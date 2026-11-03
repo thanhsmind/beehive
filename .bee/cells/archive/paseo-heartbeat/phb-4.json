@@ -1,0 +1,127 @@
+{
+  "id": "phb-4",
+  "feature": "paseo-heartbeat",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "bugfix",
+  "title": "Retry a heartbeat whose create never finished",
+  "deps": [
+    "phb-2"
+  ],
+  "decisions": [
+    "D3",
+    "9937fe58-cd9d-4b31-ac62-4ff406c1eed2"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-heartbeat/plan.md",
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+  ],
+  "action": "Red first. Live run 2026-10-06: `paseo heartbeat create` through the AppImage CLI hung, its children were reparented, the run promise never settled, and the marker stayed `{}`, so every later session start saw EEXIST and the leader never got a heartbeat. In ensureHeartbeat (paseo-heartbeat.ts:116), on EEXIST read the marker: if it parses with a non-empty schedule_id, or its mtime is younger than STALE_MARKER_MS = 120000, return {created: false, reason: 'exists'} as today; otherwise it is stale: unlinkSync it and try the wx create once more (a loser of that second race returns exists), then continue with the create as usual. Add an exported STALE_MARKER_MS. When the create fails (catch branch), make the reason end with ` — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo binary`. Tests in pi_paseo_heartbeat_contracts.rs: an empty marker with mtime 200 s ago is retried and the stub run is called once; an empty marker 10 s old returns exists with no call; a marker with a schedule_id 200 s old returns exists with no call; a failed create's reason contains herding.paseo.command. No code comments; no change to events.ts.",
+  "must_haves": {
+    "truths": [
+      "an empty marker older than 120 seconds is removed and the create runs once",
+      "an empty marker younger than 120 seconds returns exists with no create",
+      "a marker with a schedule_id returns exists with no create, whatever its age",
+      "a failed create reason names herding.paseo.command"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        "substantive": "the stale-marker retry"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+        "substantive": "stale-marker tests"
+      }
+    ],
+    "key_links": [
+      "ensureHeartbeat reads the marker on EEXIST before returning exists"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to events.ts"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts",
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-phb-4",
+    "outcome": "A heartbeat marker with no schedule id older than 120 s is retried",
+    "files_changed": [
+      ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-05T23:54:50.710Z",
+    "behavior_change": false,
+    "verification_evidence": "17 passed 0 failed (pi_plugin_contracts 114 passed too), run by the leader",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts",
+    "claimed_at": "2026-10-05T23:50:59.585Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:54:50.709Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:57:48.715Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "A heartbeat marker with no schedule id older than 120 s is retried",
+      "commit": "bd3a072bf",
+      "files": [
+        ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts — green:unit — 17 passed 0 failed (pi_plugin_contracts 114 passed too), run by the leader",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "an empty marker older than 120 seconds is removed and the create runs once",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "an empty marker younger than 120 seconds returns exists with no create",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "a marker with a schedule_id returns exists with no create, whatever its age",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "a failed create reason names herding.paseo.command",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          }
+        ],
+        "recorded_at": "2026-10-05T23:57:48.716Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

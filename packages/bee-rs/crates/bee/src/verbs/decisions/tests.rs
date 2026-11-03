@@ -197,6 +197,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -219,11 +220,12 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), bad, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
                 msg,
-                "logDecision: tag \"Bad_Tag\" is not a valid lowercase slug (must match /^[a-z0-9][a-z0-9-]*$/)."
+                "logDecision: tag \"Bad_Tag\" is not a valid lowercase slug (must match /^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/)."
             ),
             _ => panic!("expected thrown slug error"),
         }
@@ -249,6 +251,7 @@ use std::time::Instant;
             relation: Some("supersedes:a1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -285,6 +288,7 @@ use std::time::Instant;
             relation: Some("supersedes:bbbb2222".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -303,6 +307,7 @@ use std::time::Instant;
             relation: Some("supersedes:aaaa1111".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), ambiguous, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -324,6 +329,7 @@ use std::time::Instant;
             relation: Some("supersedes:deadbeef".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), unknown, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -355,6 +361,7 @@ use std::time::Instant;
             relation: Some("supersedes:c1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), stale, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -383,6 +390,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, SUPERSESSION_PROSE_GUARD_MESSAGE),
@@ -402,6 +410,7 @@ use std::time::Instant;
             relation: Some("supersedes:a1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), with_edge, 0) else {
             panic!("expected log emit once --supersedes names the target");
@@ -442,6 +451,7 @@ use std::time::Instant;
             relation: None,
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), missing, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -464,6 +474,7 @@ use std::time::Instant;
             relation: Some("sideways:a1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), malformed, 0) {
             Ok(Out::Thrown(msg)) => assert!(msg.starts_with(RELATION_REQUIRED_MESSAGE), "{msg}"),
@@ -491,6 +502,7 @@ use std::time::Instant;
             relation: Some("touches:f1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -518,6 +530,7 @@ use std::time::Instant;
             relation: Some("touches:deadbeef".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -558,6 +571,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, DEFERRAL_WITHOUT_TRIGGER_MESSAGE),
@@ -581,6 +595,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: Some("g1__deadbeef".to_string()),
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit once a registered --trigger is named");
@@ -602,6 +617,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: Some("no-such-trigger".to_string()),
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert!(
@@ -643,6 +659,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), p, 0) {
             Err(Err2::Msg(msg)) => {
@@ -678,6 +695,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), zero, 0) {
             Err(Err2::Msg(msg)) => assert_eq!(msg, UNTAGGED_REFUSED_MESSAGE),
@@ -694,6 +712,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         assert!(matches!(do_log(tmp.path(), unknown, 0), Ok(Out::Emit(_, _, 0))));
         let tax_after: Value = serde_json::from_str(&std::fs::read_to_string(&tax).unwrap()).unwrap();
@@ -808,6 +827,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         assert!(matches!(do_log(tmp.path(), p, 0), Ok(Out::Emit(_, _, 0))));
     }
@@ -1340,6 +1360,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1377,6 +1398,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1410,6 +1432,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1437,6 +1460,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1455,6 +1479,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), unrelated, 0) else {
             panic!("expected log emit");
@@ -1481,6 +1506,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -1506,14 +1532,180 @@ use std::time::Instant;
         assert!(!tag_pattern_test(""));
     }
 
-    // ── dwd-1: the WIDE door — a granted worktree gets its OWN decisions
-    //    store instead of the narrow door's refusal ──────────────────────────
+    // ── scor-2: the tag slug admits ONE interior colon, so the locked
+    //    `contract:<name>` label (slp-contract D2) is writable ────────────
+
+    /// Tags a namespaced label needs, and the near-misses that must stay
+    /// refused. One colon, interior only, both sides a plain slug.
+    #[test]
+    fn tag_pattern_admits_one_interior_colon() {
+        // Accepted: the locked spelling, in the shapes it is really used in.
+        assert!(tag_pattern_test("contract:cells"));
+        assert!(tag_pattern_test("contract:dispatch-door"));
+        assert!(tag_pattern_test("a:b"));
+        assert!(tag_pattern_test("contract:0-9"));
+        assert!(tag_pattern_test("9contract:cells"));
+
+        // Refused: a colon at either end, an empty segment, a second colon.
+        assert!(!tag_pattern_test(":cells"), "leading colon");
+        assert!(!tag_pattern_test("cells:"), "trailing colon");
+        assert!(!tag_pattern_test("contract::cells"), "empty middle segment");
+        assert!(!tag_pattern_test("contract:cells:extra"), "two colons");
+        assert!(!tag_pattern_test(":"), "colon alone");
+        assert!(!tag_pattern_test("::"), "colons alone");
+
+        // The pre-colon rule still governs each segment.
+        assert!(!tag_pattern_test("contract:-cells"), "segment starts with -");
+        assert!(!tag_pattern_test("-contract:cells"), "segment starts with -");
+        assert!(!tag_pattern_test("contract:Cells"), "uppercase segment");
+        assert!(!tag_pattern_test("contract:cell_s"), "underscore");
+        assert!(!tag_pattern_test("contract:cell.s"), "dot");
+        assert!(!tag_pattern_test("contract: cells"), "space");
+    }
+
+    /// The regression that matters: widening the predicate must not move any
+    /// tag this repo's decision store already carries. A literal table, not a
+    /// read of the live `.bee/decisions.jsonl` — a test that reads live state
+    /// passes for the wrong reason the day that state changes.
+    #[test]
+    fn tag_pattern_still_accepts_the_tags_this_repo_already_uses() {
+        for tag in [
+            "cells",
+            "contract",
+            "slp",
+            "orchestration",
+            "advisor",
+            "cli",
+            "ci",
+            "billing",
+            "nightly-job",
+            "decision-memory",
+            "workflow-state",
+            "bee-rs",
+            "p2",
+        ] {
+            assert!(
+                tag_pattern_test(tag),
+                "existing tag {tag} must still validate"
+            );
+        }
+    }
+
+    /// The refusal message prints `TAG_PATTERN_DISPLAY`. If the display text
+    /// and the predicate disagree, every refusal lies about the rule. This
+    /// pins them together: the display's own grammar, walked as strings.
+    #[test]
+    fn tag_pattern_display_describes_the_predicate() {
+        assert_eq!(
+            TAG_PATTERN_DISPLAY,
+            "/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/"
+        );
+
+        // Every branch the display describes as legal, spelled out.
+        for legal in [
+            "a",       // [a-z0-9] alone
+            "0",       // digit start, no tail
+            "a-b",     // [a-z0-9-] tail
+            "a0-b9",   // mixed tail
+            "a:b",     // the optional (:...) group, minimal
+            "a-b:c-d", // the optional group, both sides with tails
+            "0:9",     // digit-only on both sides
+        ] {
+            assert!(
+                tag_pattern_test(legal),
+                "{legal} matches {TAG_PATTERN_DISPLAY} but the predicate refused it"
+            );
+        }
+
+        // Everything the display's anchors and its single optional group
+        // exclude.
+        for illegal in [
+            "",      // ^ needs one char
+            "-a",    // first char is not [a-z0-9]
+            "A",     // outside [a-z0-9]
+            "a_b",   // outside [a-z0-9-]
+            "a b",   // outside [a-z0-9-]
+            ":a",    // the group is not optional-at-the-front
+            "a:",    // the group needs its [a-z0-9]
+            "a::b",  // one group, not two
+            "a:b:c", // one group, not two
+        ] {
+            assert!(
+                !tag_pattern_test(illegal),
+                "{illegal} does not match {TAG_PATTERN_DISPLAY} but the predicate accepted it"
+            );
+        }
+    }
+
+    /// End of the write path, not just the predicate: a namespaced tag reaches
+    /// `.bee/decisions.jsonl` with its colon intact — nothing rewrites,
+    /// splits, or slugifies it on the way in.
+    #[test]
+    fn a_namespaced_tag_is_stored_verbatim() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "The dispatch door is settled".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["contract:dispatch-door".into(), "cells".into()]),
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            rejected: None,
+        };
+        let Ok(Out::Emit(_event, _text, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit for a namespaced tag");
+        };
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["tags"], json!(["contract:dispatch-door", "cells"]));
+    }
+
+    /// Both normalizers call the one predicate, so both inherit the widening
+    /// with no edit of their own — and a namespaced tag is stored verbatim,
+    /// colon and all.
+    #[test]
+    fn both_tag_normalizers_inherit_the_namespaced_slug() {
+        // logDecision flavor.
+        assert_eq!(
+            normalize_tags(Some(vec![
+                "contract:dispatch-door".into(),
+                " contract:cells ".into(),
+                "cells".into(),
+            ]))
+            .expect("a namespaced tag is a valid slug"),
+            Some(vec![
+                "contract:dispatch-door".to_string(),
+                "contract:cells".to_string(),
+                "cells".to_string(),
+            ])
+        );
+        let refused = normalize_tags(Some(vec!["contract:cells:extra".into()]))
+            .expect_err("two colons stay refused");
+        assert!(refused.contains("\"contract:cells:extra\""));
+        assert!(refused.contains(TAG_PATTERN_DISPLAY));
+
+        // decisions-tag flavor (the RAW value form).
+        assert_eq!(
+            normalize_tag_event_tags_value(Some(&json!(["contract:cells", "slp"])))
+                .expect("a namespaced tag is a valid slug"),
+            vec!["contract:cells".to_string(), "slp".to_string()]
+        );
+        let refused = normalize_tag_event_tags_value(Some(&json!([":cells"])))
+            .expect_err("a leading colon stays refused");
+        assert!(refused.contains("\":cells\""));
+        assert!(refused.contains(TAG_PATTERN_DISPLAY));
+    }
+
+    // ── ois-4: a granted worktree's decisions store is the control root ────
     //
     // `decisions_prelude_at` is the exact function `decisions_prelude` (the
     // real cwd-reading entry point every `run_*` in this family calls)
     // delegates to, parameterized on the start directory instead of
-    // `std::env::current_dir()` — see the doc comment on `decisions_prelude`
-    // in verbs_write.rs for why: mutating the test runner's own process-wide
+    // `std::env::current_dir()` — mutating the test runner's own process-wide
     // cwd is unsafe under `cargo test`'s default parallelism, the same
     // hazard `tests/workflow_verbs.rs` documents for this family of `prelude`
     // functions. This fixture is the reservations-module fixture shape
@@ -1560,11 +1752,12 @@ use std::time::Instant;
         (main, wt)
     }
 
-    /// `decisions log` and `decisions active` resolve the granted worktree's
-    /// OWN store through the wide door — a write lands in `wt-a/.bee/
-    /// decisions.jsonl`, never main's, and a subsequent read sees it there.
+    /// `decisions log` and `decisions active` resolve the CONTROL ROOT (the
+    /// main checkout) from inside a granted worktree — a write lands in
+    /// `main/.bee/decisions.jsonl`, never the worktree's own copy, and a
+    /// subsequent read sees it there.
     #[test]
-    fn decisions_log_and_active_succeed_against_a_granted_worktrees_own_store() {
+    fn decisions_log_and_active_land_in_the_main_checkouts_store_from_a_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, wt) = granted_worktree_fixture(tmp.path());
 
@@ -1574,13 +1767,13 @@ use std::time::Instant;
         };
         assert_eq!(
             dunce::canonicalize(&ctx.root).unwrap(),
-            dunce::canonicalize(&wt).unwrap(),
-            "a granted worktree gets its OWN store, not main's"
+            dunce::canonicalize(&main).unwrap(),
+            "a granted worktree writes decisions into the main checkout's store"
         );
 
         let p = LogParams {
-            decision: "Widen decisions to the wide door".into(),
-            rationale: "matches the control-plane/data-plane split".into(),
+            decision: "Route decisions to the control root".into(),
+            rationale: "one store for the whole control plane".into(),
             alternatives: None,
             scope: "repo".into(),
             source: "user".into(),
@@ -1589,30 +1782,33 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(..)) = do_log(&ctx.root, p, 0) else {
-            panic!("expected decisions log to succeed against the worktree's own store");
+            panic!("expected decisions log to succeed against the control root");
         };
 
-        // The worktree's OWN copy carries the event; main's copy does not
-        // exist at all — the write never crossed into the other checkout.
-        let wt_events = read_jsonl(&decisions_path(&wt));
-        assert_eq!(wt_events.len(), 1, "{wt_events:?}");
-        assert!(!decisions_path(&main).exists());
+        let main_events = read_jsonl(&decisions_path(&main));
+        assert_eq!(main_events.len(), 1, "{main_events:?}");
+        assert!(!decisions_path(&wt).exists());
 
         let active_ctx = match decisions_prelude_at(&wt, "decisions active", false, Instant::now())
         {
             Some(Pre::Go(c)) => c,
             _ => panic!("decisions active must resolve a store root from a granted worktree"),
         };
+        assert_eq!(
+            dunce::canonicalize(&active_ctx.root).unwrap(),
+            dunce::canonicalize(&main).unwrap()
+        );
         let active = active_decisions(&active_ctx.root, false).ok().unwrap();
         assert_eq!(active.len(), 1, "{active:?}");
-        assert_eq!(active[0]["decision"], "Widen decisions to the wide door");
+        assert_eq!(active[0]["decision"], "Route decisions to the control root");
     }
 
-    /// The SAME fixture, through the NARROW door: a genuinely control-plane
-    /// verb still refuses, byte-identically to before this cell — the two
-    /// doors diverge on `decisions *` alone.
+    /// The SAME fixture, through the NARROW door: a control-plane verb that
+    /// still carries its own granted-worktree arm is untouched by the
+    /// decisions re-rooting.
     #[test]
     fn a_control_plane_verb_still_refuses_from_the_same_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1632,11 +1828,11 @@ use std::time::Instant;
         }
     }
 
-    /// An ordinary main checkout is unaffected by the widening: both the
-    /// dedicated decisions door and the narrow control-plane door resolve
-    /// to the SAME root they always did.
+    /// An ordinary main checkout is unaffected: both the dedicated decisions
+    /// door and the narrow control-plane door resolve to the SAME root they
+    /// always did.
     #[test]
-    fn main_checkout_behavior_is_unchanged_by_the_wide_door() {
+    fn main_checkout_behavior_is_unchanged_for_decisions() {
         let tmp = fixture_root();
         let main = tmp.path();
 
@@ -1720,6 +1916,7 @@ use std::time::Instant;
             relation: Some(format!("touches:{touched_id}")),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
@@ -1730,7 +1927,7 @@ use std::time::Instant;
         // this asserted `event["feature"] == "docfeat"`, which is precisely
         // the borrow that mis-filed 23 real decisions.
         assert!(event.get("feature").is_none());
-        let new_id = event["id"].as_str().unwrap().to_string();
+        let _new_id = event["id"].as_str().unwrap().to_string();
 
         // With no feature resolved there is no own-history exclusion, so only
         // the generated index is excluded and docfeat's own CONTEXT.md is an
@@ -1739,27 +1936,10 @@ use std::time::Instant;
         // `touches_sweep_excluded_matches_generated_index_and_bound_own_history_only`, and
         // the lane arm of the stamp by
         // `feature_for_stamp_takes_a_lane_and_never_the_default_record`.
+        // touches-sweep-active-gate D1: touched_id is still in the active set,
+        // so the touches-sweep is skipped and queues no stubs.
         let queue = read_jsonl(&capture_queue_path(root));
-        assert_eq!(queue.len(), 3, "only the generated index is excluded: {queue:?}");
-        let mut stub_files: Vec<String> =
-            queue.iter().map(|s| s["files"][0].as_str().unwrap().to_string()).collect();
-        stub_files.sort();
-        assert_eq!(
-            stub_files,
-            vec![
-                "docs/area.md".to_string(),
-                "docs/history/docfeat/CONTEXT.md".to_string(),
-                "docs/history/otherfeat/CONTEXT.md".to_string(),
-            ]
-        );
-        for stub in &queue {
-            assert_eq!(stub["kind"], "stub");
-            assert_eq!(stub["source"], "touches-sweep");
-            assert_eq!(stub["dids"], json!([touched_id, new_id]));
-            let outcome = stub["outcome"].as_str().unwrap();
-            assert!(outcome.contains(touched_id), "{outcome}");
-            assert!(outcome.contains(&new_id), "{outcome}");
-        }
+        assert_eq!(queue.len(), 0, "touches on active decision queues no stubs: {queue:?}");
     }
 
     #[test]
@@ -1790,14 +1970,16 @@ use std::time::Instant;
             relation: Some(format!("touches:{touched_id}")),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
         };
         // No bound feature — `feature` is absent from the event entirely.
         assert!(event.get("feature").is_none());
+        // touches-sweep-active-gate D1: touched_id is active, so touches-sweep queues nothing.
         let queue = read_jsonl(&capture_queue_path(tmp.path()));
-        assert_eq!(queue.len(), 1, "unbound history dir is a real citation: {queue:?}");
+        assert_eq!(queue.len(), 0, "touches on active decision queues no stubs: {queue:?}");
     }
 
     /// decision-attribution D1/D4: the shape the old fallback got wrong.
@@ -1835,6 +2017,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
@@ -2047,6 +2230,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: Some("human-mailbox".to_string()),
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
@@ -2071,6 +2255,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: Some("   ".to_string()),
+            rejected: None,
         };
         let Ok(Out::Thrown(msg)) = do_log(tmp.path(), p, 0) else {
             panic!("expected a refusal for a blank --feature");
@@ -2127,6 +2312,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -2163,6 +2349,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -2194,6 +2381,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), p_scope, 0) else {
             panic!("expected log emit");
@@ -2231,10 +2419,437 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
         };
         assert_eq!(event["update_obligations"], json!([]));
         assert!(!text.contains("update obligation:"));
+    }
+
+    /// slp-blind-lanes D2(d): the convergence's rejected set is a LIST on the
+    /// record, split by exactly the `--tags` rule, and absent when unasked.
+    #[test]
+    fn log_stores_the_rejected_set_as_a_list_and_omits_it_when_absent() {
+        let tmp = fixture_root();
+        let with_rejected = LogParams {
+            decision: "Take lane A's shape".into(),
+            rationale: "it costs one flag, not a command family".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "agent".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            // A blank middle entry and the padding around the others are the
+            // --tags rule under test: comma-split, JS-trim, drop empties.
+            rejected: Some(split_list(" lane-b: doubles the store , , lane-c: new command family ")),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), with_rejected, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(
+            event["rejected"],
+            json!(["lane-b: doubles the store", "lane-c: new command family"]),
+            "the emitted event must carry the rejected set verbatim, blanks dropped"
+        );
+
+        let without = LogParams {
+            decision: "Take the obvious route".into(),
+            rationale: "nothing else was on the table".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "agent".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            rejected: None,
+        };
+        let Ok(Out::Emit(..)) = do_log(tmp.path(), without, 0) else {
+            panic!("expected log emit");
+        };
+
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert_eq!(events.len(), 2);
+        assert_eq!(
+            events[0]["rejected"],
+            json!(["lane-b: doubles the store", "lane-c: new command family"])
+        );
+        // Absent means absent: no field at all, never an empty array — the
+        // same shape `tags` takes when no tag travelled.
+        assert!(
+            events[1].get("rejected").is_none(),
+            "a decision logged without --rejected must carry NO rejected field: {}",
+            events[1]
+        );
+        assert!(events[1].get("tags").is_none(), "control: tags behaves the same way");
+    }
+
+    /// An all-blank `--rejected` is the same as no `--rejected`: it writes no
+    /// field rather than an empty array, so "nothing was rejected" and "a
+    /// rejected set was recorded as empty" never read alike.
+    #[test]
+    fn an_all_blank_rejected_set_writes_no_field_at_all() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "Keep the flat field".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            // The flag path can never build this (split_list drops empties
+            // first); a direct do_log caller can, so the write path drops
+            // them too rather than trusting its caller.
+            rejected: Some(vec!["".into(), "   ".into()]),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        assert!(event.get("rejected").is_none(), "expected no rejected field: {event}");
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert!(events[0].get("rejected").is_none(), "{}", events[0]);
+    }
+
+    /// The rejected set is free prose reaching an append-only log, so it
+    /// passes the same secret / instruction-like scan `alternatives` does.
+    #[test]
+    fn a_secret_shaped_rejected_entry_is_refused_like_alternatives() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "Take lane A".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            rejected: Some(vec![
+                "lane-b: fine".into(),
+                "lane-c: needed ghp_abcdefghijklmnopqrstuv".into(),
+            ]),
+        };
+        match do_log(tmp.path(), p, 0) {
+            Ok(Out::Thrown(msg)) => assert!(
+                msg.starts_with("Decision rejected: field \"rejected\" matches a secret pattern"),
+                "{msg}"
+            ),
+            _ => panic!("expected a secret-pattern refusal on the rejected set"),
+        }
+        // The refused call never wrote anything.
+        assert!(!decisions_path(tmp.path()).exists());
+    }
+
+    /// `--rejected` takes its VALUE shape from `--tags`, the shipped list-flag
+    /// idiom on this verb: a comma-joined string is the list, and a bare
+    /// flag-alone spelling declines the whole shape (the CLI is
+    /// last-value-wins on a repeat, so a repeated flag would silently discard
+    /// the earlier entries — one flag, one value, or nothing).
+    #[test]
+    fn rejected_parses_by_the_same_flag_shape_as_tags() {
+        let (flags, _) = parse_flags(&["--rejected", "lane-b: a,lane-c: b", "--tags", "x"])
+            .expect("a valued --rejected parses");
+        assert!(
+            matches!(flags.get("rejected"), Some(FlagV::S(s)) if s == "lane-b: a,lane-c: b"),
+            "a valued --rejected must reach the handler as a string, like --tags"
+        );
+        assert_eq!(split_list("lane-b: a,lane-c: b"), vec!["lane-b: a", "lane-c: b"]);
+
+        let (eq_form, _) =
+            parse_flags(&["--rejected=lane-b: a,lane-c: b"]).expect("--rejected=<v> parses");
+        assert!(
+            matches!(eq_form.get("rejected"), Some(FlagV::S(s)) if s == "lane-b: a,lane-c: b"),
+            "the --flag=value spelling must carry the same string"
+        );
+
+        // A value-less `--rejected` never becomes a valued flag: it is not a
+        // flag-alone boolean, so the parser refuses the whole argv rather
+        // than inventing an empty list. `FlagV::Present` can therefore only
+        // reach run_log through a caller that built the Flags by hand, and
+        // run_log declines that shape exactly as it declines it for --tags.
+        assert!(
+            parse_flags(&["--rejected"]).is_none(),
+            "a value-less --rejected must refuse the argv, not parse as an empty rejected set"
+        );
+
+        // The allowlist run_log passes to keys_known admits the flag; without
+        // that entry the handler declines every call carrying it.
+        let known = [
+            "decision",
+            "rationale",
+            "alternatives",
+            "scope",
+            "source",
+            "confidence",
+            "tags",
+            "relation",
+            "trigger",
+            "feature",
+            "rejected",
+        ];
+        assert!(keys_known(&flags, &known), "--rejected must be a known key on decisions log");
+    }
+
+    // ── slp-contract S3 (D1, D2): the DERIVED contract status ─────────────
+    //
+    // Coverage audit before authoring. Existing trigger coverage in this
+    // file is kdt-3's write-path law only — `log_deferral_prose_with_trigger
+    // _persists_and_passes` and `log_trigger_naming_an_unregistered_id_
+    // refuses_even_without_deferral_prose`, both about `decisions log
+    // --trigger` naming a registered record. Nothing anywhere reads a
+    // trigger back to derive a decision's status, and nothing resolves a
+    // `cell.decisions` entry onto the store. The whole surface below is gap.
+
+    const D_A: &str = "aaaaaaaa-0000-0000-0000-000000000001";
+    const D_B: &str = "bbbbbbbb-0000-0000-0000-000000000002";
+    // Two ids the trigger store cannot tell apart: same first 8 characters.
+    const D_C1: &str = "cccccccc-0000-0000-0000-000000000003";
+    const D_C2: &str = "cccccccc-0000-0000-0000-000000000004";
+
+    fn decide_line(id: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"The cell store's shape is fixed","rationale":"r","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    /// One trigger record file, written by hand so each case names the exact
+    /// tier/status/predicate combination it is about.
+    fn put_trigger(
+        root: &Path,
+        id: &str,
+        decision: &str,
+        tier: &str,
+        predicate: Option<&str>,
+        status: &str,
+    ) -> PathBuf {
+        let dir = root.join(".bee").join("triggers");
+        std::fs::create_dir_all(&dir).unwrap();
+        let rec = json!({
+            "id": id,
+            "decision": decision,
+            "condition": "revisit when upstream lands",
+            "tier": tier,
+            "predicate": predicate,
+            "status": status,
+            "created_at": "2026-08-16T00:00:00.000Z",
+            "updated_at": "2026-08-16T00:00:00.000Z",
+            "outcome": null,
+        });
+        let path = dir.join(format!("{id}.json"));
+        std::fs::write(&path, format!("{rec}\n")).unwrap();
+        path
+    }
+
+    fn status_of(root: &Path, id: &str) -> ContractStatus {
+        contract_status(root, id).ok().expect("the derived status read must not go exotic")
+    }
+
+    #[test]
+    fn an_active_decision_with_no_trigger_reads_as_settled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    #[test]
+    fn an_active_decision_with_a_waiting_trigger_reads_as_unsettled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(
+            tmp.path(),
+            "upstream__aaaaaaaa",
+            "aaaaaaaa",
+            "predicate",
+            Some("path-exists:never/lands.txt"),
+            "waiting",
+        );
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unsettled);
+    }
+
+    #[test]
+    fn an_active_decision_with_a_due_trigger_reads_as_unsettled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(
+            tmp.path(),
+            "upstream__aaaaaaaa",
+            "aaaaaaaa",
+            "predicate",
+            Some("path-exists:.bee/onboarding.json"),
+            "due",
+        );
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unsettled);
+    }
+
+    /// A `manual`-tier trigger never reaches `due` — it waits for a human.
+    /// Under D2 that keeps its decision unsettled until someone resolves it,
+    /// which is the locked behaviour, not a stuck state.
+    #[test]
+    fn a_waiting_manual_trigger_keeps_its_decision_unsettled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(tmp.path(), "ask-a-human__aaaaaaaa", "aaaaaaaa", "manual", None, "waiting");
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unsettled);
+    }
+
+    #[test]
+    fn a_resolved_trigger_leaves_its_decision_settled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(tmp.path(), "upstream__aaaaaaaa", "aaaaaaaa", "manual", None, "resolved");
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    /// D3's word "retired" has no state in the store; supersession is one of
+    /// the three ways an id leaves the active set, and leaving it is the
+    /// whole condition.
+    #[test]
+    fn a_superseded_decision_reads_as_unknown() {
+        let tmp = fixture_root();
+        let replacement = format!(
+            r#"{{"id":"{D_B}","type":"decide","date":"2026-02-01T00:00:00.000Z","decision":"The cell store's shape changed","rationale":"r","supersedes":["{D_A}"],"tags":["contract:cell-store"]}}"#
+        );
+        write_events(tmp.path(), &[&decide_line(D_A), &replacement]);
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unknown);
+        assert_eq!(status_of(tmp.path(), D_B), ContractStatus::Settled);
+    }
+
+    #[test]
+    fn an_id_nobody_ever_logged_reads_as_unknown() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        assert_eq!(status_of(tmp.path(), D_B), ContractStatus::Unknown);
+    }
+
+    /// 4 of the 14 live trigger records carry a `decision` key that is not a
+    /// short8 at all. A junk key matches nothing and raises nothing.
+    #[test]
+    fn a_trigger_key_that_is_not_a_short8_matches_no_decision() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(tmp.path(), "junk__herding", "herding-", "manual", None, "waiting");
+        put_trigger(tmp.path(), "junk__p72", "P72", "manual", None, "waiting");
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    /// The honest limit of a short8-keyed store: the record cannot say WHICH
+    /// of two colliding ids it belongs to, so both inherit it. Collisions
+    /// among the live decision ids: 0, and `Unsettled` is the fail-safe
+    /// direction for a path that refuses.
+    #[test]
+    fn two_decision_ids_sharing_a_short8_both_inherit_the_one_trigger() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_C1), &decide_line(D_C2)]);
+        put_trigger(tmp.path(), "upstream__cccccccc", "cccccccc", "manual", None, "waiting");
+        assert_eq!(status_of(tmp.path(), D_C1), ContractStatus::Unsettled);
+        assert_eq!(status_of(tmp.path(), D_C2), ContractStatus::Unsettled);
+    }
+
+    #[test]
+    fn a_corrupt_trigger_file_degrades_rather_than_panicking() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        let dir = tmp.path().join(".bee").join("triggers");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("broken__aaaaaaaa.json"), "{not json at all").unwrap();
+        // Shape-invalid too: JSON, but an unknown status.
+        std::fs::write(
+            dir.join("shapeless__aaaaaaaa.json"),
+            r#"{"id":"shapeless__aaaaaaaa","decision":"aaaaaaaa","condition":"c","tier":"manual","status":"gone"}"#,
+        )
+        .unwrap();
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    #[test]
+    fn no_trigger_directory_at_all_reads_as_settled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        assert!(!tmp.path().join(".bee").join("triggers").exists());
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    /// The load-bearing one. A refusal path that writes is not a refusal
+    /// path, so the derived read must leave the trigger store BYTE-identical
+    /// even for the one record the evaluating reader would rewrite: a
+    /// `predicate`-tier trigger still `waiting` whose predicate is true.
+    ///
+    /// The second half is what proves the first half is not vacuous — the
+    /// evaluating reader (`due_and_manual_counts`, the door `bee orient`
+    /// calls) is run over the SAME file and does rewrite it. Without that
+    /// contrast the byte-identity assertion would pass on a fixture that
+    /// could never have changed.
+    #[test]
+    fn the_derived_read_leaves_a_ready_to_fire_trigger_file_byte_identical() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        let path = put_trigger(
+            tmp.path(),
+            "onboarding-lands__aaaaaaaa",
+            "aaaaaaaa",
+            "predicate",
+            Some("path-exists:.bee/onboarding.json"), // fixture_root wrote this
+            "waiting",
+        );
+        let before = std::fs::read(&path).unwrap();
+
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unsettled);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            before,
+            "the derived contract-status read must not write the trigger store"
+        );
+
+        // Contrast: the evaluating reader over the very same file DOES flip
+        // and persist, so the fixture was genuinely flip-ready above.
+        let (due, _) = crate::verbs::triggers::due_and_manual_counts(tmp.path());
+        assert_eq!(due, 1, "the evaluating reader must see this trigger as due");
+        let after = std::fs::read(&path).unwrap();
+        assert_ne!(after, before, "the evaluating reader is expected to rewrite the record");
+        assert!(String::from_utf8_lossy(&after).contains(r#""status": "due""#));
+    }
+
+    // ── the citation resolver: `cell.decisions` entry → store id ──────────
+
+    #[test]
+    fn a_local_d_id_resolves_to_no_store_decision() {
+        let ids = vec![D_A.to_string(), D_B.to_string()];
+        assert_eq!(resolve_store_citation(&ids, "D1"), None);
+        assert_eq!(resolve_store_citation(&ids, ""), None);
+    }
+
+    #[test]
+    fn a_full_decision_id_resolves_to_itself() {
+        let ids = vec![D_A.to_string(), D_B.to_string()];
+        assert_eq!(resolve_store_citation(&ids, D_A), Some(D_A.to_string()));
+    }
+
+    #[test]
+    fn a_unique_eight_character_prefix_resolves() {
+        let ids = vec![D_A.to_string(), D_B.to_string()];
+        assert_eq!(resolve_store_citation(&ids, "aaaaaaaa"), Some(D_A.to_string()));
+    }
+
+    #[test]
+    fn an_eight_character_prefix_matching_two_decisions_resolves_to_nothing() {
+        let ids = vec![D_C1.to_string(), D_C2.to_string()];
+        assert_eq!(resolve_store_citation(&ids, "cccccccc"), None);
+    }
+
+    #[test]
+    fn a_prefix_shorter_than_eight_characters_never_resolves() {
+        let ids = vec![D_A.to_string()];
+        assert_eq!(resolve_store_citation(&ids, "aaaaaaa"), None);
     }

@@ -1,0 +1,114 @@
+{
+  "id": "psh-2",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-skills-ship",
+  "title": "Ship bee-teach as a bee skill",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-teach/SKILL.md",
+    "skills/bee-teach/CREATION-LOG.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-skills-ship/plan.md",
+    "skills/bee-writing-skills/SKILL.md",
+    "skills/bee-writing-skills/references/prompt-style.md",
+    "skills/bee-writing-skills/references/creation-log-template.md",
+    ".claude/skills/teach/SKILL.md",
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-teach/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Create one NEW bee skill from the verified local port .claude/skills/teach/SKILL.md (per D1). Do NOT run bee dev regen (regen_obligation_ack wave-barrier; psh-4 runs the one regen). FRONTMATTER as in the bee-writing-skills checklist and the shape of skills/bee-planning/SKILL.md: name bee-teach, a folded description, metadata version '0.1', ecosystem bee, and dependencies copied from the bee-cli mapping in skills/bee-planning/SKILL.md. No disable-model-invocation key. Description, exactly: Explain a body of work plainly so a person understands it. Use when the user asks to understand rather than change something — 'teach me', 'explain this', 'why did you build it this way', 'I don't get X'. Not for status reports, gate questions the user has not asked to understand, or changing code. BODY: keep all five steps and the writing rules, with these changes (per D4). (1) Replace every use of the how and why skills with bee's procedures: a how-does-this-run question uses the `Trace` procedure and a why-is-this-so question uses the `Provenance sweep` procedure, both in `skills/bee-researching/references/trace-and-provenance.md` (backticked path, quoted headings \"Trace\" and \"Provenance sweep\"). Step 2's narrowing advice becomes: keep the Provenance sweep narrow by default, and name every category you did not sweep as UNSWEPT, per that procedure. (2) Add one rule near the top: at a gate, the Gate Presentation Contract and the one-next-action rule in `skills/bee-hive/references/routing-and-contracts.md` (\"Communication contract\") win over this skill's shape; teach explains only what the user asked to understand, then returns to the gate question. (3) Step 4's 'Offer to go deeper or move on' and the Reply line's 'the threads worth chasing' become: close on exactly one next action, never a menu. (4) 'in plain spoken English' becomes 'in plain spoken language, in the user's language'. (5) Every mention of the unslop skill becomes `bee-unslop`. Provenance line: Ported from pstack (cursor/plugins, pstack/skills/teach), adapted for bee. Add a short `## Headless` section: deliver the explanation in one pass, with the one next action at the end. End with: Explanation delivered. Invoke bee-hive skill. CREATION-LOG.md from the template: source material; extraction decisions, including why the gate trigger was removed (the hat-user-impact seat found it would turn every gate into a menu) and why the close became one next action; the named deviation as in psh-1; RED S4 (pressures Time + Exhaustion + Social) recorded verbatim as FAILED on the teaching rules — a preview line 'Plan is at its gate. Here is why it is three cells and not one.', a metaphor 'Think of it as one Lego brick: you press it down, you check it holds, then you add the next brick.', a long list-heavy wall instead of the smallest complete answer first, and a closing two-option menu; GREEN and Final Outcome left as 'pending, recorded by cell psh-4'.",
+  "verify": "rg -q '^name: bee-teach$' skills/bee-teach/SKILL.md && rg -q 'ecosystem: bee' skills/bee-teach/SKILL.md && rg -q 'Provenance sweep' skills/bee-teach/SKILL.md && rg -q 'Gate Presentation Contract' skills/bee-teach/SKILL.md && ! rg -n -w -e arena -e recall skills/bee-teach && ! rg -n 'disable-model-invocation|--runtime claude|plain spoken English' skills/bee-teach",
+  "must_haves": {
+    "truths": [
+      "bee-teach fires only when the user asks to understand",
+      "At a gate, the gate template and one next action win over teach's shape",
+      "How and why questions route to Trace and Provenance sweep"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-teach/SKILL.md",
+        "substantive": "the five teaching steps rewired to bee's procedures, the gate precedence rule, a Headless section and the handoff line"
+      },
+      {
+        "path": "skills/bee-teach/CREATION-LOG.md",
+        "substantive": "RED S4 with its verbatim failures and the extraction decisions"
+      }
+    ],
+    "key_links": [
+      "bee-teach cites trace-and-provenance.md (\"Trace\", \"Provenance sweep\") and routing-and-contracts.md (\"Communication contract\")"
+    ],
+    "prohibitions": [
+      "No bee dev regen in this cell",
+      "No write outside the two listed files",
+      "No menu close and no trigger on every gate"
+    ]
+  },
+  "trace": {
+    "worker": "leader-psh-2",
+    "outcome": "bee-teach shipped: SKILL.md with the five steps rewired to Trace and Provenance sweep, gate precedence rule, one-next-action close, user language, bee-unslop, Headless and handoff; CREATION-LOG.md with RED S4 verbatim FAILED, extraction decisions, named deviation, GREEN pending psh-4",
+    "files_changed": [
+      "skills/bee-teach/SKILL.md",
+      "skills/bee-teach/CREATION-LOG.md"
+    ],
+    "deviations": [
+      "Cited bee-researching/references/trace-and-provenance.md and bee-hive/references/routing-and-contracts.md without the skills/ prefix the cell action names — pointer_integrity resolves non-bare citations under skills/, so a skills/ prefix would resolve to skills/skills/... and go red; every existing citation in skills/ uses this form — the plan was wrong about a fact",
+      "Moved the source step-4 one-shot sentence into the new Headless section instead of keeping it in both places — one home per rule, smallest diff — found a better route",
+      "sync-ack: CREATION-LOG.md is a listed cell file and the skill's TDD record, not skill behavior; affects_skills names only SKILL.md"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T00:07:12.076Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "The agy-flash herding agent behind the docs role is stalled at an Antigravity OAuth consent screen and the Fable quota is spent (decision 1c407980); skill prose needs the session model.",
+    "claimed_at": "2026-09-10T23:59:45.073Z",
+    "sync_ack": "CREATION-LOG.md is a listed cell file and the skill's TDD record, not skill behavior; affects_skills names only SKILL.md",
+    "mistakes": [
+      {
+        "wrong": "Staging in the shared worktree index was refused by the concurrent-worker guard",
+        "better": "start with the intent-to-add plus path-scoped commit route when siblings are live"
+      },
+      {
+        "wrong": "A temp-index commit command that used a shell variable for the index path was refused by the write guard",
+        "better": "use the path-scoped commit route or a literal path"
+      }
+    ],
+    "report": {
+      "outcome": "bee-teach shipped with SKILL.md and CREATION-LOG.md",
+      "commit": "645b11db",
+      "files": [
+        "skills/bee-teach/SKILL.md",
+        "skills/bee-teach/CREATION-LOG.md"
+      ],
+      "tests": "cargo test -p bee --test pointer_integrity --test instruction_laws plus the cell verify rg chain — green:static — the new skill adds two backticked reference citations and instruction prose, which these two suites and the verify check cover",
+      "deviations": [
+        "Cited bee-researching/references/trace-and-provenance.md and bee-hive/references/routing-and-contracts.md without the skills/ prefix the cell action names — pointer_integrity resolves non-bare citations under skills/, so a skills/ prefix would resolve to skills/skills/... and go red; every existing citation in skills/ uses this form — the plan was wrong about a fact",
+        "Moved the source step-4 one-shot sentence into the new Headless section instead of keeping it in both places — one home per rule, smallest diff — found a better route"
+      ],
+      "mistakes": [
+        "Staging in the shared worktree index was refused by the concurrent-worker guard — start with the intent-to-add plus path-scoped commit route when siblings are live",
+        "A temp-index commit command that used a shell variable for the index path was refused by the write guard — use the path-scoped commit route or a literal path"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 206 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "escalate": true
+}

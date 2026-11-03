@@ -1,0 +1,85 @@
+{
+  "id": "pfp-2",
+  "feature": "pi-full-workflow-parity",
+  "title": "Prove the complete Pi workflow tail",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [
+    "pfp-1"
+  ],
+  "decisions": [
+    "0510d81d-24e9-46f7-bf53-701cfaccf978"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-full-workflow-parity/CONTEXT.md",
+    "docs/history/pi-full-workflow-parity/plan.md",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Extend `pi_lifecycle_end_to_end_onboarded_repo_parity` after its current cap and dispatch checks. Through the installed `bee_target`, write a pause handoff, prove it is projected, dismiss it, close the workflow, run `bee orient --json`, and assert no handoff blocker or `.bee/HANDOFF.json` remains. Also drive a planned-next dismissal refusal with an owned claim and assert the claim and mailbox record remain unchanged. Keep the configured Pi transport herding-only and preserve all existing belt failure-policy checks. Apply test-behavior-not-structure and acceptance 0510d81d.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts pi_lifecycle_end_to_end_onboarded_repo_parity -- --exact --nocapture",
+  "must_haves": {
+    "truths": [
+      "The onboarded Pi sandbox completes pause dismissal and workflow close through the installed CLI.",
+      "Orient reports no stale handoff blocker after close.",
+      "The compatibility HANDOFF.json file is absent after the workflow tail.",
+      "The sandbox proves planned-next dismissal refusal without claim loss."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "end-to-end Pi workflow-tail assertions in the existing sandbox test"
+      }
+    ],
+    "key_links": [
+      "The Pi sandbox invokes the same installed binary created by onboarding.",
+      "The final assertions inspect both orient output and the compatibility file."
+    ],
+    "prohibitions": [
+      "Do not replace the end-to-end path with direct state-file writes for the operation under test.",
+      "Do not add a native Pi worker transport or OMP target.",
+      "Do not relax any existing Pi extension assertion."
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pfp-2",
+    "outcome": "Extend pi_lifecycle_end_to_end_onboarded_repo_parity with planned-next dismissal refusal, close refusal, adoption with claim fencing, pause dismissal, close, and orient",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T14:32:15.932Z",
+    "behavior_change": false,
+    "verification_evidence": "onboarded sandbox runs installed bee CLI end-to-end",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "01a09b02-031a-7737-b6f6-76479c0be569",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts pi_lifecycle_end_to_end_onboarded_repo_parity -- --exact --nocapture",
+    "claimed_at": "2026-09-13T14:22:00.532Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Extend pi_lifecycle_end_to_end_onboarded_repo_parity with planned-next dismissal refusal, close refusal, adoption with claim fencing, pause dismissal, close, and orient",
+      "commit": "dcef11f65468a549220998d897ba5a028940bcf9",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts pi_lifecycle_end_to_end_onboarded_repo_parity -- --exact --nocapture — green:live — onboarded sandbox runs installed bee CLI end-to-end",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

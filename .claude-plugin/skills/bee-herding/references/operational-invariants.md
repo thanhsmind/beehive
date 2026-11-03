@@ -402,7 +402,8 @@ name a herd. The two config routes stay disjoint: `herd = pane`, always.
 
 ## `bee herding run` — one foreign agent as a cell-execution worker
 
-`bee herding run` is a native verb, not a script: give it one task, and it
+`bee herding run` is a native verb, not a script: give it one task, and —
+unless that job id and round already answered, see the replay rule below — it
 starts ONE external CLI agent (any herdr-supported kind — token 0 of
 `herding.agent_command` passes straight through, same seam as above) in a
 fresh pane, hands it a fully self-contained brief, and waits for a written
@@ -412,6 +413,28 @@ the way an in-family subagent is today (herding-executor D1). Flags:
 `--close-always`, `--main-root`, `--json`, `--expertise`, `--dry-run` — the last renders
 `job.json` and the brief and spawns nothing, the seam this verb's own tests
 drive instead of a real `herdr`.
+
+**A job id that already answered is not run twice (idempotent-herding-receipts
+D1/D3/D5/D7).** Before the transport is chosen and before any detached
+re-launch, `run` resolves the round the callee would use — 1 for a fresh run,
+`latest_result_round + 1` for `--continue` — and looks for a stored
+`result-N.json`. If one exists, it compares the incoming dispatch digest
+against `digest-N.sha256` beside it:
+
+- digest **matches**, or no digest file at all (every mailbox written before
+  this feature): the stored result is printed as an ordinary run envelope, the
+  result-inbox marker is still written so a detached session still receives its
+  injection, and **nothing is spawned**;
+- digest **differs**: the run refuses, naming the stored receipt path and both
+  digests, and spawns nothing — pass a fresh `--job-id`;
+- digest unreadable, or no result for that round: the run proceeds normally, so
+  an I/O fault never refuses a dispatch and a worker that died after its brief
+  stays re-runnable under its own id.
+
+The digest covers the dispatch's task and files, never the rendered brief —
+`render_brief` embeds the absolute worktree root and the configured proof
+command, so hashing it would refuse the same work in a moved worktree. Today
+`herding run` carries no file list, so the digest is task-only.
 
 **Completion travels through a file mailbox, never a screen (D3).**
 `.bee/mailbox/<job-id>/` holds `job.json`, round-numbered `result-N.json`,
@@ -520,7 +543,7 @@ never serves cell execution, while a `herding`-shaped slot serves every
 purpose, cell included.
 
 **The config route now covers every purpose (herding-tier D1-D6, widened by
-herding-review-slots D1):** `models.<runtime>.generation` (or any configurable slot) accepts
+herding-review-slots D1):** `team.<runtime>.generation` (or any configurable slot) accepts
 `{"kind": "herding"}` as a value — ANY purpose dispatched against that slot (cell, gather,
 reviewer, advisor, extraction) resolves automatically to the `bee herding run` payload this
 section describes, no per-purpose request needed. The old gather/review/advisor
@@ -548,6 +571,38 @@ unchanged; the config route is one more way to reach the same verb, not a
 replacement for it. Config shape and samples: `docs/config-reference.md`
 (models section), `.bee/config-sample.json`,
 `.bee/config-sample-cli-executors.json`.
+
+## The route role — review carve-out and boundaries
+
+**The review carve-out and its two owner-held arming conditions.** Rule
+`agents-review-user-invoked` requires independent review to be a separate,
+user-invoked pass and never an automatic stage. Inside the bee-herding cockpit
+only, a named carve-out permits the `route` role to start an independent
+review over a finished worktree without being asked (decision 8388df3e).
+This carve-out has two owner-held arming conditions: the owner enable marker
+(`.bee/tmp/bee-herding.enable`) must exist, and `gate_bypass` must be `full`
+or `total`. The `route` role can never arm itself because both conditions
+belong to the owner and require explicit owner setup. When either condition is
+unmet, `route` refuses rather than proceeding.
+
+**Different-agent requirement and refusal direction.** The reviewer must run
+on a different `herding.agents` entry than the agent that produced the
+worktree's changes. Self-review by the producing agent is prohibited. If a
+different agent is not available or cannot be resolved, `route` refuses rather
+than guessing.
+
+**Hard boundaries: what route never does.** The `route` role is strictly
+limited to routing finished worktrees. Concretely, `route` never merges, never
+approves a gate, never starts a coder, and never creates a pane. Merging remains
+an owner gesture; gates belong to the human; coding stays with working agents;
+and pane creation is reserved for cockpit setup.
+
+**Worktree isolation during review: the in-review marker.** To prevent races
+between cockpit roles, `route` creates the in-review marker
+(`.bee/tmp/bee-herding.review.<slug>`) before starting a review. The
+in-review marker is the mechanism that keeps the `merge` role off a worktree
+mid-review: while `.bee/tmp/bee-herding.review.<slug>` is present, `merge` skips
+the worktree, preventing concurrent merge attempts while review is in flight.
 
 ## What actually contains this
 

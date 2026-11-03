@@ -351,7 +351,9 @@ pub fn render_skill_bytes(buf: &[u8], runtime: &str) -> Vec<u8> {
                 MarkerClass::Error(_) => {}
             }
         }
-        if open_runtime.as_deref().is_none_or(|r| r == runtime) {
+        // D1 (pi-stage-dispatch): the codex render IS the shared .agents/skills
+        // root, which Pi reads too — it keeps pi blocks as well.
+        if open_runtime.as_deref().is_none_or(|r| r == runtime || (runtime == "codex" && r == "pi")) {
             out.push_str(content);
             out.push_str(term);
         }
@@ -484,6 +486,28 @@ mod tests {
         );
     }
 
+    /// D1 (pi-stage-dispatch psd-4): the pi marker value round-trips through
+    /// `classify_marker_line` (via `RENDER_RUNTIMES`) and `render_skill_bytes`.
+    /// The "codex" runtime (used for repo-agents) keeps both codex and pi blocks,
+    /// while "claude" and "opencode" strip pi blocks.
+    #[test]
+    fn pi_marker_label_is_accepted_and_filters_like_the_others() {
+        let src = "head\n<!-- bee:only pi -->\nPI\n<!-- bee:end -->\n<!-- bee:only codex -->\nCODEX\n<!-- bee:end -->\n<!-- bee:only claude -->\nCLAUDE\n<!-- bee:end -->\ntail\n";
+        assert!(validate_skill_markers(src).is_empty());
+        assert_eq!(
+            String::from_utf8(render_skill_bytes(src.as_bytes(), "codex")).unwrap(),
+            "head\nPI\nCODEX\ntail\n"
+        );
+        assert_eq!(
+            String::from_utf8(render_skill_bytes(src.as_bytes(), "claude")).unwrap(),
+            "head\nCLAUDE\ntail\n"
+        );
+        assert_eq!(
+            String::from_utf8(render_skill_bytes(src.as_bytes(), "opencode")).unwrap(),
+            "head\ntail\n"
+        );
+    }
+
     #[test]
     fn marker_grammar_errors_match_node_wording() {
         assert!(validate_skill_markers("plain\n").is_empty());
@@ -493,7 +517,7 @@ mod tests {
         assert_eq!(
             e,
             vec![
-                "unknown runtime label \"rust\" (expected claude or codex or opencode) at line 1",
+                "unknown runtime label \"rust\" (expected claude or codex or opencode or pi) at line 1",
                 "stray bee:end with no open block at line 3"
             ]
         );

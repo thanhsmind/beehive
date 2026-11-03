@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
   decisions: ["self-correcting-loop D3/D4/D5 with Validating amendments Δ5-Δ6 (behavior-class completion teeth, judge-verdict schema, risk-scaled goal-check judge)", "gh-issue-fixes-172 D-GHF-C (the judge cap-guard: a needs-revision verdict blocks completion absent an audited override)", "565e68d0-327f-404e-b49e-d1c61ba81bfd (unchanged: the goal-check judge is never the user-invoked independent review)", "test-economy D1/D2/D3/D8 (proof-tier by change_class × lane replaces the flat behavior-vs-advisory split; diff_stats-backed test-shape guard at cap; the D8 negative-control floor — amending self-correcting-loop D3's completion door and narrowing decision 0009 / e54878b1 / 8ef2bae6 to the red-first branches only)", "derived-check-hardening E1/E9 (the cap door cross-checks the impact registry and warns, never refuses; the residual ships open and named)", "derived-check-hardening E6 (capCell resolves behavior_change from the top-level field or trace.behavior_change, forward-only)", worker-conformance D1/D10/D12/D14 (per-unit authored evidence stops being a completion precondition — exactly two doors become non-blocking recorded warnings; absence of proof is stamped as a distinct inert marker that arms only the feature-boundary door), "worker-conformance D11 (the feature-level trailing test-coverage door inherits the same treatment: an asserted pass with nothing recorded does not discharge it) + wc-2c (a withdrawn test unit owes no coverage and stands in for none)", worker-conformance D2 as corrected (the highest-risk lane raises the behaviour-bearing classes only — refactor/formatting stay suite-green and a coverage-authoring unit stays targeted-green even there), "worker-proof (the registered-execution-worker completion door for small-lane-or-larger units, escaped by a recorded inline reason; cell wp-1, commit 57738faa, 2026-08-04)", "hook-teeth D6/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — one commit per unit becomes a completion door: the unit's own commit trailer is verified over the feature checkout's recent history)", "knowledge-one-home D3/D4 (docs/history/knowledge-one-home/CONTEXT.md — the cap-time sync door: ownership, applied_at, and prediction checks REFUSE, never warn — the derived-check-hardening E1 precedent does not apply here; --sync-ack is the one recorded escape)"]
-  sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — journaled crash-recoverable cell archive; needs-revision reopen clears verify evidence), "test-economy cells te-1/te-2 (proof-tier matrix + diff_stats handler; test-shape guard — new_suite_reason + ratio ceiling; docs/history/test-economy/CONTEXT.md, traces in .bee/cells/, 2026-07-25)", "docs/specs/workflow-state.md#B30", "docs/specs/workflow-state.md#B31", "docs/specs/workflow-state.md#B32", "docs/specs/workflow-state.md#B34", "docs/specs/workflow-state.md#B35", "docs/specs/workflow-state.md#B36", "docs/specs/workflow-state.md#R47", "docs/specs/workflow-state.md#R48", "docs/specs/workflow-state.md#R49", "docs/specs/workflow-state.md#R50", "docs/specs/workflow-state.md#R53", "docs/specs/workflow-state.md#R54", "docs/specs/workflow-state.md#E25", "derived-check-hardening cells dch-1/dch-2/dch-8 (cap-door impact-registry warning, behavior_change resolution, lazy registry import surviving a vendored-lib fixture; traces .bee/cells/dch-{1,2,8}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "worker-conformance cells wc-1/wc-2/wc-2c/wc-3/wc-4 (absence-of-proof marker stamped after the refusal chain; both debt doors armed on it with the freshness clock over the union; withdrawn test unit skipped before the count; two doors loosened to recorded warnings; per-door bypass rows — traces .bee/cells/wc-*.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, feature verify green 117 suites 2026-07-29)", "worker-proof cell wp-1 (registered-execution-worker cap door + inline-reason escape; trace .bee/cells/wp-1.json, commit 57738faa, 2026-08-04)", "hook-teeth cell bh-6 (commit-trailer verification at completion over the feature branch history, --commit-pending escape on the trace, empty file list exempt; trace .bee/cells/bh-6.json, commit 08e95a4e, 2026-08-04 — cells 89 passed, full suite 1058 passed 0 failed)"]
+  sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — journaled crash-recoverable cell archive; needs-revision reopen clears verify evidence), "test-economy cells te-1/te-2 (proof-tier matrix + diff_stats handler; test-shape guard — new_suite_reason + ratio ceiling; docs/history/test-economy/CONTEXT.md, traces in .bee/cells/, 2026-07-25)", "docs/specs/workflow-state.md#B30", "docs/specs/workflow-state.md#B31", "docs/specs/workflow-state.md#B32", "docs/specs/workflow-state.md#B34", "docs/specs/workflow-state.md#B35", "docs/specs/workflow-state.md#B36", "docs/specs/workflow-state.md#R47", "docs/specs/workflow-state.md#R48", "docs/specs/workflow-state.md#R49", "docs/specs/workflow-state.md#R50", "docs/specs/workflow-state.md#R53", "docs/specs/workflow-state.md#R54", "docs/specs/workflow-state.md#E25", "derived-check-hardening cells dch-1/dch-2/dch-8 (cap-door impact-registry warning, behavior_change resolution, lazy registry import surviving a vendored-lib fixture; traces .bee/cells/dch-{1,2,8}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "worker-conformance cells wc-1/wc-2/wc-2c/wc-3/wc-4 (absence-of-proof marker stamped after the refusal chain; both debt doors armed on it with the freshness clock over the union; withdrawn test unit skipped before the count; two doors loosened to recorded warnings; per-door bypass rows — traces .bee/cells/wc-*.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, feature verify green 117 suites 2026-07-29)", "worker-proof cell wp-1 (registered-execution-worker cap door + inline-reason escape; trace .bee/cells/archive/worker-proof/wp-1.json, commit 57738faa, 2026-08-04)", "hook-teeth cell bh-6 (commit-trailer verification at completion over the feature branch history, --commit-pending escape on the trace, empty file list exempt; trace .bee/cells/archive/hook-teeth/bh-6.json, commit 08e95a4e, 2026-08-04 — cells 89 passed, full suite 1058 passed 0 failed)"]
   authoritative_for: "workflow-state: unit completion teeth, judge verdicts, and the cell archive transaction"
 ---
 
@@ -44,6 +44,17 @@ is the other way a unit's record moves without a mutator having asked it to.
 
 ## Behaviors & Operations
 
+**The recorded verdict has closed vocabularies, and the command's help states
+the payload's field names without them.** A verdict reads PASS or
+NEEDS_REVISION. Each check names itself with an id — never a name — and carries
+a status of PASS or FAIL plus its evidence; a failing check owes a failure
+signature. Fixability reads automatic or authority, and confidence reads low,
+medium or high. A judge prompt written from the help text alone therefore
+produces a payload the recorder refuses. The refusal names every offending
+field and value at once, so the cost is one round trip rather than a silent
+pass — but that round trip is bought by help text stopping one step short of
+the contract.
+
 **Judge-debt close door (workflow-lessons wfl-3, 2026-08-11; ownership,
 grandfather, deferral, and archive fixes review-p1-fixes hpf-1,
 2026-08-12).** When the closing feature's route lane is standard or
@@ -51,9 +62,16 @@ high-risk, every capped `behavior_change` cell must carry a recorded
 semantic-judge verdict (`trace.semantic_judge`, written by
 `cells judge-record`); missing verdicts make a BLOCKING `judge-debt` door
 naming the offending cell ids, remedy `bee cells judge` /
-`bee cells judge-record`. Tiny/small routes never grow the door —
-judge-on-smell stays their rule. Judgment moved from instructed to enforced
-for the lanes where a missed smell costs most. The closing feature's route
+`bee cells judge-record`. A slice judge answers with one fenced block per
+cell whose info string is `json <cell-id>`; `bee cells judge-record
+--from-text <answer.md>` records every valid block on its own cell, reports an
+invalid block by id and exits non-zero, and refuses an answer with no block,
+a duplicate cell id, an `--id` that differs from a block, or `--file` together
+with `--from-text` before it records anything (herding-leader-toil D3, store
+`6824f849`). Tiny/small routes never grow the door —
+the semantic judge stays on smell there. The leader completeness check is
+separate and runs on every cap in every lane (R102). Judgment moved from
+instructed to enforced for the lanes where a missed smell costs most. The closing feature's route
 is read `route.lane` first from its own lane record, then — ONLY when that
 default-state route names THIS feature (`route.feature`, the same identity
 check `gated_add_refusal` already uses) — from the global default-state
@@ -316,7 +334,13 @@ swarming goal-check evaluates a completed unit of work. What happens: tiny and
 small lanes run mechanical checks only, unchanged; standard lanes dispatch one
 judge per completed behavior-changing unit; high-risk lanes dispatch the same
 judge with a preference for model independence from the builder, recording the
-outcome honestly either way (B31). A needs-revision verdict whose finding
+outcome honestly either way (B31). After a rebase, a conflict resolution, or a
+minor fix — no new behavior and under 30 changed lines counted from the capped
+commit — the leader has the worker re-run the recorded proof command at the new
+head instead of dispatching a fresh judge; new behavior, a redesign, or a diff
+at or over 30 lines returns to the lane's normal row, and the slice's sampled
+judge still covers the cell (pstack-0-15-port D3, cell p15-3, 2026-10-16; the
+row lives in the judge-tier table, `skills/bee-hive/references/gates-and-delegation.md`). A needs-revision verdict whose finding
 looks automatically fixable means the unit is not yet done — it is
 re-dispatched with the exact failing checks, and the attempt history (B26)
 gains a failed entry carrying the judge's failure signature; a needs-revision
@@ -553,7 +577,6 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   worker its capping record names is not registered for that unit; an
   explicit inline reason recorded on the unit's own trace is the sanctioned
   escape, and the `tiny` lane is exempt by contract (worker-proof, wp-1).
-
 - R100 — Completing a unit with recorded file changes requires a commit in the
   feature checkout's recent history whose message carries a line naming that
   unit; a missing line refuses the completion, a declared commit-pending reason
@@ -570,6 +593,32 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   visible `trace.deviations` line only when the touched set actually
   carried a `skills/**` path. This door refuses; it does not warn
   (knowledge-one-home D3/D4).
+- R102 — Accepting a worker's completion is a leader step, every cap, every
+  lane: before the cell counts, the leader compares every approved
+  requirement (the unit's must-haves, the plan's acceptance criteria, the
+  locked decisions it cites) against the actual artifacts — the diff, the
+  wiring claimed, the recorded proof. The worker's report is a navigation
+  aid that names where each requirement landed, never the evidence that it
+  did; a requirement with no artifact behind it means the unit is not done.
+  The check reuses existing requirements and proof lines — no new report
+  schema, no mandatory full-suite rerun; a test re-run stays smell-only,
+  and depth is risk-based (spot-check a low-risk mechanical unit, read the
+  full diff and trace wiring on high risk, missing evidence, or a
+  report-versus-diff contradiction) (f5e3c084, touching 565e68d0 —
+  independent review stays user-invoked; feature leader-completeness-check).
+  A door now enforces it (leader-check-door, `a38dc4bd`): `bee cells
+  leader-check` records the check on `trace.leader_check` with verdict `ok`
+  or `gap`, and both `bee close` and `bee worktree merge` refuse a feature
+  whose capped cells carry no `ok` mark, unless a `leader-check-deferral`
+  decision names the feature. The mark is verified, not typed: a path-shaped
+  artifact must exist on disk, and at least one answer must name a path from
+  the cell's own `trace.files_changed`. A directory entry in that list counts
+  as touched when the commit touched any file under it; a bare string prefix
+  that is not a directory is still refused (open-issues-sweep, decision
+  `cf4781e7`, issue #121). A `gap` verdict records without
+  reopening the cell: every debt reader counts capped cells only, so a
+  reopen would clear both doors and make a recorded gap the cheapest way
+  past them.
 
 ## Edge Cases Settled
 
@@ -697,7 +746,7 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   --cell <id> --tier <t> --status <s>` writes). The escape is `--inline-reason
   "<why>"`, recorded as `trace.inline_reason`. Tests:
   `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs`. Evidence: trace
-  `.bee/cells/wp-1.json`, commit `57738faa`.
+  `.bee/cells/archive/worker-proof/wp-1.json`, commit `57738faa`.
 - Commit-trailer completion door (B49/R100): `cell_commit_trailer` (the exact
   trimmed line `cell: <id>`), `commit_trailer_history_root`
   (`find_granted_worktree_for_feature`, else the caller's root) and
@@ -708,7 +757,7 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   `files_changed` is non-empty, after the test-green door and before the
   per-cell lock. The escape is `--commit-pending "<reason>"`, recorded as
   `trace.commit_pending` (`handlers_close.rs:363-368`). Evidence: trace
-  `.bee/cells/bh-6.json`, commit 08e95a4e (cells 89 passed; full suite 1058
+  `.bee/cells/archive/hook-teeth/bh-6.json`, commit 08e95a4e (cells 89 passed; full suite 1058
   passed, 0 failed, 2026-08-04).
 - The sync door (B50/R101): `sync_refusal` in
   `packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs`, reading

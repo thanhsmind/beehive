@@ -1,0 +1,81 @@
+{
+  "id": "pp2-5",
+  "feature": "pstack-part2-skills",
+  "title": "Port the prototype playbook as a standalone skill",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D6",
+    "D7"
+  ],
+  "files": [
+    ".claude/skills/prototype/*"
+  ],
+  "read_first": [
+    "docs/history/pstack-part2-skills/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Turn pstack's prototype playbook into a standalone skill here. The source is at /tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/pstack-src/pstack/skills/poteto-mode/playbooks/prototype.md — read it in full first. Write .claude/skills/prototype/SKILL.md with frontmatter carrying name prototype, a description that triggers on 'prototype this', 'try a few options', 'which layout', and disable-model-invocation true (per D6). Keep the whole idea intact: planning by code, speed over polish, the design decision is the deliverable and the code is throwaway. Keep all six steps — scope the decision, gather references when the space is open, build throwaway in an isolated scratch directory, put alternatives behind one switcher, verify on the matching surface, present alternatives with a recommendation. Apply the adaptation contract in the plan's Approach section. Rewire three things. The scratch directory is the session scratchpad directory named in the session environment, never a bare /tmp path. The control skill for driving a surface is this repo's own: read .claude/skills/verify-app/SKILL.md and cite it plus its control-bee helper by real path, instead of pstack's control-ui or control-cli from cursor-team-kit. The handoff at the end goes to bee-planning for the real build (per D2 — bee-planning owns plan shape here, pstack's Feature and multi-phase-plan playbooks are not ported), and to the architect skill when the open question is the shape rather than the behavior. Where the source cites the exhaust-the-design-space principle skill, that skill is not ported: run `ls .claude/skills/ | grep bee-principle` and cite the matching bee principle if one fits, otherwise say the idea in one plain clause. Add the provenance line naming cursor/plugins pstack/skills/poteto-mode/playbooks/prototype.md as the source. Write to .claude/skills/ only (per D7).",
+  "verify": "python3 -c \"import sys;p='.claude/skills/prototype/SKILL.md';s=open(p).read();sys.exit('missing frontmatter flag') if 'disable-model-invocation: true' not in s else 0\" && rg -q 'verify-app' .claude/skills/prototype/SKILL.md && ! rg -n 'cursor-team-kit|pstack/skills/|poteto-agent|generalPurpose|~/\\.cursor|grok-4|claude-fable-5-1-thinking|subagent_type' .claude/skills/prototype",
+  "must_haves": {
+    "truths": [
+      "The skill says plainly that the prototype is throwaway and the decision is the deliverable",
+      "The surface-driving step cites this repo's verify-app skill by real path"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude/skills/prototype/SKILL.md",
+        "substantive": "the six prototyping steps plus the reply contract, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "prototype hands the chosen direction to bee-planning, and to architect when the shape is the open question"
+    ],
+    "prohibitions": [
+      "No write outside .claude/skills/prototype/",
+      "No cursor-team-kit control skill reference",
+      "No bare /tmp scratch path"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pp2-5",
+    "outcome": "Ported the prototype playbook as a standalone skill wired to verify-app and bee-planning",
+    "files_changed": [
+      ".claude/skills/prototype/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-10T15:44:34.449Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "claimed_at": "2026-09-10T15:37:00.286Z",
+    "mistakes": [
+      {
+        "wrong": "prototype/SKILL.md shipped title-case headings ('Prototyping Steps', 'Reply Contract'), which unslop rule 17 forbids and which unslop ships in the same commit wave",
+        "better": "the cell brief should have named unslop as the style authority every ported file is written through"
+      }
+    ],
+    "report": {
+      "outcome": "Ported the prototype playbook as a standalone skill wired to verify-app and bee-planning",
+      "commit": "7c0c916735ed76862207b82dc3ab3623d476acda",
+      "files": [
+        ".claude/skills/prototype/SKILL.md"
+      ],
+      "tests": "python3 check_port.py over the nine ported skill trees — green:static — printed OK 9 skills: frontmatter parses, links resolve, no pstack token; .claude/skills/** is markdown an agent loads, not Rust, and the declared cargo suite does not reach it (plan claim 7)",
+      "deviations": [],
+      "mistakes": [
+        "prototype/SKILL.md shipped title-case headings ('Prototyping Steps', 'Reply Contract'), which unslop rule 17 forbids and which unslop ships in the same commit wave — the cell brief should have named unslop as the style authority every ported file is written through"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

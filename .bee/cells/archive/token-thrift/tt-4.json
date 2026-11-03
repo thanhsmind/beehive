@@ -1,0 +1,143 @@
+{
+  "id": "tt-4",
+  "feature": "token-thrift",
+  "title": "Document the token economy of injected context",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "tt-1",
+    "tt-2",
+    "tt-3"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "read_first": [
+    "docs/history/token-thrift/CONTEXT.md",
+    "docs/history/token-thrift/reports/hat-wave-synthesis.md",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "action": "Write a new concept in the frontmatter shape and style of the other files in docs/knowledge/areas/hook-runtime/ (ASD-STE100, short sentences). Content: bee does not own the host request, so it saves tokens by what it injects and prints; the Claude Code inline limit (10,000 characters; larger hook output goes to a file with a 2 KB preview) and why PREAMBLE_BUDGET_BYTES is 9500; the drop order and the Omitted line; zero-frontier map fold; the grouped dispatch door; the capped orient promote blocker; what was already in place (per-turn reminder deduped by hash with a 30-minute re-inject in hooks/prompt_context.rs, append-only per-turn text keeps the cached prefix, each cell runs in a fresh dispatched worker); and the boundary: budgets bind generated payloads only, never authored instruction text (decision 8f63adb4-de70-424e-b082-1f4c5ec4b693). State that the budget binds the whole session-start hook stdout (belt line, intent anchor and preamble) on every runtime, because the builder is shared and the smallest host limit sets it; the compact capsule is not budgeted yet. Each Omitted entry names its own fetch path. In model-roles-and-escalation.md, replace the statement that door lines are at most 60 characters per line (near line 161) with the grouped shape: one line per target, roles in full. Out of scope: trimming host history, wait timing tuned to cache TTL. Pointers: hooks/session_preamble/budget.rs, hooks/model_guard.rs, hooks/prompt_context.rs, verbs/status_full/orient.rs, docs/history/token-thrift/CONTEXT.md. Run `.bee/bin/bee knowledge check` if it exists and fix what it reports for this file.",
+  "verify": "rg -n 'HOST_INLINE_LIMIT_CHARS|9500|Omitted to fit|8f63adb4|should_inject' docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+  "must_haves": {
+    "truths": [
+      "the concept names the host limit, the budget, the drop order and the decision boundary",
+      "Pointers list budget.rs, model_guard.rs, prompt_context.rs and orient.rs"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+        "substantive": "the concept"
+      }
+    ],
+    "key_links": [
+      "the concept cites decision 8f63adb4"
+    ],
+    "prohibitions": [
+      "No code comments added anywhere"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-tt-4",
+    "outcome": "New concept token-economy-of-injected-context.md records host limit, 9500 budget, drop order, Omitted line, map fold, grouped door, orient and preamble promote caps, prior savings and the 8f63adb4 boundary; model-roles door line states the grouped shape",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+    ],
+    "deviations": [
+      "added a D7 sentence beside the orient blocker text, a D7 note in Edge Cases, decision 691fcac4 in frontmatter and hooks/session_preamble/render.rs in Pointers — the leader sent decision D7 mid-cell — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-21T05:53:42.088Z",
+    "behavior_change": false,
+    "verification_evidence": "docs cell: cell verify matched all five terms (13 lines); bee knowledge check also 0 errors and no warning for the new concept",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "48772102-7614-4853-aa3b-034ee7a935a1",
+    "verify_command": "rg -n 'HOST_INLINE_LIMIT_CHARS|9500|Omitted to fit|8f63adb4|should_inject' docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+    "claimed_at": "2026-10-21T05:50:11.870Z",
+    "mistakes": [
+      {
+        "wrong": "the first frontmatter quoted plain-safe list entries, so bee knowledge check warned not_canonical on the new concept",
+        "better": "read is_plain_safe in verbs/knowledge/frontmatter.rs before writing frontmatter by hand",
+        "fix_at": "none"
+      },
+      {
+        "wrong": "the first cells finish passed a paraphrased proof command and was refused",
+        "better": "pass the cell verify command verbatim as the proof command",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Concept docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md: host limit + 9500 budget (Behaviors para 1, R1); whole stdout on every runtime (para 2); drop order + Omitted line with per-entry fetch paths (paras 3-4, R3); map fold; grouped door; orient cap + D7 preamble promote line cap; prior savings incl should_inject; boundary 8f63adb4 (R4 + frontmatter decisions); capsule unbudgeted (Open Gaps); Out of Scope section; Pointers to budget.rs, session_init.rs, model_guard.rs, prompt_context.rs, orient.rs, render.rs, CONTEXT.md. model-roles-and-escalation.md B12 amendment replaces the 60-char statement with the grouped shape.",
+      "commit": "23331c7bb",
+      "files": [
+        "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+      ],
+      "tests": "rg -n 'HOST_INLINE_LIMIT_CHARS|9500|Omitted to fit|8f63adb4|should_inject' docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md — green:static — docs cell: cell verify matched all five terms (13 lines); bee knowledge check also 0 errors and no warning for the new concept",
+      "deviations": [
+        "added a D7 sentence beside the orient blocker text, a D7 note in Edge Cases, decision 691fcac4 in frontmatter and hooks/session_preamble/render.rs in Pointers — the leader sent decision D7 mid-cell — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "the first frontmatter quoted plain-safe list entries, so bee knowledge check warned not_canonical on the new concept — read is_plain_safe in verbs/knowledge/frontmatter.rs before writing frontmatter by hand — none",
+        "the first cells finish passed a paraphrased proof command and was refused — pass the cell verify command verbatim as the proof command — none"
+      ],
+      "skipped": [
+        "bee knowledge index regen: root, areas and hook-runtime index.md are stale for the new concept, plus areas/worktree-parallelism/index.md stale before this cell; outside the cell files and no test or CI step checks index freshness"
+      ],
+      "unknowns": [
+        "PROMOTE_CLEAR_COMMANDS_SHOWN is not yet in render.rs in this worktree; the Pointer names it from the leader message"
+      ],
+      "found": [
+        "run bee knowledge index to list the new concept in docs/knowledge/index.md, areas/index.md and areas/hook-runtime/index.md"
+      ]
+    },
+    "skipped": [
+      "bee knowledge index regen: root, areas and hook-runtime index.md are stale for the new concept, plus areas/worktree-parallelism/index.md stale before this cell; outside the cell files and no test or CI step checks index freshness"
+    ],
+    "unknowns": [
+      "PROMOTE_CLEAR_COMMANDS_SHOWN is not yet in render.rs in this worktree; the Pointer names it from the leader message"
+    ],
+    "found": [
+      "run bee knowledge index to list the new concept in docs/knowledge/index.md, areas/index.md and areas/hook-runtime/index.md"
+    ],
+    "warnings": [
+      "advisory: this cap's commit changes 173 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the concept names the host limit, the budget, the drop order and the decision boundary",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "Pointers list budget.rs, model_guard.rs, prompt_context.rs and orient.rs",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          }
+        ],
+        "recorded_at": "2026-10-21T05:55:45.071Z",
+        "recorded_by": "48772102-7614-4853-aa3b-034ee7a935a1",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

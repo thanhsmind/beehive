@@ -25,7 +25,9 @@ use crate::verbs::workflow_store::{
     rebuild_lane_projection_reporting, rebuild_state_projection,
     rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
-    write_mailbox_handoff, MailboxAdopt,
+    write_mailbox_handoff, MailboxAdopt, clear_mailbox_pause_handoffs,
+    clear_mailbox_pause_handoffs_assuming_lock, list_handoff_mailbox,
+    require_handoff_workflow_id,
 };
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -103,6 +105,70 @@ pub(crate) fn closed_row(record: &Map<String, Value>) -> Value {
     Value::Object(row)
 }
 
+pub(crate) fn close_workflow_records(
+    root: &Path,
+    target_ids: &[String],
+) -> Result<Vec<Map<String, Value>>, Err2> {
+    if target_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Sort and deduplicate multi-close targets
+    let mut unique_ids: Vec<String> = Vec::new();
+    for id in target_ids {
+        let wf_id_s = require_handoff_workflow_id(id)?;
+        unique_ids.push(wf_id_s);
+    }
+    unique_ids.sort();
+    unique_ids.dedup();
+
+    // Acquire workflow:<id> then handoff:<id> for each target in stable order
+    let mut guards: Vec<LockGuard> = Vec::new();
+    for id in &unique_ids {
+        guards.push(acquire_workflow_lock(root, id)?);
+        guards.push(acquire_named_lock(root, &format!("handoff:{id}"))?);
+    }
+
+    // 1. Preflight all targets for open planned-next authority
+    for id in &unique_ids {
+        let records = list_handoff_mailbox(root, id)?;
+        for record in records {
+            let is_open = matches!(record.get("status"), Some(Value::String(s)) if s == "open");
+            let is_planned_next = matches!(record.get("kind"), Some(Value::String(s)) if s == "planned-next");
+            if is_open && is_planned_next {
+                let next_cell = record
+                    .get("next_cell")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                return Err(Err2::Msg(format!(
+                    "workflows close: refused \u{2014} workflow \"{id}\" has open planned-next handoff authority (cell \"{next_cell}\"). A planned-next handoff cannot be discarded by close; adopt its carried claim first (bee state handoff adopt), or unclaim the cell."
+                )));
+            }
+        }
+    }
+
+    // 2. Clear open pause records in each target using assuming-lock helper
+    for id in &unique_ids {
+        clear_mailbox_pause_handoffs_assuming_lock(root, id)?;
+    }
+
+    // 3. Mark each workflow closed using assuming-lock helper
+    let mut closed = Vec::new();
+    for id in &unique_ids {
+        let mut patch = Map::new();
+        patch.insert("status".into(), json!("closed"));
+        closed.push(update_workflow_assuming_lock(root, id, patch)?);
+    }
+
+    // Release all transaction locks before rebuilding projections
+    drop(guards);
+
+    // 4. Rebuild handoff projection
+    rebuild_handoff_projection(root)?;
+
+    Ok(closed)
+}
+
 pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["feature", "id", "all-but-active"]) {
         return None;
@@ -144,16 +210,19 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
                     "workflows close --id: no live workflow record found with id \"{id}\"."
                 )));
             }
-            let mut patch = Map::new();
-            patch.insert("status".into(), json!("closed"));
-            let closed = update_workflow(&ctx.root, &id, patch)?;
+            let closed = match close_workflow_records(&ctx.root, &[id]) {
+                Ok(c) => c,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
+            let closed_first = &closed[0];
             let text = format!(
                 "Closed 1 workflow record: {} (feature \"{}\").",
-                js_disp_opt(closed.get("id")),
-                js_disp_opt(closed.get("feature"))
+                js_disp_opt(closed_first.get("id")),
+                js_disp_opt(closed_first.get("feature"))
             );
             let mut result = Map::new();
-            result.insert("closed".into(), Value::Array(vec![closed_row(&closed)]));
+            result.insert("closed".into(), Value::Array(vec![closed_row(closed_first)]));
             return Ok(Out::Emit(Value::Object(result), text, 0));
         }
 
@@ -185,12 +254,11 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
                     "workflows close --feature: no live workflow record found for feature \"{feature}\"."
                 )));
             }
-            let mut closed: Vec<Map<String, Value>> = Vec::new();
-            for id in matches {
-                let mut patch = Map::new();
-                patch.insert("status".into(), json!("closed"));
-                closed.push(update_workflow(&ctx.root, &id, patch)?);
-            }
+            let closed = match close_workflow_records(&ctx.root, &matches) {
+                Ok(c) => c,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
             let ids: Vec<String> = closed.iter().map(|r| js_disp_opt(r.get("id"))).collect();
             let text = format!(
                 "Closed {} workflow record(s) for feature \"{feature}\": {}.",
@@ -220,7 +288,7 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
             .filter(|s| !s.is_empty())
             .map(str::to_string);
         let records = list_workflows(&ctx.root)?;
-        let mut closed: Vec<Value> = Vec::new();
+        let mut target_ids: Vec<String> = Vec::new();
         for record in &records {
             if record.get("status").unwrap_or(&Value::Null) == &json!("closed") {
                 continue;
@@ -230,20 +298,21 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
                     continue;
                 }
             }
-            let id = wf_id(record);
-            let mut patch = Map::new();
-            patch.insert("status".into(), json!("closed"));
-            update_workflow(&ctx.root, &id, patch)?;
-            closed.push(closed_row(record));
+            target_ids.push(wf_id(record));
         }
-        if closed.is_empty() {
+        if target_ids.is_empty() {
             return Ok(Out::Thrown(
                 "workflows close --all-but-active: nothing to close \u{2014} no live workflow record other than the active feature.".to_string(),
             ));
         }
+        let closed = match close_workflow_records(&ctx.root, &target_ids) {
+            Ok(c) => c,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
         let ids: Vec<String> = closed
             .iter()
-            .map(|r| js_disp_opt(jget(r, "id")))
+            .map(|r| js_disp_opt(r.get("id")))
             .collect();
         let text = format!(
             "Closed {} workflow record(s), kept active feature \"{}\": {}.",
@@ -252,7 +321,7 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
             ids.join(", ")
         );
         let mut result = Map::new();
-        result.insert("closed".into(), Value::Array(closed));
+        result.insert("closed".into(), Value::Array(closed.iter().map(closed_row).collect()));
         Ok(Out::Emit(Value::Object(result), text, 0))
     })();
     finish(&ctx, out)
@@ -284,10 +353,19 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
 // over grant state anymore; `--show`, `--set`, and every lane are native in
 // every repo.
 
-pub(crate) const ROUTE_CLASS_VALUES: [&str; 7] =
-    ["feature", "bugfix", "docs", "refactor", "research", "release", "spike"];
+pub(crate) const ROUTE_CLASS_VALUES: [&str; 9] =
+    ["feature", "bugfix", "docs", "refactor", "research", "release", "spike", "perf", "content"];
 const ROUTE_LANE_VALUES: [&str; 6] =
     ["docs", "tiny", "small", "spike", "standard", "high-risk"];
+// psa-1 (D2, decision 1593e365) added "perf" as the eighth class. SAFETY
+// ARGUMENT — a lane record's `mode` field usually carries a WORKFLOW class,
+// and two readers (verbs/drivers/close.rs:393-403, uat.rs:139-171) fall back
+// to `mode` as a LANE only when the value it holds is itself a lane value.
+// Adding "perf" is safe because "perf" is absent from ROUTE_LANE_VALUES, so a
+// `mode: perf` record can never be misread as a lane. "docs" and "spike"
+// already sit in both vocabularies; "perf" adds no new collision. NEVER add a
+// class value that is also a lane value. Both consts keep their line numbers
+// (287-288 / 289-290) because those two readers cite them by line.
 pub(crate) const ROUTE_FLAG_VALUES: [&str; 10] = [
     "auth",
     "authorization",
@@ -658,7 +736,7 @@ pub(crate) fn route_worktree_block(
             "lane \"{lane}\" is code-touching and feature \"{feature}\" already holds a granted worktree (id {id}) \u{2014} continue work there, not in the MAIN checkout."
         )));
         block.insert("notice".into(), json!(format!(
-            "\u{26a0} WORKTREE EXISTS: lane \"{lane}\" is code-touching and feature \"{feature}\" already has a granted worktree (id {id}) at {worktree_root}. NEXT: open your session at {worktree_root} \u{2014} main stays for integration, docs-lane, and release work; a granted worktree's feature source edits are refused from here."
+            "\u{26a0} WORKTREE EXISTS: lane \"{lane}\" is code-touching and feature \"{feature}\" already has a granted worktree (id {id}) at {worktree_root}. NEXT: bee worktree enter --id {id} \u{2014} main stays for integration, docs-lane, and release work; a granted worktree's feature source edits are refused from here."
         )));
     } else {
         let command = format!("bee worktree new --feature {feature}");
@@ -667,7 +745,7 @@ pub(crate) fn route_worktree_block(
             "lane \"{lane}\" is code-touching and this is the MAIN checkout \u{2014} feature work branches at feature start (worktree-first)"
         )));
         block.insert("notice".into(), json!(format!(
-            "\u{26a0} WORKTREE-FIRST: lane \"{lane}\" is code-touching and this is the MAIN checkout. NEXT: run \"{command}\", then open your session at the printed worktree path \u{2014} main stays for integration, docs-lane, and release work; once the worktree is granted, main refuses feature source edits."
+            "\u{26a0} WORKTREE-FIRST: lane \"{lane}\" is code-touching and this is the MAIN checkout. NEXT: run \"{command}\", then bee worktree enter --id <the id it prints> \u{2014} main stays for integration, docs-lane, and release work; once the worktree is granted, main refuses feature source edits."
         )));
     }
     Some(Value::Object(block))
@@ -750,7 +828,7 @@ pub(crate) fn unbound_default_route_refusal(
         None => "the default record (.bee/state.json) holds no active feature at all, so this route would have no feature to belong to.".to_string(),
     };
     Some(format!(
-        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and {holds} FIX: bind this session to its lane (bee state session bind --lane <feature>), or pass --no-lane to write the default record on purpose.",
+        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and {holds} FIX: bind this session to its lane (bee state session bind --lane <feature>), pass --lane-record <feature> to name the lane record to write, or pass --no-lane to write the default record on purpose.",
         live_lanes.len()
     ))
 }
@@ -758,7 +836,7 @@ pub(crate) fn unbound_default_route_refusal(
 pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(
         &flags,
-        &["set", "show", "class", "lane", "flags", "files", "rationale", "no-lane"],
+        &["set", "show", "class", "lane", "lane-record", "flags", "files", "rationale", "no-lane"],
     ) {
         return None;
     }
@@ -767,26 +845,21 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
             return None;
         }
     }
-    // srg-1: `no-lane` is read DIRECTLY here, never through
-    // `mutation_lane_selector` — that helper exists to reconcile `--lane`
-    // (a lane RECORD selector on set/gate/scribing-run) with `--no-lane`,
-    // and route's `--lane` is a different flag wearing the same name: the
-    // triage class (ROUTE_LANE_VALUES). Feeding route's `--lane` to the
-    // selector would refuse `route --set --lane standard --no-lane` as a
-    // "cannot combine" collision that does not exist.
-    // Presence is the value, exactly as `mutation_lane_selector` reads it for
-    // every other lane-targeting verb — `bool_flag_ok` above has already
-    // rejected anything that is not bare / "true" / "false".
-    let no_lane = flags.get("no-lane").is_some();
-    let show = matches!(flags.get("show"), Some(FlagV::Present));
-    let set = matches!(flags.get("set"), Some(FlagV::Present));
     let ctx = match go("state route", use_json, t0)? {
         Ok(c) => c,
         Err(code) => return Some(code),
     };
     let out = (|| -> R2<Out> {
+        let (lane_feature, no_lane) = match mutation_lane_selector_at(&flags, "route", "lane-record") {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        let show = matches!(flags.get("show"), Some(FlagV::Present));
+        let set = matches!(flags.get("set"), Some(FlagV::Present));
         if show {
-            let target = resolve_mutation_target(&ctx.root, None, "route show", no_lane)?;
+            let target =
+                resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "route show", no_lane)?;
             // `target.record.route ?? null`, then `if (!route)`.
             let route = match target.record().get("route") {
                 Some(v) if truthy(v) => v.clone(),
@@ -826,10 +899,10 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         };
         let lane_class = js_disp_opt(route_object.get("lane"));
 
-        let scope = resolve_mutation_lock_scope(&ctx.root, None, no_lane)?;
+        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
         let workflows = list_workflows(&ctx.root)?;
         let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
-        let mut target = resolve_mutation_target(&ctx.root, None, "route", no_lane)?;
+        let mut target = resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "route", no_lane)?;
         // srg-1: the unbound-session guard. It lands BEFORE the no-active-
         // feature check and before any field is set, so a refusal mutates
         // nothing (the lock above is transient and released on drop).

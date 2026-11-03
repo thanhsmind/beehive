@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-1-4-capability-audit",
+  "mode": "small",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-1-4-capability-audit\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"pi-1-4-capability-audit\" — feature is closed.",
+  "created_at": "2026-10-27T13:43:41.584Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 3,
+    "rationale": "pi 1.4.0 upgrade: belt touches 3 product files; one external-systems flag (pi host API)",
+    "updated_at": "2026-10-27T13:44:07.424Z",
+    "feature": "pi-1-4-capability-audit"
+  }
+}

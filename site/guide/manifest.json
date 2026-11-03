@@ -1,0 +1,20 @@
+{
+  "lang": "vi",
+  "title": "Hướng dẫn bee",
+  "chapters": [
+    { "slug": "bee-la-gi", "number": 1, "title": "Bee là gì", "blurb": "Ai mới thật sự là người dùng bee — và vì sao điều đó đổi mọi thứ." },
+    { "slug": "tu-vung", "number": 2, "title": "Từ vựng", "blurb": "Khoảng 60 chữ bạn sẽ gặp đi gặp lại, mỗi chữ một dòng." },
+    { "slug": "cong-gate", "number": 3, "title": "Năm cái cổng", "blurb": "Những chỗ duy nhất bee dừng lại chờ bạn nói \"được\"." },
+    { "slug": "kho-store", "number": 4, "title": "Kho .bee/", "blurb": "Bee ghi cái gì xuống đĩa, và vì sao bạn không được sửa tay." },
+    { "slug": "phien-session", "number": 5, "title": "Phiên làm việc", "blurb": "Preamble, heartbeat, handoff — bộ khung quanh một phiên agent." },
+    { "slug": "hooks-guards", "number": 6, "title": "Hooks — người gác cổng", "blurb": "Ai thật sự chặn được một lần ghi file, và chặn bằng cách nào." },
+    { "slug": "worktree", "number": 7, "title": "Worktree & staging", "blurb": "Vì sao mỗi việc nên có một bàn làm việc riêng." },
+    { "slug": "vong-doi", "number": 8, "title": "Vòng đời một feature", "blurb": "Sáu chặng từ ý tưởng tới đóng sổ, và chặng nào cần gì." },
+    { "slug": "cell-lane", "number": 9, "title": "Cell & Lane", "blurb": "Đơn vị việc nhỏ nhất, và cỡ việc quyết định bao nhiêu nghi thức." },
+    { "slug": "giao-viec", "number": 10, "title": "Giao việc cho subagent", "blurb": "Dispatch, worker, herding — một cửa duy nhất để gọi quân." },
+    { "slug": "phoi-hop", "number": 11, "title": "Nhiều phiên cùng lúc", "blurb": "Claim, reservation, hold — cách nhiều agent không giẫm chân nhau." },
+    { "slug": "bo-nho", "number": 12, "title": "Bee nhớ những gì", "blurb": "Capture, decision, knowledge, backlog — bốn tầng trí nhớ." },
+    { "slug": "config", "number": 13, "title": "Cấu hình chi tiết", "blurb": "Mọi key trong .bee/config.json: giá trị mặc định, ý nghĩa, ví dụ." },
+    { "slug": "dung-hieu-qua", "number": 14, "title": "Dùng bee cho hiệu quả", "blurb": "Công thức thực chiến, và những chỗ người mới hay vấp." }
+  ]
+}

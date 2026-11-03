@@ -1,0 +1,150 @@
+{
+  "id": "pws-1",
+  "feature": "pi-worker-surface",
+  "title": "Register the terminating verdict tool and route it explicitly",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "172cb2af-34d1-497c-82ae-cd8c1a0906bb",
+    "6b7e8f49",
+    "dae51a75",
+    "e29aa9cd"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Register ONE terminating tool on the Pi belt whose parameter schema MIRRORS MailboxResult (herding/mailbox.rs:490 — status done|blocked, summary, files_changed, proof; optional options, leaning, report_path). It writes .bee/mailbox/<job-id>/result-N.json tmp-then-rename and returns terminate: true. Define no new schema (D6 as amended by 6b7e8f49). Add an explicit mapToolCall row for the tool name routing to write-guard — without it the fail-safe default arm produces a Write with an empty file_path and every call is denied with exit 2 (claim 5, claim 6). Leave model-guard a named exclusion: this tool spawns nothing (D8). Add contract fixtures pinning the route and the terminate flag, and add a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). Do not touch the Claude, Codex or OpenCode belts (D10). REGEN OBLIGATION: .pi/extensions is a release-manifest-hashed root, so run the full chain inside THIS cell before capping — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the refreshed release-manifest.json with the change.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A worker calling the verdict tool ends its run without a follow-up assistant turn",
+      "A verdict missing a required field is rejected by the host before execute() runs",
+      "A worker that never calls the tool still resolves through its report file, unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "one registered terminating tool plus its explicit mapToolCall row; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "fixtures pinning the tool's write-guard route and the model-guard exclusion"
+      }
+    ],
+    "key_links": [
+      "the tool's schema fields match MailboxResult's parsed fields in herding/mailbox.rs"
+    ],
+    "prohibitions": [
+      "No new verdict schema defined in the belt",
+      "No dispatch tool and no process spawner added to the belt",
+      "No change to transport outcome classification in herding/wave.rs",
+      "No edit to the Claude, Codex or OpenCode belts"
+    ]
+  },
+  "trace": {
+    "worker": "pws1-verdict",
+    "outcome": "Registered terminating verdict tool on Pi belt and routed to write-guard",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T09:23:13.944Z",
+    "behavior_change": true,
+    "verification_evidence": "touched bee-guard.ts and pi_plugin_contracts.rs",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "044a7c9a-a928-4ed5-bee9-4718396ee427",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-20T09:06:44.439Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Registered terminating verdict tool on Pi belt and routed to write-guard",
+      "commit": "55c287234",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        ".bee/verify/verify-app/features/pi-runtime.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check — green:unit — touched bee-guard.ts and pi_plugin_contracts.rs",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "T1-terminates",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts — executeVerdictTool returns `terminate: true` alongside its content block, so the worker's turn ends on the tool call (Pi 0.85.1 extensions.md:2019)."
+          },
+          {
+            "id": "T2-required-fields",
+            "status": "PASS",
+            "evidence": "VERDICT_TOOL_PARAMETERS declares required [status, summary, files_changed, proof] and status is an enum of done|blocked. Pi validates parameters before execute() runs (extensions.md:2033 — prepareArguments 'runs before schema validation and before execute()'), so a missing field never reaches the write."
+          },
+          {
+            "id": "T3-fallback-intact",
+            "status": "PASS",
+            "evidence": "git show 55c287234 -- .pi/extensions/bee-guard.ts shows 205 insertions and exactly 1 deletion; the deletion is the node:fs import line, re-expanded. No drain, report-reading or injection path was removed, so a worker that never calls the tool resolves exactly as before."
+          },
+          {
+            "id": "T4-manifest",
+            "status": "PASS",
+            "evidence": "Re-run by the leader: .bee/bin/bee dev release-manifest --check -> '376 file(s) match stored manifest, 1 unhashed artifact(s) present', exit 0. release-manifest.json and .bee/onboarding.json both moved in the commit, so the regen chain was actually run."
+          },
+          {
+            "id": "P1-mirrors-schema",
+            "status": "PASS",
+            "evidence": "Field-by-field against MailboxResult (herding/mailbox.rs:490-530): required status/summary/files_changed/proof match; optional options, leaning, report_path match; dissent {claim, alternative, severity} matches dissent: Option<MailboxDissent> at :517, which the worker brief at :412-424 instructs workers to fill. The contract text 172cb2af under-specified the list by omitting dissent and report_note — the CODE is more faithful than the contract was; amended by decision 73141b63. report_note is absent from the tool but optional, so nothing required was removed."
+          },
+          {
+            "id": "P2-no-spawner",
+            "status": "PASS",
+            "evidence": "Searched the belt diff's added lines for spawn|execFile|child_process|subprocess|'herding run'|dispatch — 0 matches. D11's premise that the belt carries no dispatch tool and no spawner holds, so model-guard stays a named exclusion."
+          },
+          {
+            "id": "P3-wave-untouched",
+            "status": "PASS",
+            "evidence": "git show 55c287234 --stat lists exactly 4 files; herding/wave.rs is not among them, so classify_outcome and the transport taxonomy are unchanged."
+          },
+          {
+            "id": "P4-other-belts-untouched",
+            "status": "PASS",
+            "evidence": "The same 4-file stat contains no .claude/, .codex-plugin/ or .opencode/ path. D10 holds."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-20T09:49:58.553Z"
+      }
+    ]
+  }
+}

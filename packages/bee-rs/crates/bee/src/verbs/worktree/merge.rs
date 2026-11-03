@@ -17,6 +17,7 @@ use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, record_timing};
 use crate::{jsjson, lock};
 use serde_json::{json, Map, Value};
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 use std::process::ExitCode;
@@ -114,34 +115,131 @@ pub(crate) fn is_tree_dirty_excluding(cwd: &Path, exclude_paths: &[String]) -> R
     Ok(!js_trim(&git_status_porcelain_excluding(cwd, exclude_paths)?).is_empty())
 }
 
-/// The same `:(exclude)` pathspec form [`git_status_porcelain_excluding`]
-/// uses, but with `--untracked-files=all` so an untracked directory is
-/// listed FILE BY FILE rather than collapsed to one top-level summary line.
-/// Plain porcelain's collapsing is fine for the boolean dirty/clean check
-/// (`is_tree_dirty_excluding`) — a collapsed line is still non-empty — but
-/// it is WRONG for a refusal message that has to NAME the offending path:
-/// with `docs/history/<mine>` excluded and `docs/history/<theirs>` left
-/// over, plain porcelain still renders the whole thing as `?? docs/`,
-/// naming neither feature. `--untracked-files=all` makes the exclude
-/// pathspec's own recursion into `docs/` surface the real leftover file
-/// (`?? docs/history/<theirs>/plan.md`) instead.
-pub(crate) fn git_status_porcelain_excluding_untracked_all(cwd: &Path, exclude_paths: &[String]) -> Result<String, String> {
+/// The MAIN checkout's leftover dirt, split by the ONE thing that decides
+/// whether the merge can harm it: is the path TRACKED, or UNTRACKED?
+///
+/// (mdp-1) The two are not the same risk, so the dirty-main door
+/// (phases.rs) can no longer treat them alike. A tracked modification
+/// outside the bookkeeping roots refuses exactly as it always did. An
+/// untracked path can only be harmed if the merge WRITES it — see
+/// [`branch_changed_files`] — and the daily cost of refusing on the rest
+/// was real: with several live sessions, nobody could merge until everybody
+/// committed.
+///
+/// Same `:(exclude)` pathspec form [`git_status_porcelain_excluding`] uses,
+/// plus two flags that both earn their place:
+///
+/// - `--untracked-files=all`, so an untracked DIRECTORY is listed file by
+///   file rather than collapsed to one top-level summary line. Plain
+///   porcelain's collapsing is fine for the boolean dirty/clean check
+///   (`is_tree_dirty_excluding`) — a collapsed line is still non-empty —
+///   but it is wrong twice here. It is wrong for a refusal that has to NAME
+///   the offending path (with `docs/history/<mine>` excluded and
+///   `docs/history/<theirs>` left over, plain porcelain renders the whole
+///   thing as `?? docs/`, naming neither feature), and it is wrong for the
+///   collision test, which compares each untracked path against the
+///   branch's changed-file set and so needs the real file path, never
+///   `docs/`.
+/// - `-z`, so a path carrying a space or a quote arrives verbatim instead
+///   of C-quoted. A quoted path would never string-match the `git diff -z`
+///   names it is compared against — the collision test would silently miss.
+///
+/// `tracked` keeps the whole porcelain entry (`XY path`) because that is
+/// what the refusal prints; `untracked` keeps bare paths because that is
+/// what the collision test compares. A rename/copy entry carries a SECOND
+/// NUL-terminated field (its source path), consumed and dropped here — the
+/// destination is the path that names the dirt.
+pub(crate) struct MainDirt {
+    pub(crate) tracked: Vec<String>,
+    pub(crate) untracked: Vec<String>,
+}
+
+pub(crate) fn main_dirt_excluding(cwd: &Path, exclude_paths: &[String]) -> Result<MainDirt, String> {
     let pathspecs: Vec<String> = exclude_paths
         .iter()
         .map(|p| format!(":(exclude){}", p.replace('\\', "/")))
         .collect();
-    let mut args: Vec<&str> = vec!["status", "--porcelain", "--untracked-files=all", "--"];
+    porcelain_dirt(cwd, &pathspecs)
+}
+
+pub(crate) fn main_untracked_under(cwd: &Path, roots: &[String]) -> Result<Vec<String>, String> {
+    let pathspecs: Vec<String> = roots.iter().map(|r| r.replace('\\', "/")).collect();
+    Ok(porcelain_dirt(cwd, &pathspecs)?.untracked)
+}
+
+fn porcelain_dirt(cwd: &Path, pathspecs: &[String]) -> Result<MainDirt, String> {
+    let mut args: Vec<&str> = vec!["status", "--porcelain", "--untracked-files=all", "-z", "--"];
     args.extend(pathspecs.iter().map(String::as_str));
     let r = run_git(cwd, &args);
     if r.status != Some(0) {
         return Err(format!(
-            "\"git status --porcelain --untracked-files=all -- {}\" failed in {}: {}",
+            "\"git status --porcelain --untracked-files=all -z -- {}\" failed in {}: {}",
             pathspecs.join(" "),
             p(cwd),
             r.fail_text()
         ));
     }
-    Ok(r.stdout.unwrap_or_default())
+    let out = r.stdout.unwrap_or_default();
+    let mut dirt = MainDirt { tracked: Vec::new(), untracked: Vec::new() };
+    let mut fields = out.split('\0').filter(|f| !f.is_empty());
+    while let Some(entry) = fields.next() {
+        // `XY<space><path>` — anything shorter is not an entry at all.
+        if entry.len() < 4 {
+            continue;
+        }
+        let xy = &entry[..2];
+        let path = &entry[3..];
+        if xy.contains('R') || xy.contains('C') {
+            fields.next();
+        }
+        if xy == "??" {
+            dirt.untracked.push(path.to_string());
+        } else {
+            dirt.tracked.push(entry.to_string());
+        }
+    }
+    Ok(dirt)
+}
+
+/// (mdp-1) The repo-relative paths the merging branch itself writes — the
+/// ONLY paths an untracked file in main can collide with.
+///
+/// Read against the branch's MERGE BASE with main, never against main's
+/// HEAD. The two spellings disagree exactly when main has moved on since
+/// the fork: if main DELETED a file the branch still carries untouched,
+/// `git diff HEAD <branch>` names that file (the merge RESULT differs from
+/// HEAD there) even though the branch never wrote it — a collision that
+/// cannot happen, refusing a merge for nothing. "Does this branch touch the
+/// path" is a question about the branch's own commits, so the merge base is
+/// the only honest base. `--no-renames` because a rename is TWO paths the
+/// merge writes and both have to appear; rename detection would fold them
+/// into one entry and hide the destination.
+///
+/// `None` means "cannot tell" — no merge base (unrelated histories), an
+/// unknown branch, or a git failure. Every caller then FAILS CLOSED and
+/// treats all untracked dirt as blocking, which is exactly the refusal this
+/// door had before the narrowing: unreadable never means permissive.
+pub(crate) fn branch_changed_files(main_root: &Path, branch: &str) -> Option<BTreeSet<String>> {
+    let base = run_git(main_root, &["merge-base", "HEAD", branch]);
+    if base.status != Some(0) {
+        return None;
+    }
+    let base = js_trim(&base.stdout.unwrap_or_default()).to_string();
+    if base.is_empty() {
+        return None;
+    }
+    let diff = run_git(main_root, &["diff", "--no-renames", "--name-only", "-z", &base, branch]);
+    if diff.status != Some(0) {
+        return None;
+    }
+    Some(
+        diff.stdout
+            .unwrap_or_default()
+            .split('\0')
+            .filter(|f| !f.is_empty())
+            .map(str::to_string)
+            .collect(),
+    )
 }
 
 // ─── trun-4: pre-merge `.bee` (+ `docs/decisions`, `docs/knowledge`, and
@@ -168,10 +266,10 @@ pub(crate) fn git_status_porcelain_excluding_untracked_all(cwd: &Path, exclude_p
 // --no-gpg-sign`, through `commit_unsigned`.
 
 /// The pathspecs a pre-merge bookkeeping auto-commit is allowed to sweep:
-/// `.bee` and `docs/decisions` always — both are bee's own machine-written
-/// control plane and its rendered index, written by every session
-/// (`decisions log` writes `docs/decisions/taxonomy.json`,
-/// verbs/decisions/mod.rs). `docs/knowledge` and `docs/history/<feature>`
+/// `.bee`, `docs/decisions` and each skills root's own version stamp always —
+/// the first two are bee's own machine-written control plane and its
+/// rendered index, written by every session (`decisions log` writes
+/// `docs/decisions/taxonomy.json`). `docs/knowledge` and `docs/history/<feature>`
 /// are different: both hold AUTHORED prose (capture, not bookkeeping), so
 /// neither is ever swept blanket — each is scoped to the MERGING feature's
 /// own recorded paths, and only when that feature is known.
@@ -203,6 +301,7 @@ pub(crate) fn git_status_porcelain_excluding_untracked_all(cwd: &Path, exclude_p
 /// same path that already names an unscoped `docs/history` file.
 pub(crate) fn main_bookkeeping_roots(root: &Path, feature: Option<&str>) -> Vec<String> {
     let mut roots = vec![".bee".to_string(), "docs/decisions".to_string()];
+    roots.extend(skills_version_stamp_paths());
     if let Some(feature) = feature {
         let touched = crate::verbs::drivers::feature_touched_files(root, feature).unwrap_or_default();
         for f in touched {
@@ -213,6 +312,19 @@ pub(crate) fn main_bookkeeping_roots(root: &Path, feature: Option<&str>) -> Vec<
         roots.push(format!("docs/history/{feature}"));
     }
     roots
+}
+
+pub(crate) fn skills_version_stamp_paths() -> Vec<String> {
+    crate::onboard::templates::REPO_SKILL_TARGETS
+        .iter()
+        .map(|(_, segments)| {
+            format!(
+                "{}/{}",
+                segments.join("/"),
+                crate::onboard::templates::SKILLS_VERSION_STAMP
+            )
+        })
+        .collect()
 }
 
 /// `worktree_merge_commit_bookkeeping` in the merged config (`.bee/config.json`
@@ -311,19 +423,25 @@ pub(crate) fn commit_main_bookkeeping(main_root: &Path, message: &str, pathspecs
     // ever reaches `add`/`commit` — `.bee` alone is never dropped this way in
     // practice (bootstrap always creates it), so this only ever narrows the
     // optional docs/history root.
-    let specs: Vec<&str> = pathspecs
-        .iter()
-        .map(String::as_str)
-        .filter(|spec| {
-            main_root.join(spec).exists() || {
-                let tracked = run_git(main_root, &["ls-files", "--", spec]);
-                !js_trim(&tracked.stdout.unwrap_or_default()).is_empty()
-            }
-        })
-        .collect();
-    if specs.is_empty() {
+    let mut includes: Vec<&str> = Vec::new();
+    let mut excludes: Vec<&str> = Vec::new();
+    for spec in pathspecs.iter().map(String::as_str) {
+        if spec.starts_with(':') {
+            excludes.push(spec);
+            continue;
+        }
+        if main_root.join(spec).exists() || {
+            let tracked = run_git(main_root, &["ls-files", "--", spec]);
+            !js_trim(&tracked.stdout.unwrap_or_default()).is_empty()
+        } {
+            includes.push(spec);
+        }
+    }
+    if includes.is_empty() {
         return MainBookkeepingCommit::skipped("clean");
     }
+    let mut specs: Vec<&str> = includes;
+    specs.extend(excludes);
 
     let mut status_args: Vec<&str> = vec!["status", "--porcelain", "--"];
     status_args.extend_from_slice(&specs);
@@ -610,6 +728,7 @@ pub(crate) fn teardown_worktree(
             let _ = write_grants_file_atomic(&main_store_root, &next);
         }
     }
+    super::paseo_ws::archive(main_root, id);
     let _ = ws::unregister_workspace(main_root, id);
     release_all_for_holder(main_root, id);
     Ok(())

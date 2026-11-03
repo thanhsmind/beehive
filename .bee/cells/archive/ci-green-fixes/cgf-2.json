@@ -1,0 +1,83 @@
+{
+  "id": "cgf-2",
+  "feature": "ci-green-fixes",
+  "title": "Poll for the deferred switch in the Pi marker fixture",
+  "lane": "tiny",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "4792a92e-2064-48ee-aae3-4f0bf371ac16"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In the embedded harness JS add case \"await_switches\" beside await_messages: poll switches.length until call.count or call.timeout_ms, push step({switches_seen}). Add fn await_switches_step(count) -> Value using positive_wait_ms() beside await_injections_in_vain. In shell_tool_result_captures_marker_and_agent_settled_submits_private_command replace sleep_step(50) with await_switches_step(1) (per D2). Other fixtures unchanged.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts shell_tool_result_captures_marker",
+  "must_haves": {
+    "truths": [
+      "the harness has an await_switches step and the marker fixture uses it with the positive-wait window"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Do not change the fixture's assertions",
+      "Do not touch other fixtures"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "Pi marker fixture polls for its deferred switch instead of sleeping 50 ms",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-22T11:03:41.912Z",
+    "behavior_change": false,
+    "verification_evidence": "the one fixture under node v24.19.0; the other sleep_step(50) fixtures were not changed or re-run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts shell_tool_result_captures_marker",
+    "claimed_at": "2026-09-22T11:02:01.621Z",
+    "mistakes": [
+      {
+        "wrong": "my first Edit on pi_plugin_contracts.rs added a /// doc comment on await_switches_step; the tests/ tree sits outside the comment guard's code roots (comments.rs:330), so only the doctrine caught it",
+        "better": "the why lives in decision 4792a92e and the comment was removed before the commit",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "The Pi harness gains an await_switches step and the marker fixture polls for its one switch inside the positive-wait window instead of sleeping 50 ms",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts shell_tool_result_captures_marker — green:unit — the one fixture under node v24.19.0; the other sleep_step(50) fixtures were not changed or re-run",
+      "deviations": [],
+      "commit": "c561f2a67"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the harness has an await_switches step and the marker fixture uses it with the positive-wait window",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T11:03:41.980Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

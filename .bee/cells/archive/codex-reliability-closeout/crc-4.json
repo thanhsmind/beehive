@@ -1,0 +1,152 @@
+{
+  "id": "crc-4",
+  "title": "Accept the documented gate preview flag",
+  "role": "code",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+    "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+    "docs/history/codex-reliability-closeout/preview.md"
+  ],
+  "action": "Repair the reproduced documented gate --preview and state gate --preview refusal. Shared FLAG_ALONE_BOOLEANS lacks preview; trace before fix. Add behavioral CLI regressions for both spellings with --lane following --preview, preserving state gate preview behavior and preview-only mutation (no gate approval). Use existing integration test home if tests/state_group.rs is not the correct name, reserve it and report the deviation. Reproduce the alias failure first and preserve it in preview.md. Fix the parser without bypassing gate validation; no new flags or documentation-only workaround.",
+  "verify": "Run targeted gate preview CLI regression tests on base and head; corrected aliases return a packet and leave approval gates unchanged; bee dev release-manifest --check at integration",
+  "feature": "codex-reliability-closeout",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "b0e62deb-c093-462a-9944-d43011cf2e6d",
+    "be57302a-9683-4f89-bc29-44111764389d"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "docs/history/codex-reliability-closeout/CONTEXT.md",
+    "docs/history/codex-reliability-closeout/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "hook-runtime"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "Both documented preview flag spellings accept following lane flags.",
+      "Preview returns the current packet without approving a gate.",
+      "The existing subcommand spelling continues to work."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+        "substantive": "Parser supports preview as a boolean."
+      }
+    ],
+    "key_links": [
+      "CLI aliases reach the existing preview handler."
+    ],
+    "prohibitions": [
+      "No gate bypass or new flag names."
+    ]
+  },
+  "trace": {
+    "worker": "crc-4-worker",
+    "outcome": "Repaired gate preview flag parsing and verified approved_gates preservation",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+      "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+      "docs/history/codex-reliability-closeout/preview.md"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: Parser repair adds preview to FLAG_ALONE_BOOLEANS without changing skill procedures"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T07:30:51.171Z",
+    "behavior_change": true,
+    "verification_evidence": "targeted gate preview CLI regression tests and release-manifest check pass",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09911-9b86-7a30-8a6f-b22a78347d98",
+    "verify_command": "Run targeted gate preview CLI regression tests on base and head; corrected aliases return a packet and leave approval gates unchanged; bee dev release-manifest --check at integration",
+    "claimed_at": "2026-09-13T07:10:38.686Z",
+    "sync_ack": "Parser repair adds preview to FLAG_ALONE_BOOLEANS without changing skill procedures",
+    "mistakes": [
+      {
+        "wrong": "tests/gate_preview.rs seeded synthetic gates.shape.approved rather than real approved_gates",
+        "better": "assert real approved_gates boolean fields directly"
+      }
+    ],
+    "report": {
+      "outcome": "Repaired gate preview flag parsing and verified approved_gates preservation across default and lane paths",
+      "commit": "ccd6560a1a72d1350489c5e2e297413d86d311bb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+        "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+        "docs/history/codex-reliability-closeout/preview.md"
+      ],
+      "tests": "Run targeted gate preview CLI regression tests on base and head; corrected aliases return a packet and leave approval gates unchanged; bee dev release-manifest --check at integration — green:unit — targeted gate preview CLI regression tests and release-manifest check pass",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "tests/gate_preview.rs seeded synthetic gates.shape.approved rather than real approved_gates — assert real approved_gates boolean fields directly"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "scope",
+            "status": "PASS",
+            "evidence": "HEAD is ccd6560a; paths read: packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs:31, packages/bee-rs/crates/bee/tests/gate_preview.rs:1, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:234, docs/history/codex-reliability-closeout/preview.md:1"
+          },
+          {
+            "id": "flag-spellings",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:147 and packages/bee-rs/crates/bee/tests/gate_preview.rs:183 cover both documented spellings with following --lane"
+          },
+          {
+            "id": "subcommand-compatibility",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:215 covers state gate preview with following --lane"
+          },
+          {
+            "id": "real-approval-fields",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:50 and packages/bee-rs/crates/bee/tests/gate_preview.rs:71 seed actual approved_gates booleans"
+          },
+          {
+            "id": "false-preservation",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:273 and packages/bee-rs/crates/bee/tests/gate_preview.rs:376 assert false remains false in lane and default records"
+          },
+          {
+            "id": "true-preservation",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:284 and packages/bee-rs/crates/bee/tests/gate_preview.rs:431 assert true remains true in lane and default records"
+          },
+          {
+            "id": "parser-scope",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs:37 adds only preview to the boolean flag table"
+          },
+          {
+            "id": "handler-preservation",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:298 inserts only gate_preview before writing the cloned record at line 309"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T07:33:49.686Z"
+      }
+    ]
+  }
+}

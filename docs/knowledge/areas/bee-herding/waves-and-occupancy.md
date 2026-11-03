@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-orchestration D2/D5 (the choreography is generic, behind a compiler-enforced boundary)", "herding-orchestration D7 (unverifiable is one of five worker states)", "herding-orchestration D9 (blocking threads, not an event runtime)", "herding-orchestration D10 (the wave ledger, written at spawn)", "herding-orchestration D11 (a wave is one value, not a sequence of calls)", "herding-orchestration D18 (dispatch records its own ledger row at spawn)", "tmux-herding-cockpit D1 (the whole cockpit — occupancy and waves included — selects its transport from the same herding.transport key)", "tmux-herding-cockpit D4 (waves and occupancy build the tmux backend from that key; ONE screen classifier, living in fleet, serves both crates)"]
-  sources: [docs/history/herding-orchestration/CONTEXT.md, "the first live D6 run on Linux, 2026-08-19", docs/history/tmux-herding-cockpit/CONTEXT.md]
+  decisions: ["herding-orchestration D2/D5 (the choreography is generic, behind a compiler-enforced boundary)", "herding-orchestration D7 (unverifiable is one of five worker states)", "herding-orchestration D9 (blocking threads, not an event runtime)", "herding-orchestration D10 (the wave ledger, written at spawn)", "herding-orchestration D11 (a wave is one value, not a sequence of calls)", "herding-orchestration D18 (dispatch records its own ledger row at spawn)", "tmux-herding-cockpit D1 (the whole cockpit — occupancy and waves included — selects its transport from the same herding.transport key)", "tmux-herding-cockpit D4 (waves and occupancy build the tmux backend from that key; ONE screen classifier, living in fleet, serves both crates)", "herding-cockpit-completeness 1ef811f7 (2026-09-06 — retryable bit on wave bucket rows and ledger worker rows; true only for send_failed and flipped_before_send)", "herding-cockpit-completeness d5a1f7e1 (2026-09-06 — orphan sweep in status and occupancy marks dead-pane jobs without result as interrupted with reason process_restarted; relaunches nothing)", "herding-cockpit-completeness 9615be76 (2026-09-06 — no automatic behavior: no auto-retry, no orphan relaunch)", "herding-cockpit-completeness afec9446 (2026-09-06 — D8 word list and envelope no-new-key law)"]
+  sources: [docs/history/herding-orchestration/CONTEXT.md, "the first live D6 run on Linux, 2026-08-19", docs/history/tmux-herding-transport/CONTEXT.md, docs/history/herding-cockpit-completeness/CONTEXT.md, docs/history/herding-cockpit-completeness/plan.md, "herding-cockpit-completeness cells hcc-5, hcc-7, hcc-9 (commits f487054d, 9895e008, c6537633)"]
   authoritative_for: "bee-herding: waves, the wave ledger, and occupancy"
 ---
 
@@ -59,6 +59,13 @@ unverifiable afterwards) rather than into a bare pass/fail, because partial
 failure is the normal case and the caller needs to know which kind it got. A
 worker that fails does not stop the others.
 
+**Failure bucket rows carry a per-worker `retryable` bit** (herding-cockpit-completeness 1ef811f7, c6537633). For every worker classified in a failure bucket, the JSON output row carries `"retryable": true` or `"retryable": false`:
+- `true` for `send_failed` and `flipped_before_send` — the worker never received its task or flipped before send; no work was started, so re-running is safe.
+- `false` for `refused_preflight`, `timed_out`, and `unverifiable_after_send` — the worker may have started or run steps that modified workspace state.
+- Omitted entirely on `succeeded` rows (envelope no-new-key law).
+
+The same bit is recorded on the wave ledger: `WorkerRow` in `wave_ledger.rs` stores `retryable: Option<bool>`. bee never auto-retries on its own (9615be76); the bit is an advisory signal for the outer orchestrator.
+
 ## Occupancy is read, and an unverifiable read refuses
 
 The dispatch role asks for the occupancy count instead of counting panes itself,
@@ -71,6 +78,38 @@ The fallback fires exactly when the live pane list could not be obtained — whi
 is also when counting panes would have failed — so refusing is not a lost
 opportunity, and dispatching on a count nobody can verify is the over-spawn the
 ledger exists to prevent.
+
+**The orphan sweep in occupancy and status.** Before computing slot occupancy,
+`bee herding occupancy` (and `bee herding status`) executes an orphan sweep
+(`mark_orphans`; herding-cockpit-completeness d5a1f7e1, 9895e008). Any job in
+`.bee/mailbox/*/job.json` that has a recorded `pane_id` absent from the live pane
+list, with no `result-*.json` file and no prior mark, is marked with
+`mark: "interrupted"` and `mark_reason: "process_restarted"`. The sweep writes
+only on state transition and prints a progress line per marked job in `status`.
+It relaunches nothing (9615be76). By marking dead panes as `interrupted`, the
+sweep ensures dead workers are resolved and do not leak into active occupancy
+counts.
+
+### Declared limits are refused at the door (piggery-borrow D3, 2026-10-07)
+
+`.bee/config.json` may set `herding.limits.concurrency` and `herding.limits.depth` (decision `ffa4e772`).
+Absent means no limit, and the output is byte-identical to a config without the key.
+`bee herding run` checks both before it starts a worker, and `bee dispatch prepare` checks them when the role resolves to a herding agent.
+Both count occupancy with `quiet_occupancy`, which prints nothing and writes nothing; the `occupancy` verb is not used here because it prints and marks orphans.
+Paseo agents count as live even when no pane list is available.
+The refusals are `limits.concurrency` (with `live`, `limit`, `retryable: true` and a fix), `limits.unverifiable` (only a fallback count exists while a concurrency limit is set) and `limits.depth`.
+Depth travels in `BEE_HERDING_DEPTH`, exported to the child as the caller's depth plus one, and only when a depth limit is set.
+`bee herding run --continue` is not checked, because it reuses a live worker.
+`bee dispatch prepare --explain` prints each check (role, claim, limits) with pass, refuse or skip, and writes nothing.
+The cockpit spawn path (`herdr agent start` plus `record-worker`) is outside these two doors.
+
+### Status shows each worker's context and turns (piggery-borrow D6, 2026-10-07)
+
+The activity hook writes the worker's `transcript_path` into the job's `activity.json` (decision `7edc0153`).
+`bee herding status` reads that transcript with the same usage reader as `bee dev statusline` and adds `ctx_tokens` (input plus cache tokens of the latest request) and `turns` to the JSON, and a `ctx=12.3k turns=4` suffix to the plain line.
+With no recorded transcript, both fields are `null` and there is no suffix: pi child workers run with `--no-session`, and Paseo pi workers share one agent folder.
+
+Pointers: `packages/bee-rs/crates/bee/src/herding/wave.rs` (`quiet_occupancy`, `check_limits`), `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` (`explain_checks`), `packages/bee-rs/crates/bee/src/herding.rs` (`job_usage`, `fmt_ctx`), `packages/bee-rs/crates/bee/src/devtools/statusline.rs` (`context_and_turns`), `packages/bee-rs/crates/bee/src/hooks/activity.rs`.
 
 ## On tmux
 
@@ -116,6 +155,50 @@ The classifier has no `Done` state and must never gain one. It answers
 (tmux-herding-transport D4) — it never becomes evidence that a worker
 finished. Everything this page says about unverifiable outcomes therefore
 reads identically on tmux.
+## A wave's record is closed by a second append, never a rewrite
+
+A wave is recorded twice. The first record is written when its workers are
+dispatched, with each worker's outcome left blank so that occupancy can see the
+wave while it is still running. The second is written when the run ends and
+carries each worker's outcome plus the evidence that backs it — the worker's own
+report when it produced one, otherwise its log. Both records are appended; no
+line is ever rewritten or removed, and the read side prefers the later record
+for a given wave, so the closing append is what the reader sees.
+
+Before this, the single-worker dispatch path wrote only the opening record. It
+knew its worker's outcome and reported it to its caller, but never wrote it
+back, so in practice almost every worker ever dispatched stayed unreported
+forever. That is what made the occupancy read fall through to its weakest
+answer, a fixed staleness timer, whenever a live pane list was unavailable.
+
+Writing the closing record is best effort: a failure is reported on its own line
+and never changes the run's own outcome or its exit code (cell wlf-3).
+
+## An empty fleet is a closed wave that produced nothing
+
+A wave is an EMPTY FLEET when every one of its workers has reported, it had at
+least one worker, and not one of them succeeded. It is the case where the work
+looks finished and nothing was actually produced, which otherwise reads as an
+ordinary completion.
+
+Three neighbouring cases are deliberately NOT an empty fleet, because each means
+something different to whoever is reading:
+
+- a wave with no workers launched nothing, so there was nothing to come back;
+- a wave in which any worker has not yet reported is still running;
+- a wave whose workers all only rehearsed, without doing real work, did nothing
+  real by intent.
+
+The verdict names the wave and its workers with their outcomes, capped so a very
+large wave cannot produce an unbounded report. It is a read over the recorded
+waves and changes nothing (cell wlf-4).
+
+**Open Gap** — the verdict is computed but is not yet shown anywhere: no command
+or report surfaces it. Choosing that surface needs a reader who wants it.
+
+**Open Gap** — workers dispatched as host-native subagents leave no wave record
+at all, so neither the closing record nor the empty-fleet verdict reaches them.
+
 
 ## Edge Cases Settled
 

@@ -1,0 +1,110 @@
+{
+  "id": "frt-2",
+  "feature": "finding-recheck-trigger",
+  "title": "Print the due trigger count in the per-prompt reminder",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "frt-1"
+  ],
+  "decisions": [
+    "164e6903-1bda-4bed-8d76-15b4fd109a78"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per decision 164e6903 (D2 rev 2). In hooks/prompt_context.rs: where the plan calls build_prompt_reminder(&record) (control_root is already in hand at the top of that function, :257), read the due count with crate::verbs::triggers::due_count_for_prompt(&control_root) (added by frt-1; it re-evaluates only when the control HEAD moved). Pass it into build_prompt_reminder. When it is > 0, append the line `triggers due: <N> — bee triggers list --due` after the existing lines, raise the line cap from 3 to 4 so it is never cut, and add the count to the hashed fields (key `triggers_due`) so the reminder re-injects when N changes; when it is 0, the text AND the hash inputs stay byte-identical to today (do not add the key at 0). Keep every existing prompt_context test green unchanged. Tests (red first): a fixture with one predicate trigger file already `due` in <control>/.bee/triggers/ shows the new line; a fixture with only a manual waiting trigger shows no line; no triggers dir shows no line and the same hash as before.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prompt_context",
+  "must_haves": {
+    "truths": [
+      "the per-prompt reminder shows 'triggers due: N — bee triggers list --due' while N > 0 predicate triggers are due",
+      "with zero due triggers the reminder text and hash are byte-identical to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "substantive": "due count read, new line, hash field, three new tests"
+      }
+    ],
+    "key_links": [
+      "the prompt plan calls crate::verbs::triggers::due_count_for_prompt with its control_root"
+    ],
+    "prohibitions": [
+      "No manual-tier count in the prompt line",
+      "No change to the existing reminder lines"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-frt-2",
+    "outcome": "Per-prompt reminder prints 'triggers due: N — bee triggers list --due' while predicate triggers are due; unchanged at zero",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+    ],
+    "deviations": [
+      "followed the plan; added one extra test for the 4-line cap — the cap rule needed its own proof — found a better route",
+      "sync-ack: hook-only change to the per-prompt reminder; the feature's reviewing doctrine skill edit is its own planned cell, outside frt-2 files"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T15:19:18.304Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell verify filter; 35 passed incl. 4 new tests (a_due_predicate_trigger_adds_the_due_line_and_changes_the_hash, the_due_line_survives_a_full_three_line_reminder, a_manual_waiting_trigger_adds_no_line, no_trigger_store_keeps_text_and_hash_unchanged); rest of suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prompt_context",
+    "claimed_at": "2026-09-21T15:16:29.440Z",
+    "sync_ack": "hook-only change to the per-prompt reminder; the feature's reviewing doctrine skill edit is its own planned cell, outside frt-2 files",
+    "mistakes": [
+      {
+        "wrong": "wrote the new tests after the code change, so I never saw them red",
+        "better": "write the tests first and run them red before the change"
+      },
+      {
+        "wrong": "commit 7b2aa5f8b left out the Co-Authored-By attribution line",
+        "better": "add the attribution line to the commit body"
+      }
+    ],
+    "report": {
+      "outcome": "plan() reads crate::verbs::triggers::due_count_for_prompt(&control_root) and passes it to build_prompt_reminder(record, triggers_due), which appends the due line, raises the cap to 4, and hashes triggers_due only when N > 0",
+      "commit": "7b2aa5f8b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prompt_context — green:unit — the cell verify filter; 35 passed incl. 4 new tests (a_due_predicate_trigger_adds_the_due_line_and_changes_the_hash, the_due_line_survives_a_full_three_line_reminder, a_manual_waiting_trigger_adds_no_line, no_trigger_store_keeps_text_and_hash_unchanged); rest of suite not run",
+      "deviations": [
+        "followed the plan; added one extra test for the 4-line cap — the cap rule needed its own proof — found a better route"
+      ],
+      "mistakes": [
+        "wrote the new tests after the code change, so I never saw them red — write the tests first and run them red before the change",
+        "commit 7b2aa5f8b left out the Co-Authored-By attribution line — add the attribution line to the commit body"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the per-prompt reminder shows 'triggers due: N — bee triggers list --due' while N > 0 predicate triggers are due",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "with zero due triggers the reminder text and hash are byte-identical to before",
+            "artifact": "test no_trigger_store_keeps_text_and_hash_unchanged + live run after resolve shows no line"
+          }
+        ],
+        "recorded_at": "2026-09-21T15:21:11.198Z",
+        "recorded_by": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

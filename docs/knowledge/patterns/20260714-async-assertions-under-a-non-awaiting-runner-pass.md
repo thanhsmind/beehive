@@ -7,6 +7,7 @@ timestamp: 2026-07-14
 bee:
   id: pattern-20260714-async-assertions-under-a-non-awaiting-runner-pass
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT35", "original feature: fresh-session-handoff", docs/history/learnings/20260714-fresh-session-handoff.md]
   polarity: pitfall
   critical: false

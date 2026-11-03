@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "touches-sweep-active-gate",
+  "closed_at": "2026-09-20T15:13:45.181Z",
+  "sessions": [
+    {
+      "session_id": "044a7c9a-a928-4ed5-bee9-4718396ee427",
+      "models": {
+        "claude-opus-5": {
+          "input": 1584,
+          "output": 427214,
+          "cache_write": 1320443,
+          "cache_read": 365292804,
+          "new": 1749241,
+          "cached": 365292804,
+          "total": 367042045
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1789888468545,
+      "ended_ms": 1789917220163,
+      "totals": {
+        "new": 1749241,
+        "cached": 365292804,
+        "total": 367042045
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 1749241,
+      "cached": 365292804,
+      "total": 367042045
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 1749241,
+      "cached": 365292804,
+      "total": 367042045
+    }
+  }
+}

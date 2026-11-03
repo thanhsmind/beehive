@@ -7,6 +7,7 @@ timestamp: 2026-07-23
 bee:
   id: pattern-20260723-clearing-a-red-by-widening-the-threshold
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["okf-integration-close-f4 cell f4-7 (the drift telemetry punished a migrated area for growing; denominator corrected, band untouched, proven by a two-directional negative control; trace in `.bee/cells/`, 2026-07-23)", docs/history/learnings/20260723-a-metric-that-punishes-growth-and-a-spec-that-was-wrong.md]
   polarity: practice
   critical: false

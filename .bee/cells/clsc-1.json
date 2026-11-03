@@ -1,0 +1,67 @@
+{
+  "id": "clsc-1",
+  "feature": "cli-shape-continuation",
+  "role": "code",
+  "title": "Read a backslash-continued invocation as one command in the docs CLI-shape scan",
+  "action": "The docs scanner in hooks/cli_shape.rs walks text.lines() one at a time inside a fenced block, so a documented invocation continued with a trailing backslash is only ever checked as its FIRST physical line. Every flag written on a continuation then reports as MISSING against an example that is already correct — a refusal the reader cannot act on. Join continued lines before checking, exactly as the shell does: drop the trailing backslash, join with one space, and reset the accumulator at a fence boundary. Add a test that a correct multi-line invocation passes and a genuinely malformed one still fails, so the fix cannot become a way to smuggle bad spellings past the guard.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml cli_shape",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A fenced invocation continued with a trailing backslash is checked as ONE joined command, not as its first line.",
+      "The join matches the shell: the backslash is dropped and one space joins the parts.",
+      "A fence boundary resets the accumulator, so a dangling continuation never leaks into the next block.",
+      "A genuinely malformed multi-line invocation is STILL refused — the fix must not become a way past the guard, and a test proves it.",
+      "The three-line bee decisions log example in docs/product-description/memory/decisions.md stops being reported, because it was always correct.",
+      "The scan's checked-count assertion stays non-vacuous."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "acceptance": "A backslash-continued example is checked whole; a malformed one still refuses; fence boundaries reset the join; the cli_shape suite is green and the corpus count stays non-vacuous.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-clsc-1",
+    "outcome": "The docs CLI-shape scan joins backslash continuations, so a correct multi-line invocation stops being refused for flags written one line down",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+    ],
+    "deviations": [
+      "Ran inline rather than through a dispatched worker: the bee-build agent type became unavailable mid-cell. The dispatch door was still consulted first and its answer used — it corrected my marker from [bee-tier: generation] to [bee-tier: code], which the model guard had refused. Kind: hit an unforeseen obstacle.",
+      "The corpus scan still failed after the fix until two doc corrections made in main were committed and merged in; the worktree had branched before them. Kind: something else had to be fixed first.",
+      "sync-ack: A test-side docs scanner's extraction, not a rule any skill states; no worker instruction or Result form changes."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T05:50:04.271Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-26T05:43:44.980Z",
+    "sync_ack": "A test-side docs scanner's extraction, not a rule any skill states; no worker instruction or Result form changes.",
+    "report": {
+      "outcome": "The docs CLI-shape scan joins backslash continuations before checking",
+      "commit": "145b870e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml cli_shape — green (42 passed, 3 new) — and the full suite on the merged base: exit 0, 3112 passed, 0 failed, read from cargo directly",
+      "deviations": [
+        "Ran inline rather than through a dispatched worker: the bee-build agent type became unavailable mid-cell. The dispatch door was still consulted first and its answer used — it corrected my marker from [bee-tier: generation] to [bee-tier: code], which the model guard had refused. Kind: hit an unforeseen obstacle.",
+        "The corpus scan still failed after the fix until two doc corrections made in main were committed and merged in; the worktree had branched before them. Kind: something else had to be fixed first."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

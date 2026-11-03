@@ -73,7 +73,7 @@ use std::time::Instant;
     /// required on every cap path, these fixtures need SOME valid report
     /// even though they are not testing its shape.
     fn default_test_report_json() -> String {
-        r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":[]}"#
+        r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[]}"#
             .to_string()
     }
 
@@ -720,7 +720,7 @@ use std::time::Instant;
              addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike. \
-             addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee models show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace."
+             addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose team.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set team.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee team show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace."
         );
         let base = |lane: &str| {
             json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "role": "code", "affects_skills": [], "affects_specs": []})
@@ -771,7 +771,8 @@ use std::time::Instant;
                 "verification_evidence",
                 "verify_output",
                 "verify_passed",
-                "claim_session"
+                "claim_session",
+                "verify_command"
             ]
         );
     }
@@ -802,7 +803,7 @@ use std::time::Instant;
             "addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: invalid lane \"nope\" — must be one of: tiny, small, standard, high-risk, spike."
                 .to_string(),
-            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee models show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace."
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose team.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set team.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee team show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace."
                 .to_string(),
         ];
         assert_eq!(validate_new_cell_problems(root, &broken).unwrap(), expected);
@@ -875,15 +876,15 @@ use std::time::Instant;
     /// models-show-verb D2 (CONTEXT.md): the refusal is the moment an author
     /// is choosing a role, so it must send them to READ the table instead of
     /// guessing a name that sounds right. It names the VERB, never the config
-    /// path — a path invites the hand-parse `bee models show` exists to end.
+    /// path — a path invites the hand-parse `bee team show` exists to end.
     #[test]
-    fn the_missing_role_refusal_sends_the_author_to_bee_models_show() {
+    fn the_missing_role_refusal_sends_the_author_to_bee_team_show() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let problems = validate_new_cell_problems(root, &role_probe(None)).unwrap();
         let problem = &problems[0];
         assert!(
-            problem.contains("`bee models show`"),
+            problem.contains("`bee team show`"),
             "the refusal never names the verb that prints the role table: {problem}"
         );
         // Read-FIRST, and only when it has not been read — the reminder is
@@ -1252,8 +1253,17 @@ use std::time::Instant;
                     "cell \"c-1\" is already claimed by session \"no session (sessionless claim)\""
                 ));
                 assert!(reason.contains("expires "));
+                assert!(reason.contains("FIX: bee cells claim-next."));
             }
             _ => panic!("second claim must refuse"),
+        }
+        match claim_cell_file(control, None, "c-1", None).unwrap() {
+            ClaimFileOutcome::Refused { code, reason } => {
+                assert_eq!(code, "CLAIMED");
+                assert!(!reason.contains("you already hold this claim"), "{reason}");
+                assert!(reason.contains("FIX: bee cells claim-next."), "{reason}");
+            }
+            _ => panic!("a sessionless caller must not win a sessionless claim"),
         }
         // Owner-matched release removes the file; a mismatched owner leaves it.
         release_claim(control, Some("someone-else"), "c-1").unwrap();
@@ -1498,6 +1508,14 @@ use std::time::Instant;
             "{refusal}"
         );
         assert!(!refusal.contains("NO_ROUTE_RECORD"), "{refusal}");
+        assert!(
+            refusal.contains("you already hold this claim"),
+            "{refusal}"
+        );
+        assert!(
+            refusal.contains("bee dispatch prepare --runtime <runtime> --kind cell --cell race-1 --worker <worker> --json"),
+            "{refusal}"
+        );
         // The already-claimed refusal never advances the no-route count.
         assert_eq!(no_route_claim_count(root, "race", Some("sess-1")).unwrap(), 1);
 
@@ -1506,6 +1524,10 @@ use std::time::Instant;
         let refusal2 = thrown(claim_cell_from_flags(root, "race-1", "w2", Some("sess-2"), None));
         assert!(
             refusal2.starts_with("claim: CLAIMED — cell \"race-1\" is already claimed by session \"sess-1\""),
+            "{refusal2}"
+        );
+        assert!(
+            refusal2.contains("FIX: bee cells claim-next."),
             "{refusal2}"
         );
         assert_eq!(no_route_claim_count(root, "race", Some("sess-2")).unwrap(), 0);
@@ -1677,6 +1699,682 @@ use std::time::Instant;
         let refusal = thrown(claim_cell_from_flags(root, "rb-nr-2", "w1", Some("sess-1"), None));
         assert!(refusal.starts_with("claim: NO_ROUTE_RECORD"), "{refusal}");
         assert!(!refusal.contains("RED_BASE"), "{refusal}");
+    }
+
+    fn fresh_session(root: &Path, id: &str) {
+        let now = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        write_session_fixture(root, id, &now, None);
+    }
+
+    #[test]
+    fn a_refused_claim_leaves_no_lease_behind_when_the_lease_adopted_a_session() {
+        let _lock = TEST_CLAIM_ENV_LOCK.lock().unwrap();
+        let _env = ClaimTestEnvGuard::set(None, None, None, None);
+
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "ad");
+        write_cell_fixture(root, "ad-1", &cell("ad-1", "open", "ad", json!([])));
+        fresh_session(root, "adopted-1");
+        write_test_results_fixture(root, false, &[("cargo test", false)]);
+
+        let refusal = thrown(claim_cell_from_flags(root, "ad-1", "w1", None, None));
+        assert!(refusal.starts_with("claim: RED_BASE"), "{refusal}");
+        assert!(
+            !claims_dir(root).join("ad-1.json").exists(),
+            "a refused claim outlived its own lease"
+        );
+        let untouched = read_cell_norm(root, "ad-1").ok().unwrap().unwrap();
+        assert_eq!(untouched["status"], json!("open"));
+
+        write_test_results_fixture(root, true, &[("cargo test", true)]);
+        let door = claim_cell_from_flags(root, "ad-1", "w1", None, None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn claim_without_session_sets_status_claimed_and_trace_worker() {
+        let _lock = TEST_CLAIM_ENV_LOCK.lock().unwrap();
+        let _env = ClaimTestEnvGuard::set(None, None, None, None);
+
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "ns");
+        write_cell_fixture(root, "ns-1", &cell("ns-1", "open", "ns", json!([])));
+        fresh_session(root, "adopted-2");
+
+        let door = claim_cell_from_flags(root, "ns-1", "w1", None, None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+        assert_eq!(door.cell["trace"]["worker"], json!("w1"));
+        assert_eq!(door.cell["trace"]["claim_session"], json!("adopted-2"));
+        let file: Value =
+            serde_json::from_str(&std::fs::read_to_string(claims_dir(root).join("ns-1.json")).unwrap())
+                .unwrap();
+        assert_eq!(file["session"], json!("adopted-2"));
+    }
+
+    // ══ slp-contract S4 — the contract-citation tripwire at the CLAIM door ══
+    //
+    // Coverage audit before authoring (`.bee/expertise/tests.md`):
+    //   - verbs/decisions/tests.rs already pins the DERIVATION in isolation
+    //     ("an_active_decision_with_no_trigger_reads_as_settled",
+    //     "…_with_a_waiting_trigger_reads_as_unsettled",
+    //     "…_with_a_due_trigger_reads_as_unsettled", the superseded/unknown
+    //     case, the four `resolve_store_citation` cases, and the
+    //     byte-identity of the trigger store across that read).
+    //   - this file already pins the claim door's OTHER pre-lock denies
+    //     ("claim_warns_once_per_session_then_refuses_until_routed",
+    //     "claim_refuses_on_a_red_base_unless_fix_first_escapes_it",
+    //     "already_claimed_refusal_outranks_the_red_base_deny").
+    //   - Gap: nothing tests the DOOR over a citation — neither the refusals
+    //     nor, the half that stalls workers when it is wrong, the allows.
+    // So these test the door, and never re-derive the status.
+
+    /// Decision ids whose short8s are distinct and readable in a failure
+    /// line. Real ids are lowercase hex uuids; these keep that shape.
+    const CIT_ACTIVE: &str = "11111111-0000-0000-0000-000000000001";
+    const CIT_RETIRED: &str = "22222222-0000-0000-0000-000000000002";
+    const CIT_WAITING: &str = "33333333-0000-0000-0000-000000000003";
+    const CIT_DUE: &str = "44444444-0000-0000-0000-000000000004";
+    const CIT_RESOLVED: &str = "55555555-0000-0000-0000-000000000005";
+    const CIT_UNTAGGED: &str = "66666666-0000-0000-0000-000000000006";
+    const CIT_REPLACEMENT: &str = "77777777-0000-0000-0000-000000000007";
+
+    fn decide_event(id: &str, tags: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d","rationale":"r","tags":[{tags}]}}"#
+        )
+    }
+
+    /// A later event that retires `target` — the store's only "retired"
+    /// shape, and the one D3's word resolves to.
+    fn supersede_event(id: &str, target: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"supersede","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r","supersedes":"{target}","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    fn write_decision_events(root: &Path, lines: &[String]) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("decisions.jsonl"),
+            format!("{}\n", lines.join("\n")),
+        )
+        .unwrap();
+    }
+
+    /// One trigger record file. `decision` is the SHORT8 the real store
+    /// writes, never the full id — the join this door depends on.
+    fn write_trigger_fixture(
+        root: &Path,
+        id: &str,
+        decision_short8: &str,
+        tier: &str,
+        predicate: Option<&str>,
+        status: &str,
+    ) -> PathBuf {
+        let dir = root.join(".bee").join("triggers");
+        std::fs::create_dir_all(&dir).unwrap();
+        let record = json!({
+            "id": id,
+            "decision": decision_short8,
+            "condition": "revisit when upstream lands",
+            "tier": tier,
+            "predicate": predicate,
+            "status": status,
+            "created_at": "2026-08-16T00:00:00.000Z",
+            "updated_at": "2026-08-16T00:00:00.000Z",
+            "outcome": null,
+        });
+        let path = dir.join(format!("{id}.json"));
+        std::fs::write(&path, format!("{record}\n")).unwrap();
+        path
+    }
+
+    /// A claimable open cell that cites `decisions`, on a routed feature
+    /// with a green recorded base — so the ONLY door that can refuse it is
+    /// the citation tripwire.
+    fn citing_cell(root: &Path, id: &str, decisions: Value) {
+        lane_with_route(root, "cit");
+        write_test_results_fixture(root, true, &[("cargo test", true)]);
+        let mut c = cell(id, "open", "cit", json!([]));
+        c["decisions"] = decisions;
+        write_cell_fixture(root, id, &c);
+    }
+
+    /// Every refusal path owes this: the cell is still open, nothing was
+    /// stamped on it, and the claim file it took was released.
+    fn assert_untouched_by_refusal(root: &Path, id: &str) {
+        let record = read_cell_norm(root, id).ok().unwrap().unwrap();
+        assert_eq!(record["status"], json!("open"), "a refusal must not move cell status");
+        assert!(
+            record.get("trace").and_then(|t| t.get("worker")).is_none(),
+            "a refusal must not stamp a worker"
+        );
+        assert!(
+            !claims_dir(root).join(format!("{id}.json")).exists(),
+            "a refusal must release the claim file it took"
+        );
+    }
+
+    /// REFUSE — a citation that resolves to a SUPERSEDED decision. The
+    /// store has no `retired` state, so this is what D3's word means, and
+    /// the cell is left exactly as it was.
+    #[test]
+    fn claiming_a_cell_citing_a_retired_decision_is_refused_and_leaves_it_open() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_RETIRED, r#""contract:cell-store""#),
+                supersede_event(CIT_REPLACEMENT, CIT_RETIRED),
+            ],
+        );
+        citing_cell(root, "cit-retired", json!([CIT_RETIRED]));
+
+        let refusal = thrown(claim_cell_from_flags(root, "cit-retired", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_RETIRED — cell \"cit-retired\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains(CIT_RETIRED), "the refusal names what it resolved to: {refusal}");
+        assert!(refusal.contains("no longer in the active set"), "{refusal}");
+        assert!(refusal.contains("bee decisions active"), "the FIX names a reachable remedy: {refusal}");
+        assert_untouched_by_refusal(root, "cit-retired");
+    }
+
+    /// REFUSE — an ACTIVE decision whose trigger is still `waiting`: the
+    /// revisit condition is attached and unanswered, so the contract is
+    /// unsettled (D2). The trigger file is byte-identical afterwards — a
+    /// refusal path that writes is not a refusal path.
+    #[test]
+    fn claiming_a_cell_citing_a_decision_with_a_waiting_trigger_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_WAITING, r#""contract:cell-store""#)]);
+        let trigger =
+            write_trigger_fixture(root, "upstream__33333333", "33333333", "manual", None, "waiting");
+        let before = std::fs::read(&trigger).unwrap();
+        citing_cell(root, "cit-waiting", json!([CIT_WAITING]));
+
+        let refusal = thrown(claim_cell_from_flags(root, "cit-waiting", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNSETTLED — cell \"cit-waiting\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains(CIT_WAITING), "{refusal}");
+        assert!(refusal.contains("OPEN revisit trigger"), "{refusal}");
+        assert!(refusal.contains("bee triggers list"), "the FIX names a reachable remedy: {refusal}");
+        assert_untouched_by_refusal(root, "cit-waiting");
+        assert_eq!(
+            std::fs::read(&trigger).unwrap(),
+            before,
+            "the tripwire must not rewrite the trigger store it read"
+        );
+    }
+
+    /// REFUSE — the other open status: a predicate-tier trigger already
+    /// flipped to `due`. Same refusal, because "unsettled" is waiting OR
+    /// due, and a door that knew only one of them would be a law with a
+    /// hole.
+    #[test]
+    fn claiming_a_cell_citing_a_decision_with_a_due_trigger_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_DUE, r#""contract:cell-store""#)]);
+        write_trigger_fixture(
+            root,
+            "upstream__44444444",
+            "44444444",
+            "predicate",
+            Some("path-exists:never/lands.txt"),
+            "due",
+        );
+        citing_cell(root, "cit-due", json!([CIT_DUE]));
+
+        let refusal = thrown(claim_cell_from_flags(root, "cit-due", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNSETTLED — cell \"cit-due\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains(CIT_DUE), "{refusal}");
+        assert_untouched_by_refusal(root, "cit-due");
+    }
+
+    /// REFUSE — one good citation does not launder a bad one. The list is
+    /// walked whole, the first offender refuses, and it is named.
+    #[test]
+    fn one_settled_citation_beside_a_retired_one_still_refuses() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_ACTIVE, r#""contract:cell-store""#),
+                decide_event(CIT_RETIRED, r#""contract:claims""#),
+                supersede_event(CIT_REPLACEMENT, CIT_RETIRED),
+            ],
+        );
+        citing_cell(root, "cit-mixed", json!(["D1", CIT_ACTIVE, CIT_RETIRED]));
+
+        let refusal = thrown(claim_cell_from_flags(root, "cit-mixed", "w1", Some("sess-1"), None));
+        assert!(refusal.starts_with("claim: CONTRACT_RETIRED"), "{refusal}");
+        assert!(refusal.contains(CIT_RETIRED), "the refusal names the OFFENDING citation: {refusal}");
+        assert_untouched_by_refusal(root, "cit-mixed");
+    }
+
+    /// ALLOW — an active decision with no trigger at all. The plainest
+    /// settled case, and what every citing cell in a healthy store is.
+    #[test]
+    fn a_cell_citing_a_settled_decision_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_ACTIVE, r#""contract:cell-store""#)]);
+        citing_cell(root, "cit-ok", json!([CIT_ACTIVE]));
+
+        let door = claim_cell_from_flags(root, "cit-ok", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — an active decision whose trigger has been RESOLVED. The
+    /// revisit condition was answered, so the contract is settled again; a
+    /// door that refused on the mere existence of a trigger would deadlock
+    /// every decision that ever carried one.
+    #[test]
+    fn a_cell_citing_a_decision_whose_trigger_is_resolved_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_RESOLVED, r#""contract:cell-store""#)]);
+        write_trigger_fixture(root, "upstream__55555555", "55555555", "manual", None, "resolved");
+        citing_cell(root, "cit-resolved", json!([CIT_RESOLVED]));
+
+        let door = claim_cell_from_flags(root, "cit-resolved", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — the case that decides whether this guard is usable at all.
+    /// Measured over the 92 live cells, 87% of citations are LOCAL D-IDs
+    /// pointing into a CONTEXT.md table, not store ids. An entry that does
+    /// not resolve to a store decision is passed over silently — refusing
+    /// on it would stall almost every citing cell in the repo.
+    #[test]
+    fn a_cell_citing_only_local_d_ids_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        // A store that DOES hold a retired decision, so the pass-over is
+        // proven to be about resolution, not about an empty store.
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_RETIRED, r#""contract:cell-store""#),
+                supersede_event(CIT_REPLACEMENT, CIT_RETIRED),
+            ],
+        );
+        citing_cell(root, "cit-local", json!(["D1", "D3", "D12"]));
+
+        let door = claim_cell_from_flags(root, "cit-local", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — a full-length id this store never logged is not a citation
+    /// either. "Does not resolve" means "not a store citation", never
+    /// "wrong": the tripwire has no opinion about it.
+    #[test]
+    fn a_cell_citing_an_id_this_store_never_logged_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_ACTIVE, r#""contract:cell-store""#)]);
+        citing_cell(root, "cit-unlogged", json!(["99999999-0000-0000-0000-000000000099"]));
+
+        let door = claim_cell_from_flags(root, "cit-unlogged", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — an empty list, and a cell with no `decisions` key at all.
+    /// Both are the pre-tripwire world, and both must claim exactly as they
+    /// did before it existed.
+    #[test]
+    fn a_cell_with_no_citations_claims_exactly_as_before() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_RETIRED, r#""contract:cell-store""#),
+                supersede_event(CIT_REPLACEMENT, CIT_RETIRED),
+            ],
+        );
+        citing_cell(root, "cit-empty", json!([]));
+        // No `decisions` key whatsoever — the shape most live cells carry.
+        write_cell_fixture(root, "cit-absent", &cell("cit-absent", "open", "cit", json!([])));
+
+        assert_eq!(
+            claim_cell_from_flags(root, "cit-empty", "w1", Some("sess-1"), None).unwrap().cell["status"],
+            json!("claimed")
+        );
+        assert_eq!(
+            claim_cell_from_flags(root, "cit-absent", "w2", Some("sess-2"), None).unwrap().cell["status"],
+            json!("claimed")
+        );
+    }
+
+    /// ALLOW — an active decision carrying no `contract:` tag at all.
+    ///
+    /// Stated plainly, because it is a design fact rather than an accident:
+    /// the tripwire is TAG-BLIND. D2's tag convention names which decisions
+    /// are contracts for a human reader; the derived status this door
+    /// consumes (verbs/decisions/read.rs) joins the active set against open
+    /// triggers and never reads a tag. So an untagged active decision
+    /// passes exactly like a tagged one — and an untagged decision with an
+    /// open trigger would refuse exactly like a tagged one, which is the
+    /// fail-safe direction for a refusal path.
+    #[test]
+    fn a_cell_citing_an_untagged_active_decision_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_UNTAGGED, r#""process""#)]);
+        citing_cell(root, "cit-untagged", json!([CIT_UNTAGGED]));
+
+        let door = claim_cell_from_flags(root, "cit-untagged", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    // ── slp-contract S5 (D4, store 9c0104e0): the MINT TRAP ──────────────
+    //
+    // Coverage judged before authoring (`.bee/expertise/tests.md`): the
+    // block above pins the citation TRIPWIRE at this door — the rule that
+    // asks "did the contract you cited move?". Nothing anywhere pins the
+    // rule that asks "did you cite a contract at all?". These do, and they
+    // only ever drive the DOOR: the tag convention itself, the derived
+    // status and `path_looks_like_test` each already have their own tests,
+    // and re-deriving them here would only prove the model agrees with
+    // itself.
+    //
+    // Every fixture below states its RAMP state explicitly, because the
+    // trap's answer depends on it: with zero `contract:<name>` decisions in
+    // the active set the armed arm warns, and only once one exists does it
+    // refuse.
+
+    /// A decision that ARMS the ramp — active, and tagged in the
+    /// `contract:` namespace.
+    const TRAP_CONTRACT: &str = "88888888-0000-0000-0000-000000000008";
+    /// A source-only path. `path_looks_like_test` says no: no `test`/`tests`
+    /// segment, no `_test.`/`.test.` filename.
+    const TRAP_SOURCE: &str = "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs";
+    /// A test-shaped path by the SAME classifier the door uses — the bare
+    /// filename `tests.rs`.
+    const TRAP_TEST_PATH: &str = "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs";
+
+    /// A claimable open cell on a routed feature with a green recorded
+    /// base, carrying exactly the `files`, `role`, `title` and `decisions`
+    /// the arm under test needs — so the ONLY door that can refuse it is a
+    /// contract rule.
+    fn trap_cell(
+        root: &Path,
+        id: &str,
+        decisions: Value,
+        files: Value,
+        role: Option<&str>,
+        title: Option<&str>,
+    ) {
+        lane_with_route(root, "cit");
+        write_test_results_fixture(root, true, &[("cargo test", true)]);
+        let mut c = cell(id, "open", "cit", json!([]));
+        c["decisions"] = decisions;
+        c["files"] = files;
+        if let Some(r) = role {
+            c["role"] = json!(r);
+        }
+        if let Some(t) = title {
+            c["title"] = json!(t);
+        }
+        write_cell_fixture(root, id, &c);
+    }
+
+    /// REFUSE — the armed arm's primary signal: a test-shaped path in
+    /// `files` and not one citation. This is D4 itself — a contract nobody
+    /// logged reads exactly like "there is no contract", and the tests
+    /// would become it.
+    #[test]
+    fn claiming_a_test_path_cell_that_cites_no_contract_decision_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(root, "trap-armed", json!([]), json!([TRAP_TEST_PATH]), None, None);
+
+        let refusal = thrown(claim_cell_from_flags(root, "trap-armed", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNCITED — cell \"trap-armed\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains(TRAP_TEST_PATH), "the refusal names what armed it: {refusal}");
+        assert!(
+            refusal.contains("bee decisions active --tag contract:<name>"),
+            "the FIX names a reachable remedy: {refusal}"
+        );
+        assert_untouched_by_refusal(root, "trap-armed");
+    }
+
+    /// REFUSE — the armed arm's OTHER trigger, on its own: `role: "test"`
+    /// with a source-only file list. No live cell carries this role today,
+    /// so it can never be the signal — but it is the one declaration a cell
+    /// CAN make, and the door honours it.
+    #[test]
+    fn claiming_a_role_test_cell_with_no_test_shaped_path_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(root, "trap-role", json!([]), json!([TRAP_SOURCE]), Some("test"), None);
+
+        let refusal = thrown(claim_cell_from_flags(root, "trap-role", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNCITED — cell \"trap-role\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains("carries role \"test\""), "{refusal}");
+        assert_untouched_by_refusal(root, "trap-role");
+    }
+
+    /// REFUSE — "cites NO CONTRACT decision" is precise, not "cites
+    /// nothing". This cell cites a real, active, trigger-free store
+    /// decision, so the tripwire passes it; the decision carries no
+    /// `contract:` tag, so it settles no contract and the trap still
+    /// refuses. This is where the two rules deliberately differ: the
+    /// tripwire is tag-blind, the trap is tag-aware.
+    #[test]
+    fn claiming_a_test_path_cell_citing_a_decision_with_no_contract_tag_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(
+            root,
+            &[
+                decide_event(TRAP_CONTRACT, r#""contract:cell-store""#),
+                decide_event(CIT_UNTAGGED, r#""process""#),
+            ],
+        );
+        trap_cell(root, "trap-untagged", json!([CIT_UNTAGGED]), json!([TRAP_TEST_PATH]), None, None);
+
+        let refusal =
+            thrown(claim_cell_from_flags(root, "trap-untagged", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNCITED — cell \"trap-untagged\" refused"),
+            "a citation that settles no contract is not a contract citation: {refusal}"
+        );
+        assert_untouched_by_refusal(root, "trap-untagged");
+    }
+
+    /// ALLOW — the whole point of the rule: a test-writing cell that DOES
+    /// cite the decision settling what it tests claims normally. A guard
+    /// that refuses this too would have no satisfiable state at all.
+    #[test]
+    fn a_test_path_cell_citing_a_contract_tagged_decision_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(root, "trap-cited", json!([TRAP_CONTRACT]), json!([TRAP_TEST_PATH]), None, None);
+
+        let door = claim_cell_from_flags(root, "trap-cited", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — no test-shaped path, no citation, ramp fully armed. The trap
+    /// has an opinion only about test-writing cells; every other cell in
+    /// the repo claims exactly as it did before the trap existed.
+    #[test]
+    fn a_cell_with_no_test_shaped_path_and_no_citation_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(root, "trap-plain", json!([]), json!([TRAP_SOURCE]), Some("code"), None);
+
+        let door = claim_cell_from_flags(root, "trap-plain", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — THE NAMED, ACCEPTED HOLE, asserted rather than hidden.
+    ///
+    /// A `role: code` cell adding a `#[cfg(test)]` module inside a source
+    /// file it was already touching is the DOMINANT test-writing shape in
+    /// this repo, and the armed arm cannot see it: its `files` are
+    /// source-only. Only 27 of the 67 live cells that name tests in their
+    /// title or action carry any test-shaped path at all. Closing this
+    /// needs a real cell field declaring test intent, deferred with that
+    /// measurement rather than invented on a guess — so this cell MUST
+    /// claim, and the advisory arm (which its title fires) must warn
+    /// without ever refusing.
+    #[test]
+    fn a_role_code_cell_writing_tests_inside_a_source_file_claims_the_accepted_hole() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(
+            root,
+            "trap-hole",
+            json!([]),
+            json!([TRAP_SOURCE]),
+            Some("code"),
+            Some("Add a #[cfg(test)] module beside the guard and test its refusal"),
+        );
+
+        let door = claim_cell_from_flags(root, "trap-hole", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(
+            door.cell["status"],
+            json!("claimed"),
+            "the advisory arm never refuses, in any ramp state"
+        );
+        // The advisory line it printed is a single representation, so its
+        // wording is pinned here rather than re-spelled at the call site.
+        let line = mint_trap_advisory_line("trap-hole");
+        assert!(line.contains("ADVISORY ONLY"), "{line}");
+        assert!(line.contains("never refuses"), "{line}");
+    }
+
+    /// The RAMP (decision d853e4c6, touches 9c0104e0), both states of it in
+    /// one test because it is ONE rule with a condition, not two rules.
+    ///
+    /// While the active decision set holds no `contract:<name>` decision,
+    /// no cell on earth could satisfy the trap — a rule nobody can satisfy
+    /// is a dead workflow, not a guard — so the armed arm warns and says
+    /// what will make it refuse. The moment the first one is logged, the
+    /// SAME cell is refused. The condition is derived from the active
+    /// decision set: nothing is configured, flipped or stored between the
+    /// two halves below except that one decision.
+    #[test]
+    fn the_mint_trap_warns_until_the_first_contract_decision_exists_then_refuses() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        // A non-empty store with an ACTIVE decision that is simply not
+        // tagged `contract:` — so this proves the ramp is about the TAG,
+        // never about an empty decision log.
+        write_decision_events(root, &[decide_event(CIT_UNTAGGED, r#""process""#)]);
+        trap_cell(root, "trap-ramp", json!([]), json!([TRAP_TEST_PATH]), None, None);
+
+        let door = claim_cell_from_flags(root, "trap-ramp", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(
+            door.cell["status"],
+            json!("claimed"),
+            "with no contract decision to cite, the armed arm may only warn"
+        );
+        // The warning it printed, pinned through its single producer: a
+        // ramp warning that does not say what ends the ramp is a warning
+        // about nothing.
+        let warning = mint_trap_ramp_warning(
+            "trap-ramp",
+            &format!("declares the test-shaped file \"{TRAP_TEST_PATH}\""),
+        );
+        assert!(warning.contains("The moment the first one is logged"), "{warning}");
+        assert!(warning.contains("REFUSES"), "{warning}");
+        assert!(warning.contains("bee decisions log --tags contract:<name>"), "{warning}");
+
+        // The ONE thing that changes: a `contract:<name>` decision now
+        // exists. Same cell, put back exactly as it was.
+        std::fs::remove_file(claims_dir(root).join("trap-ramp.json")).unwrap();
+        trap_cell(root, "trap-ramp", json!([]), json!([TRAP_TEST_PATH]), None, None);
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_UNTAGGED, r#""process""#),
+                decide_event(TRAP_CONTRACT, r#""contract:cell-store""#),
+            ],
+        );
+
+        let refusal = thrown(claim_cell_from_flags(root, "trap-ramp", "w2", Some("sess-2"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNCITED — cell \"trap-ramp\" refused"),
+            "the first contract decision arms the refusal: {refusal}"
+        );
+        assert_untouched_by_refusal(root, "trap-ramp");
+    }
+
+    /// The hole that made the whole claim door bypassable: `cells add` used
+    /// to preserve any truthy `status` a payload carried, so one line of
+    /// JSON minted a cell already "claimed" — one that never passes this
+    /// door, nor the red-base or no-route denies beside it. Authoring a
+    /// status other than "open" is now refused by name; omitting it still
+    /// defaults to "open".
+    #[test]
+    fn add_cell_refuses_an_authored_status_and_still_defaults_an_absent_one_to_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        for injected in ["claimed", "capped", "blocked", "dropped", "open-ish"] {
+            let mut payload = addable("inj-1");
+            payload["status"] = json!(injected);
+            let problems = validate_new_cell_problems(root, &payload).unwrap();
+            assert_eq!(problems.len(), 1, "{injected}: {problems:?}");
+            assert!(
+                problems[0].starts_with("addCell: \"status\" must be \"open\""),
+                "{problems:?}"
+            );
+            assert!(
+                problems[0].contains(&format!("\"{injected}\"")),
+                "the refusal names the value it refused: {problems:?}"
+            );
+            assert!(
+                problems[0].contains("bee cells claim"),
+                "the refusal names who owns the transition: {problems:?}"
+            );
+        }
+
+        // An explicit "open" is fine — it is exactly what the default writes.
+        let mut explicit = addable("inj-2");
+        explicit["status"] = json!("open");
+        assert_eq!(validate_new_cell_problems(root, &explicit).unwrap(), Vec::<String>::new());
+
+        // Absent: no problem, and normalization still fills in "open".
+        let absent = addable("inj-3");
+        assert_eq!(validate_new_cell_problems(root, &absent).unwrap(), Vec::<String>::new());
+        assert_eq!(normalize_new_cell(&absent).unwrap()["status"], json!("open"));
+
+        // And the whole `cells add` door refuses it, not just the collector.
+        let mut injected = addable("inj-4");
+        injected["status"] = json!("claimed");
+        assert!(thrown(validate_new_cell(root, &injected)).contains("must be \"open\" on a new cell"));
+        let (ok, rows, normalized) = build_add_cells_report(root, &[injected]).unwrap();
+        assert!(!ok, "the batch door refuses it too");
+        assert!(rows[0].problems.iter().any(|p| p.contains("must be \"open\" on a new cell")));
+        assert!(normalized.is_none(), "nothing is written when the batch refuses");
     }
 
     // ══ crf-1 — the claim ACQUIRES what the cap already releases ══════════
@@ -2373,6 +3071,466 @@ use std::time::Instant;
         assert_eq!(judge_door.command, Some("bee cells unarchive"));
     }
 
+    // sd-4: the dissent close door (slp-dissent-stop-and-ask, a2affcba and
+    // 4b7aa303). `bee close` refuses while any dissent on this feature's
+    // cells lacks a verdict. The door lives in verbs/drivers/close.rs and its
+    // two helpers in verbs/cells/dissent.rs; the cases sit HERE, beside the
+    // rest of the dissent surface, exactly as the judge door cases above sit
+    // beside the judge surface.
+    //
+    // Two of them invert their judge twins on purpose: the judge door is
+    // gated to standard/high-risk and counts only capped behavior_change
+    // cells, while this one exists in EVERY lane and counts a cell in ANY
+    // status, because a blocker dissent parks its cell as `blocked`.
+
+    fn dissent_entry(claim: &str, verdict: Option<&str>) -> Value {
+        let mut e = json!({
+            "target": "demo-1",
+            "claim": claim,
+            "alternative": "do it the other way",
+            "severity": "blocker",
+            "recorded_at": "2026-08-28T00:00:00.000Z",
+        });
+        if let Some(v) = verdict {
+            let m = e.as_object_mut().unwrap();
+            m.insert("verdict".into(), json!(v));
+            m.insert("verdict_reason".into(), json!("because"));
+            m.insert("answered_at".into(), json!("2026-08-28T01:00:00.000Z"));
+        }
+        e
+    }
+
+    fn cell_carrying_dissents(feature: &str, id: &str, status: &str, rows: Value) -> Value {
+        json!({"id": id, "feature": feature, "status": status, "trace": {"dissent": rows}})
+    }
+
+    #[test]
+    fn dissent_debt_door_blocks_a_cell_a_blocker_dissent_parked_as_blocked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("high-risk"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "blocked", json!([dissent_entry("wrong shape", None)])),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").expect("the door must exist");
+        assert!(door.blocking, "an unanswered dissent must block: {}", door.detail);
+        assert!(door.detail.contains("demo-1"), "{}", door.detail);
+        assert_eq!(door.command, Some("bee cells dissent-verdict"));
+        assert_eq!(feature_dissent_debt(root, "demo").unwrap().count, 1);
+    }
+
+    #[test]
+    fn dissent_debt_door_clears_once_a_verdict_is_recorded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("high-risk"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents(
+                "demo",
+                "demo-1",
+                "open",
+                json!([dissent_entry("wrong shape", Some("reject"))]),
+            ),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+        assert_eq!(door.command, None);
+    }
+
+    #[test]
+    fn dissent_debt_door_blocks_a_tiny_lane_feature_exactly_like_a_high_risk_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "claimed", json!([dissent_entry("wrong shape", None)])),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(
+            doors.iter().find(|d| d.door == "judge-debt").is_none(),
+            "the judge door is lane-gated; the contrast is the point of this test"
+        );
+        let door = doors.iter().find(|d| d.door == "dissent-debt").expect("every lane grows this door");
+        assert!(door.blocking, "a tiny lane blocks exactly like a high-risk one: {}", door.detail);
+        assert!(door.detail.contains("demo-1"), "{}", door.detail);
+    }
+
+    #[test]
+    fn dissent_debt_door_names_unarchive_first_for_an_archived_offender() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_archived_cell_fixture(
+            root,
+            "demo",
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "capped", json!([dissent_entry("wrong shape", None)])),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(door.blocking, "an archived cell still owes its verdict: {}", door.detail);
+        let unarchive_at = door.detail.find("bee cells unarchive").expect(&door.detail);
+        let verdict_at = door.detail.find("bee cells dissent-verdict").expect(&door.detail);
+        assert!(unarchive_at < verdict_at, "unarchive must come first: {}", door.detail);
+        assert_eq!(door.command, Some("bee cells unarchive"));
+    }
+
+    #[test]
+    fn dissent_debt_door_clears_with_a_logged_dissent_deferral_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "blocked", json!([dissent_entry("wrong shape", None)])),
+        );
+        std::fs::write(
+            root.join(".bee").join("decisions.jsonl"),
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-28T00:00:00.000Z\",\"decision\":\"defer the dissent for demo\",\"rationale\":\"r\",\"tags\":[\"dissent-deferral\"],\"scope\":\"repo\"}\n",
+        )
+        .unwrap();
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(!door.blocking, "a logged deferral clears the door: {}", door.detail);
+        assert!(door.detail.contains("deferred"), "{}", door.detail);
+        assert!(door.detail.contains("demo-1"), "the count is untouched: {}", door.detail);
+        assert_eq!(door.command, None);
+
+        assert!(has_dissent_deferral_decision(root, "demo").unwrap());
+        assert!(
+            !has_dissent_deferral_decision(root, "elsewhere").unwrap(),
+            "the same tag naming a different feature never lifts this block"
+        );
+    }
+
+    #[test]
+    fn dissent_debt_door_names_every_unanswered_cell_never_just_the_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "open", json!([dissent_entry("first", None)])),
+        );
+        write_cell_fixture(
+            root,
+            "demo-2",
+            &cell_carrying_dissents(
+                "demo",
+                "demo-2",
+                "claimed",
+                json!([dissent_entry("answered", Some("accept")), dissent_entry("still open", None)]),
+            ),
+        );
+        write_cell_fixture(
+            root,
+            "demo-3",
+            &cell_carrying_dissents("demo", "demo-3", "capped", json!([dissent_entry("done", Some("escalate"))])),
+        );
+
+        let debt = feature_dissent_debt(root, "demo").unwrap();
+        assert_eq!(debt.count, 2, "one answered cell is not debt");
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(door.blocking);
+        assert!(door.detail.contains("demo-1"), "{}", door.detail);
+        assert!(door.detail.contains("demo-2"), "{}", door.detail);
+        assert!(!door.detail.contains("demo-3"), "{}", door.detail);
+    }
+
+    #[test]
+    fn dissent_debt_door_is_clear_with_no_dissent_and_with_a_corrupt_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(root, "demo-1", &json!({"id": "demo-1", "feature": "demo", "status": "open"}));
+        write_cell_fixture(
+            root,
+            "demo-2",
+            &cell_carrying_dissents("demo", "demo-2", "open", json!(["a corrupt row"])),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(!door.blocking);
+        assert_eq!(door.detail, "clear");
+        assert_eq!(
+            feature_dissent_debt(root, "demo").unwrap().count,
+            0,
+            "a non-object row reads as ANSWERED, so a garbled entry never blocks forever"
+        );
+    }
+
+    #[test]
+    fn close_refuses_dissent_debt_in_a_tiny_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "blocked", json!([dissent_entry("wrong shape", None)])),
+        );
+
+        let Out::Emit(result, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new())
+                .unwrap()
+        else {
+            panic!("close must emit its refusal")
+        };
+        assert_eq!(code, 1, "an unanswered dissent refuses close in every lane");
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(
+            lines[0].starts_with(crate::verbs::drivers::CLOSE_DISSENT_DEBT_PREFIX),
+            "headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert!(lines[0].contains("demo-1"), "{}", lines[0]);
+        assert!(lines[1].starts_with("remedy:"), "{}", lines[1]);
+        assert!(lines[1].contains("bee cells dissent-verdict"), "{}", lines[1]);
+        assert!(lines[1].contains("dissent-deferral"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"), "{}", lines[2]);
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors.iter().find(|d| d["door"] == "dissent-debt").unwrap()["blocking"], json!(true));
+    }
+
+    // ── slp-advisor-nudge an-3: the advisor-nudge response debt (9e5eda5b) ─
+    //
+    // The debt's ONE reading lives beside the record (verbs/supervisor.rs,
+    // an-2); these are the DOOR tests — the cap path and the close door, kept
+    // here beside the dissent door's own message-contract tests because they
+    // are the same arm at the same two places. The merge door's half lives in
+    // verbs/worktree/tests.rs, where the git harness is.
+
+    /// One `advisor-nudge` mailbox row, appended straight into the store the
+    /// debt reads (`.bee/supervisor/interventions.jsonl` under the control
+    /// root) in the record-event shape `bee supervisor record` writes — not a
+    /// fixture-only shape. `feature` is the value DERIVED onto the row at
+    /// record time; `None` is the honest no-claim row.
+    fn write_advisor_nudge_row(root: &Path, id: &str, feature: Option<&str>) {
+        let dir = root.join(".bee").join("supervisor");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut row = json!({
+            "event": "record",
+            "id": id,
+            "ts": "2026-08-29T00:00:00.000Z",
+            "kind": "advisor-nudge",
+            "signal": "struggling-loop",
+            "point_key": id,
+            "question": "Would an advisor read help here?",
+            "target_session": "sess-1",
+        });
+        if let Some(feature) = feature {
+            row.as_object_mut().unwrap().insert("feature".into(), json!(feature));
+        }
+        let path = dir.join("interventions.jsonl");
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{row}\n"));
+        std::fs::write(&path, text).unwrap();
+    }
+
+    /// The per-row escape: one ACTIVE decision tagged `advisor-nudge` whose
+    /// text NAMES the row id — the shape `bee decisions log` appends.
+    fn write_advisor_nudge_clearing(root: &Path, decision_id: &str, row_id: &str) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let event = json!({
+            "id": decision_id,
+            "type": "decide",
+            "date": "2026-08-29T01:00:00.000Z",
+            "decision": format!("consulted the advisor about {row_id}; keeping the approach"),
+            "rationale": "r",
+            "tags": ["advisor-nudge"],
+            "scope": "repo",
+        });
+        let path = decisions_path(root);
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{event}\n"));
+        std::fs::write(&path, text).unwrap();
+    }
+
+    /// TRUTH: "bee close grows the advisor-nudge door at EVERY lane" — the
+    /// `tiny` fixture is the point, exactly as the dissent door's own
+    /// lane test above states it, and the judge door's absence is the
+    /// contrast. A nudge derived onto a DIFFERENT feature never counts here.
+    #[test]
+    fn advisor_nudge_debt_door_blocks_a_tiny_lane_and_clears_on_a_tagged_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_advisor_nudge_row(root, "nud-1", Some("demo"));
+        write_advisor_nudge_row(root, "nud-2", Some("elsewhere"));
+        write_advisor_nudge_row(root, "nud-3", None);
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(
+            doors.iter().all(|d| d.door != "judge-debt"),
+            "the judge door is lane-gated; the contrast is the point of this test"
+        );
+        let door = doors
+            .iter()
+            .find(|d| d.door == "advisor-nudge-debt")
+            .expect("every lane grows this door");
+        assert!(door.blocking, "an unanswered nudge must block: {}", door.detail);
+        assert!(door.detail.contains("nud-1"), "{}", door.detail);
+        assert!(
+            !door.detail.contains("nud-2"),
+            "a nudge derived onto another feature is not this feature's debt: {}",
+            door.detail
+        );
+        assert!(
+            !door.detail.contains("nud-3"),
+            "a nudge with no derived feature counts against nothing: {}",
+            door.detail
+        );
+        assert_eq!(door.command, Some("bee decisions log"));
+
+        // The per-row escape lifts exactly this row, and the door goes clear.
+        write_advisor_nudge_clearing(root, "d1", "nud-1");
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(!door.blocking, "the clearing decision opens the door: {}", door.detail);
+        assert_eq!(door.detail, "clear");
+        assert_eq!(door.command, None);
+    }
+
+    /// TRUTH: "bee close refuses on the same debt at every lane, printing
+    /// headline/remedy/next" — the message contract, pinned prefix included.
+    #[test]
+    fn close_refuses_advisor_nudge_debt_in_a_tiny_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_advisor_nudge_row(root, "nud-1", Some("demo"));
+
+        let Out::Emit(result, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new())
+                .unwrap()
+        else {
+            panic!("close must emit its refusal")
+        };
+        assert_eq!(code, 1, "an unanswered advisor nudge refuses close in every lane");
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(
+            lines[0].starts_with(crate::verbs::drivers::CLOSE_ADVISOR_NUDGE_DEBT_PREFIX),
+            "headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert!(lines[0].contains("nud-1"), "{}", lines[0]);
+        assert!(lines[1].starts_with("remedy:"), "{}", lines[1]);
+        assert!(lines[1].contains("bee decisions log"), "{}", lines[1]);
+        assert!(lines[1].contains("advisor-nudge"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"), "{}", lines[2]);
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(
+            doors.iter().find(|d| d["door"] == "advisor-nudge-debt").unwrap()["blocking"],
+            json!(true)
+        );
+
+        // The clearing decision lands and the SAME close gets past the door.
+        write_advisor_nudge_clearing(root, "d1", "nud-1");
+        let Out::Emit(_, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new())
+                .unwrap()
+        else {
+            panic!("close must emit")
+        };
+        assert!(
+            !text.starts_with(crate::verbs::drivers::CLOSE_ADVISOR_NUDGE_DEBT_PREFIX),
+            "the answered nudge stops refusing (code {code}): {text}"
+        );
+    }
+
+    /// TRUTH: "bee cells cap refuses while an unanswered advisor-nudge row
+    /// targets the cell's feature, printing headline/remedy/next" — the
+    /// cell-level tooth, the one that bites before the boundary ever runs.
+    /// The refusal writes NOTHING, and the clearing decision opens the same
+    /// cap unchanged.
+    ///
+    /// ONE fixture state answers the cap AND the close door here, on purpose:
+    /// two doors reading one obligation through two fixtures could drift
+    /// apart and both stay green. They call the same function; this is what
+    /// proves it.
+    #[test]
+    fn cap_refuses_while_an_advisor_nudge_for_the_cells_feature_is_unanswered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_cell_fixture(
+            root,
+            "an-x",
+            &json!({
+                "id": "an-x", "feature": "demo", "title": "t", "action": "a",
+                "verify": "echo ok", "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+            }),
+        );
+        write_advisor_nudge_row(root, "nud-1", Some("demo"));
+
+        let refusal = thrown(cap_cell_from_flags(root, &wf_boundary_cap_flags("an-x"), false));
+        let lines: Vec<&str> = refusal.split('\n').collect();
+        assert!(
+            lines[0].starts_with(CAP_ADVISOR_NUDGE_DEBT_PREFIX),
+            "headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert!(lines[0].contains("nud-1"), "{}", lines[0]);
+        assert!(lines[0].contains("an-x"), "{}", lines[0]);
+        assert!(lines[1].starts_with("remedy:"), "{}", lines[1]);
+        assert!(lines[1].contains("bee decisions log"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"), "{}", lines[2]);
+        assert_eq!(
+            read_cell_fixture(root, "an-x")["status"],
+            json!("claimed"),
+            "a refused cap writes nothing"
+        );
+        // The SAME state, read by the close door: one obligation, two doors.
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(door.blocking, "the close door agrees with the cap: {}", door.detail);
+
+        // A nudge for ANOTHER feature never reaches this cell's cap.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        write_cell_fixture(
+            root2,
+            "an-y",
+            &json!({
+                "id": "an-y", "feature": "demo", "title": "t", "action": "a",
+                "verify": "echo ok", "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+            }),
+        );
+        write_advisor_nudge_row(root2, "nud-9", Some("elsewhere"));
+        let capped = cap_cell_from_flags(root2, &wf_boundary_cap_flags("an-y"), false)
+            .expect("another feature's nudge is not this cell's debt");
+        assert_eq!(capped["status"], json!("capped"));
+
+        // Same cap, one clearing decision later — green.
+        write_advisor_nudge_clearing(root, "d1", "nud-1");
+        let capped = cap_cell_from_flags(root, &wf_boundary_cap_flags("an-x"), false)
+            .expect("the answered nudge stops refusing");
+        assert_eq!(capped["status"], json!("capped"));
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(!door.blocking, "one decision opens BOTH doors: {}", door.detail);
+    }
+
     // ── schedule ──────────────────────────────────────────────────────────
     #[test]
     fn compute_schedule_waves_and_diagnostics() {
@@ -2441,19 +3599,25 @@ use std::time::Instant;
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
     fn wf_boundary_cell_body(id: &str) -> Value {
         json!({
             "id": id, "feature": "f", "title": "t", "action": "a",
-            "verify": "npm test", "lane": "tiny", "status": "claimed",
+            "verify": "echo ok", "lane": "tiny", "status": "claimed",
             "deps": [], "files": [], "trace": {},
         })
     }
@@ -3307,6 +4471,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_REOPEN_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         cmd.output().expect("spawn the test binary")
     }
@@ -3671,6 +4836,127 @@ use std::time::Instant;
         assert!(!gate.exists());
     }
 
+    fn write_gate_fixture(root: &Path, id: &str, pid: Value, at: &str) {
+        let dir = claims_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut gate = Map::new();
+        if !pid.is_null() {
+            gate.insert("pid".into(), pid);
+        }
+        gate.insert("at".into(), json!(at));
+        std::fs::write(
+            dir.join(format!("{id}.adopting")),
+            format!("{}\n", jsjson::stringify(&Value::Object(gate))),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn unclaim_breaks_a_stale_claim_gate_and_frees_the_claim() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "sg");
+        write_cell_fixture(root, "sg-1", &cell("sg-1", "open", "sg", json!([])));
+
+        claim_cell_from_flags(root, "sg-1", "w1", Some("sess-1"), None).unwrap();
+        let claim_file = claims_dir(root).join("sg-1.json");
+        let gate = claim_gate_path(root, "sg-1").unwrap();
+        assert!(claim_file.exists());
+
+        let hour_ago = rsv::iso_from_ms(rsv::now_ms() - 3_600_000.0).ok().unwrap();
+        write_gate_fixture(root, "sg-1", json!(999_999_999u64), &hour_ago);
+
+        unclaim_cell(root, "sg-1", Some("sess-1"), false).unwrap();
+
+        assert!(
+            !claim_file.exists(),
+            "a stale gate must never outlive the unclaim — the claim row is gone"
+        );
+        assert!(!gate.exists(), "the broken gate is not left behind");
+
+        let again = claim_cell_from_flags(root, "sg-1", "w2", Some("sess-2"), None).unwrap();
+        assert_eq!(again.cell["status"], json!("claimed"), "the cell is claimable again");
+    }
+
+    #[test]
+    fn unclaim_breaks_a_dead_pid_gate_that_is_younger_than_the_age_window() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "sp");
+        write_cell_fixture(root, "sp-1", &cell("sp-1", "open", "sp", json!([])));
+
+        claim_cell_from_flags(root, "sp-1", "w1", Some("sess-1"), None).unwrap();
+        let claim_file = claims_dir(root).join("sp-1.json");
+        let gate = claim_gate_path(root, "sp-1").unwrap();
+        write_gate_fixture(root, "sp-1", json!(999_999_999u64), &utc_now());
+
+        unclaim_cell(root, "sp-1", Some("sess-1"), false).unwrap();
+
+        assert!(!claim_file.exists(), "a dead pid frees the claim whatever the gate's age");
+        assert!(!gate.exists());
+    }
+
+    #[test]
+    fn unclaim_breaks_a_gate_that_does_not_parse_once_it_is_old() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "sn");
+        write_cell_fixture(root, "sn-1", &cell("sn-1", "open", "sn", json!([])));
+
+        claim_cell_from_flags(root, "sn-1", "w1", Some("sess-1"), None).unwrap();
+        let claim_file = claims_dir(root).join("sn-1.json");
+        let gate = claim_gate_path(root, "sn-1").unwrap();
+        std::fs::write(&gate, "not json at all").unwrap();
+        let aged = std::time::SystemTime::now() - std::time::Duration::from_secs(3_600);
+        std::fs::File::options()
+            .write(true)
+            .open(&gate)
+            .unwrap()
+            .set_modified(aged)
+            .unwrap();
+
+        unclaim_cell(root, "sn-1", Some("sess-1"), false).unwrap();
+
+        assert!(!claim_file.exists(), "an old unparseable gate is stale");
+        assert!(!gate.exists());
+
+        write_cell_fixture(root, "sn-2", &cell("sn-2", "open", "sn", json!([])));
+        claim_cell_from_flags(root, "sn-2", "w1", Some("sess-1"), None).unwrap();
+        let claim2 = claims_dir(root).join("sn-2.json");
+        let gate2 = claim_gate_path(root, "sn-2").unwrap();
+        std::fs::write(&gate2, "not json").unwrap();
+
+        unclaim_cell(root, "sn-2", Some("sess-1"), false).unwrap();
+
+        assert!(claim2.exists(), "a just-created gate may be mid-write: never broken while young");
+        assert_eq!(std::fs::read_to_string(&gate2).unwrap(), "not json");
+    }
+
+    #[test]
+    fn a_fresh_gate_held_by_a_live_pid_is_never_broken() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "fg");
+        write_cell_fixture(root, "fg-1", &cell("fg-1", "open", "fg", json!([])));
+
+        claim_cell_from_flags(root, "fg-1", "w1", Some("sess-1"), None).unwrap();
+        let claim_file = claims_dir(root).join("fg-1.json");
+        let gate = claim_gate_path(root, "fg-1").unwrap();
+        write_gate_fixture(root, "fg-1", json!(std::process::id()), &utc_now());
+        let held = std::fs::read_to_string(&gate).unwrap();
+
+        assert!(!acquire_gate(root, "fg-1").unwrap(), "a live fresh gate still refuses");
+        assert_eq!(
+            std::fs::read_to_string(&gate).unwrap(),
+            held,
+            "the live holder's gate is left exactly as found"
+        );
+
+        unclaim_cell(root, "fg-1", Some("sess-1"), false).unwrap();
+        assert!(claim_file.exists(), "a live gate is never waited out by the best-effort release");
+        assert_eq!(std::fs::read_to_string(&gate).unwrap(), held);
+    }
+
     // ── claims D5 (R5): the Codex session bridge ──────────────────────────
     // Oracle: test_claims.mjs "claimCellFile (hardening-1-7-10 D5 — Codex
     // session bridge): a sessionless claim with EXACTLY ONE fresh live session
@@ -3794,7 +5080,9 @@ use std::time::Instant;
         for (bee, legacy, want) in cases {
             let mut cmd = std::process::Command::new(&exe);
             cmd.args(["--exact", SESSION_CHAIN_CHILD, "--ignored", "--test-threads", "1"]);
-            cmd.env_remove("BEE_SESSION_ID").env_remove("CLAUDE_CODE_SESSION_ID");
+            cmd.env_remove("BEE_SESSION_ID")
+                .env_remove("CLAUDE_CODE_SESSION_ID")
+                .env_remove("PI_SESSION_ID");
             if let Some(v) = bee {
                 cmd.env("BEE_SESSION_ID", v);
             }
@@ -4315,12 +5603,21 @@ use std::time::Instant;
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
-            report: Some(default_test_report_json()),
+            report: Some(
+                r#"{"outcome":"o","commit":"c","files":[],"tests":"none — green:static — fixture","deviations":[]}"#
+                    .to_string(),
+            ),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         };
         let cell_body = |id: &str| {
             json!({
@@ -4384,12 +5681,18 @@ use std::time::Instant;
             deviations: deviations.into_iter().map(|d| json!(d)).collect(),
             deviation: deviation.map(str::to_string),
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -4479,12 +5782,18 @@ use std::time::Instant;
             deviations,
             deviation: deviation.map(str::to_string),
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
             report: Some(report.to_string()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -4492,7 +5801,7 @@ use std::time::Instant;
     /// for the JSON array literal under test.
     fn dol_report(deviations: &str) -> String {
         format!(
-            r#"{{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":{deviations}}}"#
+            r#"{{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":{deviations}}}"#
         )
     }
 
@@ -4727,12 +6036,18 @@ use std::time::Instant;
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
             report: report.map(str::to_string),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -4740,7 +6055,7 @@ use std::time::Instant;
     // `<command> — <result> — <scope reason>`, written by the agent that
     // ran it — never the retired `boundary`/`undeclared` enum (decision
     // 13ce1858, test-cadence-boundary D1a).
-    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"cargo test -p bee — green — touched close.rs","deviations":[]}"#;
+    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"echo ok — green:unit — touched close.rs","deviations":[]}"#;
 
     #[test]
     fn valid_report_is_validated_and_stored_on_trace() {
@@ -4757,7 +6072,7 @@ use std::time::Instant;
                 "outcome": "did the thing",
                 "commit": "abc123",
                 "files": ["a.rs"],
-                "tests": "cargo test -p bee — green — touched close.rs",
+                "tests": "echo ok — green:unit — touched close.rs",
                 "deviations": [],
             })
         );
@@ -4772,15 +6087,17 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
-        write_cell_fixture(root, "wfl-r1u", &cell("wfl-r1u", "claimed", "f", json!([])));
+        let mut c = cell("wfl-r1u", "claimed", "f", json!([]));
+        c["verify"] = json!("none");
+        write_cell_fixture(root, "wfl-r1u", &c);
 
         let report =
-            r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"none — green — regen parity check only","deviations":[]}"#;
+            r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"none — green:static — regen parity check only","deviations":[]}"#;
         let flags = cap_flags_report("wfl-r1u", Some(report));
         let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(
             capped["trace"]["report"]["tests"],
-            json!("none — green — regen parity check only")
+            json!("none — green:static — regen parity check only")
         );
     }
 
@@ -4792,14 +6109,16 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
-        write_cell_fixture(root, "wfl-r1s", &cell("wfl-r1s", "claimed", "f", json!([])));
+        let mut c = cell("wfl-r1s", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee");
+        write_cell_fixture(root, "wfl-r1s", &c);
 
-        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched close.rs — and finish_support.rs","deviations":[]}"#;
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — touched close.rs — and finish_support.rs","deviations":[]}"#;
         let flags = cap_flags_report("wfl-r1s", Some(report));
         let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(
             capped["trace"]["report"]["tests"],
-            json!("cargo test -p bee — green — touched close.rs — and finish_support.rs")
+            json!("cargo test -p bee — green:unit — touched close.rs — and finish_support.rs")
         );
     }
 
@@ -4914,6 +6233,127 @@ use std::time::Instant;
         assert!(refusal.contains("fix-first"), "{refusal}");
     }
 
+    /// D1 (docs/history/proof-strength-and-expiry/CONTEXT.md): the result
+    /// segment is closed over the three strength values. A bare `green` —
+    /// every cap's form until this change — is REFUSED at the write path,
+    /// and the refusal names the whole legal set.
+    ///
+    /// The message assertion below is pinned on the FULL set, the way
+    /// `route_set_validation_names_every_bad_value` pins the route-class
+    /// one: the refusal is the contract a cold worker fixes its cap from, so
+    /// a value added or renamed without editing this line is a silent
+    /// contract change. Update it with the vocabulary; never delete it.
+    #[test]
+    fn report_tests_key_bare_green_is_refused_naming_the_three_strengths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "pse-v1", &cell("pse-v1", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched close.rs","deviations":[]}"#;
+        let flags = cap_flags_report("pse-v1", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert_eq!(
+            refusal,
+            "cells finish: --report key \"tests\" result segment is \"green\" — a cap records HOW the change was shown to work, so the result must be one of green:live, green:unit, green:static (a bare \"green\" no longer says which)."
+        );
+        // The refused cap wrote nothing: the cell is still claimed.
+        let after: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(cell_file(root, "pse-v1")).unwrap())
+                .unwrap();
+        assert_eq!(after["status"], json!("claimed"));
+    }
+
+    /// D1: each of the three qualified values caps. `green:unit` is the one
+    /// a test run records; `live` and `static` ride the same arm, so one
+    /// loop pins all three rather than three near-identical tests.
+    #[test]
+    fn report_tests_key_accepts_every_qualified_strength_value() {
+        for (n, strength) in ["green:live", "green:unit", "green:static"].iter().enumerate() {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_bee_config(root, &json!({"commands": {"test": "none"}}));
+            let id = format!("pse-v2{n}");
+            write_cell_fixture(root, &id, &cell(&id, "claimed", "f", json!([])));
+
+            let proof = format!("echo ok — {strength} — touched close.rs, evidence /tmp/x/evidence/r1");
+            let report = json!({
+                "outcome": "o", "commit": "c", "files": [],
+                "tests": proof, "deviations": [],
+            })
+            .to_string();
+            let flags = cap_flags_report(&id, Some(&report));
+            let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+            assert_eq!(capped["trace"]["report"]["tests"], json!(proof));
+        }
+    }
+
+    #[test]
+    fn report_tests_green_live_without_evidence_locator_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "lpe-v1", &cell("lpe-v1", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:live — checked","deviations":[]}"#;
+        let flags = cap_flags_report("lpe-v1", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("names no evidence locator"), "{refusal}");
+        assert!(refusal.contains("http:// or https://"), "{refusal}");
+        assert!(refusal.contains("an absolute path"), "{refusal}");
+        assert!(refusal.contains("evidence/"), "{refusal}");
+        let after: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(cell_file(root, "lpe-v1")).unwrap())
+                .unwrap();
+        assert_eq!(after["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn report_tests_green_live_accepts_every_locator_shape() {
+        for (n, reason) in [
+            "https://github.com/o/r/actions/runs/1",
+            "/home/u/.local/state/bee-verify/evidence/r1 snapshot ok",
+            "see evidence/20260922-1 out files",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_bee_config(root, &json!({"commands": {"test": "none"}}));
+            let id = format!("lpe-v2{n}");
+            write_cell_fixture(root, &id, &cell(&id, "claimed", "f", json!([])));
+
+            let proof = format!("echo ok — green:live — {reason}");
+            let report = json!({
+                "outcome": "o", "commit": "c", "files": [],
+                "tests": proof, "deviations": [],
+            })
+            .to_string();
+            let flags = cap_flags_report(&id, Some(&report));
+            let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+            assert_eq!(capped["trace"]["report"]["tests"], json!(proof));
+        }
+    }
+
+    #[test]
+    fn report_tests_green_unit_needs_no_evidence_locator() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "lpe-v3", &cell("lpe-v3", "claimed", "f", json!([])));
+
+        let proof = "echo ok — green:unit — touched close.rs";
+        let report = json!({
+            "outcome": "o", "commit": "c", "files": [],
+            "tests": proof, "deviations": [],
+        })
+        .to_string();
+        let flags = cap_flags_report("lpe-v3", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["report"]["tests"], json!(proof));
+    }
+
     /// D8: --report is now required on every cap path — an absent flag
     /// refuses instead of the old "leave trace.report untouched" byte-
     /// identical behavior.
@@ -4936,6 +6376,474 @@ use std::time::Instant;
             Some(&json!("claimed")),
             "a refused --report caps nothing"
         );
+    }
+
+    fn cap_flags_report_file(id: &str, report_file: Option<&str>) -> CapFlags {
+        cap_flags_with_report_file(cap_flags_report(id, None), report_file, false)
+            .expect("a readable report file fills the cap's report")
+    }
+
+    #[test]
+    fn report_file_caps_with_the_files_report_exactly_as_report_would() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf1", &cell("ois-rf1", "claimed", "f", json!([])));
+
+        let path = root.join("report.json");
+        std::fs::write(&path, VALID_REPORT).unwrap();
+        let path = path.to_str().unwrap();
+
+        let (parsed, _) = rsv::parse_flags(&["--id", "ois-rf1", "--report-file", path]).unwrap();
+        assert!(
+            rsv::keys_known(&parsed, &CAP_FLAGS) && rsv::keys_known(&parsed, &FINISH_FLAGS),
+            "--report-file is a declared flag on both cap and finish"
+        );
+        let from_flags = cap_flags_from(&parsed).expect("the parsed flags reach the cap door");
+        assert!(from_flags.report.is_none(), "the parse site leaves --report unset");
+
+        let flags = cap_flags_report_file("ois-rf1", Some(path));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["report"],
+            serde_json::from_str::<Value>(VALID_REPORT).unwrap(),
+            "the file's report lands on trace.report exactly as --report's own bytes would"
+        );
+    }
+
+    #[test]
+    fn report_file_and_report_together_are_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf2", &cell("ois-rf2", "claimed", "f", json!([])));
+
+        let path = root.join("report.json");
+        std::fs::write(&path, VALID_REPORT).unwrap();
+
+        let refusal = thrown(cap_flags_with_report_file(
+            cap_flags_report("ois-rf2", Some(VALID_REPORT)),
+            Some(path.to_str().unwrap()),
+            false,
+        ));
+        assert!(
+            refusal.contains("--report and --report-file are exclusive"),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "ois-rf2").ok().unwrap().unwrap();
+        assert_eq!(
+            after_norm.get("status"),
+            Some(&json!("claimed")),
+            "a refused cap writes nothing"
+        );
+    }
+
+    #[test]
+    fn report_file_that_cannot_be_read_refuses_naming_the_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf3", &cell("ois-rf3", "claimed", "f", json!([])));
+
+        let missing = root.join("no-such-report.json");
+        let refusal = thrown(cap_flags_with_report_file(
+            cap_flags_report("ois-rf3", None),
+            Some(missing.to_str().unwrap()),
+            false,
+        ));
+        assert!(
+            refusal.contains(missing.to_str().unwrap()),
+            "the refusal names the unreadable path: {refusal}"
+        );
+    }
+
+    // ══ proof-honesty D4 (decision f4261145) — optional baseline on cap report ══
+
+    /// Decision 7bd47edd: the baseline is verify evidence, so releasing a cell
+    /// clears it with the rest. Without this, a released and re-claimed cell
+    /// carries the PREVIOUS run's floor into its next claim, where it reads as
+    /// a measurement of work that has not happened yet — the one failure a
+    /// floor is supposed to prevent, produced by the floor itself.
+    #[test]
+    fn release_trace_clears_the_baseline_with_the_other_verify_evidence() {
+        let merged = merge_trace(Some(&json!({
+            "worker": "w1",
+            "verify_passed": true,
+            "baseline": "echo ok — green:unit — base commit before change"
+        })))
+        .unwrap();
+        assert_eq!(
+            merged.get("baseline"),
+            Some(&json!("echo ok — green:unit — base commit before change")),
+            "precondition: the baseline is on the trace before release"
+        );
+
+        let released = release_trace(merged);
+        assert_eq!(
+            released.get("baseline"),
+            Some(&Value::Null),
+            "a released cell must not carry the previous run's baseline"
+        );
+        // and it is cleared for the same reason as its neighbours, not instead of them
+        assert_eq!(released.get("verify_passed"), Some(&Value::Null));
+        assert_eq!(released.get("worker"), Some(&Value::Null));
+    }
+
+    /// D4: a cap carrying a valid baseline stores it on the cell trace and is
+    /// readable via `bee cells show`.
+    #[test]
+    fn report_baseline_valid_string_is_stored_on_trace_and_readable_via_show() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ph-b1", &cell("ph-b1", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "added baseline",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "baseline": "echo ok — green:unit — base commit before change"
+        })
+        .to_string();
+        let flags = cap_flags_report("ph-b1", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["baseline"],
+            json!("echo ok — green:unit — base commit before change")
+        );
+
+        let Handled::Emit { result, .. } = handle_show(root, "ph-b1").unwrap() else { panic!() };
+        assert_eq!(
+            result["trace"]["baseline"],
+            json!("echo ok — green:unit — base commit before change")
+        );
+    }
+
+    /// D4: an absent baseline still caps — absent and empty must not read alike,
+    /// matching how `mistakes` already distinguishes them.
+    #[test]
+    fn report_baseline_absent_still_caps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ph-b2", &cell("ph-b2", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "no baseline",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": []
+        })
+        .to_string();
+        let flags = cap_flags_report("ph-b2", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert!(capped["trace"].get("baseline").is_none());
+
+        let Handled::Emit { result, .. } = handle_show(root, "ph-b2").unwrap() else { panic!() };
+        assert!(result["trace"].get("baseline").is_none());
+    }
+
+    /// D4: a non-string baseline is refused by name with a fix line.
+    #[test]
+    fn report_baseline_non_string_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ph-b3", &cell("ph-b3", "claimed", "f", json!([])));
+
+        let bad = json!({
+            "outcome": "bad baseline",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "baseline": 12345
+        })
+        .to_string();
+        let flags = cap_flags_report("ph-b3", Some(&bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("cells finish: --report key \"baseline\" must be a non-empty string"),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "ph-b3").ok().unwrap().unwrap();
+        assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+    }
+
+    /// D4: an empty or whitespace string baseline is refused by name.
+    #[test]
+    fn report_baseline_empty_or_whitespace_string_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+
+        for empty in ["", "   ", "\t\n"] {
+            let id = format!("ph-b4-{}", empty.len());
+            write_cell_fixture(root, &id, &cell(&id, "claimed", "f", json!([])));
+
+            let bad = json!({
+                "outcome": "empty baseline",
+                "commit": "abc123",
+                "files": [],
+                "tests": "echo ok — green:unit — finish tests",
+                "deviations": [],
+                "baseline": empty
+            })
+            .to_string();
+            let flags = cap_flags_report(&id, Some(&bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(
+                refusal.contains("cells finish: --report key \"baseline\" must be a non-empty string"),
+                "{empty:?}: {refusal}"
+            );
+            let after_norm = read_cell_norm(root, &id).ok().unwrap().unwrap();
+            assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+        }
+    }
+
+
+    #[test]
+    fn report_reaction_and_lists_are_stored_on_trace_and_readable_via_show() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-1", &cell("rg-1", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "did most of it",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "partial",
+            "skipped": ["the live run"],
+            "unknowns": ["whether the cache is warm"],
+            "found": ["a dead flag in the same file"],
+            "stopped": "the live run — the environment has no network"
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-1", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["reaction"], json!("partial"));
+        assert_eq!(capped["trace"]["skipped"], json!(["the live run"]));
+        assert_eq!(capped["trace"]["unknowns"], json!(["whether the cache is warm"]));
+        assert_eq!(capped["trace"]["found"], json!(["a dead flag in the same file"]));
+        assert_eq!(
+            capped["trace"]["stopped"],
+            json!("the live run — the environment has no network")
+        );
+
+        let Handled::Emit { result, .. } = handle_show(root, "rg-1").unwrap() else { panic!() };
+        assert_eq!(result["trace"]["reaction"], json!("partial"));
+        assert_eq!(result["trace"]["unknowns"], json!(["whether the cache is warm"]));
+        assert_eq!(result["trace"]["stopped"], json!("the live run — the environment has no network"));
+    }
+
+    #[test]
+    fn report_mixed_case_reaction_is_stored_lowercase() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-2", &cell("rg-2", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "agreed",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "  ConFIRM  "
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-2", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["reaction"], json!("confirm"));
+        assert_eq!(capped["trace"]["report"]["reaction"], json!("confirm"));
+    }
+
+    #[test]
+    fn report_without_the_new_keys_stays_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-3", &cell("rg-3", "claimed", "f", json!([])));
+
+        let flags = cap_flags_report("rg-3", Some(VALID_REPORT));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        for key in ["reaction", "skipped", "unknowns", "found", "stopped"] {
+            assert!(
+                capped["trace"].get(key).is_none(),
+                "an absent {key} must write nothing"
+            );
+        }
+        assert_report_verbatim(&capped, VALID_REPORT);
+    }
+
+    #[test]
+    fn report_reaction_outside_the_closed_set_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-4", &cell("rg-4", "claimed", "f", json!([])));
+
+        let bad = json!({
+            "outcome": "o",
+            "commit": "c",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "maybe"
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-4", Some(&bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("cells finish: --report key \"reaction\" must be one of confirm, partial, challenge, blocked"),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "rg-4").ok().unwrap().unwrap();
+        assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+    }
+
+    #[test]
+    fn report_blank_entry_or_wrong_type_in_a_list_key_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+
+        for (id, key, value) in [
+            ("rg-5a", "skipped", json!(["ok", "  "])),
+            ("rg-5b", "unknowns", json!("not an array")),
+            ("rg-5c", "found", json!([42])),
+        ] {
+            write_cell_fixture(root, id, &cell(id, "claimed", "f", json!([])));
+            let bad = json!({
+                "outcome": "o",
+                "commit": "c",
+                "files": [],
+                "tests": "echo ok — green:unit — finish tests",
+                "deviations": [],
+                key: value
+            })
+            .to_string();
+            let flags = cap_flags_report(id, Some(&bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(
+                refusal.contains(&format!(
+                    "cells finish: --report key \"{key}\" must be an array of non-empty strings"
+                )),
+                "{id}: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn report_empty_list_is_an_answer_meaning_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-6", &cell("rg-6", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "o",
+            "commit": "c",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "confirm",
+            "skipped": [],
+            "unknowns": [],
+            "found": []
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-6", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["skipped"], json!([]));
+        assert_eq!(capped["trace"]["unknowns"], json!([]));
+        assert_eq!(capped["trace"]["found"], json!([]));
+    }
+
+    #[test]
+    fn report_partial_without_stopped_is_refused_with_the_fix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-7", &cell("rg-7", "claimed", "f", json!([])));
+
+        let bad = json!({
+            "outcome": "o",
+            "commit": "c",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "partial"
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-7", Some(&bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains(
+                "add \"stopped\": \"<the part not done> — <evidence>\""
+            ),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "rg-7").ok().unwrap().unwrap();
+        assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+    }
+
+    #[test]
+    fn report_stopped_must_be_a_non_empty_string() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+
+        for (id, stopped) in [("rg-8a", json!("   ")), ("rg-8b", json!(["x"]))] {
+            write_cell_fixture(root, id, &cell(id, "claimed", "f", json!([])));
+            let bad = json!({
+                "outcome": "o",
+                "commit": "c",
+                "files": [],
+                "tests": "echo ok — green:unit — finish tests",
+                "deviations": [],
+                "reaction": "partial",
+                "stopped": stopped
+            })
+            .to_string();
+            let flags = cap_flags_report(id, Some(&bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(
+                refusal.contains("cells finish: --report key \"stopped\" must be a non-empty string"),
+                "{id}: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn release_trace_clears_the_reaction_keys_with_the_other_verify_evidence() {
+        let merged = merge_trace(Some(&json!({
+            "worker": "w1",
+            "reaction": "partial",
+            "skipped": ["the live run"],
+            "unknowns": ["cache warmth"],
+            "found": ["a dead flag"],
+            "stopped": "the live run — no network"
+        })))
+        .unwrap();
+        assert_eq!(merged.get("reaction"), Some(&json!("partial")));
+
+        let released = release_trace(merged);
+        for key in ["reaction", "skipped", "unknowns", "found", "stopped"] {
+            assert_eq!(
+                released.get(key),
+                Some(&Value::Null),
+                "a released cell must not carry the previous run's {key}"
+            );
+        }
     }
 
     // ══ D6 — the cell commit trailer (docs/history/hook-teeth/CONTEXT.md) ══
@@ -5010,12 +6918,18 @@ use std::time::Instant;
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: commit_pending.map(str::to_string),
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -5125,12 +7039,18 @@ use std::time::Instant;
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: inline_reason.map(str::to_string),
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -6162,12 +8082,18 @@ use std::time::Instant;
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -6588,6 +8514,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_UPDATE_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         cmd.output().expect("spawn the test binary")
     }
@@ -6717,6 +8644,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", child, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         assert!(
@@ -6864,6 +8792,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", DISPATCH_WAVE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         if !extra.is_empty() {
             cmd.env("WFL4_WAVE_ARGS", extra.join(" "));
@@ -6925,6 +8854,47 @@ use std::time::Instant;
         let mut ids: Vec<&str> = economics.iter().map(|e| e["id"].as_str().unwrap()).collect();
         ids.sort();
         assert_eq!(ids, vec!["wa-1", "wa-2"], "payload: {payload}");
+    }
+
+    #[test]
+    fn dispatch_wave_run_returns_agent_tool_cells_under_native_and_runs_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        for id in ["wr-1", "wr-2"] {
+            let mut c = cell(id, "open", "f", json!([]));
+            c["files"] = json!([format!("docs/{id}.md")]);
+            c["tier"] = json!("generation");
+            c["role"] = json!("code");
+            write_cell_fixture(&root, id, &c);
+        }
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f", "--run"]);
+
+        assert_eq!(payload["ran"], json!([]), "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        assert!(
+            payload.get("economics").is_none(),
+            "the run shape carries ran/native/skipped only: {payload}"
+        );
+        let native = payload["native"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(native.len(), 2, "payload: {payload}");
+        let mut reserved: Vec<String> = native
+            .iter()
+            .flat_map(|i| i["reserved"].as_array().cloned().unwrap_or_default())
+            .filter_map(|p| p.as_str().map(str::to_string))
+            .collect();
+        reserved.sort();
+        assert_eq!(reserved, vec!["docs/wr-1.md", "docs/wr-2.md"], "payload: {payload}");
+        for item in native {
+            assert_eq!(item["tool"], json!("Agent"), "payload: {payload}");
+            assert_eq!(item["claimed"], json!(true), "payload: {payload}");
+            assert_eq!(item["payload"]["subagent_type"], json!("bee-build"));
+        }
+        assert!(
+            !root.join(".bee").join("workers").exists(),
+            "nothing ran, so no envelope file is written: {payload}"
+        );
     }
 
     /// must-have: "one refusal never poisons the batch" — a cell already
@@ -7217,10 +9187,21 @@ use std::time::Instant;
     /// banner the same way `cells_schedule_run` (above) does for its own
     /// out-of-process seam.
     fn cells_add_judge_obligation_run(root: &Path, payload: &Value) -> String {
+        let out = cells_add_child_output(root, payload);
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let prefix = format!("test {CELLS_ADD_JUDGE_CHILD} ... ");
+        let start = stdout.find(&prefix).expect("libtest status line") + prefix.len();
+        let suffix = "ok\n\ntest result:";
+        let end = stdout[start..].find(suffix).expect("libtest result banner") + start;
+        stdout[start..end].to_string()
+    }
+
+    fn cells_add_child_output(root: &Path, payload: &Value) -> std::process::Output {
         std::fs::write(root.join("cell.json"), jsjson::stringify_pretty(payload)).unwrap();
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_ADD_JUDGE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         assert!(
@@ -7229,12 +9210,7 @@ use std::time::Instant;
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr)
         );
-        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
-        let prefix = format!("test {CELLS_ADD_JUDGE_CHILD} ... ");
-        let start = stdout.find(&prefix).expect("libtest status line") + prefix.len();
-        let suffix = "ok\n\ntest result:";
-        let end = stdout[start..].find(suffix).expect("libtest result banner") + start;
-        stdout[start..end].to_string()
+        out
     }
 
     /// A `.bee` marker with nothing else declared — the same minimal root
@@ -7396,12 +9372,18 @@ use std::time::Instant;
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: sync_ack.map(str::to_string),
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -7663,6 +9645,7 @@ use std::time::Instant;
             "1",
             "--nocapture",
         ]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         let text = format!(
@@ -7702,12 +9685,18 @@ use std::time::Instant;
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -7797,6 +9786,123 @@ use std::time::Instant;
         assert_eq!(merge_ready_on_lane(&root, "demo"), fact);
         // The CELL file never grew the key — the fact belongs to the feature.
         assert!(read_cell_fixture(&root, "mr-2").get("merge_ready").is_none());
+    }
+
+    fn leader_check_worktree_cell(id: &str, feature: &str, files_changed: &[&str]) -> Value {
+        json!({
+            "id": id,
+            "title": format!("title {id}"),
+            "status": "capped",
+            "lane": "tiny",
+            "feature": feature,
+            "must_haves": {"truths": ["Truth A"]},
+            "trace": {
+                "worker": "w-1",
+                "files_changed": files_changed,
+                "commit_pending": "not yet committed",
+            },
+        })
+    }
+
+    #[test]
+    fn leader_check_resolves_a_worktree_only_artifact_in_the_feature_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        let worktree = tmp.path().join(&wt_id);
+        std::fs::create_dir_all(worktree.join("src")).unwrap();
+        std::fs::write(worktree.join("src").join("new.rs"), "x").unwrap();
+        write_cell_fixture(
+            &root,
+            "lc-wt",
+            &leader_check_worktree_cell("lc-wt", "demo", &["src/new.rs"]),
+        );
+
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "src/new.rs"}]
+        });
+        let recorded = record_leader_check(&root, "lc-wt", "ok", &payload, None, false);
+        assert!(recorded.is_ok(), "a worktree-only artifact is accepted: {:?}", recorded.err().map(|e| match e {
+            Fail::Thrown(m) => m,
+            Fail::Delegate => "delegate".into(),
+        }));
+    }
+
+    #[test]
+    fn leader_check_accepts_an_absolute_worktree_artifact_against_relative_files_changed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        let worktree = tmp.path().join(&wt_id);
+        std::fs::create_dir_all(worktree.join("src")).unwrap();
+        std::fs::write(worktree.join("src").join("new.rs"), "x").unwrap();
+        write_cell_fixture(
+            &root,
+            "lc-abs",
+            &leader_check_worktree_cell("lc-abs", "demo", &["src/new.rs"]),
+        );
+
+        let absolute = worktree.join("src").join("new.rs");
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": absolute.to_str().unwrap()}]
+        });
+        let recorded = record_leader_check(&root, "lc-abs", "ok", &payload, None, false);
+        assert!(recorded.is_ok(), "an absolute worktree path overlaps its relative form: {:?}", recorded.err().map(|e| match e {
+            Fail::Thrown(m) => m,
+            Fail::Delegate => "delegate".into(),
+        }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn leader_check_accepts_an_absolute_artifact_reached_through_an_aliased_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        let worktree = tmp.path().join(&wt_id);
+        std::fs::create_dir_all(worktree.join("src")).unwrap();
+        std::fs::write(worktree.join("src").join("new.rs"), "x").unwrap();
+        write_cell_fixture(
+            &root,
+            "lc-alias",
+            &leader_check_worktree_cell("lc-alias", "demo", &["src/new.rs"]),
+        );
+        let alias_home = tempfile::tempdir().unwrap();
+        let alias = alias_home.path().join("alias");
+        std::os::unix::fs::symlink(tmp.path(), &alias).unwrap();
+
+        let aliased = alias.join(&wt_id).join("src").join("new.rs");
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": aliased.to_str().unwrap()}]
+        });
+        let recorded = record_leader_check(&root, "lc-alias", "ok", &payload, None, false);
+        assert!(recorded.is_ok(), "an aliased worktree path overlaps its relative form: {:?}", recorded.err().map(|e| match e {
+            Fail::Thrown(m) => m,
+            Fail::Delegate => "delegate".into(),
+        }));
+    }
+
+    #[test]
+    fn leader_check_still_refuses_an_artifact_missing_from_both_checkouts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, _wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        write_cell_fixture(
+            &root,
+            "lc-miss",
+            &leader_check_worktree_cell("lc-miss", "demo", &["src/new.rs"]),
+        );
+
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "src/new.rs"}]
+        });
+        match record_leader_check(&root, "lc-miss", "ok", &payload, None, false) {
+            Err(Fail::Thrown(m)) => {
+                assert!(m.contains("does not exist on disk relative to repo root"), "{m}")
+            }
+            Err(Fail::Delegate) => panic!("expected a thrown refusal, got Delegate"),
+            Ok(v) => panic!("expected a refusal, got {v}"),
+        }
     }
 
     #[test]
@@ -7963,6 +10069,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let out = std::process::Command::new(&exe)
             .args(["--exact", MERGE_READY_JUDGE_CHILD, "--ignored", "--test-threads", "1"])
+            .env_remove("PI_SESSION_ID")
             .current_dir(&root)
             .output()
             .expect("spawn the test binary");
@@ -8659,3 +10766,1212 @@ use std::time::Instant;
             assert!(schema.get("enum").is_none(), "--{flag} must carry no enum: {schema}");
         }
     }
+
+    // ══ pihp-3 — Decision D4: replayable proof at cap ══════════════════════
+    //
+    // A cap's proof command must match the approved cell verification command
+    // (exact trimmed bytes comparison). Descriptive proof text or mismatched
+    // commands are refused before acquiring locks or writing to disk. On
+    // successful cap, trace records four structured fields: verify_command,
+    // verify_output, verify_passed (true), and verification_evidence.
+    // Cap does not spawn test processes, and historical caps remain readable.
+
+    #[test]
+    fn pihp_replayable_proof_descriptive_text_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-desc", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee");
+        write_cell_fixture(root, "pihp-desc", &c);
+        let before = std::fs::read_to_string(cell_file(root, "pihp-desc")).unwrap();
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"ran tests manually and all passed — green:unit — manual verification","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-desc", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("capCell: cell \"pihp-desc\" refused — proof command \"ran tests manually and all passed\" does not match approved cell verify command \"cargo test -p bee\"."),
+            "refusal must name the mismatch: {refusal}"
+        );
+        let after = std::fs::read_to_string(cell_file(root, "pihp-desc")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+        let after_norm = read_cell_norm(root, "pihp-desc").ok().unwrap().unwrap();
+        assert_eq!(after_norm["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn pihp_replayable_proof_mismatched_command_rejected_before_writes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-mismatch", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee pihp_replayable_proof");
+        write_cell_fixture(root, "pihp-mismatch", &c);
+        let before = std::fs::read_to_string(cell_file(root, "pihp-mismatch")).unwrap();
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p other — green:unit — touched other.rs","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-mismatch", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("capCell: cell \"pihp-mismatch\" refused — proof command \"cargo test -p other\" does not match approved cell verify command \"cargo test -p bee pihp_replayable_proof\"."),
+            "refusal must name the mismatch: {refusal}"
+        );
+        let after = std::fs::read_to_string(cell_file(root, "pihp-mismatch")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+        let after_norm = read_cell_norm(root, "pihp-mismatch").ok().unwrap().unwrap();
+        assert_eq!(after_norm["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn pihp_replayable_proof_exact_trimmed_bytes_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-trim", "claimed", "f", json!([]));
+        c["verify"] = json!("   cargo test -p bee pihp_replayable_proof   ");
+        write_cell_fixture(root, "pihp-trim", &c);
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee pihp_replayable_proof — green:unit — touched tests.rs","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-trim", Some(report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["verify_command"], json!("cargo test -p bee pihp_replayable_proof"));
+        assert_eq!(capped["trace"]["verify_output"], json!("green:unit"));
+        assert_eq!(capped["trace"]["verify_passed"], json!(true));
+        assert_eq!(capped["trace"]["verification_evidence"], json!("touched tests.rs"));
+    }
+
+    #[test]
+    fn pihp_replayable_proof_stores_four_structured_proof_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-fields", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee pihp_replayable_proof");
+        write_cell_fixture(root, "pihp-fields", &c);
+
+        let report = r#"{"outcome":"passed tests","commit":"abc1234","files":[],"tests":"cargo test -p bee pihp_replayable_proof — green:live — live verification in sandbox, evidence /tmp/x/evidence/r1","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-fields", Some(report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(capped["status"], json!("capped"));
+        let trace = &capped["trace"];
+        assert_eq!(trace["verify_command"], json!("cargo test -p bee pihp_replayable_proof"));
+        assert_eq!(trace["verify_output"], json!("green:live"));
+        assert_eq!(trace["verify_passed"], json!(true));
+        assert_eq!(trace["verification_evidence"], json!("live verification in sandbox, evidence /tmp/x/evidence/r1"));
+
+        // Persisted cell on disk must also have all 4 fields non-null
+        let on_disk = read_cell_norm(root, "pihp-fields").ok().unwrap().unwrap();
+        let disk_trace = &on_disk["trace"];
+        assert_eq!(disk_trace["verify_command"], json!("cargo test -p bee pihp_replayable_proof"));
+        assert_eq!(disk_trace["verify_output"], json!("green:live"));
+        assert_eq!(disk_trace["verify_passed"], json!(true));
+        assert_eq!(disk_trace["verification_evidence"], json!("live verification in sandbox, evidence /tmp/x/evidence/r1"));
+    }
+
+    #[test]
+    fn pihp_replayable_proof_historical_caps_remain_readable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // A historical cell with bare green and no structured trace fields
+        let hist_cell = json!({
+            "id": "hist-1",
+            "title": "historical cell",
+            "status": "capped",
+            "lane": "tiny",
+            "feature": "legacy-feat",
+            "deps": [],
+            "verify": "cargo test -p bee",
+            "trace": {
+                "claimed_at": "2026-01-01T00:00:00Z",
+                "capped_at": "2026-01-01T01:00:00Z",
+                "report": {
+                    "outcome": "old outcome",
+                    "commit": "oldcommit",
+                    "files": [],
+                    "tests": "cargo test -p bee — green — historical proof",
+                    "deviations": []
+                }
+            }
+        });
+        write_cell_fixture(root, "hist-1", &hist_cell);
+
+        let check = feature_proof_check(root, "legacy-feat").unwrap();
+        assert!(!check.blocking, "historical bare-green cap must not block");
+        assert_eq!(check.proven_count, 1);
+        assert_eq!(check.bad_ids, Vec::<String>::new());
+    }
+
+    #[test]
+    fn pihp_replayable_proof_cap_does_not_spawn_test_process() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-nospawn", "claimed", "f", json!([]));
+        c["verify"] = json!("exit 99");
+        write_cell_fixture(root, "pihp-nospawn", &c);
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"exit 99 — green:unit — test execution proof","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-nospawn", Some(report));
+        // If cap spawned the verify command, exit 99 would fail. Cap does not spawn tests.
+        let capped = cap_cell_from_flags(root, &flags, false).expect("cap must succeed without executing verify command");
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["verify_command"], json!("exit 99"));
+    }
+
+    #[test]
+    fn pihp_gate_packet_cells_add_refuses_packet_differing_from_approved_preview() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "cargo test"}}));
+
+        // Setup lane with approved preview
+        let preview_cells = vec![json!({
+            "id": "c1",
+            "feature": "feat-gated",
+            "title": "Core Parser",
+            "lane": "standard",
+            "role": "code",
+            "action": "Implement parser",
+            "files": ["src/parser.rs"],
+            "read_first": ["docs/parser.md"],
+            "must_haves": { "truths": ["parses tokens"] },
+            "verify": "cargo test -p bee parse_test",
+            "affects_skills": [],
+            "affects_specs": []
+        })];
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        let lane_content = json!({
+            "feature": "feat-gated",
+            "phase": "swarming",
+            "mode": "standard",
+            "approved_gates": { "shape": true, "execution": true },
+            "gate_preview": {
+                "feature": "feat-gated",
+                "plan_sha256": "abc123",
+                "cells": preview_cells
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-gated.json"), lane_content.to_string()).unwrap();
+
+        // 1. cells add with differing verify command
+        let mut diff_verify = preview_cells[0].clone();
+        diff_verify["verify"] = json!("cargo test -p bee different_test");
+        let err = build_add_cells_report(root, &[diff_verify]).unwrap();
+        assert!(!err.0, "differing verify must fail validation");
+        assert!(err.1[0].problems[0].contains("verify mismatch"), "{:?}", err.1[0].problems);
+
+        // 2. cells add with differing action
+        let mut diff_action = preview_cells[0].clone();
+        diff_action["action"] = json!("Different action entirely");
+        let err = build_add_cells_report(root, &[diff_action]).unwrap();
+        assert!(!err.0, "differing action must fail validation");
+        assert!(err.1[0].problems[0].contains("action mismatch"), "{:?}", err.1[0].problems);
+
+        // 3. cells add with undeclared cell
+        let mut unapproved = preview_cells[0].clone();
+        unapproved["id"] = json!("c2-unapproved");
+        let err = build_add_cells_report(root, &[unapproved]).unwrap();
+        assert!(!err.0, "undeclared cell must fail validation");
+        assert!(err.1[0].problems[0].contains("was not declared in the approved gate preview packet"), "{:?}", err.1[0].problems);
+
+        // 4. Exact matching packet succeeds
+        let ok = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(ok.0, "exact matching packet must pass validation: {:?}", ok.1[0].problems);
+    }
+
+    #[test]
+    fn pihp_gate_packet_cells_add_refuses_stale_packet_after_plan_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "cargo test"}}));
+
+        let preview_cells = vec![json!({
+            "id": "c1",
+            "feature": "feat-gated",
+            "title": "Core Parser",
+            "lane": "standard",
+            "role": "code",
+            "action": "Implement parser",
+            "files": ["src/parser.rs"],
+            "read_first": ["docs/parser.md"],
+            "must_haves": { "truths": ["parses tokens"] },
+            "verify": "cargo test -p bee parse_test",
+            "affects_skills": [],
+            "affects_specs": []
+        })];
+
+        let plan_dir = root.join("docs").join("history").join("feat-gated");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_content = "# Plan: feat-gated\n\nInitial plan content\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_content).unwrap();
+
+        let initial_sha = {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(plan_content.as_bytes());
+            format!("{:x}", hasher.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        let lane_content = json!({
+            "feature": "feat-gated",
+            "phase": "swarming",
+            "mode": "standard",
+            "approved_gates": { "shape": true, "execution": true },
+            "gate_preview": {
+                "feature": "feat-gated",
+                "plan_sha256": initial_sha,
+                "cells": preview_cells
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-gated.json"), lane_content.to_string()).unwrap();
+
+        // 1. Adding matching cell before plan change succeeds
+        let ok = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(ok.0, "matching cell before plan change must succeed: {:?}", ok.1[0].problems);
+
+        // 2. Modify plan.md
+        std::fs::write(plan_dir.join("plan.md"), "# Plan: feat-gated\n\nModified plan content\n").unwrap();
+
+        // 3. Adding cell after plan change refuses because preview is stale
+        let err = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(!err.0, "cells add after plan change must fail validation");
+        assert!(err.1[0].problems[0].contains("approved gate preview is stale"), "{:?}", err.1[0].problems);
+        assert!(err.1[0].problems[0].contains("plan.md changed since preview was approved"), "{:?}", err.1[0].problems);
+    }
+
+    #[test]
+    fn test_cell_reroute_success_and_chaining() {
+        use sha2::{Digest, Sha256};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let plan_dir = root.join("docs").join("history").join("feat-rr");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_text = "# Plan\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_text).unwrap();
+        let plan_sha = {
+            let mut h = Sha256::new();
+            h.update(plan_text.as_bytes());
+            format!("{:x}", h.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("decisions")).unwrap();
+
+        let lane_data = json!({
+            "feature": "feat-rr",
+            "gate_preview": {
+                "feature": "feat-rr",
+                "plan_sha256": plan_sha,
+                "role_plan": {
+                    "schema_version": "1.0",
+                    "runtime": "claude",
+                    "roster_sha256": "sha-roster",
+                    "stages": [
+                        {"stage": "dev", "classification": "required", "role": "code", "reason": "r1"},
+                        {"stage": "qa", "classification": "required", "role": "test", "reason": "r2"}
+                    ]
+                },
+                "cells": [
+                    {"id": "c-1", "feature": "feat-rr", "role": "code"}
+                ]
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-rr.json"), lane_data.to_string()).unwrap();
+
+        let config = json!({
+            "team": {
+                "claude": {
+                    "code": "sonnet",
+                    "test": "haiku",
+                    "advisor": "opus"
+                }
+            }
+        });
+        std::fs::write(root.join(".bee").join("config.json"), config.to_string()).unwrap();
+
+        let cell_data = json!({
+            "id": "c-1",
+            "feature": "feat-rr",
+            "role": "code",
+            "status": "open"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-1.json"), cell_data.to_string()).unwrap();
+
+        let lines = [
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-1",
+                "feature": "feat-rr",
+                "tags": ["role-reroute"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-2",
+                "feature": "feat-rr",
+                "tags": ["role-reroute", "p1"],
+                "at": "2026-09-14T02:00:00Z"
+            })).unwrap(),
+        ];
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+
+        // 1. Reroute c-1 from code to test
+        let res1 = crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-1", "test", "dec-1").unwrap();
+        assert_eq!(res1["role"], "test");
+        let rr1 = res1["role_reroutes"].as_array().unwrap();
+        assert_eq!(rr1.len(), 1);
+        assert_eq!(rr1[0]["from"], "code");
+        assert_eq!(rr1[0]["to"], "test");
+        assert_eq!(rr1[0]["decision"], "dec-1");
+        assert_eq!(rr1[0]["plan_sha256"], plan_sha);
+
+        // 2. Chained reroute c-1 from test to advisor
+        let res2 = crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-1", "advisor", "dec-2").unwrap();
+        assert_eq!(res2["role"], "advisor");
+        let rr2 = res2["role_reroutes"].as_array().unwrap();
+        assert_eq!(rr2.len(), 2);
+        assert_eq!(rr2[1]["from"], "test");
+        assert_eq!(rr2[1]["to"], "advisor");
+        assert_eq!(rr2[1]["decision"], "dec-2");
+
+        // 3. Verify history chain validation
+        let chain_ok = crate::verbs::cells::validate::validate_cell_role_chain("code", &res2);
+        assert_eq!(chain_ok.unwrap(), "advisor");
+    }
+
+    fn fail_msg(f: crate::verbs::cells::util::Fail) -> String {
+        match f {
+            crate::verbs::cells::util::Fail::Thrown(m) => m,
+            crate::verbs::cells::util::Fail::Delegate => panic!("expected Fail::Thrown, got Delegate"),
+        }
+    }
+
+    #[test]
+    fn test_cell_reroute_typed_refusals() {
+        use sha2::{Digest, Sha256};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let plan_dir = root.join("docs").join("history").join("feat-refuse");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_text = "# Plan\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_text).unwrap();
+        let plan_sha = {
+            let mut h = Sha256::new();
+            h.update(plan_text.as_bytes());
+            format!("{:x}", h.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+
+        let lane_data = json!({
+            "feature": "feat-refuse",
+            "gate_preview": {
+                "feature": "feat-refuse",
+                "plan_sha256": plan_sha,
+                "role_plan": {
+                    "schema_version": "1.0",
+                    "runtime": "claude",
+                    "roster_sha256": "sha-roster",
+                    "stages": []
+                },
+                "cells": [
+                    {"id": "c-refuse", "feature": "feat-refuse", "role": "code"}
+                ]
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-refuse.json"), lane_data.to_string()).unwrap();
+
+        let config = json!({
+            "team": {
+                "claude": {
+                    "code": "sonnet",
+                    "test": "haiku"
+                }
+            }
+        });
+        std::fs::write(root.join(".bee").join("config.json"), config.to_string()).unwrap();
+
+        let cell_data = json!({
+            "id": "c-refuse",
+            "feature": "feat-refuse",
+            "role": "code",
+            "status": "open"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-refuse.json"), cell_data.to_string()).unwrap();
+
+        let lines = [
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-valid",
+                "feature": "feat-refuse",
+                "tags": ["role-reroute"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-other",
+                "feature": "other-feat",
+                "tags": ["role-reroute"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-notag",
+                "feature": "feat-refuse",
+                "tags": ["architecture"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+        ];
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+
+        // 1. Unchanged role refuses role_unchanged
+        let err_unchanged = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "code", "dec-valid").unwrap_err());
+        assert!(err_unchanged.contains("role_unchanged"), "{err_unchanged}");
+
+        // 2. Unconfigured target role refuses role_reroute_unconfigured_role
+        let err_unconf = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "alien-role", "dec-valid").unwrap_err());
+        assert!(err_unconf.contains("role_reroute_unconfigured_role"), "{err_unconf}");
+
+        // 3. Decision not found refuses role_reroute_decision_not_found
+        let err_no_dec = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-ghost").unwrap_err());
+        assert!(err_no_dec.contains("role_reroute_decision_not_found"), "{err_no_dec}");
+
+        // 4. Decision feature mismatch refuses role_reroute_decision_feature_mismatch
+        let err_feat_mismatch = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-other").unwrap_err());
+        assert!(err_feat_mismatch.contains("role_reroute_decision_feature_mismatch"), "{err_feat_mismatch}");
+
+        // 5. Decision missing tag refuses role_reroute_decision_missing_tag
+        let err_no_tag = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-notag").unwrap_err());
+        assert!(err_no_tag.contains("role_reroute_decision_missing_tag"), "{err_no_tag}");
+
+        // 6. Claimed cell refuses role_reroute_claimed
+        std::fs::create_dir_all(root.join(".bee").join("claims")).unwrap();
+        std::fs::write(root.join(".bee").join("claims").join("c-refuse.json"), "{\"worker\": \"w1\"}\n").unwrap();
+        let err_claimed = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-valid").unwrap_err());
+        assert!(err_claimed.contains("role_reroute_claimed"), "{err_claimed}");
+        std::fs::remove_file(root.join(".bee").join("claims").join("c-refuse.json")).unwrap();
+
+        // 7. Capped cell refuses role_reroute_status
+        let cell_capped = json!({
+            "id": "c-refuse",
+            "feature": "feat-refuse",
+            "role": "code",
+            "status": "capped"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-refuse.json"), cell_capped.to_string()).unwrap();
+        let err_status = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-valid").unwrap_err());
+        assert!(err_status.contains("role_reroute_status"), "{err_status}");
+
+        // 8. Stale plan hash refuses role_reroute_plan_hash_mismatch
+        let cell_open = json!({
+            "id": "c-refuse",
+            "feature": "feat-refuse",
+            "role": "code",
+            "status": "open"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-refuse.json"), cell_open.to_string()).unwrap();
+        std::fs::write(plan_dir.join("plan.md"), "# Plan modified\n").unwrap();
+        let err_plan_stale = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-valid").unwrap_err());
+        assert!(err_plan_stale.contains("role_reroute_plan_hash_mismatch"), "{err_plan_stale}");
+    }
+
+    #[test]
+    fn test_cell_reroute_cli_flag_validation() {
+        let (flags_unknown, _) = crate::verbs::reservations::parse_flags(&["--id", "c-cli", "--unknown-flag", "val"]).unwrap();
+        assert!(crate::verbs::cells::handlers_write::run_reroute(flags_unknown, true, std::time::Instant::now()).is_none());
+
+        let (flags_missing, _) = crate::verbs::reservations::parse_flags(&["--id", "c-cli", "--role", "test"]).unwrap();
+        assert!(crate::verbs::cells::handlers_write::run_reroute(flags_missing, true, std::time::Instant::now()).is_none());
+    }
+
+    static TEST_CLAIM_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct ClaimTestEnvGuard {
+        prev_pi: Option<std::ffi::OsString>,
+        prev_claude: Option<std::ffi::OsString>,
+        prev_codex: Option<std::ffi::OsString>,
+        prev_bee: Option<std::ffi::OsString>,
+    }
+
+    impl ClaimTestEnvGuard {
+        fn set(pi: Option<&str>, claude: Option<&str>, codex: Option<&str>, bee: Option<&str>) -> Self {
+            let guard = Self {
+                prev_pi: std::env::var_os("PI_SESSION_ID"),
+                prev_claude: std::env::var_os("CLAUDE_CODE_SESSION_ID"),
+                prev_codex: std::env::var_os("CODEX_THREAD_ID"),
+                prev_bee: std::env::var_os("BEE_SESSION_ID"),
+            };
+            unsafe {
+                match pi {
+                    Some(v) => std::env::set_var("PI_SESSION_ID", v),
+                    None => std::env::remove_var("PI_SESSION_ID"),
+                }
+                match claude {
+                    Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                    None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+                }
+                match codex {
+                    Some(v) => std::env::set_var("CODEX_THREAD_ID", v),
+                    None => std::env::remove_var("CODEX_THREAD_ID"),
+                }
+                match bee {
+                    Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                    None => std::env::remove_var("BEE_SESSION_ID"),
+                }
+            }
+            guard
+        }
+    }
+
+    impl Drop for ClaimTestEnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.prev_pi {
+                    Some(v) => std::env::set_var("PI_SESSION_ID", v),
+                    None => std::env::remove_var("PI_SESSION_ID"),
+                }
+                match &self.prev_claude {
+                    Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                    None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+                }
+                match &self.prev_codex {
+                    Some(v) => std::env::set_var("CODEX_THREAD_ID", v),
+                    None => std::env::remove_var("CODEX_THREAD_ID"),
+                }
+                match &self.prev_bee {
+                    Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                    None => std::env::remove_var("BEE_SESSION_ID"),
+                }
+            }
+        }
+    }
+
+    fn write_closed_session_fixture(root: &Path, id: &str, status: &str) {
+        let dir = sessions_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut rec = Map::new();
+        rec.insert("id".into(), json!(id));
+        rec.insert("started_at".into(), json!("2026-01-01T00:00:00.000Z"));
+        rec.insert("last_heartbeat".into(), json!("2026-01-01T00:00:00.000Z"));
+        rec.insert("status".into(), json!(status));
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            jsjson::stringify_pretty(&Value::Object(rec)),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn claim_refuses_borrowed_closed_session_with_fix_line() {
+        let _lock = TEST_CLAIM_ENV_LOCK.lock().unwrap();
+        let _env = ClaimTestEnvGuard::set(Some("pi-caller-own"), None, None, None);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        lane_with_route(root, "feat");
+
+        // 1. Closed foreign session -> claim refuses with FIX line
+        write_cell_fixture(root, "c-foreign", &cell("c-foreign", "open", "feat", json!([])));
+        write_closed_session_fixture(root, "foreign-closed", "closed");
+
+        let refusal = thrown(claim_cell_from_flags(
+            root,
+            "c-foreign",
+            "w1",
+            Some("foreign-closed"),
+            None,
+        ));
+        assert!(
+            refusal.contains("is closed and belongs to another session"),
+            "expected refusal text in {refusal}"
+        );
+        assert!(
+            refusal.contains("FIX: use your own session id (PI_SESSION_ID) or start/bind your own session."),
+            "expected FIX text in {refusal}"
+        );
+        assert!(!claims_dir(root).join("c-foreign.json").exists());
+        let untouched = read_cell_norm(root, "c-foreign").unwrap().unwrap();
+        assert_eq!(untouched["status"], json!("open"));
+
+        // 2. Missing session record -> still claims
+        write_cell_fixture(root, "c-missing", &cell("c-missing", "open", "feat", json!([])));
+        let door_missing = claim_cell_from_flags(
+            root,
+            "c-missing",
+            "w1",
+            Some("nonexistent-session"),
+            None,
+        ).unwrap();
+        assert_eq!(door_missing.cell["status"], json!("claimed"));
+
+        // 3. Caller's own closed session -> still claims
+        write_cell_fixture(root, "c-own", &cell("c-own", "open", "feat", json!([])));
+        write_closed_session_fixture(root, "pi-caller-own", "closed");
+        let door_own = claim_cell_from_flags(
+            root,
+            "c-own",
+            "w1",
+            Some("pi-caller-own"),
+            None,
+        ).unwrap();
+        assert_eq!(door_own.cell["status"], json!("claimed"));
+    }
+
+    fn cap_flags_from_job(id: &str, job_id: &str, proof_result: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: true,
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: None,
+            sync_ack: None,
+            from_job: Some(job_id.to_string()),
+            proof_result: proof_result.map(str::to_string),
+            proof_reason: None,
+        }
+    }
+
+    fn setup_from_job_fixture(tmp: &Path, feature: &str) -> (PathBuf, PathBuf) {
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("mailbox")).unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(main.join("file.txt"), "base\n").unwrap();
+        git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        git_ok(&main, &["config", "user.email", "a@b.c"]);
+        git_ok(&main, &["config", "user.name", "t"]);
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "initial commit"]);
+
+        let wt = tmp.join("wt");
+        git_ok(&main, &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "feat-wt"]);
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(wt.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            wt.join(".bee").join("runtime").join("worktree-identity.json"),
+            format!("{{\"feature\": \"{feature}\"}}\n"),
+        )
+        .unwrap();
+        (main, wt)
+    }
+
+    fn write_from_job_mailbox(
+        main: &Path,
+        job_id: &str,
+        cell_id: &str,
+        cwd: &Path,
+        status: &str,
+        files_changed: &[&str],
+        proof: &str,
+        dissent: Option<Value>,
+    ) {
+        let job_dir = main.join(".bee").join("mailbox").join(job_id);
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let job_json = json!({
+            "job_id": job_id,
+            "cell_id": cell_id,
+            "cwd": cwd.to_string_lossy().to_string(),
+        });
+        std::fs::write(
+            job_dir.join("job.json"),
+            jsjson::stringify_pretty(&job_json),
+        )
+        .unwrap();
+
+        let mut res = json!({
+            "round": 1,
+            "status": status,
+            "summary": "job completed successfully",
+            "files_changed": files_changed,
+            "proof": proof,
+            "report_path": "report-1.md"
+        });
+        if let Some(d) = dissent {
+            res["dissent"] = d;
+        }
+        std::fs::write(
+            job_dir.join("result-1.json"),
+            jsjson::stringify_pretty(&res),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn contract_cells_finish_from_job_d248942f_success() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-c1";
+        let job_id = "job-101";
+
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", &format!("worker commit\n\ncell: {cell_id}")]);
+
+        write_from_job_mailbox(
+            &main,
+            job_id,
+            cell_id,
+            &wt,
+            "done",
+            &["file.txt"],
+            "cargo test --bin bee",
+            None,
+        );
+
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "job cell",
+            "action": "do work",
+            "verify": "cargo test --bin bee",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": [],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let flags = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        let out = finish_cap_and_release(&main, None, flags, None).unwrap();
+        let Out::Emit(result_val, text, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+
+        assert_eq!(result_val["status"], json!("capped"));
+        assert_eq!(result_val["files_source"], json!("worker files_changed"));
+        assert!(text.contains("Files source: worker files_changed."));
+        assert_eq!(result_val["trace"]["outcome"], json!("job completed successfully"));
+        assert_eq!(result_val["trace"]["files_changed"], json!(["file.txt"]));
+        assert_eq!(
+            result_val["trace"]["verification_evidence"],
+            json!("cargo test --bin bee")
+        );
+        assert_eq!(
+            result_val["trace"]["report"]["tests"],
+            json!("cargo test --bin bee — green:unit — cargo test --bin bee")
+        );
+        assert_eq!(result_val["trace"]["verify_passed"], json!(true));
+        assert_eq!(result_val["trace"]["verify_command"], json!("cargo test --bin bee"));
+    }
+
+    #[test]
+    fn contract_cells_finish_from_job_d248942f_git_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-c2";
+        let job_id = "job-102";
+
+        std::fs::write(wt.join("extra.txt"), "new file\n").unwrap();
+        git_ok(&wt, &["add", "extra.txt"]);
+        git_ok(&wt, &["commit", "-qm", &format!("add extra\n\ncell: {cell_id}")]);
+
+        write_from_job_mailbox(
+            &main,
+            job_id,
+            cell_id,
+            &wt,
+            "done",
+            &[],
+            "cargo test -p bee",
+            None,
+        );
+
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "git fallback cell",
+            "action": "do work",
+            "verify": "cargo test -p bee",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": [],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let flags = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        let out = finish_cap_and_release(&main, None, flags, None).unwrap();
+        let Out::Emit(result_val, text, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+
+        assert_eq!(result_val["status"], json!("capped"));
+        assert_eq!(result_val["files_source"], json!("git fallback"));
+        assert!(text.contains("Files source: git fallback."));
+        let files = result_val["trace"]["files_changed"].as_array().unwrap();
+        assert!(files.contains(&json!("extra.txt")));
+    }
+
+    #[test]
+    fn contract_cells_finish_from_job_d248942f_commit_trailer_and_dissent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-c3";
+        let job_id = "job-103";
+
+        std::fs::write(wt.join("file.txt"), "changed\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", "missing trailer commit"]);
+
+        let dissent_val = json!({
+            "claim": "approach has issue",
+            "alternative": "better plan",
+            "severity": "consider"
+        });
+        write_from_job_mailbox(
+            &main,
+            job_id,
+            cell_id,
+            &wt,
+            "done",
+            &["file.txt"],
+            "cargo check",
+            Some(dissent_val),
+        );
+
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "dissent cell",
+            "action": "do work",
+            "verify": "cargo check",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": [],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let mut flags = cap_flags_from_job(cell_id, job_id, Some("green:static"));
+        let refusal = thrown(finish_cap_and_release(&main, None, flags.clone(), None));
+        assert!(
+            refusal.contains("one commit per cell: no commit in the last"),
+            "expected trailer refusal, got: {refusal}"
+        );
+
+        flags.commit_pending = Some("pending commit".to_string());
+        flags.proof_reason = Some("override proof reason".to_string());
+        let out = finish_cap_and_release(&main, None, flags, None).unwrap();
+        let Out::Emit(result_val, _, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+
+        assert_eq!(result_val["status"], json!("capped"));
+        assert_eq!(
+            result_val["trace"]["deviations"],
+            json!(["approach has issue"])
+        );
+        assert_eq!(
+            result_val["trace"]["verification_evidence"],
+            json!("override proof reason")
+        );
+        assert_eq!(
+            result_val["trace"]["report"]["tests"],
+            json!("cargo check — green:static — override proof reason")
+        );
+    }
+
+    #[test]
+    fn contract_cells_finish_from_job_d248942f_refusals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-refuse";
+        let job_id = "job-refuse-1";
+
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "refusal cell",
+            "action": "do work",
+            "verify": "cargo check",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": [],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let mut flags_report = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        flags_report.report = Some(default_test_report_json());
+        let err1 = thrown(finish_cap_and_release(&main, None, flags_report, None));
+        assert!(
+            err1.contains("cells finish: --from-job cannot be combined with --report (FIX: omit --report when capping from a job)"),
+            "got: {err1}"
+        );
+
+        let flags_no_proof = cap_flags_from_job(cell_id, job_id, None);
+        let err2 = thrown(finish_cap_and_release(&main, None, flags_no_proof, None));
+        assert!(
+            err2.contains("cells finish: --from-job requires --proof-result <green:unit|green:static|green:live> (FIX: pass --proof-result)"),
+            "got: {err2}"
+        );
+
+        let flags_bad_proof = cap_flags_from_job(cell_id, job_id, Some("red"));
+        let err3 = thrown(finish_cap_and_release(&main, None, flags_bad_proof, None));
+        assert!(
+            err3.contains("cells finish: --proof-result \"red\" is invalid") && err3.contains("green:unit, green:static, green:live"),
+            "got: {err3}"
+        );
+
+        let mut flags_no_mistakes = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        flags_no_mistakes.no_mistakes = false;
+        flags_no_mistakes.mistake = None;
+        let err4 = thrown(finish_cap_and_release(&main, None, flags_no_mistakes, None));
+        assert!(
+            err4.contains("cells finish: --from-job requires a mistakes answer") && err4.contains("(FIX: pass --no-mistakes or --mistake with --fix-at)"),
+            "got: {err4}"
+        );
+
+        let nonexistent_cwd = tmp.path().join("nonexistent_wt");
+        write_from_job_mailbox(
+            &main,
+            "job-missing-cwd",
+            cell_id,
+            &nonexistent_cwd,
+            "done",
+            &[],
+            "cargo test",
+            None,
+        );
+        let flags_missing_cwd = cap_flags_from_job(cell_id, "job-missing-cwd", Some("green:unit"));
+        let err5 = thrown(finish_cap_and_release(&main, None, flags_missing_cwd, None));
+        assert!(
+            err5.contains("working directory") && err5.contains("does not exist") && err5.contains("(FIX: pass --report)"),
+            "got: {err5}"
+        );
+
+        write_from_job_mailbox(
+            &main,
+            "job-wrong-cell",
+            "different-cell-id",
+            &wt,
+            "done",
+            &[],
+            "cargo test",
+            None,
+        );
+        let flags_wrong_cell = cap_flags_from_job(cell_id, "job-wrong-cell", Some("green:unit"));
+        let err6 = thrown(finish_cap_and_release(&main, None, flags_wrong_cell, None));
+        assert!(
+            err6.contains("is for cell \"different-cell-id\"") && err6.contains("job-refuse") && err6.contains("(FIX: verify the job id"),
+            "got: {err6}"
+        );
+
+        let job_no_res_dir = main.join(".bee").join("mailbox").join("job-no-result");
+        std::fs::create_dir_all(&job_no_res_dir).unwrap();
+        std::fs::write(
+            job_no_res_dir.join("job.json"),
+            jsjson::stringify_pretty(&json!({
+                "job_id": "job-no-result",
+                "cell_id": cell_id,
+                "cwd": wt.to_string_lossy().to_string(),
+            })),
+        ).unwrap();
+        let flags_no_result = cap_flags_from_job(cell_id, "job-no-result", Some("green:unit"));
+        let err7 = thrown(finish_cap_and_release(&main, None, flags_no_result, None));
+        assert!(
+            err7.contains("no result file found for job \"job-no-result\"") && err7.contains("(FIX: wait for the job or inspect the worker)"),
+            "got: {err7}"
+        );
+
+        write_from_job_mailbox(
+            &main,
+            "job-blocked",
+            cell_id,
+            &wt,
+            "blocked",
+            &[],
+            "cargo test",
+            None,
+        );
+        let flags_blocked = cap_flags_from_job(cell_id, "job-blocked", Some("green:unit"));
+        let err8 = thrown(finish_cap_and_release(&main, None, flags_blocked, None));
+        assert!(
+            err8.contains("result status is not done") && err8.contains("(FIX: wait for the job to complete or pass --report)"),
+            "got: {err8}"
+        );
+
+        write_from_job_mailbox(
+            &main,
+            "job-empty-proof",
+            cell_id,
+            &wt,
+            "done",
+            &[],
+            "",
+            None,
+        );
+        let flags_empty_proof = cap_flags_from_job(cell_id, "job-empty-proof", Some("green:unit"));
+        let err9 = thrown(finish_cap_and_release(&main, None, flags_empty_proof, None));
+        assert!(
+            err9.contains("cells finish: worker result proof text is empty (FIX: pass --proof-reason)"),
+            "got: {err9}"
+        );
+    }
+
+    fn picked() -> Value {
+        json!({"commands": {"test": "none"}, "design": {"packs": ["web"]}})
+    }
+
+    fn design_cap(config: Value, files: Value, verify: &str, reason: &str, last_run: Option<Value>) -> MR<Value> {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &config);
+        if let Some(record) = last_run {
+            std::fs::create_dir_all(root.join(".bee/design")).unwrap();
+            std::fs::write(root.join(".bee/design/last-run.json"), record.to_string()).unwrap();
+        }
+        let mut body = cell("dr-1", "claimed", "f", json!([]));
+        body["files"] = files;
+        body["verify"] = json!(verify);
+        write_cell_fixture(root, "dr-1", &body);
+        let mut flags = cap_flags_frd("dr-1", Vec::new(), None);
+        flags.report = Some(
+            json!({"outcome": "o", "commit": "c", "files": [], "deviations": [],
+                   "tests": format!("{verify} — green:unit — {reason}")})
+            .to_string(),
+        );
+        cap_cell_from_flags(root, &flags, false)
+    }
+
+    #[test]
+    fn design_rule_leaves_a_host_with_no_pick_exactly_as_before() {
+        for config in [
+            json!({"commands": {"test": "none"}}),
+            json!({"commands": {"test": "none"}, "design": {"packs": "none"}}),
+            json!({"commands": {"test": "none"}, "design": {"packs": []}}),
+        ] {
+            let capped = design_cap(config.clone(), json!(["web/index.html"]), "echo ok", "fixture", None)
+                .unwrap_or_else(|_| panic!("a host with no pick caps a UI cell as before: {config}"));
+            assert_eq!(capped["status"], json!("capped"));
+        }
+    }
+
+    #[test]
+    fn design_rule_refuses_a_ui_cell_without_the_gate_in_a_picked_host() {
+        for file in ["web/index.html", "app/src/deep/Card.tsx", "theme.scss"] {
+            let refusal = thrown(design_cap(picked(), json!([file]), "echo ok", "fixture", None));
+            assert!(refusal.starts_with("capCell: cell \"dr-1\" refused — "), "{refusal}");
+            assert!(
+                refusal.contains("FIX: add `bee design gate` to the cell's verify"),
+                "the refusal names its fix: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn design_rule_refuses_a_flow_model_cell_without_the_gate_in_a_picked_host() {
+        let charts = json!({"commands": {"test": "none"}, "design": {"packs": ["charts"]}});
+        for file in ["flows/signup.flow.json", "flow.json"] {
+            let refusal = thrown(design_cap(charts.clone(), json!([file]), "echo ok", "fixture", None));
+            assert!(
+                refusal.contains("FIX: add `bee design gate` to the cell's verify"),
+                "a flow model is a UI file: {file}: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn design_rule_accepts_a_ui_cell_with_the_gate_or_a_non_ui_cell_in_a_picked_host() {
+        let gate = ".bee/bin/bee design gate && echo ok";
+        let capped = design_cap(picked(), json!(["web/index.html"]), gate, "fixture", None).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        let ran = Some(json!({"status": "ran", "pages": 2, "regressions": 0}));
+        let capped = design_cap(picked(), json!(["web/index.html"]), gate, "fixture", ran).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        let capped = design_cap(picked(), json!(["src/main.rs", "README.md"]), "echo ok", "fixture", None).unwrap();
+        assert_eq!(capped["status"], json!("capped"), "a cell with no UI file is untouched");
+    }
+
+    #[test]
+    fn design_rule_reads_ui_globs_from_config() {
+        let mut config = picked();
+        config["design"]["ui_globs"] = json!(["*.twig"]);
+        let refusal = thrown(design_cap(config.clone(), json!(["views/page.twig"]), "echo ok", "fixture", None));
+        assert!(refusal.contains("bee design gate"), "{refusal}");
+        let capped = design_cap(config, json!(["web/index.html"]), "echo ok", "fixture", None).unwrap();
+        assert_eq!(capped["status"], json!("capped"), "the config list replaces the default list");
+    }
+
+    #[test]
+    fn design_rule_needs_the_not_run_phrase_when_the_gate_did_not_run() {
+        let gate = ".bee/bin/bee design gate && echo ok";
+        let not_run = || Some(json!({"status": "not-run", "reason": "node-missing"}));
+        let refusal = thrown(design_cap(picked(), json!(["web/index.html"]), gate, "fixture", not_run()));
+        assert!(refusal.starts_with("capCell: cell \"dr-1\" refused — "), "{refusal}");
+        assert!(
+            refusal.contains("FIX: say in the proof reason") && refusal.contains("design gate not run"),
+            "the refusal names its fix: {refusal}"
+        );
+        let capped = design_cap(
+            picked(),
+            json!(["web/index.html"]),
+            gate,
+            "design gate not run — Node 20 or newer is missing",
+            not_run(),
+        )
+        .unwrap();
+        assert_eq!(capped["status"], json!("capped"), "owner answer 1: the gap is recorded, the cap lands");
+    }
+
+    #[test]
+    fn design_rule_refuses_a_cell_that_lists_the_baseline_in_any_host() {
+        for config in [picked(), json!({"commands": {"test": "none"}})] {
+            let files = json!(["./.bee/design/gate-baseline.json"]);
+            let refusal = thrown(design_cap(config.clone(), files, "echo ok", "fixture", None));
+            assert!(refusal.starts_with("capCell: cell \"dr-1\" refused — "), "{refusal}");
+            assert!(refusal.contains("FIX: ") && refusal.contains("bee design gate --write"), "{config}: {refusal}");
+        }
+    }
+
+    #[test]
+    fn cells_add_warns_on_stderr_and_still_adds_a_ui_cell_without_the_gate() {
+        let ui_cell = json!({
+            "id": "dr-add", "feature": "dr", "title": "restyle the card", "action": "edit css",
+            "verify": "echo ok", "lane": "tiny", "role": "code",
+            "files": ["web/card.css"], "affects_skills": [], "affects_specs": [],
+        });
+        let tmp = judge_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"design": {"packs": ["web"]}}));
+        let out = cells_add_child_output(root, &ui_cell);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("cell \"dr-add\"") && stderr.contains("FIX: add `bee design gate`"),
+            "stderr: {stderr}"
+        );
+        let stored = read_cell_norm(root, "dr-add").unwrap().expect("the warning never refuses");
+        assert_eq!(stored["verify"], json!("echo ok"), "the warning never changes the cell");
+
+        let tmp = judge_root();
+        let root = tmp.path();
+        let out = cells_add_child_output(root, &ui_cell);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("bee design gate"), "a host with no pick hears nothing: {stderr}");
+    }
+
+

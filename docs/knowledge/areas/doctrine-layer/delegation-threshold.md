@@ -70,6 +70,33 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
   crosses the delegation threshold on its own, so it stays in-session naturally —
   the suppression and the threshold never actually conflict.
 
+
+## Why workers do not activate — three causes, none of them the model config
+
+When a session runs a whole feature inline and dispatches nobody, the model
+slots are almost never the reason. Three causes account for the observed cases:
+
+1. **The host's standing instruction is read as a ban.** Many harnesses ship a
+   line like "do not use the Agent tool unless the user, a CLAUDE.md file, or a
+   skill asks for it". Cells pwr-1 and pwr-2 record that line verbatim as the
+   reason no execution worker was ever dispatched. The remedy is for the repo's
+   own `CLAUDE.md` to ask for bee dispatch **outright**, so the host line cannot
+   be read as a prohibition; a repo that only implies it will be read as banned.
+2. **Nothing bounds a worker that reads without writing.** `--idle-timeout`
+   watches a heartbeat, and a reading worker keeps its heartbeat alive, so it is
+   never stopped. One worker read for ~50 minutes while the leader gave up
+   waiting and took three following cells inline. A wall-clock `--ceiling` is
+   the only bound that catches this.
+3. **The door reports a transport verdict the transport does not honour.**
+   `bee dispatch prepare` decides `transport_ready` from environment variables
+   alone. It reported `false` outside a herdr pane although the same
+   `bee herding run` still succeeded, so sessions skipped dispatches that would
+   have worked; the mirror-image failure is a `true` verdict while no
+   multiplexer server is running at all. Either way the one dispatch door hands
+   back a verdict a session then acts on, so a session that finds the returned
+   transport dead names the gap and falls through rather than abandoning the
+   dispatch.
+
 ## Pointers (implementation)
 
 - The delegation contract in full (roles, digest contract):

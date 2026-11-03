@@ -1,0 +1,139 @@
+{
+  "id": "lcd-2",
+  "feature": "leader-check-door",
+  "title": "Refuse close on a capped cell with no leader check",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "lcd-1"
+  ],
+  "decisions": [
+    "a38dc4bd-a94e-4ae5-91e8-2bfb0bf6a0b1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "docs/history/leader-check-door/CONTEXT.md"
+  ],
+  "action": "Add the leader-check door to build_close_report_doors and its refusal arm, per D6a's two orders. PUSH the Door at the slot after dissent-debt (close.rs:1671) and before advisor-nudge-debt (close.rs:1726). Place the REFUSAL ARM last among the cell-debt arms: after the mistakes arm (close.rs:2655) and before the uat arm (close.rs:2685), so the specific debts surface first and this broad one masks none of them. Door detail and refusal copy the three-line shape verbatim from the judge-debt arm (close.rs:2550): headline naming the feature and the offending ids, a 'remedy:' line naming bee cells leader-check plus the leader-check-deferral escape (and bee cells unarchive FIRST when any offender resolves only under the archive, the hpf-1 shape at close.rs:1586-1592), and a 'next:' line. The remedy also names bee cells reopen as the road when a recorded gap needs rework. The debt count and the escape are read from verbs/cells/leader_check.rs — feature_leader_check_debt and has_leader_check_deferral_decision — never re-implemented here, the same way close.rs:1654 reads dissent's. Add a blocking_doors/merge_ready row for the new door name wherever the existing doors are enumerated.",
+  "must_haves": {
+    "truths": [
+      "close refuses a tiny-lane feature whose capped cell carries no leader check",
+      "close refuses a standard-lane feature in the same case",
+      "close clears once an ok mark is recorded",
+      "close still refuses when the newest mark is a gap",
+      "a cell capped before LEADER_CHECK_DOOR_INTRODUCED_AT is grandfathered",
+      "a cell with a missing or unparseable capped_at is grandfathered",
+      "a logged leader-check-deferral decision naming the feature clears the door",
+      "the mistakes and judge-debt refusals still fire first on a feature carrying both"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "the leader-check Door push and its refusal arm"
+      }
+    ],
+    "key_links": [
+      "close.rs:1671 and :1726 bracket the push slot",
+      "close.rs:2655 and :2685 bracket the refusal-arm slot",
+      "close.rs:459-473 judge_debt is the grandfather posture this copies"
+    ],
+    "prohibitions": [
+      "No re-implementation of the debt scan inside close.rs",
+      "No lane filter — the door exists at every lane (D4)",
+      "No change to the judge-debt, mistakes, scribing-debt or uat arms"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee close",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "lcd-w2",
+    "outcome": "bee close grows a leader-check door at every lane",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Touched packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs, which the cell's files list did not name — two lines, both updating an existing door-list assertion that now has to carry the new 'door leader-check: clear' row. bee cells judge reports no hits. Widened scope to keep an existing assertion honest.",
+      "sync-ack: The workflow-state skill sync is lcd-4, a planned slice-2 cell; the doctrine text must describe the verb AND both doors, and lcd-3 had not landed when this cell was written."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T02:50:45.247Z",
+    "behavior_change": false,
+    "verification_evidence": "259 close tests passed, 0 failed, including all 8 must-have truths plus the archived-offender case; leader re-ran after the worker returned without capping",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "695ef661-d172-4f5a-b000-fd74bf610bff",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee close",
+    "claimed_at": "2026-09-21T02:33:21.480Z",
+    "sync_ack": "The workflow-state skill sync is lcd-4, a planned slice-2 cell; the doctrine text must describe the verb AND both doors, and lcd-3 had not landed when this cell was written.",
+    "mistakes": [
+      {
+        "wrong": "The worker returned a success summary for lcd-2 without running cells finish, the same way lcd-1's did, so bee herding run printed 'worker reported success without capping it' twice in one wave before anyone changed anything",
+        "better": "the leader capped both by hand. Better: after the first uncapped return, the leader should have added the cap step to the remaining dispatch briefs instead of dispatching lcd-2 and lcd-3 with the identical prompt and getting the identical miss."
+      }
+    ],
+    "report": {
+      "outcome": "bee close grows a leader-check door at every lane and refuses a feature whose capped cell carries no ok leader check",
+      "commit": "14f86cb6fd2b9e0c849ec7163e062f56eeca6808",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee close — green:unit — 259 close tests passed, 0 failed, including all 8 must-have truths plus the archived-offender case; leader re-ran after the worker returned without capping",
+      "deviations": [
+        "Touched packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs, which the cell's files list did not name — two lines, both updating an existing door-list assertion that now has to carry the new 'door leader-check: clear' row. bee cells judge reports no hits. Widened scope to keep an existing assertion honest."
+      ],
+      "mistakes": [
+        "The worker returned a success summary for lcd-2 without running cells finish, the same way lcd-1's did, so bee herding run printed 'worker reported success without capping it' twice in one wave before anyone changed anything — the leader capped both by hand. Better: after the first uncapped return, the leader should have added the cap step to the remaining dispatch briefs instead of dispatching lcd-2 and lcd-3 with the identical prompt and getting the identical miss."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "close refuses a tiny-lane feature whose capped cell carries no leader check",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "close refuses a standard-lane feature in the same case",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "close clears once an ok mark is recorded",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "close still refuses when the newest mark is a gap",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "a cell capped before LEADER_CHECK_DOOR_INTRODUCED_AT is grandfathered",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "a cell with a missing or unparseable capped_at is grandfathered",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "a logged leader-check-deferral decision naming the feature clears the door",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "the mistakes and judge-debt refusals still fire first on a feature carrying both",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          }
+        ],
+        "recorded_at": "2026-09-21T03:01:43.008Z",
+        "recorded_by": "695ef661-d172-4f5a-b000-fd74bf610bff"
+      }
+    ]
+  }
+}

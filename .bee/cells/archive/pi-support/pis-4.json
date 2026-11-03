@@ -1,0 +1,84 @@
+{
+  "id": "pis-4",
+  "feature": "pi-support",
+  "title": "models.pi sample, config reference, and the non-production caveat",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "pis-2"
+  ],
+  "decisions": [
+    "D5",
+    "D6",
+    "D7"
+  ],
+  "files": [
+    ".bee/config-sample.json",
+    "docs/config-reference.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "read_first": [
+    "docs/history/pi-support/CONTEXT.md",
+    "docs/history/pi-support/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "rg -n \"models.pi\" .bee/config-sample.json docs/config-reference.md && rg -ni \"pi-result-mailbox\" docs/config-reference.md",
+  "action": "config-sample.json: models.pi block per D6 — heavy roles as herding slots naming claude-CLI agents (claude --model opus shape), advisor claude --model fable, cheap roles agy-flash; every slot kind herding; hat/lane seat rows may mirror claude. docs/config-reference.md: models.pi section — herding-only law, the refusal behaviors, escalation remedy. Knowledge sync: hook-runtime area catalog-projections-and-activation.md gains the Pi belt row (named exclusion, plugin-file-is-the-projection, model-guard exclusion). EVERY pi-herding mention carries the caveat: not production until pi-result-mailbox lands (advisor condition 3, D7).",
+  "must_haves": {
+    "truths": [
+      "every pi-herding mention carries the non-production caveat"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "models.pi documented with herding-only law"
+      }
+    ],
+    "key_links": [
+      "knowledge row cites the named-exclusion precedent"
+    ],
+    "prohibitions": [
+      "No skills/ edits",
+      "No procedure changes"
+    ]
+  },
+  "trace": {
+    "worker": "pis-w4",
+    "outcome": "models.pi documented as a herding-only preview runtime across the config sample, the config reference, and the hook-runtime knowledge area",
+    "files_changed": [
+      ".bee/config-sample.json",
+      "docs/config-reference.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T16:49:40.824Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T16:42:56.776Z",
+    "report": {
+      "outcome": "models.pi documented as a herding-only preview runtime across the config sample, the config reference, and the hook-runtime knowledge area",
+      "commit": "cc64a606",
+      "files": [
+        ".bee/config-sample.json",
+        "docs/config-reference.md",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+      ],
+      "tests": "rg -n \"models.pi\" .bee/config-sample.json docs/config-reference.md && rg -ni \"pi-result-mailbox\" docs/config-reference.md && bee knowledge check && bee knowledge index --check && cargo test -p bee --bin bee config_sample_json_embed — green — docs cell: cell verify pointer checks, knowledge bundle + index parity, and the one test that compiles the edited config sample into the binary",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 205 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

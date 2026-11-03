@@ -1,0 +1,71 @@
+{
+  "id": "psd-10",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Pin the psd-1 plan action span as a known historical CLI-shape exception",
+  "action": "Per decision 687adf88, fix-first after the full suite went red. The test hooks::cli_shape::documented_invocations::no_shipped_command_spelling_is_refused_by_the_widened_guard fails because the fenced cells JSON in docs/history/pi-stage-dispatch/plan.md quotes the state advisor-ref verb span inside the psd-1 action, and the widened guard refuses that span. Run that one test first and copy the refused span exactly as its failure message prints it. Add that exact span as a new entry in KNOWN_HISTORICAL_EXCEPTIONS in packages/bee-rs/crates/bee/src/hooks/cli_shape.rs, with a comment in the same style as the dis-1 entry that names psd-1 (pi-stage-dispatch) as the plan cell action quoting a verb shape, not a transcript anyone ran; raise the array length to match. Do not change invocations(), the walk scope, or any assertion, and do not edit plan.md.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::cli_shape::documented_invocations",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "deps": [
+    "psd-9"
+  ],
+  "decisions": [
+    "a20cf301",
+    "687adf88"
+  ],
+  "must_haves": {
+    "truths": [
+      "The documented-invocations test passes with the psd-1 plan action span pinned as a known historical exception",
+      "Every pinned exception is still refused by the guard, so no entry is dead"
+    ],
+    "prohibitions": [
+      "The scanner scope, the invocation extractor, and every assertion are unchanged",
+      "plan.md is not reworded"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-10",
+    "outcome": "Pinned the psd-1 plan action span in KNOWN_HISTORICAL_EXCEPTIONS (cli_shape.rs, array length 3->4); documented_invocations test green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+    ],
+    "deviations": [
+      "ran the verify with PATH=$HOME/.cargo/bin prefix instead of the CARGO_HOME-default form — the worktree shell guard refused the runtime-computed variable; CARGO_HOME is unset so the same cargo ran — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T11:25:09.739Z",
+    "behavior_change": false,
+    "verification_evidence": "the one test the pinned exception feeds; its dead-entry equality proves every pin is still refused",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::cli_shape::documented_invocations",
+    "claimed_at": "2026-09-15T11:22:36.940Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pinned the psd-1 plan action span in KNOWN_HISTORICAL_EXCEPTIONS (cli_shape.rs, array length 3->4); documented_invocations test green",
+      "commit": "0548018f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::cli_shape::documented_invocations — green:unit — the one test the pinned exception feeds; its dead-entry equality proves every pin is still refused",
+      "deviations": [
+        "ran the verify with PATH=$HOME/.cargo/bin prefix instead of the CARGO_HOME-default form — the worktree shell guard refused the runtime-computed variable; CARGO_HOME is unset so the same cargo ran — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -230,7 +230,7 @@ use std::time::Instant;
         assert_eq!(check_no_live_workflow_for_feature(&workflows, "done"), None);
         assert_eq!(
             check_no_live_workflow_for_feature(&workflows, "taken").unwrap(),
-            "startFeature: refused — a live workflow already exists for feature \"taken\" (workflow wf-1, phase \"swarming\", status \"active\"). FIX: close or resolve that workflow before starting a new one for the same feature."
+            "startFeature: refused — a live workflow already exists for feature \"taken\" (workflow wf-1, phase \"swarming\", status \"active\"). FIX: bee state session bind --lane taken --session-id <session id>."
         );
 
         let cells = vec![
@@ -469,6 +469,9 @@ use std::time::Instant;
         let refuse = check_scribing_run_phase(Some(&json!("idle"))).unwrap();
         assert!(refuse.contains("refused from phase \"idle\""));
         assert!(refuse.contains("Legal from: swarming, reviewing, scribing."));
+        assert!(refuse.contains(
+            "bee deferred-queue complete --kind promote --feature <feature>"
+        ));
         assert!(check_compounding_run_phase(Some(&json!("compounding"))).is_none());
         let refuse2 = check_compounding_run_phase(Some(&json!("swarming"))).unwrap();
         assert!(refuse2.contains("compounding-run: refused from phase \"swarming\""));
@@ -1074,6 +1077,26 @@ use std::time::Instant;
     }
 
     #[test]
+    fn prune_keep_set_does_not_protect_capped_cell_with_worker_row() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[{"nickname":"w1","cell":"c1"},{"nickname":"w2","cell":"c2"},{"nickname":"w3","cell":"c3"},{"nickname":"w4","cell":"c4"}]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c1.json"), r#"{"status":"capped"}"#).unwrap();
+        std::fs::write(cells.join("c2.json"), r#"{"status":"open"}"#).unwrap();
+        std::fs::write(cells.join("c3.json"), "{nope").unwrap();
+        // c4.json is missing
+        let keep = ok(read_prune_keep_set(tmp.path()));
+        assert!(!keep.contains(&"c1".to_string()));
+        assert!(keep.contains(&"c2".to_string()));
+        assert!(keep.contains(&"c3".to_string()));
+        assert!(keep.contains(&"c4".to_string()));
+    }
+
+    #[test]
     fn prune_refuses_malformed_workers() {
         let tmp = tmp_root();
         write_state_file(tmp.path(), r#"{"workers":"not-an-array"}"#);
@@ -1081,6 +1104,99 @@ use std::time::Instant;
             Err(Err2::Msg(m)) => assert!(m.starts_with("worker prune: state.workers is not an array")),
             _ => panic!("expected the fails-closed refusal"),
         }
+    }
+
+    #[test]
+    fn reconcile_capped_workers_marks_running_receipt_capped() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[{"nickname":"w1","cell":"c1","status":"running"}]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c1.json"), r#"{"status":"capped"}"#).unwrap();
+
+        let changed = ok(reconcile_capped_workers(tmp.path()));
+        assert_eq!(changed, 1);
+
+        let state = read_state_strict(tmp.path()).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].get("nickname"), Some(&json!("w1")));
+        assert_eq!(workers[0].get("cell"), Some(&json!("c1")));
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+    }
+
+    #[test]
+    fn reconcile_capped_workers_leaves_open_missing_or_corrupt_cells_untouched() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[
+                {"nickname":"w2","cell":"c2","status":"running"},
+                {"nickname":"w3","cell":"c3","status":"running"},
+                {"nickname":"w4","cell":"c4","status":"running"}
+            ]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c2.json"), r#"{"status":"open"}"#).unwrap();
+        // c3.json is missing
+        std::fs::write(cells.join("c4.json"), "{nope").unwrap();
+
+        let changed = ok(reconcile_capped_workers(tmp.path()));
+        assert_eq!(changed, 0);
+
+        let state = read_state_strict(tmp.path()).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers.len(), 3);
+        assert_eq!(workers[0].get("status"), Some(&json!("running")));
+        assert_eq!(workers[1].get("status"), Some(&json!("running")));
+        assert_eq!(workers[2].get("status"), Some(&json!("running")));
+    }
+
+    #[test]
+    fn reconcile_capped_workers_does_not_recount_already_capped_and_preserves_length() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[
+                {"nickname":"w1","cell":"c1","tier":"code","status":"running"},
+                {"nickname":"w2","cell":"c2","tier":"review","status":"open"},
+                {"nickname":"w5","cell":"c5","tier":"generation","status":"capped"}
+            ]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c1.json"), r#"{"status":"capped"}"#).unwrap();
+        std::fs::write(cells.join("c2.json"), r#"{"status":"open"}"#).unwrap();
+        std::fs::write(cells.join("c5.json"), r#"{"status":"capped"}"#).unwrap();
+
+        let changed = ok(reconcile_capped_workers(tmp.path()));
+        assert_eq!(changed, 1);
+
+        let state = read_state_strict(tmp.path()).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers.len(), 3);
+
+        // w1 updated to capped, tier preserved
+        assert_eq!(workers[0].get("nickname"), Some(&json!("w1")));
+        assert_eq!(workers[0].get("cell"), Some(&json!("c1")));
+        assert_eq!(workers[0].get("tier"), Some(&json!("code")));
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+
+        // w2 left as-is
+        assert_eq!(workers[1].get("nickname"), Some(&json!("w2")));
+        assert_eq!(workers[1].get("cell"), Some(&json!("c2")));
+        assert_eq!(workers[1].get("tier"), Some(&json!("review")));
+        assert_eq!(workers[1].get("status"), Some(&json!("open")));
+
+        // w5 was already capped, stays capped, tier preserved
+        assert_eq!(workers[2].get("nickname"), Some(&json!("w5")));
+        assert_eq!(workers[2].get("cell"), Some(&json!("c5")));
+        assert_eq!(workers[2].get("tier"), Some(&json!("generation")));
+        assert_eq!(workers[2].get("status"), Some(&json!("capped")));
     }
 
     // ── handoff kinds ─────────────────────────────────────────────────────
@@ -1197,6 +1313,62 @@ use std::time::Instant;
             HandoffAdopt::Fail { reason } => assert_eq!(reason, "no .bee/HANDOFF.json to adopt."),
             _ => panic!("expected NO_HANDOFF"),
         }
+    }
+
+    #[test]
+    fn dismiss_handoff_refuses_planned_next_and_clears_pause() {
+        let tmp = tmp_root();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+
+        // 1. Missing handoff -> Fail
+        match ok(dismiss_handoff(tmp.path())) {
+            HandoffDismiss::Fail { reason } => {
+                assert_eq!(reason, "no .bee/HANDOFF.json to dismiss.");
+            }
+            _ => panic!("expected Fail on missing handoff"),
+        }
+
+        // 2. planned-next -> Fail and file preserved
+        std::fs::write(
+            handoff_path(tmp.path()),
+            r#"{"kind":"planned-next","cell":"pfp-1"}"#,
+        )
+        .unwrap();
+        match ok(dismiss_handoff(tmp.path())) {
+            HandoffDismiss::Fail { reason } => {
+                assert!(reason.contains("is never dismissed"));
+            }
+            _ => panic!("expected Fail on planned-next"),
+        }
+        assert!(handoff_path(tmp.path()).exists(), "planned-next handoff preserved");
+
+        // 3. pause -> Ok and file removed
+        std::fs::write(
+            handoff_path(tmp.path()),
+            r#"{"kind":"pause","cell":"pfp-1"}"#,
+        )
+        .unwrap();
+        match ok(dismiss_handoff(tmp.path())) {
+            HandoffDismiss::Ok { record } => {
+                assert_eq!(record.get("kind"), Some(&json!("pause")));
+            }
+            _ => panic!("expected Ok on pause"),
+        }
+        assert!(!handoff_path(tmp.path()).exists(), "pause handoff cleared");
+
+        // 4. default (no kind field) -> Ok and file removed
+        std::fs::write(
+            handoff_path(tmp.path()),
+            r#"{"cell":"pfp-1"}"#,
+        )
+        .unwrap();
+        match ok(dismiss_handoff(tmp.path())) {
+            HandoffDismiss::Ok { record } => {
+                assert_eq!(record.get("cell"), Some(&json!("pfp-1")));
+            }
+            _ => panic!("expected Ok on untyped handoff"),
+        }
+        assert!(!handoff_path(tmp.path()).exists(), "untyped handoff cleared");
     }
 
     #[test]
@@ -1552,6 +1724,15 @@ use std::time::Instant;
                    "created_at":"2026-01-01T00:00:00.000Z"}),
         );
         assert!(resolve_handoff_workflow_id(tmp.path(), Some("ghost"), None).is_err());
+        // With an unbound session, the default record resolves to a closed workflow
+        // if no live workflow exists, so write_mailbox_handoff can serialize under
+        // locks and fail closed.
+        write_session(tmp.path(), "sess-1", None);
+        write_state_file(tmp.path(), r#"{"phase":"idle","feature":"ghost"}"#);
+        assert_eq!(
+            ok(resolve_handoff_workflow_id(tmp.path(), None, None)).as_deref(),
+            Some("wf-2")
+        );
     }
 
     #[test]
@@ -1722,8 +1903,12 @@ use std::time::Instant;
             Ok(_) => panic!("expected a refusal"),
         };
         assert!(message.starts_with(
-            "route --set: invalid flag(s): --class \"nope\" (must be one of feature, bugfix, docs"
+            "route --set: invalid flag(s): --class \"nope\" (must be one of feature, bugfix, docs, refactor, research, release, spike, perf, content)"
         ));
+        // psa-1: the line above is pinned on the FULL legal set, ending in the
+        // eighth class "perf". The refusal message is the contract a caller
+        // reads, so a class added without editing this line is a silent
+        // contract change. Update it with the enum; never delete it.
         assert!(message.contains(
             "--lane \"weird\" (must be one of docs, tiny, small, spike, standard, high-risk)"
         ));
@@ -1766,6 +1951,105 @@ use std::time::Instant;
         assert!(js_number_full("Infinity").is_err());
     }
 
+    /// psa-1 (D2, decision 1593e365): "perf" is the eighth class. Happy path
+    /// end to end — `--set` accepts it, and the record `--show` reads back
+    /// carries class=perf. (run_route's CLI entry is cwd-rooted and
+    /// untestable in-process; this drives the same functions it calls, the
+    /// pattern route_set_end_to_end_* already uses.)
+    #[test]
+    fn route_set_accepts_perf_as_the_eighth_class() {
+        assert_eq!(ROUTE_CLASS_VALUES[7], "perf");
+
+        let tmp = tmp_root();
+        let root = tmp.path();
+        ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+        let target = ok(resolve_mutation_target(root, None, "route", true));
+
+        let f = route_flags(&[("class", "perf"), ("lane", "standard"), ("flags", ""), ("files", "1")]);
+        let mut route = match ok(validate_route_set_flags(&f)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(route.get("class"), Some(&json!("perf")));
+        assert_eq!(route.get("lane"), Some(&json!("standard")));
+
+        let feature = target.record().get("feature").cloned().unwrap();
+        route.insert("feature".into(), feature);
+        let mut record = target.record().clone();
+        record.insert("route".into(), Value::Object(route));
+        ok(write_state(root, &record));
+
+        // The read `route --show` performs, on the stored record.
+        let shown = ok(resolve_mutation_target(root, None, "route show", true));
+        let stored = shown.record().get("route").cloned().unwrap();
+        assert_eq!(jget(&stored, "class"), Some(&json!("perf")));
+
+        // The SAFETY ARGUMENT, pinned: "perf" is a class and NOT a lane, so a
+        // record whose `mode` spells "perf" can never be misread as a lane
+        // (verbs/drivers/close.rs:393-403, uat.rs:139-171 read `mode` as a
+        // lane only when it names a lane value). Never add a class value that
+        // is also a lane value.
+        let as_lane = route_flags(&[("class", "perf"), ("lane", "perf"), ("flags", ""), ("files", "1")]);
+        let message = match ok(validate_route_set_flags(&as_lane)) {
+            Err(m) => m,
+            Ok(_) => panic!("expected a refusal: perf must never be a legal lane"),
+        };
+        assert!(
+            message.contains("--lane \"perf\" (must be one of docs, tiny, small, spike, standard, high-risk)"),
+            "message: {message}"
+        );
+        // Only the LANE is refused: the message carries no invalid-class
+        // clause. (A bare "--class" probe would hit the trailing Example
+        // line, which always spells one.)
+        assert!(
+            !message.contains("--class \"perf\""),
+            "class perf must be accepted: {message}"
+        );
+    }
+
+    #[test]
+    fn route_set_accepts_content_as_the_ninth_class() {
+        assert_eq!(ROUTE_CLASS_VALUES.len(), 9);
+        assert_eq!(ROUTE_CLASS_VALUES[8], "content");
+
+        let tmp = tmp_root();
+        let root = tmp.path();
+        ok(start_default(root, root, "feat-content", Some("standard"), "shaping", None, &[], &[]));
+        let target = ok(resolve_mutation_target(root, None, "route", true));
+
+        let f = route_flags(&[("class", "content"), ("lane", "docs"), ("flags", ""), ("files", "1")]);
+        let mut route = match ok(validate_route_set_flags(&f)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(route.get("class"), Some(&json!("content")));
+        assert_eq!(route.get("lane"), Some(&json!("docs")));
+
+        let feature = target.record().get("feature").cloned().unwrap();
+        route.insert("feature".into(), feature);
+        let mut record = target.record().clone();
+        record.insert("route".into(), Value::Object(route));
+        ok(write_state(root, &record));
+
+        let shown = ok(resolve_mutation_target(root, None, "route show", true));
+        let stored = shown.record().get("route").cloned().unwrap();
+        assert_eq!(jget(&stored, "class"), Some(&json!("content")));
+
+        let as_lane = route_flags(&[("class", "content"), ("lane", "content"), ("flags", ""), ("files", "1")]);
+        let message = match ok(validate_route_set_flags(&as_lane)) {
+            Err(m) => m,
+            Ok(_) => panic!("expected a refusal: content must never be a legal lane"),
+        };
+        assert!(
+            message.contains("--lane \"content\" (must be one of docs, tiny, small, spike, standard, high-risk)"),
+            "message: {message}"
+        );
+        assert!(
+            !message.contains("--class \"content\""),
+            "class content must be accepted: {message}"
+        );
+    }
+
     #[test]
     fn route_worktree_block_follows_is_code_touching_lane() {
         assert!(!is_code_touching_lane("docs", true));
@@ -1785,9 +2069,12 @@ use std::time::Instant;
             jget(&block, "command"),
             Some(&json!("bee worktree new --feature f1"))
         );
-        assert!(js_disp_opt(jget(&block, "notice")).starts_with(
+        let notice = js_disp_opt(jget(&block, "notice"));
+        assert!(notice.starts_with(
             "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
         ));
+        assert!(notice.contains("then bee worktree enter --id <the id it prints>"));
+        assert!(!notice.contains("open your session at"));
     }
 
     // ── ct-1 (D5): the granted-worktree arm of `route --set` ───────────────
@@ -1874,6 +2161,8 @@ use std::time::Instant;
             "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
         ));
         assert!(!notice.contains("wt-foreign"), "notice: {notice}");
+        assert!(notice.contains("then bee worktree enter --id <the id it prints>"));
+        assert!(!notice.contains("open your session at"));
     }
 
     /// Requirement 2: a grant for the TARGET feature routes the `worktree`
@@ -1896,6 +2185,8 @@ use std::time::Instant;
             notice.to_lowercase().contains("already"),
             "notice must say the worktree already exists: {notice}"
         );
+        assert!(notice.contains("NEXT: bee worktree enter --id wt-target"));
+        assert!(!notice.contains("open your session at"));
     }
 
     /// Requirement 3: no path through this arm ever declines (`Err2::Ex`)
@@ -2754,6 +3045,197 @@ use std::time::Instant;
         assert_eq!(CONFLICT_VERDICTS, ["compatible", "conflicts", "retires-prior"]);
     }
 
+    // ── plan-conflicts-scope: derive must stay PROPORTIONATE ───────────────
+    //
+    // Red-first for the derive flood (feature plan-conflicts-scope). Measured
+    // on this repo's live store — 2589 active decisions, the 31 terms one
+    // 9-file feature's cells produce — today's `hits >= 2` rule returns 694
+    // candidates, each of which needs its own `verdict` call before
+    // `gate --merge` opens. The defect is a FIXED >= 2 threshold meeting an
+    // UNBOUNDED term set: 30 moderately common words produce hundreds of
+    // meaningless two-hit coincidences, so a bigger plan buys more noise, not
+    // more precision.
+    //
+    // The fix (locked D2/D3/D4) lands in the TERM SET, never in the scorer:
+    // a term whose document frequency across the active store exceeds 3% is
+    // dropped, the filter arms only from 200 decisions up, and the surviving
+    // list is ranked by hit count and capped at 50.
+
+    /// Ordinary bee vocabulary — every word here is one this repo's own
+    /// decisions use constantly, and every one is >= 4 characters, so each
+    /// survives `normalize_term`'s length-and-stopword filter and reaches the
+    /// scorer. Thirty of them is the size of a real 9-file feature's term set.
+    const FLOOD_TERMS: [&str; 30] = [
+        "route", "class", "state", "name", "write", "tests", "planning", "release", "cells",
+        "gate", "worker", "lane", "record", "verdict", "store", "active", "session", "review",
+        "scope", "plan", "terms", "decision", "phase", "docs", "branch", "commit", "merge",
+        "hooks", "check", "reserve",
+    ];
+
+    /// The rare words this plan ALSO carries — none of them appears anywhere
+    /// in the flooded store below, so the one decision that does share them is
+    /// a real conflict rather than a coincidence.
+    const NEEDLE_TERMS: [&str; 4] = ["backpressure", "quarantine", "derive", "queue"];
+
+    /// A synthetic store of `n` active decisions plus one needle. Each row
+    /// takes a rotating six-word window of `FLOOD_TERMS`, so every term lands
+    /// in a fifth of the store and NO single term dominates — the same shape
+    /// the live store has, where the worst term is only 15.9%.
+    fn write_flooded_decision_store(root: &Path, n: usize) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let mut lines: Vec<String> = Vec::new();
+        for i in 0..n {
+            let words: Vec<&str> =
+                (0..6).map(|k| FLOOD_TERMS[(i * 7 + k) % FLOOD_TERMS.len()]).collect();
+            lines.push(
+                serde_json::to_string(&json!({
+                    "type": "decide",
+                    "id": format!("flood-{i:04}"),
+                    "date": "2026-07-01",
+                    "decision": format!(
+                        "The {} owns the {}; the {} follows the {}, {} and {}.",
+                        words[0], words[1], words[2], words[3], words[4], words[5]
+                    ),
+                    "tags": []
+                }))
+                .unwrap(),
+            );
+        }
+        lines.push(
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-needle",
+                "date": "2026-07-02",
+                "decision": "Quarantine a flooded candidate list behind backpressure, never behind a longer queue.",
+                "tags": []
+            }))
+            .unwrap(),
+        );
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+    }
+
+    /// The plan surface: three cells whose titles carry the thirty ordinary
+    /// terms, plus one whose title and path carry the four rare ones.
+    fn write_flood_plan_cells(root: &Path) {
+        for (n, chunk) in FLOOD_TERMS.chunks(10).enumerate() {
+            let id = format!("pcs-flood-{n}");
+            write_plan_cell(
+                root,
+                &id,
+                json!({
+                    "id": id.clone(), "feature": "flooded", "status": "open",
+                    "title": chunk.join(" "),
+                    "files": [], "affects_skills": [], "affects_specs": []
+                }),
+            );
+        }
+        write_plan_cell(
+            root,
+            "pcs-flood-rare",
+            json!({
+                "id": "pcs-flood-rare", "feature": "flooded", "status": "open",
+                "title": "Add backpressure to the derive queue",
+                "files": ["packages/bee-rs/crates/bee/src/verbs/state_group/quarantine.rs"],
+                "affects_skills": [], "affects_specs": []
+            }),
+        );
+    }
+
+    /// The premise of the flood test, pinned so a later edit to the fixtures
+    /// cannot quietly make the flood test trivial: the plan really does
+    /// produce ~34 ordinary terms, and the store really is over D3's floor.
+    #[test]
+    fn the_flood_fixture_is_a_large_store_and_an_ordinary_term_set() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_flooded_decision_store(root, 240);
+        write_flood_plan_cells(root);
+
+        let active = ok(crate::verbs::decisions::active_decisions(root, false));
+        assert!(
+            active.len() >= 200,
+            "the fixture must sit ABOVE D3's 200-decision floor, not under it: {} active",
+            active.len()
+        );
+
+        let terms = plan_terms(&ok(plan_cells(root, "flooded")));
+        for t in FLOOD_TERMS {
+            assert!(terms.contains(&t.to_string()), "the plan must carry the ordinary term {t}");
+        }
+        for t in NEEDLE_TERMS {
+            assert!(terms.contains(&t.to_string()), "the plan must carry the rare term {t}");
+        }
+        assert!(
+            (30..=40).contains(&terms.len()),
+            "roughly thirty terms, the size of a real feature's plan: {terms:?}"
+        );
+    }
+
+    /// RED until the term set learns document frequency (D2/D3/D4). A 34-term
+    /// plan against a 241-decision store must not hand the user hundreds of
+    /// candidates to verdict one CLI call at a time.
+    #[test]
+    fn derive_stays_proportionate_against_a_large_decision_store() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_flooded_decision_store(root, 240);
+        write_flood_plan_cells(root);
+
+        let candidates = ok(derive_candidates(root, "flooded"));
+        assert!(
+            candidates.len() <= 50,
+            "derive returned {} candidates for a 34-term plan over 241 active decisions — \
+             every one of them needs its own verdict before gate --merge opens. D2 drops any \
+             term over 3% document frequency and D4 caps the ranked list at 50.",
+            candidates.len()
+        );
+
+        // Proportionate is not empty: the ONE decision that shares the plan's
+        // own rare terms must survive the cut, or the fix traded a flood for
+        // a blind spot.
+        let ids: Vec<String> = candidates.iter().map(|c| js_disp_opt(jget(c, "id"))).collect();
+        assert!(
+            ids.contains(&"dec-needle".to_string()),
+            "the real conflict must survive the narrowing: {ids:?}"
+        );
+    }
+
+    /// D3's floor, from the other side: with the two-decision fixture the
+    /// older rows already use, derive returns exactly what it returns today.
+    /// Document frequency is noise at that size — one hit in two decisions is
+    /// 50% — so a small store, and a freshly onboarded host repo, must not
+    /// move at all.
+    #[test]
+    fn derive_leaves_a_small_decision_store_exactly_as_it_is_today() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        assert_eq!(ok(crate::verbs::decisions::active_decisions(root, false)).len(), 2, "far under D3's 200 floor");
+
+        let candidates = ok(derive_candidates(root, "f1"));
+        let ids: Vec<String> = candidates.iter().map(|c| js_disp_opt(jget(c, "id"))).collect();
+        assert_eq!(
+            ids,
+            vec!["dec-match".to_string(), "koh-plan-conflicts".to_string()],
+            "a small store keeps today's list byte for byte: {}",
+            jsjson::stringify(&Value::Array(candidates.clone()))
+        );
+        assert_eq!(candidates[0]["kind"], json!("decision"));
+        assert_eq!(
+            candidates[0]["title"],
+            json!("Conflict candidates are derived at plan time, never first at cap."),
+            "the decision title is untouched by any narrowing"
+        );
+        assert_eq!(candidates[1]["kind"], json!("rule"));
+        for c in &candidates {
+            assert_eq!(c["verdict"], Value::Null);
+            assert_eq!(c["note"], Value::Null);
+        }
+    }
+
     // ── merge-ready-fact D2: the uat gate flips the stored fact ────────────
     //
     // `bee gate --name uat` is the ONE writer of `merge_ready.uat`. It flips
@@ -2854,4 +3336,121 @@ use std::time::Instant;
         let lane = lane_on_disk(root, "bare");
         assert_eq!(lane["approved_gates"]["uat"], json!(true), "the approval itself still lands");
         assert!(lane.get("merge_ready").is_none(), "no fact was invented: {lane}");
+    }
+
+    #[test]
+    fn plan_packets_lane_packet_with_foreign_feature_is_not_returned() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let lanes = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&lanes).unwrap();
+        let lane_json = json!({
+            "feature": "feature-a",
+            "approved_cell_packet": {
+                "feature": "foreign-feature",
+                "cells": [{"id": "c1", "role": "code"}]
+            }
+        });
+        std::fs::write(lanes.join("feature-a.json"), lane_json.to_string()).unwrap();
+
+        let packet = get_approved_preview_packet(root, "feature-a");
+        assert!(
+            packet.is_none(),
+            "expected lane packet with foreign feature to be refused, got: {:?}",
+            packet
+        );
+    }
+
+    #[test]
+    fn plan_packets_state_packet_with_foreign_feature_is_not_returned() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let state_json = json!({
+            "feature": "feature-b",
+            "approved_cell_packet": {
+                "feature": "foreign-feature",
+                "cells": [{"id": "c1", "role": "code"}]
+            }
+        });
+        write_state_file(root, &state_json.to_string());
+
+        let packet = get_approved_preview_packet(root, "feature-b");
+        assert!(
+            packet.is_none(),
+            "expected state packet with foreign feature to be refused, got: {:?}",
+            packet
+        );
+    }
+
+    #[test]
+    fn plan_packets_packet_with_no_feature_field_is_still_returned() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let state_json = json!({
+            "feature": "feature-c",
+            "approved_cell_packet": {
+                "cells": [{"id": "c1", "role": "code"}]
+            }
+        });
+        write_state_file(root, &state_json.to_string());
+
+        let packet = get_approved_preview_packet(root, "feature-c");
+        assert!(
+            packet.is_some(),
+            "expected packet with no feature field to be returned for legacy stores"
+        );
+    }
+
+    #[test]
+    fn plan_packets_packet_with_matching_feature_is_returned() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let state_json = json!({
+            "feature": "feature-d",
+            "approved_cell_packet": {
+                "feature": "feature-d",
+                "cells": [{"id": "c1", "role": "code"}]
+            }
+        });
+        write_state_file(root, &state_json.to_string());
+
+        let packet = get_approved_preview_packet(root, "feature-d");
+        assert!(packet.is_some(), "expected matching packet to be returned");
+    }
+
+    #[test]
+    fn plan_packets_role_plan_scoped_to_feature_not_stale_across_features() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let state_json = json!({
+            "feature": "pi-native-stage-driver",
+            "approved_cell_packet": {
+                "feature": "release-2-41-2",
+                "role_plan": {
+                    "stages": [{"stage": "read-only-gather", "classification": "not-applicable"}]
+                }
+            }
+        });
+        write_state_file(root, &state_json.to_string());
+
+        let role_plan = get_approved_role_plan(root, "pi-native-stage-driver");
+        assert!(
+            role_plan.is_none(),
+            "expected role plan from foreign feature to be None, got: {:?}",
+            role_plan
+        );
+    }
+
+
+    #[test]
+    fn lane_mid_flight_refusal_names_the_bind_command() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_lane_file(root, "busy", r#"{"feature":"busy","phase":"swarming"}"#);
+        let refusal = match crate::verbs::state_group::policy::start_lane(root, root, "busy", None, "planning", None, &[], &[]) {
+            Ok(Err(msg)) => msg,
+            other => panic!("a mid-flight lane must refuse, got {:?}", other.map(|r| r.is_ok())),
+        };
+        assert!(refusal.contains("is mid-flight at phase \"swarming\""), "{refusal}");
+        assert!(refusal.contains("FIX: bee state session bind --lane busy --session-id <session id>."), "{refusal}");
     }

@@ -1,0 +1,94 @@
+{
+  "id": "rr49-1",
+  "feature": "release-red-2-49-0",
+  "lane": "tiny",
+  "role": "code",
+  "change_class": "test",
+  "title": "Pin the five closed-plan spans as historical exceptions",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "ddc902c1-4f05-41ec-a1f8-9b605d70b236",
+    "0bbb7726-ace1-4dac-80da-df78e17c168d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D1: grow KNOWN_HISTORICAL_EXCEPTIONS in packages/bee-rs/crates/bee/src/hooks/cli_shape.rs from 5 to 10 entries, adding the five spans the release suite printed, byte for byte. Write no code comments; the why lives in decision D1.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee cli_shape",
+  "must_haves": {
+    "truths": [
+      "no_shipped_command_spelling_is_refused_by_the_widened_guard passes",
+      "every pinned exception is still refused"
+    ]
+  },
+  "judge_obligation_ack": "test-only pin list inside a guard file; no guard logic changes",
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "Five closed-plan prose spans join KNOWN_HISTORICAL_EXCEPTIONS; the shipped-spelling test is green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: test-only pin list; no owned skill quotes these spans"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T08:51:08.905Z",
+    "behavior_change": false,
+    "verification_evidence": "39 passed including no_shipped_command_spelling_is_refused_by_the_widened_guard, red in the 2.49.0 release suite before",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --bin bee cli_shape",
+    "claimed_at": "2026-10-03T08:50:05.483Z",
+    "sync_ack": "test-only pin list; no owned skill quotes these spans",
+    "mistakes": [
+      {
+        "wrong": "docs/history/pi-slp-operations/plan.md and pi-slp-next-ops/plan.md put partial bee spellings in fenced cell JSON",
+        "better": "run the cli_shape test after writing a plan with fenced command text",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "Five closed-plan prose spans join KNOWN_HISTORICAL_EXCEPTIONS; the shipped-spelling test is green",
+      "commit": "2a63d3864",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --bin bee cli_shape — green:unit — 39 passed including no_shipped_command_spelling_is_refused_by_the_widened_guard, red in the 2.49.0 release suite before",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "docs/history/pi-slp-operations/plan.md and pi-slp-next-ops/plan.md put partial bee spellings in fenced cell JSON — run the cli_shape test after writing a plan with fenced command text — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "no_shipped_command_spelling_is_refused_by_the_widened_guard passes",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+          },
+          {
+            "requirement": "every pinned exception is still refused",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T08:51:33.557Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

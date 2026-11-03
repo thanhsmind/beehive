@@ -1,0 +1,5 @@
+{"schema":"leader-check/1","answers":[
+{"requirement":"A finish report with reaction and the list fields caps and the trace holds them","artifact":"packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"},
+{"requirement":"A report without the new keys caps exactly as before","artifact":"packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"},
+{"requirement":"reaction outside the closed set, and partial without stopped, are refused by name","artifact":"packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"}
+]}

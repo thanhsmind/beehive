@@ -1,0 +1,11 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "The judge-tier table names the narrowed re-verify with its diff base, its 30-line bound, the leader as applier, and the tick that records the skip", "artifact": "skills/bee-hive/references/gates-and-delegation.md"},
+    {"requirement": "Interview craft opens with the goal-playback move and says when it does not fire", "artifact": "skills/bee-shaping/references/shaping-reference.md"},
+    {"requirement": "The twice rule, its two sighting surfaces, the red-first guard, and the reproduce-fails fallback have one home; bee-evolving and bee-capturing each point at it in one sentence", "artifact": "docs/knowledge/areas/human-mailbox/overview.md"},
+    {"requirement": "FIX_AT_VALUES is unchanged", "artifact": "docs/history/codex-harness-hardening/release-manifest.json"},
+    {"requirement": "both skill sentences name the concept path and heading", "artifact": "skills/bee-evolving/SKILL.md"},
+    {"requirement": "rendered copies under .claude/skills and the plugin trees match skills/ after regen", "artifact": "skills/bee-capturing/SKILL.md"}
+  ]
+}

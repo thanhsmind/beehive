@@ -1,0 +1,59 @@
+{
+  "id": "cus-close-usage-section",
+  "title": "bee close prints a token-usage section (sessions + subagents + total)",
+  "lane": "small",
+  "role": "code",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "2d3abd12-cc34-4fc1-a1cd-859b1fa9e1c2"
+  ],
+  "description": "On a GREEN close in close_handler (packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, summary assembly around lines 2384-2460): collect session ids = every .bee/sessions/*.json whose record has lane == <closing feature>, plus the calling session id (resolve like resolve_release_session_id in verbs/state_group/sessions.rs: BEE_SESSION_ID else CLAUDE_CODE_SESSION_ID), deduped. For each record with a transcript_path that exists on disk, call rollup_transcript (packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs:383 — remove its #[allow(dead_code)]) and sum: main tokens from Rollup.models, subagent tokens from Rollup.subagent_models (each model entry carries input/output/cache_write/cache_read/new/cached/total). Records without a readable transcript are skipped and counted. Push ONE summary line into the close output lines, e.g. usage: 2 session(s) - 1.4M tokens (main 1.1M, subagents 0.3M; new 0.5M, cached 0.9M), skipping the line entirely when no transcript was readable; format token counts with a small k/M helper (reuse one if it exists). Insert a usage object into the JSON result: {sessions, skipped, main: {new, cached, total}, subagents: {new, cached, total}, total: {new, cached, total}}. Tests: unit tests beside the new code — build a temp root with .bee/sessions/<id>.json records (one bound to the feature with a transcript fixture containing assistant events with message.usage fields and a subagents/<n>.jsonl sidecar, one with a missing transcript) and assert the summed numbers, the skipped count, and that a feature with zero readable transcripts emits no usage line. Follow existing test style in close.rs/perf.rs.",
+  "acceptance": "bee close (green path) emits a usage line and a usage JSON object covering all sessions bound to the feature plus the calling session, subagent tokens included; unreadable transcripts are skipped and counted; scoped cargo tests green.",
+  "feature": "close-usage-summary",
+  "action": "Add a token-usage section to bee close: sum main + subagent tokens per feature-bound session via rollup_transcript, emit one summary line and a usage JSON object, with tests",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml usage",
+  "judge_obligation_ack": "perf.rs touch only removes #[allow(dead_code)] on rollup_transcript; no guard logic changes",
+  "status": "capped",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "cus-w1",
+    "outcome": "bee close prints a token-usage section (sessions + subagents + total) and inserts a usage object into its JSON result",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T12:11:57.063Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b3245841-d406-4c7d-a62e-3f8fda66b632",
+    "claimed_at": "2026-08-30T12:03:51.812Z",
+    "report": {
+      "outcome": "bee close prints a token-usage section (sessions + subagents + total) and inserts a usage object into its JSON result",
+      "commit": "407d3d5e8d8bab6f8b46a01481bf4cfdf7731b60",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml usage — green — 6 new usage tests ran by name; close (222) and session_close (36) filters also green, covering both touched files",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 418 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

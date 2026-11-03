@@ -1,0 +1,115 @@
+{
+  "id": "pa-4",
+  "feature": "paseo-answers",
+  "lane": "high-risk",
+  "role": "docs",
+  "title": "Document answers and steering on Paseo",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-answers/CONTEXT.md",
+    "docs/history/paseo-answers/plan.md",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "In docs/knowledge/areas/bee-herding/the-paseo-channel.md replace the planned-work line about slice 3 (answers) with a section 'Answers and steering' in the same ASD-STE100 style: a question keeps the agent; the broker sends the answer to the same agent as the next round of the same job only when Paseo shows it idle, else a fresh child job; `bee herding run --continue` on a Paseo job and its refusal when the agent is busy; `bee herding steer` on Paseo: claude, codex, opencode through the daemon helper (needs node and the npm @getpaseo/cli), pi through the steer file, other providers refused; never an interrupting send. Add 'paseo-answers D1, D2' to the frontmatter decisions. Change nothing else.",
+  "must_haves": {
+    "truths": [
+      "the concept states that a question keeps the agent and the answer continues the same job only when the agent is idle",
+      "the concept states the fallback to a fresh child job",
+      "the concept states the steer routes per provider and the refusal",
+      "the frontmatter cites paseo-answers D1, D2"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "the answers and steering section"
+      }
+    ],
+    "key_links": [
+      "the section extends the existing concept"
+    ],
+    "prohibitions": [
+      "No change to any other file"
+    ]
+  },
+  "verify": ".bee/bin/bee knowledge check --json",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-pa-4",
+    "outcome": "The Paseo channel concept documents same-agent answers and steering",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-06T00:08:52.053Z",
+    "behavior_change": false,
+    "verification_evidence": "errors 0, orphans 5 (none new)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": ".bee/bin/bee knowledge check --json",
+    "claimed_at": "2026-10-06T00:05:41.379Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T00:08:52.053Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T00:47:36.597Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The Paseo channel concept documents same-agent answers and steering",
+      "commit": "73b156e4e",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --json — green:static — errors 0, orphans 5 (none new)",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the concept states that a question keeps the agent and the answer continues the same job only when the agent is idle",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the concept states the fallback to a fresh child job",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the concept states the steer routes per provider and the refusal",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the frontmatter cites paseo-answers D1, D2",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-06T00:47:36.597Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

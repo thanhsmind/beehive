@@ -1,0 +1,69 @@
+{
+  "id": "nc-3",
+  "feature": "nudge-consult",
+  "lane": "small",
+  "role": "test",
+  "title": "Pin the nudge consult's instruction text to the closed sets code owns",
+  "action": "Close-door remedy: the pattern-check door flagged `pattern-20260821-instruction-text-is-an-untested-code-path` as violated for this feature, because nc-2 shipped the nudge consult entirely as prose with nothing pinning it. Add one test to packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs, beside the advisor-line tests, modelled on control_loop.rs's `the_shipped_prompt_pins_the_record_verbs_own_closed_sets`: read skills/bee-swarming/references/worker-details.md from the repo root and assert it names the dispatch verb the lead is told to run (`bee dispatch prepare --kind advisor`, with `advisor` still present in DISPATCH_KINDS), the ADVISOR_NUDGE_KIND record that triggers it, the three poor-work signals that earn a nudge (each also present in KNOWN_SIGNALS), and the six return-form tokens (verdict:, on-track, redirect, stop, finding:, next:). The point is the tie: widen a closed set or rename the verb, and the document must learn it in the same change.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/nudge-consult/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "decisions": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml drivers",
+  "must_haves": {
+    "truths": [
+      "The new test passes against the shipped worker-details.md.",
+      "Renaming the documented dispatch kind, or dropping a nudge signal from KNOWN_SIGNALS, makes it fail."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "depends_on": [],
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "nudge-consult-w3",
+    "outcome": "The nudge consult's instruction text is pinned to the dispatch kind, record kind, signals and return form that code owns",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "This cell did not exist at the merged gate — it was added after bee close refused on the pattern-check door, as the named remedy for pattern-20260821-instruction-text-is-an-untested-code-path — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T10:14:43.244Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "34a24bf4-5655-4cff-84e1-d02eaf823966",
+    "claimed_at": "2026-09-04T10:08:36.818Z",
+    "mistakes": [
+      {
+        "wrong": "nc-2 was planned and capped as docs-only with a parity/pointer proof, which left the whole nudge consult contract as unpinned prose and cost a third cell at the close door",
+        "better": "a cell that ships instruction text naming a closed set code owns should carry its pinning test in the same cell"
+      }
+    ],
+    "inline_reason": "Run inline by the orchestrator, not dispatched. This cell is a close-door remedy of one test in one file, added after bee close refused on the pattern-check door; the two dispatched herding workers on this feature both returned done without capping (PBI p-6f2623c9), so a third dispatch would have needed the same manual repair for less work than the edit itself. The red-first proof was driven by hand: the documented kind was renamed, the test failed on its own message, and the doc was reverted.",
+    "report": {
+      "outcome": "One test ties the nudge consult's prose to the dispatch kind, record kind, signals and return-form tokens code owns; proven to fail on a documented-kind rename",
+      "commit": "0752bff9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml drivers — green:unit — 341 passed 0 failed (340 before this cell); the new test was also driven red first by renaming the documented kind in worker-details.md, which failed on 'no longer names the nudge consult's dispatch verb' before the revert",
+      "deviations": [
+        "This cell did not exist at the merged gate — it was added after bee close refused on the pattern-check door, as the named remedy for pattern-20260821-instruction-text-is-an-untested-code-path — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "nc-2 was planned and capped as docs-only with a parity/pointer proof, which left the whole nudge consult contract as unpinned prose and cost a third cell at the close door — a cell that ships instruction text naming a closed set code owns should carry its pinning test in the same cell"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

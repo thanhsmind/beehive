@@ -1,0 +1,82 @@
+{
+  "id": "wcu-1",
+  "feature": "windows-cfg-unix",
+  "title": "Gate the backlog fail-open test behind cfg(unix)",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "0f2e5d4e-e11f-42aa-ae01-b3689a2a2fe4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In close.rs, add #[cfg(unix)] on the line above #[test] for an_unwritable_backlog_warns_and_the_close_still_passes (line 5281), matching gpgsign_true_with_a_failing_signer_still_lands_the_bookkeeping_commit at 4242 (per D1). Change nothing else.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee an_unwritable_backlog_warns",
+  "must_haves": {
+    "truths": [
+      "the test carries #[cfg(unix)] and still passes on Linux"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Do not change the test body",
+      "Do not touch any other test"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": "Gated the backlog fail-open test behind cfg(unix) so the Windows test binary compiles",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-22T10:36:41.096Z",
+    "behavior_change": false,
+    "verification_evidence": "the one gated test, run on Linux where it still compiles and runs; the Windows compile is proven only by the verify-windows CI job after the push",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee an_unwritable_backlog_warns",
+    "mistakes": [
+      {
+        "wrong": "mfa-4 wrote a std::os::unix test at close.rs:5282 with no cfg(unix) and a Linux-only scoped proof",
+        "better": "a unix import in a test carries cfg(unix) like its neighbours, and the cap scope names the Windows job it skipped",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "Gated an_unwritable_backlog_warns_and_the_close_still_passes behind #[cfg(unix)] so the Windows test binary compiles again",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee an_unwritable_backlog_warns — green:unit — the one gated test, run on Linux where it still compiles and runs; the Windows compile is proven only by the verify-windows CI job after the push",
+      "deviations": [],
+      "commit": "7cfc860ac"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the test carries #[cfg(unix)] and still passes on Linux",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T10:36:41.153Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

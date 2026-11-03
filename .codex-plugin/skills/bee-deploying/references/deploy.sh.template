@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: scripts/deploy.sh <env> <version> [--yes] [--allow-dirty]" >&2
+  exit 2
+}
+
+ENV_NAME="${1:-}"; VERSION="${2:-}"
+[ -n "$ENV_NAME" ] && [ -n "$VERSION" ] || usage
+shift 2
+YES=0; ALLOW_DIRTY=0
+for a in "$@"; do
+  case "$a" in
+    --yes) YES=1 ;;
+    --allow-dirty) ALLOW_DIRTY=1 ;;
+    *) usage ;;
+  esac
+done
+
+live() {
+  echo "LIVE: $*"
+  if [ "$YES" -ne 1 ]; then
+    read -r -p "Continue? [y/N] " ans
+    [ "$ans" = "y" ] || { echo "stopped before: $*" >&2; exit 1; }
+  fi
+  "$@"
+}
+
+if [ "$ALLOW_DIRTY" -ne 1 ] && [ -n "$(git status --porcelain)" ]; then
+  echo "working tree is dirty; commit or pass --allow-dirty" >&2
+  exit 1
+fi
+
+echo "== preconditions"
+<tool> --version
+
+echo "== build"
+<build command>
+
+echo "== test"
+<test command>
+
+echo "== deploy $ENV_NAME $VERSION"
+live <deploy command> "$ENV_NAME" "$VERSION"
+
+echo "== verify"
+curl -fsS "<health url>"
+
+echo "OK: $ENV_NAME is on $VERSION"

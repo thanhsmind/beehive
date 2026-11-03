@@ -1,0 +1,132 @@
+{
+  "id": "p1u-7",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "test",
+  "change_class": "test",
+  "title": "Prove on Pi 1.0 that a small model dispatches instead of writing inline",
+  "deps": [
+    "p1u-6"
+  ],
+  "decisions": [
+    "D1",
+    "eba50fb9-8c3c-49c9-899c-9ffe202b77f0",
+    "034373cc-aa8d-4df4-a569-c9a761f80710",
+    "690c84f5-d884-4524-ad73-1289e805dd64"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+    ".bee/verify/verify-app/features/README.md",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+    ".bee/verify/verify-app/features/pi-hat-wave.md"
+  ],
+  "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored, a small-lane feature in an approved swarming phase and one open cell, drive a Pi 1.0 leader on deepseek/deepseek-flash: record the tool list, a refused inline write with its text, a bee_dispatch call, the worker's verdict, and the cell's file written by the worker. Write the new feature file and its README index row, and add the mechanism to the audit page.",
+  "must_haves": {
+    "truths": [
+      "the leader's tool list has bee_dispatch and no edit or write",
+      "an inline leader write is refused with the bee_dispatch hint",
+      "bee_dispatch starts a worker that writes the cell's file and returns a verdict",
+      "the feature file names the run id and evidence path"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        "substantive": "how to drive it, the run evidence, gotchas"
+      }
+    ],
+    "key_links": [
+      "README.md index lists pi-harness-dispatch"
+    ],
+    "prohibitions": [
+      "No product source edits"
+    ]
+  },
+  "verify": "bash .bee/verify/verify-app/control-bee doctor",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "trace": {
+    "worker": "leader",
+    "outcome": "Live Pi 1.0 proof: a deepseek-flash leader on a small-lane cell called bee_dispatch, the worker wrote and capped the cell, the drain delivered the result; leader wrote no source",
+    "files_changed": [
+      ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+      ".bee/verify/verify-app/features/README.md",
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+    ],
+    "deviations": [
+      "leader-run instead of a worker — the worker-outward guard refuses a worker that starts pi — hit an unforeseen obstacle",
+      "the inline-write refusal is proven by the real hook probe in the sandbox, not by the model, which never attempted a write — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T08:40:56.413Z",
+    "behavior_change": false,
+    "verification_evidence": "sandbox doctor healthy; evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261002-153242-3268921/ (rpc-events.jsonl, drive-summary.txt); before-state: first run 20261002-151421-3214679 never called bee_dispatch",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "bash .bee/verify/verify-app/control-bee doctor",
+    "escalation_reason": "live Pi drive runs in the leader session; the worker-outward guard refuses a worker that starts pi",
+    "claimed_at": "2026-10-02T08:40:56.307Z",
+    "mistakes": [
+      {
+        "wrong": "the first sandbox setup ran against the previous run because a sed with a preceding cd was refused",
+        "better": "use absolute paths for scratch edits",
+        "fix_at": "none"
+      }
+    ],
+    "inline_reason": "live Pi drive runs in the leader session; the worker-outward guard refuses a dispatched worker that starts pi",
+    "report": {
+      "outcome": "Live Pi 1.0 proof: a deepseek-flash leader on a small-lane cell called bee_dispatch, the worker wrote and capped the cell, the drain delivered the result; leader wrote no source",
+      "commit": "45afc5393",
+      "files": [
+        ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        ".bee/verify/verify-app/features/README.md",
+        "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee doctor — green:live — sandbox doctor healthy; evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261002-153242-3268921/ (rpc-events.jsonl, drive-summary.txt); before-state: first run 20261002-151421-3214679 never called bee_dispatch",
+      "deviations": [
+        "leader-run instead of a worker — the worker-outward guard refuses a worker that starts pi — hit an unforeseen obstacle",
+        "the inline-write refusal is proven by the real hook probe in the sandbox, not by the model, which never attempted a write — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "the first sandbox setup ran against the previous run because a sed with a preceding cd was refused — use absolute paths for scratch edits — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the leader's tool list has bee_dispatch and no edit or write",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "an inline leader write is refused with the bee_dispatch hint",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "bee_dispatch starts a worker that writes the cell's file and returns a verdict",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "the feature file names the run id and evidence path",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          }
+        ],
+        "recorded_at": "2026-10-02T10:32:51.098Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

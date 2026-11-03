@@ -1,0 +1,127 @@
+{
+  "id": "sup-1",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Add the supervisor role to the herding control loop",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "322695d6",
+    "787a9eb0"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+    "skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "docs/history/research/slp-supervisor-placement.md",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Add Role::Supervisor to the control loop (enum at control_loop.rs:55, as_str \"supervisor\"). allowed_tools_for (:220) gets a supervisor arm returning an enumerated READ-ONLY surface per 322695d6 — Read plus query-only bee CLI (status, state session list, cells list, herding occupancy, supervisor record/list) and pane read; NO Write/Edit/dispatch tools, mirroring the shape of the existing dispatch/merge arms. Model: the supervisor invocation resolves the role name \"supervisor\" through the models fall-through (verbs/drivers/models.rs resolve_role) instead of DEFAULT_MODEL, warning and falling through when unconfigured — never failing. Author skills/bee-herding/references/supervisor-prompt.md: the OBSERVER role per CONTEXT Terms (never a router); one cold tick = read the surfaces via the query CLI, judge against the three day-1 signals (struggling-loop, big-decision, danger-op per da7cb49b), then ALWAYS end by writing exactly one record via `bee supervisor record` (verb lands in sup-2; prompt may reference it). Tests: extend the existing control_loop test pattern (see merge_role_gets_the_merge_allowlist_and_prompt_file, control_loop.rs:702) — role parses, allowed tools pinned read-only, prompt file read.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml control_loop",
+  "must_haves": {
+    "truths": [
+      "--role supervisor builds an invocation whose allowedTools contain no Write or Edit tool",
+      "an unconfigured supervisor model role warns and falls through, never fails"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-herding/references/supervisor-prompt.md",
+        "substantive": "observer contract: read surfaces, three day-1 signals, always exactly one record per tick, silence is a logged outcome"
+      }
+    ],
+    "key_links": [
+      "read_prompt_file resolves supervisor-prompt.md for Role::Supervisor"
+    ],
+    "prohibitions": [
+      "No behavior change to dispatch/merge roles",
+      "No write-scope tool in the supervisor allowlist (R4)"
+    ]
+  },
+  "trace": {
+    "worker": "w-sup-1",
+    "outcome": "Role::Supervisor lands in the herding control loop with an enumerated read-only tool surface, config-driven model fall-through, and a self-contained observer prompt",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+      "skills/bee-herding/references/supervisor-prompt.md"
+    ],
+    "deviations": [
+      "Added a per-role default interval (900s for supervisor, 60s kept for dispatch/merge) that the cell action did not list — locked decision 322695d6 on this cell names `--interval 900` as part of the role and no other cell owns the control-loop options — found a better route",
+      "Pane reading in the supervisor allowlist goes through the transport-neutral `bee herding pane list|read` verbs instead of a raw `Bash(herdr:*)`/`Bash(tmux:*)` entry, so both transport arms are the SAME string — a raw multiplexer client carries send-text and kill-pane, which is write scope wearing a read name (R4) — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T02:20:55.482Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6749e6b9-8c8c-4e3c-9fcf-f3af8df0b86c",
+    "claimed_at": "2026-08-27T01:44:05.611Z",
+    "verify_command": null,
+    "verified_at": null,
+    "report": {
+      "outcome": "Role::Supervisor lands in the herding control loop with an enumerated read-only tool surface, config-driven model fall-through, and a self-contained observer prompt",
+      "commit": "cd28a44a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+        "skills/bee-herding/references/supervisor-prompt.md"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml control_loop — green — 44 control_loop tests pass, 10 of them new supervisor coverage; also ran pointer_integrity + instruction_laws + specs_fence (21 green) because the change adds a skills reference file",
+      "deviations": [
+        "Added a per-role default interval (900s for supervisor, 60s kept for dispatch/merge) that the cell action did not list — locked decision 322695d6 on this cell names `--interval 900` as part of the role and no other cell owns the control-loop options — found a better route",
+        "Pane reading in the supervisor allowlist goes through the transport-neutral `bee herding pane list|read` verbs instead of a raw `Bash(herdr:*)`/`Bash(tmux:*)` entry, so both transport arms are the SAME string — a raw multiplexer client carries send-text and kill-pane, which is write scope wearing a read name (R4) — found a better route"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 455 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "allowlist-read-only-both-transports",
+            "status": "PASS",
+            "evidence": "control_loop.rs:274,296 SUPERVISOR_ALLOWED_TOOLS enumerates query verbs + Read only; tests supervisor_allowlist_carries_no_write_scope_tool_on_either_transport and supervisor_allowlist_is_the_same_string_on_both_transports ok"
+          },
+          {
+            "id": "allowlist-reaches-spawned-argv",
+            "status": "PASS",
+            "evidence": "control_loop.rs:432-436 resolve_iteration_argv passes allowed_tools_for into build_control_argv; supervisor_allowlist_reaches_the_spawned_argv_even_on_tmux ok"
+          },
+          {
+            "id": "unconfigured-model-warns-and-falls-through",
+            "status": "PASS",
+            "evidence": "control_loop.rs:346-356 + models.rs:584-585 warn_unknown_role; an_unconfigured_supervisor_model_role_warns_and_falls_through ok; a_configured_supervisor_model_role_reaches_the_spawned_argv shows --model haiku"
+          },
+          {
+            "id": "prompt-file-via-read_prompt_file",
+            "status": "PASS",
+            "evidence": "control_loop.rs:413-419 joins supervisor-prompt.md; the_supervisor_prompt_file_shipped_in_this_repo_carries_the_observer_contract ok"
+          },
+          {
+            "id": "dispatch-and-merge-unchanged",
+            "status": "PASS",
+            "evidence": "git show cd28a44a touches no Dispatch/Merge arm; the_cockpit_roles_keep_the_hardcoded_default_model ok"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-27T08:04:52.623Z"
+      }
+    ]
+  }
+}

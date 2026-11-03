@@ -7,6 +7,7 @@ timestamp: 2026-07-20
 bee:
   id: pattern-20260720-a-cell-that-changes-a-shared-mutator-surface
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT39", "original feature: multi-session-hardening"]
   polarity: pitfall
   critical: false

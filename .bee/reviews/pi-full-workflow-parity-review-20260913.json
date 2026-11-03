@@ -1,0 +1,39 @@
+{
+  "id": "pi-full-workflow-parity-review-20260913",
+  "requested_by": "user",
+  "requested_at": "2026-09-13T15:13:36.569Z",
+  "scope_description": "Independent review of whether the current Bee harness gives Pi semantic lifecycle parity with Claude Code for the pi-full-workflow-parity feature. Includes frozen capped cells pfp-1 and pfp-2 from cfa022ae through 50c90045. Excludes OMP, native Pi worker transport, and unrelated repository changes because CONTEXT.md names those outside this feature.",
+  "included": [
+    {
+      "type": "cell",
+      "id": "pfp-1",
+      "reason": "state and command behavior"
+    },
+    {
+      "type": "cell",
+      "id": "pfp-2",
+      "reason": "installed Pi end-to-end proof"
+    }
+  ],
+  "excluded": [],
+  "baseline": "cfa022ae",
+  "head": "50c90045",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-09-13T15:13:36.569Z",
+    "cells_checked": [
+      "pfp-1"
+    ],
+    "passed": true
+  },
+  "findings": [],
+  "uat": [],
+  "decision": {
+    "status": "blocked",
+    "review": false,
+    "reason": "Scope mismatch: this record covers only the latest tail feature, not the complete Pi harness requested by the user.",
+    "replacement_review": "pi-harness-current-parity-review-20260913"
+  },
+  "created_at": "2026-09-13T15:13:36.569Z",
+  "updated_at": "2026-09-13T15:21:58.158Z"
+}

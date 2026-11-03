@@ -1,0 +1,135 @@
+{
+  "id": "hwr-2",
+  "feature": "harness-worktree-relocation",
+  "title": "Add bee worktree exit and move the session before a merge started from main",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "hwr-1"
+  ],
+  "decisions": [
+    "016ae1ef-c7d3-4949-81c2-28c6503906e1",
+    "86337de7-429c-4317-b2e0-ed4fc7ff152a",
+    "6c860e87-9aff-42f4-8fed-8e628a217e21"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/harness-worktree-relocation/CONTEXT.md",
+    "docs/history/harness-worktree-relocation/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/session_identity.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "(1) New verb `bee worktree exit [--id <id>]` (per D1), routed where `worktree enter` is routed (`pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {` in handlers.rs, and mod.rs if it routes there) AND declared in src/generated/registry_payload.json beside `worktree enter` in the same change (hand-edit; no generator exists). Inside a linked worktree: verify the grant and Git links as `linked_worktree_merge_core` does, mutate nothing, and return a sessionTransition with operation `exit-worktree`, sourceCwd the canonical worktree root, targetCwd main, continuation null, plus hwr-1's `sessionRuntime` and `instruction`; an --id that differs from the current worktree refuses. From the main checkout: require --id; when hwr-1's locator finds a caller whose record cwd sits inside that worktree's canonical root, return the same transition with sourceCwd = the caller's canonical cwd; otherwise refuse with a typed error saying no calling session sits in that worktree. Emit the Pi marker exactly as the other paths do. (2) In `run_merge`, in the ordinary arm after `if ctx.kind != \"ordinary\" {` and the --id check, BEFORE `resolve_cleanup_on_merge` and every lock or precondition: unless the new boolean flag `--detached` is true, locate the caller; when its record cwd sits inside the --id worktree's canonical root, return `ok: true` with a sessionTransition of operation `exit-worktree-before-merge` (sourceCwd = caller's canonical cwd, targetCwd = main, continuation from `build_merge_continuation` with the given flags), hwr-1's fields, and a text line saying the merge did NOT run yet; merge nothing (per D2). Validate `--detached` fail-closed with `bool_flag_ok` and add it to the `keys_known` list; declare it on `worktree merge` in registry_payload.json. (3) When the located runtime is codex or opencode, both paths also record a waiting-on question for that session through `set_workflow_waiting_on` in verbs/workflow_store/record.rs, passing the located id as `session` explicitly, subject naming the target path (per D3); a failure to write the mark warns and does not fail the command. (4) Tests: exit inside a worktree emits exit-worktree and changes nothing on disk; exit from main with the caller's record cwd inside the worktree emits it with sourceCwd = that cwd; exit from main with no such caller refuses; merge from main with the caller's record cwd inside the worktree emits exit-worktree-before-merge and main's HEAD sha is unchanged; the same with --detached merges; caller cwd in main merges; no caller env merges; a codex caller gets the waiting-on mark. Inject the caller; never depend on the real process env.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee worktree && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_dispatch --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "bee worktree exit inside a worktree emits an exit-worktree transition and mutates nothing",
+      "bee worktree merge --id X from main does not merge while the caller's session record cwd sits inside worktree X, and emits exit-worktree-before-merge",
+      "bee worktree merge --id X --detached merges directly",
+      "a codex or opencode caller gets a waiting-on question mark"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "substantive": "exit handler and the merge detection arm with --detached"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "worktree exit declared; --detached declared on worktree merge"
+      }
+    ],
+    "key_links": [
+      "the worktree verb table routes `worktree exit` to its handler",
+      "merge detection uses hwr-1's locator and record-cwd reader"
+    ],
+    "prohibitions": [
+      "Do not change the merge transaction, queue, proof, uat, or cleanup behavior once the direct-merge path is taken",
+      "Do not change sessionTransition keys or schemaVersion",
+      "Do not touch plugin files or docs"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "hwr2-worker",
+    "outcome": "worktree exit verb and merge-from-main session detection with --detached",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-16T11:35:04.727Z",
+    "behavior_change": true,
+    "verification_evidence": "worktree module 275 passed, registry_dispatch 12 and registry_contracts 9 passed; also drove the built binary from main: worktree exit --id <this worktree> returned exit-worktree with sessionRuntime claude, and refused with no session env",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7033d8f8-2786-4936-b02c-73b18858ea0e",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee worktree && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_dispatch --test registry_contracts",
+    "claimed_at": "2026-09-16T11:19:39.370Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee worktree exit added; merge from main emits exit-worktree-before-merge while the caller session sits in the worktree; --detached merges directly; codex/opencode callers get a waiting-on mark",
+      "commit": "e00460da9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee worktree && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_dispatch --test registry_contracts — green:unit — worktree module 275 passed, registry_dispatch 12 and registry_contracts 9 passed; also drove the built binary from main: worktree exit --id <this worktree> returned exit-worktree with sessionRuntime claude, and refused with no session env",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "exit-verb-routed-declared",
+            "status": "PASS",
+            "evidence": "handlers.rs:1590 routes exit; registry_payload.json declares worktree.exit and merge detached"
+          },
+          {
+            "id": "detection-placement",
+            "status": "PASS",
+            "evidence": "handlers.rs:1301 detection after ordinary refusal and --id check, before resolve_cleanup_on_merge at :1331"
+          },
+          {
+            "id": "source-cwd-caller",
+            "status": "PASS",
+            "evidence": "handlers.rs:679 sourceCwd is caller canonical cwd; continuation from build_merge_continuation"
+          },
+          {
+            "id": "waiting-on-codex-opencode",
+            "status": "PASS",
+            "evidence": "handlers.rs:274 maybe_record_waiting_on only for codex|opencode through set_workflow_waiting_on"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "git show --stat e00460da9 lists only registry_payload.json, handlers.rs, tests.rs; direct merge path unchanged"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-16T11:47:23.945Z"
+      }
+    ]
+  }
+}

@@ -421,10 +421,39 @@ pub(crate) fn classify_decision_tags(root: &Path, tags: &[String]) -> MR<()> {
     })
 }
 
+/// The `source` every cells verb writes: a human agreed to it, and the agent
+/// only typed it down.
+pub(crate) const DECISION_SOURCE_USER: &str = "user";
+
+/// The `source` bee writes when NOBODY agreed to the row — bee derived it from
+/// records it already holds (letter-digest D4's mined lesson is the first).
+///
+/// It is a separate word on purpose. A reader scanning `.bee/decisions.jsonl`
+/// must be able to tell a line a human stood behind from a line a pass
+/// inferred, and the two are indistinguishable once they share a spelling.
+pub(crate) const DECISION_SOURCE_AGENT: &str = "agent";
+
 /// decisions.mjs logDecision — the exact event shape/append the cells verbs
 /// produce (alternatives/confidence always null here; scope 'repo', source
 /// 'user', matching every cells.mjs call site).
 pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> {
+    log_decision_from(root, decision, rationale, tags, DECISION_SOURCE_USER)
+}
+
+/// [`log_decision`] with the `source` field named by the caller.
+///
+/// Same event, same validation, same lock, same append — the ONE field that
+/// moves is `source`, because a mined row (letter-digest D4) is bee's own
+/// derivation and must never claim a human's authorship. Written as a variant
+/// rather than a second appender so there stays exactly one place that knows
+/// what a decision event looks like.
+pub(crate) fn log_decision_from(
+    root: &Path,
+    decision: &str,
+    rationale: &str,
+    tags: &[&str],
+    source: &str,
+) -> MR<()> {
     if js_trim(decision).is_empty() {
         return Err(Fail::Thrown("logDecision: decision text is required.".into()));
     }
@@ -436,7 +465,7 @@ pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &
         ("rationale", Some(rationale)),
         ("alternatives", None),
         ("scope", Some("repo")),
-        ("source", Some("user")),
+        ("source", Some(source)),
     ])?;
     let normalized: Vec<String> = tags.iter().map(|t| t.to_string()).collect();
     classify_decision_tags(root, &normalized)?;
@@ -448,7 +477,7 @@ pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &
     event.insert("rationale".into(), Value::String(js_trim(rationale).to_string()));
     event.insert("alternatives".into(), Value::Null);
     event.insert("scope".into(), Value::String("repo".into()));
-    event.insert("source".into(), Value::String("user".into()));
+    event.insert("source".into(), Value::String(source.to_string()));
     event.insert("confidence".into(), Value::Null);
     if !normalized.is_empty() {
         event.insert(

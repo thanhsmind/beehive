@@ -7,6 +7,7 @@ timestamp: 2026-07-20
 bee:
   id: pattern-20260720-a-feature-is-not-a-release-re-inspect
   lifecycle: active
+  areas: [workflow-state]
   decisions: [0018]
   sources: ["docs/history/learnings/critical-patterns.md#PAT43", "original feature: transcript-recovery"]
   polarity: pitfall

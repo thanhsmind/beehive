@@ -395,6 +395,13 @@ impl RealTmux {
     }
 }
 
+/// `pane_send_key`'s argv, pure: a named key such as `Escape` must not be
+/// literal (no `-l` flag, unlike `send_text_argv` which uses `-l` for literal text).
+/// Split out so a test can pin the argv shape with no spawned process.
+pub(crate) fn send_key_argv<'a>(pane_id: &'a str, key: &'a str) -> [&'a str; 4] {
+    ["send-keys", "-t", pane_id, key]
+}
+
 /// The five columns `pane_layout` asks for, in the order
 /// `parse_pane_geoms` reads them. Named once so the argv and the test that
 /// pins it cannot drift apart.
@@ -657,6 +664,10 @@ impl PaneTransport for RealTmux {
     fn pane_close(&self, pane_id: &str) -> Result<(), String> {
         self.forget_stability(pane_id);
         self.call(&["kill-pane", "-t", pane_id]).map(|_| ())
+    }
+
+    fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String> {
+        self.call(&send_key_argv(pane_id, key)).map(|_| ())
     }
 
     /// Sends a prompt to an already-running agent and waits for the pane to
@@ -1005,6 +1016,14 @@ $
         assert_eq!(parse_liveness("", "%7"), Liveness::Unknown);
     }
 
+    #[test]
+    fn tmux_send_key_argv_has_no_literal_flag() {
+        assert_eq!(
+            send_key_argv("%7", "Escape"),
+            ["send-keys", "-t", "%7", "Escape"]
+        );
+    }
+
     // ── stub-tmux round trips ───────────────────────────────────────────
 
     #[cfg(unix)]
@@ -1197,6 +1216,18 @@ $
         assert_eq!(calls.len(), 2, "text and Enter are never one call: {calls:?}");
         assert_eq!(calls[0], "send-keys -t %7 -l export BEE_AGENT_NAME='w-1'");
         assert_eq!(calls[1], "send-keys -t %7 Enter");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tmux_pane_send_key_sends_named_key_without_literal_flag() {
+        let stub = Stub::new();
+        let tmux = stub.tmux();
+        tmux.pane_send_key("%7", "Escape").unwrap();
+
+        let calls = stub.invocations();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0], "send-keys -t %7 Escape");
     }
 
     #[cfg(unix)]

@@ -7,7 +7,7 @@ timestamp: 2026-07-26
 bee:
   id: pattern-20260726-a-comparison-blind-to-the-contracts-own-dimension
   lifecycle: active
-  areas: []
+  areas: [rust-runtime]
   required_context: []
   decisions: []
   sources: ["rust-port (cells rust-port-15, rust-port-17, rust-port-21 and their goal-check verdicts)", docs/history/rust-port/reports/rust-port-17.md]

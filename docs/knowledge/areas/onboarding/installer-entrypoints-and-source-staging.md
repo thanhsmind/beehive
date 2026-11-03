@@ -98,6 +98,19 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
 
 - A non-interactive install run (no usable terminal) without the explicit accept-all option fails safe: it stops with guidance naming that option, never a crash — the terminal probe performs a real open, not a permission-bit check.
 
+**A shim's own banner is stdout, and stdout is what a script parses.** `mise`
+writes an activation line before the real tool's output. In `release.sh` that
+line landed inside the `gh` captures and was read first as the CI run id and
+then as an asset name; in `install.sh` it landed inside the codex and claude
+probe files, which then failed to parse as JSON and were misreported as shape
+drift. Neither script was wrong about the tool it called — it never saw the
+tool's first line. One `export MISE_QUIET=1` per script fixes it, and the
+install failure message now names an unparseable probe file as a possible cause
+rather than only naming shape drift. The general shape: any command capture that
+runs through a version manager, a wrapper, or a shell hook is capturing that
+layer's greeting too, and the fix belongs at the top of the script, once, not at
+each call site.
+
 ## Pointers (implementation)
 
 - `packages/bee/` — the vendored payload's single standard layout (`bee`,

@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [areas/rust-runtime/overview.md]
-  decisions: [harness-refocus-P2, 412e9b3a, harness-refocus-P4]
+  decisions: ["pi-slp-next-ops D1-D4 (orient reads the session record; one runnable next operation; the per-turn run line; no open-your-session text)", harness-refocus-P2, 412e9b3a, harness-refocus-P4]
   sources: [docs/specs/porcelain.md, docs/handbook/register.md, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
   authoritative_for: "rust-runtime: the porcelain/plumbing command surface and the teach-at-point-of-contact contract"
 ---
@@ -152,6 +152,22 @@ bought a smaller help output at the price of a blind guard.
 - **`bee orient` never computes state a second way.** It reuses the status
   builder. A second derivation of "where am I" is a second answer waiting to
   disagree with the first.
+- **`bee orient` answers for the calling session, and its next step runs**
+  (pi-slp-next-ops D1-D4). A session bound to a lane reads that lane's record
+  (`env_session_id()` into `session_preamble::resolve_pipeline`); a broken
+  binding is a blocker with a null command, never the default record. `bee
+  status` stays the repo-wide view. `next.command` comes from one function,
+  `next_operation` in `verbs/status_full/orient.rs`, over plain facts, in this
+  order: discovery resume (`bee discovery list --json`), a granted worktree
+  seen from main whose branch is not yet merged (`bee worktree enter --id <id>`; a branch that reached main through a merge commit gives no enter step, orient-merged-worktree D1), a handoff (`bee state
+  handoff show --json`), ready cells under an approved execution gate (`bee
+  dispatch wave --runtime <caller runtime> --feature <f> --json`), else null —
+  never a literal placeholder, never "open your session at". `next.run_from`
+  is the control root, because every command it can name is a control-plane
+  verb. The per-turn `prompt-context` hint calls the same function and prints
+  `run: <command> (from <run_from>)`; its cap is five lines and the command
+  joins its dedup hash only when non-null. The worktree-first denies and route
+  notices name the same `bee worktree enter --id` step.
 - **Per-command text help renders the FULL flag surface.** `bee <command>
   --help` prints a `--flag*:type` line for every flag the registry declares —
   optional ones included — never only the required set; the always-accepted
@@ -171,6 +187,26 @@ bought a smaller help output at the price of a blind guard.
   `bee hook` and `bee hook --help` print the usage line and exit cleanly; the
   hook dispatcher never panics on a missing subcommand (harness-audit-hardening
   hah-5, hooks/mod.rs, 2026-08-07).
+
+
+**`--no-mistakes` is spelled two different ways at two doors, and one of them
+writes nothing.** Both `bee cells cap --no-mistakes` and `bee mailbox reflect
+--no-mistakes` declare a boolean in `--help`, but the accepted forms disagree:
+`mailbox reflect` takes the flag **bare**, `cells cap` refuses the bare form as
+`unsupported_argument_shape` and accepts `--no-mistakes true`. Proven
+2026-09-01 by driving the real binary against a throwaway onboarded sandbox.
+The cause is a list, not a parser: `no-mistakes` is absent from the
+alone-boolean allowlist, so the bare form is rejected before it is read.
+
+**A cap cannot record the clean-run answer at all (open).** The asymmetry above
+has a second half: `--no-mistakes true` is *accepted* and the cap exits `0`, but
+`bool_flag` maps the string `"true"` to `false` on purpose — JS parity, because
+`"true" !== true` — so `trace.no_mistakes` is never written and `bee close`'s
+mistakes door still blocks. Both spellings therefore fail, one loudly and one
+silently. The unit tests stay green because they set the flag in Rust and never
+cross the CLI parser, which is this bundle's own *a guard and its tests are one
+model* pattern seen from the inside. Both source facts re-checked 2026-09-08 and
+unchanged. The fix is one list entry, not a parser change.
 
 ## Open Gaps
 

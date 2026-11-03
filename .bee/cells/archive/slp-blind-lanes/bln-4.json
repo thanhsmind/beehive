@@ -1,0 +1,223 @@
+{
+  "id": "bln-4",
+  "feature": "slp-blind-lanes",
+  "title": "Make bee blind check catch a fabricated citation, a divergent brief and a diet breach",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "bln-3"
+  ],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "docs/history/slp-blind-lanes/plan.md",
+    "docs/history/slp-blind-lanes/advisor-consult.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind",
+  "action": "Give `bee blind check` its three evidence checks (per D4 and D2b). Build each RED FIRST — a failing probe per hole before the arm that closes it.\n\nCHECK 1, CITATIONS. A citation line under `## Citations` is `<lane-id> :: <quote>`. Verify the quote against THAT lane's own proposal bytes only, never the concatenated set. Normalize both sides identically: collapse every whitespace run to one space, trim, ASCII case-fold. Enforce a minimum quote span so a generic fragment cannot pass. The advisor consult named FOUR distinct holes, and each needs its own red-first probe:\n  a. short-generic — \"the dispatch door\" is inside nearly any proposal;\n  b. fabricated — a quote in no proposal at all;\n  c. negation strip — the proposal says \"we should NOT cache the token\" and the dossier cites \"cache the token\", which is contained and means the opposite. Catch it by requiring the quote to match a whole-sentence span rather than any substring, so a citation cannot silently drop the clause that reverses it;\n  d. cross-lane misattribution — a quote attributed to lane A that exists only in lane B. This is THE fabrication D4 exists to catch, so it must refuse even though the text is genuine somewhere.\nAnd one green probe: a real quote differing from the proposal only in whitespace passes.\n\nCHECK 2, BRIEF DIGEST EQUALITY. Every lane section records a `dispatch_id` and a `brief_sha256`. Do NOT simply compare the recorded digests with each other — that verifies the dossier's author against itself. Read the authoritative record instead: `.bee/logs/dispatch.jsonl`, written by `append_prepare_record` (drivers/prepare.rs:601-613) as one line per prepare carrying `ts`, `source: \"prepare\"`, and the whole dispatch record including `dispatch_id` and `brief_sha256`. For each lane, find its `dispatch_id` line and refuse when the dossier's digest differs from the logged one. That log is FAIL-OPEN by design — its doc comment at :599-600 says \"a log failure never blocks the payload\" — so a `dispatch_id` with NO line in the log must refuse BY NAME, never pass silently. Then refuse when the lanes' logged digests are not all equal: that is the brief having changed between lane 1 and lane 3, which this feature detects rather than prevents (decision f0f21142 accepted exactly that cost).\n\nCHECK 3, READ DIET. Each lane section records the paths it read. Refuse when any is outside the diet the dossier's `## Question` section declares, and refuse when any names `.bee/` at all. State the trust level honestly in the refusal text and in any doc line: this is SELF-REPORTED by the lane being checked, so it catches a careless breach and a recorded lie, not a determined one. It is NOT the same trust level as the citation check, which reads bytes the checker holds. Do not write a line claiming otherwise.\n\nAll three refusals take the typed shape already used in this module: {ok:false, type:\"refused\", reason, ..., fix} with a `fix` naming what to change. A dossier passing all three exits 0 with a summary naming how many lanes, citations and paths were checked — a count of zero for any of them refuses rather than reporting success over nothing.\n\nTests go in the same inline `mod tests` inside `verbs/blind/mod.rs` that bln-3 created, so the verify filter `verbs::blind` matches them.\n\nINHERITED FROM bln-3 — read these before you plan a line of code; they are facts about the code you are extending, not suggestions:\n- `parse_dossier` returns `Dossier { run_id, brief, lanes: Vec<LaneSection>, sections }`, and each lane already carries its `proposal` and its `paths_read` separated out. All three checks read THAT, never the document text again. Do not write a second parser.\n- The pass result carries `checks_run`, today `[\"sections\",\"lane_fields\",\"brief_lint\"]`, and an existing test asserts that `citations`, `digest_equality` and `read_diet` are ABSENT from it. Extend the list and that same test TOGETHER — leaving the test asserting absence while the checks exist is a green that proves the opposite of the truth.\n- The dossier's `## Question` section records the WHOLE LaneBrief verbatim, not only the brief's Question section. bln-3 found the plan wrong about this: `lint_brief`'s shape arm requires all four brief sections, so a Question-only recording would refuse every dossier. Your digest check hashes those bytes.\n- The brief and every proposal ride inside FENCED blocks, and the heading scan skips fenced lines. A proposal is arbitrary prose that may quote a heading; outside a fence a lane's own text would move the dossier's section boundaries. Respect the fences.\n",
+  "must_haves": {
+    "truths": [
+      "A short generic citation is refused for failing the minimum quote span",
+      "A fabricated citation found in no proposal is refused",
+      "A citation that drops a negation by starting mid-sentence is refused in every written form the boundary rule enumerates, and that rule's own comment states plainly that it raises the cost of a strip rather than making one impossible — the check claims whole-sentence provenance, never a guarantee against every inversion (decision 79b5437b)",
+      "A citation attributed to one lane but present only in another is refused",
+      "A real citation differing only in whitespace passes",
+      "A lane whose dossier digest differs from its logged dispatch_id digest is refused",
+      "A lane whose dispatch_id has no line in .bee/logs/dispatch.jsonl is refused by name, never passed silently",
+      "Lanes whose logged digests are not all equal are refused, naming the divergence",
+      "A lane reporting a path outside the declared diet, or any path naming .bee/, is refused",
+      "A check that found zero lanes, zero citations or zero paths refuses rather than reporting success over nothing"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+        "substantive": "the three evidence checks and their red-first probes, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the digest check reads .bee/logs/dispatch.jsonl rather than comparing the dossier against itself"
+    ],
+    "prohibitions": [
+      "No claim, in refusal text or any doc line, that the read-diet check has the same trust level as the citation check",
+      "The citation check must never match against the concatenated proposal set",
+      "No new store and no new dispatch kind",
+      "A zero-count check must not report success"
+    ]
+  },
+  "trace": {
+    "worker": "main-orchestrator",
+    "outcome": "The three evidence checks stand green after three fix rounds: citations resolve per lane under two floors and a whole-sentence rule, digests are checked against the dispatch log, and a diet breach refuses while naming itself self-reported",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+    ],
+    "deviations": [
+      "Capped by the orchestrator rather than its builder — a failed judge reopened it, bln-5, bln-6 and bln-7 closed the defect, and the round-4 judge verified every truth at HEAD; the code is unchanged since c47fd241 — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T10:49:15.676Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
+    "claimed_at": "2026-08-28T10:48:58.161Z",
+    "report": {
+      "outcome": "The three evidence checks stand green after three fix rounds",
+      "commit": "c47fd241",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green — 55 passed 0 failed at a5ad7864, run by the round-4 judge in the worktree; the cell was reopened by its own round-1 judge and caps only now that a fourth independent round confirms every truth holds",
+      "deviations": [
+        "Capped by the orchestrator rather than its builder — a failed judge reopened it, bln-5, bln-6 and bln-7 closed the defect, and the round-4 judge verified every truth at HEAD; the code is unchanged since c47fd241 — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "short-generic-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:733-743 enforces MIN_CITATION_CHARS=24 and MIN_CITATION_WORDS=5 (:585-586); probe :1570-1582 asserts dossier_citation_too_short on 'the dispatch door' even though it IS contained in lane-a"
+          },
+          {
+            "id": "fabricated-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:777-783 dossier_citation_unresolved; probe :1585-1592 cites a quote in no proposal and asserts that reason"
+          },
+          {
+            "id": "negation-strip-refused",
+            "status": "FAIL",
+            "evidence": "The plan's canonical case DOES refuse (probe :1598-1612). Counterexample found by construction: proposal 'We should not follow lane-b here, i.e. cache the token on the worker side.' cited as 'cache the token on the worker side' gives quote_resolves=True and clears both floors (34 chars, 7 words), so check_citations passes it - because starts_sentence (mod.rs:685-691) accepts the '.' of 'i.e.' as a sentence terminator. Same for 'e.g.' and ASCII '...'. Verified against a line-faithful transcription of normalize/citation_quote/quote_resolves (mod.rs:644-705); that same transcription reproduces the green whitespace test and the red plain-strip test, so the transcription is sound. Cross-sentence framing ('Never do the following. Cache the token...') also passes, though that lies outside the within-sentence contract the plan scoped"
+          },
+          {
+            "id": "cross-lane-misattribution-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:744-776 resolves against the named lane only, then names found_in on dossier_citation_misattributed; probe :1617-1627 asserts lane-b with found_in lane-a"
+          },
+          {
+            "id": "whitespace-only-diff-passes",
+            "status": "PASS",
+            "evidence": "normalize (mod.rs:644-659) collapses runs and ASCII-folds both sides; probe :1647-1654 passes a re-wrapped, re-cased real quote with counts.citations==1"
+          },
+          {
+            "id": "digest-mismatch-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:832-847 compares the dossier's brief_sha256 to the LOGGED digest and refuses dossier_brief_digest_mismatch naming both; probe :1685-1698"
+          },
+          {
+            "id": "unlogged-dispatch-refused-by-name",
+            "status": "PASS",
+            "evidence": "mod.rs:804-817 dossier_dispatch_unlogged names lane, dispatch_id and log path; DispatchLog::read (:634-638) maps a missing file to an empty log via unwrap_or_default, and probe :1704-1718 asserts an empty log refuses - the fail-CLOSED mirror of the fail-open append_prepare_record"
+          },
+          {
+            "id": "divergent-logged-digests-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:851-868 compares LOGGED digests across lanes, collected only from log entries at :848, and refuses dossier_brief_digest_divergent naming lane, other_lane and both digests; probe :1736-1753"
+          },
+          {
+            "id": "diet-breach-and-bee-path-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:958-989 dossier_read_diet_breach for anything outside the declared diet; names_bee_store (:930-932) is segment-wise and refuses even when the diet itself declares .bee/ (probe :1781-1801)"
+          },
+          {
+            "id": "zero-count-refuses",
+            "status": "PASS",
+            "evidence": "zero lanes at mod.rs:1001-1008 with probe :1852-1859; zero citations at :786-793 with probe :1675-1681; zero paths per-lane at :948-957 with probe :1826-1837, and an undeclared diet at :936-944 with probe :1839-1845"
+          },
+          {
+            "id": "never-concatenated-set",
+            "status": "PASS",
+            "evidence": "check_citations resolves per-lane only (mod.rs:709-711, 744, 754); probe :1632-1643 proves a cross-lane-boundary quote WOULD match the join and is still refused dossier_citation_unresolved"
+          },
+          {
+            "id": "no-same-trust-claim",
+            "status": "PASS",
+            "evidence": "DIET_TRUST (mod.rs:877) is written once and says 'weaker than the citation check'; every diet refusal carries trust:self_reported; probe :1806-1824 asserts both 'self-report' and 'weaker' appear in the fix text; no contrary claim in the comments"
+          },
+          {
+            "id": "no-new-store-no-new-kind",
+            "status": "PASS",
+            "evidence": "the verb reads only the caller's --dossier and .bee/logs/dispatch.jsonl; no write besides the existing record_timing; no new dispatch kind string in the diff"
+          },
+          {
+            "id": "checks-run-pinning-test-extended",
+            "status": "PASS",
+            "evidence": "the parent commit's test asserted the three names ABSENT; the same commit replaces it with the_pass_result_names_every_check_this_door_ran (mod.rs:1528-1546) asserting the exact six-name list plus nonzero counts - extended together with CHECKS_RUN, never deleted or weakened"
+          },
+          {
+            "id": "probes-assert-not-vacuous",
+            "status": "PASS",
+            "evidence": "every evidence probe goes through evidence_refusal (mod.rs:1253-1255), which panics on Ok, and pins an exact reason string plus its fields; the concatenation probe pre-asserts its own premise; red-first history is unverifiable from outside, but no probe can pass vacuously against a stub returning Ok"
+          },
+          {
+            "id": "citation-floors-defensible",
+            "status": "PASS",
+            "evidence": "A real short verdict such as 'No new store is needed.' normalizes to 22 chars and IS refused, but the refusal is actionable and the trade is the design's own choice, not a defect"
+          },
+          {
+            "id": "verify-command-green",
+            "status": "PASS",
+            "evidence": "worktree HEAD c47fd241; cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind -> 42 passed, 0 failed, matching the cap's claim"
+          }
+        ],
+        "failure_signature": "quote_resolves (blind/mod.rs:685-691) treats any mid-sentence '.', as in 'i.e.', 'e.g.' or '...', as a sentence boundary, so a citation that drops the negation before it - 'We should not follow lane-b here, i.e. cache the token on the worker side.' cited as 'cache the token on the worker side' - passes the citation check and inverts the lane's meaning",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:00:57.224Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "bln4-truths-hold",
+            "status": "PASS",
+            "evidence": "Round-4 judge at HEAD a5ad7864: all ten truths pinned green - too-short (mod.rs:1700), fabricated (1715), negation strip in every enumerated form (1728, 1807-1894) with the comment naming raises-cost-not-impossible and the four limits (698-725), misattribution (1747), whitespace variant (1777), digest mismatch (2022), unlogged dispatch_id (2041), unequal logged digests (2073), diet violation and .bee path (2094, 2118) with the weaker-trust wording pinned (2143), and the zero-lane, zero-citation and zero-path refusals (2012, 2163, 2176, 2189). DispatchLog reads .bee/logs/dispatch.jsonl (636-641), never the dossier against itself"
+          },
+          {
+            "id": "defect-from-round-one-closed",
+            "status": "PASS",
+            "evidence": "The NEEDS_REVISION signature recorded against this cell (an abbreviation dot faking a sentence boundary) was closed by bln-5 and bln-6, and re-verified by two later judge rounds on standalone compiles of the shipped functions"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind in the worktree at a5ad7864: 55 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:48:55.137Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-28T10:00:57.224Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null,
+    "inline_reason": "No new execution happened here. The cell was executed and committed by bln4-writer at c47fd241, then REOPENED when its own round-1 judge failed it. The defect was closed by bln-5, bln-6 and bln-7, and the round-4 independent judge verified all ten of this cell's truths at HEAD a5ad7864. The orchestrator is recording that verdict, not writing code."
+  }
+}

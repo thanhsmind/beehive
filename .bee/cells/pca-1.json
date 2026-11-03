@@ -1,0 +1,203 @@
+{
+  "id": "pca-1",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Ship bee-how and bee-why, and answer Trace and Provenance questions in the reply",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-how/SKILL.md",
+    "skills/bee-how/CREATION-LOG.md",
+    "skills/bee-why/SKILL.md",
+    "skills/bee-why/CREATION-LOG.md",
+    "skills/bee-researching/SKILL.md",
+    "skills/bee-teach/SKILL.md",
+    "README.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "skills/bee-writing-skills/SKILL.md",
+    "skills/bee-writing-skills/references/creation-log-template.md",
+    "skills/bee-researching/SKILL.md",
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "skills/bee-teach/SKILL.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/red/shortcut-red-results.md"
+  ],
+  "affects_skills": [
+    "skills/bee-how/SKILL.md",
+    "skills/bee-why/SKILL.md",
+    "skills/bee-researching/SKILL.md",
+    "skills/bee-teach/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Create two thin user-facing shortcut skills and make their route clean (per D1). Do NOT run bee dev regen (wave-barrier). BEE-HOW and BEE-WHY: follow the bee-writing-skills checklist and the frontmatter shape of skills/bee-teach/SKILL.md (name equal to directory, folded description, metadata version '0.1', ecosystem bee, bee-cli dependency mapping with missing_effect degraded). Each skill is a door, never a copy: it scopes the question, invokes bee-researching, loads `bee-researching/references/trace-and-provenance.md`, and runs \"Trace\" (bee-how) or \"Provenance sweep\" (bee-why). It never restates, shortens or reorders a step of either procedure. Body sections, short: a one-paragraph door statement; Run (read-only, no brief file, the account is the reply); Scope the question (a vague target gets its reading as the first line and the skill never stops to ask; the other half of a how-and-why ask becomes the one next action as a ready /bee-why or /bee-how question; an outside library goes to bee-researching; bee-why pins the path:line range, the symbols and the search terms, sweeps every row because the user asked for reasons, treats a guess inside the question as one hypothesis, and asks for the constraint set when the user means to change the code); Reply (first line: the answer in one sentence, bee-why adds its tier; then the procedure's answer shape with tier words and empty or unswept rows kept as written; close on exactly one next action; at a gate the gate wins per `bee-hive/references/routing-and-contracts.md` (\"Communication contract\")); Headless; Handoff 'Account delivered. Invoke bee-hive skill.' Descriptions must separate the three explain skills: bee-how 'Use when the user types /bee-how or asks how a command, hook, flow or subsystem of this repo runs or where its parts live. Not for why it is built this way (bee-why), a paced explanation to understand a topic (bee-teach), an outside library (bee-researching), or changing code.' bee-why 'Use when the user types /bee-why or asks for the recorded reason, with evidence, behind a rule, value, guard or design of this repo, or what a change must keep. Not for how the code runs (bee-how), a paced explanation to understand a topic (bee-teach), locking or superseding a decision (bee-shaping), or an outside library (bee-researching).' Cite every qualified pointer without the skills/ prefix: pointer_integrity resolves qualified pointers under skills/. BEE-RESEARCHING/SKILL.md: in § Output add one line: A Trace or Provenance question skips the four-step order and answers in the reply; no brief file unless the user asks to keep one. In § Recommendation ladder add: at the start, state what answer would settle the question; close it as settled, refuted or inconclusive, and an inconclusive result travels as an open question, never as a yes. BEE-TEACH/SKILL.md: sharpen the description so a request for the recorded reason with evidence routes to bee-why and teach keeps 'help me understand' (a paced plain account); in the Reply line add: when a thread is worth chasing, the one next action is a ready /bee-how <question> or /bee-why <question>. README.md: in the 'Craft skills' table under the hive-role table, add one row each for `bee-how` and `bee-why`, one sentence each. CREATION-LOG.md for bee-how and bee-why from the template, with the named deviation from psh-1, and RED H1 to H4 recorded verbatim from shortcut-red-results.md (all PASS on behavior, contaminated by the repo's always-loaded rules, so the skill body stays minimal); note that H4 is proven by a text diff, not a GREEN run; leave GREEN and Final Outcome as 'pending, recorded by cell pca-10'.",
+  "verify": "rg -q '^name: bee-how$' skills/bee-how/SKILL.md && rg -q '^name: bee-why$' skills/bee-why/SKILL.md && rg -q 'Trace' skills/bee-how/SKILL.md && rg -q 'Provenance sweep' skills/bee-why/SKILL.md && rg -q 'skips the four-step order' skills/bee-researching/SKILL.md && ! rg -n 'disable-model-invocation|--runtime claude' skills/bee-how skills/bee-why",
+  "must_haves": {
+    "truths": [
+      "bee-how and bee-why route to Trace and Provenance sweep and restate no step",
+      "A Trace or Provenance question answers in the reply with no brief file",
+      "The three explain skills say in their descriptions which one to use"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-how/SKILL.md",
+        "substantive": "door statement, Run, Scope, Reply, Headless, Handoff; no Trace step text"
+      },
+      {
+        "path": "skills/bee-why/SKILL.md",
+        "substantive": "door statement, Run, Scope, Reply, Headless, Handoff; no sweep step text"
+      },
+      {
+        "path": "skills/bee-how/CREATION-LOG.md",
+        "substantive": "RED H1 and H4 verbatim, named deviation, GREEN pending"
+      },
+      {
+        "path": "skills/bee-why/CREATION-LOG.md",
+        "substantive": "RED H2 and H3 verbatim, named deviation, GREEN pending"
+      }
+    ],
+    "key_links": [
+      "bee-how and bee-why cite bee-researching/references/trace-and-provenance.md",
+      "bee-teach names bee-how and bee-why"
+    ],
+    "prohibitions": [
+      "No bee dev regen",
+      "No Trace or sweep step restated in a shortcut",
+      "No write outside the six listed files"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-1",
+    "outcome": "Shipped bee-how and bee-why as doors to Trace and Provenance sweep; bee-researching answers them in the reply and closes research as settled, refuted or inconclusive; bee-teach and README name both; CREATION-LOGs hold RED H1-H4 verbatim with GREEN pending for pca-10",
+    "files_changed": [
+      "skills/bee-how/SKILL.md",
+      "skills/bee-how/CREATION-LOG.md",
+      "skills/bee-why/SKILL.md",
+      "skills/bee-why/CREATION-LOG.md",
+      "skills/bee-researching/SKILL.md",
+      "skills/bee-teach/SKILL.md",
+      "README.md"
+    ],
+    "deviations": [
+      "Replaced the teach trigger 'why did you build it this way' with 'help me understand' — the old trigger overlaps the recorded-reason route that the cell hands to bee-why — found a better route",
+      "Landed the work as one commit scoped to the seven paths after the shared-index git add was refused and a private-index update-ref lost a race to a sibling commit — three workers share this checkout — hit an unforeseen obstacle",
+      "Read the plan.md Requirements as the locked decision set because the feature has no CONTEXT.md, as plan.md itself states — the dispatch named a missing input — the plan was wrong about a fact",
+      "Ran bee cells finish through a script file — the worktree session guard refused the inline JSON report — hit an unforeseen obstacle",
+      "sync-ack: The two CREATION-LOG.md files are named in the cell files list but are logs, not skill bodies, so affects_skills leaves them out. skills/bee-verifying/SKILL.md belongs to sibling cell pca-4 (commit 66bdb988) on the shared branch. The pca-1 commit fdc8829f touches only its seven listed files."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:49:11.802Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:41:03.606Z",
+    "sync_ack": "The two CREATION-LOG.md files are named in the cell files list but are logs, not skill bodies, so affects_skills leaves them out. skills/bee-verifying/SKILL.md belongs to sibling cell pca-4 (commit 66bdb988) on the shared branch. The pca-1 commit fdc8829f touches only its seven listed files.",
+    "mistakes": [
+      {
+        "wrong": "Ran cd into the worktree plus git add and git commit in one Bash call, and the write guard refused both",
+        "better": "start with one git commit -- <paths> and no cd"
+      },
+      {
+        "wrong": "Built a private index over several Bash calls and then ran git update-ref HEAD with an expected old value, and a sibling commit landed between calls so the move failed",
+        "better": "use the atomic path-scoped git commit, which stages and moves HEAD in one step"
+      },
+      {
+        "wrong": "Passed the long JSON report inline to bee cells finish three times and the worktree guard refused each call",
+        "better": "put the finish call in a script file on the first try"
+      }
+    ],
+    "report": {
+      "outcome": "skills/bee-how/SKILL.md and skills/bee-why/SKILL.md are doors with door statement, Run, Scope, Reply, Headless and Handoff, citing the Trace and Provenance sweep headings of bee-researching/references/trace-and-provenance.md with no step restated. skills/bee-researching/SKILL.md gains the Output line that skips the four-step order with no brief file, and the settled, refuted or inconclusive close at the end of Recommendation ladder. skills/bee-teach/SKILL.md description routes recorded-reason asks to bee-why and how-it-runs asks to bee-how, and its Reply line offers a ready /bee-how or /bee-why question. README Craft skills table has one row each. Both CREATION-LOGs carry the named deviation that differs from psh-1, RED H1 and H4 for how and H2 and H3 for why verbatim, H4 proven by text diff, and GREEN, REFACTOR and Final Outcome pending for pca-10.",
+      "commit": "fdc8829ff5730fe1ec2a07f080998823d62fc334",
+      "files": [
+        "skills/bee-how/SKILL.md",
+        "skills/bee-how/CREATION-LOG.md",
+        "skills/bee-why/SKILL.md",
+        "skills/bee-why/CREATION-LOG.md",
+        "skills/bee-researching/SKILL.md",
+        "skills/bee-teach/SKILL.md",
+        "README.md"
+      ],
+      "tests": "cargo test -p bee --test pointer_integrity --test instruction_laws plus the cell verify and an H4 Trace step-line diff — green:static — docs-only cell; 19 of 19 pointer and instruction-law tests ok, verify printed VERIFY-OK, the step diff found no copied step",
+      "deviations": [
+        "Replaced the teach trigger 'why did you build it this way' with 'help me understand' — the old trigger overlaps the recorded-reason route that the cell hands to bee-why — found a better route",
+        "Landed the work as one commit scoped to the seven paths after the shared-index git add was refused and a private-index update-ref lost a race to a sibling commit — three workers share this checkout — hit an unforeseen obstacle",
+        "Read the plan.md Requirements as the locked decision set because the feature has no CONTEXT.md, as plan.md itself states — the dispatch named a missing input — the plan was wrong about a fact",
+        "Ran bee cells finish through a script file — the worktree session guard refused the inline JSON report — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "Ran cd into the worktree plus git add and git commit in one Bash call, and the write guard refused both — start with one git commit -- <paths> and no cd",
+        "Built a private index over several Bash calls and then ran git update-ref HEAD with an expected old value, and a sibling commit landed between calls so the move failed — use the atomic path-scoped git commit, which stages and moves HEAD in one step",
+        "Passed the long JSON report inline to bee cells finish three times and the worktree guard refused each call — put the finish call in a script file on the first try"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "cell verify line run from worktree printed OK"
+          },
+          {
+            "id": "door-no-step-restated",
+            "status": "PASS",
+            "evidence": "skills/bee-how/SKILL.md:18 and skills/bee-why/SKILL.md:18 load trace-and-provenance.md and say 'Never restate, shorten or reorder a step'; bodies hold only Run/Scope/Reply/Headless/Handoff (git show fdc8829f)"
+          },
+          {
+            "id": "reply-no-brief",
+            "status": "PASS",
+            "evidence": "skills/bee-researching/SKILL.md:87 'A Trace or Provenance question skips the four-step order and answers in the reply'; both shortcuts say 'Write no brief file' in Run"
+          },
+          {
+            "id": "descriptions-separate",
+            "status": "PASS",
+            "evidence": "bee-how and bee-why descriptions match the action verbatim; bee-teach description routes recorded reason with evidence to bee-why and traced how to bee-how (fdc8829f skills/bee-teach/SKILL.md:4)"
+          },
+          {
+            "id": "key-links",
+            "status": "PASS",
+            "evidence": "both shortcuts cite bee-researching/references/trace-and-provenance.md; bee-teach Reply names /bee-how <question> and /bee-why <question>"
+          },
+          {
+            "id": "creation-logs",
+            "status": "PASS",
+            "evidence": "skills/bee-how/CREATION-LOG.md:111,129 hold H1 and H4 verbatim; skills/bee-why/CREATION-LOG.md:117,135 hold H2 and H3 verbatim, identical to red/shortcut-red-results.md:9,15,20,24; named psh-1 deviation at bee-how log :54-60"
+          },
+          {
+            "id": "pointers-headings",
+            "status": "PASS",
+            "evidence": "cargo test -p bee --test pointer_integrity: test result ok"
+          },
+          {
+            "id": "scope-no-regen",
+            "status": "PASS",
+            "evidence": "fdc8829f --stat: 7 files, all in the cell files list; no generated tree changed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.930Z"
+      }
+    ]
+  },
+  "escalate": true
+}

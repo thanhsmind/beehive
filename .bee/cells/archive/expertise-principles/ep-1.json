@@ -1,0 +1,63 @@
+{
+  "id": "ep-1",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Add the Principle homes index section and the first principle skill",
+  "action": "Add a new '## Principle homes' section to docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, placed after the existing '## AGENTS.md rule homes' section and using the SAME row grammar that section already uses (an id line, then indented lines). Each row: `- `principle-<slug>` (expertise/<guide>.md § <heading>):` then `  spoken: <one line a human can say out loud to steer the work>` then `  classes: <comma-separated route class values>` then `  - applied_at:` with its indented path list. Seed the section with exactly ONE row, principle-red-before-green, classes: feature, bugfix, refactor. Then write skills/principle-red-before-green/SKILL.md: YAML frontmatter with name and a description saying when the principle fires, then one page carrying the rule itself, a short Why, and a final 'Depth' line pointing at .bee/expertise/tests.md and its heading. Do NOT edit any expertise/ guide (CONTEXT.md D1). Model the row grammar on the bytes at :185-197 of the concept file and the skill page on /home/thanhsmind/Projects/refs/cursor-plugins/pstack/skills/principle-prove-it-works/SKILL.md for length and shape only.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml rule_index_parity && .bee/bin/bee knowledge check",
+  "affects_skills": [
+    "skills/principle-red-before-green/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "The new section uses the same row grammar as '## AGENTS.md rule homes' — spoken: before applied_at:, because parse_agents_rule_homes reads the indented block after applied_at: as paths.",
+      "Exactly one principle row exists after this cell; the rest arrive in slice 2.",
+      "No file under expertise/ is edited (CONTEXT.md D1).",
+      "bee knowledge check stays green and rule_index_parity stays green — the new section must not disturb the existing one."
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-1",
+    "outcome": "Added the Principle homes index section with its first row and shipped skills/principle-red-before-green/SKILL.md",
+    "files_changed": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "skills/principle-red-before-green/SKILL.md"
+    ],
+    "deviations": [
+      "Ran the parity fence as --test rule_index_parity instead of the cell verify text — the cell passed rule_index_parity as a test-NAME filter, which matches no test and ran 0 tests, so the verify as written could not fail — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T17:58:36.095Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T17:53:17.442Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added the Principle homes index section with its first row and shipped skills/principle-red-before-green/SKILL.md",
+      "commit": "3e7791ea2b89758872527e083671b46d6ef54fa1",
+      "files": [
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "skills/principle-red-before-green/SKILL.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity && .bee/bin/bee knowledge check — green:unit — the parity fence reads the concept section I edited; knowledge check reads the whole knowledge tree",
+      "deviations": [
+        "Ran the parity fence as --test rule_index_parity instead of the cell verify text — the cell passed rule_index_parity as a test-NAME filter, which matches no test and ran 0 tests, so the verify as written could not fail — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

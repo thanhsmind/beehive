@@ -1,0 +1,11 @@
+# cpc-3 second completeness revision
+
+The corrected usage and live fixture result were inspected. The live waiting_on subject and session exist on disk as reported. Two remaining regressions prevent acceptance. Add RED tests for the exact paths, then fix and re-run the assigned command. Preserve sibling source and commits; use a path-scoped fixup when cpc-3 is not HEAD.
+
+1. rollup_from_events selects arbitrary payload.id as a session id when session_meta is absent. Actual Codex response_item records have their own message/tool ids. A valid rollout filename ending in the known session UUID plus a response_item payload.id="msg_123" therefore records session_id="msg_123", not the session. Only take a session-specific identity field or validated filename fallback. Test missing/truncated metadata with a response_item id and full UUID filename.
+2. final_assistant_text_line now stops on every top-level type=user, changing Claude's existing backward scan. Claude tool results use top-level user records. Exact sequence: assistant text "Keep existing subject"; user message containing tool_result; assistant message containing tool_use but no text. Old behavior returns Keep existing subject; new behavior breaks at the user event and returns fallback. Preserve Claude behavior while retaining Codex task_started/turn_context/native-user boundaries. Test this exact sequence alongside the new Codex tool-only turn test.
+3. Defensive check: extract_validated_session_id_from_stem slices untrusted UTF-8 at len-36 and fixed timestamp byte indexes. Use safe get/strip or existing UUID helpers; malformed Unicode filenames must not panic. The helper also currently accepts arbitrary rollout-suffix strings despite claiming validated identity. Keep the supported filename contract explicit and reject cases whose identity cannot be known.
+4. Final evidence should label the session-close fixture as real-binary fixture proof, not a live Codex session. The cpc-1 installed runtime probe is a separate proof and remains in progress.
+
+Do not expand into more hypothetical transcript variants. Keep the observed formats and preserve existing Claude semantics. Report exact tests, evidence paths and cell-level mistakes/deviations for the leader's finish report.
+

@@ -1,0 +1,148 @@
+{
+  "id": "pca-9",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Define the catch-me-up reply, sharpen capture triage and harvest lenses, and fix verify-upkeep landing",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L6-digest.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Adopt the remaining L4 and L6 practices (per D2 and D4). Never rename a cited heading. Do NOT run bee dev regen (wave-barrier). routing-and-contracts.md § 'Communication contract': add a 'Catch-me-up reply' rule for a user who asks to be caught up: one scope line; a short capsule of where the work stands; one line per feature or worktree with exactly one status tag taken from bee state and written in the user's words (merged, open worktree, cell in flight, capped not merged, parked); what was tried and reverted, from feature reports and superseded decisions; one next action. bee-capturing/SKILL.md: in 'Capture the moment it settles', a decision's why names its evidence pointer (commit, path:line, output path), never prose; in Compound step 3, check that each capped cell's proof pointer resolves before the harvest (a dead pointer is a friction entry), and dispatch the harvest readers through the dispatch door as gathers with two named lenses — learnings, and divergent (self-reported proof, second-order effects, context the user pasted that the agent could have fetched); in Compound step 4, when the target already states the lesson and the run still broke it, promote a wording or placement change that makes it fire, never a second copy, and a single source clears the bar only with a named waste figure while two independent sources raise confidence. bee-verify-upkeep/SKILL.md: add step 0 — with no .bee/verify/verify-app/SKILL.md, stop and route to bee-verifying; change the 'changed' landing step from one PR to one worktree and one cell proven by the re-driven features' green:live lines, landed with bee worktree merge. Skill edits by capture still go through bee-evolving or bee-writing-skills. Cite qualified pointers without the skills/ prefix.",
+  "verify": "rg -q 'Catch-me-up reply' skills/bee-hive/references/routing-and-contracts.md && rg -q 'divergent' skills/bee-capturing/SKILL.md && ! rg -q 'one PR' skills/bee-verify-upkeep/SKILL.md",
+  "must_haves": {
+    "truths": [
+      "A catch-me-up question gets a defined reply shape in the user's words",
+      "Capture checks that proof pointers resolve",
+      "Verify upkeep lands through a worktree and a cell"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/routing-and-contracts.md",
+        "substantive": "the Catch-me-up reply rule"
+      },
+      {
+        "path": "skills/bee-capturing/SKILL.md",
+        "substantive": "evidence-pointer why, pointer check, two harvest lenses, placement-fix triage"
+      }
+    ],
+    "key_links": [
+      "the Communication contract stays the one home for chat style"
+    ],
+    "prohibitions": [
+      "No automatic skill edit by capture",
+      "No bee dev regen",
+      "No write outside the three listed files"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-9",
+    "outcome": "Catch-me-up reply rule in routing-and-contracts.md § Communication contract; evidence-pointer why, pre-harvest proof-pointer check, learnings+divergent gather lenses, and placement-fix triage in bee-capturing (Capture the moment it settles; Compound steps 3-4); bee-verify-upkeep gains step 0 and lands changed runs through one worktree and one cell via bee worktree merge",
+    "files_changed": [
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-verify-upkeep/SKILL.md"
+    ],
+    "deviations": [
+      "Also replaced PR wording in the bee-verify-upkeep description, the clean outcome, and the step 5 triage line — the cell verify refuses any one PR text and a leftover PR mention would contradict the new landing — something else had to be fixed first",
+      "Status tags in the catch-me-up rule are said in work words with the bee term in parentheses — the action asks for the user words and the work-language rule forbids leading with bee terms — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:54:12.714Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:51:29.663Z",
+    "mistakes": [
+      {
+        "wrong": "A whole-index staging call in the shared worktree was refused by the concurrent-worker guard",
+        "better": "a path-scoped commit from the start would have skipped the refused call"
+      }
+    ],
+    "report": {
+      "outcome": "Catch-me-up reply, capture triage and harvest lenses, and verify-upkeep worktree landing added",
+      "commit": "38b9fde1",
+      "files": [
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-capturing/SKILL.md",
+        "skills/bee-verify-upkeep/SKILL.md"
+      ],
+      "tests": "cargo test -p bee --test pointer_integrity — green:static — skill prose edits; pointer check plus the cell verify rg chain (VERIFY-OK)",
+      "deviations": [
+        "Also replaced PR wording in the bee-verify-upkeep description, the clean outcome, and the step 5 triage line — the cell verify refuses any one PR text and a leftover PR mention would contradict the new landing — something else had to be fixed first",
+        "Status tags in the catch-me-up rule are said in work words with the bee term in parentheses — the action asks for the user words and the work-language rule forbids leading with bee terms — found a better route"
+      ],
+      "mistakes": [
+        "A whole-index staging call in the shared worktree was refused by the concurrent-worker guard — a path-scoped commit from the start would have skipped the refused call"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "verify line printed OK"
+          },
+          {
+            "id": "catch-me-up-in-contract",
+            "status": "PASS",
+            "evidence": "routing-and-contracts.md:282 inside ## Communication contract (:209, before ### Work language :291): five parts, status tags in the user's words, from state never from memory"
+          },
+          {
+            "id": "capture-pointers-lenses",
+            "status": "PASS",
+            "evidence": "38b9fde1 bee-capturing/SKILL.md: why names an evidence pointer; Compound step 3 pointer check and learnings/divergent gather lenses; step 4 placement-fix and waste-figure rules; no rival skill-edit rule"
+          },
+          {
+            "id": "verify-upkeep-worktree",
+            "status": "PASS",
+            "evidence": "bee-verify-upkeep/SKILL.md step 0 routes to bee-verifying; step 6 lands through one worktree and one cell with green:live lines and bee worktree merge; rg PR|branch empty"
+          },
+          {
+            "id": "scope-no-regen",
+            "status": "PASS",
+            "evidence": "38b9fde1 --stat: the 3 listed files only"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.950Z"
+      }
+    ]
+  },
+  "escalate": true
+}

@@ -7,6 +7,7 @@ timestamp: 2026-07-14
 bee:
   id: pattern-20260714-a-state-name-that-asserts-history-with-nothing
   lifecycle: active
+  areas: [workflow-state]
   sources: ["docs/history/learnings/critical-patterns.md#PAT6", "original feature: chain-integrity"]
   polarity: pitfall
   critical: true

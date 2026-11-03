@@ -1,0 +1,17 @@
+running 1 test
+test hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result ... FAILED
+
+failures:
+
+---- hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result stdout ----
+
+thread 'hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result' (4040544) panicked at crates/bee/src/hooks/session_close/tests.rs:1876:9:
+assertion `left == right` failed
+  left: Some("(turn ended)")
+ right: Some("Keep existing subject")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3564 filtered out; finished in 0.00s

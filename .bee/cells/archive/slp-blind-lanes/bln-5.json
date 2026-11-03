@@ -1,0 +1,184 @@
+{
+  "id": "bln-5",
+  "feature": "slp-blind-lanes",
+  "title": "Stop an abbreviation's dot from faking a sentence boundary in the citation check",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes/plan.md",
+    "docs/history/slp-blind-lanes/advisor-consult.md",
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind",
+  "action": "FIX-FIRST. An independent judge returned NEEDS_REVISION on bln-4 with a working counterexample against the citation check — the one check D4 exists for. Close it, red first.\n\nTHE DEFECT. `starts_sentence` (blind/mod.rs:685-691) treats ANY '.' followed by whitespace as a sentence boundary, so an abbreviation's dot manufactures a false boundary and a citation can begin just after it, dropping the negation that governs the clause.\n\nThe judge's verbatim counterexample, which passes today and must refuse after this cell:\n  proposal: \"We should not follow lane-b here, i.e. cache the token on the worker side.\"\n  citation: \"cache the token on the worker side\"\n  It resolves, clears both floors (34 chars, 7 words), and inverts the lane's meaning.\nThe judge confirmed the same hole for `e.g.` and for ASCII `...`, and found one more case that also passes: cross-sentence framing, \"Never do the following. Cache the token on the worker side.\" cited as the second sentence alone. That one lies OUTSIDE the within-sentence contract the plan scoped — decide it explicitly rather than by accident, and say which way you went in the deviations.\n\nWHAT TO DO.\n1. Write the failing probes FIRST, one per case: `i.e.`, `e.g.`, ASCII `...`, and the cross-sentence framing case. Run them and see them red before touching the boundary rule. A probe that is green before your fix is not a probe for this defect.\n2. Then harden the boundary rule. A dot is a sentence boundary only when the token ending at it is not an abbreviation. Carry a small CLOSED, commented abbreviation set (at least i.e., e.g., etc., cf., vs., no., fig., approx.) and treat a run of two or more dots as never a boundary. If you also require the character after the boundary whitespace to be uppercase in the ORIGINAL proposal text, say so and prove it does not break the existing green whitespace/case-fold probe — `normalize` case-folds, so the boundary test may need the un-normalized text.\n3. Keep all 42 existing `verbs::blind` tests green. If any goes red, that is information about your fix, not permission to edit the test.\n\nHONESTY REQUIREMENT — this is a must_have, not a nicety. A mechanical string check CANNOT catch every semantic inversion; the judge broke the first attempt in one pass, and a closed abbreviation set is still a heuristic. Write one comment block above the boundary rule naming exactly what class this check catches and what it cannot, and do NOT let any refusal text or doc line claim the citation check proves a citation is faithful. It proves the quoted span is a whole sentence of the named lane's own bytes. That is the true claim; make the code say only that.\n\nDo NOT weaken the floors, the per-lane scoping, or any other check to make a probe pass.",
+  "must_haves": {
+    "truths": [
+      "The judge's i.e. counterexample is refused, and a probe pins it verbatim",
+      "The same hole via e.g. and via an ASCII ellipsis is refused, each with its own probe",
+      "The cross-sentence framing case is decided explicitly — refused, or carried with a recorded reason naming it as outside the within-sentence contract",
+      "All 42 pre-existing verbs::blind tests stay green, none edited to accommodate the fix",
+      "A comment block above the boundary rule names what class of inversion this check catches and what it cannot",
+      "No refusal text or doc line claims the citation check proves a citation is faithful"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+        "substantive": "the hardened boundary rule, its closed abbreviation set, and one red-first probe per counterexample"
+      }
+    ],
+    "key_links": [
+      "the boundary rule consults the abbreviation set before treating a dot as a sentence end"
+    ],
+    "prohibitions": [
+      "No loosening of MIN_CITATION_CHARS, MIN_CITATION_WORDS, the per-lane scoping, or any other check",
+      "No existing test edited to make the fix pass",
+      "No claim that the citation check proves faithfulness rather than whole-sentence provenance"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": "The abbreviation and ellipsis forms refuse, the framing case is a carried limit pinned green, and no line in the module claims the citation check proves faithfulness",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+    ],
+    "deviations": [
+      "Capped by the orchestrator rather than its builder — the round-2 judge reopened it, bln-6 and bln-7 closed the residue, and the round-4 judge verified its truths at HEAD — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T10:49:28.032Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "report": {
+      "outcome": "Abbreviation and ellipsis forms refuse; the framing case is a carried limit; no faithfulness claim survives",
+      "commit": "6eaf4955",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green — 55 passed 0 failed at a5ad7864, run by the round-4 judge; this cell caps only now that a fourth independent round confirms its truths hold",
+      "deviations": [
+        "Capped by the orchestrator rather than its builder — the round-2 judge reopened it, bln-6 and bln-7 closed the residue, and the round-4 judge verified its truths at HEAD — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "bln4-negation-strip-refused",
+            "status": "PASS",
+            "evidence": "The originally reported signature is DEAD. Verbatim-copy probe on the exact strings: 'We should not follow lane-b here, i.e. cache the token on the worker side.' cited as 'cache the token on the worker side' (34 chars, 7 words, both floors cleared) now REFUSES as unresolved; e.g. refuses; ASCII ... refuses; the plain negation strip still refuses; the honest whole-sentence control still passes. In-tree: a_citation_starting_after_an_i_e_abbreviation_is_refused is ok"
+          },
+          {
+            "id": "residual-false-boundary-within-sentence",
+            "status": "FAIL",
+            "evidence": "Two inputs still strip a negation living in the SAME sentence. (1) A LISTED ABBREVIATION WITH ONE ADJACENT CHARACTER: the set lookup at mod.rs:723-724 is byte equality on the space-delimited token, so any leading punctuation defeats it. 'We should not follow lane-b (i.e. cache the token on the worker side.' cited as 'cache the token on the worker side' PASSES; all 28 combinations of leading ( \" ' [ - * em-dash : with i.e./e.g./etc./cf. passed. '(i.e. ...)' is the most common written form of the very abbreviation the cell mandated. (2) A NUMERIC OR ALPHA ENUMERATOR: '1.' is not in the set, so 'We must not do any of the following:\\n\\n1. Cache the token on the worker side.\\n2. Skip the lease check.' cited as 'cache the token on the worker side' PASSES; same for 'a.' and 'ii.'. Markdown numbered lists under a negated stem are ordinary design prose. The end side mirrors it"
+          },
+          {
+            "id": "boundary-comment-names-limits",
+            "status": "FAIL",
+            "evidence": "mod.rs:677-708 exists and names two misses, but mod.rs:682-684 states as FACT that 'Requiring the span to sit between two sentence boundaries makes that strip impossible WITHIN a sentence'. The enumerator and '(i.e.' probes are within-sentence strips that succeed, so the block's headline claim is false and contradicts its own bullet at :700. The must_have asks the block to name what it cannot do; it currently over-claims what it can"
+          },
+          {
+            "id": "must-have-1-i-e-probe-verbatim",
+            "status": "PASS",
+            "evidence": "mod.rs:1718-1735 builds the governed-clause fixture and probe :1737-1749 asserts dossier_citation_unresolved plus that the fix text mentions 'sentence'"
+          },
+          {
+            "id": "must-have-2-e-g-and-ellipsis-probes",
+            "status": "PASS",
+            "evidence": "mod.rs:1751-1758 and :1761-1767, each its own test asserting dossier_citation_unresolved; both ok in the run"
+          },
+          {
+            "id": "must-have-3-framing-case-decided",
+            "status": "PASS",
+            "evidence": "mod.rs:1776-1783 pins the framing case as passing with counts.citations==1, and the copy-probe reproduces it. The label is HONEST for that case: refusing it needs the previous sentence's meaning, genuinely outside a one-sentence string check, and the deviation is recorded. It becomes a hole wearing a label only because the comment block pairs it with the false 'impossible WITHIN a sentence' guarantee"
+          },
+          {
+            "id": "must-have-4-42-preexisting-green-none-edited",
+            "status": "PASS",
+            "evidence": "git show 6eaf4955 --numstat: 132 added, 3 removed, all three removals in non-test code (the preamble tail and two quote_resolves lines). No test line removed or modified. Run: 46 passed, 0 failed; 46 minus 4 new probes = 42"
+          },
+          {
+            "id": "must-have-6-no-faithfulness-claim",
+            "status": "PASS",
+            "evidence": "rg -ni faithful: mod.rs:563 'never faithfulness to what that lane meant', :693 'cannot decide whether a citation is faithful', :708 'Provenance, not faithfulness', :1774 'never mistaken for proof of faithfulness'. The unresolved refusal text at :836-841 claims only that a quote must stand as a WHOLE SENTENCE of that lane's text"
+          },
+          {
+            "id": "prohibitions-nothing-weakened",
+            "status": "PASS",
+            "evidence": "MIN_CITATION_CHARS=24 (:588) and MIN_CITATION_WORDS=5 (:589) untouched; per-lane scoping untouched; the diff's only deletions are the three non-test lines. All 42 prior probes ok, including the concatenated-set probe and the read-diet self-report probe"
+          },
+          {
+            "id": "red-first-non-vacuous",
+            "status": "PASS",
+            "evidence": "Each new probe routes through evidence_refusal (:1253-1255), which panics on Ok, then asserts the exact reason. To fail, quote_resolves must return true for its proposal - exactly what the pre-fix code did, so all three were necessarily red before is_sentence_end existed. None passes vacuously: the fixture asserts the proposal CONTAINS the quote, the quote is 34 chars and 7 words so the too-short arm cannot fire, and lane-b lacks the quote so the misattribution arm cannot fire"
+          },
+          {
+            "id": "verify-command-green",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind in the worktree at 6eaf4955: 46 passed, 0 failed, matching the cap's claim"
+          }
+        ],
+        "failure_signature": "is_sentence_end (blind/mod.rs:709-725) matches the abbreviation set by exact equality on the space-delimited token, so '(i.e.' bypasses it and an unlisted enumerator token ('1.', 'a.') reads as a sentence end: 'We must not do any of the following: 1. Cache the token on the worker side.' and 'We should not follow lane-b (i.e. cache the token on the worker side.' both still let the citation 'cache the token on the worker side' pass and invert the lane, while mod.rs:682-684 claims that strip is impossible within a sentence",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-28T10:16:06.728Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "bln5-truths-hold",
+            "status": "PASS",
+            "evidence": "Round-4 judge at HEAD a5ad7864: the i.e., e.g. and ASCII-ellipsis probes at mod.rs:1807, 1820, 1830 are green; the framing case is pinned green at 1912 as a carried limit per decision 79b5437b; the comment block names the caught class and the four limits (686-725) and ends 'Provenance, not faithfulness' (724-725); every occurrence of 'faithful' in the module (563, 706, 725, 1910) is a NEGATION of the claim"
+          },
+          {
+            "id": "defect-from-round-two-closed",
+            "status": "PASS",
+            "evidence": "The NEEDS_REVISION signature recorded against this cell (exact-token abbreviation lookup defeated by '(i.e.', and an enumerator dot ending a sentence) was closed by bln-6 and re-verified on a standalone compile"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "55 passed, 0 failed at a5ad7864"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:48:55.139Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-28T10:16:06.728Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null,
+    "inline_reason": "No new execution. Executed and committed by bln5-writer at 6eaf4955, then reopened when the round-2 judge broke its fix. bln-6 and bln-7 closed the residue, and the round-4 judge verified this cell's truths at HEAD a5ad7864. The orchestrator is recording that verdict, not writing code."
+  }
+}

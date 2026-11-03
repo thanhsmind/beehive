@@ -1,0 +1,181 @@
+{
+  "id": "pqc-1",
+  "feature": "prune-queue-copy",
+  "title": "Keep a worktree for its capture queue only when it holds a note main lacks",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "ad9d30dc-b20f-49f7-8b14-57533e054852",
+    "f89d6cd6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+  ],
+  "read_first": [
+    "docs/history/prune-queue-copy/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+    "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+  ],
+  "action": "Red first, per contract ad9d30dc. In worktree/tests.rs, beside `fn a_non_empty_capture_queue_keeps_even_though_the_tree_reads_clean() {`, add a test where the worktree queue holds the same stub and flush lines as the main checkout's `.bee/capture-queue.jsonl` (write both files in the fixture) and assert the verdict is dead; run it and watch it fail for the reported reason (kept for capture-queue.jsonl non-empty). Then change the queue half of `fn precious_state_present(worktree_root: &Path) -> Option<String> {` in prune.rs (pass the main root from the call `if let Some(reason) = precious_state_present(&worktree_root) {` in classify_worktree, which holds `check.main_root`): write a strict local reader in prune.rs (do not reuse the capture.rs or nudges readers: they skip bad lines, which breaks D2). Split on newlines, strip a trailing carriage return, and skip blank lines. In the worktree queue, a line that does not parse as a JSON object, or whose `kind` is neither `stub` nor `flush`, or a `stub` or `flush` whose `id` is not a non-empty string, keeps. Collect pending stub ids: stub ids with no `flush` line of the same id anywhere in that file (order does not matter). In main's queue, collect every string `id` on any line (no pending fold): a missing file counts as empty; a file that exists but cannot be read, or holds a line that does not parse, keeps. Compare ids as exact strings, never trimmed or case-folded. Keep only when a pending worktree stub id is absent from main's set, with a message naming the count of such stubs, one example id, and the remedy `run bee capture list and bee capture flush --id <id> --into <doc> inside <worktree path>`. Leave the HANDOFF.json half unchanged. More tests: a unique pending stub keeps and names its id; a stub pending in the worktree but flushed in main reads dead; main naming the id only in a flush line reads dead; a worktree flush of main's pending stub reads dead; a worktree flush of its own unique stub reads dead; a flush line before its stub counts as flushed; a trailing newline and a CRLF file do not keep; an unparseable line keeps; a numeric id keeps; a missing main queue with a pending worktree stub keeps; the existing two capture-queue tests still pass unchanged. Update row 4 of the concept table and the doc comment above the check to say what now counts as precious, and that this repo tracks the queue while host repos ignore it. No new code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worktree::",
+  "must_haves": {
+    "truths": [
+      "A worktree whose queue is a copy of main's is not kept for its queue",
+      "A worktree whose queue holds a pending stub main never names is kept, and the reason names that stub",
+      "Every read or parse doubt keeps the worktree"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+        "substantive": "content-aware queue keep with fail-closed doubt arms"
+      }
+    ],
+    "key_links": [
+      "classify_worktree passes the main root to the precious-state check"
+    ],
+    "prohibitions": [
+      "No change to the HANDOFF.json keep",
+      "No change to any other prune condition",
+      "No existing test weakened",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "pqc1-test",
+    "outcome": "Prune keeps a worktree for its capture queue only on a pending stub that main never names, and every doubt keeps",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+    ],
+    "deviations": [
+      "ran the verify with PATH=HOME/.cargo/bin instead of the CARGO_HOME expansion — the session isolation guard refused the variable expansion — same cargo binary and same test filter"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T14:01:45.196Z",
+    "behavior_change": true,
+    "verification_evidence": "213 passed 0 failed, the 12 new queue tests listed by name, scope is the worktree module the change lives in, bee dev comment-baseline --check also green, full suite not run, run with PATH=HOME/.cargo/bin because the session isolation guard refused the CARGO_HOME expansion",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worktree::",
+    "claimed_at": "2026-10-15T13:54:58.719Z",
+    "mistakes": [
+      {
+        "wrong": "first wrote the main-id set in prune.rs with a Vec::leak shortcut that leaks memory per classified worktree",
+        "better": "build the set from an owned Vec borrowed in place, as the fix now does, before running any test",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "precious_state_present reads both queues by content: keeps only on a pending worktree stub absent from main, names count, example id and flush remedy, every read or parse doubt keeps, HANDOFF keep unchanged",
+      "commit": "e40edc403552b5a392f668eb979ec924567f693d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worktree:: — green:unit — 213 passed 0 failed, the 12 new queue tests listed by name, scope is the worktree module the change lives in, bee dev comment-baseline --check also green, full suite not run, run with PATH=HOME/.cargo/bin because the session isolation guard refused the CARGO_HOME expansion",
+      "deviations": [
+        "ran the verify with PATH=HOME/.cargo/bin instead of the CARGO_HOME expansion — the session isolation guard refused the variable expansion — same cargo binary and same test filter"
+      ],
+      "mistakes": [
+        "first wrote the main-id set in prune.rs with a Vec::leak shortcut that leaks memory per classified worktree — build the set from an owned Vec borrowed in place, as the fix now does, before running any test — none"
+      ],
+      "baseline": "a_capture_queue_copied_from_main_does_not_keep FAILED before the fix: /tmp/.tmpbOZgUe/main--wt--demo/.bee/capture-queue.jsonl is non-empty — unpromoted capture stubs are precious and invisible to the clean-tree check (D8a), keeping."
+    },
+    "baseline": "a_capture_queue_copied_from_main_does_not_keep FAILED before the fix: /tmp/.tmpbOZgUe/main--wt--demo/.bee/capture-queue.jsonl is non-empty — unpromoted capture stubs are precious and invisible to the clean-tree check (D8a), keeping.",
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "head-and-scope-clean",
+            "status": "PASS",
+            "evidence": "HEAD e40edc403 equals the frozen head; porcelain empty; 3 cell files"
+          },
+          {
+            "id": "truth-copy-of-main-not-kept",
+            "status": "PASS",
+            "evidence": "prune.rs:155 subset return; tests a_capture_queue_copied_from_main_does_not_keep, a_crlf_copy_of_the_main_queue_does_not_keep"
+          },
+          {
+            "id": "truth-unique-pending-stub-kept-and-named",
+            "status": "PASS",
+            "evidence": "prune.rs:166-175; test a_pending_stub_main_never_names_keeps_and_names_it"
+          },
+          {
+            "id": "truth-every-doubt-keeps",
+            "status": "PASS",
+            "evidence": "prune.rs:143-151, 182-187, 193-197; tests a_missing_main_queue_with_a_pending_worktree_stub_keeps, an_unparseable_main_queue_line_keeps"
+          },
+          {
+            "id": "key-link-main-root-passed",
+            "status": "PASS",
+            "evidence": "prune.rs:461"
+          },
+          {
+            "id": "prohibition-handoff-unchanged",
+            "status": "PASS",
+            "evidence": "prune.rs:127-133 unchanged"
+          },
+          {
+            "id": "prohibition-no-test-weakened",
+            "status": "PASS",
+            "evidence": "no removed lines in tests.rs; both old queue tests ok"
+          },
+          {
+            "id": "prohibition-no-code-comments",
+            "status": "PASS",
+            "evidence": "doc comment rewritten in place, net comment count -1"
+          },
+          {
+            "id": "verify-command",
+            "status": "PASS",
+            "evidence": "worktree:: 213 passed, 0 failed (filtered run)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-15T14:03:49.496Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A worktree whose queue is a copy of main's is not kept for its queue",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          },
+          {
+            "requirement": "A worktree whose queue holds a pending stub main never names is kept, and the reason names that stub",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs"
+          },
+          {
+            "requirement": "Every read or parse doubt keeps the worktree",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs"
+          }
+        ],
+        "recorded_at": "2026-10-15T14:03:49.528Z",
+        "recorded_by": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "status": "capped"
+}

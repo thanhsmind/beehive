@@ -135,13 +135,16 @@ pub(crate) fn read_config_failopen(root: &Path) -> Map<String, Value> {
     };
     let tracked = read_obj(root.join(".bee").join("config.json"));
     let overlay = read_obj(root.join(".bee").join("config.local.json"));
-    if overlay.is_empty() {
-        return tracked;
-    }
-    match crate::state::merge_config_overlay(&Value::Object(tracked), &Value::Object(overlay)) {
-        Value::Object(m) => m,
-        _ => Map::new(),
-    }
+    let mut out = if overlay.is_empty() {
+        tracked
+    } else {
+        match crate::state::merge_config_overlay(&Value::Object(tracked), &Value::Object(overlay)) {
+            Value::Object(m) => m,
+            _ => Map::new(),
+        }
+    };
+    crate::verbs::drivers::fold_team_key(&mut out);
+    out
 }
 
 /// state.mjs normalizeCommands — the `commands` slice readConfig exposes.
@@ -1361,11 +1364,26 @@ fn reservation_tally(
 /// IT NEVER RENDERS THE ANCHOR (D19) — the hook prefixes it.
 /// `handoff_outcome` is MANDATORY at the call site (D27): without it a
 /// compacted session silently loses the line saying WHY it must wait.
+#[allow(dead_code)]
 pub fn build_compact_capsule(
     root: &Path,
     session_id: Option<&str>,
     handoff_outcome: Option<&HandoffOutcome>,
 ) -> String {
+    build_compact_capsule_with_runtime(root, session_id, handoff_outcome, "claude")
+}
+
+pub fn build_compact_capsule_with_runtime(
+    root: &Path,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+) -> String {
+    let runtime = if crate::verbs::drivers::DISPATCH_RUNTIMES.contains(&runtime) {
+        runtime
+    } else {
+        "claude"
+    };
     let session = norm_str(session_id);
     let session = session.as_deref();
     let mut sections: Vec<Vec<String>> = Vec::new();
@@ -1520,9 +1538,8 @@ pub fn build_compact_capsule(
     // bytes (`hooks/model_guard::dispatch_door_lines`): a second copy of the
     // literal here is precisely how a compacted session gets told a role list
     // or a command spelling the preamble has already stopped saying.
-    let config_val = Value::Object(config);
     sections
-        .push(crate::hooks::model_guard::dispatch_door_lines(config_val.get("models"), "claude"));
+        .push(crate::hooks::model_guard::dispatch_door_lines(Some(&config), runtime));
 
     // ── item 11: the survival count and, when it applies, the D9 advisory.
     // Silent on a repo with no records at all (D15).
@@ -1742,12 +1759,16 @@ mod tests {
             ),
             "{text}"
         );
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(
             text.contains(
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+                "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
+
     }
 
     /// The capsule and the preamble carried two copies of this literal, which

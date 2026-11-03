@@ -1,0 +1,93 @@
+{
+  "id": "rel660-1",
+  "feature": "release-2-66-0",
+  "title": "Publish release 2.66.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-66-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.66.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.66.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.66.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.66.0",
+      "tag v2.66.0 exists locally and on the remote",
+      "the GitHub release for v2.66.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.66.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.66.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "bee 2.66.0 is live: tag pushed, release-binaries green, release carries 5 binaries and SHA256SUMS",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "release.sh ran inline in the leader under permit d26d5e5d, as releases 2.58.0-2.65.0 did"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-29T15:51:16.070Z",
+    "behavior_change": false,
+    "verification_evidence": "script printed OK after the declared cargo suite (40 test binaries ok, opencode suite allowed to skip as in 2.60.0-2.65.0), tag push, green release-binaries run https://github.com/thanhsmind/beehive/actions/runs/40902741996 and asset check; log /mnt/data/Projects/goglbe/beehive/.bee/workers/release-2.66.0.log",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "f40e9c91-c8a3-427e-a2ed-e2b2dfd128d5",
+    "verify_command": "bash scripts/release.sh 2.66.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-10-29T15:29:56.542Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "DONE",
+      "commit": "1705e4e6",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.66.0 && bee dev release-manifest --check — green:live — script printed OK after the declared cargo suite (40 test binaries ok, opencode suite allowed to skip as in 2.60.0-2.65.0), tag push, green release-binaries run https://github.com/thanhsmind/beehive/actions/runs/40902741996 and asset check; log /mnt/data/Projects/goglbe/beehive/.bee/workers/release-2.66.0.log",
+      "deviations": [
+        "release.sh ran inline in the leader under permit d26d5e5d, as releases 2.58.0-2.65.0 did"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

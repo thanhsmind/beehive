@@ -1,0 +1,112 @@
+{
+  "id": "hwr-4",
+  "feature": "harness-worktree-relocation",
+  "title": "Export the OpenCode session id to shell children",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "6c860e87-9aff-42f4-8fed-8e628a217e21"
+  ],
+  "files": [
+    ".opencode/plugins/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/harness-worktree-relocation/plan.md",
+    ".opencode/plugins/bee-guard.ts",
+    ".opencode/node_modules/@opencode-ai/plugin/dist/index.d.ts",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add a `shell.env` hook to the OpenCode plugin (signature in .opencode/node_modules/@opencode-ai/plugin/dist/index.d.ts) that sets `BEE_SESSION_ID` to the hook's sessionID and `BEE_RUNTIME` to `opencode` for every shell child, so bee's caller locator prints the `/move` instruction for OpenCode. Keep existing env entries; set nothing when sessionID is absent. The hook never throws. Contract test in opencode_plugin_contracts.rs: the plugin exposes `shell.env`; calling it with a sessionID yields both variables; calling it without one adds neither.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts",
+  "must_haves": {
+    "truths": [
+      "every OpenCode shell child sees BEE_SESSION_ID and BEE_RUNTIME=opencode when a session id exists"
+    ],
+    "artifacts": [
+      {
+        "path": ".opencode/plugins/bee-guard.ts",
+        "substantive": "shell.env hook"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+        "substantive": "shell.env contract test"
+      }
+    ],
+    "key_links": [
+      "the hook is registered in the plugin's returned hooks object beside tool.execute.after"
+    ],
+    "prohibitions": [
+      "Do not change the plugin's existing advisory hooks or tools-logger behavior",
+      "Do not touch .pi or Rust source under packages/bee-rs/crates/bee/src"
+    ]
+  },
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hwr-4",
+    "outcome": "OpenCode plugin exports BEE_SESSION_ID and BEE_RUNTIME=opencode to shell children",
+    "files_changed": [
+      ".opencode/plugins/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-16T11:13:22.420Z",
+    "behavior_change": true,
+    "verification_evidence": "the plugin contract suite covers the new shell.env hook with and without a session id (7 passed; 0 failed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7033d8f8-2786-4936-b02c-73b18858ea0e",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts",
+    "claimed_at": "2026-09-16T11:09:22.709Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "OpenCode plugin exports BEE_SESSION_ID and BEE_RUNTIME=opencode to shell children through a shell.env hook",
+      "commit": "eb2195c8c",
+      "files": [
+        ".opencode/plugins/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test opencode_plugin_contracts — green:unit — the plugin contract suite covers the new shell.env hook with and without a session id (7 passed; 0 failed)",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "shell-env-sets-both-vars",
+            "status": "PASS",
+            "evidence": ".opencode/plugins/bee-guard.ts:554-567 sets BEE_SESSION_ID and BEE_RUNTIME=opencode only when sessionID is present; never throws"
+          },
+          {
+            "id": "contract-test",
+            "status": "PASS",
+            "evidence": "opencode_plugin_contracts.rs shell_env_hook_exports_session_id_and_runtime_when_session_id_present covers with and without session id"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "git show --stat eb2195c8c lists only the two declared files; existing hooks unchanged"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-16T11:47:23.951Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,223 @@
+{
+  "id": "cro-1",
+  "feature": "claude-read-only",
+  "title": "Enforce read-only on Paseo Claude workers through a Claude hook",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "906e0b1f",
+    "63bd6725",
+    "f84f697c",
+    "8ea1fa19-fc2a-49c0-8e84-0c1ee1b3bc0f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee/hooks/claude-hooks.json",
+    ".claude/settings.json"
+  ],
+  "read_first": [
+    "docs/history/claude-read-only/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+  ],
+  "action": "Per D1-D5 (store 906e0b1f, 63bd6725, f84f697c, 8ea1fa19). (1) devtools/hook_manifests.rs: in the PreToolUse event add a CLAUDE_ONLY group, matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|Monitor|EnterWorktree|ExitWorktree|mcp__.*`, script `bee-worker-guard.mjs` (the name-to-verb mapping strips `bee-` and `.mjs`, giving `hook worker-guard`), with no status message, beside the shared write-guard group at `Some(\"Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec\")`. (2) onboard/hooks_wiring.rs: add the same entry with the same matcher to its Claude PreToolUse table beside `{ \"matcher\": \"Agent|Task\", \"hooks\": [repo_entry(\"bee-model-guard.mjs\", r)] }`. (3) Run `bee dev render-hook-manifests` (claude-hooks.json gains the group; hooks.json for Codex must not change) and `bee onboard --repo-root . --apply` so this repo's .claude/settings.json carries the entry; commit only the files listed. (4) hooks/worker_guard.rs, read-only path only: judge `Monitor` by its `command` input exactly as Bash; deny `EnterWorktree`, `ExitWorktree` and any tool name starting `mcp__` by name with the read-only denial text; add `cd` to READ_ONLY_ALLOWED. Mode A and mode B results for other inputs do not change. (5) herding/run.rs `execute_paseo`: replace the pi-only gate `if opts.read_only && !provider_is_pi {` with pi-or-claude; other providers refuse with a FIX line naming pi and claude. For claude + read_only, before spawn: run `<main root>/.bee/bin/bee hook --help` and require `worker-guard` in its output, and read `<main root>/.claude/settings.json` and require a PreToolUse hook command containing `hook worker-guard`; on either miss refuse with a FIX line (`bee onboard --apply` / refresh .bee/bin/bee). Keep `--mode` as configured. Tests: manifest test that the Claude projection has the group (matcher, script, no status message) and Codex has none; onboard table test for the entry; guard rows for Monitor (allowed rg, denied redirect), EnterWorktree, an mcp__ write tool, `cd x && rg y` allowed, and mode A denying `git push` for a claude Paseo worker payload; run.rs rows: claude read-only spawns with BEE_HERDING_READ_ONLY=1 and the configured mode when both checks pass, refuses when the binary help lacks worker-guard, refuses when settings lack the entry, and codex still refuses naming pi and claude.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hook_manifests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hooks_wiring && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worker_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee execute_paseo_read_only",
+  "must_haves": {
+    "truths": [
+      "The Claude hook projection has a PreToolUse group with the D5 matcher running hook worker-guard and no status message",
+      "The Codex projection has no worker-guard group",
+      "Onboard writes the same Claude entry and this repo's .claude/settings.json carries it",
+      "A read-only claude Paseo spawn sets BEE_HERDING_READ_ONLY=1 and keeps the configured mode when the binary and settings checks pass",
+      "A read-only claude spawn refuses before spawn when the binary help lacks worker-guard or settings lack the entry",
+      "A read-only spawn on a provider other than pi or claude refuses naming both",
+      "In read-only mode Monitor is judged like Bash, EnterWorktree, ExitWorktree and mcp__ tools are denied, and cd is allowed",
+      "Mode A denies git push for a claude Paseo worker"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/hooks/claude-hooks.json",
+        "substantive": "rendered manifest with the worker-guard group"
+      }
+    ],
+    "key_links": [
+      "hook_manifests.rs and hooks_wiring.rs carry the same Claude entry",
+      "run.rs pre-spawn check reads the same settings entry the renderers write"
+    ],
+    "prohibitions": [
+      "No worker-guard group in the Codex manifest",
+      "No change to mode A or mode B results outside the listed tools",
+      "No status message on the worker-guard group"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-cro-1",
+    "outcome": "Read-only worker-guard accepts a redirect to exactly /dev/null; other targets outside the mailbox stay denied",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-12T10:57:15.494Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify filters 8, 24, 11 and 5 passed plus 1 integration row; read_only_table was red before the fix (10 passed, 1 failed); full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hook_manifests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hooks_wiring && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worker_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee execute_paseo_read_only",
+    "claimed_at": "2026-10-12T10:54:32.066Z",
+    "sync_ack": "plan sets affects_skills empty: the bee-herding skill text does not change; the leader syncs the-paseo-channel and worker-outward-guard concepts at capture",
+    "mistakes": [
+      {
+        "wrong": "My first edit ran as an inline python heredoc chained with git in one shell call and the worktree isolation check refused it, and a cargo call with CARGO_HOME expansion was refused too",
+        "better": "use the Edit tool for edits and plain single cargo or git commands",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "My cells finish call carried the word git inside the --report JSON and the worktree isolation check refused the whole call as possible git",
+        "better": "put the report in a scratchpad script and run that",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "strip_redirects in packages/bee-rs/crates/bee/src/hooks/worker_guard.rs accepts a redirect target equal to the literal /dev/null beside the fd_copy test; read_only_table rows allow 2>/dev/null, >/dev/null 2>&1 and a quoted /dev/null, and deny /dev/sda, /dev/null2, ./dev/null and /dev/../dev/null",
+      "commit": "9ed64f14f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hook_manifests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hooks_wiring && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worker_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee execute_paseo_read_only — green:unit — cell verify filters 8, 24, 11 and 5 passed plus 1 integration row; read_only_table was red before the fix (10 passed, 1 failed); full suite not run",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "My first edit ran as an inline python heredoc chained with git in one shell call and the worktree isolation check refused it, and a cargo call with CARGO_HOME expansion was refused too — use the Edit tool for edits and plain single cargo or git commands — doctrine",
+        "My cells finish call carried the word git inside the --report JSON and the worktree isolation check refused the whole call as possible git — put the report in a scratchpad script and run that — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The Claude hook projection has a PreToolUse group with the D5 matcher running hook worker-guard and no status message",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs"
+          },
+          {
+            "requirement": "The Codex projection has no worker-guard group",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs"
+          },
+          {
+            "requirement": "Onboard writes the same Claude entry and this repo's .claude/settings.json carries it",
+            "artifact": ".claude/settings.json"
+          },
+          {
+            "requirement": "A read-only claude Paseo spawn sets BEE_HERDING_READ_ONLY=1 and keeps the configured mode when the binary and settings checks pass",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "A read-only claude spawn refuses before spawn when the binary help lacks worker-guard or settings lack the entry",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "A read-only spawn on a provider other than pi or claude refuses naming both",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "In read-only mode Monitor is judged like Bash, EnterWorktree, ExitWorktree and mcp__ tools are denied, and cd is allowed",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+          },
+          {
+            "requirement": "Mode A denies git push for a claude Paseo worker",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+          },
+          {
+            "requirement": "hook_manifests.rs and hooks_wiring.rs carry the same Claude entry",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          },
+          {
+            "requirement": "run.rs pre-spawn check reads the same settings entry the renderers write",
+            "artifact": "packages/bee/hooks/claude-hooks.json"
+          }
+        ],
+        "recorded_at": "2026-10-12T10:35:43.317Z",
+        "recorded_by": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The Claude hook projection has a PreToolUse group with the D5 matcher running hook worker-guard and no status message",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs"
+          },
+          {
+            "requirement": "The Codex projection has no worker-guard group",
+            "artifact": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs"
+          },
+          {
+            "requirement": "Onboard writes the same Claude entry and this repo's .claude/settings.json carries it",
+            "artifact": ".claude/settings.json"
+          },
+          {
+            "requirement": "A read-only claude Paseo spawn sets BEE_HERDING_READ_ONLY=1 and keeps the configured mode when the binary and settings checks pass",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "A read-only claude spawn refuses before spawn when the binary help lacks worker-guard or settings lack the entry",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "A read-only spawn on a provider other than pi or claude refuses naming both",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "In read-only mode Monitor is judged like Bash, EnterWorktree, ExitWorktree and mcp__ tools are denied, and cd is allowed",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+          },
+          {
+            "requirement": "Mode A denies git push for a claude Paseo worker",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+          },
+          {
+            "requirement": "hook_manifests.rs and hooks_wiring.rs carry the same Claude entry",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          },
+          {
+            "requirement": "run.rs pre-spawn check reads the same settings entry the renderers write",
+            "artifact": "packages/bee/hooks/claude-hooks.json"
+          }
+        ],
+        "recorded_at": "2026-10-12T10:57:32.085Z",
+        "recorded_by": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-12T10:54:24.188Z",
+    "reopened_reason": "Decision 9b20e9d2 (five-hat wave, unanimous): the read-only worker-guard accepts a shell redirect whose target is exactly the literal /dev/null after quote removal (e.g. rg foo 2>/dev/null, cmd >/dev/null 2>&1), checked in strip_redirects beside the fd_copy test with no prefix match, no path normalization and no cwd join; every other target outside the job mailbox stays denied, including /dev/sda, /dev/null2, ./dev/null and /dev/../dev/null. Red-first rows in read_only_table for each. Prove with cargo test -p bee worker_guard plus the cell verify."
+  }
+}

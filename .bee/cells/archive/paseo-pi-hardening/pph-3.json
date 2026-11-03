@@ -1,0 +1,223 @@
+{
+  "id": "pph-3",
+  "feature": "paseo-pi-hardening",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Guard Paseo workers and the Pi supervisor with a worker-guard hook",
+  "deps": [],
+  "decisions": [
+    "D5",
+    "D9",
+    "9659395e-5b41-402d-b802-07398e7dd686"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/index.ts",
+    "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi-hardening/CONTEXT.md",
+    "docs/history/paseo-pi-hardening/plan.md",
+    "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+  ],
+  "action": "Red first. hooks/mod.rs: add worker-guard to HOOK_NAMES and route it to worker_guard::run; marker_short_circuits returns false for activity and worker-guard only, and every other name still short-circuits under BEE_HERDING_WORKER. New hooks/worker_guard.rs: read the PreToolUse JSON from stdin (same shape write-guard reads: tool_name, tool_input.command, cwd); only a Bash tool is judged, anything else allows. Mode A (D5 revised), BEE_HERDING_WORKER and PASEO_AGENT_ID both non-empty: deny when any segment of the command is a git push, a gh command that is not a read-only form, an agent launch head (claude, codex, pi, opencode) that is not a read-only codex exec, a paseo command head, or a bee command (head bee or a path ending in /bee) whose verb is dispatch, `herding run`, `worktree merge` or gate; independent of the working directory. Only BEE_HERDING_WORKER set (a herdr or tmux pane worker): allow everything, as today. Mode B (D9 revised), BEE_SUPERVISOR_ALLOWED non-empty: parse it as a comma-separated list of Claude-style entries; `Bash(<prefix>:*)` allows a segment that starts with that prefix after trimming, where a leading `bee`, `./.bee/bin/bee` or an absolute path ending in `/.bee/bin/bee` counts as `.bee/bin/bee`; other entries such as Read are ignored; a segment matching no prefix, or a command with $( ), backticks or a > redirect, is denied. A deny in either mode denies. Reuse the tokenizer and helpers instead of copying them: find_git_invocations (write_guard/paths.rs) and is_separator (write_guard/guards.rs) are already pub(crate); in write_guard/checks.rs make command_basename, outward_segment_head, gh_sub_and_args, gh_read_only_form and codex_read_only_exec pub(crate), and reuse the same deep tokenize call check_git_bash_command uses. A deny exits 2 with the reason on stderr, the verdict shape write-guard uses, plus a FIX line (for a worker: stop and report blocked; the leader does this step). Neither variable set: exit 0, print nothing. .pi/extensions/bee-guard/events.ts tool_call: when the env carries BEE_HERDING_WORKER and PASEO_AGENT_ID, or BEE_SUPERVISOR_ALLOWED, and the mapped tool is the shell tool, run the blocking hook worker-guard through runBlockingHook before the normal mapping; block on a deny, a crash, a missing binary, or a binary whose `bee hook --help` output (read once per session and cached) does not list worker-guard. index.ts: when BEE_HERDING_WORKER and PASEO_AGENT_ID are both set, do not register beeDispatchTool, beeAdvisorTool and beeSteerTool (the verdict tool stays). With none of the variables set nothing changes. Tests: Rust unit tests in worker_guard.rs for the table (git push, gh pr create, pi -p x, claude, paseo ls, bee dispatch prepare, .bee/bin/bee herding run, bee gate denied in mode A; gh pr view, cargo test, git commit, git status, bee cells list allowed; `cargo test && git push` denied; pane-only marker allows git push; mode B allows `.bee/bin/bee status --json` and denies `rm -rf x`, `.bee/bin/bee status; rm x` and `.bee/bin/bee status > f`); a mod.rs test that under the marker worker-guard and activity reach their handlers and write-guard still short-circuits. New tests/pi_worker_guard_contracts.rs modeled on pi_paseo_heartbeat_contracts.rs (node probe, skip env): with a stub bee binary, the belt blocks a Paseo worker's shell call when the stub denies, allows when it allows, blocks when the binary is missing, blocks when the stub's hook help lacks worker-guard, and does not call the stub when no variable is set; index.ts registers no dispatch tools for a Paseo worker. Cite decision 9659395e (contract:worker-guard). No code comments.",
+  "must_haves": {
+    "truths": [
+      "for a Paseo worker (BEE_HERDING_WORKER and PASEO_AGENT_ID set) worker-guard refuses git push, gh writes, agent launches, paseo commands and bee dispatch, herding run, worktree merge and gate in any working directory",
+      "for a Paseo worker ordinary work commands such as cargo test, git commit, git status and bee cells list are allowed, and a herdr or tmux pane worker keeps today's posture",
+      "with BEE_SUPERVISOR_ALLOWED set, a shell command outside the allowlist is refused",
+      "every other hook still exits 0 under the worker marker",
+      "the Pi belt blocks such a shell call on a deny, a crash, a missing binary or a binary that does not list worker-guard, and changes nothing when no variable is set",
+      "the Pi extension registers no bee_dispatch, bee_advisor or bee_steer tool for a Paseo worker"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+        "substantive": "the worker and supervisor shell guard with its allow and deny tests"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/events.ts",
+        "substantive": "routing of Paseo worker and supervisor shell calls to worker-guard with the hook-list check"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/index.ts",
+        "substantive": "no dispatch tools for a Paseo worker"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+        "substantive": "node contract tests for the belt"
+      }
+    ],
+    "key_links": [
+      "hooks/mod.rs routes worker-guard past the marker",
+      "events.ts calls the worker-guard hook for Paseo worker and supervisor shell calls"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No copy of the outward tokenizer",
+      "No change to write-guard verdicts",
+      "No change for herdr or tmux pane workers"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_worker_guard_contracts --test pi_plugin_contracts",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-pph-3",
+    "outcome": "worker-guard hook guards Paseo workers and the Pi supervisor; the Pi belt routes their shell calls to it fail-closed; no dispatch tools for Paseo workers",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/index.ts",
+      "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+    ],
+    "deviations": [
+      "pi_plugin_contracts deferred_exit_ordering_settled_fork_switch_replacement_merge flaked once under load; passed on re-run"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T06:17:38.795Z",
+    "behavior_change": true,
+    "verification_evidence": "729 hooks tests, 7 worker-guard node contracts, 114 plugin contracts; one plugin test (deferred_exit_ordering) failed once under parallel load and passed alone and on the full re-run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_worker_guard_contracts --test pi_plugin_contracts",
+    "claimed_at": "2026-10-06T05:46:31.631Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:17:38.795Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:39:52.951Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:55:03.184Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "worker-guard hook guards Paseo workers and the Pi supervisor; the Pi belt routes their shell calls to it fail-closed; no dispatch tools for Paseo workers",
+      "commit": "8604ce408",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/index.ts",
+        "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_worker_guard_contracts --test pi_plugin_contracts — green:unit — 729 hooks tests, 7 worker-guard node contracts, 114 plugin contracts; one plugin test (deferred_exit_ordering) failed once under parallel load and passed alone and on the full re-run",
+      "deviations": [
+        "pi_plugin_contracts deferred_exit_ordering_settled_fork_switch_replacement_merge flaked once under load; passed on re-run"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "Paseo worker denies git push, gh writes, agent launches, paseo, bee dispatch/herding run/worktree merge/gate in any cwd",
+            "status": "PASS",
+            "evidence": "worker_guard.rs evaluate_mode_a reuses the write_guard helpers; test mode_a_denies_table"
+          },
+          {
+            "id": "ordinary commands allowed; pane-only marker unchanged",
+            "status": "PASS",
+            "evidence": "mode_a_allows_table; pane_only_marker_allows_git_push"
+          },
+          {
+            "id": "supervisor allowlist enforced",
+            "status": "PASS",
+            "evidence": "evaluate_mode_b per-segment prefixes with bee normalization; mode_b_table"
+          },
+          {
+            "id": "every other hook exits 0 under the marker",
+            "status": "PASS",
+            "evidence": "hooks/mod.rs marker_short_circuits excludes only activity and worker-guard; test iterates HOOK_NAMES"
+          },
+          {
+            "id": "belt blocks on deny, crash, missing binary, help without worker-guard; no change with no variable",
+            "status": "PASS",
+            "evidence": "events.ts worker-guard branch; hooks.ts:51-60 runBlockingHook; checkWorkerGuardSupported cached; tests/pi_worker_guard_contracts.rs 5 cases; minor: hook exits 0 on unparseable stdin"
+          },
+          {
+            "id": "no dispatch tools for a Paseo worker",
+            "status": "PASS",
+            "evidence": "index.ts isPaseoWorker guard; test_index_registers_no_dispatch_tools_for_paseo_worker"
+          },
+          {
+            "id": "prohibitions: no tokenizer copy, no write-guard change, no comments",
+            "status": "PASS",
+            "evidence": "checks.rs only fn -> pub(crate)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T06:39:52.951Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "for a Paseo worker (BEE_HERDING_WORKER and PASEO_AGENT_ID set) worker-guard refuses git push, gh writes, agent launches, paseo commands and bee dispatch, herding run, worktree merge and gate in any working directory",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+          },
+          {
+            "requirement": "for a Paseo worker ordinary work commands such as cargo test, git commit, git status and bee cells list are allowed, and a herdr or tmux pane worker keeps today's posture",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "with BEE_SUPERVISOR_ALLOWED set, a shell command outside the allowlist is refused",
+            "artifact": ".pi/extensions/bee-guard/index.ts"
+          },
+          {
+            "requirement": "every other hook still exits 0 under the worker marker",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+          },
+          {
+            "requirement": "the Pi belt blocks such a shell call on a deny, a crash, a missing binary or a binary that does not list worker-guard, and changes nothing when no variable is set",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+          },
+          {
+            "requirement": "the Pi extension registers no bee_dispatch, bee_advisor or bee_steer tool for a Paseo worker",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          }
+        ],
+        "recorded_at": "2026-10-06T06:55:03.184Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

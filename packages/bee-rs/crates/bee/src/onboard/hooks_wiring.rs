@@ -68,6 +68,9 @@ echo \"{CODEX_BINARY_MISSING_DIAGNOSTIC}\" >&2; exit 0"
     )
 }
 
+pub(crate) const WORKER_GUARD_MATCHER: &str =
+    "Edit|Write|MultiEdit|NotebookEdit|Bash|Monitor|EnterWorktree|ExitWorktree|mcp__.*";
+
 fn repo_entry(file_name: &str, repo_root: Option<&Path>) -> Value {
     json!({"type": "command", "command": repo_hook_command(file_name, repo_root)})
 }
@@ -99,6 +102,7 @@ pub fn render_repo_hook_entries(repo_root: &Path) -> Vec<(&'static str, Value)> 
             json!([
                 { "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion", "hooks": [repo_entry("bee-write-guard.mjs", r)] },
                 { "matcher": "Agent|Task", "hooks": [repo_entry("bee-model-guard.mjs", r)] },
+                { "matcher": WORKER_GUARD_MATCHER, "hooks": [repo_entry("bee-worker-guard.mjs", r)] },
                 { "hooks": [repo_entry("bee-activity.mjs", r)] }
             ]),
         ),
@@ -387,62 +391,35 @@ pub(crate) fn codex_hook_command_windows(file_name: &str) -> String {
     format!("git -c alias.beehook=\"!{body}\" beehook")
 }
 
-fn codex_entry(file_name: &str, status_message: &str) -> Value {
-    json!({
-        "type": "command",
-        "command": codex_hook_command(file_name),
-        "commandWindows": codex_hook_command_windows(file_name),
-        "statusMessage": status_message,
-    })
-}
-
-/// renderCodexHookEntries (l. 2420).
+/// renderCodexHookEntries (l. 2420). Derived from the single source of truth in
+/// crate::devtools so host onboarding and repo projections never drift.
 pub fn render_codex_hook_entries() -> Vec<(&'static str, Value)> {
-    vec![
-        (
-            "SessionStart",
-            json!([{ "matcher": "startup|resume|clear|compact", "hooks": [codex_entry("bee-session-init.mjs", "bee: session bootstrap")] }]),
-        ),
-        (
-            "UserPromptSubmit",
-            json!([{ "hooks": [codex_entry("bee-prompt-context.mjs", "bee: phase reminder")] }]),
-        ),
-        (
-            "PreToolUse",
-            json!([
-                { "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion", "hooks": [codex_entry("bee-write-guard.mjs", "bee: write guard")] },
-                { "matcher": "spawn_agent", "hooks": [codex_entry("bee-model-guard.mjs", "bee: model-tier guard")] }
-            ]),
-        ),
-        (
-            "PostToolUse",
-            json!([
-                { "matcher": "update_plan|TaskCreate|TaskUpdate|TodoWrite", "hooks": [codex_entry("bee-state-sync.mjs", "bee: state sync")] },
-                { "hooks": [codex_entry("bee-tools-logger.mjs", "bee: tools logger")] }
-            ]),
-        ),
-        (
-            "SubagentStart",
-            json!([{ "hooks": [codex_entry("bee-codex-subagent-audit.mjs", "bee: subagent start audit")] }]),
-        ),
-        (
-            "SubagentStop",
-            json!([
-                { "hooks": [codex_entry("bee-state-sync.mjs", "bee: state sync"), codex_entry("bee-chain-nudge.mjs", "bee: chain nudge")] },
-                { "hooks": [codex_entry("bee-codex-subagent-audit.mjs", "bee: subagent stop audit")] }
-            ]),
-        ),
-        (
-            "PreCompact",
-            json!([{ "hooks": [codex_entry("bee-session-close.mjs", "bee: pre-compact flush check")] }]),
-        ),
-        (
-            "Stop",
-            json!([{ "hooks": [codex_entry("bee-state-sync.mjs", "bee: state sync"), codex_entry("bee-session-close.mjs", "bee: session close check")] }]),
-        ),
-        // No SessionEnd arm here: the Codex runtime does not expose a
-        // SessionEnd hook event, so there is nothing to wire it against.
-    ]
+    let Some(text) = crate::devtools::render_projection_text_for("codex") else {
+        return Vec::new();
+    };
+    let Ok(Value::Object(top)) = serde_json::from_str::<Value>(&text) else {
+        return Vec::new();
+    };
+    let Some(Value::Object(mut hooks)) = top.get("hooks").cloned() else {
+        return Vec::new();
+    };
+    const ORDER: &[&'static str] = &[
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "SubagentStart",
+        "SubagentStop",
+        "PreCompact",
+        "Stop",
+    ];
+    let mut out = Vec::new();
+    for &event in ORDER {
+        if let Some(val) = hooks.remove(event) {
+            out.push((event, val));
+        }
+    }
+    out
 }
 
 /// `/hooks\/bee-[a-z-]+\.mjs/` — a bee entry in ANY historical Codex
@@ -577,7 +554,166 @@ pub fn codex_statusline_next_text(text: &str) -> String {
     format!("{text}{sep}\n[tui]\n{CODEX_STATUS_LINE_BLOCK}")
 }
 
+pub const WORKTREE_TOOL_ALLOW: [&str; 2] = ["EnterWorktree", "ExitWorktree"];
+
+pub fn worktree_tool_allow_missing(repo_root: &Path) -> bool {
+    let settings_path = repo_root.join(".claude").join("settings.json");
+    if !exists(&settings_path) {
+        return true;
+    }
+    let text = read_text_if_exists(&settings_path);
+    if text.trim().is_empty() {
+        return true;
+    }
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let Value::Object(m) = parsed else { return false };
+    match m.get("permissions") {
+        None => true,
+        Some(Value::Object(p)) => match p.get("allow") {
+            None => true,
+            Some(Value::Array(a)) => {
+                !WORKTREE_TOOL_ALLOW.iter().all(|name| a.iter().any(|v| v.as_str() == Some(*name)))
+            }
+            Some(_) => false,
+        },
+        Some(_) => false,
+    }
+}
+
+pub fn merge_worktree_tool_allow(settings_path: &Path) -> Merged {
+    let text = read_text_if_exists(settings_path);
+    if text.trim().is_empty() {
+        let mut permissions = Map::new();
+        permissions.insert(
+            "allow".into(),
+            Value::Array(WORKTREE_TOOL_ALLOW.iter().map(|n| json!(n)).collect()),
+        );
+        let mut out = Map::new();
+        out.insert("permissions".into(), Value::Object(permissions));
+        return Merged {
+            text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))),
+            changed: true,
+        };
+    }
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return Merged { text, changed: false },
+    };
+    let mut existing = match parsed {
+        Value::Object(m) => m,
+        _ => return Merged { text, changed: false },
+    };
+    let mut allow: Vec<Value> = match existing.get("permissions") {
+        None => Vec::new(),
+        Some(Value::Object(p)) => match p.get("allow") {
+            None => Vec::new(),
+            Some(Value::Array(a)) => a.clone(),
+            Some(_) => return Merged { text, changed: false },
+        },
+        Some(_) => return Merged { text, changed: false },
+    };
+    let mut changed = false;
+    for name in WORKTREE_TOOL_ALLOW {
+        if !allow.iter().any(|v| v.as_str() == Some(name)) {
+            allow.push(json!(name));
+            changed = true;
+        }
+    }
+    if !changed {
+        return Merged { text, changed: false };
+    }
+    let mut permissions = match existing.get("permissions") {
+        Some(Value::Object(p)) => p.clone(),
+        _ => Map::new(),
+    };
+    permissions.insert("allow".into(), Value::Array(allow));
+    existing.insert("permissions".into(), Value::Object(permissions));
+    Merged {
+        text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(existing))),
+        changed: true,
+    }
+}
+
 // ── statusline opt-in ──────────────────────────────────────────────────────
+
+/// The canonical statusLine command onboarding writes to .claude/settings.json.
+/// Guarded with `[ -f … ] &&` so a teammate's fresh clone or a linked worktree
+/// without the vendored script gets silence rather than a shell error on every prompt.
+pub const STATUSLINE_COMMAND: &str =
+    "[ -f \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline-command.sh\" ] && bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline-command.sh\"";
+
+/// True ONLY when `<repo>/.claude/settings.json` is missing, empty/whitespace,
+/// or parses as a JSON object carrying no `statusLine` key.
+/// Returns false when the file exists but does not parse, or parses to something
+/// that is not an object at the top level, or when `statusLine` is already present
+/// in any shape (user preference).
+pub fn statusline_settings_absent(repo_root: &Path) -> bool {
+    let settings_path = repo_root.join(".claude").join("settings.json");
+    if !exists(&settings_path) {
+        return true;
+    }
+    let text = read_text_if_exists(&settings_path);
+    if text.trim().is_empty() {
+        return true;
+    }
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    match parsed {
+        Value::Object(m) => !m.contains_key("statusLine"),
+        _ => false,
+    }
+}
+
+/// Add-only statusLine settings writer: adds the canonical entry if `statusLine`
+/// is absent. Preserves every foreign top-level key and their order.
+/// If `statusLine` is already present, returns the file unchanged with changed=false.
+/// On a file that does not parse or is not an object, returns unchanged with changed=false.
+/// On a missing/empty file, produces a fresh object holding just `statusLine`.
+pub fn merge_statusline_settings(settings_path: &Path) -> Merged {
+    let text = read_text_if_exists(settings_path);
+    if text.trim().is_empty() {
+        let mut out = Map::new();
+        out.insert(
+            "statusLine".into(),
+            json!({
+                "type": "command",
+                "command": STATUSLINE_COMMAND,
+            }),
+        );
+        return Merged {
+            text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))),
+            changed: true,
+        };
+    }
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return Merged { text, changed: false },
+    };
+    let existing = match parsed {
+        Value::Object(m) => m,
+        _ => return Merged { text, changed: false },
+    };
+    if existing.contains_key("statusLine") {
+        return Merged { text, changed: false };
+    }
+    let mut out = existing;
+    out.insert(
+        "statusLine".into(),
+        json!({
+            "type": "command",
+            "command": STATUSLINE_COMMAND,
+        }),
+    );
+    Merged {
+        text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))),
+        changed: true,
+    }
+}
 
 /// statuslineOptIn (l. 1883): a repo opts in by ALREADY pointing its
 /// .claude/settings.json statusLine at the project-level script.
@@ -729,9 +865,7 @@ mod tests {
         // Foreign hook entries survive, bee entries are appended after them.
         let pre = &v["hooks"]["PreToolUse"];
         assert_eq!(pre[0]["hooks"][0]["command"], "node ./my-own.mjs");
-        // 1 foreign + bee's three PreToolUse rows (write guard, model guard,
-        // activity).
-        assert_eq!(pre.as_array().unwrap().len(), 4);
+        assert_eq!(pre.as_array().unwrap().len(), 5);
         // A foreign entry on an event bee ALSO wires keeps its place and its
         // command; the bee entry joins behind it (agent-activity-hook D1 put
         // the activity probe on Notification).
@@ -817,6 +951,26 @@ mod tests {
     /// event set. SubagentStop is the load-bearing absence: a subagent
     /// stopping is not the session changing state.
     #[test]
+    fn repo_settings_carry_the_silent_worker_guard_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let rendered = render_repo_hook_entries(dir.path());
+        let pre = &rendered.iter().find(|(e, _)| *e == "PreToolUse").unwrap().1;
+        let guard: Vec<&Value> = pre
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|g| entry_hook_commands(g).iter().any(|c| c.contains(" hook worker-guard;")))
+            .collect();
+        assert_eq!(guard.len(), 1);
+        assert_eq!(guard[0]["matcher"], json!(WORKER_GUARD_MATCHER));
+        assert!(guard[0]["hooks"][0].get("statusMessage").is_none());
+        assert_eq!(
+            guard[0]["hooks"][0]["command"],
+            json!(repo_hook_command("bee-worker-guard.mjs", None))
+        );
+    }
+
+    #[test]
     fn repo_settings_carry_the_activity_hook_on_the_decided_events() {
         let dir = tempfile::tempdir().unwrap();
         let rendered = render_repo_hook_entries(dir.path());
@@ -893,7 +1047,23 @@ mod tests {
                 "Stop"
             ]
         );
-        assert_eq!(v["hooks"]["PreToolUse"][1]["matcher"], "spawn_agent");
+        assert_eq!(
+            v["hooks"]["PreToolUse"][0]["matcher"],
+            "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec"
+        );
+        assert_eq!(v["hooks"]["PreToolUse"][1]["matcher"], "spawn_agent|collaborationspawn_agent");
+        // Shared activity hooks are present on all four decided events:
+        for event in ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"] {
+            let groups = v["hooks"][event].as_array().unwrap();
+            let has_activity = groups.iter().any(|g| {
+                g["hooks"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|h| h["statusMessage"] == "bee: activity")
+            });
+            assert!(has_activity, "{event} must carry bee: activity hook");
+        }
         assert!(v["hooks"]["SessionStart"][0]["hooks"][0]["command"]
             .as_str()
             .unwrap()
@@ -1004,7 +1174,7 @@ mod tests {
         .unwrap();
         let merged = merge_codex_hooks(&hooks).unwrap();
         let v: Value = serde_json::from_str(&merged.text).unwrap();
-        assert_eq!(v["hooks"]["UserPromptSubmit"].as_array().unwrap().len(), 1);
+        assert_eq!(v["hooks"]["UserPromptSubmit"].as_array().unwrap().len(), 2);
         assert!(!merged.text.contains(".mjs"));
         // …and the fresh render is itself idempotent.
         std::fs::write(&hooks, &merged.text).unwrap();
@@ -1062,6 +1232,169 @@ mod tests {
     }
 
     #[test]
+    fn statusline_opt_in_round_trips_canonical_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(
+            &settings,
+            serde_json::to_string(&json!({
+                "statusLine": {
+                    "type": "command",
+                    "command": STATUSLINE_COMMAND
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(statusline_opt_in(dir.path()));
+    }
+
+    #[test]
+    fn statusline_settings_absent_detection() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        // absent file -> absent == true
+        assert!(statusline_settings_absent(dir.path()));
+
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+
+        // empty file -> absent == true
+        std::fs::write(&settings, "").unwrap();
+        assert!(statusline_settings_absent(dir.path()));
+
+        // whitespace-only file -> absent == true
+        std::fs::write(&settings, "   \n  \t ").unwrap();
+        assert!(statusline_settings_absent(dir.path()));
+
+        // object-without-the-key -> absent == true
+        std::fs::write(&settings, r#"{"model": "opus"}"#).unwrap();
+        assert!(statusline_settings_absent(dir.path()));
+
+        // unparseable text -> absent == false
+        std::fs::write(&settings, "{not json").unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // top-level array -> absent == false
+        std::fs::write(&settings, "[1, 2, 3]").unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // top-level string -> absent == false
+        std::fs::write(&settings, r#""just a string""#).unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // statusLine present as an object -> absent == false
+        std::fs::write(
+            &settings,
+            r#"{"statusLine": {"type": "command", "command": "echo hi"}}"#,
+        )
+        .unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // statusLine present as a string -> absent == false
+        std::fs::write(&settings, r#"{"statusLine": "echo hi"}"#).unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // statusLine present as null -> absent == false
+        std::fs::write(&settings, r#"{"statusLine": null}"#).unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // statusLine present as false -> absent == false
+        std::fs::write(&settings, r#"{"statusLine": false}"#).unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+    }
+
+    #[test]
+    fn merge_statusline_settings_preserves_foreign_keys_and_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+
+        // merge on a file carrying "model" and "hooks" -> those keys and their values survive byte-for-byte, exactly one key is added
+        let original = "{\n  \"model\": \"opus\",\n  \"hooks\": {\n    \"UserPromptSubmit\": []\n  }\n}\n";
+        std::fs::write(&settings, original).unwrap();
+
+        let merged = merge_statusline_settings(&settings);
+        assert!(merged.changed);
+
+        let parsed: Value = serde_json::from_str(&merged.text).unwrap();
+        let obj = parsed.as_object().unwrap();
+        assert_eq!(obj.len(), 3);
+        assert_eq!(obj.get("model").unwrap(), "opus");
+        assert_eq!(
+            obj.get("hooks").unwrap(),
+            &json!({"UserPromptSubmit": []})
+        );
+        assert_eq!(
+            obj.get("statusLine").unwrap(),
+            &json!({
+                "type": "command",
+                "command": STATUSLINE_COMMAND
+            })
+        );
+
+        let keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+        assert_eq!(keys, vec!["model", "hooks", "statusLine"]);
+
+        // Idempotent: merging twice changes nothing the second time (changed == false)
+        std::fs::write(&settings, &merged.text).unwrap();
+        let again = merge_statusline_settings(&settings);
+        assert!(!again.changed);
+        assert_eq!(again.text, merged.text);
+    }
+
+    #[test]
+    fn merge_statusline_settings_broken_or_non_object_returns_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+
+        // merge on a broken file returns changed == false and text equal to the input
+        let broken = "{\"model\": broken";
+        std::fs::write(&settings, broken).unwrap();
+        let res = merge_statusline_settings(&settings);
+        assert!(!res.changed);
+        assert_eq!(res.text, broken);
+
+        // top-level array returns changed == false and text equal to the input
+        let non_obj = "[1, 2, 3]";
+        std::fs::write(&settings, non_obj).unwrap();
+        let res = merge_statusline_settings(&settings);
+        assert!(!res.changed);
+        assert_eq!(res.text, non_obj);
+    }
+
+    #[test]
+    fn merge_statusline_settings_absent_or_empty_produces_fresh_statusline_object() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        // absent file produces fresh object holding just statusLine
+        let res = merge_statusline_settings(&settings);
+        assert!(res.changed);
+        let expected = format!(
+            "{}\n",
+            jsjson::stringify_pretty(&json!({
+                "statusLine": {
+                    "type": "command",
+                    "command": STATUSLINE_COMMAND
+                }
+            }))
+        );
+        assert_eq!(res.text, expected);
+
+        // empty file produces fresh object holding just statusLine
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(&settings, "   \n\t").unwrap();
+        let res = merge_statusline_settings(&settings);
+        assert!(res.changed);
+        assert_eq!(res.text, expected);
+    }
+
+
+
+    #[test]
     fn codex_statusline_insertion_respects_an_existing_tui_section() {
         assert_eq!(
             codex_statusline_next_text("[tui]\nfoo = 1\n"),
@@ -1083,5 +1416,108 @@ mod tests {
         assert!(has_status_line_key("status_line=[]\n"));
         assert!(!has_status_line_key("# status_line = x\n"));
         assert!(!has_status_line_key("status_line_use_colors = true\n"));
+    }
+
+    #[test]
+    fn merge_worktree_tool_allow_writes_a_fresh_file_with_both_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        let res = merge_worktree_tool_allow(&settings);
+        assert!(res.changed);
+        let expected = format!(
+            "{}\n",
+            jsjson::stringify_pretty(&json!({
+                "permissions": { "allow": ["EnterWorktree", "ExitWorktree"] }
+            }))
+        );
+        assert_eq!(res.text, expected);
+
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(&settings, "   \n\t").unwrap();
+        let res = merge_worktree_tool_allow(&settings);
+        assert!(res.changed);
+        assert_eq!(res.text, expected);
+    }
+
+    #[test]
+    fn merge_worktree_tool_allow_appends_only_missing_names_and_keeps_everything() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(
+            &settings,
+            "{\n  \"model\": \"opus\",\n  \"permissions\": {\n    \"allow\": [\"Bash(ls:*)\", \"EnterWorktree\"],\n    \"deny\": [\"Read\"]\n  },\n  \"zeta\": 1\n}\n",
+        )
+        .unwrap();
+
+        let res = merge_worktree_tool_allow(&settings);
+        assert!(res.changed);
+        let v: Value = serde_json::from_str(&res.text).unwrap();
+        let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(keys, vec!["model", "permissions", "zeta"]);
+        assert_eq!(v["model"], "opus");
+        assert_eq!(v["zeta"], 1);
+        assert_eq!(v["permissions"]["deny"], json!(["Read"]));
+        assert_eq!(
+            v["permissions"]["allow"],
+            json!(["Bash(ls:*)", "EnterWorktree", "ExitWorktree"])
+        );
+
+        std::fs::write(&settings, &res.text).unwrap();
+        let again = merge_worktree_tool_allow(&settings);
+        assert!(!again.changed);
+        assert_eq!(again.text, res.text);
+    }
+
+    #[test]
+    fn merge_worktree_tool_allow_leaves_unchanged_the_shapes_it_cannot_merge() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        for body in [
+            "{ this is not json",
+            "[1, 2, 3]",
+            r#"{"permissions": "not-an-object"}"#,
+            r#"{"permissions": {"allow": "not-an-array"}}"#,
+        ] {
+            std::fs::write(&settings, body).unwrap();
+            let res = merge_worktree_tool_allow(&settings);
+            assert!(!res.changed, "must not change {body}");
+            assert_eq!(res.text, body);
+        }
+    }
+
+    #[test]
+    fn worktree_tool_allow_missing_detection() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        assert!(worktree_tool_allow_missing(dir.path()));
+
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(&settings, "").unwrap();
+        assert!(worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, "   \n\t ").unwrap();
+        assert!(worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, r#"{"model": "opus"}"#).unwrap();
+        assert!(worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, r#"{"permissions": {"allow": ["EnterWorktree"]}}"#).unwrap();
+        assert!(worktree_tool_allow_missing(dir.path()));
+        std::fs::write(
+            &settings,
+            r#"{"permissions": {"allow": ["EnterWorktree", "ExitWorktree"]}}"#,
+        )
+        .unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
+
+        std::fs::write(&settings, "{ this is not json").unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, "[1, 2, 3]").unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, r#"{"permissions": "not-an-object"}"#).unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, r#"{"permissions": {"allow": "not-an-array"}}"#).unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
     }
 }

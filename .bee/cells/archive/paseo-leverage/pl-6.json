@@ -1,0 +1,103 @@
+{
+  "id": "pl-6",
+  "feature": "paseo-leverage",
+  "title": "Add the live Paseo contract test",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "D8",
+    "89d24cf0",
+    "2faffc59-8062-42c8-ba66-0b8e5232826d",
+    "faab6b2e-8971-4799-92da-a0b9c0438d34"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/paseo_live_contract.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-leverage/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D8, add an integration test file with tests named paseo_live_* and marked #[ignore]. Each first checks that `paseo --version` runs and `paseo ls --json` answers; if not, it prints a skip line and returns. Then: `paseo ls -a --json` parses as a JSON array; for the first agent id, `paseo inspect <id> --json` has keys Id, Status, UpdatedAt, PendingPermissions, ParentAgentId, Model, Thinking, Mode and LastUsage; and that agent's on-disk file under PASEO_HOME or ~/.paseo/agents/*/<id>.json has id, labels, lastStatus, runtimeInfo and persistence.nativeHandle. A missing key fails with the key name and the Paseo version. No agent is created, sent to, stopped or archived.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test paseo_live_contract -- --ignored",
+  "must_haves": {
+    "truths": [
+      "The ignored tests pass on the installed Paseo 0.11.2",
+      "With no daemon the tests print a skip line and pass"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/paseo_live_contract.rs",
+        "substantive": "ignored live tests for inspect, ls and the on-disk file"
+      }
+    ],
+    "key_links": [
+      "the key list matches what paseo.rs and paseo_state.rs read"
+    ],
+    "prohibitions": [
+      "No mutating paseo command",
+      "Not run by the default cargo test"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pl-6",
+    "outcome": "Added three ignored paseo_live_* contract tests for ls, inspect keys and the on-disk agent file keys",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/paseo_live_contract.rs"
+    ],
+    "deviations": [
+      "the first agent id comes from paseo ls -a -g --json, not ls -a --json — ls -a is scoped to the cwd and listed no agent here while 9 exist globally — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-12T08:34:50.186Z",
+    "behavior_change": false,
+    "verification_evidence": "3 passed against installed Paseo 0.11.2; same binary with paseo off PATH printed the skip line and passed 3; default run (no --ignored) shows 3 ignored",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test paseo_live_contract -- --ignored",
+    "claimed_at": "2026-10-12T08:32:03.007Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added three ignored paseo_live_* tests in packages/bee-rs/crates/bee/tests/paseo_live_contract.rs: paseo_live_ls_answers_a_json_array (ls -a --json is an array), paseo_live_inspect_carries_the_keys_bee_reads (INSPECT_KEYS, 9 keys), paseo_live_agent_file_carries_the_keys_bee_reads (FILE_KEYS incl. persistence.nativeHandle); live() skips with a line when paseo --version or ls --json fail; failures name the key and the Paseo version; only ls/inspect/--version run",
+      "commit": "4facba7c5",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/paseo_live_contract.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test paseo_live_contract -- --ignored — green:unit — 3 passed against installed Paseo 0.11.2; same binary with paseo off PATH printed the skip line and passed 3; default run (no --ignored) shows 3 ignored",
+      "deviations": [
+        "the first agent id comes from paseo ls -a -g --json, not ls -a --json — ls -a is scoped to the cwd and listed no agent here while 9 exist globally — the plan was wrong about a fact"
+      ],
+      "mistakes": [],
+      "baseline": "test file did not exist on base; no test target to run"
+    },
+    "baseline": "test file did not exist on base; no test target to run",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The ignored tests pass on the installed Paseo 0.11.2",
+            "artifact": "packages/bee-rs/crates/bee/tests/paseo_live_contract.rs"
+          },
+          {
+            "requirement": "With no daemon the tests print a skip line and pass",
+            "artifact": "packages/bee-rs/crates/bee/tests/paseo_live_contract.rs"
+          },
+          {
+            "requirement": "the key list matches what paseo.rs and paseo_state.rs read",
+            "artifact": "packages/bee-rs/crates/bee/tests/paseo_live_contract.rs"
+          }
+        ],
+        "recorded_at": "2026-10-12T08:35:46.357Z",
+        "recorded_by": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

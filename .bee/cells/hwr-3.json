@@ -1,0 +1,127 @@
+{
+  "id": "hwr-3",
+  "feature": "harness-worktree-relocation",
+  "title": "Teach the Pi belt plain exit",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "hwr-2"
+  ],
+  "decisions": [
+    "016ae1ef-c7d3-4949-81c2-28c6503906e1"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/harness-worktree-relocation/CONTEXT.md",
+    "docs/history/harness-worktree-relocation/plan.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Teach the Pi belt the `exit-worktree` operation (per D1). Sites in .pi/extensions/bee-guard.ts: the parser check `if (parsed.operation !== \"enter-worktree\" && parsed.operation !== \"exit-worktree-before-merge\") {` (~1158) and its continuation branches just below; the verify arms `if (intent.operation === \"enter-worktree\") {` / `} else if (intent.operation === \"exit-worktree-before-merge\") {` (~1346-1349) — add an arm running `worktree exit --id <worktreeId> --json` (real verb added by hwr-2); the comparison `if (validatedVerified.operation !== intent.operation) return null` (~1386); the post-switch branch `if (intent.operation === \"exit-worktree-before-merge\") {` (~1415 and ~1673); and the relocation guard `intent.operation !== \"enter-worktree\" && intent.operation !== \"exit-worktree-before-merge\"` (~1499). `exit-worktree` requires `continuation === null`, relocates to targetCwd through the same forkFrom + switchSession path, runs NO merge, and its notice says the worktree was kept and names `/bee-worktree-enter --id <id>` to return. Add a `/bee-worktree-exit [--id <id>]` command modeled on `/bee-worktree-enter`, and add it to the pinned list `for cmd in [\"bee-worktree-new\", \"bee-worktree-enter\", \"bee-worktree-merge\", \"bee-worktree-relocate\"] {` in pi_plugin_contracts.rs. Contract tests, written red first: an exit-worktree marker relocates and no merge command runs; the fake bee's `worktree exit --json` output uses the exact JSON shape hwr-2's handler returns (copy from hwr-2's unit test or run the built binary); `/bee-worktree-exit` relocates; existing enter and exit-before-merge tests stay green.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+  "must_haves": {
+    "truths": [
+      "an exit-worktree marker relocates the Pi session to main and runs no merge",
+      "the belt verifies exit-worktree by running bee worktree exit --json",
+      "/bee-worktree-exit is a registered Pi command",
+      "existing enter and exit-before-merge relocation still work"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "exit-worktree parse, verify arm, relocation branch, /bee-worktree-exit command"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "exit relocation and command tests"
+      }
+    ],
+    "key_links": [
+      "exit-worktree goes through the same fork and switchSession path as exit-worktree-before-merge"
+    ],
+    "prohibitions": [
+      "Do not change EXPECTED_TRANSITION_KEYS or the schemaVersion check",
+      "Do not touch Rust source under packages/bee-rs/crates/bee/src"
+    ]
+  },
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "hwr3-worker",
+    "outcome": "Pi belt plain exit and /bee-worktree-exit",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-16T11:41:40.185Z",
+    "behavior_change": true,
+    "verification_evidence": "the Pi contract suite (70 passed) covers exit relocation, the new command, and the existing enter and exit-before-merge paths",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7033d8f8-2786-4936-b02c-73b18858ea0e",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "claimed_at": "2026-09-16T11:35:04.852Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pi belt accepts exit-worktree, verifies it with bee worktree exit --json, relocates with no merge, and registers /bee-worktree-exit",
+      "commit": "4926094b8",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts — green:unit — the Pi contract suite (70 passed) covers exit relocation, the new command, and the existing enter and exit-before-merge paths",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "parse-exit-worktree",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:1159-1161 accepts exit-worktree with null continuation"
+          },
+          {
+            "id": "verify-arm",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:1353-1355 runs worktree exit --id <id> --json"
+          },
+          {
+            "id": "no-merge",
+            "status": "PASS",
+            "evidence": "bee-guard.ts:1692-1698 exit branch runs no merge; test exit_worktree_marker_relocates_and_no_merge_command_runs"
+          },
+          {
+            "id": "command-registered",
+            "status": "PASS",
+            "evidence": "bee-worktree-exit registered and pinned in public_and_private_commands_register"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "git show --stat 4926094b8 lists only the belt and its contract tests; EXPECTED_TRANSITION_KEYS untouched"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-16T11:47:23.948Z"
+      }
+    ]
+  }
+}

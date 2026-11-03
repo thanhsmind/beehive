@@ -1,0 +1,121 @@
+{
+  "id": "rel430-1",
+  "feature": "release-2-43-0",
+  "title": "Publish release 2.43.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-43-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.43.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.43.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.43.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.43.0",
+      "tag v2.43.0 exists locally and on the remote",
+      "the GitHub release for v2.43.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.43.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.43.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "released 2.43.0 (tag v2.43.0, assets verified, OK)",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the leader ran scripts/release.sh under the prepared deployment permit f1c8d7cf instead of a dispatched agent — the deploy role on the native opus runtime returned a read-only gather payload that cannot run the script — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T23:22:13.483Z",
+    "behavior_change": false,
+    "verification_evidence": "the script ran the full declared suite (4195 passed, 0 failed) before tagging and printed its final OK",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+    "verify_command": "bash scripts/release.sh 2.43.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-09-21T23:22:13.391Z",
+    "mistakes": [
+      {
+        "wrong": "wrote .bee/backlog.jsonl while scripts/release.sh was running",
+        "better": "file backlog rows before starting or after the script prints OK"
+      }
+    ],
+    "commit_pending": "the release commit is made by scripts/release.sh and carries no cell trailer",
+    "report": {
+      "outcome": "released 2.43.0: tag v2.43.0 at df8bd439, release-binaries green, assets verified, script printed OK",
+      "commit": "df8bd439d",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.43.0 && bee dev release-manifest --check — green:live — the script ran the full declared suite (4195 passed, 0 failed) before tagging and printed its final OK",
+      "deviations": [
+        "the leader ran scripts/release.sh under the prepared deployment permit f1c8d7cf instead of a dispatched agent — the deploy role on the native opus runtime returned a read-only gather payload that cannot run the script — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "wrote .bee/backlog.jsonl while scripts/release.sh was running — file backlog rows before starting or after the script prints OK"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both plugin manifests report 2.43.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "tag v2.43.0 exists locally and on the remote",
+            "artifact": "git ls-remote --tags origin v2.43.0 -> refs/tags/v2.43.0"
+          },
+          {
+            "requirement": "the GitHub release for v2.43.0 carries the binaries and SHA256SUMS",
+            "artifact": "gh release view v2.43.0: bee-x86_64-unknown-linux-gnu, bee-x86_64-pc-windows-msvc.exe, SHA256SUMS"
+          },
+          {
+            "requirement": "the script printed its final OK line",
+            "artifact": "release log: release  OK       bee 2.43.0 is live"
+          }
+        ],
+        "recorded_at": "2026-09-21T23:22:27.489Z",
+        "recorded_by": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  }
+}

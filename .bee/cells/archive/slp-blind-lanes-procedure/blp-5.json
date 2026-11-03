@@ -1,0 +1,76 @@
+{
+  "id": "blp-5",
+  "feature": "slp-blind-lanes-procedure",
+  "title": "Import the truth-table and lifecycle checks as reviewer craft, and frame the rest",
+  "lane": "high-risk",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "D6"
+  ],
+  "files": [
+    "expertise/review.md",
+    "skills/bee-reviewing/references/reviewing-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes-procedure/plan.md",
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "skills/bee-planning/references/edge-dimensions.md",
+    "expertise/review.md"
+  ],
+  "affects_skills": [
+    "skills/bee-reviewing/references/reviewing-reference.md"
+  ],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "The Truth Table Test lands as its own section: every branch that can be taken names what happens when it is not",
+      "The CRUD Lifecycle check lands as its own section, covering create, read, update and delete over one thing's whole life",
+      "The 5-Layer rubric lands as a FRAME that cites the existing homes for happy path, failure edge and definition-of-done, and restates none of them",
+      "Every new section is reachable by name from the reviewer method steps, the way the existing craft headings are",
+      "Every pointer that names a new heading quotes it exactly, and the pointer-integrity gate is green",
+      "bee dev regen ran inside this cell and the release manifest is current"
+    ]
+  },
+  "action": "Import D6's three checks as reviewer craft, in the one file the reviewing skill already cites by heading name.\n\nWHERE, AND WHY THERE. Reviewer role cards are thin lens contracts and forbid failure-mode catalogs by their own rule. The craft file is where rubrics live, and the reviewing reference already binds its method steps to that file's headings by quoted name. Follow that binding: a new section is only reachable if a method step names it.\n\nTWO ARE NEW, ONE IS NOT. Research over the skills, the craft tree and the knowledge bundle found no statement anywhere of the Truth Table Test or the CRUD Lifecycle check — write those as full sections. But happy path and failure edge are ALREADY stated in at least four places, and definition-of-done in three; a fifth layer named definition-of-done would be the fourth spelling of a rule this repo already has. So the 5-Layer rubric lands as a frame that NAMES its existing homes and restates none of them. Creating a second home is the exact failure this import must avoid.\n\nMATCH THE FORM. Copy the shape of the existing sections in that file — a bolded lead, then what the reviewer actually does. Section lengths there run from 9 to 57 lines; 15 to 25 is in family. No size ceiling exists in this repo and none may be introduced.\n\nTHE REGEN HALF. This tree is hashed by the release manifest and the craft tree is vendored into the runtime store, so run bee dev regen inside this cell and let the manifest move with the prose. A pointer that names a heading must quote it exactly, or the pointer gate fails.",
+  "status": "capped",
+  "trace": {
+    "worker": "blp-5-builder",
+    "outcome": "Truth Table Test and CRUD Lifecycle check land as full craft sections; the 5-Layer rubric lands as a frame citing existing homes; both reachable from reviewer method steps 1-2",
+    "files_changed": [
+      "expertise/review.md",
+      "skills/bee-reviewing/references/reviewing-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T14:17:22.894Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b97c221a-fd60-40c2-bd86-9681b9f547bf",
+    "claimed_at": "2026-08-28T14:09:43.461Z",
+    "report": {
+      "outcome": "Truth Table Test and CRUD Lifecycle check land as full craft sections; the 5-Layer rubric lands as a frame citing existing homes; both reachable from reviewer method steps 1-2",
+      "commit": "c123921a",
+      "files": [
+        "expertise/review.md",
+        "skills/bee-reviewing/references/reviewing-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity && --test instruction_laws && .bee/bin/bee dev release-manifest --check — green — the cell verify: pointer/heading gate plus the instruction-layer laws plus the manifest parity for a prose-only change",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 244 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

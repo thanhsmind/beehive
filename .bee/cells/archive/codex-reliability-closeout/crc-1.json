@@ -1,0 +1,195 @@
+{
+  "id": "crc-1",
+  "title": "Isolate Codex canary processes from user settings",
+  "role": "code",
+  "files": [
+    "scripts/codex-parity-canary.sh",
+    "scripts/codex-parity-canary-test.sh",
+    "docs/history/codex-reliability-closeout/isolation.md",
+    "docs/history/codex-reliability-closeout/isolation-red.log",
+    "docs/history/codex-reliability-closeout/isolation-green.log"
+  ],
+  "action": "Fix F1 at the canary entrypoint. Require an explicit direct executable rather than discovering or invoking mise or a PATH wrapper. Isolate HOME, XDG config/data/cache and CODEX_HOME for all nested processes and use a controlled PATH with direct Codex probe configuration. Reject real-home aliases, symlinks into real settings, and unsafe homes before any subprocess can mutate them. Do not copy, read or delete credentials. Add hermetic behavioral shell tests that run fake executables with sentinel host paths and observable side-effect attempts; preserve a real failed pre-fix run and successful fixed run. Keep existing live hook assertions and report skipped capabilities honestly. Reserve logs before their redirection; reports must not expose environment secrets. Follow existing shell conventions and introduce no dependencies.",
+  "verify": "bash scripts/codex-parity-canary-test.sh && bash -n scripts/codex-parity-canary.sh",
+  "feature": "codex-reliability-closeout",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "b0e62deb-c093-462a-9944-d43011cf2e6d"
+  ],
+  "read_first": [
+    "docs/history/codex-reliability-closeout/CONTEXT.md",
+    "docs/history/codex-reliability-closeout/plan.md",
+    "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+    ".bee/verify/verify-app/features/codex-runtime.md",
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "hook-runtime"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "Unsafe homes are refused before launching any mutating probe.",
+      "The canary cannot resolve the user's Codex wrapper through inherited PATH.",
+      "A hostile fake subprocess writes only isolated HOME and XDG paths; host sentinels remain unchanged.",
+      "Existing installed-hook verification still has a runnable entrypoint."
+    ],
+    "artifacts": [
+      {
+        "path": "scripts/codex-parity-canary.sh",
+        "substantive": "Isolate Codex canary processes from user settings"
+      }
+    ],
+    "key_links": [
+      "Production behavior and evidence agree with D1."
+    ],
+    "prohibitions": [
+      "No guard bypass, real credential reads, or changes to unrelated settings."
+    ]
+  },
+  "trace": {
+    "worker": "crc-1-worker",
+    "outcome": "Isolate Codex canary environment and direct executable routing",
+    "files_changed": [
+      "scripts/codex-parity-canary.sh",
+      "scripts/codex-parity-canary-test.sh",
+      "docs/history/codex-reliability-closeout/isolation.md",
+      "docs/history/codex-reliability-closeout/isolation-red.log",
+      "docs/history/codex-reliability-closeout/isolation-green.log"
+    ],
+    "deviations": [
+      "Corrected verify field to an executable command — original mixed prose with shell and could not match proof parser; decision a8464d1c — the plan was wrong about a fact",
+      "sync-ack: Owner behavior checked; Codex map and hook-runtime knowledge synchronized; bee dev regen completed at integration."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T07:34:13.383Z",
+    "behavior_change": true,
+    "verification_evidence": "seven controls passed; installed live-canary.json records denied and allowed patch/shell writes",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09911-9b86-7a30-8a6f-b22a78347d98",
+    "verify_command": "bash scripts/codex-parity-canary-test.sh && bash -n scripts/codex-parity-canary.sh",
+    "claimed_at": "2026-09-13T07:33:27.706Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "unsafe-homes-refused-before-probe",
+            "status": "PASS",
+            "evidence": "scripts/codex-parity-canary.sh:41-98 validates real-home paths, system paths, and symlinks before the first probe at line 166. docs/history/codex-reliability-closeout/isolation-green.log:2-6 records the fixture result."
+          },
+          {
+            "id": "inherited-path-wrapper-isolated",
+            "status": "PASS",
+            "evidence": "scripts/codex-parity-canary.sh:100-145 removes directories containing a different codex executable. scripts/codex-parity-canary-test.sh:164-219 supplies a hostile inherited PATH wrapper and checks that it stays unresolved."
+          },
+          {
+            "id": "inherited-environment-isolated",
+            "status": "FAIL",
+            "evidence": "scripts/codex-parity-canary.sh:156-162 replaces HOME and XDG paths, but leaves BEE_CODEX_PROBE_BIN inherited. The variable controls the Codex capability probe at packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:2436. The Codex execution at scripts/codex-parity-canary.sh:215-217 does not unset it.",
+            "failure_signature": "Set BEE_CODEX_PROBE_BIN in the host environment. The canary passes it into nested bee and hook processes, which can execute the inherited probe instead of the controlled Codex path."
+          },
+          {
+            "id": "hostile-subprocess-positive-control",
+            "status": "FAIL",
+            "evidence": "scripts/codex-parity-canary-test.sh:358-368 makes the fake probe write through isolated HOME and XDG paths, but lines 386-404 check only that host sentinels remain unchanged. The test never checks that isolated sentinel files contain CORRUPTED. It also ignores the canary exit status at lines 374-384.",
+            "failure_signature": "Prevent the fake probe from running. test_hostile_subprocess_isolation can still report PASS because it has no probe-executed or isolated-write assertion."
+          },
+          {
+            "id": "installed-hook-entrypoint",
+            "status": "PASS",
+            "evidence": "scripts/codex-parity-canary.sh is executable. Read-only checks `bash -n scripts/codex-parity-canary.sh` and `bash -n scripts/codex-parity-canary-test.sh` printed `syntax-ok`. This proves executable syntax only; the retained isolation logs use mock bee and fake Codex fixtures, not an installed Codex run."
+          },
+          {
+            "id": "artifact-and-prohibitions",
+            "status": "PASS",
+            "evidence": "The substantive artifact exists at scripts/codex-parity-canary.sh:1-300. Credential paths appear only in rejection and documentation logic at lines 71-98 and 239-250; no credential copy is present."
+          }
+        ],
+        "failure_signature": "Set BEE_CODEX_PROBE_BIN in the host environment. The canary passes it into nested bee and hook processes, which can execute the inherited probe instead of the controlled Codex path.\nPrevent the fake probe from running. test_hostile_subprocess_isolation can still report PASS because it has no probe-executed or isolated-write assertion.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T07:17:49.606Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "unsafe-roots-rejected-before-probe",
+            "status": "PASS",
+            "evidence": "scripts/codex-parity-canary.sh:66-130 rejects real-home, descendant, custom-XDG, system-root, and sensitive symlink paths before the probe at line 198."
+          },
+          {
+            "id": "canonical-executable-and-helper-symlinks",
+            "status": "PASS",
+            "evidence": "scripts/codex-parity-canary.sh:29-64 requires a canonical direct executable and forces BEE_CODEX_PROBE_BIN; lines 118-129 permit executable helper links only when they resolve to CODEX_REAL."
+          },
+          {
+            "id": "positive-isolation-controls",
+            "status": "PASS",
+            "evidence": "scripts/codex-parity-canary-test.sh:533-561 requires proof that the hostile fake ran and wrote through isolated paths, then checks that all host sentinels remain unchanged."
+          },
+          {
+            "id": "isolation-scope-disclosed",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/isolation.md:33-40 explicitly defines the protection as environment hygiene, not OS-level filesystem sandboxing, and states that credentials are not accessed."
+          },
+          {
+            "id": "hermetic-regression-evidence",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/isolation-green.log:11-21 records all seven repaired isolation checks passing. Fresh bash -n checks for both canary scripts also printed syntax-ok; the full test could not rerun because the review filesystem denied mktemp."
+          },
+          {
+            "id": "installed-live-canary",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/live-canary.json:1-50 records Codex CLI 0.154.0, exit 0, installed write-guard deny/allow results, and the disclosed limitation that native spawn input was not observed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T07:31:34.355Z"
+      }
+    ],
+    "verified_at": null,
+    "sync_ack": "Owner behavior checked; Codex map and hook-runtime knowledge synchronized; bee dev regen completed at integration.",
+    "mistakes": [
+      {
+        "wrong": "Initial canary missed inherited probe paths and legitimate helper links",
+        "better": "test nested probes and actual executable helper links"
+      }
+    ],
+    "report": {
+      "outcome": "Isolate Codex canary environment and direct executable routing",
+      "commit": "ff028c404948b1ce3392d77e4db09e8caf0c0be4",
+      "files": [
+        "scripts/codex-parity-canary.sh",
+        "scripts/codex-parity-canary-test.sh",
+        "docs/history/codex-reliability-closeout/isolation.md",
+        "docs/history/codex-reliability-closeout/isolation-red.log",
+        "docs/history/codex-reliability-closeout/isolation-green.log"
+      ],
+      "tests": "bash scripts/codex-parity-canary-test.sh && bash -n scripts/codex-parity-canary.sh — green:unit — seven controls passed; installed live-canary.json records denied and allowed patch/shell writes",
+      "deviations": [
+        "Corrected verify field to an executable command — original mixed prose with shell and could not match proof parser; decision a8464d1c — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Initial canary missed inherited probe paths and legitimate helper links — test nested probes and actual executable helper links"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

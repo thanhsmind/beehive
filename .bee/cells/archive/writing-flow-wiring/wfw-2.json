@@ -1,0 +1,128 @@
+{
+  "id": "wfw-2",
+  "feature": "writing-flow-wiring",
+  "title": "Record GREEN, regenerate, and prove the suite",
+  "lane": "small",
+  "role": "docs",
+  "deps": [
+    "wfw-1"
+  ],
+  "decisions": [
+    "f951a31f"
+  ],
+  "files": [
+    "skills/bee-technical-writing/CREATION-LOG.md",
+    "AGENTS.md",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    ".claude-plugin/*",
+    ".codex-plugin/*",
+    ".bee/expertise/*",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-technical-writing/CREATION-LOG.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/wfw/red-results.md"
+  ],
+  "affects_skills": [
+    "skills/bee-technical-writing/CREATION-LOG.md"
+  ],
+  "affects_specs": [],
+  "action": "Wave-close cell. (1) Record GREEN and Final Outcome in the 'Wiring into the flow' section of skills/bee-technical-writing/CREATION-LOG.md from the leader's GREEN results file in this cell's Expertise block. (2) Run `.bee/bin/bee dev regen`, then `.bee/bin/bee dev release-manifest --check`, then the declared suite with the literal cargo path (`/home/thanhsmind/.cargo/bin/cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml`). All must be green; record their last lines on the cap. (3) Confirm AGENTS.md now carries the new sentence and agents_block_render_parity is green. Commit the regenerated trees and the log in one cell commit.",
+  "verify": "rg -q 'bee-technical-writing' AGENTS.md && rg -q 'bee-technical-writing' .claude/skills/bee-hive/SKILL.md && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "Regen, the manifest check and the declared suite are green",
+      "AGENTS.md carries the rendered sentence"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-technical-writing/CREATION-LOG.md",
+        "substantive": "GREEN and Final Outcome recorded"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md changes only through regen"
+    ],
+    "prohibitions": [
+      "No hand edit of a generated tree",
+      "No release"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader-wfw-2",
+    "outcome": "GREEN G4/G7 and Final Outcome recorded in skills/bee-technical-writing/CREATION-LOG.md (Wiring into the flow); regen rendered the sentence into AGENTS.md:262 and the docs-only row into all five skill trees; manifest check, verify and the declared suite green",
+    "files_changed": [
+      "skills/bee-technical-writing/CREATION-LOG.md",
+      "AGENTS.md",
+      ".claude/skills/bee-hive/SKILL.md",
+      ".claude/skills/bee-technical-writing/CREATION-LOG.md",
+      ".claude/skills/.bee-render.json",
+      ".agents/skills/bee-hive/SKILL.md",
+      ".agents/skills/bee-technical-writing/CREATION-LOG.md",
+      ".agents/skills/.bee-render.json",
+      ".opencode/skills/bee-hive/SKILL.md",
+      ".opencode/skills/bee-technical-writing/CREATION-LOG.md",
+      ".opencode/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/SKILL.md",
+      ".claude-plugin/skills/bee-technical-writing/CREATION-LOG.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/SKILL.md",
+      ".codex-plugin/skills/bee-technical-writing/CREATION-LOG.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "capped with --sync-ack instead of editing the rule applied_at files — the SYNC_DOOR flagged AGENTS.md, but its diff is regen output of one routing sentence and the capture rule is unchanged — hit an unforeseen obstacle",
+      "sync-ack: AGENTS.md changed only through bee dev regen: one routing sentence added to § Communication from wfw-1's packages/bee/AGENTS.block.md edit; rule agents-capture-line-at-close text is unchanged, and skills/bee-hive/SKILL.md was already updated by wfw-1"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T07:09:21.906Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose and the always-loaded block need the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen this session, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T07:05:46.452Z",
+    "sync_ack": "AGENTS.md changed only through bee dev regen: one routing sentence added to § Communication from wfw-1's packages/bee/AGENTS.block.md edit; rule agents-capture-line-at-close text is unchanged, and skills/bee-hive/SKILL.md was already updated by wfw-1",
+    "mistakes": [
+      {
+        "wrong": "the first bee cells finish --report JSON left out the files key and was refused",
+        "better": "check the report keys against the Result form before the first finish call"
+      }
+    ],
+    "report": {
+      "outcome": "GREEN and Final Outcome recorded; regen, release-manifest --check and the declared suite green",
+      "commit": "7a4998c2",
+      "files": [
+        "skills/bee-technical-writing/CREATION-LOG.md",
+        "AGENTS.md",
+        ".claude/skills",
+        ".agents/skills",
+        ".opencode/skills",
+        ".claude-plugin/skills",
+        ".codex-plugin/skills",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "/home/thanhsmind/.cargo/bin/cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — cell action names the declared suite after regen: 35 result groups, 3836 passed, 0 failed, agents_block_render_parity ok; bee dev regen all 3 steps green; bee dev release-manifest --check: 376 file(s) match stored manifest; cell verify line exit 0",
+      "deviations": [
+        "capped with --sync-ack instead of editing the rule applied_at files — the SYNC_DOOR flagged AGENTS.md, but its diff is regen output of one routing sentence and the capture rule is unchanged — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "the first bee cells finish --report JSON left out the files key and was refused — check the report keys against the Result form before the first finish call"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 331 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "escalate": true
+}

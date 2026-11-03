@@ -349,13 +349,13 @@ fn resolve_from_registry(
 }
 
 /// Returns the configured agent name from the cell-execution tier slot
-/// (`models.<runtime>.generation`), but ONLY when it is an object with
+/// (`team.<runtime>.generation`), but ONLY when it is an object with
 /// `kind == "herding"` and an `agent` field that is a non-empty string.
 /// `<runtime>` is mapped to one of `"claude"`, `"codex"`, `"opencode"`,
 /// defaulting to `"claude"`.
 fn generation_slot_herding_agent<'a>(cfg: &'a Value, runtime: &str) -> Option<&'a str> {
     let rt = if matches!(runtime, "claude" | "codex" | "opencode") { runtime } else { "claude" };
-    let slot = cfg.get("models")?.get(rt)?.get("generation")?;
+    let slot = cfg.get("team")?.get(rt)?.get("generation")?;
     let obj = slot.as_object()?;
     if obj.get("kind").and_then(Value::as_str) != Some("herding") {
         return None;
@@ -382,7 +382,7 @@ fn current_runtime() -> String {
 ///     through `herding.agents` alone. An unknown name is
 ///     `AgentCommandError::UnknownAgent`, listing every registry key.
 ///   - `agent = None` and the cell-execution tier slot
-///     (`models.<runtime>.generation`) is an object with `kind == "herding"`
+///     (`team.<runtime>.generation`) is an object with `kind == "herding"`
 ///     and a non-empty `agent`: resolved through `herding.agents` the same
 ///     way (an unknown name refuses typed).
 ///   - `agent = None` and `herding.agent_command` is a plain JSON string:
@@ -489,6 +489,19 @@ fn classify_outcome(result: &WaveResult, canonical_name: &str) -> Option<&'stati
     }
 }
 
+// Outcome -> retryable rule from herding::run / CONTEXT.md D3 (1ef811f7):
+// true only when the worker did no work (send_failed, flipped_before_send,
+// spawn_failed / resolution_failed); false for timed_out,
+// unverifiable_after_send, unsafe_at_preflight; None for done / succeeded.
+fn outcome_retryable(outcome: &str) -> Option<bool> {
+    match outcome {
+        "send_failed" | "flipped_before_send" | "spawn_failed" | "resolution_failed" => Some(true),
+        "timed_out" | "unverifiable_after_send" => Some(false),
+        "succeeded" | "done" => None,
+        _ => Some(false),
+    }
+}
+
 /// Runs `wave` on `backend`, then appends EXACTLY ONE row to the wave
 /// ledger (D10) — this call, not the choreography, owns the ledger write,
 /// so `run_wave` itself stays memoryless (D5). Generic over `WorkerBackend`
@@ -512,6 +525,7 @@ pub(crate) fn run_wave_and_record<B: WorkerBackend + Sync + ?Sized>(
             // dispatch.
             let pane_id = backend.canonical_id(&w.name);
             let outcome = classify_outcome(&result, &pane_id).map(str::to_string);
+            let retryable = outcome.as_deref().and_then(outcome_retryable);
             wave_ledger::WorkerRow {
                 name: w.name.clone(),
                 pane_id,
@@ -519,6 +533,7 @@ pub(crate) fn run_wave_and_record<B: WorkerBackend + Sync + ?Sized>(
                 task: w.task.clone(),
                 outcome,
                 evidence: None,
+                retryable,
             }
         })
         .collect();
@@ -664,18 +679,32 @@ fn run_wave_for_transport(
     }
 }
 
+fn wave_bucket_rows(names: &[String], retryable: Option<bool>) -> Vec<Value> {
+    names
+        .iter()
+        .map(|name| {
+            let mut m = serde_json::Map::new();
+            m.insert("name".into(), Value::String(name.clone()));
+            if let Some(r) = retryable {
+                m.insert("retryable".into(), Value::Bool(r));
+            }
+            Value::Object(m)
+        })
+        .collect()
+}
+
 fn emit_wave_result(wave_id: &str, result: &WaveResult, json: bool) {
     if json {
         let obj = serde_json::json!({
             "wave_id": wave_id,
             "success": result.is_success(),
-            "succeeded": result.succeeded,
-            "resolution_failed": result.resolution_failed,
-            "unsafe_at_preflight": result.unsafe_at_preflight,
-            "flipped_before_send": result.flipped_before_send,
-            "send_failed": result.send_failed,
-            "timed_out": result.timed_out,
-            "unverifiable_after_send": result.unverifiable_after_send,
+            "succeeded": wave_bucket_rows(&result.succeeded, outcome_retryable("succeeded")),
+            "resolution_failed": wave_bucket_rows(&result.resolution_failed, outcome_retryable("resolution_failed")),
+            "unsafe_at_preflight": wave_bucket_rows(&result.unsafe_at_preflight, outcome_retryable("unsafe_at_preflight")),
+            "flipped_before_send": wave_bucket_rows(&result.flipped_before_send, outcome_retryable("flipped_before_send")),
+            "send_failed": wave_bucket_rows(&result.send_failed, outcome_retryable("send_failed")),
+            "timed_out": wave_bucket_rows(&result.timed_out, outcome_retryable("timed_out")),
+            "unverifiable_after_send": wave_bucket_rows(&result.unverifiable_after_send, outcome_retryable("unverifiable_after_send")),
         });
         println!("{obj}");
         return;
@@ -914,7 +943,7 @@ fn parse_tmux_pane_list(stdout: &str) -> HashSet<String> {
 /// A refused key — a typo, which `transport_kind` reports as an `Err` rather
 /// than guessing — resolves to `None`, i.e. the ledger's degraded timer
 /// answer, never the other transport's pane list.
-fn live_pane_ids(main_root: &Path) -> Option<HashSet<String>> {
+pub(super) fn live_pane_ids(main_root: &Path) -> Option<HashSet<String>> {
     match super::transport_kind_at(main_root) {
         Ok(super::TransportKind::Herdr) => live_pane_ids_via_herdr(),
         Ok(super::TransportKind::Tmux) => live_pane_ids_via_tmux(),
@@ -953,17 +982,18 @@ fn emit_occupancy(occ: &wave_ledger::Occupancy, json: bool) {
     println!("{}", occupancy_plain_line(occ));
 }
 
-/// `bee herding occupancy` — the CLI bridge to the wave ledger's read side
-/// (D10's occupancy answer), reachable from a markdown role for the first
-/// time (`role-dispatch.md` §4 can only run shell commands). Reports how
-/// many worker slots are occupied AND which answer it gave: a real
-/// pane-list cross-check (`source: "live"`) when `herdr pane list`
-/// succeeded, or the degraded one-hour timer fallback (`source:
-/// "fallback"`) when it did not.
-///
-/// Flags: `--main-root <path>` (same override the other verbs take),
-/// `--json`.
-pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
+pub(super) fn occupancy_with_panes(
+    flags: &[&str],
+    live_panes_override: Option<Option<HashSet<String>>>,
+) -> (ExitCode, wave_ledger::Occupancy, Vec<String>) {
+    occupancy_with_panes_and_paseo(flags, live_panes_override, None)
+}
+
+pub(super) fn occupancy_with_panes_and_paseo(
+    flags: &[&str],
+    live_panes_override: Option<Option<HashSet<String>>>,
+    paseo_override: Option<&dyn crate::herding::paseo::PaseoCli>,
+) -> (ExitCode, wave_ledger::Occupancy, Vec<String>) {
     let mut explicit_root: Option<&str> = None;
     let mut json = false;
     let mut i = 0usize;
@@ -972,6 +1002,10 @@ pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
             "--main-root" => {
                 explicit_root = flags.get(i + 1).copied();
                 i += 2;
+            }
+            arg if arg.starts_with("--main-root=") => {
+                explicit_root = Some(&arg["--main-root=".len()..]);
+                i += 1;
             }
             "--json" => {
                 json = true;
@@ -986,15 +1020,150 @@ pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
             "bee herding occupancy: could not resolve the MAIN checkout root (no --main-root \
              given and `git rev-parse --git-common-dir` failed)"
         );
-        return ExitCode::FAILURE;
+        return (ExitCode::FAILURE, wave_ledger::Occupancy::Fallback(0), Vec::new());
     };
 
-    let live_panes = live_pane_ids(&main_root);
+    let paseo_box = if paseo_override.is_none() { paseo_cli_for(&main_root) } else { None };
+    let p_ref = paseo_override.or(paseo_box.as_deref());
+
+    let mut live_panes = match live_panes_override {
+        Some(lp) => lp,
+        None => live_pane_ids(&main_root),
+    };
+
+    if let (Some(cli), Some(set)) = (p_ref, live_panes.as_mut()) {
+        if let Some(ids) = paseo_live_ids(cli) {
+            set.extend(ids);
+        }
+    }
+
+    let mut sweep_lines = Vec::new();
+    if let Some(ref panes) = live_panes {
+        let bee_dir = main_root.join(".bee");
+        for marked_id in super::mailbox::mark_orphans_with_paseo(&bee_dir, panes, p_ref) {
+            let msg = format!("herding: marked job {marked_id} interrupted (process_restarted)");
+            println!("{msg}");
+            sweep_lines.push(msg);
+        }
+    }
+
     let now_ms = chrono::Utc::now().timestamp_millis();
     let occ =
         wave_ledger::live_worker_count(&main_root, live_panes.as_ref(), now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS);
     emit_occupancy(&occ, json);
-    ExitCode::SUCCESS
+    (ExitCode::SUCCESS, occ, sweep_lines)
+}
+
+fn paseo_cli_for(main_root: &Path) -> Option<Box<dyn crate::herding::paseo::PaseoCli>> {
+    let cfg = crate::herding::run::read_main_config(main_root);
+    if !crate::herding::repo_uses_paseo(&cfg, &main_root.join(".bee")) || !crate::herding::paseo::daemon_reachable() {
+        return None;
+    }
+    let cmd = crate::herding::paseo::paseo_command(&cfg);
+    let real = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));
+    Some(Box::new(crate::herding::paseo::FailFastPaseoCli::new(Box::new(real))))
+}
+
+fn paseo_live_ids(cli: &dyn crate::herding::paseo::PaseoCli) -> Option<Vec<String>> {
+    let stdout = cli.call(&crate::herding::paseo::ls_label_argv("bee_job")).ok()?;
+    let agents = crate::herding::paseo::parse_ls_agents_checked(&stdout)?;
+    Some(agents.into_iter().filter(|(_, _, archived)| !archived).map(|(id, _, _)| id).collect())
+}
+
+fn quiet_occupancy_from(
+    main_root: &Path,
+    live_panes: Option<HashSet<String>>,
+    paseo_ids: Option<Vec<String>>,
+    now_ms: i64,
+) -> wave_ledger::Occupancy {
+    let panes = match (live_panes, paseo_ids) {
+        (Some(mut set), Some(ids)) => {
+            set.extend(ids);
+            Some(set)
+        }
+        (None, Some(ids)) => Some(ids.into_iter().collect()),
+        (set, None) => set,
+    };
+    wave_ledger::live_worker_count(main_root, panes.as_ref(), now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS)
+}
+
+fn quiet_occupancy(main_root: &Path) -> wave_ledger::Occupancy {
+    let paseo_ids = paseo_cli_for(main_root).and_then(|cli| paseo_live_ids(cli.as_ref()));
+    quiet_occupancy_from(main_root, live_pane_ids(main_root), paseo_ids, chrono::Utc::now().timestamp_millis())
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct HerdingLimits {
+    pub(crate) concurrency: Option<u64>,
+    pub(crate) depth: Option<u64>,
+}
+
+pub(crate) fn herding_limits(cfg: &Value) -> HerdingLimits {
+    let limits = &cfg["herding"]["limits"];
+    HerdingLimits { concurrency: limits["concurrency"].as_u64(), depth: limits["depth"].as_u64() }
+}
+
+pub(crate) fn herding_depth_from(raw: Option<&str>) -> u64 {
+    raw.and_then(|v| v.trim().parse().ok()).unwrap_or(0)
+}
+
+pub(crate) fn herding_depth() -> u64 {
+    herding_depth_from(std::env::var("BEE_HERDING_DEPTH").ok().as_deref())
+}
+
+pub(crate) fn limits_refusal(
+    limits: HerdingLimits,
+    depth: u64,
+    occupancy: impl FnOnce() -> wave_ledger::Occupancy,
+) -> Option<Value> {
+    if let Some(limit) = limits.depth.filter(|limit| depth >= *limit) {
+        return Some(serde_json::json!({
+            "ok": false,
+            "reason": "limits.depth",
+            "depth": depth,
+            "limit": limit,
+            "retryable": false,
+            "fix": format!("this herding worker runs at depth {depth} and herding.limits.depth is {limit}; hand the work back to the leader or raise herding.limits.depth"),
+        }));
+    }
+    let limit = limits.concurrency?;
+    match occupancy() {
+        wave_ledger::Occupancy::Fallback(live) => Some(serde_json::json!({
+            "ok": false,
+            "reason": "limits.unverifiable",
+            "live": live,
+            "limit": limit,
+            "retryable": true,
+            "fix": "no live pane list could be read, so the live worker count cannot be verified; start the herding transport (herdr or tmux) or remove herding.limits.concurrency",
+        })),
+        wave_ledger::Occupancy::Live(live) if live as u64 >= limit => Some(serde_json::json!({
+            "ok": false,
+            "reason": "limits.concurrency",
+            "live": live,
+            "limit": limit,
+            "retryable": true,
+            "fix": "wait for a worker to finish (bee herding status) or raise herding.limits.concurrency",
+        })),
+        wave_ledger::Occupancy::Live(_) => None,
+    }
+}
+
+pub(crate) fn check_limits(main_root: &Path, cfg: &Value) -> Option<Value> {
+    limits_refusal(herding_limits(cfg), herding_depth(), || quiet_occupancy(main_root))
+}
+
+/// `bee herding occupancy` — the CLI bridge to the wave ledger's read side
+/// (D10's occupancy answer), reachable from a markdown role for the first
+/// time (`role-dispatch.md` §4 can only run shell commands). Reports how
+/// many worker slots are occupied AND which answer it gave: a real
+/// pane-list cross-check (`source: "live"`) when `herdr pane list`
+/// succeeded, or the degraded one-hour timer fallback (`source:
+/// "fallback"`) when it did not.
+///
+/// Flags: `--main-root <path>` (same override the other verbs take),
+/// `--json`.
+pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
+    occupancy_with_panes(flags, None).0
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1038,6 +1207,7 @@ fn append_worker_row(
             task,
             outcome: None,
             evidence: None,
+            retryable: None,
         }],
     };
     wave_ledger::append_wave(root, &row)?;
@@ -1500,12 +1670,12 @@ mod tests {
         assert_eq!(expand_tilde("~otheruser/bar.json"), "~otheruser/bar.json");
     }
 
-    // ─── tier slot resolution: models.<runtime>.generation ────────────
+    // ─── tier slot resolution: team.<runtime>.generation ────────────
 
     #[test]
     fn tier_slot_wins_over_differing_agent_command() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "agy-flash" }
                 }
@@ -1522,7 +1692,7 @@ mod tests {
     #[test]
     fn explicit_agent_name_still_wins_over_the_tier_slot() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "agy-flash" }
                 }
@@ -1537,7 +1707,7 @@ mod tests {
     fn non_participating_tier_slots_fall_through_to_agent_command() {
         // 1. kind: herding with no agent
         let cfg_no_agent = serde_json::json!({
-            "models": { "claude": { "generation": { "kind": "herding" } } },
+            "team": { "claude": { "generation": { "kind": "herding" } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_no_agent, None, "claude").unwrap();
@@ -1546,7 +1716,7 @@ mod tests {
 
         // 2. kind: herding with empty/whitespace agent
         let cfg_empty_agent = serde_json::json!({
-            "models": { "claude": { "generation": { "kind": "herding", "agent": "   " } } },
+            "team": { "claude": { "generation": { "kind": "herding", "agent": "   " } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_empty_agent, None, "claude").unwrap();
@@ -1555,7 +1725,7 @@ mod tests {
 
         // 3. plain model-name slot
         let cfg_model_str = serde_json::json!({
-            "models": { "claude": { "generation": "sonnet" } },
+            "team": { "claude": { "generation": "sonnet" } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_model_str, None, "claude").unwrap();
@@ -1564,7 +1734,7 @@ mod tests {
 
         // 4. kind: "cli" slot
         let cfg_cli = serde_json::json!({
-            "models": { "claude": { "generation": { "kind": "cli", "command": "run-cmd" } } },
+            "team": { "claude": { "generation": { "kind": "cli", "command": "run-cmd" } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_cli, None, "claude").unwrap();
@@ -1573,7 +1743,7 @@ mod tests {
 
         // 5. null / non-object slot
         let cfg_null = serde_json::json!({
-            "models": { "claude": { "generation": null } },
+            "team": { "claude": { "generation": null } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_null, None, "claude").unwrap();
@@ -1584,7 +1754,7 @@ mod tests {
     #[test]
     fn tier_slot_naming_unknown_agent_returns_unknown_agent_error() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "no-such-herd" }
                 }
@@ -1608,7 +1778,7 @@ mod tests {
     #[test]
     fn tier_slot_resolving_to_object_shape_entry_carries_env() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "codex-envd" }
                 }
@@ -1632,7 +1802,7 @@ mod tests {
     #[test]
     fn unknown_or_absent_runtime_reads_the_claude_block() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "agy-flash" }
                 },
@@ -1959,6 +2129,7 @@ mod tests {
                     task: "do it".to_string(),
                     outcome: None,
                     evidence: None,
+                    retryable: None,
                 }],
             },
         )
@@ -2209,5 +2380,426 @@ mod tests {
             "the recorded row's worktree must be the value given to --path"
         );
         assert_eq!(waves[0].workers[0].task, "P-777", "the recorded row's task must be the value given to --task");
+    }
+
+    #[test]
+    fn occupancy_sweep_marks_orphan_interrupted_process_restarted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-orphan");
+        std::fs::create_dir_all(&job_dir).unwrap();
+
+        let job_spec = serde_json::json!({
+            "job_id": "job-orphan",
+            "pane_id": "w4:dead",
+            "round": 1
+        });
+        std::fs::write(job_dir.join("job.json"), serde_json::to_string(&job_spec).unwrap()).unwrap();
+
+        // live_panes is empty, so w4:dead is not alive
+        let (exit, _occ, sweep_lines) =
+            occupancy_with_panes(&["--main-root", root_str], Some(Some(HashSet::new())));
+        assert_eq!(exit, ExitCode::SUCCESS);
+        assert_eq!(
+            sweep_lines,
+            vec!["herding: marked job job-orphan interrupted (process_restarted)"]
+        );
+
+        let (mark, reason) = crate::herding::mailbox::read_mark(&bee_dir, "job-orphan").expect("mark should exist");
+        assert_eq!(mark, crate::herding::mailbox::Mark::Interrupted);
+        assert_eq!(reason, Some("process_restarted".to_string()));
+    }
+
+    #[test]
+    fn occupancy_sweep_skips_jobs_with_result_or_live_pane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+
+        // Job 1: has result file
+        let job1_dir = bee_dir.join("mailbox").join("job-result");
+        std::fs::create_dir_all(&job1_dir).unwrap();
+        let job1_spec = serde_json::json!({
+            "job_id": "job-result",
+            "pane_id": "w4:dead",
+            "round": 1
+        });
+        std::fs::write(job1_dir.join("job.json"), serde_json::to_string(&job1_spec).unwrap()).unwrap();
+        let result_json = serde_json::json!({
+            "status": "done",
+            "summary": "all good",
+            "files_changed": [],
+            "proof": "tests passed"
+        });
+        std::fs::write(job1_dir.join("result-1.json"), serde_json::to_string(&result_json).unwrap()).unwrap();
+
+        // Job 2: pane is in live_panes
+        let job2_dir = bee_dir.join("mailbox").join("job-live");
+        std::fs::create_dir_all(&job2_dir).unwrap();
+        let job2_spec = serde_json::json!({
+            "job_id": "job-live",
+            "pane_id": "w4:live",
+            "round": 1
+        });
+        std::fs::write(job2_dir.join("job.json"), serde_json::to_string(&job2_spec).unwrap()).unwrap();
+
+        let live_panes: HashSet<String> = ["w4:live".to_string()].into_iter().collect();
+        let (exit, _occ, sweep_lines) =
+            occupancy_with_panes(&["--main-root", root_str], Some(Some(live_panes)));
+        assert_eq!(exit, ExitCode::SUCCESS);
+        assert!(sweep_lines.is_empty(), "neither job should be marked as orphan");
+
+        assert_eq!(crate::herding::mailbox::read_mark(&bee_dir, "job-result"), None);
+        assert_eq!(crate::herding::mailbox::read_mark(&bee_dir, "job-live"), None);
+    }
+
+    // ─── D3 (1ef811f7): retryable bit on wave buckets and ledger rows ────────
+
+    #[test]
+    fn wave_ledger_and_bucket_rows_set_retryable_true_for_send_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let backend = FakeBackend::new();
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_send_result("alpha", Err("broken pipe".to_string()));
+
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "do it".to_string(),
+            worktree: "/tmp/wt-alpha".to_string(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(50), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let result = run_wave_and_record(&backend, root, "w-send-fail".to_string(), "2026-08-18T00:00:00Z".to_string(), &inputs, &wave_value);
+        assert!(!result.is_success());
+        assert_eq!(result.send_failed, vec!["alpha".to_string()]);
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("send_failed"));
+        assert_eq!(waves[0].workers[0].retryable, Some(true), "send_failed worker row in ledger must have retryable: Some(true)");
+
+        let bucket = wave_bucket_rows(&result.send_failed, outcome_retryable("send_failed"));
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0]["name"], "alpha");
+        assert_eq!(bucket[0]["retryable"], true, "send_failed bucket row must carry retryable: true");
+    }
+
+    #[test]
+    fn wave_ledger_and_bucket_rows_set_retryable_false_for_unverifiable_after_send() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let backend = FakeBackend::new();
+        ready_worker(&backend, "alpha", "MARKER-alpha");
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_status("alpha", RawStatus::LookupFailed);
+
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "MARKER-alpha".to_string(),
+            worktree: "/tmp/wt-alpha".to_string(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(50), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let result = run_wave_and_record(&backend, root, "w-unverif".to_string(), "2026-08-18T00:00:00Z".to_string(), &inputs, &wave_value);
+        assert!(!result.is_success());
+        assert_eq!(result.unverifiable_after_send, vec!["alpha".to_string()]);
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("unverifiable_after_send"));
+        assert_eq!(waves[0].workers[0].retryable, Some(false), "unverifiable_after_send worker row in ledger must have retryable: Some(false)");
+
+        let bucket = wave_bucket_rows(&result.unverifiable_after_send, outcome_retryable("unverifiable_after_send"));
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0]["name"], "alpha");
+        assert_eq!(bucket[0]["retryable"], false, "unverifiable_after_send bucket row must carry retryable: false");
+    }
+
+    #[test]
+    fn wave_ledger_and_bucket_rows_omit_retryable_for_succeeded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let backend = FakeBackend::new();
+        ready_worker(&backend, "alpha", "MARKER-alpha");
+
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "MARKER-alpha".to_string(),
+            worktree: "/tmp/wt-alpha".to_string(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(500), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let result = run_wave_and_record(&backend, root, "w-succ".to_string(), "2026-08-18T00:00:00Z".to_string(), &inputs, &wave_value);
+        assert!(result.is_success());
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("succeeded"));
+        assert_eq!(waves[0].workers[0].retryable, None, "succeeded worker row in ledger must have retryable: None");
+
+        let bucket = wave_bucket_rows(&result.succeeded, outcome_retryable("succeeded"));
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0]["name"], "alpha");
+        assert!(bucket[0].get("retryable").is_none(), "succeeded bucket row must carry no retryable key");
+    }
+
+    #[test]
+    fn wave_ledger_and_bucket_rows_set_retryable_true_for_flipped_before_send() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let backend = FakeBackend::new();
+        // Phase 2 ready, but before send it flips to Blocked
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Blocked));
+
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "do it".to_string(),
+            worktree: "/tmp/wt-alpha".to_string(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(50), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let result = run_wave_and_record(&backend, root, "w-flipped".to_string(), "2026-08-18T00:00:00Z".to_string(), &inputs, &wave_value);
+        assert!(!result.is_success());
+        assert_eq!(result.flipped_before_send, vec!["alpha".to_string()]);
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("flipped_before_send"));
+        assert_eq!(waves[0].workers[0].retryable, Some(true), "flipped_before_send worker row in ledger must have retryable: Some(true)");
+
+        let bucket = wave_bucket_rows(&result.flipped_before_send, outcome_retryable("flipped_before_send"));
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0]["name"], "alpha");
+        assert_eq!(bucket[0]["retryable"], true, "flipped_before_send bucket row must carry retryable: true");
+    }
+
+    struct FakePaseoCli {
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        result: Result<String, String>,
+    }
+
+    impl FakePaseoCli {
+        fn new(result: Result<String, String>) -> Self {
+            Self {
+                calls: std::sync::Mutex::new(Vec::new()),
+                result,
+            }
+        }
+    }
+
+    impl crate::herding::paseo::PaseoCli for FakePaseoCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            self.calls.lock().unwrap().push(args.to_vec());
+            self.result.clone()
+        }
+    }
+
+    #[test]
+    fn occupancy_counts_labelled_non_archived_paseo_agents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+
+        let worker = wave_ledger::WorkerRow {
+            name: "job-p1".to_string(),
+            pane_id: "paseo-agent-live".to_string(),
+            worktree: root.display().to_string(),
+            task: "task-1".to_string(),
+            outcome: None,
+            evidence: None,
+            retryable: None,
+        };
+        let row = wave_ledger::WaveRow {
+            wave_id: "w-1".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            workers: vec![worker],
+        };
+        wave_ledger::append_wave(root, &row).unwrap();
+
+        let ls_json = r#"[
+            {"id": "paseo-agent-live", "labels": {"bee_job": "job-p1"}, "archived": false},
+            {"id": "paseo-agent-archived", "labels": {"bee_job": "job-p2"}, "archived": true}
+        ]"#;
+        let fake = FakePaseoCli::new(Ok(ls_json.to_string()));
+
+        let (exit, occ, _) = occupancy_with_panes_and_paseo(
+            &["--main-root", root_str],
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+        assert_eq!(occ, wave_ledger::Occupancy::Live(1));
+        assert_eq!(
+            fake.calls.lock().unwrap().as_slice(),
+            &[crate::herding::paseo::ls_label_argv("bee_job")]
+        );
+    }
+
+    #[test]
+    fn occupancy_failed_paseo_call_preserves_existing_behaviour() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+
+        let worker = wave_ledger::WorkerRow {
+            name: "job-p1".to_string(),
+            pane_id: "pane-1".to_string(),
+            worktree: root.display().to_string(),
+            task: "task-1".to_string(),
+            outcome: None,
+            evidence: None,
+            retryable: None,
+        };
+        let row = wave_ledger::WaveRow {
+            wave_id: "w-1".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            workers: vec![worker],
+        };
+        wave_ledger::append_wave(root, &row).unwrap();
+
+        let fake = FakePaseoCli::new(Err("paseo connection failed".to_string()));
+        let live_panes: HashSet<String> = ["pane-1".to_string()].into_iter().collect();
+
+        let (exit, occ, _) = occupancy_with_panes_and_paseo(
+            &["--main-root", root_str],
+            Some(Some(live_panes)),
+            Some(&fake),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+        assert_eq!(occ, wave_ledger::Occupancy::Live(1));
+
+        let (exit_fb, occ_fb, _) = occupancy_with_panes_and_paseo(
+            &["--main-root", root_str],
+            Some(None),
+            Some(&fake),
+        );
+        assert_eq!(exit_fb, ExitCode::SUCCESS);
+        assert_eq!(occ_fb, wave_ledger::Occupancy::Fallback(1));
+    }
+
+    fn unresolved_worker_row(root: &Path, name: &str, pane_id: &str) {
+        let row = wave_ledger::WaveRow {
+            wave_id: name.to_string(),
+            started_at: "2020-01-01T00:00:00Z".to_string(),
+            workers: vec![wave_ledger::WorkerRow {
+                name: name.to_string(),
+                pane_id: pane_id.to_string(),
+                worktree: "/w".to_string(),
+                task: "t".to_string(),
+                outcome: None,
+                evidence: None,
+                retryable: None,
+            }],
+        };
+        wave_ledger::append_wave(root, &row).unwrap();
+    }
+
+    fn untouched() -> wave_ledger::Occupancy {
+        panic!("occupancy must not be read")
+    }
+
+    #[test]
+    fn herding_limits_read_both_keys_and_absent_means_no_limit() {
+        let both = serde_json::json!({"herding": {"limits": {"concurrency": 4, "depth": 2}}});
+        assert_eq!(herding_limits(&both), HerdingLimits { concurrency: Some(4), depth: Some(2) });
+        assert_eq!(herding_limits(&Value::Null), HerdingLimits::default());
+        let bogus = serde_json::json!({"herding": {"limits": {"concurrency": "4", "depth": -1}}});
+        assert_eq!(herding_limits(&bogus), HerdingLimits::default());
+    }
+
+    #[test]
+    fn herding_depth_reads_absent_or_garbage_as_zero() {
+        assert_eq!(herding_depth_from(None), 0);
+        assert_eq!(herding_depth_from(Some("2")), 2);
+        assert_eq!(herding_depth_from(Some("x")), 0);
+    }
+
+    #[test]
+    fn no_limits_never_reads_occupancy_and_never_refuses() {
+        assert_eq!(limits_refusal(HerdingLimits::default(), 9, untouched), None);
+    }
+
+    #[test]
+    fn a_run_at_the_concurrency_limit_is_refused_and_retryable() {
+        let limits = HerdingLimits { concurrency: Some(4), depth: None };
+        let v = limits_refusal(limits, 0, || wave_ledger::Occupancy::Live(4)).expect("at the limit refuses");
+        assert_eq!(
+            v,
+            serde_json::json!({
+                "ok": false,
+                "reason": "limits.concurrency",
+                "live": 4,
+                "limit": 4,
+                "retryable": true,
+                "fix": "wait for a worker to finish (bee herding status) or raise herding.limits.concurrency",
+            })
+        );
+        assert_eq!(limits_refusal(limits, 0, || wave_ledger::Occupancy::Live(3)), None);
+    }
+
+    #[test]
+    fn a_fallback_count_with_a_concurrency_limit_is_unverifiable() {
+        let limits = HerdingLimits { concurrency: Some(4), depth: None };
+        let v = limits_refusal(limits, 0, || wave_ledger::Occupancy::Fallback(0)).expect("fallback refuses");
+        assert_eq!(v["reason"], "limits.unverifiable");
+        assert_eq!(v["retryable"], true);
+        assert_eq!(v["limit"], 4);
+    }
+
+    #[test]
+    fn a_run_at_the_depth_limit_is_refused_before_occupancy_is_read() {
+        let limits = HerdingLimits { concurrency: Some(4), depth: Some(1) };
+        let v = limits_refusal(limits, 1, untouched).expect("depth 1 at limit 1 refuses");
+        assert_eq!(v["reason"], "limits.depth");
+        assert_eq!(v["depth"], 1);
+        assert_eq!(v["limit"], 1);
+        let shallow = HerdingLimits { concurrency: None, depth: Some(1) };
+        assert_eq!(limits_refusal(shallow, 0, untouched), None);
+    }
+
+    #[test]
+    fn paseo_agents_count_live_even_without_a_pane_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        unresolved_worker_row(root, "job-a", "paseo-agent-1");
+        unresolved_worker_row(root, "job-b", "paseo-agent-gone");
+        let now = chrono::Utc::now().timestamp_millis();
+        let occ = quiet_occupancy_from(root, None, Some(vec!["paseo-agent-1".to_string()]), now);
+        assert_eq!(occ, wave_ledger::Occupancy::Live(1));
+        let panes: HashSet<String> = ["%1".to_string()].into_iter().collect();
+        let merged = quiet_occupancy_from(root, Some(panes), Some(vec!["paseo-agent-1".to_string()]), now);
+        assert_eq!(merged, wave_ledger::Occupancy::Live(1));
+        assert!(quiet_occupancy_from(root, None, None, now).is_fallback());
     }
 }

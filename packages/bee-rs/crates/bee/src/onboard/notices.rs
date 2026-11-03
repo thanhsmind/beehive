@@ -6,9 +6,11 @@
 // and repoHooksTransitionNotices (l. 3512) — plus lib/commands_detect.mjs
 // detectCommands, which this script imports.
 
+use super::plan::verify_source_root;
 use super::templates::{
-    COMMAND_KEYS, GITIGNORE_BLOCK_PATTERNS, RETIRED_VERIFY_KEY_NO_TEST_WARNING,
-    RETIRED_VERIFY_KEY_WARNING, STALE_ADVISOR_KEY_WARNING,
+    COMMAND_KEYS, DESIGN_PACKS_OFFER, GITIGNORE_BLOCK_PATTERNS, NO_TEST_VERIFICATION_OFFER,
+    RETIRED_VERIFY_KEY_NO_TEST_WARNING, RETIRED_VERIFY_KEY_WARNING, STALE_ADVISOR_KEY_WARNING,
+    TESTED_REPO_VERIFICATION_OFFER, VERIFICATION_UPKEEP_POINTER, VERIFY_APP_SKILL_NAME,
 };
 use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists, split_lines};
 use serde_json::Value;
@@ -149,6 +151,24 @@ pub fn detect_commands(root: &Path) -> Vec<Candidate> {
 
 // ── notices ────────────────────────────────────────────────────────────────
 
+/// host-packaging-gaps D2: name the two keys the one-time `add_pi_team` item
+/// adds to an existing `.bee/config.json` (planned or applied — `items` is
+/// whichever list this run reports).
+pub fn pi_team_notices(items: &[Value]) -> Vec<String> {
+    items
+        .iter()
+        .filter(|i| i["action"] == "add_pi_team")
+        .map(|i| {
+            let table = i["table"].as_str().unwrap_or("team");
+            format!(
+                "Pi role table: .bee/config.json gains {table}.pi (every role a herding slot on \
+agent \"pi\") and herding.agents.pi = [\"pi\"] (your own Pi default model), each only if absent. \
+Onboarding adds them once; delete them to opt out and they stay deleted."
+            )
+        })
+        .collect()
+}
+
 /// commandsNotices (l. 2594): propose-only (decision D3) — this script never
 /// writes detected values to .bee/config.json.
 pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {
@@ -199,19 +219,99 @@ pub fn stale_advisor_notices(repo_root: &Path) -> Vec<String> {
         notices.push(STALE_ADVISOR_KEY_WARNING.to_string());
     }
     let commands = obj.and_then(|o| o.get("commands")).and_then(Value::as_object);
-    if let Some(commands) = commands {
-        if commands.contains_key("verify") {
-            let has_test = commands
-                .get("test")
-                .is_some_and(|v| v.as_str().is_some_and(|s| !s.trim().is_empty()) || v.is_array());
-            notices.push(if has_test {
-                RETIRED_VERIFY_KEY_WARNING.to_string()
-            } else {
-                RETIRED_VERIFY_KEY_NO_TEST_WARNING.to_string()
-            });
-        }
+    let has_test = declares_test(commands);
+    // ARM ORDER, deliberate and asserted: the retired `commands.verify` key
+    // is read FIRST and keeps every case it answered before. A host carrying
+    // it lost its test gate and must delete the key; that instruction outranks
+    // anything about verification, and stacking a second notice beside it
+    // would only compete for the reader's one next action. Exactly one arm
+    // fires, so no repo ever draws two of these notices.
+    if commands.is_some_and(|c| c.contains_key("verify")) {
+        notices.push(if has_test {
+            RETIRED_VERIFY_KEY_WARNING.to_string()
+        } else {
+            RETIRED_VERIFY_KEY_NO_TEST_WARNING.to_string()
+        });
+    } else if exists(&verify_app_skill_file(repo_root)) {
+        // Has the skill already: point at its upkeep, never re-offer it
+        // (verification-in-the-flow D3).
+        notices.push(VERIFICATION_UPKEEP_POINTER.to_string());
+    } else {
+        // Has no verification skill: offer to build one. The wording splits
+        // on the test command, but the ARM never does - a test command asks
+        // whether the code stayed correct, which is a different question from
+        // whether the product works, so a tested repo needs this offer too.
+        notices.push(if has_test {
+            TESTED_REPO_VERIFICATION_OFFER.to_string()
+        } else {
+            NO_TEST_VERIFICATION_OFFER.to_string()
+        });
+    }
+    if design_offer_due(repo_root) {
+        notices.push(DESIGN_PACKS_OFFER.to_string());
     }
     notices
+}
+
+pub fn design_offer_due(repo_root: &Path) -> bool {
+    let config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
+    let picked = config
+        .as_ref()
+        .and_then(Value::as_object)
+        .and_then(|o| o.get("design"))
+        .and_then(|d| d.get("packs"))
+        .is_some();
+    !picked && has_ui_file(repo_root)
+}
+
+const UI_FILE_EXTENSIONS: &[&str] = &["html", "css", "scss", "jsx", "tsx", "vue", "svelte"];
+const UI_SCAN_SKIPPED_DIRS: &[&str] = &["node_modules", "target", "dist"];
+const UI_SCAN_MAX_DEPTH: usize = 6;
+const UI_SCAN_MAX_ENTRIES: usize = 10_000;
+
+fn has_ui_file(repo_root: &Path) -> bool {
+    let mut queue = std::collections::VecDeque::from([(repo_root.to_path_buf(), 0usize)]);
+    let mut seen = 0usize;
+    while let Some((dir, depth)) = queue.pop_front() {
+        for entry in read_dir_sorted(&dir) {
+            seen += 1;
+            if seen > UI_SCAN_MAX_ENTRIES {
+                return false;
+            }
+            if entry.is_dir {
+                let skipped = entry.name.starts_with('.') || UI_SCAN_SKIPPED_DIRS.contains(&entry.name.as_str());
+                if depth < UI_SCAN_MAX_DEPTH && !skipped {
+                    queue.push_back((dir.join(&entry.name), depth + 1));
+                }
+            } else if entry.is_file
+                && Path::new(&entry.name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| UI_FILE_EXTENSIONS.contains(&e))
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// The ONE path that answers "does this repo have a verification skill": its
+/// SOURCE file (verification-in-the-flow D8), never a rendered runtime copy.
+/// A fresh clone has the source before it has ever run `--apply`, so reading a
+/// rendered home would branch on clone state instead of on what the repo has.
+fn verify_app_skill_file(repo_root: &Path) -> std::path::PathBuf {
+    verify_source_root(repo_root).join(VERIFY_APP_SKILL_NAME).join("SKILL.md")
+}
+
+/// The ONE definition of "this repo declares a test command": a non-empty
+/// string, or an array (the multi-command list shape). The retired-verify
+/// warnings and the verification offer read it through this function so the
+/// two can never disagree about what "declared" means.
+fn declares_test(commands: Option<&serde_json::Map<String, Value>>) -> bool {
+    commands
+        .and_then(|c| c.get("test"))
+        .is_some_and(|v| v.as_str().is_some_and(|s| !s.trim().is_empty()) || v.is_array())
 }
 
 /// trackedGitignorePaths (l. 2665): `git ls-files -z -- <patterns>` with an
@@ -396,16 +496,200 @@ mod tests {
 
     #[test]
     fn stale_advisor_key_is_reported() {
+        // Every repo now also draws a verification notice, so this case is
+        // about the advisor key appearing and disappearing, never about the
+        // list being empty.
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+        let has_advisor_warning = |dir: &Path| {
+            stale_advisor_notices(dir).contains(&STALE_ADVISOR_KEY_WARNING.to_string())
+        };
         std::fs::write(
             dir.path().join(".bee").join("config.json"),
-            json!({"advisor": {"mode": "x"}}).to_string(),
+            json!({"advisor": {"mode": "x"}, "commands": {"test": "cargo test"}}).to_string(),
         )
         .unwrap();
-        assert_eq!(stale_advisor_notices(dir.path()), vec![STALE_ADVISOR_KEY_WARNING.to_string()]);
-        std::fs::write(dir.path().join(".bee").join("config.json"), json!({}).to_string()).unwrap();
-        assert!(stale_advisor_notices(dir.path()).is_empty());
+        assert!(has_advisor_warning(dir.path()));
+        std::fs::write(
+            dir.path().join(".bee").join("config.json"),
+            json!({"commands": {"test": "cargo test"}}).to_string(),
+        )
+        .unwrap();
+        assert!(!has_advisor_warning(dir.path()));
+    }
+
+    /// Whether the fixture repo carries the verification skill SOURCE. Named
+    /// constants because the truth table has two independent axes and a bare
+    /// `true` at the call site says nothing about which one it moves.
+    const WITH_SKILL: bool = true;
+    const NO_SKILL: bool = false;
+
+    fn stale_notices_for(config: Value, verify_skill: bool) -> Vec<String> {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+        std::fs::write(dir.path().join(".bee").join("config.json"), config.to_string()).unwrap();
+        if verify_skill {
+            let skill = verify_app_skill_file(dir.path());
+            std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
+            std::fs::write(skill, "drive the app\n").unwrap();
+        }
+        stale_advisor_notices(dir.path())
+    }
+
+    #[test]
+    fn a_repo_with_no_test_command_is_offered_the_verification_skill() {
+        let offer = vec![NO_TEST_VERIFICATION_OFFER.to_string()];
+        // The target population: onboarded after 2.1.0, so no legacy key.
+        assert_eq!(stale_notices_for(json!({"commands": {"start": "make run"}}), NO_SKILL), offer);
+        // No commands block at all is the same state — nothing is declared.
+        assert_eq!(stale_notices_for(json!({}), NO_SKILL), offer);
+        // Neither is a blank one.
+        assert_eq!(stale_notices_for(json!({"commands": {"test": "   "}}), NO_SKILL), offer);
+    }
+
+    #[test]
+    fn a_legacy_verify_key_without_a_test_gets_the_retirement_warning_alone() {
+        assert_eq!(
+            stale_notices_for(json!({"commands": {"verify": "make check"}}), NO_SKILL),
+            vec![RETIRED_VERIFY_KEY_NO_TEST_WARNING.to_string()],
+            "the retired-key host already has its instruction; two notices would contradict",
+        );
+    }
+
+    #[test]
+    fn a_legacy_verify_key_beside_a_test_gets_the_plain_retirement_warning() {
+        assert_eq!(
+            stale_notices_for(
+                json!({"commands": {"verify": "make check", "test": "cargo test"}}),
+                NO_SKILL
+            ),
+            vec![RETIRED_VERIFY_KEY_WARNING.to_string()],
+        );
+    }
+
+    #[test]
+    fn a_legacy_verify_key_outranks_the_upkeep_pointer() {
+        // The stated arm order, asserted: the retired key is read FIRST, so a
+        // host that has both a legacy key and the skill hears about the key
+        // it must delete and nothing else. Exactly one notice, never two.
+        for shape in [
+            json!({"commands": {"verify": "make check"}}),
+            json!({"commands": {"verify": "make check", "test": "cargo test"}}),
+        ] {
+            let notices = stale_notices_for(shape.clone(), WITH_SKILL);
+            assert_eq!(notices.len(), 1, "one notice only, for {shape}");
+            assert!(
+                notices[0].starts_with("commands.verify was retired"),
+                "the retirement warning wins, for {shape}",
+            );
+        }
+    }
+
+    #[test]
+    fn a_declared_test_command_now_draws_the_undriven_product_offer() {
+        // It used to draw nothing at all: the offer was gated on the repo
+        // declaring NO test command, so most repos — bee's own included —
+        // never heard of verification. A test command is not a drive.
+        for declared in [json!("cargo test"), json!(["cargo test", "cargo clippy"])] {
+            assert_eq!(
+                stale_notices_for(json!({"commands": {"test": declared}}), NO_SKILL),
+                vec![TESTED_REPO_VERIFICATION_OFFER.to_string()],
+                "declared as {declared}",
+            );
+        }
+        let first = |s: &str| s.split(". ").next().unwrap().to_string();
+        assert_ne!(
+            first(TESTED_REPO_VERIFICATION_OFFER),
+            first(NO_TEST_VERIFICATION_OFFER),
+            "a tested repo must not be told it has no command that proves it works",
+        );
+    }
+
+    #[test]
+    fn the_verification_skill_beside_no_test_command_draws_the_upkeep_pointer() {
+        assert_eq!(
+            stale_notices_for(json!({"commands": {"start": "make run"}}), WITH_SKILL),
+            vec![VERIFICATION_UPKEEP_POINTER.to_string()],
+            "the skill exists, so there is nothing left to offer",
+        );
+    }
+
+    #[test]
+    fn the_verification_skill_beside_a_test_command_draws_the_upkeep_pointer() {
+        assert_eq!(
+            stale_notices_for(json!({"commands": {"test": "cargo test"}}), WITH_SKILL),
+            vec![VERIFICATION_UPKEEP_POINTER.to_string()],
+            "the test command never decided this arm; the skill's existence does",
+        );
+    }
+
+    #[test]
+    fn the_verification_offer_speaks_to_the_user_without_internal_terms() {
+        // All three are printed verbatim, so whatever any of them says can
+        // reach a person.
+        for text in [
+            NO_TEST_VERIFICATION_OFFER,
+            TESTED_REPO_VERIFICATION_OFFER,
+            VERIFICATION_UPKEEP_POINTER,
+        ] {
+            for banned in [".bee", "commands.", "config.json", "gate", "cap ", "proof"] {
+                assert!(!text.contains(banned), "no notice may say {banned}: {text}");
+            }
+        }
+        for offer in [NO_TEST_VERIFICATION_OFFER, TESTED_REPO_VERIFICATION_OFFER] {
+            assert!(offer.contains("bee-verifying"), "it names the skill: {offer}");
+            assert!(
+                offer.contains("user's to accept"),
+                "the offer is the user's to accept, never the agent's to assume: {offer}",
+            );
+        }
+        assert!(
+            VERIFICATION_UPKEEP_POINTER.contains("bee-verify-upkeep"),
+            "the pointer names the skill that does the upkeep",
+        );
+        assert!(
+            !VERIFICATION_UPKEEP_POINTER.contains("Offer"),
+            "the upkeep notice is a pointer, not a second offer",
+        );
+    }
+
+    #[test]
+    fn the_design_offer_speaks_plainly_and_names_every_pack() {
+        for banned in [".bee", "config.json", "design.packs", "gate", "cap ", "proof", "cell"] {
+            assert!(!DESIGN_PACKS_OFFER.contains(banned), "no offer may say {banned}");
+        }
+        for pack in ["web", "charts", "motion", "apple", "figma", "none"] {
+            assert!(DESIGN_PACKS_OFFER.contains(pack), "the offer names {pack}");
+        }
+        assert!(DESIGN_PACKS_OFFER.contains("replaces every edit made inside its design folders"));
+        assert!(DESIGN_PACKS_OFFER.contains("never pick for them"));
+    }
+
+    #[test]
+    fn the_ui_scan_skips_hidden_and_build_trees_and_stops_at_its_depth_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let put = |rel: &[&str]| {
+            let mut p = dir.path().to_path_buf();
+            for seg in rel {
+                p = p.join(seg);
+            }
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "x").unwrap();
+        };
+        put(&[".venv", "lib", "page.html"]);
+        put(&["node_modules", "x", "a.css"]);
+        put(&["dist", "a.jsx"]);
+        put(&["target", "a.vue"]);
+        put(&["src", "main.rs"]);
+        let too_deep: Vec<String> = (0..=UI_SCAN_MAX_DEPTH).map(|i| format!("d{i}")).collect();
+        let mut path: Vec<&str> = too_deep.iter().map(String::as_str).collect();
+        path.push("deep.svelte");
+        put(&path);
+        assert!(!has_ui_file(dir.path()));
+
+        let deepest: Vec<&str> = too_deep[..UI_SCAN_MAX_DEPTH].iter().map(String::as_str).chain(["ok.scss"]).collect();
+        put(&deepest);
+        assert!(has_ui_file(dir.path()));
     }
 
     #[test]

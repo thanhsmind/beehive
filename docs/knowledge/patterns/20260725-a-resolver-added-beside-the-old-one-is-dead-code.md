@@ -7,6 +7,7 @@ timestamp: 2026-07-25
 bee:
   id: pattern-20260725-a-resolver-added-beside-the-old-one-is-dead-code
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["multisession-native cell multisession-native-17 (resolveContext(cwd) added beside resolveRoots with zero production call sites reading its new fields; trace .bee/cells/multisession-native-17.json, commit bd8f755, 2026-07-25)", multisession-native re-slice decision 89a4a87b (msn-18 honest block and the 18a/18b/18c/18d re-slice that followed), docs/history/multisession-native/reports/advisor-digest-slice4.md (condition 3/F4)]
   polarity: pitfall
   critical: true

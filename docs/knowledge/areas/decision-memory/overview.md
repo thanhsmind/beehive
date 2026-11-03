@@ -72,6 +72,58 @@ Three field failures (reported against a host repo, fixed generically):
   pushed to fabricate a value that is not theirs to choose; and the check is
   proven by injection — a tagless call added on purpose must name its own file
   and line.
+- **R1b — A tag slug takes at most ONE interior colon, which namespaces it**
+  (slp-contract-original-request D2). The pattern is
+  `/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/`: each side of the colon obeys
+  the plain slug rule, so a colon at either end, an empty segment, and a second
+  colon each refuse by name. One predicate
+  (`verbs/decisions/scanners.rs` `tag_pattern_test`) serves both `decisions log`
+  and `decisions tag`, and the refusal text it prints (`TAG_PATTERN_DISPLAY`)
+  is that same pattern. The namespace exists for `contract:<name>` — the
+  contract-status label, which is DERIVED over the active decision set and is
+  never a registry (slp-contract-original-request D1). Every pre-namespace
+  tag still validates; the widening takes nothing away. Side effect under R1:
+  a `contract:<name>` tag is unknown to the taxonomy, so it is accepted and
+  appended to `candidates[]` — the checked-in `docs/decisions/taxonomy.json`
+  grows one candidate per contract name, awaiting curation like any other new
+  tag.
+- **R1c — Contract status is DERIVED, never stored**
+  (slp-contract-original-request D1/D2). R1b gives the label its spelling;
+  this is what reading it means. Nothing is written anywhere — no registry,
+  no reverse index from contract name to trigger, no cache. One decision id
+  has exactly three derived values (`verbs/decisions/read.rs`,
+  `ContractStatus`):
+  - **settled** — the id is in the ACTIVE decision set and no trigger keyed to
+    it is still open;
+  - **unsettled** — it is active and a trigger keyed to it is `waiting` or
+    `due`;
+  - **unknown** — it is not in the active set at all. D3's word "retired" lands
+    here: the store has no `retired` state, only supersession, redaction and
+    archiving, and all three drop the id out of `active_decisions`. A
+    never-logged id reads `unknown` too.
+
+  <!-- bee:not-a-deferral: describes the trigger record's storage format; the word "deferring" names the decision a trigger points at, it promises no work -->
+  The join onto triggers is on **SHORT8**, because that is all a trigger record
+  carries: `TriggerRecord.decision` holds the first 8 characters of the
+  deferring decision's id, never the full id. Three consequences to know:
+  <!-- /bee:not-a-deferral -->
+  a trigger key that is not a short8 of any decision (the live store carries
+  `herding-`, `P72`) matches nothing and is never an error; two decision ids
+  sharing a short8 both inherit the one trigger, because the record cannot say
+  which it meant (live collisions: 0, and "both unsettled" is the fail-safe
+  direction for a path that refuses); and a **`manual`-tier trigger never
+  reaches `due`**, so a decision with a waiting manual trigger stays unsettled
+  until a human runs `triggers resolve` — the revisit condition is attached and
+  unanswered, which is D2 working, not a stuck state.
+
+  The read reaches the trigger store through
+  `triggers::read_without_evaluating`, which is `read_and_evaluate`'s own body
+  with the persisting waiting-to-due predicate flip turned OFF — one shared
+  walk with a flag, never two copies that can disagree. Every file under
+  `.bee/triggers/` is byte-identical after the read: a refusal path that writes
+  is not a refusal path. Fail-open is inherited whole — no trigger directory,
+  a raced-away file, or a corrupt record each contribute nothing rather than
+  failing the read.
 - **R2 — Reversal is not finished until citing artifacts are reconciled** (D2,
   `b9b9fee3`). A supersede computes a citation sweep over `docs/**` (full id +
   word-boundary short8) BEFORE its single append; the event carries the sweep
@@ -86,7 +138,19 @@ Three field failures (reported against a host repo, fixed generically):
   render`, never hand-fixed) and, when the logging context has a bound
   feature, that feature's own live `docs/history/<feature>/` dir
   (self-citation of live work is not staleness) — a different feature's
-  history is still a real citation and is never excluded.
+  history is still a real citation and is never excluded. The log-time
+  sweep queues a stub only when the touched decision has left the active
+  set (touches-sweep-active-gate, `00595ba4`): a `touches:` relation relates
+  without retiring, so a citation of a live decision is not stale. Measured
+  before the gate on 64 stubs, 37 cited a live decision and none of the rest
+  was a find the retiring sweep had missed; the gate also ends the loop where
+  settling a batch logged a decision whose own relation queued the next batch.
+  **A decision that only RECORDS a sweep answer must relate to nothing.**
+  Naming the swept ids as touched re-runs the sweep over every doc that cites
+  them, so the answer mints one fresh stub per citing line — the same lines
+  the decision just certified. Answering 4 touched ids this way produced 22
+  new stubs in one call (2026-08-28). Log the answer with no relation; the
+  decision's own text is the record that the read happened.
 - **R2a — Supersession is an edge, never prose, and every write now declares
   its relation to what's already active** (`252102b5`; knowledge-distill-trigger
   D3, cell kdt-3). Every `decisions log` call requires `--relation
@@ -239,6 +303,17 @@ Three field failures (reported against a host repo, fixed generically):
   explicit cutoff; union reads (`--all`) reach both the active store and the
   archive and de-duplicate by id.
 
+
+## A promotion that cannot be mechanised routes to where it will be READ
+
+The three promotion bars — multi-feature relevance, meaningful waste prevented,
+generalisable — are unchanged, and an executable check still beats prose. What
+settles is where the prose goes when no check is possible: into a skill the run
+**actually opened**. A skill that should have fired and never opened has a
+discovery problem, not a content problem, so it earns a tuned *description*
+rather than a longer body — text added to a skill nobody loads is a record that
+cannot be read.
+
 ## Open Gaps
 
 - **The ownership map is re-read from disk on every logged decision.** The
@@ -247,3 +322,14 @@ Three field failures (reported against a host repo, fixed generically):
   cost is invisible, so nothing was built; it is stated here rather than
   discovered as a slow log verb once the bundle grows (koh-7,
   knowledge-one-home D1).
+
+## Concepts in this area
+
+- [Decision Memory — which feature a decision belongs to](attribution.md) — How a decision event gets its feature stamp: a lane-resolved name or an explicitly named one, never the shared default record's; why an absent stamp beats a borrowed one; and the narrow correction verb for records whose stamp already contradicts their own text.
+- [Decision Memory — the unified backlog store (event-sourced PBI records)](backlog-store.md) — How a product backlog item lives as an append-only event record in the same stream as machine friction/grooming events, how its current state is derived by folding those events, how id generation stays collision-safe under concurrent writers, and why docs/backlog.md is a generated view no session ever hand-edits.
+
+## Patterns in this area
+
+- [A required field added to a shared params struct ripples to every literal call site — pinned counts included](../../patterns/20260817-a-required-field-added-to-a-shared-params-struct-ripples-to-every-literal-call-site.md) — Adding a required field to a params struct that call sites construct literally forces a repo-wide sweep: every literal construction (tests included) fails to compile until updated, and pinned-count or allow-list assertions (flag catalogs, CLI-shape guards) shift too. Scope the cell for the sweep up front — the fallout is mechanical but it is not free, and it lands in files the cell never named.
+- [Pin a settled contract with a test, never a provisional one](../../patterns/20260902-pin-a-settled-contract-with-a-test-never-a-provisional-one.md) — A test asserting a rule is present turns that rule's own agreed revert condition into a build failure. Before pinning a rule, check whether the team already agreed on what would retire it.
+- [A decision attributed to the user needs a traceable in-session quote](../../patterns/20260711-a-decision-attributed-to-the-user-needs-a.md) — A decision attributed to the user needs a traceable in-session quote

@@ -1,0 +1,70 @@
+{
+  "id": "msh-1",
+  "feature": "mise-shim-stdout",
+  "lane": "tiny",
+  "title": "Stop mise's activation banner from poisoning stdout captures in the release and install scripts",
+  "behavior_change": true,
+  "role": "code",
+  "tier": "generation",
+  "files": [
+    "scripts/release.sh",
+    "scripts/install.sh",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "scripts/release.sh",
+    "scripts/install.sh"
+  ],
+  "action": "mise prints an activation line naming its config file and the tool version to STDOUT on every shimmed invocation, e.g. running gh --version emits that line before the version. bee captures tool stdout in four places and two of them break on it. release.sh:284 does RUN_ID=$(gh run list ... --jq .[0].databaseId) and gets the banner as the run id, so the follow-up lookup 404s and the release never reaches its final OK line - this happened live on 2026-08-30 during the 2.25.1 release. release.sh:295 does ASSETS=$(gh release view ... --jq .assets[].name) and gets a bogus first asset name. install.sh:420 and :425 redirect codex/claude plugin list --json into files, and the banner makes the JSON unparseable; the installer then reports package-list shape drift, which is the wrong cause - verified by test that merge-plugin-state accepts the codex object shape once the banner is gone. FIX: export MISE_QUIET=1 once near the top of BOTH scripts, beside the other environment setup, each with a one-line comment naming why (a mise shim writes its activation banner to stdout and would land inside these captures). Do not wrap individual call sites - one export per script is the whole change. Additionally, in install.sh, widen the merge-plugin-state failure message so it no longer asserts shape drift as the only cause: it must also name an unparseable probe file and point at the tool wrapper writing to stdout. Keep both scripts passing bash -n. Then run the regen chain in THIS cell: bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order), because both scripts are hashed roots of the release manifest.",
+  "verify": "bash -n scripts/release.sh && bash -n scripts/install.sh && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "MISE_QUIET=1 is exported once near the top of scripts/release.sh",
+      "MISE_QUIET=1 is exported once near the top of scripts/install.sh",
+      "Each export carries a one-line comment naming the stdout-banner reason",
+      "No individual gh/codex/claude call site is wrapped or changed",
+      "The install.sh merge failure message names an unparseable probe file, not shape drift alone",
+      "bash -n is clean on both scripts and the release manifest check is clean"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "msh-inline-1",
+    "outcome": "MISE_QUIET=1 exported once in each script; the install failure message now names an unparseable probe file too",
+    "files_changed": [
+      "scripts/release.sh",
+      "scripts/install.sh",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Ran the tiny cell inline in the MAIN checkout instead of a feature worktree — AGENTS.md exempts a solo tiny fix when no other session is live, and bee state session list showed only this session live — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T07:46:55.838Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9edcd966-07e8-402f-89f0-a1ec504f42c1",
+    "claimed_at": "2026-08-30T07:46:04.395Z",
+    "report": {
+      "outcome": "MISE_QUIET=1 exported once per script so the mise banner cannot enter a stdout capture",
+      "commit": "9359d811",
+      "files": [
+        "scripts/release.sh",
+        "scripts/install.sh",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash -n both scripts && bee dev release-manifest --check — green — shell-only change plus the regen the manifest obligation requires; a live before/after capture of the exact gh run-id read proved the bug and the fix",
+      "deviations": [
+        "Ran the tiny cell inline in the MAIN checkout instead of a feature worktree — AGENTS.md exempts a solo tiny fix when no other session is live, and bee state session list showed only this session live — found a better route"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

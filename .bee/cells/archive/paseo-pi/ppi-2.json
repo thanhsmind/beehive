@@ -1,0 +1,209 @@
+{
+  "id": "ppi-2",
+  "feature": "paseo-pi",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Run a herded worker as a Paseo agent",
+  "deps": [
+    "ppi-1"
+  ],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Red first. In run.rs add `execute_paseo(opts, spec, cli: &dyn PaseoCli) -> ExecResult`, shaped like `execute_no_pane` (run.rs:3005): write the inbox marker and job.json the same way plus `transport: \"paseo\"`; render the same brief; build env from `build_child_env` plus BEE_HERDING_WORKER=1 and BEE_HERDING_JOB_ID; before spawning, call `--version` and refuse SpawnFailed with a message containing `FIX:` and `0.10.3` when `version_at_least` is false; call `run_argv` with the same pointer prompt the pane path delivers; on Err refuse SpawnFailed with `FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)`; parse the agent id and write `paseo_agent_id` into job.json at once; wait for the round through the same file-mailbox wait the no-pane path uses, with liveness from `inspect_argv` + `parse_inspect` (None never counts as alive); read the result only from result-N.json; on exit call `archive_argv` only when `should_close_pane` (run.rs:1226) is true and the id differs from env PASEO_AGENT_ID, else keep the agent and report its id. In `run` (run.rs:4286 and 4315), when not no_pane and `PaseoSpec::from_config(read_main_config(main_root), agent)` is Some(Ok), skip the pane transport and call execute_paseo with RealPaseoCli; Some(Err) refuses before any job file; None keeps today's path byte-identical. Tests with a fake PaseoCli: happy path archives; failed result keeps; own PASEO_AGENT_ID is never archived; old version refuses before run; failed run refuses with FIX; job.json carries paseo_agent_id; an agent with no paseo block takes the old path. No code comments; no `send` call.",
+  "must_haves": {
+    "truths": [
+      "a run whose agent entry has a paseo block starts the worker through paseo run and never through a pane",
+      "job.json records transport paseo and paseo_agent_id before the wait begins",
+      "the result is read only from result-N.json",
+      "the agent is archived only when should_close_pane is true and never when its id equals PASEO_AGENT_ID",
+      "a paseo version below 0.10.3 refuses with a FIX line before any agent is created",
+      "a failed paseo run refuses with a FIX line naming paseo daemon start",
+      "an agent entry with no paseo block runs the existing herdr, tmux or no-pane path unchanged and the existing herding tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "execute_paseo and its routing in run"
+      }
+    ],
+    "key_links": [
+      "run routes to execute_paseo when PaseoSpec::from_config returns Some(Ok)"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No paseo send call",
+      "No change to PaneTransport, RealHerdr or RealTmux"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppi-2",
+    "outcome": "Paseo executor in herding run, proven live",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "Live proof used a temporary herding.agents.paseo-pi-flash entry and herding.paseo.command in main .bee/config.json, restored byte-identical afterwards",
+      "sync-ack: skills/bee-herding covers the cockpit roles, not how herding run carries a worker; the Paseo channel concept (ppi-4) is the owning doc"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-05T16:16:30.352Z",
+    "behavior_change": true,
+    "verification_evidence": "664 passed 0 failed; live: bee herding run --agent paseo-pi-flash (pi, openrouter deepseek-flash, Paseo 0.10.3 npm CLI) returned outcome done summary # bee, paseo inspect showed Status closed Archived true, job.json transport paseo and paseo_agent_id 23d95fbe; evidence /home/thanhsmind/Projects/goglbe/beehive/.bee/mailbox/job-1791216921204-3796356-1/job.json",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+    "claimed_at": "2026-10-05T16:02:10.726Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T16:16:30.351Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T16:18:34.836Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:22:15.877Z"
+      }
+    ],
+    "sync_ack": "skills/bee-herding covers the cockpit roles, not how herding run carries a worker; the Paseo channel concept (ppi-4) is the owning doc",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee herding run starts a paseo-bound worker as a Paseo agent, reads its result from the mailbox and archives it",
+      "commit": "e4721cb21",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding — green:live — 664 passed 0 failed; live: bee herding run --agent paseo-pi-flash (pi, openrouter deepseek-flash, Paseo 0.10.3 npm CLI) returned outcome done summary # bee, paseo inspect showed Status closed Archived true, job.json transport paseo and paseo_agent_id 23d95fbe; evidence /home/thanhsmind/Projects/goglbe/beehive/.bee/mailbox/job-1791216921204-3796356-1/job.json",
+      "deviations": [
+        "Live proof used a temporary herding.agents.paseo-pi-flash entry and herding.paseo.command in main .bee/config.json, restored byte-identical afterwards"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 651 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a run whose agent entry has a paseo block starts the worker through paseo run and never through a pane",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "job.json records transport paseo and paseo_agent_id before the wait begins",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "the result is read only from result-N.json",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "the agent is archived only when should_close_pane is true and never when its id equals PASEO_AGENT_ID",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a paseo version below 0.10.3 refuses with a FIX line before any agent is created",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a failed paseo run refuses with a FIX line naming paseo daemon start",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "an agent entry with no paseo block runs the existing herdr, tmux or no-pane path unchanged and the existing herding tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-10-05T16:18:34.836Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "run.rs:4610-4627 and 4659-4662 route a paseo-bound agent to execute_paseo with RealPaseoCli; execute_paseo (run.rs:3262) makes no pane call"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "run.rs:3300 writes transport paseo; run.rs:3398-3401 writes paseo_agent_id before wait_for_round_paseo at run.rs:3410"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "run.rs:3421 reads read_result_for_round; readiness from latest_result_round matches only result-N.json (mailbox.rs:618)"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "run.rs:3437-3441 should_archive = should_close_pane && !is_own_agent; tests cover keep-on-failure and own-id"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "run.rs:3354-3367 --version first; below 0.10.3 refuses with FIX before run_argv; test asserts one call"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "run.rs:3369-3381 failed run refuses with FIX naming paseo daemon start; test asserts the text"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "run.rs:4618/4624 None keeps the old path; cargo test herding 664 passed 0 failed"
+          },
+          {
+            "id": "t8",
+            "status": "PASS",
+            "evidence": "commit touches only herding/run.rs; no added comment lines; no paseo send call"
+          },
+          {
+            "id": "liveness",
+            "status": "PASS",
+            "evidence": "run.rs:3562-3566 failed or None inspect maps to Liveness::Unknown and never refreshes the heartbeat"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-05T23:22:15.877Z"
+      }
+    ]
+  }
+}

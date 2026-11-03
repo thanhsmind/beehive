@@ -1,0 +1,86 @@
+{
+  "id": "hcc-5",
+  "feature": "herding-cockpit-completeness",
+  "title": "Add the orphan sweep and last_status helpers to mailbox.rs",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "hcc-1"
+  ],
+  "decisions": [
+    "d5a1f7e1",
+    "468c6cb8",
+    "afec9446"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::mailbox",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/CONTEXT.md",
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Two small additions to mailbox.rs, reusing the Mark helpers from hcc-1 (read_mark/write_mark) and job_path. (1) `pub(crate) fn mark_orphans(bee_dir: &Path, live_panes: &HashSet<String>) -> Vec<String>`: walk `.bee/mailbox/*/job.json`; for a job whose job.json records a pane id (find the existing key the run verb writes — grep `pane_id` in mailbox.rs/run.rs) that is NOT in live_panes, that has no `result-*.json` in its dir, and that has no mark yet (read_mark is None) → write_mark(Interrupted, \"process_restarted\") (D5 d5a1f7e1) and push the job id. Return the marked ids so the caller prints one progress line each (`herding: marked job <id> interrupted (process_restarted)`). Jobs with no pane id recorded are skipped. Nothing is relaunched (D7). (2) `pub(crate) fn transition_status(bee_dir: &Path, job_id: &str, now_word: &str) -> Option<(String, String)>`: read job.json `last_status`; when it differs from now_word (or is absent and now_word is `stalled`), write `last_status = now_word` and return Some((previous_or_empty, now_word)); when equal return None and write nothing. This is the one write-on-transition helper the run tick (hcc-6) and `bee herding status` (hcc-7) share so `recovered` prints once (plan Open Question 3). Tests: orphan with dead pane and no result gets marked; orphan with a result file is left alone; a job with a live pane is left alone; a job already marked is left alone (mark_reason unchanged); transition_status returns Some only on change and None on repeat.",
+  "must_haves": {
+    "truths": [
+      "mark_orphans marks only pane-recorded jobs whose pane is not live, with no result file and no prior mark",
+      "mark_orphans returns the marked ids and writes mark_reason process_restarted",
+      "transition_status writes last_status only when the word changes"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "substantive": "mark_orphans and transition_status with tests, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "hcc-6 (run tick) and hcc-7 (status/occupancy) call these helpers"
+    ],
+    "prohibitions": [
+      "No relaunch, no pane operation inside mailbox.rs",
+      "No second freshness constant",
+      "No new file"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-hcc-5",
+    "outcome": "Add mark_orphans and transition_status helpers with unit tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal herding change; skill sync is hcc-10"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T10:37:32.989Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T10:28:51.569Z",
+    "sync_ack": "internal herding change; skill sync is hcc-10",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Add mark_orphans and transition_status helpers with unit tests",
+      "commit": "f487054da321f73e7ac105e65333ac8777a242ad",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::mailbox — green:unit — added unit tests in mailbox.rs",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 277 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

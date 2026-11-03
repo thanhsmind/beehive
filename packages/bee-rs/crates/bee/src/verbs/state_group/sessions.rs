@@ -25,7 +25,7 @@ use crate::verbs::workflow_store::{
     rebuild_lane_projection_reporting, rebuild_state_projection,
     rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
-    write_mailbox_handoff, MailboxAdopt,
+    write_mailbox_handoff, MailboxAdopt, dismiss_mailbox_handoff, MailboxDismiss,
 };
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -333,7 +333,7 @@ pub(crate) fn run_session_unbind(flags: Flags, use_json: bool, t0: Instant) -> O
 
 /// The plain flag→env resolver `state session release` targets its own
 /// session with: `--session-id` wins, then `BEE_SESSION_ID`, then
-/// `CLAUDE_CODE_SESSION_ID` — mirrors claims.rs's `resolve_session_flag_env`
+/// `CLAUDE_CODE_SESSION_ID`, then `PI_SESSION_ID` — mirrors claims.rs's `resolve_session_flag_env`
 /// exactly, deliberately WITHOUT `resolve_session_id`'s single-live-session
 /// adoption fallback: a release names its own session, never guesses one
 /// from the sessions directory.
@@ -343,7 +343,7 @@ fn resolve_release_session_id(flag: Option<&str>) -> Option<String> {
             return Some(js_trim(f).to_string());
         }
     }
-    env_nonempty("BEE_SESSION_ID").or_else(|| env_nonempty("CLAUDE_CODE_SESSION_ID"))
+    crate::session_identity::env_session_id()
 }
 
 /// `bee state session release` — marks an OPEN session `status: "closed"`,
@@ -364,6 +364,14 @@ pub(crate) fn run_session_release(flags: Flags, use_json: bool, t0: Instant) -> 
     };
     let out = (|| -> R2<Out> {
         let session_id_flag = flag_value(&flags, "session-id");
+        if session_id_flag.is_none() && crate::hooks::herding_worker_marker_set() {
+            return Ok(Out::Emit(
+                json!({"released": false, "reason": "herding_worker"}),
+                "Session release skipped: a herding worker never releases the session it inherited."
+                    .to_string(),
+                0,
+            ));
+        }
         let Some(session_raw) = resolve_release_session_id(session_id_flag.as_deref()) else {
             return Ok(Out::Thrown(
                 "state session release: no session id resolved — pass --session-id, or run \
@@ -426,10 +434,11 @@ pub(crate) fn resolve_handoff_workflow_id(
     lane_feature: Option<&str>,
     session_id_flag: Option<&str>,
 ) -> Result<Option<String>, Err2> {
-    let workflows = list_workflows(root)?;
+    let mut workflows = list_workflows(root)?;
     if workflows.is_empty() {
         return Ok(None); // C1: no workflow records anywhere.
     }
+    workflows_list_sort(&mut workflows)?;
     if let Some(f) = lane_feature {
         return match find_live_workflow(&workflows, f) {
             Some(wf) => Ok(Some(wf_id(wf))),
@@ -451,7 +460,13 @@ pub(crate) fn resolve_handoff_workflow_id(
     let default_record = read_state_strict(root)?;
     if let Some(v) = default_record.get("feature") {
         if truthy(v) {
-            if let Some(wf) = find_live_workflow(&workflows, &js_disp(v)) {
+            let feat = js_disp(v);
+            if let Some(wf) = find_live_workflow(&workflows, &feat) {
+                return Ok(Some(wf_id(wf)));
+            }
+            if let Some(wf) = workflows.iter().find(|w| {
+                w.get("feature").unwrap_or(&Value::Null) == &Value::String(feat.clone())
+            }) {
                 return Ok(Some(wf_id(wf)));
             }
         }
@@ -715,6 +730,75 @@ pub(crate) fn run_handoff_show(flags: Flags, use_json: bool, t0: Instant) -> Opt
     finish(&ctx, out)
 }
 
+pub(crate) fn run_handoff_dismiss(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &["lane", "target-role", "session-id"]) {
+        return None;
+    }
+    let ctx = match go("state handoff dismiss", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        let lane = match optional_lane_flag(&flags, "state handoff dismiss") {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        let target_role = flag_string(&flags, "target-role");
+        let workflow_id = match resolve_handoff_workflow_id(
+            &ctx.root,
+            lane.as_deref(),
+            flag_value(&flags, "session-id").as_deref(),
+        ) {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        if let Some(wid) = workflow_id {
+            let dismissed = match dismiss_mailbox_handoff(
+                &ctx.root,
+                &wid,
+                target_role.as_deref(),
+            ) {
+                Ok(v) => v,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
+            return match dismissed {
+                MailboxDismiss::Fail { reason } => {
+                    Ok(Out::Thrown(format!("state handoff dismiss: {reason}")))
+                }
+                MailboxDismiss::Ok { workflow_id, seq, record: _ } => {
+                    rebuild_handoff_projection(&ctx.root)?;
+                    let mut result = Map::new();
+                    result.insert("ok".into(), json!(true));
+                    result.insert("workflow_id".into(), json!(workflow_id));
+                    result.insert("seq".into(), json!(seq));
+                    let text = format!(
+                        "Dismissed \"pause\" handoff in workflow \"{wid}\" mailbox (seq {seq}); handoff cleared."
+                    );
+                    Ok(Out::Emit(Value::Object(result), text, 0))
+                }
+            };
+        }
+        // Legacy single-file path (C1).
+        match dismiss_handoff(&ctx.root) {
+            Err(Err2::Msg(m)) => Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => Err(Err2::Ex),
+            Ok(HandoffDismiss::Fail { reason }) => {
+                Ok(Out::Thrown(format!("state handoff dismiss: {reason}")))
+            }
+            Ok(HandoffDismiss::Ok { record: _ }) => {
+                let mut result = Map::new();
+                result.insert("ok".into(), json!(true));
+                let text = "Dismissed \"pause\" handoff; handoff cleared.".to_string();
+                Ok(Out::Emit(Value::Object(result), text, 0))
+            }
+        }
+    })();
+    finish(&ctx, out)
+}
+
 
 // ─── tests ──────────────────────────────────────────────────────────────────
 
@@ -740,6 +824,48 @@ mod tests {
         match iso_from_ms(ms) {
             Ok(s) => s,
             Err(_) => panic!("fixture timestamp is inside the JS Date range"),
+        }
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter() -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    struct HerdingWorkerEnv {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        prior: Option<std::ffi::OsString>,
+    }
+
+    impl HerdingWorkerEnv {
+        fn on() -> Self {
+            let lock = crate::hooks::herding_env_lock();
+            let prior = std::env::var_os("BEE_HERDING_WORKER");
+            unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
+            Self { _lock: lock, prior }
+        }
+    }
+
+    impl Drop for HerdingWorkerEnv {
+        fn drop(&mut self) {
+            match &self.prior {
+                Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+                None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+            }
         }
     }
 
@@ -770,6 +896,31 @@ mod tests {
     fn session_signal_reads_no_signal_without_an_activity_object() {
         let plain = record("{\"id\":\"s1\",\"last_heartbeat\":\"2026-08-22T00:00:00.000Z\"}");
         assert_eq!(session_signal(&plain, NOW_MS), Some("no_signal"));
+    }
+
+    #[test]
+    fn session_release_from_a_herding_worker_without_a_flag_releases_nothing() {
+        let _cwd = CwdGuard::enter();
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::env::set_current_dir(tmp.path()).unwrap();
+        let dir = sessions_dir(tmp.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("leader-1.json"),
+            "{\"id\":\"leader-1\",\"status\":\"open\"}\n",
+        )
+        .unwrap();
+
+        let env = HerdingWorkerEnv::on();
+        let code = run_session_release(Flags(Vec::new()), true, Instant::now());
+        drop(env);
+
+        assert_eq!(code.map(|c| format!("{c:?}")), Some(format!("{:?}", ExitCode::SUCCESS)));
+        let record = std::fs::read_to_string(dir.join("leader-1.json")).unwrap();
+        assert!(!record.contains("released"), "the leader record must stay untouched: {record}");
+        assert!(!record.contains("closed"), "the leader record must stay untouched: {record}");
     }
 
     /// A finished session carries NO signal — `None`, so callers emit null

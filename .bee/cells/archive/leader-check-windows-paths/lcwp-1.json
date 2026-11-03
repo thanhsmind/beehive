@@ -1,0 +1,101 @@
+{
+  "id": "lcwp-1",
+  "feature": "leader-check-windows-paths",
+  "title": "Match an absolute leader-check artifact through an aliased worktree path",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "6ca8f8a8-8015-41b7-8994-544c6cbe4848"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In record_leader_check's relative_artifact closure, when the raw strip_prefix of the worktree root fails, canonicalize both the root and the artifact and strip again; fall back to the raw artifact. Red first on Linux with a unix-only test that reaches the worktree through a symlinked alias of the temp dir (the same shape as a Windows 8.3 short name versus the long name git reports).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee leader_check",
+  "must_haves": {
+    "truths": [
+      "An absolute artifact reached through an alias of the worktree root overlaps its relative files_changed entry",
+      "The existing leader_check tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "substantive": "relative_artifact canonicalizes on a failed strip"
+      }
+    ],
+    "key_links": [
+      "relative_artifact feeds the files_changed overlap check"
+    ],
+    "prohibitions": [
+      "No new code comments",
+      "No change to refusal message text"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "leader-check canonicalizes on a failed strip so aliased worktree paths match",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: no owned skill describes leader-check path matching"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T17:15:28.031Z",
+    "behavior_change": true,
+    "verification_evidence": "28 leader_check tests; new unix symlink test red first with the Windows failure shape; full --bin bee 4131 passed on Linux; Windows itself not run locally, left to Windows CI",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee leader_check",
+    "claimed_at": "2026-10-06T17:13:19.817Z",
+    "sync_ack": "no owned skill describes leader-check path matching",
+    "mistakes": [
+      {
+        "wrong": "lcwr-1 compared absolute paths with a plain strip_prefix and pushed without a Windows check, so Windows CI went red on the 8.3 short temp path",
+        "better": "compare filesystem paths after canonicalize when one side comes from git",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "leader-check canonicalizes on a failed strip so aliased worktree paths match",
+      "commit": "2894bb085",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee leader_check — green:unit — 28 leader_check tests; new unix symlink test red first with the Windows failure shape; full --bin bee 4131 passed on Linux; Windows itself not run locally, left to Windows CI",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An absolute artifact reached through an alias of the worktree root overlaps its relative files_changed entry",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "The existing leader_check tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T17:15:28.113Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

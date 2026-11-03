@@ -118,12 +118,12 @@ fn branch_is_merged(main_root: &Path, branch: &str, base_commit: &str) -> bool {
     run_git(main_root, &["merge-base", "--is-ancestor", &branch_ref, base_commit]).status == Some(0)
 }
 
-/// D8a's blind spot, closed: `git status --porcelain` (no `--ignored`) never
-/// sees a gitignored `.bee/HANDOFF.json` or `.bee/capture-queue.jsonl`, so a
-/// paused handoff or an unpromoted capture stub reads as a clean tree and
-/// would be deleted forever. This checks both directly, off the filesystem,
-/// never through git.
-fn precious_state_present(worktree_root: &Path) -> Option<String> {
+/// D8a's blind spot, closed: porcelain never sees a gitignored HANDOFF.json or
+/// capture queue, so both are checked off the filesystem. The queue keeps only
+/// on a pending stub (no flush of its id in that file) main's queue never names:
+/// this repo tracks the queue, so a worktree holds a copy of main's; host repos
+/// ignore it, so it holds only the worktree's own stubs. Any doubt keeps.
+fn precious_state_present(worktree_root: &Path, main_root: &Path) -> Option<String> {
     let handoff = worktree_root.join(".bee").join("HANDOFF.json");
     if handoff.exists() {
         return Some(format!(
@@ -132,18 +132,71 @@ fn precious_state_present(worktree_root: &Path) -> Option<String> {
         ));
     }
     let queue = worktree_root.join(".bee").join("capture-queue.jsonl");
-    match std::fs::metadata(&queue) {
-        Ok(meta) if meta.len() > 0 => Some(format!(
-            "{} is non-empty — unpromoted capture stubs are precious and invisible to the clean-tree check (D8a); keeping.",
-            p(&queue)
-        )),
-        Ok(_) => None, // present but empty: not precious.
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(_) => Some(format!(
-            "{} could not be checked — keeping rather than assuming it is empty.",
-            p(&queue)
-        )),
+    let lines = match read_queue_lines(&queue) {
+        Ok(lines) => lines,
+        Err(reason) => return Some(reason),
+    };
+    let mut stubs = BTreeSet::new();
+    let mut flushed = BTreeSet::new();
+    for line in &lines {
+        let kind = line.get("kind").and_then(Value::as_str);
+        let id = line.get("id").and_then(Value::as_str).filter(|id| !id.is_empty());
+        match (kind, id) {
+            (Some("stub"), Some(id)) => stubs.insert(id.to_string()),
+            (Some("flush"), Some(id)) => flushed.insert(id.to_string()),
+            _ => {
+                return Some(format!(
+                    "{} holds a line that is not a stub or flush with a string id — keeping rather than guessing what it holds.",
+                    p(&queue)
+                ))
+            }
+        };
     }
+    if stubs.is_subset(&flushed) {
+        return None;
+    }
+    let main_queue = main_root.join(".bee").join("capture-queue.jsonl");
+    let main_lines = match read_queue_lines(&main_queue) {
+        Ok(lines) => lines,
+        Err(reason) => return Some(reason),
+    };
+    let main_ids: BTreeSet<&str> =
+        main_lines.iter().filter_map(|line| line.get("id").and_then(Value::as_str)).collect();
+    let unique: Vec<&String> =
+        stubs.difference(&flushed).filter(|id| !main_ids.contains(id.as_str())).collect();
+    let example = unique.first()?;
+    Some(format!(
+        "{} holds {} pending capture stub(s) main's queue never names (e.g. {}) — run bee capture list and bee capture flush --id {} --into <doc> inside {}; keeping.",
+        p(&queue),
+        unique.len(),
+        example,
+        example,
+        p(worktree_root)
+    ))
+}
+
+fn read_queue_lines(queue: &Path) -> Result<Vec<Value>, String> {
+    let text = match std::fs::read_to_string(queue) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+        Err(_) => {
+            return Err(format!(
+                "{} could not be read — keeping rather than assuming it is empty.",
+                p(queue)
+            ))
+        }
+    };
+    text.split('\n')
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| match serde_json::from_str::<Value>(line) {
+            Ok(value) if value.is_object() => Ok(value),
+            _ => Err(format!(
+                "{} holds a line that does not parse as a JSON object — keeping rather than guessing what it holds.",
+                p(queue)
+            )),
+        })
+        .collect()
 }
 
 /// Any of the five interrupted-operation markers under the worktree's git
@@ -405,7 +458,7 @@ pub(crate) fn classify_worktree(check: &PruneCheck<'_>) -> Verdict {
     }
 
     // (4) nothing precious ignored (D8a's blind spot, closed).
-    if let Some(reason) = precious_state_present(&worktree_root) {
+    if let Some(reason) = precious_state_present(&worktree_root, check.main_root) {
         return kept(reason);
     }
 

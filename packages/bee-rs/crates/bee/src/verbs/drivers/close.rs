@@ -41,6 +41,32 @@ pub(crate) const CLOSE_CAPTURE_DEBT_PREFIX: &str = "Capture debt for";
 /// surface). docs/history/workflow-lessons/plan.md wl-3.
 pub(crate) const CLOSE_JUDGE_DEBT_PREFIX: &str = "Judge debt for";
 
+/// slp-dissent-stop-and-ask sd-4: pinned prefix of the dissent-debt refusal
+/// headline (message-contract tests live in verbs/cells/tests.rs, beside the
+/// rest of the dissent surface). Cite: a2affcba and 4b7aa303.
+pub(crate) const CLOSE_DISSENT_DEBT_PREFIX: &str = "Dissent debt for";
+
+/// reflection-becomes-lesson D1: pinned prefix of the mistakes-door refusal
+/// headline (message-contract test lives in this file's own tests). The
+/// headline opens with the command's own name because it is the first line a
+/// human reads when a close stops, and "close:" is what tells them which of
+/// their commands stopped. Cite: db562f26 and 20fe96d3.
+pub(crate) const CLOSE_MISTAKES_PREFIX: &str = "close: feature";
+
+/// The clean-run answer, spelled as the command that records it. Written once
+/// and cited by the refusal below, so the remedy a human is handed and the
+/// flag that actually clears the door can never drift apart.
+pub(crate) const MISTAKES_CLEAN_RUN_COMMAND: &str = "bee mailbox reflect --no-mistakes";
+
+/// slp-advisor-nudge an-3: pinned prefix of the advisor-nudge refusal
+/// headline (message-contract tests live in verbs/cells/tests.rs, beside the
+/// dissent door's own). Cite: 9e5eda5b.
+pub(crate) const CLOSE_ADVISOR_NUDGE_DEBT_PREFIX: &str = "Advisor nudge debt for";
+
+/// leader-check-door: pinned prefix of the leader-check refusal headline
+/// (message-contract tests live in this file's own tests).
+pub(crate) const CLOSE_LEADER_CHECK_DEBT_PREFIX: &str = "Leader check debt for";
+
 /// D1: pinned prefix of the knowledge-freshness refusal headline (message-
 /// contract tests live in verbs/drivers/tests.rs). CONTEXT.md D1.
 pub(crate) const CLOSE_KNOWLEDGE_FRESHNESS_PREFIX: &str = "Knowledge freshness debt for";
@@ -220,6 +246,186 @@ pub(crate) struct DebtSummary {
     pub(crate) ids: Vec<Value>,
 }
 
+/// reflection-becomes-lesson D1/D5: the feature's capped cells that never
+/// answered the mistakes question.
+///
+/// WHAT IS READ: the FEATURE'S CAPPED CELLS, through the walk close already
+/// performs (`list_cells_including_archive`), and never a run's own mailbox
+/// file. Reflections are stored per run, and a close resolves its OWN run —
+/// which under the default `uat_stop: "close"` is the attended orchestrator's
+/// run, a different one from the workers' — so a run-scoped debt count would
+/// see nothing and refuse every close.
+///
+/// WHAT COUNTS AS ANSWERED: `trace.mistakes` (one or more written mistakes)
+/// or `trace.no_mistakes` (the explicit clean-run statement). Both are
+/// written by the cap, from one reading, so they can never disagree.
+///
+/// LEGACY IS CLEAR, on the same rule the proof door already uses
+/// (`verbs/cells/proof.rs`): a capped cell with no `trace.report` at all
+/// predates the era in which a cap records a structured answer, and a door
+/// that refused it would demand a field its worker was never asked for.
+pub(crate) fn mistakes_debt(root: &Path, feature: &str) -> D<DebtSummary> {
+    let mut ids = Vec::new();
+    for cell in list_cells_including_archive(root, feature, Some("capped"))? {
+        let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
+        if vget(&trace, "report").is_none() {
+            continue; // legacy cap — see above
+        }
+        let recorded = matches!(vget(&trace, "mistakes"), Some(Value::Array(a)) if !a.is_empty());
+        let clean = matches!(vget(&trace, "no_mistakes"), Some(Value::Bool(true)));
+        if recorded || clean {
+            continue;
+        }
+        ids.push(vget(&cell, "id").cloned().unwrap_or(Value::Null));
+    }
+    Ok(DebtSummary { count: ids.len(), ids })
+}
+
+/// Did the closing session itself answer the mistakes question?
+///
+/// This is the REMEDY path, never the debt count: the refusal below tells the
+/// acting agent to write the mistakes down with `bee mailbox reflect` (or to
+/// state the clean run with `--no-mistakes`), and that verb writes into the
+/// closing session's own run. Reading that run HERE is what makes the remedy
+/// true — and it can only ever let a close through, so it never turns into
+/// the refuse-every-close hazard a run-scoped debt COUNT would be.
+///
+/// Same run and same root the close's own entry and letter use, so "the run
+/// whose letter this close files" is one idea with one resolution.
+fn closing_run_answered_mistakes(root: &Path) -> bool {
+    use crate::verbs::mailbox;
+    let control = crate::hooks::session_init::control_root_for(root);
+    let run = mailbox::run_id(crate::verbs::cells::resolve_session_flag_env(None).as_deref());
+    mailbox::read_entries(&control, &run).iter().any(mailbox::Entry::is_mistakes_answer)
+}
+
+// ── mistake-fix-at D2: one backlog row per mechanizable mistake ───────────
+
+/// What the filing pass did, as the tail has to report it.
+struct FixAtRows {
+    /// Rows appended by this close.
+    filed: usize,
+    /// Mistakes whose row was already on disk — the re-close count.
+    skipped: usize,
+    /// FAIL-OPEN (CONTEXT.md, the mailbox rule): a backlog that cannot be
+    /// written warns and never refuses the close. One line, however many
+    /// rows failed, naming the path.
+    warning: Option<String>,
+}
+
+/// One mistake, with the source that has to appear in its row's detail.
+struct Mechanizable {
+    wrong: String,
+    better: String,
+    /// `check` or `architecture` — already filtered.
+    fix_at: String,
+    /// `cell demo-1` or `run <id>`, rendered into the detail as `(from …)`.
+    source: String,
+}
+
+/// Every mistake of this feature that a check or a code change could have
+/// stopped (mistake-fix-at D2, source set per D2a).
+///
+/// TWO sources, because a mistake is recorded in two places and D2 says
+/// "every reflection of the closing feature":
+///  * each capped cell's `trace.mistakes` — walked exactly as
+///    [`mistakes_debt`] walks, archive included, so a cell an earlier close
+///    already retired still counts;
+///  * the closing run's own reflection entries — the same run and control
+///    root [`closing_run_answered_mistakes`] resolves, which is where
+///    `bee mailbox reflect` writes.
+///
+/// `doctrine`, `none` and a missing `fix_at` yield nothing: D4 forbids
+/// backfilling a layer nobody named, and an absent key IS the answer `none`.
+fn mechanizable_mistakes(root: &Path, feature: &str) -> Vec<Mechanizable> {
+    use crate::verbs::mailbox;
+    fn mechanizable(layer: &str) -> bool {
+        matches!(layer.trim(), "check" | "architecture")
+    }
+    let mut out = Vec::new();
+    // Fail-open like the rest of this pass: a walk that would delegate costs
+    // the rows, never the close.
+    for cell in list_cells_including_archive(root, feature, Some("capped")).unwrap_or_default() {
+        let id = vget(&cell, "id").and_then(Value::as_str).unwrap_or("").to_string();
+        let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
+        let Some(Value::Array(mistakes)) = vget(&trace, "mistakes").cloned() else { continue };
+        for m in mistakes {
+            let field =
+                |name: &str| vget(&m, name).and_then(Value::as_str).unwrap_or("").to_string();
+            let fix_at = field("fix_at");
+            if !mechanizable(&fix_at) {
+                continue;
+            }
+            out.push(Mechanizable {
+                wrong: field("wrong"),
+                better: field("better"),
+                fix_at: fix_at.trim().to_string(),
+                source: format!("cell {id}"),
+            });
+        }
+    }
+    let control = crate::hooks::session_init::control_root_for(root);
+    let run = mailbox::run_id(crate::verbs::cells::resolve_session_flag_env(None).as_deref());
+    for entry in mailbox::read_entries(&control, &run) {
+        if !entry.is_reflection() {
+            continue;
+        }
+        let fix_at = entry.fix_at.clone().unwrap_or_default();
+        if !mechanizable(&fix_at) {
+            continue;
+        }
+        out.push(Mechanizable {
+            // The entry's `what` IS the wrong text: `Entry::reflection` stores
+            // it there verbatim.
+            wrong: entry.what.clone(),
+            better: entry.better.clone().unwrap_or_default(),
+            fix_at: fix_at.trim().to_string(),
+            source: format!("run {run}"),
+        });
+    }
+    out
+}
+
+/// File one backlog row per mechanizable mistake (mistake-fix-at D2).
+///
+/// ONE occurrence is enough — a mistake a check could catch is worth a row
+/// the first time it is seen, which is why this needs none of the lesson
+/// miner's two-run brake. The row is built by `backlog::backlog_finding_row`
+/// and appended by `fsutil::append_jsonl`, the two homes `bee backlog add`
+/// itself uses, so there is no second row shape.
+///
+/// Dedupe is `backlog_finding_exists` on (feature, layer, title) — re-read
+/// per row, which is also what keeps two identical mistakes in ONE close
+/// from filing twice: the first append is on disk before the second is asked
+/// about.
+fn file_fix_at_rows(root: &Path, feature: &str) -> FixAtRows {
+    use crate::verbs::backlog;
+    let mut rows = FixAtRows { filed: 0, skipped: 0, warning: None };
+    let path = backlog::backlog_jsonl_path(root);
+    for m in mechanizable_mistakes(root, feature) {
+        let layer = format!("fix-at:{}", m.fix_at);
+        // The title rides the same `--title` cap `bee backlog add` enforces,
+        // so a filed row is one a human could have filed by hand.
+        let title = crate::textutil::truncate_chars_head(&m.wrong, backlog::BACKLOG_MAX_TITLE);
+        if backlog::backlog_finding_exists(root, feature, &layer, &title) {
+            rows.skipped += 1;
+            continue;
+        }
+        let detail = format!("{} (from {})", m.better, m.source);
+        let row = backlog::backlog_finding_row("finding", &title, &detail, "P3", &layer, feature);
+        match append_jsonl(&path, &Value::Object(row)) {
+            Ok(()) => rows.filed += 1,
+            Err(e) => {
+                rows.warning.get_or_insert(format!(
+                    "Fix-at row(s) for \"{feature}\" were not filed: {} could not be written ({e}) — the mistakes stay on the cells and in the letter.",
+                    path.display()
+                ));
+            }
+        }
+    }
+    rows
+}
+
 /// provenance: cells.mjs scribingDebt(root, {feature}) — the feature-scoped
 /// overrides arm (scribing-integrity si-1), which is the one close uses.
 ///
@@ -251,7 +457,7 @@ pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     // (cell id, that cell's own declared `files`) — only cells no existing
     // record names yet; materialized into one new record below, once.
     let mut to_materialize: Vec<(String, Vec<String>)> = Vec::new();
-    for cell in list_cells_including_archive(root, feature, "capped")? {
+    for cell in list_cells_including_archive(root, feature, Some("capped"))? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if !matches!(vget(&trace, "behavior_change"), Some(Value::Bool(true))) {
             continue;
@@ -382,7 +588,7 @@ pub(crate) const JUDGE_DOOR_INTRODUCED_AT: &str = "2026-08-11T00:00:00.000Z";
 pub(crate) fn judge_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     let cutoff = date_parse(Some(&Value::String(JUDGE_DOOR_INTRODUCED_AT.to_string())));
     let mut ids = Vec::new();
-    for cell in list_cells_including_archive(root, feature, "capped")? {
+    for cell in list_cells_including_archive(root, feature, Some("capped"))? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if !matches!(vget(&trace, "behavior_change"), Some(Value::Bool(true))) {
             continue;
@@ -613,8 +819,25 @@ pub(crate) fn has_knowledge_freshness_deferral_decision(root: &Path, feature: &s
 // named limitation: prose contradictions (the "dark guards" class) have no
 // machine detector here, that is S2-c distill work, recorded, not silently
 // dropped.
+pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {
+    if let Ok(cwd) = std::env::current_dir() {
+        if let (Roots::Ordinary(main_root), Some(here)) = crate::verbs::drivers::resolve_root_serving_granted(&cwd) {
+            if crate::roots::same_path(&main_root.to_string_lossy(), &root.to_string_lossy()) {
+                if feature.is_empty() {
+                    return here;
+                }
+                let owns_feature = crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
+                    .is_some_and(|(_, worktree_root)| crate::roots::same_path(&here.to_string_lossy(), &worktree_root));
+                return if owns_feature { here } else { root.to_path_buf() };
+            }
+        }
+    }
+    root.to_path_buf()
+}
+
 pub(crate) fn build_knowledge_freshness_door(root: &Path, feature: &str) -> D<Door> {
-    let Some(dir) = crate::verbs::knowledge::bundle_dir(root) else {
+    let docs_root = docs_root_for_feature(root, feature);
+    let Some(dir) = crate::verbs::knowledge::bundle_dir(&docs_root) else {
         return Ok(Door { door: "knowledge-freshness", blocking: false, detail: "clear".to_string(), command: None });
     };
     let Some(report) = crate::verbs::knowledge::check_bundle(&dir, false) else {
@@ -926,7 +1149,8 @@ fn feature_local_decisions(root: &Path, feature: &str) -> D<Vec<Value>> {
 /// no-archaeology rationale — the door BLOCKS only for CONTEXT files
 /// carrying the canonical grammar.
 pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
-    let context_path = root.join("docs").join("history").join(feature).join("CONTEXT.md");
+    let docs_root = docs_root_for_feature(root, feature);
+    let context_path = docs_root.join("docs").join("history").join(feature).join("CONTEXT.md");
     let text = match std::fs::read_to_string(&context_path) {
         Ok(t) => t,
         Err(_) => {
@@ -959,7 +1183,7 @@ pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
         });
     }
 
-    let bundle_files: Vec<(PathBuf, String)> = match crate::verbs::knowledge::bundle_dir(root) {
+    let bundle_files: Vec<(PathBuf, String)> = match crate::verbs::knowledge::bundle_dir(&docs_root) {
         Some(dir) => crate::verbs::knowledge::list_bundle_markdown(&dir)
             .unwrap_or_default()
             .into_iter()
@@ -1062,9 +1286,10 @@ pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
 /// under `docs/history/<feature>/` on disk (present or not, cell-touched or
 /// not).
 pub(crate) fn doc_deferral_scan_files(root: &Path, feature: &str) -> D<Vec<String>> {
+    let docs_root = docs_root_for_feature(root, feature);
     let touched = feature_touched_files(root, feature)?;
     let mut files: Vec<String> = touched.into_iter().filter(|f| f.starts_with("docs/")).collect();
-    let history_dir = root.join("docs").join("history").join(feature);
+    let history_dir = docs_root.join("docs").join("history").join(feature);
     if let Some(rels) = crate::verbs::knowledge::list_bundle_markdown(&history_dir) {
         for rel in rels {
             let full = format!("docs/history/{feature}/{rel}");
@@ -1073,7 +1298,28 @@ pub(crate) fn doc_deferral_scan_files(root: &Path, feature: &str) -> D<Vec<Strin
             }
         }
     }
+    let control = crate::hooks::session_init::control_root_for(root);
+    let plan_frozen = crate::hooks::write_guard::plan_freeze_shape_approved(
+        &control.to_string_lossy(),
+        &read_state(&control)?,
+        feature,
+    )
+    .map_err(|_| Delegate)?;
+    let frozen_plan = format!("docs/history/{feature}/plan.md");
+    files.retain(|rel| !(plan_frozen && rel == &frozen_plan) && !is_generated_knowledge_index(&docs_root, rel));
     Ok(files)
+}
+
+fn is_generated_knowledge_index(docs_root: &Path, rel: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(docs_root.join(rel)) else { return false };
+    let rest = match text.strip_prefix("---\n") {
+        Some(after) => match after.find("\n---\n") {
+            Some(end) => &after[end + 5..],
+            None => return false,
+        },
+        None => text.as_str(),
+    };
+    rest.starts_with(crate::verbs::knowledge::KNOWLEDGE_INDEX_HEADER)
 }
 
 /// Every trigger-id candidate cited on one line: a backtick span (`` `<id>`
@@ -1282,8 +1528,9 @@ fn doc_deferral_candidates(root: &Path, files: &[String]) -> Vec<DeferralCandida
 /// real close would freeze. Every run after that only reads the baseline —
 /// nothing is ever adopted back into it automatically (D2/D4).
 pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool) -> D<Door> {
+    let docs_root = docs_root_for_feature(root, feature);
     let files = doc_deferral_scan_files(root, feature)?;
-    let candidates = doc_deferral_candidates(root, &files);
+    let candidates = doc_deferral_candidates(&docs_root, &files);
     let baseline_path = doc_deferral_baseline_path(root);
 
     let new_items: Vec<&DeferralCandidate> = match read_json(&baseline_path) {
@@ -1291,8 +1538,8 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool)
             // D6: the seed is REPO-WIDE. `candidates` above is the
             // per-feature ENFORCEMENT set and is deliberately ignored here —
             // seeding from it would freeze only this feature's own docs.
-            let seed_files = doc_deferral_seed_files(root);
-            let seed_candidates = doc_deferral_candidates(root, &seed_files);
+            let seed_files = doc_deferral_seed_files(&docs_root);
+            let seed_candidates = doc_deferral_candidates(&docs_root, &seed_files);
             if dry_run {
                 // D5: `--dry-run` writes NOTHING, ever. It still has to
                 // predict the verdict honestly — and the verdict is
@@ -1454,6 +1701,34 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
         command: None,
     });
 
+    // reflection-becomes-lesson D1: the mistakes door, in EVERY lane and
+    // never armed-gated. A feature close files its letter unconditionally,
+    // attended sessions included, so a close may always demand the answer
+    // that letter is supposed to carry.
+    let mistakes = mistakes_debt(root, feature)?;
+    let answered_here = mistakes.count > 0 && closing_run_answered_mistakes(root);
+    let mistakes_blocking = mistakes.count > 0 && !answered_here;
+    doors.push(Door {
+        door: "mistakes",
+        blocking: mistakes_blocking,
+        detail: if mistakes.count == 0 {
+            "clear".to_string()
+        } else if answered_here {
+            format!(
+                "answered by this run — {} capped cell(s) recorded no answer ({}); this run's own mailbox carries one",
+                mistakes.count,
+                js_join(&mistakes.ids, ", ")
+            )
+        } else {
+            format!(
+                "pending — {} capped cell(s) recorded no reflection and no clean-run statement ({}); write each mistake with bee mailbox reflect, or state the clean run with {MISTAKES_CLEAN_RUN_COMMAND}",
+                mistakes.count,
+                js_join(&mistakes.ids, ", ")
+            )
+        },
+        command: if mistakes_blocking { Some("bee mailbox reflect") } else { None },
+    });
+
     // wl-3: the judge-debt door exists ONLY for a standard/high-risk
     // closing route — a tiny/small feature never grows this door at all
     // (AGENTS.md's own judge-on-smell carve-out for those lanes), not
@@ -1527,6 +1802,171 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
     // detail naming both keys and their legal values — the two-key read
     // order is ambiguous on a typo, and guessing either way is worse than
     // refusing.
+    // slp-dissent-stop-and-ask sd-4: the dissent-debt door (a2affcba,
+    // 4b7aa303). It copies the judge-debt arm above for SHAPE only, and
+    // deliberately drops three of its parts:
+    //
+    //   1. NO LANE GATE. The judge arm exists only for a standard/high-risk
+    //      route. a2affcba is unconditional, so this door exists in EVERY
+    //      lane, `tiny` included. A dissent record only exists because a
+    //      worker wrote one, so its existence is the gate.
+    //   2. NO GRANDFATHER CUTOFF. A dissent record cannot predate the feature
+    //      that created it.
+    //   3. NO `behavior_change` FILTER. A worker dissents against any cell it
+    //      was handed.
+    //
+    // The count and the escape are read from verbs/cells/dissent.rs, never
+    // recomputed here, because the merge door reads the SAME two functions:
+    // one obligation, two doors.
+    //
+    // `cells dissent-verdict` writes through `mutate_cell`, which refuses an
+    // archived cell outright, so an offender that only resolves under the
+    // archive owes the unarchive step FIRST or the remedy sends the reader
+    // straight into that refusal. Same reasoning the judge arm records.
+    let dissent = crate::verbs::cells::feature_dissent_debt(root, feature)?;
+    let dissent_deferred = if dissent.count > 0 {
+        crate::verbs::cells::has_dissent_deferral_decision(root, feature)?
+    } else {
+        false
+    };
+    let dissent_blocking = dissent.count > 0 && !dissent_deferred;
+    let dissent_archived: Vec<&str> = dissent
+        .ids
+        .iter()
+        .filter_map(|id| id.as_str())
+        .filter(|id| {
+            !crate::verbs::cells::cell_file(root, id).exists()
+                && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+        })
+        .collect();
+    doors.push(Door {
+        door: "dissent-debt",
+        blocking: dissent_blocking,
+        detail: if dissent.count == 0 {
+            "clear".to_string()
+        } else if dissent_deferred {
+            format!(
+                "deferred — {} cell(s) carry a dissent with no verdict ({}); a logged dissent-deferral decision names \"{feature}\"",
+                dissent.count,
+                js_join(&dissent.ids, ", ")
+            )
+        } else if !dissent_archived.is_empty() {
+            format!(
+                "{} cell(s) carry a dissent with no verdict ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells dissent-verdict to record a verdict, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it",
+                dissent.count,
+                js_join(&dissent.ids, ", "),
+                dissent_archived.len(),
+            )
+        } else {
+            format!(
+                "{} cell(s) carry a dissent with no verdict ({}); run bee cells dissent-verdict to record a verdict, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it",
+                dissent.count,
+                js_join(&dissent.ids, ", ")
+            )
+        },
+        command: if !dissent_blocking {
+            None
+        } else if dissent_archived.is_empty() {
+            Some("bee cells dissent-verdict")
+        } else {
+            Some("bee cells unarchive")
+        },
+    });
+
+    // leader-check-door: the leader-check door (a38dc4bd). It applies to
+    // EVERY lane and every capped cell (D4), grandfathered by
+    // LEADER_CHECK_DOOR_INTRODUCED_AT (D5).
+    //
+    // Pushed after dissent-debt and before advisor-nudge-debt per D6a.
+    // The debt count and deferral escape are read from verbs/cells/leader_check.rs:
+    // one obligation, two doors (bee close and bee worktree merge).
+    let leader_check = crate::verbs::cells::feature_leader_check_debt(root, feature)?;
+    let leader_check_deferred = if leader_check.count > 0 {
+        crate::verbs::cells::has_leader_check_deferral_decision(root, feature)?
+    } else {
+        false
+    };
+    let leader_check_blocking = leader_check.count > 0 && !leader_check_deferred;
+    let leader_check_archived: Vec<&str> = leader_check
+        .ids
+        .iter()
+        .filter_map(|id| id.as_str())
+        .filter(|id| {
+            !crate::verbs::cells::cell_file(root, id).exists()
+                && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+        })
+        .collect();
+    let leader_check_command = if !leader_check_blocking {
+        None
+    } else if leader_check_archived.is_empty() {
+        Some("bee cells leader-check")
+    } else {
+        Some("bee cells unarchive")
+    };
+    doors.push(Door {
+        door: "leader-check",
+        blocking: leader_check_blocking,
+        detail: if leader_check.count == 0 {
+            "clear".to_string()
+        } else if leader_check_deferred {
+            format!(
+                "deferred — {} cell(s) capped with no leader check ({}); a logged leader-check-deferral decision names \"{feature}\"",
+                leader_check.count,
+                js_join(&leader_check.ids, ", ")
+            )
+        } else if !leader_check_archived.is_empty() {
+            format!(
+                "{} cell(s) capped with no leader check ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells leader-check to record a check, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it",
+                leader_check.count,
+                js_join(&leader_check.ids, ", "),
+                leader_check_archived.len(),
+            )
+        } else {
+            format!(
+                "{} cell(s) capped with no leader check ({}); run bee cells leader-check to record a check, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it",
+                leader_check.count,
+                js_join(&leader_check.ids, ", ")
+            )
+        },
+        command: leader_check_command,
+    });
+
+    // slp-advisor-nudge an-3: the advisor-nudge response debt (9e5eda5b). It
+    // copies the dissent arm right above — NOT the judge arm's standard-up
+    // lane gate — and for the same reason a2affcba gave the dissent one: the
+    // nudge only exists because a supervisor wrote a record about THIS work,
+    // so its existence is the gate and a lane gate would double-filter it.
+    //
+    // Three parts of the dissent arm are deliberately absent here:
+    //
+    //   1. NO ARCHIVE ARM. The offenders are MAILBOX ROW ids, never cell ids
+    //      — nothing about them can be under `.bee/cells/archive`, so there
+    //      is no unarchive step to name first.
+    //   2. NO FEATURE-LEVEL ESCAPE. The dissent door's `dissent-deferral`
+    //      decision lifts every dissent in the feature at once; 9e5eda5b puts
+    //      the obligation on each nudge, so the escape is per ROW and lives
+    //      inside the count itself (a cleared row is simply not counted).
+    //      That is why there is no `deferred` detail branch below.
+    //   3. NO SECOND READING. The count comes from
+    //      `feature_advisor_nudge_debt` (verbs/supervisor.rs), the SAME
+    //      function the cap path and the merge door call: one obligation,
+    //      three doors.
+    let nudge = crate::verbs::supervisor::feature_advisor_nudge_debt(root, feature)?;
+    doors.push(Door {
+        door: "advisor-nudge-debt",
+        blocking: nudge.count > 0,
+        detail: if nudge.count == 0 {
+            "clear".to_string()
+        } else {
+            format!(
+                "{} advisor nudge(s) unanswered ({}); run the consult, then log a decision tagged advisor-nudge whose text NAMES that row id — or record a reasoned decline the same way",
+                nudge.count,
+                js_join(&nudge.ids, ", ")
+            )
+        },
+        command: if nudge.count == 0 { None } else { Some("bee decisions log") },
+    });
+
     match crate::uat::uat_stop_config(root) {
         None => {
             doors.push(Door {
@@ -1619,7 +2059,7 @@ pub(crate) fn parse_pattern_verdicts(raw: &str) -> HashMap<String, String> {
 /// insertion order.
 pub(crate) fn feature_touched_files(root: &Path, feature: &str) -> D<Vec<String>> {
     let mut files: Vec<String> = Vec::new();
-    for cell in list_cells_including_archive(root, feature, "capped")? {
+    for cell in list_cells_including_archive(root, feature, Some("capped"))? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if let Some(Value::Array(items)) = vget(&trace, "files_changed") {
             for item in items {
@@ -1819,6 +2259,330 @@ fn record_merge_ready_blocked_by(root: &Path, feature: &str, doors: &[Door]) {
     let names: Vec<&str> =
         doors.iter().filter(|d| d.blocking && d.door != "uat").map(|d| d.door).collect();
     let _ = crate::verbs::workflow_store::merge_ready::set_blocked_by(root, feature, &names);
+}
+
+// ═══ the token-usage section (decision 2d3abd12) ═══════════════════════════
+//
+// WHAT IT ANSWERS. "What did this feature cost in tokens?" — asked at the one
+// moment the answer is final, and answered from the only place that already
+// holds the truth: the Claude transcript each session wrote. No new store, no
+// new counter, nothing to keep in sync.
+//
+// WHY NOT `performance.jsonl`. That record is written by the session-close
+// hook, so it is stale for the session that is running close RIGHT NOW — the
+// most interesting one — and it is keyed by project, not by feature. Both
+// alternatives are named as rejected in decision 2d3abd12.
+//
+// FAIL-SOFT, ALWAYS. This section is a report line on an already-green close.
+// Every read below degrades to "skipped" instead of erroring: a session with
+// no record, no stored `transcript_path`, a path that no longer exists on
+// disk (transcripts are outside the repo and get cleaned up), or a transcript
+// with no events at all. The skipped count is printed rather than swallowed —
+// a total summed over 1 of 4 sessions must never read like a total over 4.
+
+/// The three numbers a `Rollup`'s model entries already carry, summed across
+/// every model. `ModelAcc::finalize` computed `new`/`cached`/`total` before
+/// serialization (`hooks/session_close/perf.rs`), so this only ever ADDS them
+/// up — it never re-derives a total from input/output/cache fields, which
+/// would be a second, drift-prone definition of the same number.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct UsageBucket {
+    pub(crate) new_t: f64,
+    pub(crate) cached: f64,
+    pub(crate) total: f64,
+}
+
+impl UsageBucket {
+    fn add_models(&mut self, models: &Value) {
+        let Value::Object(map) = models else { return };
+        for m in map.values() {
+            self.new_t += crate::hooks::session_close::num_field(m, "new");
+            self.cached += crate::hooks::session_close::num_field(m, "cached");
+            self.total += crate::hooks::session_close::num_field(m, "total");
+        }
+    }
+
+    fn plus(&self, other: &UsageBucket) -> UsageBucket {
+        UsageBucket {
+            new_t: self.new_t + other.new_t,
+            cached: self.cached + other.cached,
+            total: self.total + other.total,
+        }
+    }
+
+    fn value(&self) -> Value {
+        json!({ "new": self.new_t, "cached": self.cached, "total": self.total })
+    }
+}
+
+/// One rolled-up session, kept whole (decision e97cc9d4).
+///
+/// The printed line only ever needed the sums, but the RECORD close writes
+/// beside it answers "where did this feature's tokens go" — which model, how
+/// many subagents, over what span. Every field is copied straight off the
+/// `Rollup` the transcript already produced; nothing here is re-derived, for
+/// the same reason [`UsageBucket::add_models`] only ever adds.
+///
+/// `totals` is this session's WHOLE cost — its own models plus its subagents'
+/// — because that is the number a per-session reader wants first. The split
+/// is never lost: `models` and `subagent_models` ride beside it.
+pub(crate) struct SessionUsage {
+    pub(crate) session_id: String,
+    pub(crate) models: Value,
+    pub(crate) subagent_models: Value,
+    pub(crate) subagent_count: usize,
+    pub(crate) started_ms: Option<f64>,
+    pub(crate) ended_ms: Option<f64>,
+    pub(crate) totals: UsageBucket,
+}
+
+impl SessionUsage {
+    fn value(&self) -> Value {
+        json!({
+            "session_id": self.session_id,
+            "models": self.models,
+            "subagent_models": self.subagent_models,
+            "subagent_count": self.subagent_count,
+            // Null, never 0, when the transcript carried no timestamp: a span
+            // that could not be read must not read like an instant one.
+            "started_ms": self.started_ms,
+            "ended_ms": self.ended_ms,
+            "totals": self.totals.value(),
+        })
+    }
+}
+
+/// The whole usage section: what was read, what could not be, and the two
+/// buckets. `details` holds the transcripts actually ROLLED UP, never the
+/// candidates — with `skipped` beside it the reader can always tell a
+/// complete total from a partial one.
+///
+/// The session COUNT is [`CloseUsage::sessions`], derived from `details` and
+/// never stored beside it: one number, one home, so the printed line and the
+/// written record can never disagree about how many sessions were read.
+pub(crate) struct CloseUsage {
+    pub(crate) details: Vec<SessionUsage>,
+    pub(crate) skipped: usize,
+    pub(crate) main: UsageBucket,
+    pub(crate) subagents: UsageBucket,
+}
+
+impl CloseUsage {
+    pub(crate) fn sessions(&self) -> usize {
+        self.details.len()
+    }
+
+    fn total(&self) -> UsageBucket {
+        self.main.plus(&self.subagents)
+    }
+
+    pub(crate) fn value(&self) -> Value {
+        json!({
+            "sessions": self.sessions(),
+            "skipped": self.skipped,
+            "main": self.main.value(),
+            "subagents": self.subagents.value(),
+            "total": self.total().value(),
+        })
+    }
+}
+
+/// Every session id whose usage belongs to this feature: each `.bee/sessions/
+/// *.json` record bound to the lane, PLUS the session running close (which
+/// may not be lane-bound at all, and whose own record is the freshest and
+/// least likely to be in any rolled-up log yet).
+///
+/// Sorted and deduped. The sums are order-insensitive, but a deterministic
+/// candidate order keeps the skipped count and any future per-session detail
+/// reproducible across runs — the same reason `walk_subagents` sorts its own
+/// directory listing.
+pub(crate) fn usage_session_ids(
+    control: &Path,
+    feature: &str,
+    calling_session: Option<&str>,
+) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(crate::verbs::cells::sessions_dir(control)) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            // `.bee/sessions/` also holds `<id>.activity.jsonl` sidecars; only
+            // the plain `<id>.json` record carries the lane binding.
+            let Some(id) = name.strip_suffix(".json") else { continue };
+            if id.is_empty() || id.contains(".activity") {
+                continue;
+            }
+            let ReadJson::Parsed(record) = read_json(&entry.path()) else { continue };
+            if record.get("lane").and_then(Value::as_str) == Some(feature) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+    if let Some(calling) = calling_session.map(str::trim).filter(|s| !s.is_empty()) {
+        ids.push(calling.to_string());
+    }
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// Roll every candidate session's transcript up into one usage section.
+///
+/// `calling_session` is a PARAMETER rather than an env read inside this
+/// function so the tests can drive it directly: `BEE_SESSION_ID` is
+/// process-global and two tests setting it would race under the default
+/// parallel test runner. The env resolution happens once, at the call site.
+pub(crate) fn collect_close_usage(
+    control: &Path,
+    feature: &str,
+    calling_session: Option<&str>,
+) -> CloseUsage {
+    let mut usage = CloseUsage {
+        details: Vec::new(),
+        skipped: 0,
+        main: UsageBucket::default(),
+        subagents: UsageBucket::default(),
+    };
+    for id in usage_session_ids(control, feature, calling_session) {
+        let record = match read_json(&crate::verbs::cells::sessions_dir(control).join(format!("{id}.json"))) {
+            ReadJson::Parsed(r) => r,
+            // No record, or a corrupt one: a session we meant to cover and
+            // could not. Counted, never silently dropped.
+            _ => {
+                usage.skipped += 1;
+                continue;
+            }
+        };
+        let transcript = record
+            .get("transcript_path")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .filter(|p| p.exists());
+        let Some(transcript) = transcript else {
+            usage.skipped += 1;
+            continue;
+        };
+        // `rollup_transcript` answers None for an empty/unparseable transcript
+        // — same "could not read it" outcome as a missing file.
+        let Some(rollup) = crate::hooks::session_close::rollup_transcript(&transcript) else {
+            usage.skipped += 1;
+            continue;
+        };
+        // The session's own two buckets, summed once and used twice: added
+        // into the feature totals, and kept whole on its own record line.
+        let mut session_main = UsageBucket::default();
+        session_main.add_models(&rollup.models);
+        let mut session_subagents = UsageBucket::default();
+        session_subagents.add_models(&rollup.subagent_models);
+        usage.main = usage.main.plus(&session_main);
+        usage.subagents = usage.subagents.plus(&session_subagents);
+        usage.details.push(SessionUsage {
+            session_id: id,
+            models: rollup.models,
+            subagent_models: rollup.subagent_models,
+            subagent_count: rollup.subagent_count,
+            started_ms: rollup.started_ms,
+            ended_ms: rollup.ended_ms,
+            totals: session_main.plus(&session_subagents),
+        });
+    }
+    usage
+}
+
+/// The record's own version marker. A reader that walks
+/// `.bee/usage/*.json` checks this before trusting a field name, so
+/// the string is a CONTRACT — a shape change earns `bee-usage/v2`, never a
+/// quiet edit of what v1 means.
+pub(crate) const USAGE_SCHEMA: &str = "bee-usage/v1";
+
+/// The detailed token record a green close leaves in bee's own store
+/// (decision e97cc9d4, relocated by 62331863).
+///
+/// `closed_at` is a parameter rather than a `utc_now()` read inside, so a test
+/// can pin the one field that is not derived from the usage itself.
+pub(crate) fn usage_record_value(feature: &str, usage: &CloseUsage, closed_at: &str) -> Value {
+    json!({
+        "schema": USAGE_SCHEMA,
+        "feature": feature,
+        "closed_at": closed_at,
+        "sessions": usage.details.iter().map(SessionUsage::value).collect::<Vec<Value>>(),
+        "skipped": usage.skipped,
+        "totals": {
+            "main": usage.main.value(),
+            "subagents": usage.subagents.value(),
+            "total": usage.total().value(),
+        },
+    })
+}
+
+/// Write `.bee/usage/<feature>.json`, answering the written path (relative to
+/// the `control` root it was given).
+///
+/// ALWAYS, on a green close — including the close whose transcripts were all
+/// unreadable, which writes `sessions: []` beside a non-zero `skipped`. A
+/// missing file and an empty record must never read alike: the file says "we
+/// looked and found nothing readable", the absence says nothing at all. That
+/// is the same honesty rule [`close_usage_line`] follows by staying SILENT for
+/// that case — a printed "0 tokens" would be a false claim, while a stored
+/// empty `sessions` list beside `skipped` is a true one.
+///
+/// THE CONTROL ROOT, like the sessions this record sums: the caller resolves
+/// it once through `control_root_for` and hands it to both
+/// [`collect_close_usage`] and this write, so a worktree close stores the
+/// record in the main checkout's `.bee` — the same place its `.bee/sessions/`
+/// evidence lives — instead of in a worktree that is about to disappear.
+///
+/// `write_json_atomic` is [`write_text_atomic`]'s JSON sibling — the same
+/// tmp-then-rename write `promote-proposals.md` gets, plus the repo's one
+/// pretty-printer, so this record is spelled like every other JSON file bee
+/// writes; it creates `.bee/usage/` on the way. Unlike that proposal file this
+/// record lands INSIDE `commit_close_bookkeeping`'s `.bee`-scoped stage
+/// (`git add -A -- .bee`), and `.bee/usage/` is not matched by `.gitignore`
+/// (only `.bee/logs/`, `.bee/sessions/`, `.bee/cache/` and friends are), so
+/// close's own bookkeeping commit puts the record in git — no merge-time
+/// dependency, nothing left dirty on disk.
+pub(crate) fn write_usage_record(
+    control: &Path,
+    feature: &str,
+    usage: &CloseUsage,
+) -> Result<String, String> {
+    let rel = format!(".bee/usage/{feature}.json");
+    let value = usage_record_value(feature, usage, &crate::verbs::cells::utc_now());
+    match write_json_atomic(&control.join(&rel), &value) {
+        Ok(()) => Ok(rel),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// The one summary line. `None` when no transcript was readable at all: a
+/// "usage: 0 session(s) — 0 tokens" line states a cost of zero, which is a
+/// FALSE claim about a feature whose transcripts merely could not be found.
+/// Saying nothing is the honest answer there.
+///
+/// Reuses `fmt_tokens` (`hooks/session_close/perf`'s sibling `html.rs`), the
+/// k/M/B spelling every other bee token readout already uses.
+pub(crate) fn close_usage_line(usage: &CloseUsage) -> Option<String> {
+    if usage.sessions() == 0 {
+        return None;
+    }
+    let f = crate::hooks::session_close::fmt_tokens;
+    let total = usage.total();
+    let skipped = if usage.skipped > 0 {
+        format!(", {} session(s) skipped — no readable transcript", usage.skipped)
+    } else {
+        String::new()
+    };
+    Some(format!(
+        "usage: {} session(s) — {} tokens (main {}, subagents {}; new {}, cached {}){}",
+        usage.sessions(),
+        f(total.total),
+        f(usage.main.total),
+        f(usage.subagents.total),
+        f(total.new_t),
+        f(total.cached),
+        skipped
+    ))
 }
 
 /// provenance: bee.mjs handleClose (~7643). `worktree` is provably null here
@@ -2046,6 +2810,132 @@ pub(crate) fn close_handler(
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
+    // slp-dissent-stop-and-ask sd-4: refuse on dissent debt, in EVERY lane.
+    //
+    // The `Door` the builder pushed does not refuse by itself, so this is the
+    // second, separate half: same "read the door's own verdict, never
+    // recompute it" discipline the two refusals above already keep. Unlike
+    // the judge refusal, a `tiny` or `small` lane reaches this one, because
+    // a2affcba puts the obligation everywhere a worker can dissent.
+
+    if doors.iter().any(|d| d.door == "dissent-debt" && d.blocking) {
+        let debt = crate::verbs::cells::feature_dissent_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let archived = debt.ids.iter().any(|id| {
+            id.as_str().is_some_and(|id| {
+                !crate::verbs::cells::cell_file(root, id).exists()
+                    && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+            })
+        });
+        let remedy = if archived {
+            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells dissent-verdict to record a verdict for each dissent, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it.")
+        } else {
+            format!("remedy: run bee cells dissent-verdict to record a verdict for each dissent on the cells above, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it.")
+        };
+        let lines = vec![
+            format!(
+                "{CLOSE_DISSENT_DEBT_PREFIX} \"{feature}\" — close stops at the dissent-debt door: {} cell(s) carry a dissent with no verdict ({}).",
+                debt.count,
+                js_join(&debt.ids, ", ")
+            ),
+            remedy,
+            format!("next: settle the dissent debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // slp-advisor-nudge an-3: refuse on advisor-nudge debt, in EVERY lane.
+    //
+    // Same second half the dissent refusal above is: the `Door` the builder
+    // pushed does not refuse by itself, and this reads the door's own verdict
+    // rather than recomputing it. Placed AFTER the dissent arm, so a feature
+    // owing both is told about the dissent first — the same masking order the
+    // judge arm already has over the dissent one, and deliberate.
+    if doors.iter().any(|d| d.door == "advisor-nudge-debt" && d.blocking) {
+        let debt = crate::verbs::supervisor::feature_advisor_nudge_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let lines = vec![
+            format!(
+                "{CLOSE_ADVISOR_NUDGE_DEBT_PREFIX} \"{feature}\" — close stops at the advisor-nudge door: {} advisor nudge(s) with no consult and no recorded decline ({}).",
+                debt.count,
+                js_join(&debt.ids, ", ")
+            ),
+            "remedy: run the advisor consult for each row above, then record what came of it with bee decisions log --tags advisor-nudge — or record a reasoned decline the same way. The decision text must NAME the row id; one decision answers one row, and a decision naming no row clears nothing.".to_string(),
+            format!("next: settle the advisor-nudge debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // reflection-becomes-lesson D1/D5: refuse on the mistakes door, in EVERY
+    // lane and for attended sessions too.
+    //
+    // Same "read the door's own verdict, never recompute it" discipline the
+    // refusals above keep, and the same placement: with the blocking doors,
+    // BEFORE any write — a refused close appends no mailbox entry and files
+    // no letter, so answering and re-running is the whole cost of getting it
+    // wrong.
+    if doors.iter().any(|d| d.door == "mistakes" && d.blocking) {
+        let debt = mistakes_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let lines = vec![
+            format!(
+                "{CLOSE_MISTAKES_PREFIX} \"{feature}\" — close stops at the mistakes door: this run's letter cannot say whether anything went wrong, because cell(s) {} recorded no reflection and no clean-run statement.",
+                js_join(&debt.ids, ", ")
+            ),
+            format!(
+                "remedy: record each mistake with `bee mailbox reflect --wrong \"<what went wrong>\" --better \"<what would have been better>\"` — or, if those cells truly hit none, say so: {MISTAKES_CLEAN_RUN_COMMAND}."
+            ),
+            format!("next: answer, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // leader-check-door: refuse on leader check debt, in EVERY lane.
+    //
+    // Placed last among the cell-debt arms: after mistakes and before uat,
+    // so the specific debts surface first and this broad one masks none of them.
+    if doors.iter().any(|d| d.door == "leader-check" && d.blocking) {
+        let debt = crate::verbs::cells::feature_leader_check_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let archived = debt.ids.iter().any(|id| {
+            id.as_str().is_some_and(|id| {
+                !crate::verbs::cells::cell_file(root, id).exists()
+                    && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+            })
+        });
+        let remedy = if archived {
+            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells leader-check to record a check for each cell, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it (or bee cells reopen if a recorded gap needs rework).")
+        } else {
+            format!("remedy: run bee cells leader-check to record a check for each cell above, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it (or bee cells reopen if a recorded gap needs rework).")
+        };
+        let lines = vec![
+            format!(
+                "{CLOSE_LEADER_CHECK_DEBT_PREFIX} \"{feature}\" — close stops at the leader-check door: {} cell(s) capped with no leader check ({}).",
+                debt.count,
+                js_join(&debt.ids, ", ")
+            ),
+            remedy,
+            format!("next: settle the leader check debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
     // ── uat-stop-placement D4.4/D2: refuse on a pending close-time uat door ─
     //
     // Runs only here — tests GREEN (or undeclared) and past the D1 capture-
@@ -2226,14 +3116,27 @@ pub(crate) fn close_handler(
     // knowledge a feature earned never blocks finishing it, and D38
     // (promote proposes, it never writes into docs/knowledge/) stays
     // untouched by this door.
-    let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(root) {
+    let docs_root = docs_root_for_feature(root, feature);
+    let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(&docs_root) {
         None => Err("no docs/knowledge/ bundle to mine here".to_string()),
-        Some(dir) => match crate::verbs::knowledge::build_promotion(root, &dir, feature) {
+        Some(dir) => match crate::verbs::knowledge::build_promotion_split(root, &docs_root, &dir, feature) {
             None => Err("no docs/knowledge/ bundle to mine here".to_string()),
             Some(crate::verbs::knowledge::Promo::Thrown(msg)) => Err(msg),
             Some(crate::verbs::knowledge::Promo::Ok(proposal)) => Ok(proposal),
         },
     };
+
+    // ── mistake-fix-at D2: file the fix-at rows ───────────────────────────
+    //
+    // HERE, not earlier: past every refusal above, so a close that stopped at
+    // a door files nothing. Before retirement only because the whole tail
+    // reads better in the order it prints; the walk itself reads the archive
+    // too, so it would survive being moved after it.
+    let fix_at_rows = file_fix_at_rows(root, feature);
+    result.insert(
+        "fix_at_rows".into(),
+        json!({"filed": fix_at_rows.filed, "skipped": fix_at_rows.skipped}),
+    );
 
     // ── retire the feature's cells ────────────────────────────────────────
     //
@@ -2268,6 +3171,20 @@ pub(crate) fn close_handler(
             "Cells kept in the active scan: {reason}."
         )),
         Retirement::Off => {}
+    }
+    // Right after the Retired line, in the same voice — and silent when
+    // there was nothing to file, on the same rule the `moved == 0`
+    // retirement takes above: a feature whose mistakes were all `doctrine`,
+    // `none` or absent has no fix-at news, and a line saying "0 (0 already
+    // there)" would be noise on most closes.
+    if fix_at_rows.filed > 0 || fix_at_rows.skipped > 0 {
+        lines.push(format!(
+            "Filed for \"{feature}\": {} fix-at row(s) to .bee/backlog.jsonl ({} already there) — bee backlog findings --feature {feature} to read them.",
+            fix_at_rows.filed, fix_at_rows.skipped
+        ));
+    }
+    if let Some(warning) = &fix_at_rows.warning {
+        lines.push(warning.clone());
     }
     result.insert("retired".into(), retired.value());
 
@@ -2307,6 +3224,50 @@ pub(crate) fn close_handler(
         Err(reason) => format!("Promote skipped for \"{feature}\": {reason}"),
     };
     lines.push(promote_line);
+
+    // ── the token-usage section (decision 2d3abd12) ───────────────────────
+    //
+    // GREEN, non-dry-run only, like every line around it: `--dry-run` returns
+    // near the top of this function and each blocking door returns above, so
+    // a refused close never prints a cost for work that is not finished.
+    //
+    // THE CONTROL ROOT, not `root`. `.bee/sessions/` is control-plane — for a
+    // linked worktree it lives in the main checkout, exactly as
+    // `record_feature_close_in_mailbox` above resolves it. Reading `root`
+    // here would find an empty sessions directory for every worktree feature
+    // and report a cost of zero for the ones that ran in a worktree, which is
+    // most of them.
+    //
+    // The calling session resolves through `resolve_session_flag_env` — the
+    // same BEE_SESSION_ID → CLAUDE_CODE_SESSION_ID chain the mailbox stop
+    // above already uses, so close names one session id, never two.
+    let usage_control = crate::hooks::session_init::control_root_for(root);
+    let usage = collect_close_usage(
+        &usage_control,
+        feature,
+        crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
+    );
+    result.insert("usage".into(), usage.value());
+    let usage_line = close_usage_line(&usage);
+    if let Some(line) = &usage_line {
+        lines.push(line.clone());
+    }
+
+    // The detailed record beside the printed line (decision e97cc9d4), stored
+    // in bee's own store at `.bee/usage/<feature>.json` (decision 62331863).
+    // The CONTROL root again — the record belongs beside the `.bee/sessions/`
+    // evidence it sums, not in a worktree. Written BEFORE the bookkeeping
+    // commit below, which stages `.bee`, so close itself commits the record.
+    // FAIL-SOFT like every other write on this tail: a record that could not be
+    // written is one warning line, never a failed close.
+    match write_usage_record(&usage_control, feature, &usage) {
+        Ok(rel) => {
+            result.insert("usage_record".into(), json!(rel));
+        }
+        Err(e) => lines.push(format!(
+            "Warning: the token-usage record for \"{feature}\" could not be written: {e}"
+        )),
+    }
 
     // ── bookkeeping auto-commit — GREEN, non-dry-run only, path-scoped ─────
     //
@@ -2418,7 +3379,7 @@ pub(crate) fn close_handler(
     // ignore block is absent would otherwise commit a run's letter material
     // into the project's history. The lane write just above is the existing
     // precedent for a `.bee` write that lands after that commit.
-    record_feature_close_in_mailbox(root, feature);
+    record_feature_close_in_mailbox(root, feature, usage_line.as_deref());
 
     lines.push(
         "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
@@ -2463,7 +3424,17 @@ pub(crate) fn close_handler(
 /// The three lists D14's extra sections are composed from, read out of the
 /// feature's own capped cells. Cells are read INCLUDING the archive, because
 /// this runs after `auto_archive_on_close` has already moved them.
-fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::CloseNote {
+///
+/// The FOURTH list is the token-usage line (decision e97cc9d4) — the same one
+/// string close just printed, handed in rather than recomputed here so the
+/// letter and the terminal can never state two different costs. `None` when no
+/// transcript was readable: the letter then grows no Token usage section at
+/// all, which is `close_usage_line`'s own honesty rule reaching the mailbox.
+fn feature_close_note(
+    root: &Path,
+    feature: &str,
+    usage_line: Option<&str>,
+) -> crate::verbs::mailbox::CloseNote {
     fn push_unique(out: &mut Vec<String>, value: &str) {
         let value = value.trim();
         if !value.is_empty() && !out.iter().any(|seen| seen == value) {
@@ -2474,7 +3445,7 @@ fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::Clos
     let architecture = feature_touched_files(root, feature).unwrap_or_default();
     let mut behaviour: Vec<String> = Vec::new();
     let mut usage: Vec<String> = Vec::new();
-    if let Ok(cells) = list_cells_including_archive(root, feature, "capped") {
+    if let Ok(cells) = list_cells_including_archive(root, feature, Some("capped")) {
         for cell in cells {
             if let Some(Value::String(acceptance)) = vget(&cell, "acceptance") {
                 push_unique(&mut behaviour, acceptance);
@@ -2490,7 +3461,13 @@ fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::Clos
             }
         }
     }
-    crate::verbs::mailbox::CloseNote { architecture, behaviour, usage }
+    let token_usage = usage_line
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .into_iter()
+        .collect();
+    crate::verbs::mailbox::CloseNote { architecture, behaviour, usage, token_usage }
 }
 
 /// Record this feature close as ONE human-mailbox entry, the moment the close
@@ -2507,7 +3484,14 @@ fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::Clos
 ///
 /// UNCONDITIONAL, by D9: every session appends its entries, attended or not.
 /// Arming decides only whether a letter is composed at the run's END.
-fn record_feature_close_in_mailbox(root: &Path, feature: &str) {
+///
+/// AND THE LETTER IS FILED HERE, by D2 (aedb5be9): every close files its close
+/// letter at the moment of the close, attended sessions included. The entry
+/// data was already appended on the line above; filing was the missing step,
+/// and waiting for a run end meant an attended session's close letter was
+/// never written at all. FAIL-OPEN (D10): a letter that cannot be filed is
+/// said out loud and never turns a finished close into a refusal.
+fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Option<&str>) {
     use crate::verbs::mailbox;
     let control = crate::hooks::session_init::control_root_for(root);
     let run = mailbox::run_id(
@@ -2530,8 +3514,25 @@ fn record_feature_close_in_mailbox(root: &Path, feature: &str) {
         // A green close left nothing outstanding; a close that needed the
         // human's call refused at a door and never reached this line (D13).
         needs_you: Vec::new(),
+        // Only a reflection entry carries letter-reflection's second part
+        // or mistake-fix-at's layer.
+        better: None,
+        fix_at: None,
     };
-    mailbox::record_close_stop(&control, &run, &entry, &feature_close_note(root, feature));
+    mailbox::record_close_stop(
+        &control,
+        &run,
+        &entry,
+        &feature_close_note(root, feature, usage_line),
+    );
+    // D2: the same CONTROL root the entry just landed under — the letter must
+    // be composed where the entries and the caps are. A worktree root here
+    // would file an orphan letter in a checkout the human never reads.
+    if let mailbox::RunEnd::Failed(why) = mailbox::file_close_letter(&control, &run) {
+        eprintln!(
+            "bee: could not file the human-mailbox letter for the close of \"{feature}\" on run \"{run}\" ({why}) — the close itself is recorded; that run has no letter to read."
+        );
+    }
 }
 
 /// What close did with the feature's cells, and why.
@@ -2831,32 +3832,26 @@ pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     // ── everything that can still delegate happens BEFORE prelude, whose
     //    drift-cache write would swallow the Node re-run's drift line. ──────
     let cwd = std::env::current_dir().ok()?;
-    let root = match resolve_store_root(&cwd) {
+    let (roots, _here) = crate::verbs::drivers::resolve_root_serving_granted(&cwd);
+    let root = match roots {
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => {
             return Some(emit_unsupported_root(&cwd, "close", use_json, t0, &why))
         }
         Roots::None => return Some(emit_no_root_error(&cwd, "close", use_json, t0)),
     };
-    // D7: close never spawns commands.test, so no shell needs resolving and
-    // no `.bee/logs/` dir needs creating up front any more — `declared` is
-    // still read (and still passed through below) only to keep
-    // `close_handler`'s signature matching its other callers.
     let declared = declared_test_commands(&root).ok()?;
-    // Delegation pre-flight for the report doors: they are pure reads, so
-    // computing them here (and again, for real, in close_handler) can only
-    // cost two cheap directory scans — but it means a corrupt store can
-    // still hand the whole command to Node BEFORE close_handler runs.
     build_close_report_doors(&root, &feature).ok()?;
     build_pattern_check_door(&root, &feature, &pattern_verdicts).ok()?;
 
-    let ctx = match prelude("close", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let ctx = match crate::verbs::drivers::ctx_serving_granted("close", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
     };
     let out: R2<Out> = close_handler(&ctx.root, &feature, dry_run, declared, None, &pattern_verdicts)
         .map_err(crate::verbs::reservations::Err2::from);
-    finish(&ctx, out)
+    let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
+    crate::verbs::drivers::finish_serving_granted(&ctx, out, served_main.as_deref())
 }
 
 // ═══ routing ═══════════════════════════════════════════════════════════════
@@ -2883,6 +3878,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             match sub {
                 "prepare" => run_dispatch_prepare(flags, use_json, t0),
                 "wave" => run_dispatch_wave(flags, use_json, t0),
+                "authorize" => run_dispatch_authorize(flags, use_json, t0),
                 _ => None,
             }
         }
@@ -3197,11 +4193,18 @@ mod tests {
         assert_eq!(result["bookkeeping_commit"]["committed"], json!(true));
         assert!(result["bookkeeping_commit"]["sha"].as_str().is_some_and(|s| !s.is_empty()));
 
+        // The dirtied tracked file plus the token-usage record this green
+        // close wrote (62331863) — both `.bee`, both staged by the same
+        // path-scoped `git add`. `unrelated.txt` is the point: it is dirt
+        // outside `.bee`, so it stays out of the commit.
         let committed = git_committed_paths(root);
-        assert_eq!(committed, vec![".bee/config.json".to_string()]);
+        assert_eq!(
+            committed,
+            vec![".bee/config.json".to_string(), ".bee/usage/demo.json".to_string()]
+        );
         let status = git_status_porcelain(root);
         assert!(status.contains("unrelated.txt"), "{status}");
-        assert!(!status.contains(".bee/config.json"), "{status}");
+        assert!(!status.contains(".bee/"), "{status}");
         let subject = git_out(root, &["log", "-1", "--pretty=%s"]);
         assert_eq!(subject, "Record demo close bookkeeping in the bee store");
     }
@@ -3504,14 +4507,17 @@ mod tests {
         );
     }
 
-    /// P2-4(b): a clean `.bee` (nothing for close to have dirtied) reports
-    /// `reason: "clean"` through the full `close_handler` path, GREEN, not
-    /// just through `commit_close_bookkeeping` directly. There are no
-    /// `docs/knowledge/` bundle and no cells for "demo" in this fixture, so
-    /// promote is skipped and retirement moves nothing — close itself never
-    /// touches `.bee` on top of the already-clean seed commit.
+    /// P2-4(b), rewritten by 62331863: this fixture has no
+    /// `docs/knowledge/` bundle and no cells for "demo", so promote is
+    /// skipped and retirement moves nothing — the ONE thing a green close
+    /// writes on top of the clean seed commit is its token-usage record. That
+    /// record now lands at `.bee/usage/demo.json`, INSIDE the `.bee` scope
+    /// this commit stages, so the green close no longer reports
+    /// `reason: "clean"`: it commits the record it just wrote and leaves the
+    /// tree clean. `reason: "clean"` itself is still pinned, one step later,
+    /// on a store that really has nothing left to commit.
     #[test]
-    fn clean_store_green_close_reports_reason_clean() {
+    fn green_close_commits_the_usage_record_it_just_wrote() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         init_bee_repo(root);
@@ -3519,8 +4525,20 @@ mod tests {
         let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
         assert_eq!(code, 0);
-        assert_eq!(result["bookkeeping_commit"], json!({"committed": false, "reason": "clean"}));
-        assert!(git_status_porcelain(root).is_empty(), "{}", git_status_porcelain(root));
+        assert_eq!(result["bookkeeping_commit"]["committed"], json!(true), "{result}");
+        assert_eq!(result["usage_record"], json!(".bee/usage/demo.json"));
+
+        // The record is IN the commit, not merely on disk — no merge-time
+        // auto-commit is needed to preserve it any more.
+        assert_eq!(git_committed_paths(root), vec![".bee/usage/demo.json".to_string()]);
+        let status = git_status_porcelain(root);
+        assert!(!status.contains(".bee"), "close must leave nothing in .bee dirty: {status}");
+
+        // And with the record committed, the store really is clean.
+        assert_eq!(
+            commit_close_bookkeeping(root, "demo").value(),
+            json!({"committed": false, "reason": "clean"})
+        );
     }
 
     /// P2-4(a) + P2-1 + P2-2: a `pre-commit` hook that fails SILENTLY (exit
@@ -4064,10 +5082,13 @@ mod tests {
         w(
             root,
             ".bee/cells/demo-1.json",
+            // reflection-becomes-lesson: the cap stated its mistakes answer
+            // (here, the clean-run half), which is what lets this close reach
+            // its green tail instead of stopping at the mistakes door.
             r#"{"id":"demo-1","feature":"demo","status":"capped",
                 "acceptance":"A letter is filed once per run and never twice",
                 "affects_skills":["bee-hive"],"affects_specs":["docs/specs/letters.md"],
-                "trace":{"files_changed":["src/one.rs","src/two.rs"],
+                "trace":{"files_changed":["src/one.rs","src/two.rs"],"no_mistakes":true,
                 "report":{"outcome":"o","commit":"c","files":["src/one.rs"],
                 "tests":"cargo test — green — the touched module","deviations":[]}}}"#,
         );
@@ -4113,6 +5134,263 @@ mod tests {
         );
     }
 
+    // ── reflection-becomes-lesson D1/D5: the mistakes door ───────────────
+
+    /// The same capped cell `capped_cell` writes, minus its mistakes answer:
+    /// a cap that was never asked, or never said.
+    fn unanswered_cell(root: &Path) {
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped",
+                "acceptance":"A letter is filed once per run and never twice",
+                "trace":{"files_changed":["src/one.rs"],
+                "report":{"outcome":"o","commit":"c","files":["src/one.rs"],
+                "tests":"cargo test — green — the touched module","deviations":[]}}}"#,
+        );
+    }
+
+    /// TRUTH: a close whose feature has a capped cell that never answered the
+    /// mistakes question is REFUSED, the refusal names that cell, and the
+    /// close writes nothing — no mailbox entry, no letter. Answering and
+    /// re-running is the whole cost of getting it wrong.
+    #[test]
+    fn close_refuses_a_feature_whose_capped_cell_never_answered_about_mistakes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "the mistakes door must stop this close: {text}");
+        assert!(text.starts_with(CLOSE_MISTAKES_PREFIX), "text: {text}");
+        assert!(text.contains("demo-1"), "the refusal must name the cell: {text}");
+        // The remedy offers the reflect verb FIRST and the clean-run flag
+        // SECOND, and the last line says what to do next.
+        assert!(text.contains("bee mailbox reflect --wrong"), "text: {text}");
+        assert!(text.contains(MISTAKES_CLEAN_RUN_COMMAND), "text: {text}");
+        assert!(text.contains("next: answer, then re-run bee close --feature demo"), "text: {text}");
+        assert_eq!(
+            result["doors"].as_array().unwrap().iter().find(|d| d["door"] == "mistakes").unwrap()
+                ["blocking"],
+            json!(true)
+        );
+
+        // Nothing was written: no entry, no letter.
+        assert!(
+            !crate::verbs::mailbox::entries_dir(root).exists(),
+            "a refused close appended a mailbox entry"
+        );
+        assert!(
+            std::fs::read_dir(crate::verbs::mailbox::mailbox_dir(root))
+                .map(|d| d.count())
+                .unwrap_or(0)
+                == 0,
+            "a refused close filed a letter"
+        );
+    }
+
+    // ── mistake-fix-at D2: the fix-at rows filed at close ────────────────
+
+    /// A capped cell whose cap answered with ONE mistake, shaped exactly as
+    /// `bee cells cap --mistake --fix-at` writes it. `fix_at: None` models a
+    /// row written before D1 existed — D4 forbids backfilling those.
+    fn mistake_cell(root: &Path, id: &str, wrong: &str, fix_at: Option<&str>) {
+        let layer = match fix_at {
+            Some(v) => format!(r#","fix_at":"{v}""#),
+            None => String::new(),
+        };
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"demo","status":"capped",
+                "acceptance":"A letter is filed once per run and never twice",
+                "trace":{{"files_changed":["src/one.rs"],
+                "mistakes":[{{"wrong":"{wrong}","better":"say it at the cap"{layer}}}],
+                "report":{{"outcome":"o","commit":"c","files":["src/one.rs"],
+                "tests":"cargo test — green — the touched module","deviations":[]}}}}}}"#
+            ),
+        );
+    }
+
+    fn backlog_rows(root: &Path) -> Vec<Value> {
+        let path = root.join(".bee").join("backlog.jsonl");
+        std::fs::read_to_string(path)
+            .map(|text| {
+                text.lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(|l| serde_json::from_str::<Value>(l).unwrap())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// TRUTH (D2): one occurrence is enough. A green close of a feature whose
+    /// capped cells each recorded a `check` mistake appends exactly one
+    /// backlog row per mistake, and the tail says where to read them.
+    #[test]
+    fn a_green_close_files_one_backlog_row_per_mechanizable_mistake() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        mistake_cell(root, "demo-1", "Reserved a file after writing it", Some("check"));
+        mistake_cell(root, "demo-2", "Ran the whole suite for a one-line doc fix", Some("check"));
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "the cells answered, so nothing stops this close: {text}");
+
+        let rows = backlog_rows(root);
+        assert_eq!(rows.len(), 2, "one row per mechanizable mistake: {rows:?}");
+        for row in &rows {
+            assert_eq!(row["type"], json!("finding"), "{row}");
+            assert_eq!(row["severity"], json!("P3"), "{row}");
+            assert_eq!(row["layer"], json!("fix-at:check"), "{row}");
+            assert_eq!(row["feature"], json!("demo"), "{row}");
+        }
+        // The title is the wrong text; the detail carries the better text and
+        // names the cell it came from.
+        let titles: Vec<&str> = rows.iter().map(|r| r["title"].as_str().unwrap()).collect();
+        assert!(titles.contains(&"Reserved a file after writing it"), "{titles:?}");
+        assert!(rows.iter().any(|r| r["detail"]
+            .as_str()
+            .unwrap()
+            .ends_with("(from cell demo-1)")), "{rows:?}");
+
+        assert!(
+            text.contains("Filed for \"demo\": 2 fix-at row(s) to .bee/backlog.jsonl (0 already there) — bee backlog findings --feature demo to read them."),
+            "the tail must name the count, the path and the reader: {text}"
+        );
+        assert_eq!(result["fix_at_rows"], json!({"filed": 2, "skipped": 0}));
+    }
+
+    /// TRUTH (D2): the same entry is never filed twice. Closing the same
+    /// feature again appends nothing and reports the rows as already there.
+    #[test]
+    fn closing_the_same_feature_again_files_no_second_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        mistake_cell(root, "demo-1", "Reserved a file after writing it", Some("check"));
+        mistake_cell(root, "demo-2", "Ran the whole suite for a one-line doc fix", Some("check"));
+
+        let first = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, _text, code) = first else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert_eq!(backlog_rows(root).len(), 2);
+
+        let second = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = second else { panic!("expected Emit") };
+        assert_eq!(code, 0, "{text}");
+        assert_eq!(backlog_rows(root).len(), 2, "a re-close appended a duplicate row");
+        assert!(
+            text.contains("Filed for \"demo\": 0 fix-at row(s) to .bee/backlog.jsonl (2 already there)"),
+            "the re-close must report them as already there: {text}"
+        );
+        assert_eq!(result["fix_at_rows"], json!({"filed": 0, "skipped": 2}));
+    }
+
+    /// TRUTH (D2 + D4): only `check` and `architecture` are mechanizable. A
+    /// `doctrine` mistake stays on the two-run lesson rule, and a mistake
+    /// written before `fix_at` existed is read as `none`, never guessed at.
+    #[test]
+    fn doctrine_and_layerless_mistakes_file_no_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        mistake_cell(root, "demo-1", "Wrote the summary before the work", Some("doctrine"));
+        mistake_cell(root, "demo-2", "Misread the flag name", None);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "{text}");
+        assert!(backlog_rows(root).is_empty(), "nothing mechanizable, nothing filed");
+        assert!(!text.contains("Filed for"), "no news is no line: {text}");
+        assert_eq!(result["fix_at_rows"], json!({"filed": 0, "skipped": 0}));
+    }
+
+    /// TRUTH (the fail-open rule): a backlog file that cannot be written
+    /// warns and NEVER changes the close's exit code. Losing a backlog row
+    /// must not cost a feature its close.
+    #[cfg(unix)]
+    #[test]
+    fn an_unwritable_backlog_warns_and_the_close_still_passes() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        mistake_cell(root, "demo-1", "Reserved a file after writing it", Some("check"));
+        let backlog = root.join(".bee").join("backlog.jsonl");
+        std::fs::write(&backlog, "").unwrap();
+        std::fs::set_permissions(&backlog, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        std::fs::set_permissions(&backlog, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(code, 0, "an unwritable backlog must never refuse the close: {text}");
+        assert!(
+            text.contains("Fix-at row(s) for \"demo\" were not filed:")
+                && text.contains("backlog.jsonl"),
+            "one warning line naming the path: {text}"
+        );
+        assert_eq!(result["fix_at_rows"], json!({"filed": 0, "skipped": 0}));
+    }
+
+    /// TRUTH (the D5 regression): the door reads the FEATURE'S CAPPED CELLS,
+    /// never the closing session's own run. Under the default `uat_stop:
+    /// "close"` the closing session is the attended orchestrator — a
+    /// different run from the workers' — so a run-scoped door would refuse
+    /// every close. This close's own run holds no entry at all, and it
+    /// passes, because the cells carry the answer.
+    #[test]
+    fn a_close_whose_own_run_recorded_nothing_still_passes_when_the_cells_answered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        capped_cell(root);
+        assert!(
+            !crate::verbs::mailbox::entries_dir(root).exists(),
+            "the fixture must start with an empty mailbox — that is the point"
+        );
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "the cells answered, so nothing stops this close: {text}");
+    }
+
+    /// TRUTH: the remedy the refusal prints is a remedy that WORKS. The
+    /// acting agent writes the mistake into its own run with
+    /// `bee mailbox reflect`, and the same close then goes through — the
+    /// letter can now say whether anything went wrong, which is the whole
+    /// thing the door is protecting.
+    #[test]
+    fn the_refusals_own_remedy_clears_the_mistakes_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+
+        let run = crate::verbs::mailbox::run_id(
+            crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
+        );
+        crate::verbs::mailbox::record_stop(
+            root,
+            &run,
+            &crate::verbs::mailbox::Entry::reflection(
+                "2026-08-31T01:00:00.000Z",
+                "Capped demo-1 without saying what went wrong",
+                "Answer the mistakes question at the cap, when it is still in hand",
+                "none",
+            ),
+        );
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "the recorded reflection must clear the door: {text}");
+    }
+
     #[test]
     fn a_green_close_appends_one_feature_close_entry_carrying_the_three_lists() {
         let tmp = tempfile::tempdir().unwrap();
@@ -4135,7 +5413,7 @@ mod tests {
 
         // D14's three lists, each read out of the feature's own capped cell —
         // which retirement has already moved into the archive by now.
-        let note = feature_close_note(root, "demo");
+        let note = feature_close_note(root, "demo", None);
         assert_eq!(note.architecture, vec!["src/one.rs".to_string(), "src/two.rs".to_string()]);
         assert_eq!(
             note.behaviour,
@@ -4156,10 +5434,772 @@ mod tests {
             ".bee/cells/demo-1.json",
             r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test — green — one module","deviations":[]}}}"#,
         );
-        let note = feature_close_note(root, "demo");
+        let note = feature_close_note(root, "demo", None);
         assert!(note.is_empty(), "a feature that recorded nothing must carry nothing: {note:?}");
 
         // And a feature nobody ever worked on carries nothing either.
-        assert!(feature_close_note(root, "never-existed").is_empty());
+        assert!(feature_close_note(root, "never-existed", None).is_empty());
+
+        // e97cc9d4: the token-usage line is the ONE string this note takes
+        // from outside the cells, and it is passed through untouched — a
+        // blank one is dropped rather than stored as an empty bullet.
+        let priced = feature_close_note(root, "demo", Some("usage: 1 session(s) — 9 tokens"));
+        assert_eq!(priced.token_usage, vec!["usage: 1 session(s) — 9 tokens".to_string()]);
+        assert!(feature_close_note(root, "demo", Some("   ")).is_empty());
+    }
+
+    // ─── tests: the token-usage section (decision 2d3abd12) ────────────────
+
+    /// One transcript event, in the exact shape `aggregate_usage` reads:
+    /// `type: "assistant"` with a truthy `message.model` and a `message.usage`
+    /// block. `requestId` keeps the de-duplication path honest, `timestamp` is
+    /// what `walk_subagents` needs to accept a sidecar at all.
+    fn usage_event(model: &str, req: &str, input: u32, output: u32, cw: u32, cr: u32) -> String {
+        format!(
+            r#"{{"type":"assistant","requestId":"{req}","timestamp":"2026-08-30T12:00:00.000Z","message":{{"model":"{model}","usage":{{"input_tokens":{input},"output_tokens":{output},"cache_creation_input_tokens":{cw},"cache_read_input_tokens":{cr}}}}}}}"#
+        )
+    }
+
+    /// Writes `.bee/sessions/<id>.json` and, when `main` is given, the
+    /// transcript it points at — inside the SAME tempdir, so `transcript_path`
+    /// is a real absolute path that `.exists()` answers true for.
+    fn write_usage_session(
+        root: &Path,
+        id: &str,
+        lane: Option<&str>,
+        main: Option<&str>,
+        subagent: Option<&str>,
+    ) {
+        let transcript = root.join("transcripts").join(format!("{id}.jsonl"));
+        let lane_field = lane.map(|l| format!(r#","lane":"{l}""#)).unwrap_or_default();
+        // The path goes into a JSON string literal: escape the separator so a
+        // win32 checkout does not write an unparseable record.
+        let transcript_json = transcript.to_string_lossy().replace('\\', "\\\\");
+        w(
+            root,
+            &format!(".bee/sessions/{id}.json"),
+            &format!(r#"{{"id":"{id}","transcript_path":"{transcript_json}"{lane_field}}}"#),
+        );
+        if let Some(main) = main {
+            w(root, &format!("transcripts/{id}.jsonl"), &format!("{main}\n"));
+        }
+        if let Some(sub) = subagent {
+            w(root, &format!("transcripts/{id}/subagents/a.jsonl"), &format!("{sub}\n"));
+        }
+    }
+
+    /// The fixture the sum tests share: two readable sessions (one bound to
+    /// the lane and carrying a subagent sidecar, one reached only because it
+    /// is the CALLING session), one lane-bound session whose transcript is
+    /// gone, and one readable session belonging to a different feature that
+    /// must not be counted at all.
+    fn usage_fixture(root: &Path) {
+        write_usage_session(
+            root,
+            "s-bound",
+            Some("demo"),
+            Some(&usage_event("opus", "r1", 100, 10, 5, 1000)),
+            Some(&usage_event("sonnet", "s1", 50, 4, 1, 200)),
+        );
+        write_usage_session(root, "s-call", None, Some(&usage_event("opus", "r2", 200, 20, 0, 0)), None);
+        // Lane-bound, but the transcript it names was never written.
+        write_usage_session(root, "s-gone", Some("demo"), None, None);
+        // A readable transcript that belongs to somebody else's feature.
+        write_usage_session(
+            root,
+            "s-other",
+            Some("other-feature"),
+            Some(&usage_event("opus", "r3", 9_000, 9_000, 9_000, 9_000)),
+            None,
+        );
+    }
+
+    #[test]
+    fn usage_candidates_are_the_lane_bound_records_plus_the_calling_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        // s-other is bound to another lane; s-call has no lane at all and is
+        // reached ONLY through the calling-session argument.
+        assert_eq!(
+            usage_session_ids(root, "demo", Some("s-call")),
+            vec!["s-bound".to_string(), "s-call".to_string(), "s-gone".to_string()]
+        );
+        assert_eq!(
+            usage_session_ids(root, "demo", None),
+            vec!["s-bound".to_string(), "s-gone".to_string()]
+        );
+        // A calling session already bound to the lane is named once, not twice.
+        assert_eq!(
+            usage_session_ids(root, "demo", Some("s-bound")),
+            vec!["s-bound".to_string(), "s-gone".to_string()]
+        );
+    }
+
+    #[test]
+    fn usage_sums_main_and_subagent_tokens_and_counts_the_unreadable_ones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        let usage = collect_close_usage(root, "demo", Some("s-call"));
+
+        // s-bound and s-call rolled up; s-gone counted as skipped; s-other
+        // never a candidate, so it is neither summed NOR skipped.
+        assert_eq!(usage.sessions(), 2);
+        assert_eq!(usage.skipped, 1);
+
+        // main = s-bound (100+10+5 new, 1000 cached) + s-call (220 new, 0 cached)
+        assert_eq!(usage.main.new_t, 335.0);
+        assert_eq!(usage.main.cached, 1000.0);
+        assert_eq!(usage.main.total, 1335.0);
+        // subagents = s-bound's one sidecar (50+4+1 new, 200 cached)
+        assert_eq!(usage.subagents.new_t, 55.0);
+        assert_eq!(usage.subagents.cached, 200.0);
+        assert_eq!(usage.subagents.total, 255.0);
+
+        // The JSON object close inserts: main + subagents, never re-derived.
+        assert_eq!(
+            usage.value(),
+            json!({
+                "sessions": 2,
+                "skipped": 1,
+                "main": {"new": 335.0, "cached": 1000.0, "total": 1335.0},
+                "subagents": {"new": 55.0, "cached": 200.0, "total": 255.0},
+                "total": {"new": 390.0, "cached": 1200.0, "total": 1590.0},
+            })
+        );
+    }
+
+    #[test]
+    fn usage_line_spells_both_buckets_and_names_the_skipped_sessions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        let usage = collect_close_usage(root, "demo", Some("s-call"));
+        assert_eq!(
+            close_usage_line(&usage).unwrap(),
+            "usage: 2 session(s) — 1.6k tokens (main 1.3k, subagents 255; new 390, cached 1.2k), \
+             1 session(s) skipped — no readable transcript"
+        );
+    }
+
+    #[test]
+    fn usage_line_drops_the_skipped_clause_when_every_transcript_was_read() {
+        let usage = CloseUsage {
+            details: vec![SessionUsage {
+                session_id: "s-one".to_string(),
+                models: json!({}),
+                subagent_models: json!({}),
+                subagent_count: 0,
+                started_ms: None,
+                ended_ms: None,
+                totals: UsageBucket::default(),
+            }],
+            skipped: 0,
+            main: UsageBucket { new_t: 500_000.0, cached: 900_000.0, total: 1_400_000.0 },
+            subagents: UsageBucket::default(),
+        };
+        assert_eq!(
+            close_usage_line(&usage).unwrap(),
+            "usage: 1 session(s) — 1.40M tokens (main 1.40M, subagents 0; new 500.0k, cached 900.0k)"
+        );
+    }
+
+    /// The honesty rule: a feature whose transcripts are all gone gets NO
+    /// line, because "0 tokens" would be a false claim about its cost. The
+    /// JSON object is still present, so a reader can tell "nothing read" from
+    /// "nothing spent".
+    #[test]
+    fn no_readable_transcript_emits_no_usage_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_usage_session(root, "s-gone", Some("demo"), None, None);
+        let usage = collect_close_usage(root, "demo", None);
+        assert_eq!(usage.sessions(), 0);
+        assert_eq!(usage.skipped, 1);
+        assert!(close_usage_line(&usage).is_none());
+        assert_eq!(usage.value()["total"]["total"], json!(0.0));
+
+        // A feature with no session records at all: nothing read, nothing
+        // skipped, still no line.
+        let empty = collect_close_usage(root, "never-existed", None);
+        assert_eq!(empty.sessions(), 0);
+        assert_eq!(empty.skipped, 0);
+        assert!(close_usage_line(&empty).is_none());
+    }
+
+    /// A session record that exists but stores no `transcript_path`, and one
+    /// whose transcript is present but empty, are both "could not read it" —
+    /// counted, never summed as a zero-cost session.
+    #[test]
+    fn usage_skips_a_record_with_no_transcript_path_and_an_empty_transcript() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/sessions/s-nopath.json", r#"{"id":"s-nopath","lane":"demo"}"#);
+        write_usage_session(root, "s-empty", Some("demo"), Some(""), None);
+        let usage = collect_close_usage(root, "demo", None);
+        assert_eq!(usage.sessions(), 0);
+        assert_eq!(usage.skipped, 2);
+        assert!(close_usage_line(&usage).is_none());
+    }
+
+    // ─── tests: the usage RECORD (decision e97cc9d4) ───────────────────────
+
+    /// The three token numbers under `at`, read back as f64.
+    ///
+    /// The record is written through the repo's JS-shaped pretty printer, so a
+    /// whole f64 comes back as `1115`, not `1115.0` — comparing VALUES rather
+    /// than `Value`s keeps these assertions about the tokens instead of about
+    /// the spelling.
+    fn tokens(at: &Value) -> (f64, f64, f64) {
+        let n = |key: &str| at[key].as_f64().unwrap_or_else(|| panic!("{key} missing in {at}"));
+        (n("new"), n("cached"), n("total"))
+    }
+
+    /// The record keeps what the printed line throws away: which session,
+    /// which model, how many subagents — and the feature totals beside them.
+    #[test]
+    fn the_usage_record_keeps_per_session_detail_beside_the_feature_totals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        let usage = collect_close_usage(root, "demo", Some("s-call"));
+
+        let rel = write_usage_record(root, "demo", &usage).unwrap();
+        assert_eq!(rel, ".bee/usage/demo.json");
+        let ReadJson::Parsed(record) = read_json(&root.join(&rel)) else {
+            panic!("the usage record must be readable JSON")
+        };
+
+        assert_eq!(record["schema"], json!(USAGE_SCHEMA));
+        assert_eq!(record["feature"], json!("demo"));
+        // Written at the close, so only its shape is pinned here.
+        assert!(record["closed_at"].as_str().is_some_and(|s| s.ends_with('Z')));
+        assert_eq!(record["skipped"], json!(1));
+
+        // Candidate order is the sorted session-id order `usage_session_ids`
+        // guarantees: s-bound, then s-call.
+        let sessions = record["sessions"].as_array().unwrap();
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0]["session_id"], json!("s-bound"));
+        assert_eq!(sessions[0]["subagent_count"], json!(1));
+        assert_eq!(sessions[0]["models"]["opus"]["total"].as_f64(), Some(1115.0));
+        assert_eq!(sessions[0]["subagent_models"]["sonnet"]["total"].as_f64(), Some(255.0));
+        // The session's WHOLE cost: its own 1115 plus its subagent's 255.
+        assert_eq!(tokens(&sessions[0]["totals"]), (170.0, 1200.0, 1370.0));
+        assert_eq!(sessions[1]["session_id"], json!("s-call"));
+        assert_eq!(sessions[1]["subagent_count"], json!(0));
+        assert_eq!(tokens(&sessions[1]["totals"]), (220.0, 0.0, 220.0));
+
+        // Same three buckets the printed line names — one computation, two
+        // renderings, so the file and the terminal can never disagree.
+        assert_eq!(tokens(&record["totals"]["main"]), (335.0, 1000.0, 1335.0));
+        assert_eq!(tokens(&record["totals"]["subagents"]), (55.0, 200.0, 255.0));
+        assert_eq!(tokens(&record["totals"]["total"]), (390.0, 1200.0, 1590.0));
+    }
+
+    /// The honesty rule the record adds to the line's silence: a close that
+    /// could read NO transcript still writes the file, with an empty
+    /// `sessions` list beside a non-zero `skipped`. "We looked and found
+    /// nothing readable" and "nobody ever wrote a record" must not read alike.
+    #[test]
+    fn a_green_close_writes_the_usage_record_even_with_nothing_readable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        // Lane-bound, but the transcript it names was never written.
+        write_usage_session(root, "s-gone", Some("demo"), None, None);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "this close must be green");
+        assert_eq!(result["usage_record"], json!(".bee/usage/demo.json"));
+        // No readable transcript, so no printed line — and still a record.
+        assert!(!text.contains("usage: "), "{text}");
+
+        let ReadJson::Parsed(record) = read_json(&root.join(".bee/usage/demo.json")) else {
+            panic!("a green close must write the usage record")
+        };
+        assert_eq!(record["schema"], json!(USAGE_SCHEMA));
+        assert_eq!(record["sessions"], json!([]));
+        // At least s-gone. `close_handler` also names the CALLING session from
+        // the ambient `BEE_SESSION_ID`, which the test runner may or may not
+        // carry — pinning an exact count here would make this test depend on
+        // the environment it runs in, so it pins what the record is FOR: the
+        // unreadable ones are counted, never swallowed.
+        assert!(record["skipped"].as_u64().unwrap() >= 1, "{record}");
+        assert_eq!(tokens(&record["totals"]["total"]), (0.0, 0.0, 0.0));
+    }
+
+    /// The whole green path, end to end: the record lands and the SAME line
+    /// close printed is stored for the feature-close letter.
+    #[test]
+    fn a_green_close_records_the_usage_and_hands_the_line_to_the_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_usage_session(
+            root,
+            "s-bound",
+            Some("demo"),
+            Some(&usage_event("opus", "r1", 100, 10, 5, 1000)),
+            None,
+        );
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "this close must be green");
+
+        let printed = text
+            .lines()
+            .find(|l| l.starts_with("usage: "))
+            .expect("a readable transcript prints a usage line");
+        // `starts_with`, not equality: an ambient `BEE_SESSION_ID` in the test
+        // runner adds one unreadable candidate and its skipped clause, which
+        // says nothing about what this test is for.
+        assert!(
+            printed.starts_with(
+                "usage: 1 session(s) — 1.1k tokens (main 1.1k, subagents 0; new 115, cached 1.0k)"
+            ),
+            "{printed}"
+        );
+
+        let ReadJson::Parsed(record) = read_json(&root.join(".bee/usage/demo.json")) else {
+            panic!("a green close must write the usage record")
+        };
+        assert_eq!(record["sessions"][0]["session_id"], json!("s-bound"));
+        assert_eq!(tokens(&record["totals"]["total"]), (115.0, 1000.0, 1115.0));
+        assert_eq!(result["usage"]["sessions"], json!(1));
+
+        // The letter's material: the printed line, verbatim, in the note the
+        // feature-close stop stores.
+        let note = feature_close_note(root, "demo", Some(printed));
+        assert_eq!(note.token_usage, vec![printed.to_string()]);
+    }
+
+    // ── leader-check-door: the leader-check door and refusal tests ─────────
+
+    fn make_leader_check_cell(
+        id: &str,
+        feature: &str,
+        lane: &str,
+        capped_at: Option<&str>,
+        leader_check_verdicts: &[&str],
+    ) -> Value {
+        let mut trace = json!({
+            "worker": "w-1",
+            "files_changed": ["src/lib.rs"],
+            "no_mistakes": true,
+            "report": {
+                "outcome": "done",
+                "commit": "c1",
+                "files": ["src/lib.rs"],
+                "tests": "cargo test — green:unit — lib",
+                "deviations": []
+            }
+        });
+        if let Some(ts) = capped_at {
+            trace.as_object_mut().unwrap().insert("capped_at".into(), json!(ts));
+        }
+        if !leader_check_verdicts.is_empty() {
+            let checks: Vec<Value> = leader_check_verdicts
+                .iter()
+                .map(|v| {
+                    json!({
+                        "verdict": v,
+                        "answers": [{"requirement": "req", "artifact": "src/lib.rs"}],
+                        "recorded_at": "2026-09-21T10:00:00.000Z"
+                    })
+                })
+                .collect();
+            trace.as_object_mut().unwrap().insert("leader_check".into(), Value::Array(checks));
+        }
+        json!({
+            "id": id,
+            "feature": feature,
+            "title": format!("title {id}"),
+            "status": "capped",
+            "lane": lane,
+            "trace": trace
+        })
+    }
+
+    #[test]
+    fn close_refuses_a_tiny_lane_feature_whose_capped_cell_carries_no_leader_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &[],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "leader-check door must refuse tiny lane: {text}");
+        assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
+        assert!(text.contains("demo-1"), "{text}");
+        assert!(text.contains("bee cells leader-check"), "{text}");
+        assert!(text.contains("leader-check-deferral"), "{text}");
+        assert!(text.contains("bee cells reopen"), "{text}");
+        assert_eq!(
+            result["doors"].as_array().unwrap().iter().find(|d| d["door"] == "leader-check").unwrap()["blocking"],
+            json!(true)
+        );
+    }
+
+    #[test]
+    fn close_refuses_a_standard_lane_feature_whose_capped_cell_carries_no_leader_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, ".bee/config.json", r#"{"uat_stop":"off"}"#);
+        write_lane_mode(root, "demo", "standard");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "standard",
+            Some("2026-09-21T12:00:00.000Z"),
+            &[],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "leader-check door must refuse standard lane: {text}");
+        assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
+        assert_eq!(
+            result["doors"].as_array().unwrap().iter().find(|d| d["door"] == "leader-check").unwrap()["blocking"],
+            json!(true)
+        );
+    }
+
+    #[test]
+    fn close_clears_once_an_ok_mark_is_recorded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &["ok"],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "leader-check").unwrap();
+        assert!(!door.blocking, "door must be clear once ok is recorded");
+        assert_eq!(door.detail, "clear");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "close must succeed when leader check is ok: {text}");
+    }
+
+    #[test]
+    fn close_still_refuses_when_newest_mark_is_a_gap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        // Ok first, but then gap
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &["ok", "gap"],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "leader-check").unwrap();
+        assert!(door.blocking, "door must block when newest verdict is gap");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "close must refuse when newest verdict is gap: {text}");
+        assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
+    }
+
+    #[test]
+    fn cell_capped_before_stamp_is_grandfathered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-20T23:59:59.000Z"),
+            &[],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "leader-check").unwrap();
+        assert!(!door.blocking, "pre-stamp cap must be grandfathered");
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn cell_with_missing_or_unparseable_capped_at_is_grandfathered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+
+        // Missing capped_at
+        let cell_missing = make_leader_check_cell("demo-1", "demo", "tiny", None, &[]);
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell_missing).unwrap());
+        let doors1 = build_close_report_doors(root, "demo").unwrap();
+        assert!(!doors1.iter().find(|d| d.door == "leader-check").unwrap().blocking);
+
+        // Unparseable capped_at
+        let cell_corrupt = make_leader_check_cell("demo-2", "demo", "tiny", Some("not-a-date"), &[]);
+        w(root, ".bee/cells/demo-2.json", &serde_json::to_string(&cell_corrupt).unwrap());
+        let doors2 = build_close_report_doors(root, "demo").unwrap();
+        assert!(!doors2.iter().find(|d| d.door == "leader-check").unwrap().blocking);
+    }
+
+    #[test]
+    fn logged_leader_check_deferral_decision_clears_the_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &[],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        // Log deferral decision
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d-lcd\",\"type\":\"decide\",\"date\":\"2026-09-21T12:00:00.000Z\",\"decision\":\"defer leader check for demo\",\"rationale\":\"r\",\"tags\":[\"leader-check-deferral\"],\"scope\":\"repo\"}\n",
+        );
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "leader-check").unwrap();
+        assert!(!door.blocking, "leader-check-deferral decision must clear the door");
+        assert!(door.detail.contains("deferred"), "{}", door.detail);
+        assert!(door.detail.contains("demo"), "{}", door.detail);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "close must succeed with deferral decision: {text}");
+    }
+
+    #[test]
+    fn mistakes_and_judge_debt_refusals_fire_first_before_leader_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, ".bee/config.json", r#"{"uat_stop":"off"}"#);
+        write_lane_mode(root, "demo", "standard");
+
+        // Cell has mistakes debt (no_mistakes false/omitted) AND leader check debt AND judge debt (behavior_change true)
+        let cell = json!({
+            "id": "demo-1",
+            "feature": "demo",
+            "status": "capped",
+            "lane": "standard",
+            "trace": {
+                "worker": "w-1",
+                "behavior_change": true,
+                "capped_at": "2026-09-21T12:00:00.000Z",
+                "files_changed": ["src/lib.rs"],
+                "report": {
+                    "outcome": "done",
+                    "commit": "c1",
+                    "files": ["src/lib.rs"],
+                    "tests": "cargo test — green:unit — lib",
+                    "deviations": []
+                }
+            }
+        });
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+        // Clear scribing debt with deferral so judge debt surfaces first
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d-cap\",\"type\":\"decide\",\"date\":\"2026-09-21T12:00:00.000Z\",\"decision\":\"defer capture for demo\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n",
+        );
+
+        // First close run: judge-debt fires first!
+        let out1 = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text1, code1) = out1 else { panic!("expected Emit") };
+        assert_eq!(code1, 1);
+        assert!(text1.starts_with(CLOSE_JUDGE_DEBT_PREFIX), "judge-debt must fire before mistakes and leader-check: {text1}");
+
+        // Now clear judge-debt with deferral as well
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d-cap\",\"type\":\"decide\",\"date\":\"2026-09-21T12:00:00.000Z\",\"decision\":\"defer capture for demo\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n{\"id\":\"d-jd\",\"type\":\"decide\",\"date\":\"2026-09-21T12:00:00.000Z\",\"decision\":\"defer judge for demo\",\"rationale\":\"r\",\"tags\":[\"judge-deferral\"],\"scope\":\"repo\"}\n",
+        );
+
+        // Second close run: mistakes fires before leader-check!
+        let out2 = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text2, code2) = out2 else { panic!("expected Emit") };
+        assert_eq!(code2, 1);
+        assert!(text2.starts_with(CLOSE_MISTAKES_PREFIX), "mistakes must fire before leader-check: {text2}");
+
+        // Now clear mistakes by setting no_mistakes in cell trace
+        let mut cell2 = cell.clone();
+        cell2["trace"]["no_mistakes"] = json!(true);
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell2).unwrap());
+
+        // Third close run: now leader-check fires!
+        let out3 = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text3, code3) = out3 else { panic!("expected Emit") };
+        assert_eq!(code3, 1);
+        assert!(text3.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "leader-check must fire once judge and mistakes are cleared: {text3}");
+    }
+
+    #[test]
+    fn close_leader_check_refusal_names_bee_cells_unarchive_first_for_archived_offender() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+
+        let cell = make_leader_check_cell(
+            "demo-arch",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &[],
+        );
+        let arch_dir = root.join(".bee").join("cells").join("archive").join("demo");
+        std::fs::create_dir_all(&arch_dir).unwrap();
+        std::fs::write(arch_dir.join("demo-arch.json"), serde_json::to_string(&cell).unwrap()).unwrap();
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1);
+        assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
+        assert!(text.contains("bee cells unarchive --feature demo first"), "{text}");
+        assert!(text.contains("bee cells leader-check"), "{text}");
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn fixture_e32f3a66_close(tmp: &Path) -> (PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        init_bee_repo(&main);
+        let granted = tmp.join("wt-granted");
+        git_ok(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        w(
+            &main,
+            ".bee/runtime/worktree-grants.json",
+            "{\"wt-granted\": true}\n",
+        );
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        w(&granted, ".bee/onboarding.json", "{}\n");
+        w(
+            &granted,
+            ".bee/runtime/worktree-identity.json",
+            "{\"feature\":\"demo\"}\n",
+        );
+        w(
+            &granted,
+            "docs/history/demo/CONTEXT.md",
+            "# CONTEXT: demo\n\n## Locked Decisions\n\n| ID | Title |\n|---|---|\n| D1 | Decision from worktree CONTEXT |\n",
+        );
+        w(
+            &main,
+            ".bee/cells/c1.json",
+            "{\"id\":\"c1\",\"feature\":\"demo\",\"status\":\"capped\",\"outcome\":\"done c1\",\"files_changed\":[],\"deviations\":[],\"verify\":\"cargo check\",\"verify_summary\":\"green:unit\",\"capped_at\":\"2026-10-06T00:00:00Z\"}\n",
+        );
+        w(
+            &main,
+            ".bee/state.json",
+            "{\"schema_version\":\"1.0\",\"phase\":\"idle\",\"feature\":\"demo\"}\n",
+        );
+        (main, granted)
+    }
+
+    #[test]
+    fn contract_control_plane_from_worktree_e32f3a66_close_dry_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = fixture_e32f3a66_close(tmp.path());
+        {
+            let _cwd = CwdGuard::enter(&granted);
+            assert_eq!(docs_root_for_feature(&main, "demo"), granted);
+            let dir = crate::verbs::knowledge::bundle_dir(&granted).unwrap();
+            let promo = crate::verbs::knowledge::build_promotion_split(&main, &granted, &dir, "demo").unwrap();
+            match promo {
+                crate::verbs::knowledge::Promo::Ok(proposal) => {
+                    assert_eq!(proposal["cells"].as_array().unwrap().len(), 1);
+                    assert_eq!(proposal["cells"][0]["id"], "c1");
+                    assert!(proposal["delivery"]["content"].as_str().unwrap().contains("docs/history/demo/CONTEXT.md"));
+                }
+                _ => panic!("expected promo ok"),
+            }
+            let code = try_native(
+                &[
+                    OsString::from("close"),
+                    OsString::from("--feature"),
+                    OsString::from("demo"),
+                    OsString::from("--dry-run"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code, Some(ExitCode::SUCCESS));
+        }
+        {
+            let _cwd = CwdGuard::enter(&main);
+            assert_eq!(docs_root_for_feature(&main, "demo"), main);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn docs_root_for_feature_matches_an_aliased_main_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = fixture_e32f3a66_close(tmp.path());
+        let alias = tmp.path().join("main-alias");
+        std::os::unix::fs::symlink(&main, &alias).unwrap();
+        let _cwd = CwdGuard::enter(&granted);
+        assert_eq!(
+            std::fs::canonicalize(docs_root_for_feature(&alias, "demo")).unwrap(),
+            std::fs::canonicalize(&granted).unwrap()
+        );
     }
 }
+

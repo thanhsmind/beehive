@@ -1,0 +1,9 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "The failure table names what to do for a silent, capped, dropped, tool-erroring, unknown and late-returning worker, and the two-retries abandonment", "artifact": "skills/bee-swarming/references/swarming-reference.md"},
+    {"requirement": "The merge role classifies a red CI before any rerun", "artifact": "skills/bee-herding/references/role-merge.md"},
+    {"requirement": "The PR title and body shape has one home in bee-technical-writing and ship visibility points at it", "artifact": "skills/bee-technical-writing/SKILL.md"},
+    {"requirement": "scout-and-ticks.md points at bee-technical-writing; rendered copies match skills/ after regen", "artifact": "skills/bee-hive/references/scout-and-ticks.md"}
+  ]
+}

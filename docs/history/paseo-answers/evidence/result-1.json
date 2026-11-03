@@ -1,0 +1,7 @@
+{
+"status": "question",
+"summary": "Round 1 stops for the answer: which word to report, alpha or beta",
+"files_changed": [],
+"question": { "text": "Which word should I report: alpha or beta?", "kind": "technical" },
+"report_path": "/home/thanhsmind/Projects/goglbe/beehive/.bee/mailbox/job-1791247044087-1050051-1/report-1.md"
+}

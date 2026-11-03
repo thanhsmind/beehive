@@ -46,10 +46,12 @@
 
 use crate::hooks::adapter::{log_crash, now_iso, read_hook_context, HookContext};
 use crate::hooks::compaction::{
-    append_compaction_record, build_compact_capsule, read_config_failopen, read_intent,
-    read_session_record, resume_block, well_formed_id,
+    append_compaction_record, build_compact_capsule_with_runtime,
+    read_config_failopen, read_intent, read_session_record, resume_block, well_formed_id,
 };
-use crate::hooks::session_preamble::{build_session_preamble, read_handoff, HandoffOutcome};
+use crate::hooks::session_preamble::{
+    build_session_preamble_within, read_handoff, HandoffOutcome, PREAMBLE_BUDGET_BYTES,
+};
 use crate::hooks::Outcome;
 use crate::roots::{resolve_roots_core, Resolution};
 use crate::verbs::state_group::{adopt_claim, AdoptOutcome};
@@ -72,6 +74,22 @@ const CAPSULE_SOURCE: &str = "compact";
 /// ADOPT_SOURCES — the anchor is a prefix, never a router.
 const ANCHOR_LEAD_SOURCES: [&str; 2] = ["compact", "resume"];
 
+const BELT_CONTRACT_LEAD: &str = "bee belt contract:";
+
+/// Allowlist of dispatch runtimes accepted by session-init.
+/// Missing, null, non-string, and unknown values fall back to "claude".
+pub(crate) fn normalize_dispatch_runtime(value: Option<&Value>) -> &'static str {
+    if let Some(Value::String(s)) = value {
+        let trimmed = s.trim();
+        for &rt in &crate::verbs::drivers::DISPATCH_RUNTIMES {
+            if trimmed == rt {
+                return rt;
+            }
+        }
+    }
+    "claude"
+}
+
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
     let ctx = read_hook_context(HOOK_NAME, argv, stdin);
     let Some(root) = ctx.root.clone() else {
@@ -86,6 +104,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
 
     let session_id = trimmed(ctx.payload.get("session_id"));
     let event_source = trimmed(ctx.payload.get("source")).unwrap_or_default();
+    let runtime = normalize_dispatch_runtime(ctx.payload.get("runtime"));
 
     if let Some(sid) = &session_id {
         register_acting_session(&ctx, &root, sid, &event_source);
@@ -96,17 +115,32 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         None => None,
     };
 
-    let output = compose_output(
+    let belt = belt_contract_line(&root, &ctx.payload);
+    let output = compose_output_budgeted(
         &root,
         &event_source,
         session_id.as_deref(),
         handoff_outcome.as_ref(),
+        runtime,
+        belt.as_ref().map_or(0, |line| line.len() + 2),
     );
+    let output = match belt {
+        Some(line) => format!("{line}\n\n{output}"),
+        None => output,
+    };
     if !output.trim().is_empty() {
         use std::io::Write;
         let _ = std::io::stdout().write_all(output.as_bytes());
     }
     Outcome::Done(ExitCode::SUCCESS)
+}
+
+fn belt_contract_line(root: &Path, payload: &Map<String, Value>) -> Option<String> {
+    let contract = payload.get("belt_contract")?;
+    let belt = contract.get("belt").and_then(Value::as_str)?;
+    let version = u32::try_from(contract.get("version")?.as_u64()?).ok()?;
+    let (detail, fix) = crate::doctor::belt_contract_check(root, Some(version));
+    Some(format!("{BELT_CONTRACT_LEAD} {belt} {detail}. Fix: {}", fix?))
 }
 
 /// `typeof v === 'string' && v.trim() ? v.trim() : null`.
@@ -133,14 +167,40 @@ fn hook_enabled_failopen(root: &Path) -> bool {
 /// intent-anchor ia-1 (D4/D5): PREFIX ONLY. The anchor is prepended ahead of
 /// the body on a compact/resume start, and with no anchor the emitted string
 /// is the body itself.
+#[allow(dead_code)]
 pub(crate) fn compose_output(
     root: &Path,
     event_source: &str,
     session_id: Option<&str>,
     handoff_outcome: Option<&HandoffOutcome>,
 ) -> String {
-    let body = session_body(root, event_source, session_id, handoff_outcome);
+    compose_output_with_runtime(root, event_source, session_id, handoff_outcome, "claude")
+}
+
+pub(crate) fn compose_output_with_runtime(
+    root: &Path,
+    event_source: &str,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+) -> String {
+    compose_output_budgeted(root, event_source, session_id, handoff_outcome, runtime, 0)
+}
+
+pub(crate) fn compose_output_budgeted(
+    root: &Path,
+    event_source: &str,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+    prefix_bytes: usize,
+) -> String {
     let anchor = intent_lead_block(root, event_source, session_id);
+    let reserved = prefix_bytes
+        + if anchor.is_empty() { 0 } else { anchor.len() + 2 };
+    let budget = PREAMBLE_BUDGET_BYTES.saturating_sub(reserved);
+    let body =
+        session_body_within(root, event_source, session_id, handoff_outcome, runtime, budget);
     if anchor.is_empty() {
         body
     } else {
@@ -175,25 +235,39 @@ pub(crate) fn intent_lead_block(
 /// `handoff_outcome` must be carried into the capsule too (D27), because a
 /// compacted session holding a planned-next handoff otherwise silently loses
 /// the `- Adoption not applied:` line that says WHY it is being told to wait.
-///
-/// The .mjs wrapped the capsule branch in a try/catch for a repo vendored
-/// before compaction.mjs shipped. There is no dynamic import left to fail:
-/// both calls below are fail-open inside hooks/compaction.rs itself, so the
-/// catch has no reachable trigger and is not reproduced.
-fn session_body(
+fn session_body_with_runtime(
     root: &Path,
     event_source: &str,
     session_id: Option<&str>,
     handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+) -> String {
+    session_body_within(
+        root,
+        event_source,
+        session_id,
+        handoff_outcome,
+        runtime,
+        PREAMBLE_BUDGET_BYTES,
+    )
+}
+
+fn session_body_within(
+    root: &Path,
+    event_source: &str,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+    budget_bytes: usize,
 ) -> String {
     if event_source == CAPSULE_SOURCE {
         // D5: SessionStart(compact) IS the `resume` event — the other half of
         // the PreCompact record, and the one that proves the session came
         // back. The append is fail-open; it never affects what renders below.
         append_compaction_record(root, "resume", session_id);
-        return build_compact_capsule(root, session_id, handoff_outcome);
+        return build_compact_capsule_with_runtime(root, session_id, handoff_outcome, runtime);
     }
-    build_session_preamble(root, session_id, handoff_outcome)
+    build_session_preamble_within(root, session_id, handoff_outcome, runtime, budget_bytes)
 }
 
 // ───────────────────────── handoff adoption ────────────────────────────────
@@ -926,5 +1000,88 @@ mod tests {
         assert_eq!(context.workspace_id.as_deref(), Some("main"));
         assert!(context.worktree_id.is_none());
         assert_eq!(control_root_for(tmp.path()), context.control_root.unwrap());
+    }
+
+    #[test]
+    fn normalize_dispatch_runtime_allows_known_and_falls_back_to_claude() {
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("pi"))), "pi");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("codex"))), "codex");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("claude"))), "claude");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("  pi  "))), "pi");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("unknown"))), "claude");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!(123))), "claude");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!(null))), "claude");
+        assert_eq!(normalize_dispatch_runtime(None), "claude");
+    }
+
+    #[test]
+    fn compose_output_with_runtime_propagates_selected_runtime() {
+        let tmp = tempfile::tempdir().unwrap();
+        vendored_repo(tmp.path());
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            json!({
+                "team": {
+                    "pi": {"generation": {"kind": "herding", "agent": "pi-agent"}},
+                    "codex": {"generation": {"model": "gpt-5.6"}},
+                    "claude": {"generation": {"model": "sonnet"}}
+                }
+            }).to_string(),
+        ).unwrap();
+
+        // Normal preamble with runtime pi
+        let out_pi = compose_output_with_runtime(tmp.path(), "startup", Some("s1"), None, "pi");
+        assert!(out_pi.contains("--runtime pi"), "{out_pi}");
+        assert!(out_pi.contains("team.pi"), "{out_pi}");
+
+        // Compact capsule with runtime pi
+        let out_pi_compact = compose_output_with_runtime(tmp.path(), "compact", Some("s1"), None, "pi");
+        assert!(out_pi_compact.contains("--runtime pi"), "{out_pi_compact}");
+        assert!(out_pi_compact.contains("team.pi"), "{out_pi_compact}");
+
+        // Normal preamble with runtime codex
+        let out_codex = compose_output_with_runtime(tmp.path(), "startup", Some("s1"), None, "codex");
+        assert!(out_codex.contains("--runtime codex"), "{out_codex}");
+
+        // Fallback with unknown runtime
+        let out_unknown = compose_output_with_runtime(tmp.path(), "startup", Some("s1"), None, "unknown");
+        assert!(out_unknown.contains("--runtime claude"), "{out_unknown}");
+    }
+
+    fn contract(belt: &str, version: u32) -> Map<String, Value> {
+        json!({ "belt_contract": { "belt": belt, "version": version } }).as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn a_belt_on_the_binary_contract_says_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(belt_contract_line(tmp.path(), &contract("pi", crate::doctor::BELT_CONTRACT)), None);
+    }
+
+    #[test]
+    fn an_older_belt_is_told_to_onboard() {
+        let tmp = tempfile::tempdir().unwrap();
+        let line = belt_contract_line(tmp.path(), &contract("pi", crate::doctor::BELT_CONTRACT - 1)).unwrap();
+        assert!(line.starts_with(BELT_CONTRACT_LEAD), "{line}");
+        assert!(line.contains("pi belt") && line.contains("bee onboard --apply"), "{line}");
+        assert!(!line.contains('\n'), "{line}");
+    }
+
+    #[test]
+    fn an_older_binary_is_told_the_binary_freshness_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let line =
+            belt_contract_line(tmp.path(), &contract("opencode", crate::doctor::BELT_CONTRACT + 1)).unwrap();
+        assert!(line.starts_with(BELT_CONTRACT_LEAD), "{line}");
+        assert!(line.contains("opencode belt") && line.contains("installer"), "{line}");
+        assert!(!line.contains("onboard"), "{line}");
+    }
+
+    #[test]
+    fn an_absent_or_malformed_contract_is_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(belt_contract_line(tmp.path(), &Map::new()), None);
+        let bad = json!({ "belt_contract": "pi" }).as_object().unwrap().clone();
+        assert_eq!(belt_contract_line(tmp.path(), &bad), None);
     }
 }

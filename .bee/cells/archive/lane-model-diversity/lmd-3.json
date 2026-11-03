@@ -1,0 +1,79 @@
+{
+  "id": "lmd-3",
+  "feature": "lane-model-diversity",
+  "title": "Name the seat roles in the two procedure homes and the sample config",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "lmd-1"
+  ],
+  "decisions": [
+    "D5",
+    "D3"
+  ],
+  "files": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    ".bee/config-sample.json"
+  ],
+  "read_first": [
+    "docs/history/lane-model-diversity/CONTEXT.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [],
+  "verify": "rg -n \"lane-1\" skills/bee-hive/references/gates-and-delegation.md && rg -n \"hat-risks\" skills/bee-hive/references/gates-and-delegation.md .bee/config-sample.json",
+  "regen_obligation_ack": "wave-barrier",
+  "action": "gates-and-delegation.md: in Blind lanes fan-out move, name --role lane-N per lane (one line); in the Hat wave table, add each hat its role name; one line per section naming SEAT_ROLES in models.rs as the constant of record and the fall-through-to-advisor rule. config-sample.json: seat-role example rows — lane-1..3 plain slots, hat-* object slots each carrying a description, with the display-only caveat intact. Keep both sections single-home: pointers elsewhere stay pointers.",
+  "must_haves": {
+    "truths": [
+      "both procedure sections name the seat roles and the fall-through rule"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/gates-and-delegation.md",
+        "substantive": "seat roles named in both sections"
+      }
+    ],
+    "key_links": [
+      "doc text points at SEAT_ROLES as the constant of record"
+    ],
+    "prohibitions": [
+      "No procedure-mechanics change; no second copy of either procedure"
+    ]
+  },
+  "trace": {
+    "worker": "lmd-w3",
+    "outcome": "Both procedure homes name the eight seat roles, SEAT_ROLES as the constant of record, and the fall-through rule; config sample carries the seat rows with hat descriptions",
+    "files_changed": [
+      "skills/bee-hive/references/gates-and-delegation.md",
+      ".bee/config-sample.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T14:26:56.463Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T14:22:07.676Z",
+    "report": {
+      "outcome": "Both procedure homes name the eight seat roles, SEAT_ROLES as the constant of record, and the fall-through rule; config sample carries the seat rows with hat descriptions",
+      "commit": "c3e9c978",
+      "files": [
+        "skills/bee-hive/references/gates-and-delegation.md",
+        ".bee/config-sample.json"
+      ],
+      "tests": "rg -n \"lane-1\" skills/bee-hive/references/gates-and-delegation.md && rg -n \"hat-risks\" skills/bee-hive/references/gates-and-delegation.md .bee/config-sample.json; cargo test -p bee onboard::templates::tests::config_sample_json_embed_parses_and_carries_the_herding_key — green — docs cell: cell verify (pointer parity in both homes) plus the one test that embeds the edited sample; opencode projection drift is this cell's acked wave-barrier regen, not a code red",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

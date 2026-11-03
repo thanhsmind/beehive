@@ -7,7 +7,7 @@ use super::*;
 use crate::fsutil::{ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
-use crate::herding::{transport_kind_at, TransportKind};
+use crate::herding::{ceiling_seconds_at, transport_kind_at, TransportKind};
 use crate::state::read_config_raw;
 use crate::verbs::knowledge;
 use crate::verbs::reservations::{
@@ -24,9 +24,130 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::time::Instant;
 
+pub(crate) static TEST_CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // ═══ dispatch prepare ══════════════════════════════════════════════════════
 
-pub(crate) const DISPATCH_RUNTIMES: [&str; 2] = ["codex", "claude"];
+/// pi-stage-dispatch D6: `dispatch prepare` and `state advisor-ref
+/// record|show` are served inside a GRANTED feature worktree against main's
+/// store, where their records live. Every other door keeps the narrow
+/// refusal. The second value is that worktree's root, when the command runs
+/// in one.
+pub(crate) fn resolve_root_serving_granted(cwd: &Path) -> (Roots, Option<PathBuf>) {
+    match resolve_store_root(cwd) {
+        Roots::Unsupported(crate::roots::Unsupported::GrantedWorktree { main_root }) => {
+            let here = match crate::roots::resolve_store_root_worktree(cwd) {
+                crate::roots::RootsWt::Go(r) => r.linked.map(|l| l.worktree_root),
+                _ => None,
+            };
+            (Roots::Ordinary(main_root), here)
+        }
+        other => (other, None),
+    }
+}
+
+/// `prelude` over `resolve_root_serving_granted` — the Ctx for the doors D6
+/// serves from a granted worktree.
+pub(crate) fn ctx_serving_granted(
+    cmd: &'static str,
+    use_json: bool,
+    t0: Instant,
+) -> Option<Result<crate::verbs::reservations::Ctx, ExitCode>> {
+    let cwd = std::env::current_dir().ok()?;
+    let (resolved, here) = resolve_root_serving_granted(&cwd);
+    let root = match resolved {
+        Roots::Ordinary(r) => {
+            let served = here.is_some().then(|| r.clone());
+            SERVED_CONTROL_ROOT.with(|s| *s.borrow_mut() = served);
+            r
+        }
+        Roots::Unsupported(why) => return Some(Err(emit_unsupported_root(&cwd, cmd, use_json, t0, &why))),
+        Roots::None => return Some(Err(emit_no_root_error(&cwd, cmd, use_json, t0))),
+    };
+    let drift = crate::registry::check_manifest_drift(&root);
+    Some(Ok(crate::verbs::reservations::Ctx {
+        root,
+        cmd,
+        use_json,
+        t0,
+        drift_changed: drift.manifest_changed,
+        drift_hint: drift.hint,
+    }))
+}
+
+thread_local! {
+    pub(crate) static SERVED_CONTROL_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+pub(crate) fn take_served_control_root() -> Option<PathBuf> {
+    SERVED_CONTROL_ROOT.with(|s| s.borrow_mut().take())
+}
+
+pub(crate) fn is_serving_granted(cwd: &Path) -> Option<PathBuf> {
+    match resolve_root_serving_granted(cwd) {
+        (Roots::Ordinary(main_root), Some(_here)) => Some(main_root),
+        _ => None,
+    }
+}
+
+pub(crate) fn augment_served_output(
+    result: &mut Value,
+    text: &mut String,
+    main_root: &Path,
+) {
+    if let Value::Object(map) = result {
+        map.insert("control_root".to_string(), Value::String(main_root.display().to_string()));
+    }
+    if !text.starts_with("control plane: ") {
+        *text = format!("control plane: {}\n{text}", main_root.display());
+    }
+}
+
+pub(crate) fn finish_serving_granted(
+    ctx: &crate::verbs::reservations::Ctx,
+    mut out: crate::verbs::reservations::R2<crate::verbs::reservations::Out>,
+    served_main: Option<&Path>,
+) -> Option<ExitCode> {
+    if let Some(main_root) = served_main {
+        if let Ok(crate::verbs::reservations::Out::Emit(ref mut result, ref mut text, _)) = out {
+            augment_served_output(result, text, main_root);
+        }
+    }
+    crate::verbs::reservations::finish(ctx, out)
+}
+
+
+/// pi-stage-dispatch D7: a non-cell dispatch with no `--feature` and no bound
+/// lane takes the feature of the granted worktree it runs in, so it runs
+/// there. Main's `state.json` feature stays the last fallback, in the wire.
+pub(crate) fn granted_worktree_feature(
+    root: &Path,
+    kind: &str,
+    session_id: Option<&str>,
+    worktree_root: Option<&Path>,
+) -> Option<String> {
+    let worktree_root = worktree_root.filter(|_| kind != "cell")?;
+    let bound = crate::verbs::state_group::session_binding(session_id, root)
+        .ok()
+        .and_then(|(_sid, bound)| bound);
+    if bound.is_some() {
+        return None;
+    }
+    crate::verbs::status_full::read_worktree_feature(&worktree_root.to_string_lossy())
+}
+
+/// pi-support D5 (store: the pi belt's dispatch door): `pi` joins codex and
+/// claude as a legal `--runtime`, resolving `team.pi` in the ONE config home
+/// every other runtime reads. It is a HERDING-ONLY door — see
+/// `pi_requires_herding_refusal` — because Pi ships no Agent/subagent tool
+/// surface for a payload to name.
+///
+/// This constant is one of THREE gates a runtime name passes: the shape guard
+/// reads the `runtime` enum in `generated/registry_payload.json` (declared for
+/// `dispatch.prepare` AND `dispatch.wave`) BEFORE the handler runs, this list
+/// gates the handlers themselves, and `devtools::render_projection_text_for`
+/// carries the label arm. All three move together or the door half-opens.
+pub(crate) const DISPATCH_RUNTIMES: [&str; 3] = ["codex", "claude", "pi"];
 
 pub(crate) const DISPATCH_KINDS: [&str; 4] = ["cell", "gather", "reviewer", "advisor"];
 
@@ -41,9 +162,17 @@ pub(crate) const DISPATCH_KINDS: [&str; 4] = ["cell", "gather", "reviewer", "adv
 /// to the advisor model with nothing red to show for it. Every kind now names
 /// its slot EXPLICITLY; an unhandled kind returns `None` and its caller
 /// refuses (`unmapped_kind_refusal`).
+///
+/// gather-reads-the-read-slot D1 (decision 295f3d03) — `cell` and `gather` no
+/// longer share one arm. A gather dispatched with no `--role` asks for the
+/// READ job, which `tier_role_list("read")` walks as `[read, generation]`, so
+/// a host that never configured a `read` key keeps its gathers on the
+/// `generation` model byte for byte. `cell` keeps `generation` outright: a
+/// cell execution writes, and no config describes the read slot that way.
 pub(crate) fn slot_for_kind(kind: &str) -> Option<&'static str> {
     match kind {
-        "cell" | "gather" => Some("generation"),
+        "cell" => Some("generation"),
+        "gather" => Some("read"),
         "reviewer" => Some("review"),
         "advisor" => Some("advisor"),
         _ => None,
@@ -66,6 +195,316 @@ pub(crate) fn unmapped_kind_refusal(kind: &str) -> Value {
         )),
     );
     Value::Object(refusal)
+}
+
+/// The `reason` every pi-runtime refusal carries — ONE reason word, so a
+/// caller at this door branches on one string rather than five.
+pub(crate) const PI_HERDING_ONLY_REASON: &str = "pi_requires_herding";
+
+/// pi-result-mailbox D6 — the `detached_delivery` instruction the pi herding
+/// payload carries. It names the flag, the token to pass, and the one case
+/// that must NOT carry it, because a detached pane's result reaches the
+/// session through the drain or not at all.
+/// pi-stage-dispatch D3: the hat wave's wall-clock budget, in seconds
+/// (`bee-hive/references/gates-and-delegation.md` "Hat wave").
+const HAT_WAVE_CEILING_SECONDS: u64 = 600;
+
+pub(crate) const HERDING_DETACHED_DELIVERY_PI: &str = "One delivery path per job, never both. DETACHED (this command backgrounded, nothing waiting on its output): append --inbox-session \"$PI_SESSION_ID\" — the variable Pi's bash tool exports — before you run it. The flag writes a .bee/result-inbox/<session>/<job-id>.json marker before the pane splits, and the bee Pi drain injects the worker's result into this session once the pane closes. When $PI_SESSION_ID is empty, do not detach: run the command in the foreground and pass NO flag. On both paths the JSON summary is one line; the worker's full answer is the file at report_path — read that file.";
+
+/// What a slot resolved to, in the words the refusal reports it under.
+/// `Herding` never reaches here (it is the one resolution the pi door
+/// serves); `Refused` arrives from the cli purpose gate, which on pi is a
+/// cli slot either way.
+pub(crate) fn pi_resolution_word(resolved: &Resolved, escalated: bool) -> &'static str {
+    if escalated {
+        return "escalation";
+    }
+    match resolved {
+        Resolved::Inherit => "escalation",
+        Resolved::Model { .. } => "model",
+        Resolved::Native { .. } => "native",
+        Resolved::Cli { .. } | Resolved::Refused { .. } => "cli",
+        Resolved::Budget => "budget",
+        Resolved::Herding { .. } => "herding",
+    }
+}
+
+/// pi-support D5, at FULL width: on runtime `pi`, EVERY slot resolution that
+/// is not `Resolved::Herding` is refused BY NAME.
+///
+/// Pi has no Agent tool and no `spawn_agent` (store `7f9c8518`: no native
+/// subagents), so an Agent payload, a codex `spawn_agent` payload, a plain
+/// `model` parameter or a bare cli command emitted for the pi runtime would
+/// dispatch NOTHING while the envelope read as a successful dispatch. The
+/// herding pane is the one transport Pi can actually take, so the door emits
+/// the herding-exec payload or it refuses.
+///
+/// The escalation arm (`Resolved::Inherit` — an escalated cell, or an explicit
+/// `--role ceiling`) carries its own remedy: there is no subagent to run on
+/// the session model, so the escalated cell runs INLINE in the session. Every
+/// other arm names the slot and the herding shape to configure.
+pub(crate) fn pi_requires_herding_refusal(slot: &str, resolved: &Resolved, escalated: bool) -> Value {
+    let resolution = pi_resolution_word(resolved, escalated);
+    let mut refusal = Map::new();
+    refusal.insert("ok".into(), Value::Bool(false));
+    refusal.insert("type".into(), Value::String("refused".into()));
+    refusal.insert("reason".into(), Value::String(PI_HERDING_ONLY_REASON.into()));
+    refusal.insert("runtime".into(), Value::String("pi".into()));
+    refusal.insert("slot".into(), Value::String(slot.to_string()));
+    refusal.insert("resolution".into(), Value::String(resolution.to_string()));
+    let fix = if resolution == "escalation" {
+        format!(
+            "the \"{slot}\" dispatch asked for the session model (escalation), and the pi runtime has no session subagent to hand it to — Pi ships no Agent tool surface, so the payload would dispatch nothing. FIX: Pi has no subagent surface, run the escalated cell inline in the session. Every other cell on pi resolves a {{\"kind\":\"herding\"}} slot under team.pi."
+        )
+    } else {
+        format!(
+            "team.pi.{slot} resolved a \"{resolution}\" slot, and the pi runtime dispatches ONLY through herding — Pi ships no Agent tool surface, so any other payload would dispatch nothing. FIX: set team.pi.{slot} in .bee/config.json to {{\"kind\":\"herding\",\"agent\":\"<herding.agents name>\"}}."
+        )
+    };
+    refusal.insert("fix".into(), Value::String(fix));
+    Value::Object(refusal)
+}
+
+/// Extracts the first argv token from an entry in `herding.agents`, normalizing
+/// BOTH shapes that configuration accepts: a bare argv array (`["pi", ...]`),
+/// and an object with an `argv` key (`{"argv": ["pi", ...], ...}`).
+///
+/// Returns None if the entry does not match either shape or carries an empty
+/// argv array.
+pub(crate) fn agent_first_argv<'a>(entry: &'a Value) -> Option<&'a str> {
+    match entry {
+        Value::Array(tokens) => tokens.first().and_then(Value::as_str),
+        Value::Object(obj) => obj
+            .get("argv")
+            .and_then(Value::as_array)
+            .and_then(|arr| arr.first())
+            .and_then(Value::as_str),
+        _ => None,
+    }
+}
+
+/// Returns true if the configured agent in `herding.agents` resolves to a `pi`
+/// executable (D1, D3). Decided from the first argv token of the configured
+/// agent, never from the role name (D8).
+pub(crate) fn is_pi_agent(cfg: &Value, agent_name: &str) -> bool {
+    let Some(entry) = cfg
+        .get("herding")
+        .and_then(|h| h.get("agents"))
+        .and_then(|a| a.get(agent_name))
+    else {
+        return false;
+    };
+    let Some(first) = agent_first_argv(entry) else {
+        return false;
+    };
+    let trimmed = first.trim();
+    trimmed == "pi" || Path::new(trimmed).file_name().and_then(|f| f.to_str()) == Some("pi")
+}
+
+pub(crate) fn command_resolves_on_path(cmd: &str) -> bool {
+    command_resolves_on_path_in(cmd, std::env::var_os("PATH").as_deref())
+}
+
+pub(crate) fn command_resolves_on_path_in(cmd: &str, path_var: Option<&std::ffi::OsStr>) -> bool {
+    let p = Path::new(cmd);
+    if p.is_absolute() || cmd.contains('/') || (cfg!(windows) && cmd.contains('\\')) {
+        return p.is_file();
+    }
+    let Some(path_var) = path_var else {
+        return false;
+    };
+    for dir in std::env::split_paths(path_var) {
+        let candidate = dir.join(cmd);
+        if candidate.is_file() {
+            return true;
+        }
+        #[cfg(windows)]
+        {
+            for ext in [".exe", ".cmd", ".bat"] {
+                if dir.join(format!("{cmd}{ext}")).is_file() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+// ─── the LaneBrief carrier (slp-blind-lanes E1/E2, decision 5981246b D2) ───
+//
+// `--brief-file <path>` is the FIRST caller text that reaches a non-cell
+// prompt body: every non-cell kind used to render with an empty vars slice.
+// It exists so a blind lane can be handed one question, byte-identical across
+// 2–3 parallel advisor dispatches, without a new dispatch kind and without a
+// new store (decision f0f21142).
+
+/// The cap on a carried brief, in bytes of the file as read from disk.
+///
+/// A brief is a QUESTION plus its constraints and read diet, not a document:
+/// past this size the thing being carried is context, and context is what the
+/// lane is supposed to go and read for itself.
+pub(crate) const BRIEF_MAX_BYTES: usize = 8192;
+
+/// The typed refusal shape every `--brief-file` failure takes — the same
+/// `{ok:false, type:"refused", reason, …, fix}` `unmapped_kind_refusal`
+/// returns, so a caller at this door parses ONE refusal shape, never two.
+/// `fix` is inserted last so it reads at the end of the object, as it does
+/// there.
+pub(crate) fn brief_refusal(reason: &str, extra: &[(&str, Value)], fix: String) -> Value {
+    let mut refusal = Map::new();
+    refusal.insert("ok".into(), Value::Bool(false));
+    refusal.insert("type".into(), Value::String("refused".into()));
+    refusal.insert("reason".into(), Value::String(reason.to_string()));
+    for (k, v) in extra {
+        refusal.insert((*k).to_string(), v.clone());
+    }
+    refusal.insert("fix".into(), Value::String(fix));
+    Value::Object(refusal)
+}
+
+/// Resolve `--brief-file` into the brief THIS dispatch carries.
+///
+/// * `Ok(None)` — no brief travels. Either the flag was absent, or the file
+///   held nothing but whitespace: `{{#if}}` truthiness is `!v.is_empty()`
+///   (`prompt.rs`), so a whitespace-only brief that reached the renderer
+///   would splice an EMPTY block where today's bytes are. Trimmed-empty
+///   therefore resolves to no brief at all, and the payload stays
+///   byte-identical to a dispatch that passed no `--brief-file`.
+/// * `Ok(Some(text))` — the trimmed brief, which is both what renders into
+///   the prompt and what `brief_sha256` digests. Digesting the CARRIED bytes
+///   rather than the file's is deliberate: equal digests then mean the lanes
+///   received equal payloads, which is exactly what D2(b)'s byte-identity
+///   claim is about.
+/// * `Err(refusal)` — a typed `{ok:false, type:"refused", …}` value.
+///
+/// ADVISOR ONLY, and refused loudly everywhere else. `--kind cell` is D3: a
+/// worker-cell prompt injects machine-assembled `learned_context` shared
+/// across workers, which leaks the very thing blindness protects. `gather`
+/// and `reviewer` carry no `{{#if brief}}` block at all, so accepting a brief
+/// for them would swallow it silently — the one outcome this door must never
+/// have.
+///
+/// The path is read AS GIVEN, relative to the process cwd, the same way every
+/// other file-consuming flag in this CLI reads one (`read_file_text`,
+/// verbs/cells/handlers_write.rs).
+pub(crate) fn resolve_brief_file(kind: &str, path: Option<&str>) -> Result<Option<String>, Value> {
+    let Some(path) = path else { return Ok(None) };
+    if kind != "advisor" {
+        return Err(brief_refusal(
+            "brief_kind_not_advisor",
+            &[("kind".into(), Value::String(kind.to_string()))],
+            format!(
+                "--brief-file is only valid with --kind advisor (got --kind {kind}). A blind lane never runs as --kind cell — the worker-cell prompt injects learned_context shared across workers, which leaks what blindness protects — and the gather/reviewer prompts carry no brief block, so a brief passed to them would be swallowed with nothing to show for it. Re-run the dispatch as --kind advisor."
+            ),
+        ));
+    }
+    let trimmed_path = js_trim(path);
+    if trimmed_path.is_empty() {
+        return Err(brief_refusal(
+            "brief_file_unreadable",
+            &[("path".into(), Value::String(path.to_string()))],
+            "--brief-file needs the path of a readable file holding the brief; it was given no path at all. Pass --brief-file <path>.".to_string(),
+        ));
+    }
+    let Ok(bytes) = std::fs::read(trimmed_path) else {
+        return Err(brief_refusal(
+            "brief_file_unreadable",
+            &[("path".into(), Value::String(trimmed_path.to_string()))],
+            format!(
+                "--brief-file \"{trimmed_path}\" could not be read. The path is resolved from the current working directory — check the spelling, or pass an absolute path."
+            ),
+        ));
+    };
+    if bytes.len() > BRIEF_MAX_BYTES {
+        return Err(brief_refusal(
+            "brief_too_large",
+            &[
+                ("path".into(), Value::String(trimmed_path.to_string())),
+                ("bytes".into(), Value::Number(Number::from(bytes.len()))),
+                ("max_bytes".into(), Value::Number(Number::from(BRIEF_MAX_BYTES))),
+            ],
+            format!(
+                "--brief-file \"{trimmed_path}\" is {} bytes; the cap is {BRIEF_MAX_BYTES} bytes. A brief is the QUESTION plus its constraints and read diet — anything longer is context, which the lane reads for itself from the paths the brief names. Cut it, or move the bulk into the read diet.",
+                bytes.len()
+            ),
+        ));
+    }
+    let Ok(text) = String::from_utf8(bytes) else {
+        return Err(brief_refusal(
+            "brief_not_utf8",
+            &[("path".into(), Value::String(trimmed_path.to_string()))],
+            format!(
+                "--brief-file \"{trimmed_path}\" is not valid UTF-8. It is refused rather than decoded lossily: a lossy decode would change the very bytes brief_sha256 exists to pin, and every lane would agree on the corrupted text. Save the brief as UTF-8."
+            ),
+        ));
+    };
+    let trimmed = js_trim(&text);
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(trimmed.to_string()))
+}
+
+/// slp-blind-lanes-procedure P1: a reading list may NEVER ride beside a
+/// brief.
+///
+/// `--expertise` is prose that reaches the lane's prompt exactly as the brief
+/// does, and two things break when the two travel together:
+///
+/// * the leaning guard reads BRIEF BYTES ONLY, by deliberate design
+///   (`lint_brief` is handed one `&str` and nothing more), so a reading list
+///   riding alongside is an unlinted prose channel straight into a blind
+///   lane — the one channel `brief_lint.rs` exists to close;
+/// * `brief_sha256` would keep proving the BRIEFS were byte-identical across
+///   2–3 lanes while the payloads themselves diverged, which is precisely
+///   what the digest is stamped to rule out.
+///
+/// So the combination is a typed refusal, in the same
+/// `{ok:false, type:"refused", reason, fix}` shape `brief_kind_not_advisor`
+/// takes, and its fix names the brief's OWN `## Read diet` section — a
+/// required section of every LaneBrief, already checked against the reported
+/// paths by `bee blind check` — as the one carrier. One list, one carrier,
+/// one linted channel.
+///
+/// It speaks only for `advisor`: every other kind may not carry a brief at
+/// all, and the kind arm below owns that refusal with its own remedy.
+/// `expertise` here is the RENDERED block, so an empty or absent list carries
+/// nothing and refuses nothing.
+pub(crate) fn expertise_beside_brief_refusal(
+    kind: &str,
+    brief_path: Option<&str>,
+    expertise: Option<&str>,
+) -> Option<Value> {
+    if kind != "advisor" {
+        return None;
+    }
+    brief_path?;
+    let expertise = expertise?;
+    if expertise.is_empty() {
+        return None;
+    }
+    Some(brief_refusal(
+        "expertise_beside_brief",
+        &[],
+        "--expertise cannot travel with --brief-file. The leaning guard reads the brief's bytes and nothing else, so a reading list passed alongside reaches the lane unlinted, and brief_sha256 would keep certifying that the briefs matched while the payloads differed. A brief already carries its reading list: put the paths in the brief's own `## Read diet` section — the section `bee blind check` checks the reported paths against — and drop --expertise from this dispatch.".to_string(),
+    ))
+}
+
+/// `resolve_brief_file` with the combination check in front of it — the
+/// arity-adapter shape `prepare_dispatch_with_brief` already uses, so there
+/// is ONE resolution order and a caller cannot accidentally read the brief
+/// first. The refusal fires BEFORE any file is touched: an unreadable path
+/// passed beside a reading list earns `expertise_beside_brief`, never
+/// `brief_file_unreadable`.
+pub(crate) fn resolve_brief_with_expertise(
+    kind: &str,
+    path: Option<&str>,
+    expertise: Option<&str>,
+) -> Result<Option<String>, Value> {
+    if let Some(refusal) = expertise_beside_brief_refusal(kind, path, expertise) {
+        return Err(refusal);
+    }
+    resolve_brief_file(kind, path)
 }
 
 /// A non-empty string field off a loaded cell record, or `None`. Written once
@@ -95,6 +534,20 @@ pub(crate) fn recorded_str<'a>(cell: Option<&'a Value>, field: &str) -> Option<&
 ///
 /// The advisor is deliberately NOT here: it keeps `resolve_advisor`, one name
 /// and no fall-through at all (decision 4faf1de9).
+///
+/// lane-model-diversity D2 (store `23de5362`) does NOT change that. An
+/// unconfigured SEAT role (`lane-2`, `hat-risks`) falls through to the advisor
+/// at the `--kind advisor` door only, and it does so by REBINDING the role
+/// before resolution — never by appending `advisor` to an ordered list, here
+/// or anywhere. The advisor's tail is still its own floor-less one-name walk,
+/// and a cell declaring a seat role keeps this exact list, byte for byte.
+///
+/// gather-reads-the-read-slot D1: this read list and `tier_role_list`'s
+/// `[read, generation]` differ ON PURPOSE. A read-shaped CELL is a backfilled
+/// `tier: extraction` record (doctrine B8), so `extraction` is an honest
+/// waypoint in its tail; a read-shaped GATHER has no such history, and
+/// walking one through `extraction` would move every legacy host's gathers
+/// onto the cheapest model.
 pub(crate) fn cell_role_list(role: &str) -> Vec<&str> {
     // role-surface-cleanup D1: the tail names skip anything already in the
     // list — a duplicate made the fall-through warn fire twice for one
@@ -212,6 +665,57 @@ pub(crate) const DESCRIPTION_TITLE_MAX: usize = 60;
 /// kept as its own constant rather than reusing DESCRIPTION_TITLE_MAX in case
 /// the two ever need to diverge.
 pub(crate) const TASK_NAME_MAX: usize = 60;
+
+fn codex_task_name(subject: &str) -> String {
+    let mut out = String::new();
+    let mut separator = false;
+    for ch in subject.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if separator && !out.is_empty() && out.len() < TASK_NAME_MAX {
+                out.push('_');
+            }
+            separator = false;
+            if out.len() < TASK_NAME_MAX {
+                out.push(ch.to_ascii_lowercase());
+            }
+        } else {
+            separator = true;
+        }
+    }
+    while out.ends_with('_') {
+        out.pop();
+    }
+    if out.is_empty() { "bee_task".into() } else { out }
+}
+
+fn shell_quote(token: &str) -> String {
+    format!("'{}'", token.replace('\'', "'\\''"))
+}
+
+fn codex_spawn_payload(
+    subject: &str,
+    tier: &str,
+    prompt_body: &str,
+    model: Option<&str>,
+    effort: Option<&str>,
+    extra_markers: &str,
+) -> Map<String, Value> {
+    let mut payload = Map::new();
+    payload.insert("task_name".into(), Value::String(codex_task_name(subject)));
+    let marker_line = format!("[bee-tier: {tier}] {extra_markers}");
+    payload.insert(
+        "message".into(),
+        Value::String(format!("{marker_line}\nAssignment: {subject}\n{prompt_body}")),
+    );
+    payload.insert("fork_turns".into(), Value::String("none".into()));
+    if let Some(model) = model {
+        payload.insert("model".into(), Value::String(model.to_string()));
+    }
+    if let Some(effort) = effort {
+        payload.insert("reasoning_effort".into(), Value::String(effort.to_string()));
+    }
+    payload
+}
 
 /// provenance: dispatch-prepare.mjs priorRoundEventLines — the machine-
 /// assembled digest of the cell record's own trace history, chronological
@@ -546,7 +1050,99 @@ pub(crate) fn parse_expertise(raw: &str) -> Result<Vec<ExpertiseEntry>, String> 
     Ok(entries)
 }
 
+pub(crate) const REVIEWER_DEFAULT_EXPERTISE: &str =
+    ".bee/expertise/review.md :: finding quality and severity calibration :: Where to look";
+
+pub(crate) fn reviewer_default_expertise_block(root: &Path) -> Option<String> {
+    if root.join(".bee/expertise/review.md").exists() {
+        let entries = parse_expertise(REVIEWER_DEFAULT_EXPERTISE).ok()?;
+        let lines: Vec<String> = entries
+            .iter()
+            .map(|e| format!("- {} — {}. Read it to {}.", e.path, e.purpose, e.read_to))
+            .collect();
+        Some(lines.join("\n"))
+    } else {
+        None
+    }
+}
+
+/// D5/D6 — the user's verbatim request, framed for a prompt, or `""`.
+///
+/// The framing is the intent anchor's OWN header and footer constants, reused
+/// rather than retyped: the same "VERBATIM · DO NOT SUMMARIZE · DO NOT
+/// PARAPHRASE" banner the compaction checkpoint already emits, so a worker
+/// meets one framing for the user's words wherever it meets them.
+///
+/// `""` is falsy to `{{#if}}`, which drops the block WITH its own leading
+/// newline — so a dispatch that resolves no anchor renders byte-identically
+/// to what this door produced before the block existed.
+pub(crate) fn original_request_block(root: &Path, feature: Option<&str>) -> String {
+    match crate::verbs::intent_group::dispatch_original_request(root, feature) {
+        Some(request) => format!(
+            "{}\nORIGINAL REQUEST (verbatim):\n{request}\n{}",
+            crate::verbs::intent_group::PRECOMPACT_HEADER,
+            crate::verbs::intent_group::PRECOMPACT_FOOTER,
+        ),
+        None => String::new(),
+    }
+}
+
 /// provenance: dispatch-prepare.mjs cellPromptBody / promptBodyFor.
+/// nc-1: resolve the advisor slot for cell dispatches and render the advisor line value.
+///
+/// Returns None when:
+/// - no advisor is configured (decision 4faf1de9: one name, no fall-through)
+/// - the advisor resolves to literally the same model name as the worker's resolved model
+///   (the one honest no-op; a cli-shaped advisor is never the same model, so it is always consulted)
+///
+/// Otherwise returns the advisor identity AND its transport verbatim (model-shaped vs cli-shaped)
+/// matching skills/bee-swarming/references/worker-details.md.
+pub(crate) fn resolve_cell_advisor(
+    models: &Map<String, Value>,
+    runtime: &str,
+    cell_id: &str,
+    worker_resolved: &Resolved,
+    is_escalated: bool,
+) -> Option<String> {
+    let advisor = resolve_advisor(models, runtime)?;
+
+    let worker_model_name = match worker_resolved {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } if !is_escalated => {
+            Some(model.as_str())
+        }
+        _ => None,
+    };
+
+    let (advisor_identity, is_cli) = match &advisor {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => (model.as_str(), false),
+        Resolved::Cli { command } => (command.as_str(), true),
+        Resolved::Herding { agent, .. } => (agent.as_deref().unwrap_or("herding"), true),
+        _ => return None,
+    };
+
+    if !is_cli {
+        if let Some(w_model) = worker_model_name {
+            if w_model == advisor_identity {
+                return None;
+            }
+        }
+    }
+
+    let line = if is_cli {
+        format!("{advisor_identity} — consult via {advisor_identity}, evidence bundle on stdin")
+    } else if runtime == "codex" {
+        format!(
+            "{advisor_identity} — consult via Codex-native subagent dispatch at model {advisor_identity}, description starting exactly \"advisor-consult {cell_id}: {advisor_identity}\""
+        )
+    } else {
+        format!(
+            "{advisor_identity} — consult via your own Agent tool, model param {advisor_identity}, description starting exactly \"advisor-consult {cell_id}: {advisor_identity}\" (fallback: headless claude -p --model {advisor_identity})"
+        )
+    };
+
+    Some(line)
+}
+
 pub(crate) fn prompt_body_for(
     root: &Path,
     kind: &str,
@@ -560,10 +1156,46 @@ pub(crate) fn prompt_body_for(
     // strips to nothing when its var is empty.
     worktree_location: Option<(&str, &str)>,
     expertise: Option<&str>,
+    // The carried LaneBrief, already resolved and trimmed by
+    // `resolve_brief_file` (advisor kind only; `None` everywhere else).
+    brief: Option<&str>,
+    advisor: Option<&str>,
+    purpose: Option<&str>,
+    lane_feature: Option<&str>,
+    // pi-stage-dispatch D5: the `hat-*` seat this non-cell dispatch runs
+    // as, `None` for every other role. Only the advisor template reads it.
+    seat: Option<&str>,
+    is_herding: bool,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
-        return Ok(render(&template, &[]));
+        // Every var a non-cell template can carry. Absent renders the empty
+        // string, which is falsy to `{{#if}}`, which drops the block WITH
+        // its own leading newline — so a gather/reviewer/advisor payload
+        // carrying neither is byte-identical to what this line produced when
+        // it passed `&[]`.
+        //
+        // `expertise` is here because it was NOT: this arm rendered `brief`
+        // alone, so a dispatcher's `--expertise` reading list was parsed,
+        // rendered to a block and then silently dropped for every kind but
+        // `cell`. Pass 2 refuses a `{{NAME}}` with no supplied value, so a
+        // var declared in a template MUST appear in this slice or every
+        // dispatch of that kind dies at the door.
+        //
+        // `original_request` is feature-keyed only: resolved from the caller's
+        // bound lane feature, then the active feature from state, then nothing
+        // (D5/D6: rendering the wrong request is worse than rendering none).
+        let original_request = original_request_block(root, lane_feature);
+        return Ok(render(
+            &template,
+            &[
+                ("brief", brief.unwrap_or("")),
+                ("expertise", expertise.unwrap_or("")),
+                ("purpose", purpose.unwrap_or("")),
+                ("original_request", &original_request),
+                ("seat", seat.unwrap_or("")),
+            ],
+        ));
     }
     let cell = cell.expect("kind cell always carries a loaded cell");
     let Some(template) = load_prompt("worker-cell") else { return Err(Delegate) };
@@ -580,6 +1212,13 @@ pub(crate) fn prompt_body_for(
     let cell_json = jsjson::stringify_pretty(cell);
     let feature = tpl(vget(cell, "feature"));
     let cell_id = tpl(vget(cell, "id"));
+    // The cell's OWN feature keys the anchor read, then the active feature,
+    // then nothing — never the `default` key.
+    let original_request =
+        original_request_block(root, if feature.is_empty() { None } else { Some(&feature) });
+    let native_bookkeeping = if is_herding { "" } else { "1" };
+    let herding = if is_herding { "1" } else { "" };
+    let native_worktree_check = if !is_herding && !worktree_root.is_empty() { "1" } else { "" };
     Ok(render(
         &template,
         &[
@@ -589,9 +1228,14 @@ pub(crate) fn prompt_body_for(
             ("cell_json", &cell_json),
             ("learned_context", &learned),
             ("expertise", expertise.unwrap_or("")),
+            ("advisor", advisor.unwrap_or("")),
             ("prior_rounds", &prior),
             ("worktree_root", worktree_root),
             ("control_root", control_root),
+            ("original_request", &original_request),
+            ("native_bookkeeping", native_bookkeeping),
+            ("herding", herding),
+            ("native_worktree_check", native_worktree_check),
         ],
     ))
 }
@@ -751,13 +1395,182 @@ pub(crate) fn prepare_dispatch_with_role(
     record_it: bool,
     expertise: Option<&str>,
 ) -> D<Prepared> {
+    prepare_dispatch_with_brief(
+        root,
+        runtime,
+        kind,
+        role,
+        cell_id,
+        worker,
+        force_ownership,
+        classification,
+        purpose,
+        record_it,
+        expertise,
+        None,
+    )
+}
+
+/// `prepare_dispatch_with_role` plus the carried LaneBrief (slp-blind-lanes
+/// E1/E2).
+///
+/// The SAME arity-adapter shape the eleven-argument spelling above already
+/// uses for `role`, and for the same reason: "no brief" is every existing
+/// call site, so threading a `None` through each of them would buy nothing
+/// but churn in files this change has no business touching. There is exactly
+/// one implementation — this body — so the no-brief path cannot drift from
+/// the brief path.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_dispatch_with_brief(
+    root: &Path,
+    runtime: &str,
+    kind: &str,
+    role: Option<&str>,
+    cell_id: Option<&str>,
+    worker: Option<&str>,
+    force_ownership: bool,
+    classification: Option<&str>,
+    purpose: Option<&str>,
+    record_it: bool,
+    expertise: Option<&str>,
+    brief: Option<&str>,
+) -> D<Prepared> {
+    prepare_dispatch_wire(
+        root,
+        runtime,
+        kind,
+        role,
+        cell_id,
+        worker,
+        force_ownership,
+        classification,
+        purpose,
+        record_it,
+        expertise,
+        brief,
+        None,
+        None,
+        None,
+        None,
+    )
+}
+
+pub(crate) fn is_valid_semver(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    for part in parts {
+        if part.is_empty() {
+            return false;
+        }
+        if !part.chars().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+        if part.len() > 1 && part.starts_with('0') {
+            return false;
+        }
+    }
+    true
+}
+
+pub(crate) fn resolve_main_commit(root: &Path) -> Option<String> {
+    let try_ref = |target: &str| -> Option<String> {
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", target])
+            .current_dir(root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !s.is_empty() {
+                return Some(s);
+            }
+        }
+        None
+    };
+
+    try_ref("refs/heads/main").or_else(|| try_ref("HEAD"))
+}
+
+pub(crate) fn resolve_current_branch(root: &Path) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if out.status.success() {
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !s.is_empty() {
+            return Some(s);
+        }
+    }
+    None
+}
+
+pub(crate) fn deployment_prompt(release_version: &str) -> String {
+    format!(
+        "Deploy-stage execution brief\n\n\
+        Authorized release version: {release_version}\n\n\
+        You are the deployment worker. This dispatch is authorized to perform release mutations on the main branch.\n\n\
+        Execute the authorized release command:\n\
+        scripts/release.sh {release_version}\n\n\
+        Run only that command; never run `bee dispatch authorize` yourself, because release.sh runs it and the permit works one time.\n\n\
+        Wait for release CI to pass and verify the published release assets.\n"
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_dispatch_wire(
+    root: &Path,
+    runtime: &str,
+    kind: &str,
+    role: Option<&str>,
+    cell_id: Option<&str>,
+    worker: Option<&str>,
+    force_ownership: bool,
+    classification: Option<&str>,
+    purpose: Option<&str>,
+    record_it: bool,
+    expertise: Option<&str>,
+    // Already resolved and trimmed by `resolve_brief_file`, which refuses
+    // every kind but `advisor` — so this is `None` for every other kind by
+    // the time it reaches here.
+    brief: Option<&str>,
+    feature: Option<&str>,
+    stage: Option<&str>,
+    session_id: Option<&str>,
+    release_version: Option<&str>,
+) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
     // bytes), so both are known-good here.
-    debug_assert!(DISPATCH_RUNTIMES.contains(&runtime) && DISPATCH_KINDS.contains(&kind));
+    debug_assert!(RUNTIMES.contains(&runtime) && DISPATCH_KINDS.contains(&kind));
 
+    if release_version.is_some() && (kind == "cell" || stage != Some("deployment")) {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("release_version_not_permitted".into()));
+        r.insert("fix".into(), Value::String("--release-version is permitted only on stage deployment under role deploy.".into()));
+        return Ok(Prepared::Value(Value::Object(r)));
+    }
+
+    let orig_role = role;
     let mut cell: Option<Value> = None;
     let mut ownership_override: Option<Value> = None;
     let mut resolved_worker: Option<String> = None;
+
+    let default_reviewer_expertise = if kind == "reviewer"
+        && (expertise.is_none() || expertise.map_or(false, |e| e.trim().is_empty()))
+        && (brief.is_none() || brief.map_or(false, |b| b.trim().is_empty()))
+    {
+        reviewer_default_expertise_block(root)
+    } else {
+        None
+    };
+    let expertise = expertise.filter(|e| !e.trim().is_empty()).or(default_reviewer_expertise.as_deref());
 
     if kind == "cell" {
         let Some(cell_id) = cell_id else {
@@ -815,23 +1628,420 @@ pub(crate) fn prepare_dispatch_with_role(
             ov.insert("note".into(), Value::String("advisory bypass only — cell.trace.worker (the actual claim owner) was NOT transferred; no correct transfer primitive exists on this ownership axis (see comment above).".into()));
             ownership_override = Some(Value::Object(ov));
         }
+        // slp-contract S4 (D3, store 9c0104e0) — the SECOND door of the
+        // contract-citation tripwire, running the SAME shared check the
+        // claim body runs (`cells::contract_citation_refusal`), never a
+        // second copy of the walk. Why both: a cell claimed BEFORE its
+        // cited decision was superseded, or before a trigger keyed to it
+        // reopened, slips a claim-only check entirely — the claim door
+        // cannot see that window — and D3's letter names the dispatch.
+        //
+        // Placed AFTER the ownership refusal on the same ordering principle
+        // the claim door uses: who owns the claim is a fact about the
+        // caller and answers first; the citations are a fact about the
+        // cell. `--force-ownership` deliberately does not reach here — that
+        // flag is an ownership bypass and nothing else.
+        if let Some(refusal) =
+            crate::verbs::cells::contract_citation_refusal(root, cell_id, Some(&loaded))
+        {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String(refusal.code.to_ascii_lowercase()));
+            r.insert("code".into(), Value::String(refusal.code.to_string()));
+            r.insert("cell".into(), Value::String(cell_id.to_string()));
+            r.insert("fix".into(), Value::String(refusal.message));
+            return Ok(Prepared::Value(Value::Object(r)));
+        }
         resolved_worker = Some(trimmed);
         cell = Some(loaded);
     }
 
-    // `find_granted_worktree_for_feature` (status_full/topology.rs) resolved
-    // ONCE here feeds both the envelope (below) and the rendered prompt's
-    // Location block (prompt_body_for) — one resolution, two destinations,
-    // never a second lookup that could drift from the first. `root` here is
-    // always the MAIN checkout: a granted worktree's own `dispatch prepare`
-    // call already refused through the narrow door in run_dispatch_prepare
-    // (Roots::Unsupported(GrantedWorktree)) before reaching this function.
-    let worktree_location: Option<(String, String)> = cell
-        .as_ref()
-        .and_then(|c| match vget(c, "feature") {
-            Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
-            _ => None,
+    let resolved_feature: Option<String> = if kind == "cell" {
+        cell.as_ref()
+            .and_then(|c| match vget(c, "feature") {
+                Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            })
+            .or_else(|| {
+                feature
+                    .map(|f| js_trim(f).to_string())
+                    .filter(|f| !f.is_empty())
+            })
+    } else {
+        feature
+            .map(|f| js_trim(f).to_string())
+            .filter(|f| !f.is_empty())
+            .or_else(|| {
+                crate::verbs::state_group::session_binding(session_id, root)
+                    .ok()
+                    .and_then(|(_sid, bound)| bound)
+            })
+    };
+
+    struct V2DispatchInfo {
+        feature: String,
+        stage: Option<String>,
+        planned_role: String,
+        plan_sha256: String,
+        roster_sha256: String,
+        role_reroute_decision: Option<String>,
+        release_version: Option<String>,
+        main_commit: Option<String>,
+    }
+
+    let mut v2_info: Option<V2DispatchInfo> = None;
+    let mut v2_effective_role: Option<String> = None;
+
+    if stage == Some("deployment") || release_version.is_some() {
+        let has_approved_role_plan = resolved_feature
+            .as_deref()
+            .and_then(|feat| crate::verbs::state_group::get_approved_role_plan(root, feat))
+            .is_some();
+        if !has_approved_role_plan {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("role_plan_required".into()));
+            if let Some(feat) = resolved_feature.as_deref() {
+                r.insert("feature".into(), Value::String(feat.to_string()));
+            }
+            r.insert("stage".into(), Value::String("deployment".into()));
+            let plan_path = match resolved_feature.as_deref() {
+                Some(feat) => format!("docs/history/{feat}/plan.md"),
+                None => "docs/history/<feature>/plan.md".to_string(),
+            };
+            r.insert(
+                "fix".into(),
+                Value::String(format!(
+                    "stage deployment requires an approved v2 plan with a role plan; add a ## Role assignments section to {plan_path} and run bee gate --preview."
+                )),
+            );
+            return Ok(Prepared::Value(Value::Object(r)));
+        }
+    }
+
+    if let Some(feat) = resolved_feature.as_deref() {
+        if let Some(role_plan) = crate::verbs::state_group::get_approved_role_plan(root, feat) {
+            // 1. Verify runtime matches
+            let plan_runtime = role_plan
+                .get("runtime")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if plan_runtime != runtime {
+                let mut r = Map::new();
+                r.insert("ok".into(), Value::Bool(false));
+                r.insert("type".into(), Value::String("refused".into()));
+                r.insert("reason".into(), Value::String("role_plan_runtime_mismatch".into()));
+                r.insert("feature".into(), Value::String(feat.to_string()));
+                r.insert("runtime".into(), Value::String(runtime.to_string()));
+                r.insert("plan_runtime".into(), Value::String(plan_runtime.to_string()));
+                r.insert("fix".into(), Value::String(format!(
+                    "feature \"{feat}\" approved role plan is for runtime \"{plan_runtime}\", not \"{runtime}\". Revise plan.md for runtime \"{runtime}\" and approve a new revision."
+                )));
+                return Ok(Prepared::Value(Value::Object(r)));
+            }
+
+            // 2. Verify roster is fresh
+            let table = crate::verbs::models_group::team_table(root, Some(runtime)).ok();
+            let runtimes_arr = table.as_ref().and_then(|t| t.get("runtimes")).and_then(Value::as_array);
+            let rt_entry = runtimes_arr.and_then(|arr| arr.iter().find(|r| r.get("runtime").and_then(Value::as_str) == Some(runtime)));
+            let roles_arr = rt_entry.and_then(|r| r.get("roles")).and_then(Value::as_array);
+
+            let expected_roster_sha = if let Some(arr) = roles_arr {
+                let (sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(arr);
+                sha
+            } else {
+                String::new()
+            };
+
+            let plan_roster_sha = role_plan
+                .get("roster_sha256")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if plan_roster_sha != expected_roster_sha {
+                let mut r = Map::new();
+                r.insert("ok".into(), Value::Bool(false));
+                r.insert("type".into(), Value::String("refused".into()));
+                r.insert("reason".into(), Value::String("role_plan_roster_stale".into()));
+                r.insert("feature".into(), Value::String(feat.to_string()));
+                r.insert("runtime".into(), Value::String(runtime.to_string()));
+                r.insert("expected_roster_sha256".into(), Value::String(expected_roster_sha.clone()));
+                r.insert("plan_roster_sha256".into(), Value::String(plan_roster_sha.to_string()));
+                r.insert("fix".into(), Value::String(format!(
+                    "roster digest mismatch for runtime \"{runtime}\" (expected {expected_roster_sha}, got {plan_roster_sha}). Update plan.md roster_sha256 to {expected_roster_sha} and approve."
+                )));
+                return Ok(Prepared::Value(Value::Object(r)));
+            }
+
+            let approved_packet = crate::verbs::cells::get_approved_preview_packet(root, feat);
+            let plan_sha256 = role_plan
+                .get("plan_sha256")
+                .or_else(|| approved_packet.as_ref().and_then(|p| p.get("plan_sha256")))
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+
+            if kind == "cell" {
+                let approved_packet = match approved_packet {
+                    Some(p) => p,
+                    None => {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "approved preview packet not found for feature \"{feat}\""
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                };
+
+                let cell_id_str = cell_id.unwrap_or_default();
+                let original_role = approved_packet
+                    .get("cells")
+                    .and_then(Value::as_array)
+                    .and_then(|arr| {
+                        arr.iter().find(|c| c.get("id").and_then(Value::as_str) == Some(cell_id_str))
+                    })
+                    .and_then(|c| c.get("role").and_then(Value::as_str));
+
+                let Some(original_role) = original_role else {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                    r.insert("feature".into(), Value::String(feat.to_string()));
+                    r.insert("cell".into(), Value::String(cell_id_str.to_string()));
+                    r.insert("fix".into(), Value::String(format!(
+                        "cell \"{cell_id_str}\" not found in approved preview packet for feature \"{feat}\""
+                    )));
+                    return Ok(Prepared::Value(Value::Object(r)));
+                };
+
+                let effective_role = match crate::verbs::cells::validate_cell_role_chain(original_role, cell.as_ref().unwrap()) {
+                    Ok(r) => r,
+                    Err(err) => {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("cell".into(), Value::String(cell_id_str.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "cell \"{cell_id_str}\" role chain invalid: {err}"
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                };
+
+                if let Some(declared_role) = role {
+                    if declared_role != effective_role {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("cell".into(), Value::String(cell_id_str.to_string()));
+                        r.insert("planned_role".into(), Value::String(effective_role.clone()));
+                        r.insert("declared_role".into(), Value::String(declared_role.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "cell \"{cell_id_str}\" planned effective role is \"{effective_role}\", but dispatch declared \"{declared_role}\". FIX: use planned role or run bee cells reroute."
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                }
+
+                let role_reroute_decision = cell.as_ref()
+                    .and_then(|c| c.get("role_reroutes"))
+                    .and_then(Value::as_array)
+                    .filter(|arr| !arr.is_empty())
+                    .and_then(|arr| arr.last())
+                    .and_then(|entry| entry.get("decision"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+
+                v2_effective_role = Some(effective_role.clone());
+                v2_info = Some(V2DispatchInfo {
+                    feature: feat.to_string(),
+                    stage: stage.map(str::to_string),
+                    planned_role: effective_role,
+                    plan_sha256,
+                    roster_sha256: expected_roster_sha,
+                    role_reroute_decision,
+                    release_version: None,
+                    main_commit: None,
+                });
+            } else {
+                let Some(stage_name) = stage else {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("stage_required".into()));
+                    r.insert("feature".into(), Value::String(feat.to_string()));
+                    r.insert("fix".into(), Value::String(format!(
+                        "non-cell dispatch for feature \"{feat}\" with approved v2 role plan requires --stage <stage>. FIX: provide the approved stage name."
+                    )));
+                    return Ok(Prepared::Value(Value::Object(r)));
+                };
+
+                let stages = match role_plan.get("stages").and_then(Value::as_array) {
+                    Some(s) => s,
+                    None => {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("stage_unknown".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "no stages found in role plan for feature \"{feat}\""
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                };
+
+                let stage_entry = match stages.iter().find(|s| s.get("stage").and_then(Value::as_str) == Some(stage_name)) {
+                    Some(e) => e,
+                    None => {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("stage_unknown".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String(stage_name.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "stage \"{stage_name}\" is not defined in feature \"{feat}\" role plan. FIX: supply one of the approved stages or revise plan.md."
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                };
+
+                let classification_str = stage_entry
+                    .get("classification")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if classification_str == "not-applicable" {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("stage_not_applicable".into()));
+                    r.insert("feature".into(), Value::String(feat.to_string()));
+                    r.insert("stage".into(), Value::String(stage_name.to_string()));
+                    r.insert("fix".into(), Value::String(format!(
+                        "stage \"{stage_name}\" is classified as not-applicable for feature \"{feat}\". FIX: do not dispatch this stage, or revise plan.md."
+                    )));
+                    return Ok(Prepared::Value(Value::Object(r)));
+                }
+
+                let stage_role = stage_entry
+                    .get("role")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+
+                if let Some(declared_role) = role {
+                    if declared_role != stage_role {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String(stage_name.to_string()));
+                        r.insert("planned_role".into(), Value::String(stage_role.to_string()));
+                        r.insert("declared_role".into(), Value::String(declared_role.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "stage \"{stage_name}\" requires role \"{stage_role}\", got \"{declared_role}\". FIX: dispatch with --role {stage_role}."
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                }
+
+                if stage_name == "deployment" {
+                    let Some(ver) = release_version else {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("release_version_required".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String("deployment".into()));
+                        r.insert("fix".into(), Value::String("stage deployment requires --release-version <MAJOR.MINOR.PATCH>.".into()));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    };
+                    if !is_valid_semver(ver) {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("release_version_invalid".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String("deployment".into()));
+                        r.insert("release_version".into(), Value::String(ver.to_string()));
+                        r.insert("fix".into(), Value::String(format!("\"{ver}\" is not valid semver (MAJOR.MINOR.PATCH with no leading zeros).")));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                    let branch = resolve_current_branch(root);
+                    if branch.as_deref() != Some("main") {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("main_branch_required".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String("deployment".into()));
+                        if let Some(b) = branch {
+                            r.insert("branch".into(), Value::String(b));
+                        }
+                        r.insert("fix".into(), Value::String("stage deployment requires control root to be on branch \"main\".".into()));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                }
+
+                let main_commit = resolve_main_commit(root);
+                v2_effective_role = Some(stage_role.to_string());
+                v2_info = Some(V2DispatchInfo {
+                    feature: feat.to_string(),
+                    stage: Some(stage_name.to_string()),
+                    planned_role: stage_role.to_string(),
+                    plan_sha256,
+                    roster_sha256: expected_roster_sha,
+                    role_reroute_decision: None,
+                    release_version: release_version.map(str::to_string),
+                    main_commit,
+                });
+            }
+        }
+    }
+
+    let role = if role.is_some() {
+        role
+    } else {
+        v2_effective_role.as_deref()
+    };
+
+    let feature_for_worktree = resolved_feature
+        .clone()
+        .or_else(|| {
+            cell.as_ref()
+                .and_then(|c| match vget(c, "feature") {
+                    Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                    _ => None,
+                })
         })
+        .or_else(|| {
+            cell_id
+                .and_then(|cid| read_cell(root, cid).ok().flatten())
+                .and_then(|c| match vget(&c, "feature") {
+                    Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                    _ => None,
+                })
+        })
+        .or_else(|| match crate::fsutil::read_json(&root.join(".bee").join("state.json")) {
+            crate::fsutil::ReadJson::Parsed(state) => match state.get("feature") {
+                Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            },
+            _ => None,
+        });
+
+    let worktree_location: Option<(String, String)> = feature_for_worktree
         .and_then(|feature| {
             crate::verbs::status_full::find_granted_worktree_for_feature(root, &feature)
                 .map(|(_id, worktree_root)| (worktree_root, root.to_string_lossy().into_owned()))
@@ -846,6 +2056,7 @@ pub(crate) fn prepare_dispatch_with_role(
         return Ok(Prepared::Value(unmapped_kind_refusal(kind)));
     };
     let models = read_models(root)?;
+    let cfg = Value::Object(read_config_raw(root));
     // T012a: a `--role` naming a role nothing configures is REFUSED, never
     // resolved onto some other role's model. Same FIX shape as the
     // model-guard's marker refusal, and — the part that used to be a comment
@@ -864,7 +2075,47 @@ pub(crate) fn prepare_dispatch_with_role(
     // resolver can look up, exactly as `classify_marker` hands the guard one.
     // Admitting a spelling here without normalizing it would have moved the
     // two-answers defect one line down instead of closing it.
+    //
+    // lane-model-diversity D2 (store `23de5362`) — SEAT FALL-THROUGH, at the
+    // ADVISOR door and nowhere else. A blind lane or a hat asks for its own
+    // seat (`--role lane-3`, `--role hat-risks`); a host that has not
+    // configured that seat still has to get an advisor rather than a refusal,
+    // because the seats exist to let an operator OPT IN to model diversity and
+    // an un-opted host must keep working exactly as it did.
+    //
+    // Three properties make this narrow rather than a hole in T012a:
+    //
+    //   * Only the eight `SEAT_ROLES` names (closed constant) fall through, so
+    //     a typo'd `hat-risk` is still refused instead of quietly running on
+    //     the advisor's model.
+    //   * Only when the seat's own slot RESOLVES NOTHING — absent, null, or a
+    //     shape `resolve_configured` reads as nothing. A configured seat
+    //     resolves its own model and stamps its own marker (D4).
+    //   * Only on the advisor kind. `default_slot` is `slot_for_kind(kind)`,
+    //     and `advisor` is the one kind that maps to the advisor slot (see
+    //     `slot_map_tests::only_the_advisor_arm_resolves_the_advisor_slot`), so
+    //     `--kind gather --role lane-3` keeps T012a's refusal untouched.
+    //
+    // The fall-through REBINDS the canonical role to `advisor` rather than
+    // walking `[seat, advisor]` through `resolve_role_named`: that walk's last
+    // entry lands on the `Resolved::Budget` floor, which would hand an
+    // unconfigured advisor the session model — verbatim the outcome
+    // `4faf1de9` forbids. Rebinding lands on the advisor arm below, so the
+    // advisor keeps its own one-name walk AND its `advisor_not_configured`
+    // refusal for free.
+    //
+    // Nothing here reads a slot's `description`: that field is display-only
+    // (`hooks/model_guard::role_slot_description`) and `normalize_models` has
+    // already dropped it before `models` exists. D3's "a hat states its
+    // purpose" is enforced as a `bee doctor` advisory over the RAW config
+    // instead, so no resolution, guard, or dispatch decision depends on it.
+    let fallen_through_seat: Option<&'static str> = match role {
+        Some(declared) if default_slot == ADVISOR_ROLE => seat_role_named(declared)
+            .filter(|_| !role_slot_resolves(&models, runtime, declared, kind)),
+        _ => None,
+    };
     let canonical_role: Option<String> = match role {
+        Some(_) if fallen_through_seat.is_some() => Some(ADVISOR_ROLE.to_string()),
         Some(declared) => match known_role_named(&models, runtime, declared) {
             Some(canonical) => Some(canonical),
             None => {
@@ -875,7 +2126,7 @@ pub(crate) fn prepare_dispatch_with_role(
                 refusal.insert("reason".into(), Value::String("role_not_configured".into()));
                 refusal.insert("role".into(), Value::String(declared.to_string()));
                 refusal.insert("fix".into(), Value::String(format!(
-                    "--role \"{declared}\" names a role nothing configures — models.{runtime} in .bee/config.json carries no \"{declared}\" entry, so the dispatch would select no model while the record asserted the caller had chosen one. FIX: name a configured role ({roles}), or configure this one — add \"{declared}\": \"<model>\" to models.{runtime} in .bee/config.json. Any role name you configure is legal; bee holds no fixed list."
+                    "--role \"{declared}\" names a role nothing configures — team.{runtime} in .bee/config.json carries no \"{declared}\" entry, so the dispatch would select no model while the record asserted the caller had chosen one. FIX: name a configured role ({roles}), or configure this one — add \"{declared}\": \"<model>\" to team.{runtime} in .bee/config.json. Any role name you configure is legal; bee holds no fixed list."
                 )));
                 return Ok(Prepared::Value(Value::Object(refusal)));
             }
@@ -909,19 +2160,30 @@ pub(crate) fn prepare_dispatch_with_role(
     // changes which value a role-CARRYING cell resolves from, nothing else.
     // `from_role` is what tells the two apart downstream — the observable
     // `tier_source` vocabulary is unchanged at {flag, cell, default}.
-    let (tier_token, tier_source, from_role) = match role {
-        Some(role) => (role, "flag", false),
-        None => {
-            if kind == "cell" {
-                match recorded_str(cell.as_ref(), "role") {
-                    Some(r) => (r, "cell", true),
-                    None => match recorded_str(cell.as_ref(), "tier") {
-                        Some(t) => (t, "cell", false),
-                        None => (default_slot, "default", false),
-                    },
+    let (tier_token, tier_source, from_role) = if let Some(v2) = &v2_info {
+        let ts = if orig_role.is_some() {
+            "flag"
+        } else if kind == "cell" {
+            "cell"
+        } else {
+            "default"
+        };
+        (v2.planned_role.as_str(), ts, true)
+    } else {
+        match role {
+            Some(role) => (role, "flag", false),
+            None => {
+                if kind == "cell" {
+                    match recorded_str(cell.as_ref(), "role") {
+                        Some(r) => (r, "cell", true),
+                        None => match recorded_str(cell.as_ref(), "tier") {
+                            Some(t) => (t, "cell", false),
+                            None => (default_slot, "default", false),
+                        },
+                    }
+                } else {
+                    (default_slot, "default", false)
                 }
-            } else {
-                (default_slot, "default", false)
             }
         }
     };
@@ -931,10 +2193,19 @@ pub(crate) fn prepare_dispatch_with_role(
     // <other>` does not: with no `--role` it is exactly `kind == "advisor"`,
     // because `slot_for_kind("advisor")` is the advisor slot.
     //
-    // Which name in the list actually WON. Set only on the cell-role path,
-    // because every other path asks for one name (or `[review, generation]`,
-    // whose fall-through predates this feature) and must keep stamping the
-    // exact token it always stamped.
+    // gather-reads-the-read-slot D2/D3 — a `--kind gather` with NO `--role`,
+    // the one dispatch whose asked name (`read`) is a name bee ships no
+    // built-in model for. It records the winner just below, and pins its
+    // agent by kind further down.
+    let default_gather = kind == "gather" && role.is_none();
+    // Which name in the list actually WON. Set on the cell-role path and on
+    // the DEFAULT-GATHER path (D2) — the two whose asked name may be one bee
+    // ships no built-in model for. `read` is not in `default_models("claude")`,
+    // so a marker saying `read` on a host with no `read` key names nothing the
+    // guard can resolve back, and the guard would refuse the dispatch bee
+    // itself prepared. Every other path asks for one name (or
+    // `[review, generation]`, whose fall-through predates this feature) and
+    // must keep stamping the exact token it always stamped.
     let mut resolved_role: Option<&str> = None;
     // D5 (store `97ce5225`) — ESCALATION, read off the cell's flag rather
     // than off a tier value. `ceiling` used to arrive here as `tier_token`
@@ -949,7 +2220,7 @@ pub(crate) fn prepare_dispatch_with_role(
     // behind it (a gather or a reviewer run on the session model). The flag
     // is read only on a `--kind cell` dispatch with no `--role`, which is
     // exactly the shape that used to read the cell's recorded `tier`.
-    let escalated_cell = role.is_none()
+    let escalated_cell = orig_role.is_none()
         && kind == "cell"
         && cell.as_ref().map(crate::verbs::cells::cell_is_escalated).unwrap_or(false);
     // REVIEW P1-A — the escalation word is read off the CALLER or the FLAG,
@@ -991,7 +2262,7 @@ pub(crate) fn prepare_dispatch_with_role(
                 refusal.insert("ok".into(), Value::Bool(false));
                 refusal.insert("reason".into(), Value::String("advisor_not_configured".into()));
                 refusal.insert("fix".into(), Value::String(format!(
-                    "set models.{runtime}.advisor in .bee/config.json to enable an advisor consult (resolveAdvisor never falls back to another tier)."
+                    "set team.{runtime}.advisor in .bee/config.json to enable an advisor consult (resolveAdvisor never falls back to another tier)."
                 )));
                 return Ok(Prepared::Value(Value::Object(refusal)));
             }
@@ -1019,7 +2290,7 @@ pub(crate) fn prepare_dispatch_with_role(
             refusal.insert("reason".into(), Value::String("tier_not_configured".into()));
             refusal.insert("tier".into(), Value::String(tier_token.to_string()));
             refusal.insert("fix".into(), Value::String(format!(
-                "set models.{runtime}.{tier_token} in .bee/config.json to configure this tier."
+                "set team.{runtime}.{tier_token} in .bee/config.json to configure this tier."
             )));
             return Ok(Prepared::Value(Value::Object(refusal)));
         }
@@ -1029,10 +2300,17 @@ pub(crate) fn prepare_dispatch_with_role(
         let roles =
             if from_role { cell_role_list(tier_token) } else { tier_role_list(tier_token) };
         let (winner, r) = resolve_role_named(&models, &roles, runtime, kind);
-        if from_role {
+        if from_role || default_gather {
             resolved_role = winner;
         }
         if let Resolved::Refused { slot } = &r {
+            // pi-support D5: on pi a cli slot is refused for its RUNTIME, not
+            // for its purpose — `{kind:"cli"}` has no herding pane behind it
+            // on any kind, so the refusal that names the herding requirement
+            // is the useful one for a gather as much as for a cell.
+            if runtime == "pi" {
+                return Ok(Prepared::Value(pi_requires_herding_refusal(slot, &r, false)));
+            }
             let mut refusal = Map::new();
             refusal.insert("ok".into(), Value::Bool(false));
             refusal.insert("type".into(), Value::String("refused".into()));
@@ -1042,6 +2320,20 @@ pub(crate) fn prepare_dispatch_with_role(
             return Ok(Prepared::Value(Value::Object(refusal)));
         }
         (r, false)
+    };
+    let lane: Option<&str> = if kind == "cell" {
+        cell.as_ref().and_then(|c| vget(c, "lane")).and_then(Value::as_str)
+    } else {
+        None
+    };
+    let mut resolved = resolved;
+    let effort_choice = match &mut resolved {
+        Resolved::Model { effort, .. } | Resolved::Native { effort, .. } => {
+            let choice = effort_for_dispatch(effort.as_deref(), kind, lane);
+            *effort = choice.effort.clone();
+            Some(choice)
+        }
+        _ => None,
     };
 
     // THE NAME THE DISPATCH TRAVELS UNDER — the role that resolved, which on
@@ -1062,6 +2354,67 @@ pub(crate) fn prepare_dispatch_with_role(
     let marker_role: &str =
         if is_escalated { ESCALATION_WORD } else { resolved_role.unwrap_or(tier_token) };
 
+    if runtime == "codex" && kind == "cell"
+        && classification == Some("native_hook_input_opaque")
+        && !matches!(&resolved, Resolved::Herding { .. } | Resolved::Cli { .. }
+            | Resolved::Native { fallback: Some(_), .. })
+    {
+        return Ok(Prepared::Value(serde_json::json!({
+            "ok": false,
+            "type": "refused",
+            "reason": "native_hook_input_opaque",
+            "slot": marker_role,
+            "fix": "Codex 0.154.0 hides the native role message from installed hooks. Configure an explicit herding executor for this cell role and prepare again. For an escalated cell, keep escalation and return this refusal to the leader; do not add model overrides or remove the guard."
+        })));
+    }
+
+    // pi-support D5 — THE HERDING-ONLY DOOR, at full width. Placed here, after
+    // the slot resolved and before a single byte of prompt is rendered:
+    // resolution is what the refusal reports, and a refused dispatch has no
+    // business paying for a prompt build. Every non-herding exit is covered by
+    // construction — `Model`, `Native`, `Cli`, `Budget` and the escalation
+    // path's `Inherit` all arrive here as `resolved`, so a transport arm added
+    // to the payload match below cannot open a new hole in this rule.
+    if runtime == "pi" && !matches!(resolved, Resolved::Herding { .. }) {
+        return Ok(Prepared::Value(pi_requires_herding_refusal(
+            marker_role,
+            &resolved,
+            is_escalated,
+        )));
+    }
+
+    if matches!(resolved, Resolved::Herding { .. }) {
+        if let Some(Value::Object(mut refusal)) = crate::herding::wave::check_limits(root, &cfg) {
+            refusal.insert("type".into(), Value::String("refused".into()));
+            return Ok(Prepared::Value(Value::Object(refusal)));
+        }
+    }
+
+    let advisor = if kind == "cell" {
+        let cell_id = cell
+            .as_ref()
+            .and_then(|c| recorded_str(Some(c), "id"))
+            .unwrap_or("");
+        resolve_cell_advisor(&models, runtime, cell_id, &resolved, is_escalated)
+    } else {
+        None
+    };
+
+    let lane_feature = if kind != "cell" {
+        resolved_feature.clone()
+    } else {
+        None
+    };
+    // pi-stage-dispatch D3/D5: the seat a non-cell dispatch names. A seat that
+    // fell through to the advisor slot keeps its own name here — only its
+    // model resolution rides the advisor.
+    let seat_name: &str = fallen_through_seat.unwrap_or(marker_role);
+    let hat_seat = (kind != "cell" && role.is_some())
+        .then(|| seat_role_named(seat_name))
+        .flatten()
+        .filter(|seat| seat.starts_with("hat-"));
+
+    let is_herding = matches!(resolved, Resolved::Herding { .. });
     let prompt_body = match prompt_body_for(
         root,
         kind,
@@ -1069,6 +2422,12 @@ pub(crate) fn prepare_dispatch_with_role(
         resolved_worker.as_deref(),
         worktree_location.as_ref().map(|(w, c)| (w.as_str(), c.as_str())),
         expertise,
+        brief,
+        advisor.as_deref(),
+        purpose,
+        lane_feature.as_deref(),
+        hat_seat,
+        is_herding,
     )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
@@ -1084,8 +2443,43 @@ pub(crate) fn prepare_dispatch_with_role(
     // lookup, mirrored by hooks/model_guard.rs PINNED_AGENT_TYPE); `kind`
     // is the one signal that can, and only a --kind cell dispatch is a cell
     // execution (dp-2).
-    let pinned_type =
-        if kind == "cell" { "bee-build" } else { pinned_agent_type(marker_role) };
+    //
+    // gather-reads-the-read-slot D3: a DEFAULT gather pins `bee-gather`
+    // whichever spelling of the read job won. Without the pin a `read` winner
+    // would answer `bee-extract` through the read->extraction alias
+    // (`ROLE_ALIASES`), renaming an agent no decision moved. Every other
+    // dispatch still reads the ASKED token, so `--role extraction` keeps
+    // `bee-extract` (B11) and `--kind reviewer` keeps `bee-review`.
+    let design_role = tier_token == "design";
+    let design_cell = kind == "cell" && design_role;
+    let prompt_body =
+        if design_cell { format!("{DESIGN_CELL_PREAMBLE}\n\n{prompt_body}") } else { prompt_body };
+    let pinned_type = match kind {
+        "cell" if design_role => "bee-design",
+        "cell" => "bee-build",
+        "gather" if default_gather || design_role => "bee-gather",
+        "reviewer" if design_role => "bee-review",
+        _ => pinned_agent_type(marker_role),
+    };
+    let is_deployment = v2_info
+        .as_ref()
+        .map(|v| v.stage.as_deref() == Some("deployment"))
+        .unwrap_or(false);
+
+    let pane_prompt = if is_deployment {
+        let ver = v2_info
+            .as_ref()
+            .and_then(|v| v.release_version.as_deref())
+            .unwrap_or_default();
+        deployment_prompt(ver)
+    } else if kind == "cell" && is_herding {
+        prompt_body.clone()
+    } else {
+        match embedded_agent_body(pinned_type) {
+            Some(body) => format!("{body}\n\n{prompt_body}"),
+            None => prompt_body.clone(),
+        }
+    };
 
     // The dispatch SUBJECT — computed ONCE, here, before the transport match,
     // so every branch below (native override, native fallback, codex
@@ -1099,10 +2493,20 @@ pub(crate) fn prepare_dispatch_with_role(
     // is FOR. A whitespace-only or absent title is no title: the bare kind,
     // never a dangling "id: ".
     //
-    // Every other kind: subject is "<kind>: <purpose>" when the caller passes
-    // `--purpose`, and the bare kind otherwise — today's exact bytes when no
-    // `--purpose` is given, so this stays back-compatible by construction.
-    // Their purpose is the caller's to state; prepare never invents one.
+    // Every other kind: subject is "<lead>: <purpose>" when the caller passes
+    // `--purpose`, and the bare lead otherwise. The LEAD is the asked role
+    // when `--role` was given (its config spelling), and the kind when none
+    // was — today's exact bytes for every role-less dispatch, so this stays
+    // back-compatible by construction. Their purpose is the caller's to
+    // state; prepare never invents one.
+    //
+    // dispatch-label-seat-first: the lead used to be the kind always. A seat
+    // dispatched through the advisor kind (`--kind advisor --role
+    // hat-facts-gaps`) ran on its own seat model and still read `advisor:`
+    // in every UI that shows the description — three hats on opus/opus/
+    // sonnet, all labelled advisor (2026-09-02). The label names the slot
+    // that resolved, never the kind that asked; the audit line already
+    // carried the role, the human-facing string did not.
     let subject = if kind == "cell" {
         cell.as_ref()
             .map(|c| (tpl(vget(c, "id")), one_line(vget(c, "title"), DESCRIPTION_TITLE_MAX)))
@@ -1110,15 +2514,17 @@ pub(crate) fn prepare_dispatch_with_role(
             .map(|(id, title)| format!("{id}: {title}"))
             .unwrap_or_else(|| kind.to_string())
     } else {
+        let lead = role.unwrap_or(kind);
         match purpose.map(js_trim).filter(|p| !p.is_empty()) {
             Some(p) => format!(
-                "{kind}: {}",
+                "{lead}: {}",
                 one_line(Some(&Value::String(p.to_string())), DESCRIPTION_TITLE_MAX)
             ),
-            None => kind.to_string(),
+            None => lead.to_string(),
         }
     };
 
+    let dispatch_id = pseudo_uuid_v4();
     let mut tool = String::new();
     let mut payload = Map::new();
     let mut channel = String::new();
@@ -1129,25 +2535,33 @@ pub(crate) fn prepare_dispatch_with_role(
     let mut extra_transport: Option<&str> = None;
     let mut extra_fallback_reason: Option<&str> = None;
 
+    let v2_markers: Option<String> = v2_info.as_ref().map(|v2| {
+        if kind == "cell" {
+            let cell_id_str = cell_id.unwrap_or_default();
+            let stage_part = v2.stage.as_deref().map(|s| format!(" [bee-stage: {s}]")).unwrap_or_default();
+            format!("[bee-feature: {}]{stage_part} [bee-cell: {cell_id_str}] ", v2.feature)
+        } else {
+            let stage_str = v2.stage.as_deref().unwrap_or_default();
+            format!("[bee-feature: {}] [bee-stage: {stage_str}] ", v2.feature)
+        }
+    });
+    let lane_marker = lane.map(|l| format!(" [bee-lane: {l}]")).unwrap_or_default();
+    let extra_markers = format!("{}[bee-kind: {kind}]{lane_marker}", v2_markers.unwrap_or_default());
+
+    let marker_header = format!("[bee-tier: {marker_role}] {extra_markers}");
+
     if is_escalated {
         if runtime == "codex" {
             tool = "spawn_agent".into();
-            payload.insert(
-                "task_name".into(),
-                Value::String(one_line(Some(&Value::String(subject.clone())), TASK_NAME_MAX)),
-            );
-            payload.insert(
-                "message".into(),
-                Value::String(format!("[bee-tier: {ESCALATION_WORD}]\n{prompt_body}")),
-            );
-            payload.insert("fork_turns".into(), Value::String("none".into()));
+            payload = codex_spawn_payload(&subject, ESCALATION_WORD, &prompt_body, None, None, &extra_markers);
             channel = "session-model".into();
         } else {
             tool = "Agent".into();
             payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
+            let escalated_header = format!("[bee-tier: {ESCALATION_WORD}] {extra_markers}");
             payload.insert(
                 "prompt".into(),
-                Value::String(format!("[bee-tier: {ESCALATION_WORD}]\n{prompt_body}")),
+                Value::String(format!("{escalated_header}\n{prompt_body}")),
             );
             payload.insert(
                 "description".into(),
@@ -1157,63 +2571,13 @@ pub(crate) fn prepare_dispatch_with_role(
         }
     } else {
         match &resolved {
-            Resolved::Native { model, effort, fallback, agent_type, .. } => {
-                native_confirmed = classification == Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
-                if native_confirmed {
-                    tool = "spawn_agent".into();
-                    payload.insert(
-                        "agent_type".into(),
-                        Value::String(if agent_type.is_empty() {
-                            "worker".to_string()
-                        } else {
-                            agent_type.clone()
-                        }),
-                    );
-                    payload.insert(
-                        "message".into(),
-                        Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
-                    );
-                    payload.insert("model".into(), Value::String(model.clone()));
-                    payload.insert("fork_turns".into(), Value::String("none".into()));
-                    if let Some(effort) = effort {
-                        payload.insert("reasoning_effort".into(), Value::String(effort.clone()));
-                    }
-                    channel = "codex-native".into();
-                    extra_transport = Some("native-override");
-                } else if let Some(command) = fallback.as_ref().filter(|c| !c.is_empty()) {
-                    // cli-exec: NO label field. This payload is `{command, stdin}`
-                    // only — a recorded limit (dispatch-label-chokepoint plan.md
-                    // "What this does not do"), not an oversight: no field exists
-                    // on an external CLI-executor call to carry a subject.
-                    tool = "Bash".into();
-                    payload.insert("command".into(), Value::String(command.clone()));
-                    payload.insert("stdin".into(), Value::String(prompt_body.clone()));
-                    channel = "cli-exec".into();
-                    extra_fallback_reason = Some("native_unavailable");
-                } else {
-                    let mut r = Map::new();
-                    r.insert("ok".into(), Value::Bool(false));
-                    r.insert("type".into(), Value::String("refused".into()));
-                    r.insert("reason".into(), Value::String("native_unavailable".into()));
-                    r.insert(
-                        "detail".into(),
-                        Value::String(
-                            classification
-                                .filter(|c| !c.is_empty())
-                                .unwrap_or(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
-                                .to_string(),
-                        ),
-                    );
-                    refusal = Some(Value::Object(r));
-                }
-            }
             Resolved::Cli { command } => {
                 // cli-exec: NO label field — see the identical comment on the
                 // native-fallback Bash arm above; this is the same recorded
                 // limit, not an oversight.
                 tool = "Bash".into();
                 payload.insert("command".into(), Value::String(command.clone()));
-                payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
                 channel = "cli-exec".into();
             }
             Resolved::Herding { agent, fallback } => {
@@ -1230,7 +2594,11 @@ pub(crate) fn prepare_dispatch_with_role(
                 // without an agent leaves the command byte-identical to before.
                 tool = "Bash".into();
                 let mut command = ".bee/bin/bee herding run --task-file - --json".to_string();
-                if let Some((worktree_root, _control_root)) = &worktree_location {
+                if is_deployment {
+                    command.push_str(" --cwd \"");
+                    command.push_str(&root.to_string_lossy());
+                    command.push('"');
+                } else if let Some((worktree_root, _control_root)) = &worktree_location {
                     if !worktree_root.is_empty() {
                         command.push_str(" --cwd \"");
                         command.push_str(worktree_root);
@@ -1242,8 +2610,56 @@ pub(crate) fn prepare_dispatch_with_role(
                     command.push_str(agent);
                     command.push('"');
                 }
+                // dispatch-cell-id-flag D1, D2, D3: a cell dispatch carries
+                // `--cell-id "<id>"` so `herding run`'s postflight_cap_check can
+                // identify the cell and refuse when it was not capped.
+                if kind == "cell" {
+                    if let Some(id) = cell_id {
+                        command.push_str(" --cell-id \"");
+                        command.push_str(id);
+                        command.push('"');
+                    }
+                }
+                if (kind == "gather" || kind == "advisor") && !is_deployment {
+                    command.push_str(" --read-only");
+                }
+                // pi-native-stage-driver D1, D3, D11: on runtime pi, when the configured
+                // agent is a pi binary, choose the no-pane runner. The flag is appended
+                // here inside the herding arm so --seat, the 600 s hat clamp and
+                // detached_delivery still apply.
+                if runtime == "pi" && agent.as_deref().is_some_and(|name| is_pi_agent(&cfg, name)) {
+                    command.push_str(" --no-pane");
+                }
+                // pi-stage-dispatch D3, pi only: a non-cell dispatch that
+                // names a role carries it as `--seat`, so a detached result
+                // comes back named by its seat.
+                if runtime == "pi" && kind != "cell" && role.is_some() {
+                    command.push_str(" --seat \"");
+                    command.push_str(seat_name);
+                    command.push('"');
+                }
+                // herding-stall-ceiling D1: `herding.ceiling_seconds` in the
+                // MAIN checkout's config becomes `--ceiling <n>` on the
+                // command. `herding run` already caps a DEAD pane through
+                // --idle-timeout; this caps a pane that is busy but useless —
+                // the worker that reads without ever editing and so keeps its
+                // own heartbeat alive past the idle door. Absent or
+                // out-of-range key leaves the command byte-identical.
+                //
+                // pi-stage-dispatch D3, pi only: a hat seat keeps the 10-minute
+                // wave budget — 600 seconds, or a lower configured value.
+                let ceiling = match ceiling_seconds_at(root) {
+                    configured if runtime == "pi" && hat_seat.is_some() => {
+                        Some(configured.map_or(HAT_WAVE_CEILING_SECONDS, |s| s.min(HAT_WAVE_CEILING_SECONDS)))
+                    }
+                    configured => configured,
+                };
+                if let Some(seconds) = ceiling {
+                    command.push_str(" --ceiling ");
+                    command.push_str(&seconds.to_string());
+                }
                 payload.insert("command".into(), Value::String(command));
-                payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
                 // herding-reach D1: dispatch prepare reports herding transport
                 // reachability. Probes the caller's environment and writes
                 // transport_ready and transport_reason into the payload.
@@ -1253,12 +2669,58 @@ pub(crate) fn prepare_dispatch_with_role(
                 // `worktree_location` above), never from sniffing the env. A
                 // bad value is reported as not-ready with the refusal text,
                 // never a panic.
-                let (transport_ready, transport_reason, _) = match transport_kind_at(root) {
-                    Ok(kind) => herding_transport_probe_for(kind, &|k| std::env::var(k).ok()),
-                    Err(reason) => (false, reason, None),
+                let (transport_ready, transport_reason) = match agent
+                    .as_deref()
+                    .and_then(|name| crate::herding::paseo::PaseoSpec::from_config(&cfg, name).map(|res| (name, res)))
+                {
+                    Some((name, Ok(_))) => {
+                        let cmd = crate::herding::paseo::paseo_command(&cfg);
+                        if command_resolves_on_path(&cmd) {
+                            (true, format!("paseo agent {name}: {cmd} on PATH"))
+                        } else {
+                            (
+                                false,
+                                format!(
+                                    "paseo agent {name}: {cmd} not found — FIX: npm i -g @getpaseo/cli"
+                                ),
+                            )
+                        }
+                    }
+                    Some((_, Err(err))) => (false, err),
+                    None => {
+                        let (ready, reason, _) = match transport_kind_at(root) {
+                            Ok(kind) => herding_transport_probe_for(kind, &|k| std::env::var(k).ok()),
+                            Err(reason) => (false, reason, None),
+                        };
+                        (ready, reason)
+                    }
                 };
                 payload.insert("transport_ready".into(), Value::Bool(transport_ready));
                 payload.insert("transport_reason".into(), Value::String(transport_reason));
+                // pi-result-mailbox D6, Approach 2: on the pi runtime a herding
+                // pane is the ONLY dispatch surface, so a detached one is also
+                // the only way a result can outlive the command that started
+                // it. `--inbox-session <token>` IS the detached fact (there is
+                // no other detach signal in `herding run`): with it, the run
+                // writes a `.bee/result-inbox/<token>/<job-id>.json` marker
+                // before the pane splits and the Pi drain finds the result
+                // after the pane closes; without it, the result is readable
+                // only from this command's own output. The token is the
+                // orchestrator session id the Pi preamble already shows the
+                // model — bee cannot resolve it here (the child never receives
+                // it), so the payload INSTRUCTS rather than appends, and the
+                // orchestrator composes the final command.
+                //
+                // Instruction only, and pi-only: no flag is added to `command`,
+                // so a synchronous run stays one delivery path (D6) and every
+                // non-pi herding payload stays byte-identical to before this
+                // key existed.
+                if runtime == "pi" {
+                    payload.insert(
+                        "detached_delivery".into(),
+                        Value::String(HERDING_DETACHED_DELIVERY_PI.to_string()),
+                    );
+                }
                 // herding-review-slots D3: `fallback:"default"` on the slot
                 // names the runtime's own default model for this slot (the
                 // same table a gather purpose used to fall back to silently,
@@ -1289,23 +2751,85 @@ pub(crate) fn prepare_dispatch_with_role(
                 }
                 channel = "herding-exec".into();
             }
+            _ if runtime == "codex" && purpose_is_gather(kind) => {
+                // Native read-only gather/reviewer/advisor jobs need enforced filesystem
+                // restrictions. Current spawn_agent has no sandbox field, so we dispatch
+                // via an explicit read-only CLI sandbox:
+                // codex exec --sandbox read-only --ephemeral ... -
+                tool = "Bash".into();
+                let mut command = "codex exec --sandbox read-only --ephemeral".to_string();
+                if let Some((worktree_root, _control_root)) = &worktree_location {
+                    if !worktree_root.is_empty() {
+                        command.push_str(" --cd ");
+                        command.push_str(&shell_quote(worktree_root));
+                    }
+                }
+                let (cfg_model, cfg_effort) = match &resolved {
+                    Resolved::Model { model, effort } => (Some(model.as_str()), effort.as_deref()),
+                    Resolved::Native { model, effort, .. } => (Some(model.as_str()), effort.as_deref()),
+                    _ => (None, None),
+                };
+                if let Some(model) = cfg_model {
+                    command.push_str(" --model ");
+                    command.push_str(&shell_quote(model));
+                }
+                if let Some(effort) = cfg_effort {
+                    command.push_str(" -c model_reasoning_effort=");
+                    command.push_str(&shell_quote(effort));
+                }
+                command.push_str(" -");
+                payload.insert("command".into(), Value::String(command));
+                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
+                channel = "cli-exec".into();
+            }
+            Resolved::Native { model, effort, fallback, .. } => {
+                native_confirmed = classification == Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
+                if native_confirmed {
+                    tool = "spawn_agent".into();
+                    payload = codex_spawn_payload(
+                        &subject,
+                        marker_role,
+                        &prompt_body,
+                        Some(model),
+                        effort.as_deref(),
+                        &extra_markers,
+                    );
+                    channel = "codex-native".into();
+                    extra_transport = Some("native-override");
+                } else if let Some(command) = fallback.as_ref().filter(|c| !c.is_empty()) {
+                    // cli-exec: NO label field. This payload is `{command, stdin}`
+                    // only — a recorded limit (dispatch-label-chokepoint plan.md
+                    // "What this does not do"), not an oversight: no field exists
+                    // on an external CLI-executor call to carry a subject.
+                    tool = "Bash".into();
+                    payload.insert("command".into(), Value::String(command.clone()));
+                    payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
+                    channel = "cli-exec".into();
+                    extra_fallback_reason = Some("native_unavailable");
+                } else {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("native_unavailable".into()));
+                    r.insert(
+                        "detail".into(),
+                        Value::String(
+                            classification
+                                .filter(|c| !c.is_empty())
+                                .unwrap_or(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
+                                .to_string(),
+                        ),
+                    );
+                    refusal = Some(Value::Object(r));
+                }
+            }
             _ if runtime == "codex" => {
                 tool = "spawn_agent".into();
-                // Carries the SAME subject as the claude Agent branch below,
-                // instead of the bare cell id (or "bee-{kind}") it used to —
-                // this arm is exactly the one the codex gap hid in (plan.md).
-                // codex's `task_name` is a plain required string on the
-                // live-probed 0.145.0 schema (see TASK_NAME_MAX); one-lined and
-                // capped so a long subject cannot read like a paragraph.
-                payload.insert(
-                    "task_name".into(),
-                    Value::String(one_line(Some(&Value::String(subject.clone())), TASK_NAME_MAX)),
-                );
-                payload.insert(
-                    "message".into(),
-                    Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
-                );
-                payload.insert("fork_turns".into(), Value::String("none".into()));
+                let (cfg_model, cfg_effort) = match &resolved {
+                    Resolved::Model { model, effort } => (Some(model.as_str()), effort.as_deref()),
+                    _ => (None, None),
+                };
+                payload = codex_spawn_payload(&subject, marker_role, &prompt_body, cfg_model, cfg_effort, &extra_markers);
                 channel = "codex-native".into();
             }
             _ => {
@@ -1313,7 +2837,7 @@ pub(crate) fn prepare_dispatch_with_role(
                 payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
                 payload.insert(
                     "prompt".into(),
-                    Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
+                    Value::String(format!("{marker_header}\n{prompt_body}")),
                 );
                 // `requestedModel || tierToken`
                 let model_tag = requested_model
@@ -1330,7 +2854,39 @@ pub(crate) fn prepare_dispatch_with_role(
                 if let Resolved::Model { model, .. } = &resolved {
                     payload.insert("model".into(), Value::String(model.clone()));
                 }
+                if let Some(effort) = effort_choice.as_ref().and_then(|c| c.effort.clone()) {
+                    payload.insert("effort".into(), Value::String(effort));
+                }
                 channel = "claude-agent".into();
+            }
+        }
+    }
+
+    // The issuer session is resolved ONCE, through the same resolver
+    // `dispatch authorize` uses, and feeds both the export below and the
+    // `issuer_session` stamp further down — so the permit's issuer and the
+    // session the worker pane acts as cannot disagree.
+    let deploy_issuer_session = match &v2_info {
+        Some(v2) if v2.stage.as_deref() == Some("deployment") => {
+            crate::verbs::state_group::resolve_session_id(session_id, root).ok().flatten()
+        }
+        _ => None,
+    };
+
+    if let Some(v2) = &v2_info {
+        if v2.stage.as_deref() == Some("deployment") {
+            if let Some(ver) = &v2.release_version {
+                if let Some(cmd) = payload.get("command").and_then(Value::as_str) {
+                    // `bee herding run` forwards these into the worker pane
+                    // (only when BEE_DISPATCH_ID is set), where release.sh
+                    // runs `dispatch authorize` as the issuer session.
+                    let session_export = deploy_issuer_session
+                        .as_deref()
+                        .map(|sid| format!(" BEE_SESSION_ID=\"{sid}\""))
+                        .unwrap_or_default();
+                    let new_cmd = format!("export BEE_DISPATCH_ID=\"{dispatch_id}\" BEE_RELEASE_VERSION=\"{ver}\"{session_export}; {cmd}");
+                    payload.insert("command".into(), Value::String(new_cmd));
+                }
             }
         }
     }
@@ -1372,6 +2928,19 @@ pub(crate) fn prepare_dispatch_with_role(
 
     let param_model = match (&channel[..], &resolved) {
         ("claude-agent", Resolved::Model { model, .. }) => Some(model.clone()),
+        ("codex-native", Resolved::Model { model, .. }) => Some(model.clone()),
+        _ => None,
+    };
+    let declared = match (&channel[..], &resolved) {
+        ("cli-exec", Resolved::Native { fallback: Some(command), .. }) => {
+            declared_model_for(&cfg, &Resolved::Cli { command: command.clone() }, runtime)
+        }
+        ("cli-exec", Resolved::Cli { .. }) | ("herding-exec", Resolved::Herding { .. }) => {
+            declared_model_for(&cfg, &resolved, runtime)
+        }
+        ("cli-exec", _) if runtime == "codex" => {
+            payload.get("command").and_then(Value::as_str).and_then(crate::verbs::drivers::scan_command_model)
+        }
         _ => None,
     };
     // `logical_tier` audits the model channel this dispatch actually took, so
@@ -1383,13 +2952,85 @@ pub(crate) fn prepare_dispatch_with_role(
         param_model.as_deref(),
         &resolved,
         native_confirmed,
+        declared.as_deref(),
+        effort_choice.as_ref(),
     );
     economics.insert("tier_source".into(), Value::String(tier_source.to_string()));
+    // lane-model-diversity D2 — the seat that was ASKED FOR, beside the role
+    // that RESOLVED. `logical_tier` and the `[bee-tier: …]` marker both name
+    // `advisor` on a fallen-through seat (D4: the marker names the resolved
+    // role), so without this key the record cannot tell three lanes that all
+    // fell through apart from three plain advisor consults — and an operator
+    // reading the log to find out whether their seats are wired would have
+    // nothing to read. Present ONLY when a seat actually fell through: every
+    // other dispatch's economics block, envelope and log row stay
+    // byte-identical to before this key existed.
+    //
+    // It rides `economics` because that map is inserted into BOTH the returned
+    // envelope and the appended dispatch-log record, one write reaching both
+    // destinations rather than two that could drift.
+    if let Some(seat) = fallen_through_seat {
+        economics.insert("requested_role".into(), Value::String(seat.to_string()));
+    }
 
-    let dispatch_id = pseudo_uuid_v4();
+    if let Some(v2) = &v2_info {
+        economics.insert("feature".into(), Value::String(v2.feature.clone()));
+        if let Some(st) = &v2.stage {
+            economics.insert("stage".into(), Value::String(st.clone()));
+        }
+        economics.insert("planned_role".into(), Value::String(v2.planned_role.clone()));
+        economics.insert("plan_sha256".into(), Value::String(v2.plan_sha256.clone()));
+        economics.insert("roster_sha256".into(), Value::String(v2.roster_sha256.clone()));
+        if let Some(rr) = &v2.role_reroute_decision {
+            economics.insert("role_reroute_decision".into(), Value::String(rr.clone()));
+        }
+
+        if let Some(ver) = &v2.release_version {
+            economics.insert("release_version".into(), Value::String(ver.clone()));
+            payload.insert("release_version".into(), Value::String(ver.clone()));
+        }
+        if let Some(mc) = &v2.main_commit {
+            economics.insert("main_commit".into(), Value::String(mc.clone()));
+            payload.insert("main_commit".into(), Value::String(mc.clone()));
+        }
+        if v2.stage.as_deref() == Some("deployment") {
+            let expires = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+            economics.insert("expires_at".into(), Value::String(expires.clone()));
+            payload.insert("expires_at".into(), Value::String(expires));
+            if let Some(sid) = &deploy_issuer_session {
+                economics.insert("issuer_session".into(), Value::String(sid.clone()));
+            }
+        }
+
+        payload.insert("feature".into(), Value::String(v2.feature.clone()));
+        if let Some(st) = &v2.stage {
+            payload.insert("stage".into(), Value::String(st.clone()));
+        }
+        payload.insert("planned_role".into(), Value::String(v2.planned_role.clone()));
+        payload.insert("plan_sha256".into(), Value::String(v2.plan_sha256.clone()));
+        if let Some(rr) = &v2.role_reroute_decision {
+            payload.insert("role_reroute_decision".into(), Value::String(rr.clone()));
+        }
+    }
+
+    // slp-blind-lanes E2 (D2b). Byte-identity of the LaneBrief across 2–3
+    // parallel lanes has to be CHECKABLE, and the dispatch record is the one
+    // artifact prepare already returns AND already logs — so the digest goes
+    // there rather than into a new store (decision f0f21142). Reuses the ONE
+    // hasher this codebase has (`verbs/reservations/leases.rs`), never a
+    // second one.
+    //
+    // Over the CARRIED brief, not the file: two lanes agreeing on this digest
+    // agree on the bytes they were actually handed. Absent entirely when no
+    // brief travelled, so every existing dispatch record — and every existing
+    // envelope — stays byte-identical to before this key existed.
+    let brief_sha256 = brief.map(crate::verbs::reservations::sha256_hex);
 
     let mut record = Map::new();
     record.insert("dispatch_id".into(), Value::String(dispatch_id.clone()));
+    if let Some(digest) = &brief_sha256 {
+        record.insert("brief_sha256".into(), Value::String(digest.clone()));
+    }
     record.insert("kind".into(), Value::String(kind.to_string()));
     record.insert(
         "cell".into(),
@@ -1429,6 +3070,13 @@ pub(crate) fn prepare_dispatch_with_role(
     envelope.insert("tool".into(), Value::String(tool));
     envelope.insert("payload".into(), Value::Object(payload));
     envelope.insert("dispatch_id".into(), Value::String(dispatch_id));
+    // The same digest the logged record carries, on the artifact the CALLER
+    // holds: an orchestrator firing three lanes reads it straight off each
+    // returned envelope instead of re-reading the log to find out what it
+    // just sent. Present only when a brief travelled.
+    if let Some(digest) = brief_sha256 {
+        envelope.insert("brief_sha256".into(), Value::String(digest));
+    }
     envelope.insert("economics".into(), Value::Object(economics));
     // Present only when the cell's feature has a granted worktree — see
     // `worktree_location` above. A feature with no worktree split (or a
@@ -1457,22 +3105,243 @@ pub(crate) fn prepare_dispatch_with_role(
 /// delegates.
 pub(crate) const NATIVE_TRANSPORT_PROBE_SCHEMA: &str = "native-transport-probe/1";
 
-pub(crate) fn native_transport_classification(root: &Path) -> D<&'static str> {
+pub(crate) fn native_transport_config_scope_hash(scope: Option<&Value>) -> Option<String> {
+    let Value::Object(obj) = scope? else {
+        return None;
+    };
+    let mut map = std::collections::BTreeMap::new();
+    for (k, v) in obj {
+        map.insert(k.clone(), v.clone());
+    }
+    let s = serde_json::to_string(&map).ok()?;
+    Some(crate::verbs::reservations::sha256_hex(&s))
+}
+
+fn run_probe_command_bounded(
+    cmd: &str,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Option<std::process::Output> {
+    let mut command = crate::herding::paseo::scrubbed_command(cmd);
+    command
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command.spawn().ok()?;
+    let pid = child.id();
+    let mut stdout = child.stdout.take()?;
+    let result = (|| {
+        #[cfg(unix)]
+        {
+            use std::os::fd::AsRawFd;
+            let fd = stdout.as_raw_fd();
+            let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+            if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+                return None;
+            }
+        }
+        let deadline = std::time::Instant::now() + timeout;
+        let mut bytes = Vec::new();
+        loop {
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            read_probe_available(&mut stdout, &mut bytes)?;
+            match child.try_wait().ok()? {
+                Some(status) => {
+                    // Drain bytes written between the previous read and exit.
+                    // Never wait for EOF: a descendant can retain the pipe.
+                    read_probe_available(&mut stdout, &mut bytes)?;
+                    return Some(std::process::Output { status, stdout: bytes, stderr: Vec::new() });
+                }
+                None => std::thread::sleep(std::time::Duration::from_millis(5)),
+            }
+        }
+    })();
+    // Close our pipe without a reader thread. Unix descendants in this group
+    // are terminated too; detached descendants are outside that boundary.
+    drop(stdout);
+    #[cfg(unix)]
+    unsafe {
+        libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    result
+}
+
+fn read_probe_available(stdout: &mut std::process::ChildStdout, bytes: &mut Vec<u8>) -> Option<()> {
+    use std::io::Read;
+    const MAX_OUTPUT: usize = 64 * 1024;
+    let mut buffer = [0u8; 4096];
+    loop {
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            use windows_sys::Win32::System::Pipes::PeekNamedPipe;
+            let mut available = 0;
+            let ok = unsafe { PeekNamedPipe(stdout.as_raw_handle(), std::ptr::null_mut(), 0,
+                std::ptr::null_mut(), &mut available, std::ptr::null_mut()) };
+            if ok == 0 {
+                return (std::io::Error::last_os_error().kind() == std::io::ErrorKind::BrokenPipe).then_some(());
+            }
+            if available == 0 {
+                return Some(());
+            }
+        }
+        match stdout.read(&mut buffer) {
+            Ok(0) => return Some(()),
+            Ok(n) => {
+                if bytes.len() + n > MAX_OUTPUT {
+                    return None;
+                }
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Some(()),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return None,
+        }
+    }
+}
+
+pub(crate) fn native_transport_classification_with_cmd(
+    root: &Path,
+    codex_cmd: &str,
+    timeout: std::time::Duration,
+) -> D<&'static str> {
     let file = root.join(".bee").join("native-transport-probe.json");
     // doctorSafeReadJson: unreadable OR unparseable both yield null.
     let record = match std::fs::read(&file) {
         Err(_) => None,
         Ok(bytes) => serde_json::from_str::<Value>(&String::from_utf8_lossy(&bytes)).ok(),
     };
-    match record {
-        None => Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
-        Some(r) if !matches!(vget(&r, "schema"), Some(Value::String(s)) if s == NATIVE_TRANSPORT_PROBE_SCHEMA) => {
-            Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
-        }
-        // A live probe record: doctorRepoIdentity + `codex --version` +
-        // `codex features list` + the config-scope hash all have to run.
-        Some(_) => Err(Delegate),
+    let Some(r) = record else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    if !matches!(vget(&r, "schema"), Some(Value::String(s)) if s == NATIVE_TRANSPORT_PROBE_SCHEMA) {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
     }
+    let Some(expected_id) = r.get("repo_identity").and_then(Value::as_str) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    let actual_id = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+    if expected_id != actual_id {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    }
+
+    let Some(expected_ver) = r.get("codex_version").and_then(Value::as_str) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    let live_ver = run_probe_command_bounded(codex_cmd, &["--version"], timeout)
+        .and_then(|out| {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                s.lines()
+                    .map(str::trim)
+                    .find(|line| line.starts_with("codex"))
+                    .map(String::from)
+                    .or_else(|| {
+                        let trimmed = s.trim().to_string();
+                        (!trimmed.is_empty()).then_some(trimmed)
+                    })
+            } else {
+                None
+            }
+        });
+    if live_ver.as_deref() != Some(expected_ver) {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    }
+
+    let Some(expected_hash) = r.get("config_scope_hash").and_then(Value::as_str) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    let Some(recomputed_hash) = native_transport_config_scope_hash(r.get("config_scope")) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    if expected_hash != recomputed_hash {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    }
+
+    let features_out = match run_probe_command_bounded(codex_cmd, &["features", "list"], timeout) {
+        Some(out) if out.status.success() => out,
+        _ => return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
+    };
+
+    let stdout = String::from_utf8_lossy(&features_out.stdout);
+    let mut features_map = std::collections::HashMap::new();
+    for raw_line in stdout.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 3 {
+            let name = parts[0];
+            let enabled = match parts.last() {
+                Some(&"true") => Some(true),
+                Some(&"false") => Some(false),
+                _ => None,
+            };
+            if let Some(en) = enabled {
+                features_map.insert(name.to_string(), en);
+            }
+        }
+    }
+
+    if features_map.is_empty() {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    }
+
+    let Some(scope_obj) = r.get("config_scope").and_then(Value::as_object) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+
+    for (k, v) in scope_obj {
+        if let Some(expected_val) = v.as_bool() {
+            match features_map.get(k) {
+                Some(&live_val) => {
+                    if live_val != expected_val {
+                        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+                    }
+                }
+                None => {
+                    return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+                }
+            }
+        }
+    }
+
+    if let Some(cls) = r.get("classification").and_then(Value::as_str) {
+        match cls {
+            "native_model_override" => Ok(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE),
+            "external_cli_only" => Ok(crate::verbs::drivers::NATIVE_TRANSPORT_EXTERNAL_CLI_ONLY),
+            _ => Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
+        }
+    } else {
+        Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
+    }
+}
+
+pub(crate) fn native_transport_classification(root: &Path) -> D<&'static str> {
+    let cmd = std::env::var("BEE_CODEX_PROBE_BIN").unwrap_or_else(|_| "codex".to_string());
+    installed_native_transport_classification(root, &cmd, std::time::Duration::from_millis(2000))
+}
+
+pub(crate) fn installed_native_transport_classification(root: &Path, cmd: &str, timeout: std::time::Duration) -> D<&'static str> {
+    // Exact installed-hook observation, not a version-range capability guess:
+    // reports/cpc-1.md records opaque message bytes on Codex 0.154.0.
+    if let Some(out) = run_probe_command_bounded(cmd, &["--version"], timeout) {
+        if out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "codex-cli 0.154.0" {
+            return Ok("native_hook_input_opaque");
+        }
+    }
+    native_transport_classification_with_cmd(root, cmd, timeout)
 }
 
 /// bee.mjs's `claimAndReserveForDispatch` — the claim, then one reserve per
@@ -1625,6 +3494,106 @@ pub(crate) fn claim_and_reserve_for_dispatch(
     .map_err(|e| (e, true))
 }
 
+/// Emit the prompt-skew refusal on the caller's chosen stream, with timing,
+/// exactly as the root refusals beside it do.
+fn emit_prompt_skew(
+    cwd: &Path,
+    cmd: &str,
+    name: &str,
+    skew: &PromptSkew,
+    use_json: bool,
+    t0: Instant,
+) -> ExitCode {
+    let msg = prompt_skew_message(cmd, name, skew);
+    if use_json {
+        println!("{}", crate::jsjson::stringify(&serde_json::json!({ "error": msg })));
+    } else {
+        eprintln!("{msg}");
+    }
+    crate::verbs::record_timing(cwd, cmd, t0, false);
+    ExitCode::FAILURE
+}
+
+fn explain_check(check: &str, pass: bool, detail: String) -> Value {
+    serde_json::json!({ "check": check, "result": if pass { "pass" } else { "refuse" }, "detail": detail })
+}
+
+fn explain_claim(root: &Path, kind: &str, cell_id: Option<&str>, worker: Option<&str>, claim: bool, force_ownership: bool) -> Value {
+    if kind != "cell" {
+        return explain_check("claim", true, format!("--kind {kind} owns no cell"));
+    }
+    let Some(cell) = cell_id.and_then(|id| read_cell(root, id).ok().flatten()) else {
+        return explain_check("claim", false, format!("cell \"{}\" not found", cell_id.unwrap_or("")));
+    };
+    let status = recorded_str(Some(&cell), "status").unwrap_or("");
+    if claim {
+        return explain_check("claim", status == "open", format!("cell is \"{status}\"; --claim needs an open cell"));
+    }
+    let worker = js_trim(worker.unwrap_or(""));
+    let ownership = check_cell_claim_ownership(&cell, worker);
+    match (ownership.ok, force_ownership) {
+        (true, _) => explain_check("claim", true, format!("claimed by \"{worker}\"")),
+        (false, true) => explain_check("claim", true, format!("--force-ownership overrides: {}", ownership.reason)),
+        (false, false) => explain_check("claim", false, ownership.reason),
+    }
+}
+
+pub(crate) fn explain_checks(
+    root: &Path,
+    kind: &str,
+    cell_id: Option<&str>,
+    worker: Option<&str>,
+    claim: bool,
+    force_ownership: bool,
+    prepared: &Prepared,
+) -> Vec<Value> {
+    let claim_check = explain_claim(root, kind, cell_id, worker, claim, force_ownership);
+    let (role, limits) = match prepared {
+        Prepared::Thrown(msg) => (explain_check("role", false, msg.clone()), None),
+        Prepared::Value(v) if v["ok"] == Value::Bool(false) => {
+            let reason = v["reason"].as_str().unwrap_or("");
+            let detail = format!("{reason}: {}", v["fix"].as_str().unwrap_or(""));
+            if reason.starts_with("limits.") {
+                (explain_check("role", true, "resolves to a herding agent".to_string()), Some(explain_check("limits", false, detail)))
+            } else {
+                (explain_check("role", false, detail), None)
+            }
+        }
+        Prepared::Value(v) => {
+            let economics = &v["economics"];
+            let channel = economics["channel"].as_str().unwrap_or("");
+            let role = explain_check("role", true, format!("{} via {channel}", economics["logical_tier"].as_str().unwrap_or("")));
+            let detail = if channel == "herding-exec" { "within herding.limits" } else { "not a herding dispatch" };
+            (role, Some(explain_check("limits", true, detail.to_string())))
+        }
+    };
+    let limits = limits.unwrap_or_else(|| serde_json::json!({ "check": "limits", "result": "skip", "detail": "role did not resolve" }));
+    let effort = match prepared {
+        Prepared::Value(v) if v["economics"].is_object() => {
+            let e = &v["economics"];
+            let detail = match (e["effort_base"].as_str(), e["effort"].as_str()) {
+                (Some(base), Some(effort)) => {
+                    let step = e["effort_step"].as_i64().unwrap_or(0);
+                    let step = if step > 0 { format!("+{step}") } else { step.to_string() };
+                    format!("{base} → {effort} ({step}, {})", e["effort_reason"].as_str().unwrap_or(""))
+                }
+                _ => format!("none ({})", e["effort_reason"].as_str().unwrap_or("no-base")),
+            };
+            explain_check("effort", true, detail)
+        }
+        _ => serde_json::json!({ "check": "effort", "result": "skip", "detail": "role did not resolve" }),
+    };
+    vec![role, claim_check, limits, effort]
+}
+
+fn explain_text(checks: &[Value]) -> String {
+    checks
+        .iter()
+        .map(|c| format!("{}: {} — {}", c["check"].as_str().unwrap_or(""), c["result"].as_str().unwrap_or(""), c["detail"].as_str().unwrap_or("")))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
@@ -1639,6 +3608,11 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             "purpose",
             "expertise",
             "role",
+            "brief-file",
+            "feature",
+            "stage",
+            "release-version",
+            "explain",
         ],
     ) {
         return None;
@@ -1652,14 +3626,21 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         Some(FlagV::S(s)) if s == "false" => false,
         Some(FlagV::S(_)) => return None,
     };
-    // `--session-id` is documented as ignored WITHOUT --claim; a caller that
-    // passes it anyway is an unproven shape here. With --claim it is the
-    // claim door's own `sessionFlag`.
-    let session_flag: Option<String> = match (claim, flags.get("session-id")) {
-        (_, None) => None,
-        (false, Some(_)) => return None,
-        (true, Some(FlagV::S(s))) => Some(s.clone()),
-        (true, Some(FlagV::Present)) => return None, // String(true) — unproven
+    // validate(): runtime/kind required + enum-checked.
+    let runtime = flags.req_str("runtime")?.to_string();
+    let kind = flags.req_str("kind")?.to_string();
+    if !DISPATCH_RUNTIMES.contains(&runtime.as_str()) || !DISPATCH_KINDS.contains(&kind.as_str()) {
+        return None; // validate()'s enum message
+    }
+    // `--session-id` is accepted for feature lane lookup on non-cell kinds, or
+    // with `--claim` on cell kind.
+    let session_flag: Option<String> = match (claim, kind.as_str(), flags.get("session-id")) {
+        (_, _, None) => None,
+        (false, "cell", Some(_)) => return None,
+        (false, _, Some(FlagV::S(s))) => Some(s.clone()),
+        (false, _, Some(FlagV::Present)) => None,
+        (true, _, Some(FlagV::S(s))) => Some(s.clone()),
+        (true, _, Some(FlagV::Present)) => return None, // String(true) — unproven
     };
     // validate(): boolean-typed --force-ownership given as =value.
     match flags.get("force-ownership") {
@@ -1667,12 +3648,16 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         Some(FlagV::S(s)) if s == "true" || s == "false" => {}
         Some(FlagV::S(_)) => return None,
     }
-    // validate(): runtime/kind required + enum-checked.
-    let runtime = flags.req_str("runtime")?.to_string();
-    let kind = flags.req_str("kind")?.to_string();
-    if !DISPATCH_RUNTIMES.contains(&runtime.as_str()) || !DISPATCH_KINDS.contains(&kind.as_str()) {
-        return None; // validate()'s enum message
-    }
+    let explain = match flags.get("explain") {
+        None => false,
+        Some(FlagV::Present) => true,
+        Some(FlagV::S(s)) if s == "true" => true,
+        Some(FlagV::S(s)) if s == "false" => false,
+        Some(FlagV::S(_)) => return None,
+    };
+    let feature_flag = flags.truthy_str("feature").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
+    let stage_flag = flags.truthy_str("stage").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
+    let release_version_flag = flags.truthy_str("release-version").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
     // `typeof flags.cell === 'string' && flags.cell ? flags.cell : null`
     let cell_id = flags.truthy_str("cell").map(str::to_string);
     let worker = flags.truthy_str("worker").map(str::to_string);
@@ -1701,6 +3686,20 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         },
         None => Ok(Vec::new()),
     };
+    // slp-blind-lanes E1: the LaneBrief path. `FlagV::Present` (a bare
+    // `--brief-file` with no value) is deliberately NOT a delegation like the
+    // boolean-shaped flags above — the Node runtime it would delegate to was
+    // deleted at the R6 cutover, so it resolves to the empty path and earns
+    // `brief_file_unreadable`, a refusal that names its own remedy. An
+    // argument shape this door cannot honour is refused, never shrugged at.
+    let brief_flag: Option<String> = match flags.get("brief-file") {
+        None => None,
+        Some(FlagV::S(s)) => Some(s.clone()),
+        Some(FlagV::Present) => Some(String::new()),
+    };
+    // The rendered reading list, resolved BEFORE the brief: the two may not
+    // travel together (`expertise_beside_brief_refusal`), and that refusal
+    // has to fire before the brief file is read.
     let (expertise_arg_error, expertise_block) = match expertise_entries {
         Ok(entries) => {
             let block = if entries.is_empty() {
@@ -1716,12 +3715,49 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         }
         Err(err) => (Some(err), None),
     };
+    // Resolved here, before anything is built, so a refused brief never
+    // reaches the payload build at all. A typed refusal, never a Thrown: the
+    // caller of this door is an orchestrator firing 2–3 lanes, and it reads
+    // `{ok:false, reason}` off every other refusal this command returns.
+    //
+    // The LEANING GUARD runs here too, on the resolved brief bytes and NOTHING
+    // else — never `--purpose`, never `--expertise`, never the cell record. A
+    // false fire on those would refuse the advisor consult Gate 3 itself
+    // requires (`high_risk_advisor_refusal`) and deadlock the high-risk
+    // workflow that approves guards, so the guard is handed one `&str` and the
+    // door hands it nothing more. Its list and its arms live in
+    // `brief_lint.rs` alone, so `bee blind check` can re-run the SAME rule
+    // over a dossier's recorded brief without a second copy to drift.
+    //
+    // `resolve_brief_with_expertise`, never `resolve_brief_file`: a reading
+    // list beside a brief is refused here, before the brief file is read,
+    // because a list that reached a lane's payload would ride around the
+    // guard on this very line.
+    let (brief_text, brief_arg_refusal) = match resolve_brief_with_expertise(
+        &kind,
+        brief_flag.as_deref(),
+        expertise_block.as_deref(),
+    ) {
+        Ok(Some(brief)) => match lint_brief(&brief) {
+            Ok(()) => (Some(brief), None),
+            Err(refusal) => (None, Some(refusal)),
+        },
+        Ok(None) => (None, None),
+        Err(refusal) => (None, Some(refusal)),
+    };
 
     // ── everything that can still delegate happens BEFORE prelude: its
     //    drift-cache write would otherwise swallow the Node re-run's
     //    manifest_changed line. ─────────────────────────────────────────────
     let cwd = std::env::current_dir().ok()?;
-    let root = match resolve_store_root(&cwd) {
+    let (roots, here) = resolve_root_serving_granted(&cwd);
+    let root = match roots {
+        // --claim is a cell-execution move on the shared control plane; it
+        // keeps the granted-worktree refusal.
+        Roots::Ordinary(r) if claim && here.is_some() => {
+            let why = crate::roots::Unsupported::GrantedWorktree { main_root: r };
+            return Some(emit_unsupported_root(&cwd, "dispatch prepare", use_json, t0, &why));
+        }
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => {
             return Some(emit_unsupported_root(&cwd, "dispatch prepare", use_json, t0, &why));
@@ -1730,9 +3766,17 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             return Some(emit_no_root_error(&cwd, "dispatch prepare", use_json, t0));
         }
     };
+    let feature_flag = feature_flag.or_else(|| {
+        granted_worktree_feature(&root, &kind, session_flag.as_deref(), here.as_deref())
+    });
     let prompt_name = if kind == "cell" { "worker-cell" } else { kind.as_str() };
-    if !prompts_match_disk(&root, prompt_name) {
-        return None; // prompt skew ⇒ delegate (C4)
+    // Skew used to `return None` — delegate to the Node renderer (C4). That
+    // runtime was deleted at R6, so `None` reaches the dispatcher's generic
+    // argument-shape classifier and blames the caller's flags for a stale
+    // binary. Name it instead.
+    let check_root = here.as_deref().unwrap_or(&root);
+    if let Some(skew) = prompt_skew(check_root, prompt_name) {
+        return Some(emit_prompt_skew(&cwd, "dispatch prepare", prompt_name, &skew, use_json, t0));
     }
     let classification = if runtime == "codex" {
         Some(native_transport_classification(&root).ok()?)
@@ -1770,24 +3814,46 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     // post-claim build produces. Its verdict is discarded; only "would this
     // delegate?" is kept, and it is kept because after the claim's O_EXCL
     // write nothing may delegate at all (campaign rule 2).
-    let prepared = if arg_error.is_some() {
+    let prepared = if arg_error.is_some() || brief_arg_refusal.is_some() {
         Prepared::Value(Value::Null) // unused — the refusal short-circuits below
     } else {
-        prepare_dispatch_with_role(
+        prepare_dispatch_wire(
             &root,
             &runtime,
             &kind,
             role.as_deref(),
             cell_id.as_deref(),
             worker.as_deref(),
-            force_ownership,
+            force_ownership || claim || explain,
             classification,
             purpose.as_deref(),
             false,
             expertise_block.as_deref(),
+            brief_text.as_deref(),
+            feature_flag.as_deref(),
+            stage_flag.as_deref(),
+            session_flag.as_deref(),
+            release_version_flag.as_deref(),
         )
         .ok()?
     };
+    if explain {
+        if let Some(message) = arg_error.or_else(|| brief_arg_refusal.map(|r| jsjson::stringify(&r))) {
+            if use_json {
+                println!("{}", jsjson::stringify(&serde_json::json!({ "error": message })));
+            } else {
+                eprintln!("{message}");
+            }
+            return Some(ExitCode::FAILURE);
+        }
+        let checks = explain_checks(&root, &kind, cell_id.as_deref(), worker.as_deref(), claim, force_ownership, &prepared);
+        if use_json {
+            println!("{}", jsjson::stringify_pretty(&serde_json::json!({ "ok": true, "explain": checks })));
+        } else {
+            println!("{}", explain_text(&checks));
+        }
+        return Some(ExitCode::SUCCESS);
+    }
     // The cross-worktree hold topology reservePathAtomic resolves for itself.
     // `prelude` above already narrowed this to an ORDINARY checkout, so this
     // is always `(workRoot, "main")` — a linked worktree delegated earlier.
@@ -1799,12 +3865,27 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         },
     };
 
-    let ctx = match prelude("dispatch prepare", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let ctx = match ctx_serving_granted("dispatch prepare", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
     };
     if let Some(message) = arg_error {
         return finish(&ctx, Ok(Out::Thrown(message)));
+    }
+    // The `--brief-file` refusals, in the shape every other prepare refusal
+    // takes: emitted as the command's own JSON, exit 0, `{ok:false}` saying
+    // which arm fired and how to fix it. Nothing was claimed, reserved or
+    // logged before this point, so a refusal here leaves no state behind.
+    if let Some(refusal) = brief_arg_refusal {
+        let text = jsjson::stringify_pretty(&refusal);
+        return finish(&ctx, Ok(Out::Emit(refusal, text, 0)));
+    }
+
+    if let Prepared::Value(refusal) = &prepared {
+        if refusal["reason"].as_str().is_some_and(|r| r.starts_with("limits.")) {
+            let text = jsjson::stringify_pretty(refusal);
+            return finish(&ctx, Ok(Out::Emit(refusal.clone(), text, 0)));
+        }
     }
 
     // ── the claim + reserve gesture, before the payload build (Node's order).
@@ -1840,7 +3921,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         _ => {
             // Re-run for real so the prepare-time record is appended exactly
             // once, with a freshly minted dispatch_id/ts like Node's.
-            match prepare_dispatch_with_role(
+            match prepare_dispatch_wire(
                 &ctx.root,
                 &runtime,
                 &kind,
@@ -1852,6 +3933,11 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                 purpose.as_deref(),
                 true,
                 expertise_block.as_deref(),
+                brief_text.as_deref(),
+                feature_flag.as_deref(),
+                stage_flag.as_deref(),
+                session_flag.as_deref(),
+                release_version_flag.as_deref(),
             ) {
                 Ok(Prepared::Value(result)) => {
                     // `claimOutcome ? {...out, claimed:true, reserved} : out`
@@ -2092,7 +4178,7 @@ pub(crate) fn unwind_wave_claim(root: &Path, topo: Option<(&Path, &str)>, worker
 pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
-        &["runtime", "feature", "session-id", "limit"],
+        &["runtime", "feature", "session-id", "limit", "run"],
     ) {
         return None;
     }
@@ -2111,6 +4197,13 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         Some(FlagV::S(s)) => Some(s.clone()),
         Some(FlagV::Present) => return None,
     };
+    let run_flag = match flags.get("run") {
+        None => false,
+        Some(FlagV::Present) => true,
+        Some(FlagV::S(s)) if s == "true" => true,
+        Some(FlagV::S(s)) if s == "false" => false,
+        Some(FlagV::S(_)) => return None,
+    };
 
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
@@ -2124,8 +4217,8 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     };
     // Every wave cell renders the "worker-cell" prompt (kind is always
     // "cell") — the same skew guard `dispatch prepare --claim` applies.
-    if !prompts_match_disk(&root, "worker-cell") {
-        return None;
+    if let Some(skew) = prompt_skew(&root, "worker-cell") {
+        return Some(emit_prompt_skew(&cwd, "dispatch wave", "worker-cell", &skew, use_json, t0));
     }
     let classification = if runtime == "codex" {
         Some(native_transport_classification(&root).ok()?)
@@ -2205,7 +4298,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     }
 
     let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
-    let mut wave_payloads: Vec<Value> = Vec::new();
+    let mut wave_items: Vec<(String, Value)> = Vec::new();
     let mut skipped: Vec<Value> = Vec::new();
     let mut economics: Vec<Value> = Vec::new();
 
@@ -2268,6 +4361,27 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                     true,
                     None,
                 ) {
+                    // pi-support D5 in the WAVE door: the same refusal
+                    // `dispatch prepare` emits, and the claim this loop just
+                    // took is unwound rather than left standing on a cell
+                    // nothing can dispatch. Every cell of a pi wave resolves
+                    // the same `team.pi` table, so this fires for the whole
+                    // wave or for none of it — the operator gets a `skipped`
+                    // row per cell naming the slot and the herding shape,
+                    // instead of a `wave` array of refusals holding claims.
+                    Ok(Prepared::Value(result))
+                        if result.get("reason").and_then(Value::as_str)
+                            == Some(PI_HERDING_ONLY_REASON) =>
+                    {
+                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
+                        let fix =
+                            result.get("fix").and_then(Value::as_str).unwrap_or_default();
+                        skipped.push(wave_skip(
+                            id,
+                            PI_HERDING_ONLY_REASON,
+                            format!("cell \"{id}\": {fix} — {note}"),
+                        ));
+                    }
                     Ok(Prepared::Value(result)) => {
                         let mut m = match result {
                             Value::Object(m) => m,
@@ -2275,7 +4389,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                             // (either the full payload or a typed refusal);
                             // this arm is unreached in practice.
                             other => {
-                                wave_payloads.push(other);
+                                wave_items.push((id.clone(), other));
                                 continue;
                             }
                         };
@@ -2290,7 +4404,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                             e.insert("id".into(), Value::String(id.clone()));
                             economics.push(Value::Object(e));
                         }
-                        wave_payloads.push(Value::Object(m));
+                        wave_items.push((id.clone(), Value::Object(m)));
                     }
                     Ok(Prepared::Thrown(msg)) => {
                         let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
@@ -2315,13 +4429,506 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         }
     }
 
+    if run_flag {
+        let (value, code) = wave_run::run_wave(&ctx.root, &wave_items, &skipped);
+        let text = jsjson::stringify_pretty(&value);
+        return finish(&ctx, Ok(Out::Emit(value, text, code)));
+    }
+
     let mut result = Map::new();
-    result.insert("wave".into(), Value::Array(wave_payloads));
+    result.insert(
+        "wave".into(),
+        Value::Array(wave_items.into_iter().map(|(_, item)| item).collect()),
+    );
     result.insert("skipped".into(), Value::Array(skipped));
     result.insert("economics".into(), Value::Array(economics));
     let result = Value::Object(result);
     let text = jsjson::stringify_pretty(&result);
     finish(&ctx, Ok(Out::Emit(result, text, 0)))
+}
+
+pub(crate) fn authorize_dispatch_permit(
+    root: &Path,
+    dispatch_id: &str,
+    release_version: &str,
+    session_id: Option<&str>,
+) -> Result<Value, Value> {
+    let id_bytes = dispatch_id.as_bytes();
+    let valid_dispatch_id = id_bytes.len() == 36
+        && id_bytes.iter().enumerate().all(|(idx, byte)| {
+            if matches!(idx, 8 | 13 | 18 | 23) {
+                *byte == b'-'
+            } else {
+                byte.is_ascii_hexdigit()
+            }
+        });
+    if !valid_dispatch_id {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_unknown".into()));
+        r.insert("fix".into(), Value::String("dispatch id must be a generated UUID.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let auth_dir = root.join(".bee").join("authorizations");
+    let marker_path = auth_dir.join(format!("{dispatch_id}.json"));
+    if marker_path.exists() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_consumed".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert(
+            "fix".into(),
+            Value::String(format!(
+                "this dispatch authorization has already been consumed; dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
+            )),
+        );
+        return Err(Value::Object(r));
+    }
+
+    let log_path = root.join(".bee").join("logs").join("dispatch.jsonl");
+    if !log_path.exists() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_unknown".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("no dispatch log found; dispatch with deployment stage and deploy role first.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let content = match std::fs::read_to_string(&log_path) {
+        Ok(c) => c,
+        Err(e) => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_unknown".into()));
+            r.insert("fix".into(), Value::String(format!("failed to read dispatch log: {e}")));
+            return Err(Value::Object(r));
+        }
+    };
+
+    let mut matching_record: Option<Value> = None;
+    for line in content.lines().rev() {
+        if let Ok(val) = serde_json::from_str::<Value>(line) {
+            if val.get("dispatch_id").and_then(Value::as_str) == Some(dispatch_id) {
+                matching_record = Some(val);
+                break;
+            }
+        }
+    }
+
+    let Some(record) = matching_record else {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_unknown".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("dispatch ID not found in dispatch log; dispatch with deployment stage and deploy role first.".into()));
+        return Err(Value::Object(r));
+    };
+
+    let rec_ver = record.get("release_version").and_then(Value::as_str).unwrap_or("");
+    if rec_ver.is_empty() || rec_ver != release_version {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_version".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("authorized_version".into(), Value::String(rec_ver.to_string()));
+        r.insert("requested_version".into(), Value::String(release_version.to_string()));
+        r.insert("fix".into(), Value::String(format!("dispatch authorized version \"{rec_ver}\", but release requested \"{release_version}\".")));
+        return Err(Value::Object(r));
+    }
+
+    let ts_str = record.get("ts").and_then(Value::as_str);
+    let exp_str = record.get("expires_at").and_then(Value::as_str);
+
+    let ts_dt = match ts_str {
+        Some(s) => match chrono::DateTime::parse_from_rfc3339(s) {
+            Ok(dt) => dt,
+            Err(_) => {
+                let mut r = Map::new();
+                r.insert("ok".into(), Value::Bool(false));
+                r.insert("type".into(), Value::String("refused".into()));
+                r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+                r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+                r.insert("fix".into(), Value::String("dispatch timestamp \"ts\" is malformed RFC-3339.".into()));
+                return Err(Value::Object(r));
+            }
+        },
+        None => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("fix".into(), Value::String("dispatch timestamp \"ts\" is missing.".into()));
+            return Err(Value::Object(r));
+        }
+    };
+
+    let exp_dt = match exp_str {
+        Some(s) => match chrono::DateTime::parse_from_rfc3339(s) {
+            Ok(dt) => dt,
+            Err(_) => {
+                let mut r = Map::new();
+                r.insert("ok".into(), Value::Bool(false));
+                r.insert("type".into(), Value::String("refused".into()));
+                r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+                r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+                r.insert("fix".into(), Value::String("dispatch expiration \"expires_at\" is malformed RFC-3339.".into()));
+                return Err(Value::Object(r));
+            }
+        },
+        None => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("fix".into(), Value::String("dispatch expiration \"expires_at\" is missing.".into()));
+            return Err(Value::Object(r));
+        }
+    };
+
+    let now = chrono::Utc::now();
+    let created_at = ts_dt.with_timezone(&chrono::Utc);
+    let expires_at = exp_dt.with_timezone(&chrono::Utc);
+    let lifetime = expires_at.signed_duration_since(created_at);
+    if created_at > now || lifetime.num_seconds() <= 0 || lifetime.num_seconds() > 2 * 3600 {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("dispatch lifetime must start now or earlier and end no more than two hours later.".into()));
+        return Err(Value::Object(r));
+    }
+    let age = now.signed_duration_since(created_at);
+    if age.num_seconds() > 2 * 3600 || now > expires_at {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_stale".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert(
+            "fix".into(),
+            Value::String(format!(
+                "dispatch authorization expired (> 2 hours old); dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
+            )),
+        );
+        return Err(Value::Object(r));
+    }
+
+    let current_commit = resolve_main_commit(root);
+    let rec_commit = record.get("main_commit").and_then(Value::as_str).unwrap_or("");
+    if current_commit.is_none() || rec_commit.is_empty() || current_commit.as_deref() != Some(rec_commit) {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_commit".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("dispatch_commit".into(), Value::String(rec_commit.to_string()));
+        r.insert("current_commit".into(), Value::String(current_commit.unwrap_or_default()));
+        r.insert("fix".into(), Value::String("current main commit does not match the commit authorized at dispatch; dispatch again on current main.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let stage = record.get("stage").and_then(Value::as_str).unwrap_or("");
+    if stage != "deployment" {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_stage".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("stage".into(), Value::String(stage.to_string()));
+        r.insert("fix".into(), Value::String("dispatch stage must be \"deployment\".".into()));
+        return Err(Value::Object(r));
+    }
+
+    let role = record.get("planned_role").or_else(|| record.get("role")).and_then(Value::as_str).unwrap_or("");
+    if role != "deploy" {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_role".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("role".into(), Value::String(role.to_string()));
+        r.insert("fix".into(), Value::String("dispatch role must be \"deploy\".".into()));
+        return Err(Value::Object(r));
+    }
+
+    let feat = record.get("feature").and_then(Value::as_str).unwrap_or("");
+    if feat.is_empty() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_feature".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert(
+            "fix".into(),
+            Value::String(
+                "dispatch record is missing feature name; run bee state lanes from main, then dispatch for a feature it lists.".into(),
+            ),
+        );
+        return Err(Value::Object(r));
+    }
+    let lane_path = root.join(".bee").join("lanes").join(format!("{feat}.json"));
+    if !lane_path.exists() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_feature".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("feature".into(), Value::String(feat.to_string()));
+        r.insert(
+            "fix".into(),
+            Value::String(format!(
+                "feature \"{feat}\" lane file not found in store; run bee state lanes from main, then dispatch for a feature it lists."
+            )),
+        );
+        return Err(Value::Object(r));
+    }
+
+    let role_plan = crate::verbs::state_group::get_approved_role_plan(root, feat);
+    let approved_packet = crate::verbs::cells::get_approved_preview_packet(root, feat);
+    let (role_plan, approved_packet) = match (role_plan, approved_packet) {
+        (Some(rp), Some(ap)) => (rp, ap),
+        _ => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_wrong_plan".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("feature".into(), Value::String(feat.to_string()));
+            r.insert("fix".into(), Value::String("no approved plan or role plan found for feature.".into()));
+            return Err(Value::Object(r));
+        }
+    };
+    let expected_plan_sha = role_plan
+        .get("plan_sha256")
+        .or_else(|| approved_packet.get("plan_sha256"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let rec_plan_sha = record.get("plan_sha256").and_then(Value::as_str).unwrap_or("");
+    if expected_plan_sha.is_empty() || rec_plan_sha.is_empty() || rec_plan_sha != expected_plan_sha {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_plan".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("expected_plan_sha".into(), Value::String(expected_plan_sha.to_string()));
+        r.insert("dispatch_plan_sha".into(), Value::String(rec_plan_sha.to_string()));
+        r.insert("fix".into(), Value::String("plan digest mismatch; feature plan has changed since dispatch.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let rec_runtime = record.get("runtime").and_then(Value::as_str).unwrap_or("");
+    let expected_runtime = role_plan.get("runtime").and_then(Value::as_str).unwrap_or("");
+    if rec_runtime.is_empty() || expected_runtime.is_empty() || rec_runtime != expected_runtime {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_runtime".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("dispatch_runtime".into(), Value::String(rec_runtime.to_string()));
+        r.insert("expected_runtime".into(), Value::String(expected_runtime.to_string()));
+        r.insert("fix".into(), Value::String("dispatch runtime does not match approved role plan runtime.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let rec_session = record.get("issuer_session").and_then(Value::as_str).unwrap_or("");
+    if rec_session.is_empty() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("dispatch record is missing issuer_session; deployment dispatch must be bound to an issuer session.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let Some(acting_session) = session_id.filter(|sid| !sid.is_empty()) else {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+        r.insert("fix".into(), Value::String("an active issuer session is required to consume this authorization.".into()));
+        return Err(Value::Object(r));
+    };
+    if acting_session != rec_session {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+        r.insert("requested_session".into(), Value::String(acting_session.to_string()));
+        r.insert("fix".into(), Value::String("session ID does not match the issuer session recorded at dispatch.".into()));
+        return Err(Value::Object(r));
+    }
+
+    match crate::verbs::state_group::read_session(root, rec_session) {
+        Ok(Some(sess)) => {
+            if let Some(lane) = sess.get("lane").and_then(Value::as_str) {
+                if !lane.is_empty() && lane != feat {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+                    r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+                    r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+                    r.insert("session_lane".into(), Value::String(lane.to_string()));
+                    r.insert("feature".into(), Value::String(feat.to_string()));
+                    r.insert("fix".into(), Value::String("issuer session is bound to a different feature lane.".into()));
+                    return Err(Value::Object(r));
+                }
+            }
+        }
+        Ok(None) => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+            r.insert("fix".into(), Value::String(format!("issuer session \"{rec_session}\" does not exist in store.")));
+            return Err(Value::Object(r));
+        }
+        Err(_) => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+            r.insert("fix".into(), Value::String("failed to read issuer session from the workflow store.".into()));
+            return Err(Value::Object(r));
+        }
+    }
+
+    if let Err(e) = std::fs::create_dir_all(&auth_dir) {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_storage_error".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String(format!("failed to create authorizations directory: {e}")));
+        return Err(Value::Object(r));
+    }
+
+    let mut file = match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&marker_path)
+    {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_consumed".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert(
+                "fix".into(),
+                Value::String(format!(
+                    "this dispatch authorization has already been consumed; dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
+                )),
+            );
+            return Err(Value::Object(r));
+        }
+        Err(e) => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_storage_error".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("fix".into(), Value::String(format!("failed to write authorization marker: {e}")));
+            return Err(Value::Object(r));
+        }
+    };
+
+    use std::io::Write;
+    let marker_json = serde_json::json!({
+        "dispatch_id": dispatch_id,
+        "consumed_at": chrono::Utc::now().to_rfc3339(),
+        "release_version": release_version,
+        "main_commit": current_commit,
+        "issuer_session": rec_session,
+        "feature": feat,
+        "runtime": rec_runtime,
+        "plan_sha256": rec_plan_sha,
+    });
+    if let Err(e) = file
+        .write_all(marker_json.to_string().as_bytes())
+        .and_then(|_| file.sync_all())
+    {
+        let _ = std::fs::remove_file(&marker_path);
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_storage_error".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String(format!("failed to persist authorization marker: {e}")));
+        return Err(Value::Object(r));
+    }
+
+    Ok(serde_json::json!({
+        "ok": true,
+        "authorized": true,
+        "dispatch_id": dispatch_id,
+        "release_version": release_version,
+        "main_commit": current_commit,
+        "issuer_session": rec_session,
+        "feature": feat,
+    }))
+}
+
+pub(crate) fn run_dispatch_authorize(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !crate::verbs::reservations::keys_known(
+        &flags,
+        &["id", "release-version", "session-id"],
+    ) {
+        return None;
+    }
+    let id = flags.truthy_str("id").unwrap_or_default();
+    let release_version = flags.truthy_str("release-version").unwrap_or_default();
+    let requested_session_id = flags.truthy_str("session-id");
+
+    let cwd = std::env::current_dir().ok()?;
+    let root = match resolve_store_root(&cwd) {
+        Roots::Ordinary(r) => r,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "dispatch authorize", use_json, t0, &why));
+        }
+        Roots::None => {
+            return Some(emit_no_root_error(&cwd, "dispatch authorize", use_json, t0));
+        }
+    };
+    let ctx = match prelude("dispatch authorize", use_json, t0)? {
+        Pre::Go(c) => c,
+        Pre::Emitted(code) => return Some(code),
+    };
+    let session_id = crate::verbs::state_group::resolve_session_id(requested_session_id, &root)
+        .ok()
+        .flatten();
+
+    match authorize_dispatch_permit(&root, id, release_version, session_id.as_deref()) {
+        Ok(val) => {
+            let text = jsjson::stringify_pretty(&val);
+            finish(&ctx, Ok(Out::Emit(val, text, 0)))
+        }
+        Err(refusal) => {
+            let text = jsjson::stringify_pretty(&refusal);
+            finish(&ctx, Ok(Out::Emit(refusal, text, 1)))
+        }
+    }
 }
 
 // ═══ tests — the slot map's explicit arms (D2 / 06e49368) ══════════════════
@@ -2330,13 +4937,13 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
 mod slot_map_tests {
     use super::*;
 
-    /// The four live kinds keep exactly the slots they resolved before the
-    /// catch-all went away — cell/gather → generation, reviewer → review,
-    /// advisor → advisor.
+    /// Every live kind names its slot EXPLICITLY — cell → generation,
+    /// gather → read (gather-reads-the-read-slot D1, decision 295f3d03),
+    /// reviewer → review, advisor → advisor.
     #[test]
-    fn every_dispatch_kind_keeps_its_slot() {
+    fn every_dispatch_kind_names_its_slot_explicitly() {
         assert_eq!(slot_for_kind("cell"), Some("generation"));
-        assert_eq!(slot_for_kind("gather"), Some("generation"));
+        assert_eq!(slot_for_kind("gather"), Some("read"));
         assert_eq!(slot_for_kind("reviewer"), Some("review"));
         assert_eq!(slot_for_kind("advisor"), Some("advisor"));
         // Every declared kind has an arm: no member of DISPATCH_KINDS may
@@ -2457,24 +5064,27 @@ mod role_flag_tests {
             let t = v.get("payload").and_then(|p| p.get("subagent_type")).cloned().unwrap();
             returned.insert(t.as_str().unwrap().to_string());
         }
-        // bee-build is the cell-execution agent: `--kind cell` names it, and
-        // that is deliberately NOT role-driven — a cell execution reserves,
-        // writes and caps whatever job the cell declares (`--role` selects
-        // the MODEL, per D4, never the capability).
         w_cell(&root, "c-1");
-        let Prepared::Value(v) = prepare_dispatch_with_role(
-            &root, "claude", "cell", None, Some("c-1"), Some("w"), false, None, None, false, None,
+        std::fs::write(
+            root.join(".bee").join("cells").join("c-2.json"),
+            r#"{"id":"c-2","feature":"f","role":"design","status":"claimed","trace":{"worker":"w"}}"#,
         )
-        .unwrap() else {
-            panic!("expected an envelope")
-        };
-        returned.insert(
-            v.get("payload")
-                .and_then(|p| p.get("subagent_type"))
-                .and_then(Value::as_str)
-                .unwrap()
-                .to_string(),
-        );
+        .unwrap();
+        for id in ["c-1", "c-2"] {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "cell", None, Some(id), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            returned.insert(
+                v.get("payload")
+                    .and_then(|p| p.get("subagent_type"))
+                    .and_then(Value::as_str)
+                    .unwrap()
+                    .to_string(),
+            );
+        }
         for (_, agent) in crate::verbs::drivers::ROLE_AGENTS {
             assert!(
                 returned.contains(agent),
@@ -2534,6 +5144,179 @@ mod role_flag_tests {
         Value::Object(m)
     }
 
+    const READ_SPLIT: &str =
+        r#"{"models":{"claude":{"read":"haiku","generation":"sonnet","review":"opus"}}}"#;
+
+    /// gather-reads-the-read-slot D1/D2/D3 (decision 295f3d03): a gather
+    /// dispatched with no `--role` asks for the READ job. On a host that
+    /// configures `read`, the default gather runs on the read slot's model,
+    /// travels under the name that WON the walk, and still names the
+    /// read-only gather agent.
+    #[test]
+    fn a_default_gather_resolves_the_read_slot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, READ_SPLIT);
+        let v = envelope(&root, "gather", None);
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("model"), Some(&json!("haiku")), "the read slot picked the model");
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-gather")));
+        let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: read]"), "{prompt}");
+        let e = v.get("economics").unwrap();
+        assert_eq!(e.get("logical_tier"), Some(&json!("read")));
+        assert_eq!(e.get("tier_source"), Some(&json!("default")));
+    }
+
+    /// D1: a herding-shaped `read` slot makes the DEFAULT gather a pane. The
+    /// winning slot's shape is obeyed exactly — the transport was always
+    /// dynamic; only which slot a gather asks for moved.
+    #[test]
+    fn a_herding_shaped_read_slot_makes_a_default_gather_a_pane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let command = v
+            .get("payload")
+            .and_then(|p| p.get("command"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(command.contains("--agent \"x\""), "{command}");
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("read"))
+        );
+    }
+
+    /// herding-stall-ceiling D1: with `herding.ceiling_seconds` set, the
+    /// herding command carries `--ceiling <n>` — the wall-clock cap that ends
+    /// a pane which is busy but useless. `--idle-timeout` cannot do this job:
+    /// a worker that reads without editing keeps its own heartbeat alive.
+    #[test]
+    fn a_configured_ceiling_rides_the_herding_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"herding":{"ceiling_seconds":1800},"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        let command = v
+            .get("payload")
+            .and_then(|p| p.get("command"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(command.contains("--ceiling 1800"), "{command}");
+        assert!(command.contains("--agent \"x\""), "{command}");
+    }
+
+    /// herding-stall-ceiling D1: absent or out-of-range leaves the command
+    /// byte-identical to before the key existed — the fail-open posture every
+    /// other read of this config file takes.
+    #[test]
+    fn an_absent_or_bogus_ceiling_leaves_the_command_alone() {
+        for cfg in [
+            r#"{"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+            r#"{"herding":{"ceiling_seconds":0},"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+            r#"{"herding":{"ceiling_seconds":99999},"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+            r#"{"herding":{"ceiling_seconds":"1800"},"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, cfg);
+            let v = envelope(&root, "gather", None);
+            let command = v
+                .get("payload")
+                .and_then(|p| p.get("command"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            assert!(!command.contains("--ceiling"), "{cfg} -> {command}");
+        }
+    }
+
+    /// D1: an explicitly NULL read slot is one somebody turned off, so the
+    /// walk falls through to `generation` — and D2 makes the dispatch travel
+    /// under the name that won, never under the `read` the guard could not
+    /// resolve back.
+    #[test]
+    fn an_explicitly_null_read_slot_falls_through_to_generation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"read":null,"generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("model"), Some(&json!("sonnet")));
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-gather")), "D3: the agent is pinned by kind");
+        let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: generation]"), "{prompt}");
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("generation"))
+        );
+    }
+
+    /// D2's boundary: the winner is recorded on the default-GATHER path and
+    /// nowhere else. A host that names no `review` key resolves its reviewer
+    /// exactly as it always did — `normalize_models` overlays claude's own
+    /// built-in `review: opus` — and still stamps `review`, the marker every
+    /// `bee-review` has travelled under since before this feature.
+    #[test]
+    fn a_review_less_host_keeps_its_reviewer_envelope_byte_for_byte() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"read":"haiku","generation":"sonnet"}}}"#);
+        let v = envelope(&root, "reviewer", None);
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-review")));
+        assert_eq!(p.get("model"), Some(&json!("opus")), "the built-in review default");
+        let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: review]"), "the winner is NOT recorded here: {prompt}");
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("review"))
+        );
+    }
+
+    /// D8, prepare's half: the published fallback names a model bee ships a
+    /// built-in default for, and `read` is not one — exactly as `advisor` is
+    /// not. A read winner therefore publishes NO `fallback` field at all,
+    /// leaving the payload identical to a slot that named no fallback.
+    #[test]
+    fn a_read_winner_publishes_no_herding_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"read":{"kind":"herding","agent":"x","fallback":"default"},"generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(v.get("payload").and_then(|p| p.get("fallback")), None);
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("read"))
+        );
+    }
+
+    /// D8's other half: no `read` key, so `generation` wins the gather's walk
+    /// and the fallback is generation's own built-in default — the model the
+    /// guard's mirror has to keep admitting.
+    #[test]
+    fn a_generation_winner_still_publishes_the_herding_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding","fallback":"default"},"review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").and_then(|p| p.get("fallback")),
+            Some(&json!({"model": "sonnet", "fallback_when": "transport_ready is false"}))
+        );
+    }
+
     /// An explicit role beats the cell's own recorded value: the caller
     /// stating the job at the door is the most specific signal there is.
     #[test]
@@ -2586,7 +5369,7 @@ mod role_flag_tests {
         for configured in ["extraction", "generation", "review"] {
             assert!(fix.contains(configured), "the FIX lists {configured}: {fix}");
         }
-        assert!(fix.contains("models.claude"), "the FIX names where to add it: {fix}");
+        assert!(fix.contains("team.claude"), "the FIX names where to add it: {fix}");
         // A role the operator invented and CONFIGURED is legal — the open set
         // is open (D2), so this is not a four-word allowlist wearing a new
         // name.
@@ -2644,7 +5427,6 @@ mod role_flag_tests {
     /// subagent inherit the session model, while `--role advisor` and `--kind
     /// advisor` on the SAME host refused. One question, two doors, two
     /// answers — through the reachable configuration bee ships.
-    #[test]
     /// role-edge-hardening D1: a mis-cased "Advisor" config key answers the
     /// SAME at both doors, in both directions. Before the case-fold,
     /// `role_is_declarable` matched the advisor arm exactly and fell through
@@ -2762,4 +5544,979 @@ mod role_flag_tests {
         assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
         assert_eq!(v.get("role"), Some(&json!("Generatoin")));
     }
+
+    // ═══ lane-model-diversity — the SEAT roles (D1/D2/D4) ══════════════════
+
+    /// A host that configures the advisor and nothing seat-shaped: every one
+    /// of the eight seats is unconfigured here, which is the state every
+    /// existing host is in the moment this ships.
+    const ADVISOR_ONLY: &str =
+        r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#;
+
+    /// D1 — the eight seats, as the two procedures name them. This asserts the
+    /// CONTENT of the list, not just that a list exists: the constant is what
+    /// `gates-and-delegation.md` cites, so a name silently dropped from it
+    /// would make the doc wrong with nothing red to say so.
+    #[test]
+    fn the_seat_roles_are_the_three_lanes_and_the_five_hats() {
+        assert_eq!(
+            SEAT_ROLES.to_vec(),
+            vec![
+                "lane-1",
+                "lane-2",
+                "lane-3",
+                "hat-facts-gaps",
+                "hat-risks",
+                "hat-value",
+                "hat-alternatives",
+                "hat-user-impact",
+            ]
+        );
+        // Membership folds case, like every other role door.
+        assert_eq!(seat_role_named("lane-2"), Some("lane-2"));
+        assert_eq!(seat_role_named("Lane-2"), Some("lane-2"));
+        assert_eq!(seat_role_named("HAT-RISKS"), Some("hat-risks"));
+        // …and it is CLOSED: a near-miss is not a seat, which is what keeps
+        // D2's fall-through from swallowing typos.
+        for stranger in ["hat-risk", "lane-4", "lane", "hat-", "advisor", "generation", ""] {
+            assert_eq!(seat_role_named(stranger), None, "{stranger} must not be a seat");
+        }
+        // Every hat is prefixed, no lane is — the predicate doctor's advisory
+        // reads.
+        for seat in SEAT_ROLES {
+            assert_eq!(
+                seat.starts_with(HAT_ROLE_PREFIX),
+                seat.starts_with("hat"),
+                "{seat} disagrees with the hat prefix"
+            );
+        }
+    }
+
+    /// D2 — the fall-through, in the two spellings of "this seat carries
+    /// nothing": the key is ABSENT, and the key is present but `null`.
+    ///
+    /// The null case is the one that had a hole. `resolve_role_named`'s last
+    /// entry always resolves, so a walk over `["lane-3"]` would have answered
+    /// `Resolved::Budget` — no model parameter, the subagent inherits the
+    /// SESSION model — for the exact spelling `.bee/config-sample.json`
+    /// teaches for "off". Both spellings must reach the advisor's model.
+    #[test]
+    fn an_unconfigured_seat_resolves_the_advisor_at_the_advisor_door() {
+        for (label, config) in [
+            ("absent", ADVISOR_ONLY),
+            (
+                "null",
+                r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","lane-3":null}}}"#,
+            ),
+            (
+                "shapeless",
+                r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","lane-3":{"nonsense":1}}}}"#,
+            ),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let v = envelope(&root, "advisor", Some("lane-3"));
+            assert_eq!(v.get("ok"), None, "{label}: a seat must not be refused: {v}");
+            assert_eq!(
+                v.get("payload").and_then(|p| p.get("model")),
+                Some(&json!("opus")),
+                "{label}: the advisor's model, never the session model"
+            );
+            // D4 — the marker names the RESOLVED role, so the guard reading it
+            // back sees a name this host configures.
+            let prompt = v
+                .get("payload")
+                .and_then(|p| p.get("prompt"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            assert!(prompt.starts_with("[bee-tier: advisor]"), "{label}: {prompt}");
+            let e = v.get("economics").unwrap();
+            assert_eq!(e.get("logical_tier"), Some(&json!("advisor")), "{label}");
+            // …and the seat that was ASKED for is on the record, or three
+            // fallen-through lanes read as three plain advisor consults.
+            assert_eq!(e.get("requested_role"), Some(&json!("lane-3")), "{label}");
+        }
+    }
+
+    /// A CONFIGURED seat is the whole point: it resolves its OWN model and
+    /// travels under its OWN name, so two lanes can run two models.
+    #[test]
+    fn a_configured_seat_resolves_its_own_model_and_names_itself() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","lane-2":"fable","hat-risks":{"model":"haiku","description":"what could go wrong"}}}}"#,
+        );
+        let v = envelope(&root, "advisor", Some("lane-2"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("fable")));
+        let e = v.get("economics").unwrap();
+        assert_eq!(e.get("logical_tier"), Some(&json!("lane-2")));
+        assert_eq!(e.get("requested_role"), None, "nothing fell through, so nothing to record");
+        let prompt = v
+            .get("payload")
+            .and_then(|p| p.get("prompt"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: lane-2]"), "{prompt}");
+        // An object-shaped hat carrying D3's description resolves exactly like
+        // any other object slot: the description is display-only and the
+        // resolver never sees it.
+        let v = envelope(&root, "advisor", Some("hat-risks"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("haiku")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("hat-risks"))
+        );
+        // A string-shaped hat carries no description and STILL resolves —
+        // doctor's advisory flags it, the door does not.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let bare = repo(
+            &tmp2,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","hat-risks":"fable"}}}"#,
+        );
+        let v = envelope(&bare, "advisor", Some("hat-risks"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("fable")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("requested_role")),
+            None,
+            "a described-or-not configured seat is configured"
+        );
+    }
+
+    /// P2-2 — case folding, in both directions. `--role Lane-2` must resolve a
+    /// configured `lane-2` (the config's spelling travels), and fall through
+    /// when the seat is unconfigured. An exact-match seat test would have made
+    /// the mixed-case spelling a stranger and refused it, which is the
+    /// one-question-two-answers defect this codebase already closed twice.
+    #[test]
+    fn a_mixed_case_seat_resolves_and_falls_through_like_its_lowercase_spelling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let on = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","lane-2":"fable"}}}"#,
+        );
+        let v = envelope(&on, "advisor", Some("Lane-2"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("fable")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("lane-2")),
+            "the CONFIG's spelling travels, never the caller's"
+        );
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let off = repo(&tmp2, ADVISOR_ONLY);
+        let v = envelope(&off, "advisor", Some("Lane-2"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("opus")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("requested_role")),
+            Some(&json!("lane-2")),
+            "the record names the seat in the constant's own spelling"
+        );
+    }
+
+    /// The fall-through is bounded on BOTH axes it claims to be bounded on.
+    ///
+    /// By KIND: every non-advisor kind keeps T012a's refusal, so an
+    /// unconfigured seat cannot borrow the advisor's model through a `gather`
+    /// or a `reviewer` dispatch.
+    ///
+    /// By NAME: a typo'd seat is refused on the advisor kind too. Falling
+    /// through for any unconfigured name would let `hat-risk` run silently on
+    /// the advisor model, which is the outcome the refusal exists to prevent.
+    #[test]
+    fn the_seat_fall_through_is_bounded_by_kind_and_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, ADVISOR_ONLY);
+        for kind in ["gather", "reviewer"] {
+            for seat in SEAT_ROLES {
+                let v = envelope(&root, kind, Some(seat));
+                assert_eq!(
+                    v.get("reason"),
+                    Some(&json!("role_not_configured")),
+                    "{kind}/{seat}: T012a is unchanged off the advisor door"
+                );
+                assert_eq!(v.get("role"), Some(&json!(seat)), "{kind}/{seat}");
+            }
+        }
+        for typo in ["hat-risk", "lane-4", "lanes-1", "hat-value-add"] {
+            let v = envelope(&root, "advisor", Some(typo));
+            assert_eq!(
+                v.get("reason"),
+                Some(&json!("role_not_configured")),
+                "{typo} is not a seat, so it is refused rather than resolved"
+            );
+        }
+    }
+
+    /// P3-2 — when the advisor is ALSO off, the seat's fall-through lands on
+    /// the advisor's own refusal and says so by its own name. Reporting
+    /// `role_not_configured` here would send the operator to configure the
+    /// seat when what the host actually lacks is the advisor.
+    #[test]
+    fn a_seat_falling_through_to_a_missing_advisor_refuses_as_the_advisor() {
+        for config in [
+            r#"{"models":{"claude":{"generation":"sonnet"}}}"#,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":null}}}"#,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let v = envelope(&root, "advisor", Some("lane-1"));
+            assert_eq!(v.get("ok"), Some(&json!(false)), "{config}");
+            assert_eq!(
+                v.get("reason"),
+                Some(&json!("advisor_not_configured")),
+                "{config}: the missing thing is the advisor, and the refusal names it"
+            );
+            let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("team.claude.advisor"), "{fix}");
+        }
+    }
+
+    /// Nothing moved for anyone who never names a seat. A `--kind advisor`
+    /// dispatch with no `--role`, and every other kind's default path, are
+    /// byte-identical to the pre-seat spelling.
+    #[test]
+    fn a_dispatch_that_names_no_seat_is_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, ADVISOR_ONLY);
+        for kind in DISPATCH_KINDS {
+            if kind == "cell" {
+                continue; // a cell dispatch needs a claimed cell; covered above
+            }
+            let v = envelope(&root, kind, None);
+            let e = v.get("economics").unwrap();
+            assert_eq!(e.get("requested_role"), None, "{kind}: no seat, no key");
+        }
+        let v = envelope(&root, "advisor", None);
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("opus")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("tier_source")),
+            Some(&json!("default"))
+        );
+    }
+
+    const HERDING_READ: &str = r#"{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}"#;
+
+    fn herding_cfg(herding: &str) -> String {
+        format!(r#"{{{herding}"models":{{"claude":{HERDING_READ}}}}}"#)
+    }
+
+    fn tree(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut out = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    out.push((path.clone(), std::fs::read(&path).unwrap()));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn a_herding_role_at_the_depth_limit_is_refused_at_the_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &herding_cfg(r#""herding":{"limits":{"depth":0}},"#));
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v["ok"], json!(false), "{v}");
+        assert_eq!(v["type"], json!("refused"));
+        assert_eq!(v["reason"], json!("limits.depth"));
+        assert_eq!(v["retryable"], json!(false));
+        assert_eq!(v["limit"], json!(0));
+    }
+
+    #[test]
+    fn limits_never_touch_a_role_that_is_not_herding() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"herding":{"limits":{"depth":0,"concurrency":0}},"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v.get("tool"), Some(&json!("Agent")), "{v}");
+    }
+
+    #[test]
+    fn a_config_without_limits_gives_a_byte_identical_herding_payload() {
+        let bare = tempfile::tempdir().unwrap();
+        let bare_root = repo(&bare, &herding_cfg(""));
+        let empty = tempfile::tempdir().unwrap();
+        let empty_root = repo(&empty, &herding_cfg(r#""herding":{"limits":{}},"#));
+        let a = envelope(&bare_root, "gather", None);
+        let b = envelope(&empty_root, "gather", None);
+        assert_eq!(a["tool"], json!("Bash"));
+        assert_eq!(a["payload"], b["payload"]);
+        assert_eq!(a["economics"], b["economics"]);
+    }
+
+    #[test]
+    fn explain_names_each_check_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &herding_cfg(r#""herding":{"limits":{"depth":0}},"#));
+        let before = tree(&root);
+        let prepared =
+            prepare_dispatch_with_role(&root, "claude", "gather", None, None, None, true, None, None, false, None)
+                .unwrap();
+        let checks = explain_checks(&root, "gather", None, None, false, false, &prepared);
+        assert_eq!(before, tree(&root), "explain wrote to the store");
+        let names: Vec<_> = checks.iter().map(|c| (c["check"].clone(), c["result"].clone())).collect();
+        assert_eq!(
+            names,
+            vec![
+                (json!("role"), json!("pass")),
+                (json!("claim"), json!("pass")),
+                (json!("limits"), json!("refuse")),
+                (json!("effort"), json!("skip")),
+            ]
+        );
+        assert!(checks[2]["detail"].as_str().unwrap().starts_with("limits.depth: "), "{checks:?}");
+        let text = explain_text(&checks);
+        assert_eq!(text.lines().count(), 4, "{text}");
+        assert!(text.lines().nth(2).unwrap().starts_with("limits: refuse — limits.depth: "), "{text}");
+    }
+
+    const EXPLAIN_CHILD: &str = "verbs::drivers::prepare::role_flag_tests::explain_through_the_cli_child";
+
+    #[test]
+    #[ignore = "spawned by explain_through_the_cli_takes_no_claim_and_writes_nothing"]
+    fn explain_through_the_cli_child() {
+        let (flags, use_json) = crate::verbs::reservations::parse_flags(&[
+            "--runtime", "claude", "--kind", "cell", "--cell", "c-1", "--worker", "w-1", "--claim", "--explain", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        assert_eq!(run_dispatch_prepare(flags, use_json, Instant::now()), Some(ExitCode::SUCCESS));
+    }
+
+    #[test]
+    fn explain_through_the_cli_takes_no_claim_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"herding":{"limits":{"depth":0}},"models":{"claude":{"generation":{"kind":"herding","agent":"x"},"review":"opus"}}}"#,
+        );
+        let cell = root.join(".bee/cells/c-1.json");
+        std::fs::create_dir_all(cell.parent().unwrap()).unwrap();
+        std::fs::write(
+            &cell,
+            r#"{"id":"c-1","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"tier":"generation","files":["a.rs"]}"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee/lanes/f.json"),
+            r#"{"feature":"f","approved_gates":{"execution":true},"route":true}"#,
+        )
+        .unwrap();
+        let before = tree(&root);
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(&exe)
+            .args(["--exact", EXPLAIN_CHILD, "--ignored", "--test-threads", "1", "--nocapture"])
+            .env_remove("PI_SESSION_ID")
+            .env_remove("BEE_HERDING_DEPTH")
+            .current_dir(&root)
+            .output()
+            .expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(out.status.success(), "child failed:\n{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap();
+        let v: Value = serde_json::from_str(&stdout[start..end]).unwrap();
+        let results: Vec<_> = v["explain"].as_array().unwrap().iter().map(|c| c["result"].clone()).collect();
+        assert_eq!(results, vec![json!("pass"), json!("pass"), json!("refuse"), json!("skip")], "{v}");
+        assert_eq!(before, tree(&root), "explain claimed, reserved or recorded something");
+    }
 }
+
+// ═══ tests — reviewer default expertise (.bee/expertise/review.md) ═════════
+
+#[cfg(test)]
+mod reviewer_expertise_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)]
+        {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    const REVIEW_HOST: &str =
+        r#"{"models":{"claude":{"review":"opus","generation":"sonnet"}}}"#;
+
+    #[test]
+    fn reviewer_dispatch_defaults_expertise_to_review_md_when_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, REVIEW_HOST);
+
+        // Repo without .bee/expertise/review.md carries none
+        let out_without = prepare_dispatch_with_role(
+            &root, "claude", "reviewer", None, None, None, false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v_without) = out_without else { panic!("expected envelope") };
+        let prompt_without = v_without
+            .get("payload")
+            .unwrap()
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(
+            !prompt_without.contains(".bee/expertise/review.md"),
+            "without review.md, no expertise entry should be present: {prompt_without}"
+        );
+        assert!(
+            !prompt_without.contains("Expertise — dispatcher-picked; read/load before you start:"),
+            "without review.md, no expertise section should be present: {prompt_without}"
+        );
+
+        // Repo with .bee/expertise/review.md carries the default entry
+        let review_md_path = root.join(".bee/expertise/review.md");
+        std::fs::create_dir_all(review_md_path.parent().unwrap()).unwrap();
+        std::fs::write(&review_md_path, "# How to Review\n").unwrap();
+
+        let out_with = prepare_dispatch_with_role(
+            &root, "claude", "reviewer", None, None, None, false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v_with) = out_with else { panic!("expected envelope") };
+        let prompt_with = v_with
+            .get("payload")
+            .unwrap()
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(
+            prompt_with.contains("- .bee/expertise/review.md — finding quality and severity calibration. Read it to Where to look."),
+            "with review.md present, prompt must carry the default expertise entry: {prompt_with}"
+        );
+        assert!(
+            prompt_with.contains("Expertise — dispatcher-picked; read/load before you start:"),
+            "with review.md present, prompt must carry expertise header: {prompt_with}"
+        );
+
+        // An explicit --expertise wins unchanged
+        let explicit = "- other.md — some purpose. Read it to some section.";
+        let out_explicit = prepare_dispatch_with_role(
+            &root, "claude", "reviewer", None, None, None, false, None, None, false, Some(explicit),
+        )
+        .unwrap();
+        let Prepared::Value(v_explicit) = out_explicit else { panic!("expected envelope") };
+        let prompt_explicit = v_explicit
+            .get("payload")
+            .unwrap()
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(prompt_explicit.contains("- other.md — some purpose. Read it to some section."));
+        assert!(!prompt_explicit.contains(".bee/expertise/review.md"));
+    }
+
+    #[test]
+    fn non_reviewer_kinds_do_not_default_review_md_expertise() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, REVIEW_HOST);
+        let review_md_path = root.join(".bee/expertise/review.md");
+        std::fs::create_dir_all(review_md_path.parent().unwrap()).unwrap();
+        std::fs::write(&review_md_path, "# How to Review\n").unwrap();
+
+        for kind in ["gather", "advisor"] {
+            let out = prepare_dispatch_with_role(
+                &root, "claude", kind, None, None, None, false, None, None, false, None,
+            )
+            .unwrap();
+            let Prepared::Value(v) = out else { panic!("expected envelope for {kind}") };
+            let prompt = v
+                .get("payload")
+                .and_then(|p| p.get("prompt"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            assert!(
+                !prompt.contains(".bee/expertise/review.md"),
+                "{kind} must not default review.md expertise: {prompt}"
+            );
+        }
+    }
+}
+
+// ═══ tests — the detached-delivery instruction (pi-result-mailbox D6) ══════
+
+
+#[cfg(test)]
+mod detached_delivery_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// The same two-file root the module above uses; kept local for the same
+    /// reason (the drivers test module's `repo` fixture is private to it).
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)]
+        {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    fn herding_payload(root: &Path, runtime: &str) -> Value {
+        let out = prepare_dispatch_with_role(
+            root,
+            runtime,
+            "gather",
+            Some("generation"),
+            None,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected an envelope on {runtime}") };
+        v.get("payload").cloned().unwrap_or_else(|| panic!("no payload on {runtime}: {v}"))
+    }
+
+    fn host(runtime: &str) -> String {
+        format!(r#"{{"models":{{"{runtime}":{{"generation":{{"kind":"herding","agent":"a-1"}}}}}}}}"#)
+    }
+
+    /// The pi herding payload TELLS the orchestrator how a detached run stays
+    /// findable: the flag by name, the token to pass, the marker path the
+    /// drain reads.
+    #[test]
+    fn the_pi_herding_payload_names_the_inbox_session_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &host("pi"));
+        let payload = herding_payload(&root, "pi");
+        let note = payload
+            .get("detached_delivery")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("pi carries no detached_delivery: {payload}"));
+        assert!(note.contains("--inbox-session"), "the flag must be named: {note}");
+        assert!(note.contains(".bee/result-inbox/"), "the marker path must be named: {note}");
+        assert!(
+            note.contains("--inbox-session \"$PI_SESSION_ID\""),
+            "the token must be a variable Pi really exports: {note}"
+        );
+        assert!(note.contains("foreground"), "the empty-token case must be named: {note}");
+        assert!(note.contains("report_path"), "the full-answer file must be named: {note}");
+        // The command itself is untouched: bee never guesses the token.
+        let command = payload.get("command").and_then(Value::as_str).unwrap_or_default();
+        assert!(!command.contains("--inbox-session"), "{command}");
+    }
+
+    /// D6 as a payload fact: the instruction is pi-only, so every other
+    /// runtime's herding payload is byte-identical to before this key existed.
+    #[test]
+    fn a_non_pi_herding_payload_carries_no_detached_delivery_key() {
+        for runtime in ["claude", "codex", "opencode"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, &host(runtime));
+            let payload = herding_payload(&root, runtime);
+            assert!(
+                payload.get("command").is_some(),
+                "{runtime}: expected a herding payload, got {payload}"
+            );
+            assert_eq!(payload.get("detached_delivery"), None, "{runtime}: {payload}");
+        }
+    }
+
+    /// A pi dispatch that resolves NO herding slot is refused, not decorated —
+    /// the instruction rides the served payload only.
+    #[test]
+    fn a_refused_pi_dispatch_carries_no_instruction() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"pi":{"generation":"opus"}}}"#);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "gather", Some("generation"), None, None, false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected a typed refusal") };
+        assert_eq!(v.get("ok"), Some(&json!(false)), "{v}");
+        assert_eq!(v.get("payload"), None, "{v}");
+    }
+}
+
+// ═══ tests — pi native stage driver (pi-native-stage-driver pnsd-3) ════════
+
+#[cfg(test)]
+mod pi_native_door_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)]
+        {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    fn w_cell(root: &Path, id: &str) {
+        let path = root.join(".bee").join("cells").join(format!("{id}.json"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(r#"{{"id":"{id}","feature":"f","status":"claimed","trace":{{"worker":"w"}}}}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn agent_argv_first_normalizes_both_config_shapes() {
+        // Shape 1: bare array
+        let array_shape = json!(["pi", "-a", "--model", "some-model"]);
+        assert_eq!(agent_first_argv(&array_shape), Some("pi"));
+
+        // Shape 2: object with "argv" key
+        let object_shape = json!({
+            "argv": ["pi", "--mode", "json"],
+            "workspace_trust": {"file": "~/.config/test.json", "key": "trusted"}
+        });
+        assert_eq!(agent_first_argv(&object_shape), Some("pi"));
+
+        // Non-pi argv
+        let agy_shape = json!({"argv": ["agy", "--dangerously-skip-permissions"]});
+        assert_eq!(agent_first_argv(&agy_shape), Some("agy"));
+
+        // Path to pi executable
+        let path_shape = json!(["/usr/local/bin/pi", "-p"]);
+        assert_eq!(agent_first_argv(&path_shape), Some("/usr/local/bin/pi"));
+
+        // Malformed / empty shapes
+        assert_eq!(agent_first_argv(&json!([])), None);
+        assert_eq!(agent_first_argv(&json!({"argv": []})), None);
+        assert_eq!(agent_first_argv(&json!({"other": "field"})), None);
+        assert_eq!(agent_first_argv(&json!("not-an-array-or-obj")), None);
+    }
+
+    #[test]
+    fn pi_role_with_pi_agent_returns_no_pane_runner() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Array shape
+        let cfg = r#"{
+            "team": {"pi": {"advisor": {"kind": "herding", "agent": "pi-luna"}}},
+            "herding": {"agents": {"pi-luna": ["pi", "-a", "--model", "luna"]}}
+        }"#;
+        let root = repo(&tmp, cfg);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "advisor", Some("advisor"), None, None, false, None, None, false, None,
+        ).unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let command = v["payload"]["command"].as_str().expect("command string");
+        assert!(command.contains(" --no-pane"), "expected --no-pane in command: {command}");
+        assert!(command.contains("--agent \"pi-luna\""), "expected agent in command: {command}");
+    }
+
+    #[test]
+    fn pi_role_with_object_shape_pi_agent_returns_no_pane_runner() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Object shape with argv
+        let cfg = r#"{
+            "team": {"pi": {"advisor": {"kind": "herding", "agent": "pi-obj"}}},
+            "herding": {"agents": {"pi-obj": {"argv": ["pi", "-a", "--model", "test"]}}}
+        }"#;
+        let root = repo(&tmp, cfg);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "advisor", Some("advisor"), None, None, false, None, None, false, None,
+        ).unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let command = v["payload"]["command"].as_str().expect("command string");
+        assert!(command.contains(" --no-pane"), "expected --no-pane in command: {command}");
+        assert!(command.contains("--agent \"pi-obj\""), "expected agent in command: {command}");
+    }
+
+    #[test]
+    fn non_pi_agent_on_pi_returns_pane_payload_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"generation": {"kind": "herding", "agent": "agy-flash"}}},
+            "herding": {"agents": {"agy-flash": {"argv": ["agy", "--flag"]}}}
+        }"#;
+        let root = repo(&tmp, cfg);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "gather", Some("generation"), None, None, false, None, None, false, None,
+        ).unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let command = v["payload"]["command"].as_str().expect("command string");
+        assert!(!command.contains("--no-pane"), "unexpected --no-pane in command: {command}");
+        assert!(command.contains("--agent \"agy-flash\""), "command: {command}");
+    }
+
+    #[test]
+    fn claude_and_codex_payloads_are_byte_identical_to_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {
+                "claude": {
+                    "generation": {"kind": "herding", "agent": "pi-agent"},
+                    "advisor": {"kind": "herding", "agent": "pi-agent"},
+                    "review": {"kind": "herding", "agent": "pi-agent"}
+                },
+                "codex": {
+                    "generation": {"kind": "herding", "agent": "pi-agent"},
+                    "advisor": {"kind": "herding", "agent": "pi-agent"},
+                    "review": {"kind": "herding", "agent": "pi-agent"}
+                }
+            },
+            "herding": {
+                "agents": {
+                    "pi-agent": ["pi", "-a"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+
+        w_cell(&root, "c-1");
+
+        // For claude and codex, even when the configured agent is a pi binary,
+        // --no-pane is NEVER added; the command matches the baseline byte for byte.
+        for runtime in ["claude", "codex"] {
+            for (kind, role, cell, worker) in [
+                ("cell", "generation", Some("c-1"), Some("w")),
+                ("gather", "generation", None, None),
+                ("reviewer", "review", None, None),
+                ("advisor", "advisor", None, None),
+            ] {
+                let out = prepare_dispatch_with_role(
+                    &root, runtime, kind, Some(role), cell, worker, false, None, None, false, None,
+                ).unwrap();
+                let Prepared::Value(v) = out else { panic!("expected prepared value on {runtime} {kind}") };
+                let command = v["payload"]["command"].as_str().expect("command");
+                assert!(!command.contains("--no-pane"), "{runtime} {kind} herding command must not contain --no-pane: {command}");
+                let expected = match kind {
+                    "cell" => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --cell-id \"c-1\"",
+                    "gather" | "advisor" => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --read-only",
+                    _ => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\"",
+                };
+                assert_eq!(
+                    command,
+                    expected,
+                    "{runtime} {kind} command bytes must be exact"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pi_hat_dispatch_on_native_path_retains_seat_ceiling_and_detached_delivery() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {
+                "pi": {
+                    "hat-facts-gaps": {"kind": "herding", "agent": "pi-gpt-5.6-luna"}
+                }
+            },
+            "herding": {
+                "ceiling_seconds": 1800,
+                "agents": {
+                    "pi-gpt-5.6-luna": ["pi", "-a", "--model", "luna"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "advisor", Some("hat-facts-gaps"), None, None, false, None, None, false, None,
+        ).unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        let command = payload["command"].as_str().expect("command");
+
+        // Native flag is present
+        assert!(command.contains(" --no-pane"), "command must have --no-pane: {command}");
+
+        // Seat is present and correct
+        assert!(command.contains(" --seat \"hat-facts-gaps\""), "command must carry --seat: {command}");
+
+        // 600 s hat ceiling is clamped (1800 is clamped to 600)
+        assert!(command.contains(" --ceiling 600"), "command must carry clamped ceiling 600: {command}");
+
+        // detached_delivery note is present
+        assert!(payload.get("detached_delivery").is_some(), "payload must have detached_delivery");
+    }
+}
+
+#[cfg(test)]
+mod paseo_probe_tests {
+    use super::*;
+
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)] {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    fn w_cell(root: &Path, id: &str) {
+        let path = root.join(".bee").join("cells").join(format!("{id}.json"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(r#"{{"id":"{id}","feature":"f","status":"claimed","trace":{{"worker":"w"}}}}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn paseo_agent_ready_when_command_resolves_on_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin_dir = tmp.path().join("bin\\dir");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub_paseo = bin_dir.join("stub-paseo");
+        std::fs::write(&stub_paseo, "").unwrap();
+
+        let cfg = format!(
+            r#"{{
+            "team": {{"pi": {{"code": {{"kind": "herding", "agent": "paseo-worker"}}}}}},
+            "herding": {{
+                "transport": "herdr",
+                "paseo": {{"command": {}}},
+                "agents": {{
+                    "paseo-worker": {{
+                        "paseo": {{
+                            "provider": "pi",
+                            "model": "deepseek-flash"
+                        }}
+                    }}
+                }}
+            }}
+        }}"#,
+            serde_json::to_string(&stub_paseo.to_string_lossy()).unwrap()
+        );
+        let root = repo(&tmp, &cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(true));
+        assert_eq!(
+            payload["transport_reason"],
+            Value::String(format!("paseo agent paseo-worker: {} on PATH", stub_paseo.display()))
+        );
+    }
+
+    #[test]
+    fn paseo_agent_not_ready_when_command_not_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "paseo-worker"}}},
+            "herding": {
+                "transport": "herdr",
+                "paseo": {"command": "definitely-not-on-path-paseo-12345"},
+                "agents": {
+                    "paseo-worker": {
+                        "paseo": {
+                            "provider": "pi",
+                            "model": "deepseek-flash"
+                        }
+                    }
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        assert_eq!(
+            payload["transport_reason"],
+            Value::String("paseo agent paseo-worker: definitely-not-on-path-paseo-12345 not found — FIX: npm i -g @getpaseo/cli".into())
+        );
+    }
+
+    #[test]
+    fn paseo_agent_not_ready_on_malformed_paseo_block() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "bad-paseo"}}},
+            "herding": {
+                "agents": {
+                    "bad-paseo": {
+                        "paseo": {
+                            "model": "deepseek-flash"
+                        }
+                    }
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        let reason = payload["transport_reason"].as_str().expect("string");
+        assert!(reason.contains("bad-paseo"));
+        assert!(reason.contains("provider"));
+    }
+
+    #[test]
+    fn non_paseo_agent_keeps_today_probe_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "normal-worker"}}},
+            "herding": {
+                "transport": "herdr",
+                "agents": {
+                    "normal-worker": ["pi", "-a"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        let (expected_ready, expected_reason, _) = herding_transport_probe(&|k| std::env::var(k).ok());
+        assert_eq!(payload["transport_ready"], Value::Bool(expected_ready));
+        assert_eq!(payload["transport_reason"], Value::String(expected_reason));
+    }
+
+    #[test]
+    fn command_resolves_on_path_in_checks_existence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub = bin_dir.join("test-bin");
+        std::fs::write(&stub, "").unwrap();
+
+        assert!(command_resolves_on_path_in("test-bin", Some(bin_dir.as_os_str())));
+        assert!(!command_resolves_on_path_in("missing-bin", Some(bin_dir.as_os_str())));
+        assert!(!command_resolves_on_path_in("test-bin", None));
+    }
+}
+

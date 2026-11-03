@@ -1,0 +1,11 @@
+{
+  "id": "the-mint-trap-s-advisory-arm-has-fired-o__d853e4c6",
+  "decision": "d853e4c6",
+  "condition": "The mint trap's advisory arm has fired often enough to say whether the blind spot matters: a role code cell adding an inline #[cfg(test)] module is the dominant test-writing shape in this repo (67 of 92 live cells name tests, only 27 of those carry a test-shaped path), so if the trap keeps missing real mint events, add a cell field declaring test intent and arm the trap on it. Revisit after the first release that carries the trap.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-29T02:23:54.715Z",
+  "updated_at": "2026-08-29T02:23:54.715Z",
+  "outcome": null
+}

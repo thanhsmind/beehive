@@ -1,0 +1,212 @@
+<p>Mười ba chương trước nói bee <em>là gì</em>. Chương này nói bạn <em>làm gì</em>.</p>
+
+<p>Nếu bạn chỉ đọc một chương trong cả trang này, đọc chương này. Rồi khi vấp chỗ nào, quay lại tra chương tương ứng.</p>
+
+<h2>Một phiên làm việc, từ đầu đến cuối</h2>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 300" role="img" aria-labelledby="fig-phien-title">
+    <title id="fig-phien-title">Bốn nhịp của một phiên: bạn kể, agent hỏi, bạn duyệt, agent làm rồi báo cáo có bằng chứng.</title>
+
+    <rect class="fig-box fig-fill-ok" x="20" y="30" width="176" height="72" rx="10"/>
+    <text class="fig-t fig-t--mono" x="34" y="52">1</text>
+    <text class="fig-t" x="108" y="66" text-anchor="middle">Bạn kể việc</text>
+    <text class="fig-t fig-t--sm" x="108" y="86" text-anchor="middle">bằng tiếng người, không cần thuật ngữ</text>
+
+    <rect class="fig-box fig-fill-agent" x="216" y="30" width="176" height="72" rx="10"/>
+    <text class="fig-t fig-t--mono" x="230" y="52">2</text>
+    <text class="fig-t" x="304" y="66" text-anchor="middle">Agent hỏi lại</text>
+    <text class="fig-t fig-t--sm" x="304" y="86" text-anchor="middle">chỗ nào đoán bừa sẽ hỏng</text>
+
+    <rect class="fig-box fig-fill-gate" x="412" y="30" width="176" height="72" rx="10"/>
+    <text class="fig-t fig-t--mono" x="426" y="52">3</text>
+    <text class="fig-t" x="500" y="66" text-anchor="middle">Bạn duyệt kế hoạch</text>
+    <text class="fig-t fig-t--sm" x="500" y="86" text-anchor="middle">đây là cái cổng quan trọng nhất</text>
+
+    <rect class="fig-box fig-fill-agent" x="608" y="30" width="192" height="72" rx="10"/>
+    <text class="fig-t fig-t--mono" x="622" y="52">4</text>
+    <text class="fig-t" x="704" y="66" text-anchor="middle">Agent làm + chứng minh</text>
+    <text class="fig-t fig-t--sm" x="704" y="86" text-anchor="middle">bạn đi làm việc khác</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M196 66 L212 66"/><path d="M204 60 l8 6 -8 6"/>
+      <path d="M392 66 L408 66"/><path d="M400 60 l8 6 -8 6"/>
+      <path d="M588 66 L604 66"/><path d="M596 60 l8 6 -8 6"/>
+    </g>
+
+    <path class="fig-line" stroke-width="1.5" stroke-dasharray="5 4" fill="none" d="M704 102 L704 150 L108 150 L108 176"/>
+    <text class="fig-t fig-t--sm" x="406" y="143" text-anchor="middle">xong một mẩu → quay lại chỗ bạn nếu cần quyết định tiếp</text>
+
+    <rect class="fig-box fig-fill-gate" x="20" y="176" width="176" height="60" rx="10"/>
+    <text class="fig-t" x="108" y="200" text-anchor="middle">Bạn nghiệm thu</text>
+    <text class="fig-t fig-t--sm" x="108" y="220" text-anchor="middle">thử sản phẩm thật</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M196 206 L272 206"/><path d="M264 200 l8 6 -8 6"/>
+    </g>
+
+    <rect class="fig-box fig-fill-ok" x="276" y="176" width="176" height="60" rx="10"/>
+    <text class="fig-t" x="364" y="200" text-anchor="middle">Ship</text>
+    <text class="fig-t fig-t--sm" x="364" y="220" text-anchor="middle">merge về nhánh chính</text>
+
+    <text class="fig-t fig-t--sm" x="580" y="212">Ba ô vàng — và chỉ ba ô vàng — là việc của bạn.</text>
+  </svg>
+  <p class="guide-fig__cap">Bạn xuất hiện ở nhịp 1, nhịp 3 và lúc nghiệm thu. Phần còn lại agent tự chạy.</p>
+</figure>
+
+<h2>Sáu thói quen đáng giá nhất</h2>
+
+<h3>1. Kể việc bằng kết quả, đừng kể bằng cách làm</h3>
+
+<p>Bee sẽ hỏi lại nếu yêu cầu mơ hồ — nhưng nó chỉ hỏi được những gì bạn <em>chưa</em> quyết. Nếu bạn nói "sửa file <code>views.rs</code> dòng 200", bạn đã tự chọn cách làm rồi, và agent sẽ làm đúng thế kể cả khi có cách tốt hơn.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Thay vì</th><th>Hãy nói</th></tr></thead>
+  <tbody>
+    <tr><td>"Thêm một cột vào bảng users"</td><td>"Người dùng cần thấy lần đăng nhập gần nhất của họ ở đâu đó trong phần hồ sơ"</td></tr>
+    <tr><td>"Refactor cái hàm này"</td><td>"Hàm này mỗi lần sửa là hỏng chỗ khác — tôi muốn sửa một chỗ mà không sợ"</td></tr>
+    <tr><td>"Viết test cho module X"</td><td>"Tôi không tin module X. Chỗ nào mà nếu hỏng thì tôi sẽ không biết?"</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>2. Trả lời câu hỏi của nó cho dứt khoát</h3>
+
+<p>Khi agent dừng và hỏi, đó là lúc rẻ nhất để đổi hướng. Sau khi cổng mở và code đã viết, cùng câu trả lời đó tốn gấp mười.</p>
+
+<p>Câu trả lời của bạn được ghi lại thành <a href="/guide/bo-nho">một quyết định trên đĩa</a>. Nghĩa là bạn trả lời <strong>một lần</strong> — phiên sau, phiên sau nữa, agent đọc lại chứ không hỏi lại.</p>
+
+<h3>3. Đọc kế hoạch, đừng đọc code</h3>
+
+<p>Cổng thứ hai — duyệt kế hoạch — là chỗ đáng để bạn chậm lại 2 phút. Nếu kế hoạch sai, mọi dòng code sau đó đều sai theo, dù từng dòng đều đúng.</p>
+
+<p>Nhìn ba thứ: <strong>phạm vi</strong> (nó định đụng bao nhiêu file — nhiều hơn bạn nghĩ là dấu hiệu xấu), <strong>thứ tự</strong> (mẩu nào trước, mẩu nào sau), và <strong>bằng chứng</strong> (nó định chứng minh là xong bằng cách nào).</p>
+
+<h3>4. Một việc — một worktree</h3>
+
+<p>Đừng để hai việc khác nhau cùng sửa một cây làm việc. <a href="/guide/worktree">Worktree</a> rẻ, còn gỡ một mớ thay đổi trộn vào nhau thì không.</p>
+
+<p>Dấu hiệu bạn đang phạm điều này: bạn đang nói "à tiện thể sửa luôn cái…" trong lúc một việc khác chưa đóng.</p>
+
+<h3>5. Đòi bằng chứng, đừng đòi lời hứa</h3>
+
+<p>"Xong rồi" không phải một câu trả lời. "<code>cargo test -p waggledance</code> — xanh, 931 test" mới là.</p>
+
+<p>Bee đã bắt agent làm chuyện này ở <a href="/guide/cell-lane">mỗi lần đóng mẩu việc</a>. Nhưng trong phần hội thoại thường ngày, thói quen là của bạn: khi thấy "đã fix", hỏi lại "chạy lệnh gì, ra gì".</p>
+
+<h3>6. Chốt xong là ghi lại ngay</h3>
+
+<p>Mỗi lần bạn và agent thống nhất được một điều — dù chỉ là "cái này luôn dùng chữ thường" — nó nên nằm trên đĩa trước khi phiên chat đóng lại. Không thì tuần sau bạn sẽ giải thích lại từ đầu.</p>
+
+<h2>Chọn mức tin tưởng cho đúng việc</h2>
+
+<p><code>gate_bypass</code> quyết định bee dừng lại bao nhiêu lần. Không có mức nào "đúng" — có mức đúng cho <em>loại việc này</em>.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Tình huống</th><th>Mức</th><th>Vì sao</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Bạn đang ngồi ngay đó, việc quan trọng, hoặc bạn còn đang học bee</td>
+      <td><code>off</code></td>
+      <td>Dừng ở mọi cổng. Chậm, nhưng bạn thấy được nó định làm gì trước khi nó làm.</td>
+    </tr>
+    <tr>
+      <td>Việc nhỏ, rõ ràng, bạn vẫn ở gần máy</td>
+      <td><code>normal</code></td>
+      <td>Tự duyệt cổng 1–2 cho việc nhỏ và vừa; việc rủi ro cao vẫn dừng chờ bạn.</td>
+    </tr>
+    <tr>
+      <td>Bạn tin quy trình, muốn nó chạy liền mạch</td>
+      <td><code>full</code></td>
+      <td>Tự duyệt cổng 1–2 ở mọi cỡ việc. Nghiệm thu vẫn là của bạn.</td>
+    </tr>
+    <tr>
+      <td>Chạy không người trông (herding)</td>
+      <td><code>total</code></td>
+      <td>Bắt buộc cho chế độ không người trông. Đổi lại: bạn chỉ thấy kết quả, không thấy quá trình.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="guide-note guide-note--ok">
+  <span class="guide-note__title">Điều không đổi ở mọi mức</span>
+  <p>Nghiệm thu (UAT) <strong>không bao giờ</strong> tự động bỏ qua được. Kể cả <code>total</code>. Sản phẩm không được coi là xong khi chưa có một con người thử nó.</p>
+  <p>Chi tiết từng mức nằm ở <a href="/guide/cong-gate">chương 3</a>; cách đặt nằm ở <a href="/guide/config">chương 13</a>.</p>
+</div>
+
+<h2>Bảy chỗ người mới hay vấp</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Triệu chứng</th><th>Chuyện gì đang xảy ra</th><th>Làm gì</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>"Nó cứ hỏi hoài, mệt quá"</td>
+      <td>Yêu cầu của bạn còn nhiều chỗ mập mờ, hoặc bạn đang ở <code>gate_bypass: off</code> cho một việc rất nhỏ.</td>
+      <td>Trả lời gọn và dứt khoát — mỗi câu trả lời được ghi lại và không bị hỏi lần hai. Việc nhỏ thì nâng lên <code>normal</code>.</td>
+    </tr>
+    <tr>
+      <td>"Nó bảo bị chặn, không ghi được file"</td>
+      <td>Cổng chưa mở, hoặc file đang bị phiên khác giữ chỗ.</td>
+      <td>Đọc dòng từ chối — <a href="/guide/hooks-guards">nó luôn nói cách gỡ</a>. Đừng bảo agent "cứ ghi đè đi".</td>
+    </tr>
+    <tr>
+      <td>"Phiên trước làm gì tôi không biết"</td>
+      <td>Bình thường — trí nhớ nằm trên đĩa, không nằm trong phiên.</td>
+      <td>Mở phiên mới và hỏi thẳng "đang dở việc gì". Nó đọc <a href="/guide/kho-store">kho</a> rồi kể lại.</td>
+    </tr>
+    <tr>
+      <td>"Kế hoạch đụng 30 file, tôi chỉ nhờ sửa một chỗ"</td>
+      <td>Yêu cầu bị hiểu rộng hơn ý bạn.</td>
+      <td>Từ chối cổng và nói rõ ranh giới: "chỉ trong thư mục X" hoặc "không đổi API".</td>
+    </tr>
+    <tr>
+      <td>"Test xanh mà CI đỏ"</td>
+      <td>Phạm vi chứng minh hẹp hơn phạm vi thay đổi.</td>
+      <td>Đây là một mẩu việc sửa-trước mới, cộng một bài học ghi lại vì sao phạm vi đó hụt. Đừng vá vội rồi bỏ qua.</td>
+    </tr>
+    <tr>
+      <td>"Hai agent giẫm chân nhau"</td>
+      <td>Hai phiên cùng sửa một file.</td>
+      <td><a href="/guide/phoi-hop">Chương 11</a>. Nguyên tắc: gặp xung đột thì nhận việc khác và báo lại, không chờ và không ghi đè.</td>
+    </tr>
+    <tr>
+      <td>"Tôi sửa tay <code>.bee/state.json</code> cho nhanh"</td>
+      <td>Đừng. Các bản ghi phái sinh sẽ lệch khỏi bản ghi gốc và bee sẽ đưa ra những câu trả lời sai một cách khó hiểu.</td>
+      <td>Nói với agent điều bạn muốn đổi; nó có lệnh cho việc đó.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Câu hỏi tự kiểm, trước khi duyệt một kế hoạch</h2>
+
+<ol>
+  <li><strong>Tôi có đọc được kết quả cuối không?</strong> Nếu kế hoạch không nói rõ "xong thì cái gì khác đi", nó chưa phải kế hoạch.</li>
+  <li><strong>Phạm vi có khớp với điều tôi nhờ không?</strong> Rộng hơn — hỏi vì sao. Hẹp hơn — hỏi phần còn lại đi đâu.</li>
+  <li><strong>Nó định chứng minh là xong bằng cách nào?</strong> Một lệnh cụ thể, hay một lời hứa?</li>
+  <li><strong>Có chỗ nào không quay lui được không?</strong> Xoá dữ liệu, đổi API công khai, đẩy lên nhánh chính — những chỗ đó đáng để hỏi thêm một câu.</li>
+</ol>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Một cái bẫy nhẹ nhàng</span>
+  <p>Bee tạo ra cảm giác an toàn — có cổng, có bằng chứng, có ghi chép. Cảm giác đó đúng, nhưng chỉ ở phần <a href="/guide/hooks-guards">thật sự được cưỡng chế</a>. Rất nhiều luật trong bee là <em>lời dặn cho agent</em>, và agent có thể hiểu sai hoặc quên. Cổng của bạn là hàng phòng thủ cuối, đừng bấm duyệt theo phản xạ.</p>
+</div>
+
+<h2>Nếu bạn chỉ nhớ ba câu</h2>
+
+<ol>
+  <li><strong>Nói kết quả bạn muốn, để agent chọn đường đi.</strong></li>
+  <li><strong>Chậm lại ở cổng duyệt kế hoạch; nhanh ở mọi chỗ khác.</strong></li>
+  <li><strong>Thấy chữ "xong", hỏi "lệnh gì, ra gì".</strong></li>
+</ol>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/config">Chương 13 — Cấu hình chi tiết</a>: đặt <code>gate_bypass</code>, <code>commands.test</code> và mọi thứ khác cho đúng máy của bạn.</li>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: nếu bạn muốn hiểu kỹ ba lần dừng lại kia.</li>
+  <li><a href="/guide/bee-la-gi">Chương 1 — Bee là gì</a>: đọc lại sau khi đã dùng vài lần, nó sẽ nghĩa khác đi.</li>
+</ul>

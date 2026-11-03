@@ -1,0 +1,12 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "An Agent call whose effort differs from the door's value is repaired to it, never denied, and the human sees the guard's note", "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"},
+    {"requirement": "An Agent call with the right effort, including plan and lane-* tiers dispatched as advisor, is allowed unchanged", "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"},
+    {"requirement": "A codex spawn carrying the ladder-moved reasoning_effort is allowed; one carrying a different value is still denied", "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"},
+    {"requirement": "A prompt with no [bee-kind:] token is allowed unchanged", "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"},
+    {"requirement": "The guard and the door compute effort from the same function on the same inputs", "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"},
+    {"requirement": "model_guard.rs calls models::effort_for_dispatch, no second ladder", "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"},
+    {"requirement": "the twin's order test pins the four keys", "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"}
+  ]
+}

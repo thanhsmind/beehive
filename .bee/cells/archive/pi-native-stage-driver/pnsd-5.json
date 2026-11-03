@@ -1,0 +1,93 @@
+{
+  "id": "pnsd-5",
+  "feature": "pi-native-stage-driver",
+  "title": "Prove a five-seat hat wave runs with no panes and drops a late seat by name",
+  "lane": "high-risk",
+  "role": "test",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D10",
+    "D11",
+    "cca2b21c-b932-44f4-ba22-1c483a558a0b",
+    "38110682-9e81-43d5-9aa8-dfe0864259da"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/pi-hat-wave.md"
+  ],
+  "read_first": [
+    ".bee/verify/verify-app/features/pi-hat-wave.md",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    "docs/history/pi-native-stage-driver/evidence.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    ".bee/verify/verify-app/features/pi-hat-wave.md"
+  ],
+  "action": "This slice is PROOF, not construction: the seat name, the 600 second hat clamp and the result drain already live on the herding path and the no-pane runner inherits them (per D11). Do not add new mechanism for any of it — if something is missing, report it rather than building it. Rebuild first and install the binary at .bee/bin/bee, because doctor byte-compares the belt against the compiled copy and a stale vendored binary makes the whole run worthless (this bit pnsd-4: doctor reported binary_freshness not_ok). Then prove four things about a five-seat hat wave where every seat runs as a child process. One: all five seats run in parallel with NO tmux pane opened — count panes before and after with bee herding pane list and assert the count is unchanged, the way pnsd-4 did (26 before, 26 after). Two: every result is named by its seat — assert the seat field on each result envelope matches the seat that was dispatched, and that five distinct seats come back. Three: the wave stays inside its budget. Four, and this is the one that matters most: a seat that exceeds the ceiling is DROPPED AND NAMED, never silently lost. Force it rather than waiting for it — dispatch one seat with a deliberately tiny --ceiling and a task that cannot finish in time, then assert the run returns outcome TimedOutCeiling AND that the result still carries its seat name. The runner kills the child at the ceiling and returns RunOutcome::TimedOutCeiling; confirm the seat survives onto that envelope rather than assuming it does. Record the whole drive as a new sub-feature in pi-hat-wave.md, following that file's existing four-H2 contract, with the exact commands and their assertions.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+  "must_haves": {
+    "truths": [
+      "Five hat seats run as child processes with no tmux pane opened, proven by an unchanged pane count",
+      "Every seat's result is named by its seat, and five distinct seats return",
+      "A seat that exceeds its ceiling returns TimedOutCeiling and is still named by its seat",
+      "The wave stays inside its wall-clock budget"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/features/pi-hat-wave.md",
+        "substantive": "a new sub-feature for the no-pane wave with its driving commands, assertions and gotchas"
+      }
+    ],
+    "key_links": [
+      "the drive runs the rebuilt binary installed at .bee/bin/bee, not a stale vendored copy"
+    ],
+    "prohibitions": [
+      "No new seat-naming, ceiling or drain mechanism — it is inherited; report a gap instead of building one",
+      "No edit to herding/run.rs or prepare.rs in this cell",
+      "No claim of green without the fresh command output beside it"
+    ]
+  },
+  "trace": {
+    "worker": "worker-wave",
+    "outcome": "Prove the five-seat hat wave runs with no panes and names a dropped seat",
+    "files_changed": [
+      ".bee/verify/verify-app/features/pi-hat-wave.md"
+    ],
+    "deviations": [
+      "followed the plan — the cell was written as proof, not construction, and no seat-naming, ceiling or drain mechanism was added: every one of them was inherited from the pane path as D11 intended, and the drive confirmed it"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-19T01:42:32.024Z",
+    "behavior_change": false,
+    "verification_evidence": "576 passed, 0 failed, and the leader independently reproduced D10 crux rather than accepting the worker report. Leader run, from the worktree against the rebuilt binary: printf a long task | bee herding run --no-pane --seat hat-risks --ceiling 1 returned outcome timed_out_ceiling with seat hat-risks and pane_id null, and the pane count was 26 before and 26 after. That is drop-and-name holding on the native path. The worker own drive in a control-bee sandbox reported the other three truths with evidence files: five seats (hat-facts-gaps, hat-alternatives, hat-user-impact, hat-risks, hat-value) each returning outcome done with pane_id null and a report_path, pane count 27 unchanged before during and after, and 12.62 seconds wall clock against a 600 second budget.",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+    "claimed_at": "2026-09-19T01:36:23.641Z",
+    "mistakes": [
+      {
+        "wrong": "I filed a P2 finding calling the worktree .bee/state.json a stale copy, when bee worktree register --help states the grant deliberately writes each worktree its own independent lifecycle store",
+        "better": "so the second gate set is by design and load-bearing, not drift — check the verb own help for the intended shape of a file before labelling a disagreement between two copies as staleness. A correction row was filed against it the same session."
+      }
+    ],
+    "report": {
+      "outcome": "A five-seat hat wave runs entirely as child processes: no tmux pane is opened, every result is named by its seat, the wave finishes far inside the ten-minute budget, and a seat that blows the ceiling is dropped AND still named.",
+      "commit": "5d4e9a126244af2fbdea7297090bab1fa63db60c",
+      "files": [
+        ".bee/verify/verify-app/features/pi-hat-wave.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding — green:live — 576 passed, 0 failed, and the leader independently reproduced D10 crux rather than accepting the worker report. Leader run, from the worktree against the rebuilt binary: printf a long task | bee herding run --no-pane --seat hat-risks --ceiling 1 returned outcome timed_out_ceiling with seat hat-risks and pane_id null, and the pane count was 26 before and 26 after. That is drop-and-name holding on the native path. The worker own drive in a control-bee sandbox reported the other three truths with evidence files: five seats (hat-facts-gaps, hat-alternatives, hat-user-impact, hat-risks, hat-value) each returning outcome done with pane_id null and a report_path, pane count 27 unchanged before during and after, and 12.62 seconds wall clock against a 600 second budget.",
+      "deviations": [
+        "followed the plan — the cell was written as proof, not construction, and no seat-naming, ceiling or drain mechanism was added: every one of them was inherited from the pane path as D11 intended, and the drive confirmed it"
+      ],
+      "mistakes": [
+        "I filed a P2 finding calling the worktree .bee/state.json a stale copy, when bee worktree register --help states the grant deliberately writes each worktree its own independent lifecycle store — so the second gate set is by design and load-bearing, not drift — check the verb own help for the intended shape of a file before labelling a disagreement between two copies as staleness. A correction row was filed against it the same session."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

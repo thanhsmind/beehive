@@ -1,0 +1,156 @@
+{
+  "id": "rig-6",
+  "feature": "slp-role-gaps",
+  "title": "Teach workers the new result fields, partial stop, dissent once and layered done status",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "15f6804c-1faf-4273-875b-e3b2dfaf0d38",
+    "6e81d8db-8e72-48ef-aa69-c465336421d3",
+    "b2baf5e0-f22a-44e9-ab4c-0cb232f41ddd",
+    "e11f3e7a-dda7-4bb5-823d-1eb8a3ba9df1"
+  ],
+  "files": [
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/SKILL.md",
+    "packages/bee/prompts/worker-cell.md"
+  ],
+  "read_first": [
+    "docs/history/slp-role-gaps/CONTEXT.md",
+    "docs/history/slp-role-gaps/plan.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "packages/bee/prompts/worker-cell.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Doctrine, one home each. In swarming-reference.md section `## Result Formats (expected back from workers)` (the one home of the Result form): keep the minimal JSON example as is and add a second, optional example with `reaction`, `skipped`, `unknowns`, `found`, `stopped`; one bullet each (D1: reaction is the stance toward the brief, closed set confirm|partial|challenge|blocked; `[]` means none, an absent key means no answer). Add D2: a worker that finds a false premise in part of its cell finishes the safe part, returns [DONE] with reaction partial and `stopped` naming the part and its evidence; [BLOCKED] stays for a cell with no safe part. Add D3: dissent once per point; after the verdict, follow it; a second dissent needs new evidence. Add D8 beside the `tests` proof-tag bullet: a final report for work that ships something runnable states source / artifact / installed / live, each with its verdict or `not checked`; omit the four layers when nothing runnable ships; give one example line. In SKILL.md add the leader-side line: a partial result's `stopped` part becomes a new cell or a dissent verdict before close, and the leader's own final report follows D8 — as a pointer to the Result Formats section, never a copy. In worker-cell.md add ONE short block after the Result form paragraph naming the optional keys, partial stop and dissent-once, pointing at nothing outside the prompt. Keep the prompt short. Do not run bee dev regen: the leader runs it once at the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws",
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "The Result form names the five optional keys with their meaning",
+      "Partial stop, dissent once and the four-layer report each have exactly one home"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-swarming/references/swarming-reference.md",
+        "substantive": "optional result example, D2, D3, D8 rules"
+      }
+    ],
+    "key_links": [
+      "SKILL.md points at the Result Formats section",
+      "worker-cell.md names the optional keys"
+    ],
+    "prohibitions": [
+      "No second copy of the Result form",
+      "No size budget language",
+      "No change to the proof-line tag set"
+    ]
+  },
+  "trace": {
+    "worker": "rig6-docs",
+    "outcome": "Optional result keys, partial stop, dissent once and four-layer report land in Result Formats; SKILL.md and worker-cell.md point at them",
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-swarming/SKILL.md",
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "updated the worker-cell golden string in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs (reserved first) — native_cell_prompt_render_is_byte_identical_to_golden went red on the new prompt block — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T11:57:15.239Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify over the instruction text touched, 9 passed; native_cell_prompt_render golden green after update; NOT green: every_template_carries_the_original_request_block_and_matches_disk stays red until bee dev regen at the wave barrier",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws",
+    "claimed_at": "2026-10-15T11:53:09.144Z",
+    "mistakes": [
+      {
+        "wrong": "first edits ran a python script from /tmp and a cargo line with a CARGO_HOME default, both refused by the worktree guards",
+        "better": "use the Edit tool and plain HOME paths in the worktree from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Result Formats in swarming-reference.md gains the optional-key example (reaction, skipped, unknowns, found, stopped) with one bullet each, Partial stop (D2), Dissent once (D3), and the four-layer bullet (D8) beside tests; SKILL.md Tend step points there; worker-cell.md has one short block after the Result form",
+      "commit": "7b0357b54",
+      "files": [
+        "skills/bee-swarming/references/swarming-reference.md",
+        "skills/bee-swarming/SKILL.md",
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws — green:unit — cell verify over the instruction text touched, 9 passed; native_cell_prompt_render golden green after update; NOT green: every_template_carries_the_original_request_block_and_matches_disk stays red until bee dev regen at the wave barrier",
+      "deviations": [
+        "updated the worker-cell golden string in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs (reserved first) — native_cell_prompt_render_is_byte_identical_to_golden went red on the new prompt block — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "first edits ran a python script from /tmp and a cargo line with a CARGO_HOME default, both refused by the worktree guards — use the Edit tool and plain HOME paths in the worktree from the start — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The Result form names the five optional keys with their meaning",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "Partial stop, dissent once and the four-layer report each have exactly one home",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          }
+        ],
+        "recorded_at": "2026-10-15T12:29:40.905Z",
+        "recorded_by": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-result-form-five-keys",
+            "status": "PASS",
+            "evidence": "swarming-reference.md Result Formats optional example and five bullets"
+          },
+          {
+            "id": "truth-one-home-each",
+            "status": "PASS",
+            "evidence": "doctrine in swarming-reference.md; worker-cell.md one short block; SKILL.md pointer"
+          },
+          {
+            "id": "prohib-no-second-result-form",
+            "status": "PASS",
+            "evidence": "minimal example unchanged"
+          },
+          {
+            "id": "verify",
+            "status": "PASS",
+            "evidence": "cargo test -p bee --test instruction_laws: 9 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-15T12:43:25.522Z"
+      }
+    ]
+  },
+  "status": "capped"
+}

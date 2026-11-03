@@ -7,6 +7,7 @@ timestamp: 2026-07-19
 bee:
   id: pattern-20260719-with-concurrent-sessions-possible-the-claim-precedes-the
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["docs/history/learnings/critical-patterns.md#PAT38", "original feature: codex-native-transport"]
   polarity: pitfall
   critical: true

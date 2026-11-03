@@ -1,0 +1,100 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "proof-strength-and-expiry",
+  "closed_at": "2026-09-01T16:01:41.952Z",
+  "sessions": [
+    {
+      "session_id": "5a3619c8-a3c2-470a-be32-189bc3db79ac",
+      "models": {
+        "claude-opus-5": {
+          "input": 302,
+          "output": 78885,
+          "cache_write": 511619,
+          "cache_read": 22770985,
+          "new": 590806,
+          "cached": 22770985,
+          "total": 23361791
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5": {
+          "input": 250,
+          "output": 14771,
+          "cache_write": 374663,
+          "cache_read": 9150899,
+          "new": 389684,
+          "cached": 9150899,
+          "total": 9540583
+        }
+      },
+      "subagent_count": 4,
+      "started_ms": 1788276159114,
+      "ended_ms": 1788278486189,
+      "totals": {
+        "new": 980490,
+        "cached": 31921884,
+        "total": 32902374
+      }
+    },
+    {
+      "session_id": "c021e309-e77a-4956-a752-9611003c58bd",
+      "models": {
+        "claude-opus-5": {
+          "input": 724,
+          "output": 272927,
+          "cache_write": 3008577,
+          "cache_read": 118887088,
+          "new": 3282228,
+          "cached": 118887088,
+          "total": 122169316
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5": {
+          "input": 680,
+          "output": 51416,
+          "cache_write": 794590,
+          "cache_read": 15640298,
+          "new": 846686,
+          "cached": 15640298,
+          "total": 16486984
+        },
+        "claude-sonnet-5": {
+          "input": 20,
+          "output": 51,
+          "cache_write": 65539,
+          "cache_read": 461509,
+          "new": 65610,
+          "cached": 461509,
+          "total": 527119
+        }
+      },
+      "subagent_count": 14,
+      "started_ms": 1788257618599,
+      "ended_ms": 1788275980889,
+      "totals": {
+        "new": 4194524,
+        "cached": 134988895,
+        "total": 139183419
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 3873034,
+      "cached": 141658073,
+      "total": 145531107
+    },
+    "subagents": {
+      "new": 1301980,
+      "cached": 25252706,
+      "total": 26554686
+    },
+    "total": {
+      "new": 5175014,
+      "cached": 166910779,
+      "total": 172085793
+    }
+  }
+}

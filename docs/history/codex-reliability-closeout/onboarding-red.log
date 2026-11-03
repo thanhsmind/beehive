@@ -1,0 +1,22 @@
+$ PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard::agents::tests::codex_onboarding_note_describes_configurable_transports_without_obsolete_claims
+    Finished `release` profile [optimized] target(s) in 48.11s
+     Running unittests src/main.rs (/home/thanhsmind/.cache/cargo-target/release/deps/bee-c971e971395acb0c)
+
+running 1 test
+test onboard::agents::tests::codex_onboarding_note_describes_configurable_transports_without_obsolete_claims ... FAILED
+
+failures:
+
+---- onboard::agents::tests::codex_onboarding_note_describes_configurable_transports_without_obsolete_claims stdout ----
+
+thread 'onboard::agents::tests::codex_onboarding_note_describes_configurable_transports_without_obsolete_claims' panicked at crates/bee/src/onboard/agents.rs:589:9:
+obsolete claim: note must not state Codex has no per-agent model selection (got: Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11).)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    onboard::agents::tests::codex_onboarding_note_describes_configurable_transports_without_obsolete_claims
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3564 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p bee --bin bee`

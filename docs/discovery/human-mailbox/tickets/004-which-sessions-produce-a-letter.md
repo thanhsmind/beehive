@@ -22,3 +22,8 @@ already saw.
 attended or not; only an unattended run composes and files a letter. A
 session that starts attended and becomes an overnight run keeps a
 complete record of its whole span.
+
+Extended by **letter-digest D2 (aedb5be9)**: every `bee close` now
+files its close letter at the moment of close, attended sessions
+included — D9's rule stays only for the run-end letter, which still
+waits on an unattended run.

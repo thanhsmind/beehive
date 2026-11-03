@@ -1,0 +1,103 @@
+{
+  "id": "rgs-1",
+  "feature": "run-git-stdin-thread",
+  "title": "Write git stdin from a thread so a long patch-id stream cannot deadlock",
+  "lane": "tiny",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "0154bcb7-5daa-480c-aee1-af90bbc8143f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "behavior_change": false,
+  "action": "Per run-git-stdin-thread D1: in run_git_stdin, take the child's stdin, move the input into std::thread::spawn which does write_all and drops the handle, call child.wait_with_output on the parent, then join the thread and ignore its result. Keep GitOut and every fail-open path. Per D2 no new test. Fix the typo 'A cleaner rebase' to 'A clean rebase' in the concept. No code comments.",
+  "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green; `rg -c 'A clean rebase is not stale proof' docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` prints 1; `.bee/bin/bee dev comment-baseline --check` is clean.",
+  "must_haves": {
+    "truths": [
+      "run_git_stdin never blocks on a full stdout pipe",
+      "every existing worktree test stays green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+        "substantive": "stdin written from a spawned thread, stdout read with wait_with_output"
+      }
+    ],
+    "key_links": [
+      "phases.rs callers unchanged"
+    ],
+    "prohibitions": [
+      "No change to the GitOut shape",
+      "No new code comments"
+    ]
+  },
+  "trace": {
+    "worker": "leader-inline",
+    "outcome": "run_git_stdin writes stdin from a thread; no deadlock on a long patch-id stream; typo fixed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-17T04:27:06.526Z",
+    "behavior_change": false,
+    "verification_evidence": "worktree tests 199 passed 0 failed after the change; rg printed 1; comment-baseline 253 files at or below baseline; no new test per D2 (an 800-commit fixture is not worth its runtime)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+    "verify_command": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green; `rg -c 'A clean rebase is not stale proof' docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` prints 1; `.bee/bin/bee dev comment-baseline --check` is clean.",
+    "claimed_at": "2026-10-17T04:22:30.029Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "run_git_stdin writes the child's stdin from a spawned thread and reads with wait_with_output; GitOut and fail-open paths unchanged; concept typo fixed",
+      "commit": "9972859be",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+        "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+      ],
+      "tests": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green; `rg -c 'A clean rebase is not stale proof' docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` prints 1; `.bee/bin/bee dev comment-baseline --check` is clean. — green:unit — worktree tests 199 passed 0 failed after the change; rg printed 1; comment-baseline 253 files at or below baseline; no new test per D2 (an 800-commit fixture is not worth its runtime)",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "run_git_stdin never blocks on a full stdout pipe",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+          },
+          {
+            "requirement": "every existing worktree test stays green",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+          },
+          {
+            "requirement": "phases.rs callers unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+          }
+        ],
+        "recorded_at": "2026-10-17T04:27:19.145Z",
+        "recorded_by": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "codex-parity-completion",
+  "closed_at": "2026-09-13T04:43:22.384Z",
+  "sessions": [
+    {
+      "session_id": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+      "models": {
+        "gpt-6-astra": {
+          "input": 1930671,
+          "output": 237686,
+          "cache_write": 0,
+          "cache_read": 98219264,
+          "new": 2168357,
+          "cached": 98219264,
+          "total": 100387621
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1789221242132,
+      "ended_ms": 1789274400066,
+      "totals": {
+        "new": 2168357,
+        "cached": 98219264,
+        "total": 100387621
+      }
+    },
+    {
+      "session_id": "01a09911-9b86-7a30-8a6f-b22a78347d98",
+      "models": {
+        "gpt-6-astra": {
+          "input": 39037,
+          "output": 1464,
+          "cache_write": 0,
+          "cache_read": 316416,
+          "new": 40501,
+          "cached": 316416,
+          "total": 356917
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1789274479430,
+      "ended_ms": 1789274599847,
+      "totals": {
+        "new": 40501,
+        "cached": 316416,
+        "total": 356917
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 2208858,
+      "cached": 98535680,
+      "total": 100744538
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 2208858,
+      "cached": 98535680,
+      "total": 100744538
+    }
+  }
+}

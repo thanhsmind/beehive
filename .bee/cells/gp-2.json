@@ -1,0 +1,49 @@
+{
+  "id": "gp-2",
+  "feature": "guide-pages",
+  "title": "Add the GitHub Pages deploy workflow",
+  "lane": "small",
+  "role": "code",
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "gp-1"
+  ],
+  "action": "Write .github/workflows/pages.yml: triggers push to main (paths site/guide/**, .github/workflows/pages.yml) + workflow_dispatch; job builds with node site/guide/build.mjs, uploads dist/site via actions/upload-pages-artifact, deploys via actions/deploy-pages; permissions contents:read, pages:write, id-token:write; concurrency group pages.",
+  "verify": "the workflow YAML parses (python3 -c 'import yaml,sys;yaml.safe_load(open(\".github/workflows/pages.yml\"))' exits 0) and names the dist/site path emitted by gp-1's builder",
+  "status": "capped",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "guide-pages-w1",
+    "outcome": "GitHub Pages deploy workflow: build guide site on push to main, upload dist/site, deploy",
+    "files_changed": [
+      ".github/workflows/pages.yml"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T07:44:28.110Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8f719c60-a4b8-4aa5-9928-c219c1dc9663",
+    "claimed_at": "2026-08-26T07:42:33.542Z",
+    "report": {
+      "outcome": "Pages workflow added and validated",
+      "commit": "e6cda71a",
+      "files": [
+        ".github/workflows/pages.yml"
+      ],
+      "tests": "python3 yaml.safe_load(.github/workflows/pages.yml) + node site/guide/build.mjs path check — green — workflow YAML is the whole change; parse + upload-path match is its proof",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

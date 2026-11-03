@@ -1,0 +1,260 @@
+{
+  "id": "po-3",
+  "feature": "paseo-observe",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Keep a blocked Paseo worker waiting, count it, and attach its log tail",
+  "deps": [
+    "po-1"
+  ],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-observe/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "action": "Red first. run.rs: in the Paseo poll (wait_for_round_paseo_driven and its liveness mapping), a Blocked state is alive and waiting, never a reason to end the run; the idle and ceiling timeouts still apply, and a result still ends it. In execute_paseo and execute_continue_paseo call record_dispatch with the agent id where the pane path passes a pane id, so the wave ledger gets a row. On every non-result exit after the agent exists (idle timeout, ceiling, died, blocked at timeout) append the output of logs_tail_argv(id, 40, None) to the message, say 'agent kept for inspection: paseo logs <id>' instead of the pane wording, and keep the original message when the logs call fails. wave.rs: the live set for occupancy adds the ids of labelled, non-archived Paseo agents from ls_label_argv(bee_job) through parse_ls_agents; a failed call keeps today's behaviour. Tests with fakes: Blocked then a result returns the result; Blocked until the idle timeout times out with the log tail in the message; a Paseo run writes one ledger row; a labelled agent counts in occupancy; a herdr run is unchanged. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a Paseo worker that is Blocked keeps the run waiting until a result or a timeout",
+      "a Paseo run writes a wave-ledger row with its agent id",
+      "a Paseo timeout message carries the agent's last log lines and says the agent is kept",
+      "occupancy counts labelled, non-archived Paseo agents",
+      "herdr and tmux runs and occupancy are unchanged and the existing herding tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "blocked waiting, ledger row and log-tail diagnosis"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "substantive": "Paseo agents in the live set"
+      }
+    ],
+    "key_links": [
+      "the Paseo poll treats Blocked as alive"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No send or archive change",
+      "No change to the herdr poll"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": "A blocked Paseo worker waits, writes a ledger row, counts in occupancy only with a known pane list, and exits carry its log tail",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave.rs"
+    ],
+    "deviations": [
+      "Leader fixed the judge findings (untracked by job agent id, unreadable ls as unknown, occupancy keeps an unknown pane list unknown, log tail on ceiling and died)",
+      "sync-ack: skills/bee-herding covers the cockpit roles, not these herding verbs; the Paseo channel concept is the owning doc"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T04:21:31.726Z",
+    "behavior_change": true,
+    "verification_evidence": "712 passed 0 failed; full suite 4030 passed 0 failed; live: Claude worker in Paseo default mode was blocked on Bash, status showed blocked with the tool, the broker filed a permission intervention, bee herding permit allow let the same run finish done; evidence /home/thanhsmind/Projects/goglbe/beehive--wt--paseo-observe/docs/history/paseo-observe/evidence/status-blocked.json",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+    "claimed_at": null,
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:12:16.408Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:17:22.763Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:21:21.988Z"
+      },
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:21:31.726Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:22:15.762Z"
+      }
+    ],
+    "sync_ack": "skills/bee-herding covers the cockpit roles, not these herding verbs; the Paseo channel concept is the owning doc",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "A blocked Paseo worker waits, writes a ledger row, counts in occupancy only with a known pane list, and exits carry its log tail",
+      "commit": "06b8e5ad1 e61c4e918",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding — green:live — 712 passed 0 failed; full suite 4030 passed 0 failed; live: Claude worker in Paseo default mode was blocked on Bash, status showed blocked with the tool, the broker filed a permission intervention, bee herding permit allow let the same run finish done; evidence /home/thanhsmind/Projects/goglbe/beehive--wt--paseo-observe/docs/history/paseo-observe/evidence/status-blocked.json",
+      "deviations": [
+        "Leader fixed the judge findings (untracked by job agent id, unreadable ls as unknown, occupancy keeps an unknown pane list unknown, log tail on ceiling and died)"
+      ],
+      "mistakes": [
+        "the first version trusted a key-only paseo ls --label filter and a labels field that real Paseo 0.10.3 does not emit — check the real CLI output shape before writing a parser — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "po3-t1",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po3-t2",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po3-t4",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po3-p",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po3-t3",
+            "status": "FAIL",
+            "evidence": "ceiling and died exits carry no log tail"
+          },
+          {
+            "id": "po3-t5",
+            "status": "FAIL",
+            "evidence": "wave.rs:1054 turns an unknown herdr pane list into a Paseo-only live set, so the sweep false-marks live herdr jobs"
+          }
+        ],
+        "failure_signature": "occupancy merges Paseo ids into an unknown pane list; ceiling and died exits lack the log tail",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T04:17:22.763Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "po3-t1",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po3-t2",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po3-t3",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po3-t4",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po3-t5",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po3-p",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T04:21:21.988Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-10-06T04:17:22.763Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "mistakes": [
+      {
+        "wrong": "the first version trusted a key-only paseo ls --label filter and a labels field that real Paseo 0.10.3 does not emit",
+        "better": "check the real CLI output shape before writing a parser",
+        "fix_at": "check"
+      }
+    ],
+    "inline_reason": "the leader applied the judge fixes inline after the reopen; the original work ran through a dispatched worker",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a Paseo worker that is Blocked keeps the run waiting until a result or a timeout",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a Paseo run writes a wave-ledger row with its agent id",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a Paseo timeout message carries the agent's last log lines and says the agent is kept",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "occupancy counts labelled, non-archived Paseo agents",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "herdr and tmux runs and occupancy are unchanged and the existing herding tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T04:22:15.762Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

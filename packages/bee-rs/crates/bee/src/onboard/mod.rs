@@ -3,9 +3,9 @@
 // repo.
 //
 //   bee onboard [--repo-root <path>] [--apply] [--json] [--repo-hooks]
-//               [--plugin-source] [--runtime claude|codex|both]
+//               [--plugin-source] [--runtime claude|codex|pi|both]
 //               [--no-claude-md] [--claude-md] [--global-skills]
-//               [--force-downgrade]
+//               [--force-downgrade] [--no-statusline]
 //
 // The flag set is the .mjs's own parseArgs (l. 4022), verbatim.
 //
@@ -103,7 +103,6 @@ use plan::{compute_plan, core_changes_needed, Options};
 use serde_json::{json, Map, Value};
 use source::Engine;
 use std::ffi::OsString;
-#[cfg(test)]
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -118,9 +117,12 @@ struct Args {
     repo_hooks: bool,
     claude_md: bool,
     global_skills: bool,
+    skillstation: bool,
     plugin_source: bool,
     force_downgrade: bool,
+    statusline: bool,
     runtime: String,
+    design_packs: Option<Vec<String>>,
 }
 
 impl Default for Args {
@@ -134,10 +136,16 @@ impl Default for Args {
             // opts out. --claude-md is still accepted, a no-op alias.
             claude_md: true,
             global_skills: false,
+            skillstation: false,
             plugin_source: false,
             force_downgrade: false,
+            // 4cac0774: the status display is a DEFAULT onboarding artifact;
+            // --no-statusline opts out for this run, and a project opts out
+            // permanently with `.bee/config.json` "statusline": false.
+            statusline: true,
             // GH #22 P0-1: default "both" matches install.sh's own default.
             runtime: "both".to_string(),
+            design_packs: None,
         }
     }
 }
@@ -147,6 +155,35 @@ enum ParseOutcome {
     Error(String),
     /// `--help`/`-h`: hand the command back to the shared help surface.
     Delegate,
+}
+
+/// The project's recorded preference for the status display (4cac0774).
+///
+/// Recorded once in `.bee/config.json` as `"statusline": false`, read exactly
+/// the way `merge::host_shell_is_powershell` reads `host_shell`, and never
+/// written by onboarding. Absent or unrecognised means true.
+fn statusline_config_preference(repo_root: &Path) -> bool {
+    let text = util::read_text_if_exists(&repo_root.join(".bee").join("config.json"));
+    match serde_json::from_str::<Value>(&text).ok().and_then(|v| {
+        v.get("statusline").and_then(Value::as_bool)
+    }) {
+        Some(v) => v,
+        None => true,
+    }
+}
+
+fn parse_design_packs(value: &str) -> Result<Vec<String>, String> {
+    if value.trim() == "none" {
+        return Ok(Vec::new());
+    }
+    let named: Vec<&str> = value.split(',').map(str::trim).collect();
+    if named.iter().any(|p| !templates::DESIGN_PACKS.contains(p)) {
+        return Err(format!(
+            "--design-packs takes a comma list of {}, or none (got: {value})",
+            templates::DESIGN_PACKS.join(", ")
+        ));
+    }
+    Ok(templates::DESIGN_PACKS.iter().filter(|p| named.contains(p)).map(|p| p.to_string()).collect())
 }
 
 /// parseArgs (l. 4022).
@@ -170,8 +207,12 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
             args.claude_md = true;
         } else if arg == "--no-claude-md" {
             args.claude_md = false;
+        } else if arg == "--no-statusline" {
+            args.statusline = false;
         } else if arg == "--global-skills" {
             args.global_skills = true;
+        } else if arg == "--skillstation" {
+            args.skillstation = true;
         } else if arg == "--plugin-source" {
             args.plugin_source = true;
         } else if arg == "--force-downgrade" {
@@ -186,6 +227,18 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
             i += 1;
         } else if let Some(v) = arg.strip_prefix("--runtime=") {
             args.runtime = v.to_string();
+        } else if arg == "--design-packs" || arg.starts_with("--design-packs=") {
+            let value = match arg.strip_prefix("--design-packs=") {
+                Some(v) => v.to_string(),
+                None => {
+                    i += 1;
+                    argv.get(i).cloned().unwrap_or_default()
+                }
+            };
+            match parse_design_packs(&value) {
+                Ok(packs) => args.design_packs = Some(packs),
+                Err(message) => return ParseOutcome::Error(message),
+            }
         } else if arg == "--help" || arg == "-h" {
             return ParseOutcome::Delegate;
         } else {
@@ -193,9 +246,9 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
         }
         i += 1;
     }
-    if !["claude", "codex", "both"].contains(&args.runtime.as_str()) {
+    if !["claude", "codex", "pi", "both"].contains(&args.runtime.as_str()) {
         return ParseOutcome::Error(format!(
-            "--runtime must be claude, codex, or both (got: {})",
+            "--runtime must be claude, codex, pi, or both (got: {})",
             args.runtime
         ));
     }
@@ -355,6 +408,8 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
     // Captured before any apply: "first onboard" means no marker yet.
     let first_onboard = !util::exists(&repo_root.join(".bee").join("onboarding.json"));
 
+    let is_powershell = merge::host_shell_is_powershell(&repo_root);
+    let statusline_config_allowed = statusline_config_preference(&repo_root);
     let opts = Options {
         // --repo-hooks opts a repo IN; it is not a re-consent owed on every
         // upgrade (the record is sticky).
@@ -365,17 +420,40 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
         },
         claude_md: args.claude_md,
         global_skills: args.global_skills,
+        skillstation: args.skillstation,
         sync_skills: !args.plugin_source,
         force_downgrade: args.force_downgrade,
         plugin_source: args.plugin_source,
+        // 4cac0774: on by default, three ways off — this run's flag, the
+        // project's recorded preference, and a PowerShell host.
+        statusline: args.statusline && statusline_config_allowed && !is_powershell,
         runtime: args.runtime.clone(),
+        design_packs: args.design_packs.clone(),
     };
+    let statusline_skip_notices: Vec<String> =
+        if args.statusline && statusline_config_allowed && is_powershell {
+            vec![
+                "Status display skipped: this project's host shell is PowerShell and \
+statusline-command.sh is a bash script. A hook that fails is silent, but a status line that \
+fails is drawn on every prompt. Set .bee/config.json \"host_shell\": \"posix\" if this project \
+does run a POSIX shell."
+                    .to_string(),
+            ]
+        } else {
+            Vec::new()
+        };
     let hooks_transition_notices = notices::repo_hooks_transition_notices(
         &repo_root,
         args.plugin_source,
         args.plugin_source && hooks_wiring::runtime_covers_codex(&args.runtime),
     );
-    let build_notices = |extra: &[String]| -> Value {
+    let all_extra_notices: Vec<String> = hooks_transition_notices
+        .iter()
+        .chain(statusline_skip_notices.iter())
+        .cloned()
+        .collect();
+    // `items` is the plan (plan mode) or the applied list (apply mode).
+    let build_notices = |items: &[Value]| -> Value {
         let mut out: Vec<Value> = Vec::new();
         for n in notices::commands_notices(&repo_root, first_onboard) {
             out.push(json!(n));
@@ -386,7 +464,10 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
         for n in notices::tracked_paths_notices(&repo_root) {
             out.push(json!(n));
         }
-        for n in extra {
+        for n in &all_extra_notices {
+            out.push(json!(n));
+        }
+        for n in notices::pi_team_notices(items) {
             out.push(json!(n));
         }
         Value::Array(out)
@@ -417,7 +498,8 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
                 "targets": computed.skill_sync.targets.iter().map(|t| t.to_json()).collect::<Vec<_>>(),
             }),
         );
-        payload.insert("notices".into(), build_notices(&hooks_transition_notices));
+        payload.insert("notices".into(), build_notices(&computed.plan));
+        payload.insert("design_offer".into(), json!(notices::design_offer_due(&repo_root)));
         if computed.worktree_migration.applicable {
             payload.insert(
                 "worktree_migration".into(),
@@ -480,6 +562,7 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
                 forced_versions,
                 skills,
             } = *result;
+            let notices = build_notices(&applied);
             let recheck = compute_plan(engine, &repo_root, &opts);
             // Review P1-7: blocked-first precedence — a recheck can NEVER
             // read "up_to_date" while ANY target is still blocked.
@@ -513,7 +596,8 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
             );
             payload.insert("skills".into(), skills);
             payload.insert("onboarding".into(), onboarding);
-            payload.insert("notices".into(), build_notices(&hooks_transition_notices));
+            payload.insert("notices".into(), notices);
+            payload.insert("design_offer".into(), json!(notices::design_offer_due(&repo_root)));
             if forced_downgrade {
                 // F9: a forced apply reports the fact machine-readably.
                 payload.insert("forced_downgrade".into(), json!(true));

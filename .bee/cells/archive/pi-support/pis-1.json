@@ -1,0 +1,87 @@
+{
+  "id": "pis-1",
+  "feature": "pi-support",
+  "title": "Pi enforcement belt extension with enumerated tool map and fail-safe unknown-tool routing",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D8"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "read_first": [
+    "docs/history/pi-support/CONTEXT.md",
+    "docs/history/pi-support/plan.md",
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/research/pi-harness-support.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "node --check .pi/extensions/bee-guard.ts",
+  "action": "Write .pi/extensions/bee-guard.ts mirroring .opencode/plugins/bee-guard.ts in Pi 0.84.3 idiom (default export function(pi), events per D2). Blocking: tool_call routed via an ENUMERATED map of Pi built-in tool names (enumerate from the installed Pi docs at ~/.local/share/mise/installs/pi/0.84.3/pi/docs/extensions.md and the herdr extension precedent); any name outside the map routes to write-guard as write-capable (fail-safe, per decision logged 2026-08-29); deny/crash/missing-binary/ask-verdict/unparseable-stdout all return {block: true, reason} (D3 fail closed). Repaired-verdict tools stay pass-through (no field-name translation; no documented Pi input-mutation contract). Advisory (never throw): session_start runs bee hook session-init once, cached, reload-idempotent; each before_agent_start appends the cached block on first turn then runs bee hook prompt-context unchanged as the per-turn delta (D8); tool_result to state-sync; agent_settled to turn-end. Passivity checked PER CALL on the .bee DIRECTORY (cwd then git-common-dir main root, mirroring candidateBinaries); directory present + binary missing = block. Include the model-guard NAMED EXCLUSION comment (Pi has no Agent/Task surface). execFile only, bee.exe in the chain, cwd from process.cwd()/ctx (Pi passes no directory arg).",
+  "must_haves": {
+    "truths": [
+      "an unmapped tool name reaches write-guard, never a silent allow",
+      "deny/crash/missing-binary on the blocking path returns {block:true}",
+      "no handler throws on the advisory path"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "enumerated tool map, blocking runner, advisory wrappers, per-call passivity, named exclusion comment; zero guard rules of its own"
+      }
+    ],
+    "key_links": [
+      "every verdict comes from exec of .bee/bin/bee hook <rule>"
+    ],
+    "prohibitions": [
+      "No guard logic in TS beyond translation",
+      "No load-time-only passivity",
+      "No field-name translation on repaired-verdict tools",
+      "No Rust changes"
+    ]
+  },
+  "trace": {
+    "worker": "pis-w1",
+    "outcome": "Pi enforcement belt written: enumerated built-in tool map, fail-safe unknown-tool routing to write-guard, fail-closed blocking runner, never-throw advisory wrappers, per-call .bee-directory passivity, model-guard named exclusion",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts"
+    ],
+    "deviations": [
+      "Mapped Pi edit to MultiEdit and translated edits[].oldText/newText into old_string/new_string instead of a bare Edit passthrough — Pi edit takes an array of replacements, which is MultiEdit shape, and bee treats Edit/Write/MultiEdit identically so the honest name costs nothing — found a better route",
+      "Unmapped tools carrying a string command route as Bash instead of Write — Bash is write-capable in bee terms too and a Write-shaped route would hide a custom shell tool command from the guard, a real bypass — hit an unforeseen obstacle",
+      "Blocking runner blocks on an updatedInput repair it cannot apply to a field-translated tool — plan.md said Pi has no documented input-mutation contract, but docs/extensions.md tool_call documents mutable event.input, so the repair channel exists and dropping it would run the call unrepaired — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T16:32:26.668Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T16:23:17.143Z",
+    "report": {
+      "outcome": "Pi enforcement belt written: enumerated built-in tool map, fail-safe unknown-tool routing to write-guard, fail-closed blocking runner, never-throw advisory wrappers, per-call .bee-directory passivity, model-guard named exclusion",
+      "commit": "9a36fe28",
+      "files": [
+        ".pi/extensions/bee-guard.ts"
+      ],
+      "tests": "node --check .pi/extensions/bee-guard.ts + node smoke over mapToolCall/handlers against the real .bee/bin/bee — green — the cell verify plus the three must-have truths (unmapped tool routes write-capable to write-guard, real deny returns {block:true}, no advisory handler throws); fixture suite is pis-3",
+      "deviations": [
+        "Mapped Pi edit to MultiEdit and translated edits[].oldText/newText into old_string/new_string instead of a bare Edit passthrough — Pi edit takes an array of replacements, which is MultiEdit shape, and bee treats Edit/Write/MultiEdit identically so the honest name costs nothing — found a better route",
+        "Unmapped tools carrying a string command route as Bash instead of Write — Bash is write-capable in bee terms too and a Write-shaped route would hide a custom shell tool command from the guard, a real bypass — hit an unforeseen obstacle",
+        "Blocking runner blocks on an updatedInput repair it cannot apply to a field-translated tool — plan.md said Pi has no documented input-mutation contract, but docs/extensions.md tool_call documents mutable event.input, so the repair channel exists and dropping it would run the call unrepaired — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 633 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

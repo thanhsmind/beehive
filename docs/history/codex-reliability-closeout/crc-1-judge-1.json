@@ -1,0 +1,40 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "NEEDS_REVISION",
+  "checks": [
+    {
+      "id": "unsafe-homes-refused-before-probe",
+      "status": "PASS",
+      "evidence": "scripts/codex-parity-canary.sh:41-98 validates real-home paths, system paths, and symlinks before the first probe at line 166. docs/history/codex-reliability-closeout/isolation-green.log:2-6 records the fixture result."
+    },
+    {
+      "id": "inherited-path-wrapper-isolated",
+      "status": "PASS",
+      "evidence": "scripts/codex-parity-canary.sh:100-145 removes directories containing a different codex executable. scripts/codex-parity-canary-test.sh:164-219 supplies a hostile inherited PATH wrapper and checks that it stays unresolved."
+    },
+    {
+      "id": "inherited-environment-isolated",
+      "status": "FAIL",
+      "evidence": "scripts/codex-parity-canary.sh:156-162 replaces HOME and XDG paths, but leaves BEE_CODEX_PROBE_BIN inherited. The variable controls the Codex capability probe at packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:2436. The Codex execution at scripts/codex-parity-canary.sh:215-217 does not unset it.",
+      "failure_signature": "Set BEE_CODEX_PROBE_BIN in the host environment. The canary passes it into nested bee and hook processes, which can execute the inherited probe instead of the controlled Codex path."
+    },
+    {
+      "id": "hostile-subprocess-positive-control",
+      "status": "FAIL",
+      "evidence": "scripts/codex-parity-canary-test.sh:358-368 makes the fake probe write through isolated HOME and XDG paths, but lines 386-404 check only that host sentinels remain unchanged. The test never checks that isolated sentinel files contain CORRUPTED. It also ignores the canary exit status at lines 374-384.",
+      "failure_signature": "Prevent the fake probe from running. test_hostile_subprocess_isolation can still report PASS because it has no probe-executed or isolated-write assertion."
+    },
+    {
+      "id": "installed-hook-entrypoint",
+      "status": "PASS",
+      "evidence": "scripts/codex-parity-canary.sh is executable. Read-only checks `bash -n scripts/codex-parity-canary.sh` and `bash -n scripts/codex-parity-canary-test.sh` printed `syntax-ok`. This proves executable syntax only; the retained isolation logs use mock bee and fake Codex fixtures, not an installed Codex run."
+    },
+    {
+      "id": "artifact-and-prohibitions",
+      "status": "PASS",
+      "evidence": "The substantive artifact exists at scripts/codex-parity-canary.sh:1-300. Credential paths appear only in rejection and documentation logic at lines 71-98 and 239-250; no credential copy is present."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

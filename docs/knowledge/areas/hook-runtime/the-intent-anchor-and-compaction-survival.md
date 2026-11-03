@@ -84,6 +84,18 @@ re-anchored on its own bookkeeping, so putting the bookkeeping second is the fix
 not a presentation preference. Handoff adoption is unchanged — a compacted
 session still never auto-adopts a planned-next handoff.
 
+**It now also reaches every dispatch.** `bee dispatch prepare` renders the
+request into the worker, gather, reviewer and advisor prompts under this same
+header, so a delegated worker reads the user's words instead of an
+intermediate layer's restatement. That door resolves the anchor by **feature**
+only and never falls back to the `default` key — no staleness check exists,
+and a stale default anchor printed under a verbatim banner would be worse than
+printing nothing. The anchor's own DO-NOT-PARAPHRASE framing is what carries
+the rule that no intermediate layer may replace or paraphrase the user's
+words — a layer may only ADD guidance beside them
+(slp-contract-original-request D5/D6). Details in
+[`../workflow-state/dispatch.md`](../workflow-state/dispatch.md).
+
 **Absence changes nothing.** With no anchor the emitted text is byte-identical to
 what shipped before: the anchor path is strictly **additive**, a prefix on an
 otherwise untouched block. A corrupt anchor reads as no anchor. A repo that never
@@ -180,5 +192,6 @@ orientation ended with zero edits to that suite.
   read-only `state compact-check` verb.
 - Proof: `packages/bee/tests/test_intent.mjs` (incl. the
   two-boundary simulation), the intent rows in `hooks/test_hook_contracts.mjs`,
-  and `scripts/tests/test_compaction_advisories.mjs` (the nudge and survival-warning
-  rows against the real hooks).
+  `scripts/tests/test_compaction_advisories.mjs` (the nudge and survival-warning
+  rows against the real hooks), and `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`
+  (`pi_lifecycle_end_to_end_onboarded_repo_parity` proving intent retention and dispatch rendering).

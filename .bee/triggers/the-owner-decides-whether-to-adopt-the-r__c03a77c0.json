@@ -1,0 +1,11 @@
+{
+  "id": "the-owner-decides-whether-to-adopt-the-r__c03a77c0",
+  "decision": "c03a77c0",
+  "condition": "The owner decides whether to adopt the remaining two openJev-verdict-2.0 practices — judge ABSTAIN and baseline floors in cap proofs — plus the smoke rule's code half (a narrowing flag printing its own warning). Tracked on the spec-drop backlog row for 3d41a292.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-20T15:34:09.714Z",
+  "updated_at": "2026-09-20T15:34:09.714Z",
+  "outcome": null
+}

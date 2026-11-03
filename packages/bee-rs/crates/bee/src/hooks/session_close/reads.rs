@@ -314,6 +314,42 @@ pub(crate) fn control_root(root: &Path, ctx: &HookContext) -> PathBuf {
     }
 }
 
+pub(crate) fn control_root_for_root(root: &Path) -> PathBuf {
+    match crate::roots::resolve_roots_core(root) {
+        crate::roots::Resolution::LinkedValid { main_root, .. } => main_root,
+        crate::roots::Resolution::Ordinary { work_root, .. } => work_root,
+        _ => root.to_path_buf(),
+    }
+}
+
+pub(crate) fn read_session_record(root: &Path, sid: &str) -> Option<Map<String, Value>> {
+    if !is_plain_id(sid) {
+        return None;
+    }
+    let ctl = control_root_for_root(root);
+    let session_file = ctl.join(".bee").join("sessions").join(format!("{sid}.json"));
+    match read_json_failopen(&session_file) {
+        ReadJson::Parsed(Value::Object(m)) => {
+            if m.get("id").and_then(Value::as_str) == Some(sid) {
+                Some(m)
+            } else {
+                None
+            }
+        }
+        _ => {
+            if ctl != root {
+                let direct_file = root.join(".bee").join("sessions").join(format!("{sid}.json"));
+                if let ReadJson::Parsed(Value::Object(m)) = read_json_failopen(&direct_file) {
+                    if m.get("id").and_then(Value::as_str) == Some(sid) {
+                        return Some(m);
+                    }
+                }
+            }
+            None
+        }
+    }
+}
+
 pub(crate) fn resolve_pipeline(
     root: &Path,
     ctx: &HookContext,

@@ -7,6 +7,7 @@ timestamp: 2026-08-23
 bee:
   id: pattern-20260823-a-settling-window-rebuilt-per-call-never-closes
   lifecycle: active
+  areas: [bee-herding]
   sources: ["tmux-ready-wait cell trw-1 (the stability window moved from the agent_wait call frame onto the per-pane transport state; dropped on a failed read, a pane close, and a new job into the pane)"]
   polarity: pitfall
   critical: false

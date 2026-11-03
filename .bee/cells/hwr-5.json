@@ -1,0 +1,160 @@
+{
+  "id": "hwr-5",
+  "feature": "harness-worktree-relocation",
+  "title": "Document enter and exit per harness",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "hwr-3",
+    "hwr-4"
+  ],
+  "decisions": [
+    "016ae1ef-c7d3-4949-81c2-28c6503906e1",
+    "86337de7-429c-4317-b2e0-ed4fc7ff152a",
+    "6c860e87-9aff-42f4-8fed-8e628a217e21",
+    "c6023a6e-b1f2-4eb7-bf31-ea542d0cb975"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-herding/references/role-merge.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md",
+    "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "read_first": [
+    "docs/history/harness-worktree-relocation/CONTEXT.md",
+    "docs/history/harness-worktree-relocation/plan.md",
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-herding/references/role-merge.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-herding/references/role-merge.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "action": "Sync the words with the shipped behavior. (1) packages/bee/AGENTS.block.md, where it says `Move the session into the worktree`: add one short rule — follow the `instruction` line bee prints on `worktree new`, `enter`, `exit` and `merge`; leave with `bee worktree exit`; never `cd` to main inside a shell call to merge. Regenerate AGENTS.md with `.bee/bin/bee dev regen`, never by hand. (2) skills/bee-swarming/SKILL.md near `Enter the worktree first (EnterWorktree, or a session/pane`: name `bee worktree exit` as the way back. (3) skills/bee-herding/references/role-merge.md: every `bee worktree merge --id <grant-key> --cleanup` gains `--detached`, with one sentence why (per D2). (4) .bee/verify/verify-app/features/worktree-and-close.md: add rows and drive steps for `worktree exit`, merge-from-main detection, `--detached`, and the `instruction`/`sessionRuntime` fields. (5) Both knowledge files: add the exit verb, the caller locator order, the detection rule, the two limits (OpenCode has no session cwd so detection never fires there; a Claude Code `cd` that persisted from an earlier Bash call is not seen), cite decisions 016ae1ef, 86337de7, 6c860e87, c6023a6e, and mark the old no-exit statement superseded. Short plain sentences.",
+  "verify": ".bee/bin/bee dev release-manifest --check && rg -n 'worktree exit' packages/bee/AGENTS.block.md AGENTS.md skills/bee-swarming/SKILL.md && rg -c -- '--detached' skills/bee-herding/references/role-merge.md",
+  "must_haves": {
+    "truths": [
+      "the AGENTS block and swarming skill name bee worktree exit and the instruction line",
+      "the herding merge role passes --detached",
+      "the feature map and knowledge area describe exit, detection, locator order and limits"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "per-harness move rule"
+      },
+      {
+        "path": ".bee/verify/verify-app/features/worktree-and-close.md",
+        "substantive": "exit and detection drive steps"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md is regenerated from AGENTS.block.md, not hand-edited"
+    ],
+    "prohibitions": [
+      "Do not edit Rust or plugin source",
+      "Do not rewrite unrelated sections of the knowledge files"
+    ]
+  },
+  "behavior_change": false,
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "hwr5-worker",
+    "outcome": "docs and agent instructions synced with worktree exit and merge detection",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-herding/references/role-merge.md",
+      ".agents/skills/bee-swarming/SKILL.md",
+      ".agents/skills/verify-app/features/worktree-and-close.md",
+      ".bee/onboarding.json",
+      ".bee/verify/verify-app/features/worktree-and-close.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-herding/references/role-merge.md",
+      ".claude-plugin/skills/bee-swarming/SKILL.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-herding/references/role-merge.md",
+      ".claude/skills/bee-swarming/SKILL.md",
+      ".claude/skills/verify-app/features/worktree-and-close.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-herding/references/role-merge.md",
+      ".codex-plugin/skills/bee-swarming/SKILL.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-herding/references/role-merge.md",
+      ".opencode/skills/bee-swarming/SKILL.md",
+      ".opencode/skills/verify-app/features/worktree-and-close.md",
+      "AGENTS.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-herding/references/role-merge.md",
+      "skills/bee-swarming/SKILL.md"
+    ],
+    "deviations": [
+      "wave-barrier regen for hwr-3/hwr-4/hwr-5 ran inside this cell's commit (bee dev regen), as the regen_obligation_ack deferred",
+      "sync-ack: AGENTS.md changed only in the worktree-dispatch paragraph through bee dev regen from AGENTS.block.md; the capture-line rule text and its applied_at files are untouched"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-16T11:47:16.207Z",
+    "behavior_change": false,
+    "verification_evidence": "release manifest matches (376 files), exit pinned in AGENTS block, AGENTS.md and swarming skill, --detached appears 3 times in role-merge.md",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7033d8f8-2786-4936-b02c-73b18858ea0e",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && rg -n 'worktree exit' packages/bee/AGENTS.block.md AGENTS.md skills/bee-swarming/SKILL.md && rg -c -- '--detached' skills/bee-herding/references/role-merge.md",
+    "claimed_at": "2026-09-16T11:41:40.307Z",
+    "sync_ack": "AGENTS.md changed only in the worktree-dispatch paragraph through bee dev regen from AGENTS.block.md; the capture-line rule text and its applied_at files are untouched",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "AGENTS block, swarming skill, herding merge role, feature map and worktree knowledge area describe exit, detection, --detached and the instruction line; regen chain run once for the wave barrier",
+      "commit": "67bd2c4ff",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-herding/references/role-merge.md",
+        ".agents/skills/bee-swarming/SKILL.md",
+        ".agents/skills/verify-app/features/worktree-and-close.md",
+        ".bee/onboarding.json",
+        ".bee/verify/verify-app/features/worktree-and-close.md",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-herding/references/role-merge.md",
+        ".claude-plugin/skills/bee-swarming/SKILL.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-herding/references/role-merge.md",
+        ".claude/skills/bee-swarming/SKILL.md",
+        ".claude/skills/verify-app/features/worktree-and-close.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-herding/references/role-merge.md",
+        ".codex-plugin/skills/bee-swarming/SKILL.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-herding/references/role-merge.md",
+        ".opencode/skills/bee-swarming/SKILL.md",
+        ".opencode/skills/verify-app/features/worktree-and-close.md",
+        "AGENTS.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+        "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+        "packages/bee/AGENTS.block.md",
+        "skills/bee-herding/references/role-merge.md",
+        "skills/bee-swarming/SKILL.md"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && rg -n 'worktree exit' packages/bee/AGENTS.block.md AGENTS.md skills/bee-swarming/SKILL.md && rg -c -- '--detached' skills/bee-herding/references/role-merge.md — green:static — release manifest matches (376 files), exit pinned in AGENTS block, AGENTS.md and swarming skill, --detached appears 3 times in role-merge.md",
+      "deviations": [
+        "wave-barrier regen for hwr-3/hwr-4/hwr-5 ran inside this cell's commit (bee dev regen), as the regen_obligation_ack deferred"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 284 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -38,6 +38,145 @@ pub(crate) fn first_truthy<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Op
     None
 }
 
+pub(crate) enum ReconstructFail {
+    WriteContent,
+    Unreadable,
+    MissingOldString,
+    MissingNewString,
+    OldStringNotFound,
+    MissingEdits,
+    EmptyEdits,
+    BadEdit,
+    UnsupportedTool,
+}
+
+fn apply_edit(text: &str, old_s: &str, new_s: &str, replace_all: Option<&Value>) -> String {
+    if replace_all.and_then(Value::as_bool).unwrap_or(false) {
+        text.replace(old_s, new_s)
+    } else {
+        text.replacen(old_s, new_s, 1)
+    }
+}
+
+pub(crate) fn reconstruct_target_text(
+    tool_name: &str,
+    tool_input: &Map<String, Value>,
+    root_pb: &Path,
+    rel: &str,
+) -> Result<(String, String), ReconstructFail> {
+    let target = root_pb.join(rel);
+    match tool_name {
+        "Write" => {
+            let Some(content) = tool_input.get("content").and_then(Value::as_str) else {
+                return Err(ReconstructFail::WriteContent);
+            };
+            Ok((
+                std::fs::read_to_string(&target).unwrap_or_default(),
+                content.to_string(),
+            ))
+        }
+        "Edit" => {
+            let Ok(current_text) = std::fs::read_to_string(&target) else {
+                return Err(ReconstructFail::Unreadable);
+            };
+            let Some(old_s) = tool_input.get("old_string").and_then(Value::as_str) else {
+                return Err(ReconstructFail::MissingOldString);
+            };
+            let Some(new_s) = tool_input.get("new_string").and_then(Value::as_str) else {
+                return Err(ReconstructFail::MissingNewString);
+            };
+            if !current_text.contains(old_s) {
+                return Err(ReconstructFail::OldStringNotFound);
+            }
+            let proposed = apply_edit(&current_text, old_s, new_s, tool_input.get("replace_all"));
+            Ok((current_text, proposed))
+        }
+        "MultiEdit" => {
+            let Ok(current_text) = std::fs::read_to_string(&target) else {
+                return Err(ReconstructFail::Unreadable);
+            };
+            let Some(Value::Array(edits)) = tool_input.get("edits") else {
+                return Err(ReconstructFail::MissingEdits);
+            };
+            if edits.is_empty() {
+                return Err(ReconstructFail::EmptyEdits);
+            }
+            let mut proposed = current_text.clone();
+            for edit in edits {
+                let Some(old_s) = edit.get("old_string").and_then(Value::as_str) else {
+                    return Err(ReconstructFail::BadEdit);
+                };
+                let Some(new_s) = edit.get("new_string").and_then(Value::as_str) else {
+                    return Err(ReconstructFail::BadEdit);
+                };
+                if !proposed.contains(old_s) {
+                    return Err(ReconstructFail::BadEdit);
+                }
+                proposed = apply_edit(&proposed, old_s, new_s, edit.get("replace_all"));
+            }
+            Ok((current_text, proposed))
+        }
+        _ => Err(ReconstructFail::UnsupportedTool),
+    }
+}
+
+fn config_reconstruct_denial(fail: &ReconstructFail, rel: &str, tool_name: &str) -> String {
+    let tail = match fail {
+        ReconstructFail::WriteContent => {
+            "missing or invalid content parameter. FIX: use Edit/Write with complete content."
+        }
+        ReconstructFail::Unreadable => {
+            "unable to read on-disk file. FIX: verify the file exists and is readable before editing."
+        }
+        ReconstructFail::MissingOldString => {
+            "missing or invalid old_string. FIX: provide old_string and new_string to Edit."
+        }
+        ReconstructFail::MissingNewString => {
+            "missing or invalid new_string. FIX: provide old_string and new_string to Edit."
+        }
+        ReconstructFail::OldStringNotFound => {
+            "old_string not found in file. FIX: provide exact matching old_string to Edit."
+        }
+        ReconstructFail::MissingEdits => {
+            "missing edits array. FIX: provide edits array to MultiEdit."
+        }
+        ReconstructFail::EmptyEdits => {
+            "edits array is empty. FIX: provide non-empty edits array to MultiEdit."
+        }
+        ReconstructFail::BadEdit => {
+            "missing parameters or target string not found. FIX: provide valid edits array to MultiEdit."
+        }
+        ReconstructFail::UnsupportedTool => {
+            return format!(
+                "bee config guard: \"{}\" cannot be modified via {} — unsupported tool for governed config. FIX: use Edit/Write to edit config files.",
+                rel, tool_name
+            )
+        }
+    };
+    format!(
+        "bee config guard: \"{}\" {} cannot be reconstructed — {}",
+        rel, tool_name, tail
+    )
+}
+
+fn first_added_comment(rel: &str, old: &str, new: &str) -> Option<(String, String)> {
+    let lang = crate::comments::code_lang(rel, new.lines().next().unwrap_or(""))?;
+    let (number, text) = crate::comments::added_comment_lines(lang, old, new).into_iter().next()?;
+    Some((number.to_string(), text))
+}
+
+fn comment_guard_denial(rel: &str, locus: &str, text: &str) -> String {
+    let trimmed: String = text.trim().chars().take(80).collect();
+    format!(
+        "bee comment guard denied this write: {rel}:{locus} adds a comment line (\"{trimmed}\"). \
+This repository keeps no comments in code (no_code_comments) — not //, not /// or //! doc comments, not /* */, not #. \
+FIX: put the why in a docs/knowledge concept whose Pointers name this file, or log it with bee decisions log; \
+a public item's description goes in the owning docs/knowledge concept; \
+a workaround is fixed, or filed with bee backlog add and cited from the concept — never from the code. \
+Exceptions: a #! line, a SAFETY: line on unsafe, a license header at file top."
+    )
+}
+
 pub(crate) fn run_native(ctx: &HookContext) -> R<Emit> {
     run_native_with_roots(ctx, &HarnessRoots::detect())
 }
@@ -63,8 +202,9 @@ pub(crate) fn run_native_with_roots(ctx: &HookContext, harness_roots: &HarnessRo
     };
     let is_write_tool = matches!(tool_name.as_str(), "Edit" | "Write" | "MultiEdit");
     let is_apply = matches!(tool_name.as_str(), "apply_patch" | "ApplyPatch");
+    let is_shell = matches!(tool_name.as_str(), "Bash" | "exec");
     let is_read_tool = matches!(tool_name.as_str(), "Read" | "Glob" | "Grep");
-    let write_capable = is_write_tool || tool_name == "Bash" || is_apply;
+    let write_capable = is_write_tool || is_shell || is_apply;
 
     if write_capable && ctx.worktree_resolution == "linked-invalid" {
         emit.stderr.push_str(
@@ -179,8 +319,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     }
                 }
             }
-        } else if tool_name == "Bash" {
-            let command = match tool_input.get("command") {
+        } else if is_shell {
+            let command = match first_truthy(&tool_input, &["command", "cmd"]) {
                 Some(Value::String(s)) => s.clone(),
                 _ => String::new(),
             };
@@ -424,15 +564,38 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         let mut shared_denied = false;
         if denial.is_none() {
             for (rel, abs) in &shared_candidates {
-                if is_shared_nested_checkout_target(
+                // sfg-5, then sfg-6: FOUR answers, not two. The two
+                // unreadable-record arms are the fail-opens sfg-4's sweep left
+                // here — this loop runs for EVERY Edit/Write/Bash with a
+                // resolvable target, so one truncated
+                // `.bee/sessions/<id>.json`, or one corrupt
+                // `.bee/companion-session.json`, used to switch the whole
+                // guard off on a real write. Both deny now, in bee's own
+                // wording; see `unreadable_session_refusal` and
+                // `unreadable_companion_marker_refusal` for why that departs
+                // from Node.
+                match is_shared_nested_checkout_target(
                     &root,
                     abs,
                     session_id.as_deref(),
                     control_root_s.as_deref(),
                 )? {
-                    denial = Some(shared_nested_checkout_refusal(rel));
-                    shared_denied = true;
-                    break;
+                    SharedNested::No => {}
+                    SharedNested::Yes => {
+                        denial = Some(shared_nested_checkout_refusal(rel));
+                        shared_denied = true;
+                        break;
+                    }
+                    SharedNested::UnreadableSession(file) => {
+                        denial = Some(unreadable_session_refusal(rel, &file));
+                        shared_denied = true;
+                        break;
+                    }
+                    SharedNested::UnreadableCompanionMarker(file) => {
+                        denial = Some(unreadable_companion_marker_refusal(rel, &file));
+                        shared_denied = true;
+                        break;
+                    }
                 }
             }
         }
@@ -467,7 +630,172 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             }
         }
 
-        if denial.is_none() && !rel_paths.is_empty() {
+        // crkg-1: config-role-key-guard arm over .bee/config.json and .bee/config.local.json
+        if denial.is_none() {
+            for rel in &rel_paths {
+                let norm = normalize_rel(rel);
+                if norm == ".bee/config.json" || norm == ".bee/config.local.json" {
+                    if is_apply {
+                        denial = Some(format!(
+                            "bee config guard: \"{}\" cannot be modified via apply_patch — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
+                            rel
+                        ));
+                        break;
+                    }
+                    if is_shell {
+                        denial = Some(format!(
+                            "bee config guard: \"{}\" cannot be modified via Bash — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
+                            rel
+                        ));
+                        break;
+                    }
+                    // The comparison is over the MERGED view, never one file
+                    // alone: .bee/config.local.json deep-merges over
+                    // .bee/config.json on every read (state.rs:176-184), so a
+                    // per-file projection cannot tell a masked change from a
+                    // removal in either direction. Both sides of the diff are
+                    // built the way read_config_raw builds what the dispatcher
+                    // resolves against.
+                    let tracked_disk =
+                        std::fs::read_to_string(root_pb.join(".bee/config.json")).ok();
+                    let overlay_disk =
+                        std::fs::read_to_string(root_pb.join(".bee/config.local.json")).ok();
+                    let is_overlay_file = norm == ".bee/config.local.json";
+                    // Two distinct "nothing to compare" cases, both None, both
+                    // allowed: NEITHER config file exists yet (a first write
+                    // has no prior table to change), and the tracked file
+                    // exists but does not parse (config_merged_text returns
+                    // None, which is how a corrupt-config repair stays possible).
+                    let old_merged = if tracked_disk.is_none() && overlay_disk.is_none() {
+                        None
+                    } else {
+                        config_merged_text(tracked_disk.as_deref(), overlay_disk.as_deref())
+                    };
+                    let merged_with = |proposed: &str| -> Option<String> {
+                        if is_overlay_file {
+                            config_merged_text(tracked_disk.as_deref(), Some(proposed))
+                        } else {
+                            config_merged_text(Some(proposed), overlay_disk.as_deref())
+                        }
+                    };
+
+                    let proposed =
+                        match reconstruct_target_text(&tool_name, &tool_input, &root_pb, rel) {
+                            Ok((_, new)) => new,
+                            Err(fail) => {
+                                denial =
+                                    Some(config_reconstruct_denial(&fail, rel, &tool_name));
+                                break;
+                            }
+                        };
+                    if let Some(new_merged) = merged_with(&proposed) {
+                        if let Some(reason) =
+                            config_governed_change_deny(rel, old_merged.as_deref(), &new_merged)
+                        {
+                            denial = Some(reason);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if denial.is_none() {
+            let config = read_config(&store_root_pb)?;
+            if config.get("no_code_comments") == Some(&Value::Bool(true)) {
+                let command = match first_truthy(&tool_input, &["command", "cmd"]) {
+                    Some(Value::String(s)) => s.clone(),
+                    _ => String::new(),
+                };
+                let patch = apply_patch_text(&tool_input);
+                for rel in &rel_paths {
+                    if rel == "**" {
+                        continue;
+                    }
+                    let norm = normalize_rel(rel);
+                    if !crate::comments::under_code_root(&norm) {
+                        continue;
+                    }
+                    let mut hit: Option<(String, String)> = None;
+                    if is_apply {
+                        if let Some(patch_text) = patch.as_deref() {
+                            for (target, added) in apply_patch_added_lines(patch_text) {
+                                let Ok(Some(resolved)) =
+                                    canonical_rel_path(&root, &cwd, Some(&Value::String(target)))
+                                else {
+                                    continue;
+                                };
+                                if normalize_rel(&resolved) != norm {
+                                    continue;
+                                }
+                                let first = added.first().map(String::as_str).unwrap_or("");
+                                let Some(lang) = crate::comments::code_lang(&norm, first) else {
+                                    continue;
+                                };
+                                let mut in_block = false;
+                                for (index, line) in added.iter().enumerate() {
+                                    if !crate::comments::is_comment_line(lang, line, &mut in_block)
+                                    {
+                                        continue;
+                                    }
+                                    if crate::comments::is_exception(lang, line, false) {
+                                        continue;
+                                    }
+                                    hit = Some((
+                                        format!("added line {}", index + 1),
+                                        line.trim().to_string(),
+                                    ));
+                                    break;
+                                }
+                                if hit.is_some() {
+                                    break;
+                                }
+                            }
+                        }
+                    } else if is_shell {
+                        for write in heredoc_writes(&command) {
+                            let Ok(Some(resolved)) = canonical_rel_path(
+                                &root,
+                                &cwd,
+                                Some(&Value::String(write.target.clone())),
+                            ) else {
+                                continue;
+                            };
+                            if normalize_rel(&resolved) != norm {
+                                continue;
+                            }
+                            let old = std::fs::read_to_string(root_pb.join(&norm))
+                                .unwrap_or_default();
+                            let new = if write.append {
+                                let mut merged = old.clone();
+                                if !merged.is_empty() && !merged.ends_with('\n') {
+                                    merged.push('\n');
+                                }
+                                merged.push_str(&write.body);
+                                merged
+                            } else {
+                                write.body.clone()
+                            };
+                            hit = first_added_comment(&norm, &old, &new);
+                            if hit.is_some() {
+                                break;
+                            }
+                        }
+                    } else if let Ok((old, new)) =
+                        reconstruct_target_text(&tool_name, &tool_input, &root_pb, rel)
+                    {
+                        hit = first_added_comment(&norm, &old, &new);
+                    }
+                    if let Some((locus, text)) = hit {
+                        denial = Some(comment_guard_denial(&norm, &locus, &text));
+                        break;
+                    }
+                }
+            }
+        }
+
+        let pi_leader = is_pi_leader(payload);
+        if denial.is_none() && (!rel_paths.is_empty() || pi_leader) {
             // The worktree-first guard must judge the same ACTING record
             // every other write check already resolved (resolve_write_record:
             // the lane record for a lane-bound session, the default state
@@ -489,21 +817,28 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             if let RecordResolution::Ok { record, .. } =
                 resolve_write_record(&topo.control_root, &state, session_id.as_deref(), &mut emit)?
             {
-                if let Some(reason) = check_worktree_first(
-                    ctx.worktree_resolution,
-                    &root,
-                    &store_root_pb,
-                    &record,
-                    &rel_paths,
-                    session_id.as_deref(),
-                )? {
-                    denial = Some(reason);
+                if !rel_paths.is_empty() {
+                    denial = check_worktree_first(
+                        ctx.worktree_resolution,
+                        &root,
+                        &store_root_pb,
+                        &record,
+                        &rel_paths,
+                        session_id.as_deref(),
+                    )?;
+                }
+                if denial.is_none() && pi_leader {
+                    let command = match first_truthy(&tool_input, &["command", "cmd"]) {
+                        Some(Value::String(s)) if is_shell => s.as_str(),
+                        _ => "",
+                    };
+                    denial = check_pi_leader_write_lock(&store_root_pb, &record, &rel_paths, command)?;
                 }
             }
         }
 
-        if denial.is_none() && tool_name == "Bash" {
-            let command = match tool_input.get("command") {
+        if denial.is_none() && is_shell {
+            let command = match first_truthy(&tool_input, &["command", "cmd"]) {
                 Some(Value::String(s)) => s.clone(),
                 _ => String::new(),
             };
@@ -515,6 +850,7 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     &cwd,
                     session_id.as_deref(),
                     control_root_s.as_deref(),
+                    ctx.worktree_resolution,
                     &mut emit,
                 )? {
                     denial = Some(reason);
@@ -522,8 +858,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             }
         }
 
-        if denial.is_none() && tool_name == "Bash" {
-            let command = match tool_input.get("command") {
+        if denial.is_none() && is_shell {
+            let command = match first_truthy(&tool_input, &["command", "cmd"]) {
                 Some(Value::String(s)) => s.clone(),
                 _ => String::new(),
             };
@@ -538,8 +874,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
     // unless a bee-CLI-shaped token resolves, and it can only ASSIGN a denial
     // when none exists yet, so short-circuiting on `denial.is_none()` is the
     // intended precedence.
-    if tool_name == "Bash" {
-        let command = match tool_input.get("command") {
+    if is_shell {
+        let command = match first_truthy(&tool_input, &["command", "cmd"]) {
             Some(Value::String(s)) => s.clone(),
             _ => String::new(),
         };

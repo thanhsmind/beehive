@@ -15,7 +15,7 @@
 //   deferred-queue list    [--kind <v>] [--claimed <claimed|unclaimed>] [--json]
 //   deferred-queue claim   --id <v> [--owner <v>] [--lease <seconds>] [--json]
 //   deferred-queue release --id <v> [--owner <v>] [--json]
-//   deferred-queue complete --id <v> [--owner <v>] [--json]
+//   deferred-queue complete --id <v> [--owner <v>] | --kind <v> --feature <v> [--json]
 //
 // Store: `.bee/deferred-queue.jsonl`, event-sourced (add/claim/release/
 // complete), folded last-event-wins per id — the same shape backlog.rs's
@@ -456,7 +456,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "list" => run_list(parse_shape(rest, &["kind", "claimed"])?, t0),
         "claim" => run_claim(parse_shape(rest, &["id", "owner", "lease"])?, t0),
         "release" => run_release(parse_shape(rest, &["id", "owner"])?, t0),
-        "complete" => run_complete(parse_shape(rest, &["id", "owner"])?, t0),
+        "complete" => {
+            run_complete(parse_shape(rest, &["id", "kind", "feature", "owner"])?, t0)
+        }
         _ => None,
     }
 }
@@ -799,8 +801,45 @@ fn run_complete(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
-    let Some(id) = flag(&parsed, "id") else {
-        return Some(emit_error(&ctx.root, cmd, parsed.json, &format!("bee {cmd}: --id is required."), t0));
+    let id_flag = flag(&parsed, "id").map(str::to_string);
+    let kind_flag = flag(&parsed, "kind").map(str::to_string);
+    let feature_flag = flag(&parsed, "feature").map(str::to_string);
+    let by_kind_feature = match (&id_flag, &kind_flag, &feature_flag) {
+        (Some(_), None, None) => None,
+        (Some(_), _, _) => {
+            let msg =
+                format!("bee {cmd}: give either --id, or --kind with --feature — not both.");
+            return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
+        }
+        (None, Some(kind), Some(feature)) => {
+            if !KINDS.contains(&kind.as_str()) {
+                let msg = format!(
+                    "bee {cmd}: --kind must be one of capture, scribe, review, promote, worktree-cleanup."
+                );
+                return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
+            }
+            if kind == "promote"
+                && !ctx
+                    .root
+                    .join("docs")
+                    .join("history")
+                    .join(feature)
+                    .join("promote-proposals.md")
+                    .is_file()
+            {
+                let msg = format!(
+                    "bee {cmd}: docs/history/{feature}/promote-proposals.md does not exist — there is no promote proposal for feature \"{feature}\" to clear."
+                );
+                return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
+            }
+            Some((kind.clone(), feature.clone()))
+        }
+        (None, _, _) => {
+            let msg = format!(
+                "bee {cmd}: --id is required, or --kind with --feature to clear every open item of one kind for a feature."
+            );
+            return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
+        }
     };
     let owner_flag = flag(&parsed, "owner");
     let owner = resolve_owner(&ctx.root, owner_flag).or_else(|| owner_flag.map(str::to_string));
@@ -820,45 +859,111 @@ fn run_complete(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         }
     };
     let f = fold(&ctx.root);
-    let outcome: Result<Item, String> = match f.items.get(id) {
-        None => Err(format!("bee {cmd}: no queued item with id \"{id}\".")),
-        Some(item) if item.completed => Err(format!("bee {cmd}: item \"{id}\" is already completed.")),
-        Some(item) => match &item.claim {
-            None => Err(format!(
-                "bee {cmd}: item \"{id}\" must be claimed before it can be completed."
-            )),
-            Some(claim) if claim.owner.as_deref() != owner.as_deref() => Err(format!(
-                "bee {cmd}: item \"{id}\" is claimed by \"{}\", not \"{}\".",
-                claim.owner.as_deref().unwrap_or("no owner"),
-                owner.as_deref().unwrap_or("no owner")
-            )),
-            Some(_) => {
-                let ts = now_iso();
-                let mut event = Map::new();
-                event.insert("ts".into(), Value::String(ts.clone()));
-                event.insert("event".into(), Value::String("complete".into()));
-                event.insert("id".into(), Value::String(id.to_string()));
-                if append_jsonl(&queue_path(&ctx.root), &Value::Object(event)).is_err() {
-                    Err(format!("bee {cmd}: could not append to the deferred queue."))
-                } else {
-                    let mut completed = item.clone();
-                    completed.completed = true;
-                    completed.completed_at = Some(ts);
-                    completed.claim = None;
-                    Ok(completed)
-                }
+    let outcome: Result<(Value, String), String> = match (&id_flag, &by_kind_feature) {
+        (Some(id), _) => match f.items.get(id) {
+            None => Err(format!("bee {cmd}: no queued item with id \"{id}\".")),
+            Some(item) if item.completed => {
+                Err(format!("bee {cmd}: item \"{id}\" is already completed."))
             }
+            Some(item) => match &item.claim {
+                None => Err(format!(
+                    "bee {cmd}: item \"{id}\" must be claimed before it can be completed."
+                )),
+                Some(claim) if claim.owner.as_deref() != owner.as_deref() => Err(format!(
+                    "bee {cmd}: item \"{id}\" is claimed by \"{}\", not \"{}\".",
+                    claim.owner.as_deref().unwrap_or("no owner"),
+                    owner.as_deref().unwrap_or("no owner")
+                )),
+                Some(_) => complete_folded_item(&ctx.root, item, cmd).map(|done| {
+                    let text = format!("Completed deferred {} item {id}.", done.kind);
+                    (item_value(&done), text)
+                }),
+            },
         },
+        (None, Some((kind, feature))) => {
+            complete_by_kind_feature(&ctx.root, kind, feature, cmd)
+        }
+        (None, None) => unreachable!("refused above"),
     };
     guard.release();
 
     match outcome {
         Err(msg) => Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0)),
-        Ok(item) => {
-            let text = format!("Completed deferred {} item {id}.", item.kind);
-            Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &item_value(&item), &text, t0))
+        Ok((value, text)) => {
+            Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &value, &text, t0))
         }
     }
+}
+
+pub(crate) fn complete_by_kind_feature(
+    root: &Path,
+    kind: &str,
+    feature: &str,
+    cmd: &str,
+) -> Result<(Value, String), String> {
+    let f = fold(root);
+    let open: Vec<Item> = f
+        .order
+        .iter()
+        .filter_map(|id| f.items.get(id))
+        .filter(|item| item.kind == kind && item.feature == feature && !item.completed)
+        .cloned()
+        .collect();
+    if open.is_empty() {
+        let existing = f
+            .order
+            .iter()
+            .filter_map(|id| f.items.get(id))
+            .any(|item| item.kind == kind && item.feature == feature);
+        if existing {
+            return Err(format!(
+                "bee {cmd}: the deferred {kind} item for feature \"{feature}\" is already completed."
+            ));
+        }
+        let reason = if kind == "promote" {
+            format!(
+                "Promote proposal for \"{feature}\" awaiting apply — docs/history/{feature}/promote-proposals.md."
+            )
+        } else {
+            format!("Deferred {kind} work for \"{feature}\" cleared with no recorded queue item.")
+        };
+        let (id, _) = enqueue(root, kind, feature, &[], &[], &[], &reason)
+            .map_err(|_| format!("bee {cmd}: could not append to the deferred queue."))?;
+        let added = fold(root).items.get(&id).cloned().ok_or_else(|| {
+            format!("bee {cmd}: could not read back the item just queued.")
+        })?;
+        let done = complete_folded_item(root, &added, cmd)?;
+        return Ok((
+            item_value(&done),
+            format!("Cleared the deferred {kind} reminder for feature \"{feature}\" ({id})."),
+        ));
+    }
+    let count = open.len();
+    let mut last = None;
+    for item in &open {
+        last = Some(complete_folded_item(root, item, cmd)?);
+    }
+    let done = last.expect("open is non-empty");
+    Ok((
+        item_value(&done),
+        format!("Completed {count} deferred {kind} item(s) for feature \"{feature}\"."),
+    ))
+}
+
+fn complete_folded_item(root: &Path, item: &Item, cmd: &str) -> Result<Item, String> {
+    let ts = now_iso();
+    let mut event = Map::new();
+    event.insert("ts".into(), Value::String(ts.clone()));
+    event.insert("event".into(), Value::String("complete".into()));
+    event.insert("id".into(), Value::String(item.id.clone()));
+    if append_jsonl(&queue_path(root), &Value::Object(event)).is_err() {
+        return Err(format!("bee {cmd}: could not append to the deferred queue."));
+    }
+    let mut completed = item.clone();
+    completed.completed = true;
+    completed.completed_at = Some(ts);
+    completed.claim = None;
+    Ok(completed)
 }
 
 #[cfg(test)]
@@ -928,6 +1033,68 @@ mod tests {
         let f = fold(tmp.path());
         assert_eq!(f.order.len(), 1);
         assert_eq!(f.items.get("a").unwrap().reason, "first");
+    }
+
+    #[test]
+    fn complete_by_kind_and_feature_clears_an_open_item_without_a_claim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("docs").join("history").join("f1")).unwrap();
+        std::fs::write(
+            root.join("docs").join("history").join("f1").join("promote-proposals.md"),
+            "promote proposal for work item \"f1\" — 1 capped cell(s): a-1\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let (id, _) = enqueue(root, "promote", "f1", &[], &[], &[], "awaiting apply").unwrap();
+        assert_eq!(items_for(root, "promote", "f1").len(), 1);
+        assert!(!items_for(root, "promote", "f1")[0].completed);
+
+        assert!(complete_by_kind_feature(root, "promote", "f1", "deferred-queue complete").is_ok());
+
+        let cleared = items_for(root, "promote", "f1");
+        assert_eq!(cleared.len(), 1, "the existing item is completed, not duplicated");
+        assert!(cleared[0].completed);
+        assert_eq!(cleared[0].cells.first(), None);
+        assert_eq!(fold(root).items.get(&id).unwrap().id, id);
+    }
+
+    #[test]
+    fn complete_by_kind_and_feature_records_add_and_complete_for_a_feature_with_no_item() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        assert!(items_for(root, "promote", "pre-queue").is_empty());
+
+        assert!(complete_by_kind_feature(root, "promote", "pre-queue", "deferred-queue complete").is_ok());
+
+        let recorded = items_for(root, "promote", "pre-queue");
+        assert_eq!(recorded.len(), 1);
+        assert!(recorded[0].completed);
+        let f = fold(root);
+        let events: Vec<&str> = f
+            .order
+            .iter()
+            .filter_map(|id| f.items.get(id))
+            .map(|i| if i.completed { "complete" } else { "add" })
+            .collect();
+        assert_eq!(events, vec!["complete"], "one folded item, already completed");
+        let raw = std::fs::read_to_string(queue_path(root)).unwrap();
+        assert_eq!(raw.lines().count(), 2, "an add event then a complete event: {raw}");
+        assert!(raw.lines().next().unwrap().contains("\"event\":\"add\""), "{raw}");
+        assert!(raw.lines().nth(1).unwrap().contains("\"event\":\"complete\""), "{raw}");
+    }
+
+    #[test]
+    fn complete_by_kind_and_feature_is_idempotent_once_completed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        enqueue(root, "promote", "f2", &[], &[], &[], "awaiting apply").unwrap();
+        assert!(complete_by_kind_feature(root, "promote", "f2", "deferred-queue complete").is_ok());
+        let again = complete_by_kind_feature(root, "promote", "f2", "deferred-queue complete");
+        assert!(again.is_err(), "a second call reports the item already completed");
+        assert_eq!(std::fs::read_to_string(queue_path(root)).unwrap().lines().count(), 2);
     }
 
     #[test]

@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "lane-model-diversity",
+  "mode": "standard",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"lane-model-diversity\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"lane-model-diversity\" — feature is closed.",
+  "created_at": "2026-08-29T13:59:31.517Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Cửa cuối: 4 dòng văn \"để sau\" chưa có trigger. Tôi xem từng dòng để xử lý đúng bản chất.",
+    "asked_at": "2026-08-29T15:18:46.914Z",
+    "session": "a95c772f-e050-490b-98ad-5511130f6b08"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 5,
+    "rationale": "Seat-role model resolution for blind lanes and hat wave: models.rs ordered walk + prepare.rs advisor-kind role arm + config validate hat-description rule + model-guard parity + gates-and-delegation.md; standard lane — recorded law changes with tests, no hard-gate territory",
+    "updated_at": "2026-08-29T14:00:41.647Z",
+    "feature": "lane-model-diversity"
+  }
+}

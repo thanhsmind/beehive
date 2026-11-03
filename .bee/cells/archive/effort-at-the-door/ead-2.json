@@ -1,0 +1,231 @@
+{
+  "id": "ead-2",
+  "feature": "effort-at-the-door",
+  "title": "Make both guard legs read the ladder and repair a hand-picked Agent effort",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "ead-1"
+  ],
+  "decisions": [
+    "d6ec1958-6c5f-464f-aeb6-0774d866fb91",
+    "85192add-1382-4497-830b-790597e19f7a",
+    "5009d4f1-6578-48df-9f88-47b3d237b08c",
+    "8233df26-b0ea-4988-8987-14a5859431bd"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/effort-at-the-door/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "behavior_change": true,
+  "action": "Per effort-at-the-door D4, D4a, D10 and the contract decision d6ec1958, in packages/bee-rs/crates/bee/src/hooks/model_guard.rs only. INPUTS (D10): parse two new marker tokens beside the existing `[bee-tier:` / `[bee-cell:` parse (search `strip_prefix_ascii_ci(rest, \"[bee-cell:\")`): `[bee-kind: <kind>]` and `[bee-lane: <lane>]`. Kind comes from the token; when `[bee-cell: <id>]` names a cell the store can read (`crate::verbs::cells::read_cell(&main_root, cell_id)`, already used in this file — search it), the cell's `lane` wins over the token; otherwise the token's lane; a prompt with NO `[bee-kind:]` token takes the legacy path: no effort expectation, allowed unchanged. Never derive kind from the role name. CLAUDE LEG (D4): in `evaluate_claude_dispatch` (search `fn evaluate_claude_dispatch`) read the optional `effort` param from tool_input, compute `crate::verbs::drivers::models::effort_for_dispatch(configured effort of the resolved tier, kind, lane)` — the ONE ladder home — and compare: expected Some(e) and param == e → allow; expected Some(e) and param missing or different → REPAIR the `effort` param to e, code `effort-param-repaired`, note `[bee-tier: t] expects effort \"e\", dispatch carried \"p\" → \"e\" (D4: the door picks effort)`; expected None and param present → repair by removing the param (same code); expected None and absent → allow. The effort repair COMPOSES with the model repair: the model leg returns early today (`return repair(\"param-tier-repaired\", …)`), so restructure so one `Verdict` can carry both corrected params — give `Verdict` an optional `effort` field, extend `repair(...)` (three callers) accordingly, and make `repair_stdout` emit both in one `updatedInput`. CODEX LEG (D4a): in `evaluate_codex_spawn`, where `expected` is the configured effort (search `(Some(expected), Some(actual)) if actual != expected`), compute expected as `effort_for_dispatch(configured, kind, lane).effort` from the same tokens; keep the deny posture and codes exactly; keep `codex_spawn_mismatched_effort_override_refused` green by moving its fixture to a laddered value where needed. TWIN: `derive_dispatch_economics` (search `fn derive_dispatch_economics(`) is a hand-rolled copy that does not call `derive_economics`; add the same four keys after `enforcement`, in the same order, and extend the twin's own order test (search `derive_dispatch_economics(&config, &models, false, &verdict)`). Delete the stale doc line `/// * Claude's Agent interface has no effort parameter.` (the comment ratchet may fall, never rise). RED FIRST, required, in the in-file `mod tests`: (a) wrong effort repaired; (b) missing effort repaired; (c) right effort allowed; (d) expected-none with a param present → param removed; (e) model and effort both wrong → ONE repair carrying both; (f) `[bee-kind: advisor]` on tier `plan` and on `lane-1` with a base → the door's value allowed unchanged; (g) no `[bee-kind:]` token → allowed unchanged; (h) codex spawn with the ladder-moved `reasoning_effort` → allowed, with the unmoved base → denied. Run before the fix and record the red; implement; record green. Scope: `cargo test -p bee hooks::model_guard`. No code comments.",
+  "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::model_guard` is green, AND the recorded red run of the new tests failed before the fix; both outputs in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean.",
+  "must_haves": {
+    "truths": [
+      "An Agent call whose effort differs from the door's value is repaired to it, never denied, and the human sees the guard's note",
+      "An Agent call with the right effort, including plan and lane-* tiers dispatched as advisor, is allowed unchanged",
+      "A codex spawn carrying the ladder-moved reasoning_effort is allowed; one carrying a different value is still denied",
+      "A prompt with no [bee-kind:] token is allowed unchanged",
+      "The guard and the door compute effort from the same function on the same inputs"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "substantive": "marker token parse, effort leg in evaluate_claude_dispatch composing with the model repair, laddered expected value in evaluate_codex_spawn, four keys in derive_dispatch_economics, eight new tests seen red then green"
+      }
+    ],
+    "key_links": [
+      "model_guard.rs calls models::effort_for_dispatch, no second ladder",
+      "the twin's order test pins the four keys"
+    ],
+    "prohibitions": [
+      "No new deny code",
+      "No change to the deny posture of the codex leg",
+      "No edit outside hooks/model_guard.rs",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "w-ead-2",
+    "outcome": "Both guard legs read the effort ladder; Agent effort repaired, codex denied against the laddered value",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [
+      "Composed the effort repair by wrapping the model verdict (evaluate_claude_dispatch now calls evaluate_claude_model, then adds the effort fix onto the same updated_input) instead of extending repair() and its three callers — one edit point covers every model, type and allow branch with no signature change; Verdict.effort carries the EffortChoice for the economics twin — found a better route",
+      "Imported effort_for_dispatch through crate::verbs::drivers instead of crate::verbs::drivers::models — the models module is private and re-exported by glob; it is the same one function — the plan was wrong about a fact",
+      "Codex fixture codex_spawn_mismatched_effort_override_refused needed no move: with no [bee-kind:] token its expected value stays the configured base — the plan was wrong about a fact",
+      "Tests (f) and (g) passed on the base too: the base never checks effort, so these rows pin allow-unchanged behavior; the other six new tests and the twin key-order assertions were red on base — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-17T02:44:17.418Z",
+    "behavior_change": true,
+    "verification_evidence": "green run: 80 passed, 0 failed (scoped to the touched hook); red run before the fix: 74 passed, 6 failed (effort_wrong_value, effort_missing, effort_matching, effort_on_a_role_with_no_base, wrong_model_and_wrong_effort, codex_spawn_reads_the_laddered_reasoning_effort); full crate once: 4322 passed + 122 passed, 0 failed; comment-baseline --check: 253 files at or below baseline",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+    "verify_command": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::model_guard` is green, AND the recorded red run of the new tests failed before the fix; both outputs in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean.",
+    "claimed_at": "2026-10-17T02:22:27.951Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Both guard legs recompute effort with effort_for_dispatch from [bee-kind:]/[bee-lane:] (cell store lane wins); a claude Agent effort mismatch is repaired in one updatedInput with any model repair; the codex leg denies against the laddered value; the economics twin carries the four effort keys.",
+      "commit": "b3e1484b5d0e508301677b773dbd5e78db01ca5d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::model_guard` is green, AND the recorded red run of the new tests failed before the fix; both outputs in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean. — green:unit — green run: 80 passed, 0 failed (scoped to the touched hook); red run before the fix: 74 passed, 6 failed (effort_wrong_value, effort_missing, effort_matching, effort_on_a_role_with_no_base, wrong_model_and_wrong_effort, codex_spawn_reads_the_laddered_reasoning_effort); full crate once: 4322 passed + 122 passed, 0 failed; comment-baseline --check: 253 files at or below baseline",
+      "deviations": [
+        "Composed the effort repair by wrapping the model verdict (evaluate_claude_dispatch now calls evaluate_claude_model, then adds the effort fix onto the same updated_input) instead of extending repair() and its three callers — one edit point covers every model, type and allow branch with no signature change; Verdict.effort carries the EffortChoice for the economics twin — found a better route",
+        "Imported effort_for_dispatch through crate::verbs::drivers instead of crate::verbs::drivers::models — the models module is private and re-exported by glob; it is the same one function — the plan was wrong about a fact",
+        "Codex fixture codex_spawn_mismatched_effort_override_refused needed no move: with no [bee-kind:] token its expected value stays the configured base — the plan was wrong about a fact",
+        "Tests (f) and (g) passed on the base too: the base never checks effort, so these rows pin allow-unchanged behavior; the other six new tests and the twin key-order assertions were red on base — something else had to be fixed first"
+      ],
+      "mistakes": [],
+      "baseline": "Same scoped command on base plus new tests: 74 passed, 6 failed",
+      "reaction": "confirm",
+      "unknowns": [
+        "The cell-store-lane-wins path in door_effort has no dedicated test: a [bee-cell:] marker also triggers v2 plan routing, which needs a lane/plan fixture; covered only by code reading",
+        "A legacy dispatch (no [bee-kind:]) logs effort null and effort_reason none even when it carries an effort param"
+      ],
+      "found": [
+        "packages/bee-rs/crates/bee/.bee/ left untracked by the full crate run"
+      ]
+    },
+    "baseline": "Same scoped command on base plus new tests: 74 passed, 6 failed",
+    "reaction": "confirm",
+    "unknowns": [
+      "The cell-store-lane-wins path in door_effort has no dedicated test: a [bee-cell:] marker also triggers v2 plan routing, which needs a lane/plan fixture; covered only by code reading",
+      "A legacy dispatch (no [bee-kind:]) logs effort null and effort_reason none even when it carries an effort param"
+    ],
+    "found": [
+      "packages/bee-rs/crates/bee/.bee/ left untracked by the full crate run"
+    ],
+    "warnings": [
+      "advisory: this cap's commit changes 309 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An Agent call whose effort differs from the door's value is repaired to it, never denied, and the human sees the guard's note",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "An Agent call with the right effort, including plan and lane-* tiers dispatched as advisor, is allowed unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "A codex spawn carrying the ladder-moved reasoning_effort is allowed; one carrying a different value is still denied",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "A prompt with no [bee-kind:] token is allowed unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "The guard and the door compute effort from the same function on the same inputs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "model_guard.rs calls models::effort_for_dispatch, no second ladder",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "the twin's order test pins the four keys",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          }
+        ],
+        "recorded_at": "2026-10-17T02:45:09.483Z",
+        "recorded_by": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "a: kind/lane tokens parsed at any position",
+            "status": "PASS",
+            "evidence": "model_guard.rs parse_anchored_markers is a prefix table of 6 known tokens in any order; parse test asserts kind=cell, lane=tiny from a mixed-order line"
+          },
+          {
+            "id": "c2",
+            "name": "b: no [bee-kind:] -> legacy allow",
+            "status": "PASS",
+            "evidence": "door_effort returns None when markers.kind is None; codex leg falls back to cfg_effort; test effort_without_a_kind_token_is_allowed_unchanged"
+          },
+          {
+            "id": "c3",
+            "name": "c: claude repair/remove, effort-param-repaired, one updatedInput with model repair",
+            "status": "PASS",
+            "evidence": "evaluate_claude_dispatch wraps evaluate_claude_model and reuses verdict.updated_input; tests effort_wrong_value_is_repaired_to_the_door_value, effort_missing_is_repaired_to_the_door_value, effort_on_a_role_with_no_base_is_removed, wrong_model_and_wrong_effort_land_in_one_repair"
+          },
+          {
+            "id": "c4",
+            "name": "d: codex expected = ladder value, deny posture unchanged",
+            "status": "PASS",
+            "evidence": "evaluate_codex_spawn expected = door_effort(...).effort else cfg_effort; deny arms untouched; test codex_spawn_reads_the_laddered_reasoning_effort (xhigh exit 0, high exit 2 codex-spawn-effort-mismatch)"
+          },
+          {
+            "id": "c5",
+            "name": "e: derive_dispatch_economics four keys in order",
+            "status": "PASS",
+            "evidence": "twin inserts the four keys after enforcement from verdict.effort; order test asserts the 10-key order and agreement with prepare"
+          },
+          {
+            "id": "c6",
+            "name": "f: stale doc line deleted",
+            "status": "PASS",
+            "evidence": "diff line '-/// * Claude's Agent interface has no effort parameter.'"
+          },
+          {
+            "id": "c7",
+            "name": "g: no new code comments",
+            "status": "PASS",
+            "evidence": "rg over git show b3e1484b5 -- packages/: only a deletion; comment-baseline --check clean"
+          },
+          {
+            "id": "c8",
+            "name": "h: the eight tests exist; hooks::model_guard 80 passed",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee hooks::model_guard: 80 passed; 0 failed"
+          },
+          {
+            "id": "c9",
+            "name": "i: kind never derived from role name",
+            "status": "PASS",
+            "evidence": "door_effort reads kind only from markers.kind; dispatch_kind_for_role used only in fix-text arms"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-17T02:49:43.628Z"
+      }
+    ]
+  },
+  "role_reroutes": [
+    {
+      "from": "code",
+      "to": "test",
+      "decision": "d660436f-f988-40b4-a740-9f63d925a87d",
+      "at": "2026-10-17T02:08:51.579Z",
+      "plan_sha256": "adc54708c23b7c6653f884e1bdabf1f94a5b92a3ec273b4ca16cfcaeffc9fe81"
+    }
+  ]
+}

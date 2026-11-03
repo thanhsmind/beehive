@@ -1,0 +1,34 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "NEEDS_REVISION",
+  "checks": [
+    {
+      "id": "portable-first-call-fallback",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:2012 starts fresh child processes and forces fallback before the first ambient capture. docs/history/codex-reliability-closeout/windows-red.log:159 shows 0 passed and 3 failed before repair; windows-green.log:222 shows 55 passed and 0 failed after repair."
+    },
+    {
+      "id": "inherited-job-control",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:2017-2034 runs both inherited=false and inherited=true children, selects the existing inherited-job isolation test, requires 3 and 1 selected tests, and requires successful child status."
+    },
+    {
+      "id": "positive-child-test-counts",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:2029-2032 requires stdout to contain running 3 tests or running 1 test. The passing parent regression contributes to windows-green.log:222."
+    },
+    {
+      "id": "no-nested-locks",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:2012-2034 uses isolated child processes and contains no added lock acquisition. docs/history/codex-reliability-closeout/windows-activity.md:13-15 records replacement of shared-cache injection with isolated children."
+    },
+    {
+      "id": "production-unchanged",
+      "status": "FAIL",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:665-668 changes non-test production code. BEE_TEST_FORCE_ENV_FALLBACK is not guarded by cfg(test), so any production process can set it and bypass /proc/self/environ."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high",
+  "failure_signature": "The test-only fallback switch changes production behavior because its branch is compiled and honored outside tests."
+}

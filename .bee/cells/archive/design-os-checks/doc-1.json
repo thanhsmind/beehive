@@ -1,0 +1,217 @@
+{
+  "id": "doc-1",
+  "feature": "design-os-checks",
+  "title": "Check chart, diagram, flow and motion artifacts in the design gate at 0.6.2",
+  "lane": "standard",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D6",
+    "D7",
+    "D8",
+    "D9",
+    "D12",
+    "11eba13b-839e-4604-99ed-1dbc22f1bac2",
+    "36269a35-17b2-46be-8ac0-b417dc8fbd66",
+    "d1093071-d396-4c77-9369-8008e11316a0"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+  ],
+  "read_first": [
+    "docs/history/design-os-checks/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+  ],
+  "action": "RED FIRST: add the failing tests to the existing tests module of design_group.rs (fake node and fake cli, canned JSON per page) and watch each fail for its own reason, then change the code. (1) Per D1 set PIN to ease-design@0.6.2. (2) Per D9 read data.families from ui gate output: for each page, the compared error count is the sum of families.<name>.errorCount over the baseline's family set; the baseline written by --write gains a top-level families array (sorted names the run returned); a baseline with no families key counts the 0.6.1 set a11y, autofix, content, layout, taste, tell; when the run returned any family outside the baseline's set, print one advisory line naming those families and saying they are not counted until a person re-records with bee design gate --write. A ui gate output with no families object falls back to data.errorCount. Keep recording warnings and coverage as today. (3) Per D6 detect artifacts: among the HTML pages the gate already scores, a page whose text contains data-chart-owned=\"true\" also runs ui chart lint <page> --json, data-diagram-owned=\"true\" runs ui diagram lint, an element whose class attribute has the token scrub runs ui tenant-lint; from the same walk (same skipped dirs, ignoring design.pages globs) a file named flow.json or ending in .flow.json runs ui flow lint. Read data.errorCount (required) and data.warningCount (missing counts as 0: tenant-lint returns none). A linter that does not start or returns other JSON is a failure line naming the kind and path, like the page case. (4) Per D7 the baseline gains an artifacts object keyed by kind (chart, diagram, motion, flow) then path, each {errors, warnings}; a known artifact may not gain errors; one with no entry must have 0 errors; regression lines read design gate: <kind> <path> — errors rose a -> b or design gate: <kind> <path> — new <kind> has n errors, must have 0. Per D12, when the baseline file exists but has no artifacts key, artifact errors are not failures: the advisory line also names the artifacts with errors. The advisory line prints at most once per run, before the summary, also under --write; it never counts as a failure, never sets exit 1, never enters last-run.json regressions, and never blocks --write. --json output gains an artifacts object only when an artifact was found. When no artifact is found, every output line, the JSON object and the baseline pages object stay byte-identical to today; with artifacts the summary reads no regressions on N pages and M artifacts. (5) Per D8 never run scrub-lint or scroll-story. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_group",
+  "must_haves": {
+    "truths": [
+      "An old baseline with no families key and a run whose only new errors are in ds-usage exits 0 and prints one line naming ds-usage and bee design gate --write",
+      "A page with data-chart-owned=\"true\" whose chart lint errors rose against the baseline exits 1 naming the page and the counts",
+      "A flow.json with errors and no baseline entry exits 1",
+      "A project with no artifacts prints exactly the same lines as before",
+      "The advisory line never counts as a regression in last-run.json and never blocks --write",
+      "A baseline with no artifacts key and a marked chart page with chart lint errors exits 0 and the advisory line names that page"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+        "substantive": "PIN 0.6.2, family-scoped compare, artifact lint and ratchet, tests for each truth"
+      }
+    ],
+    "key_links": [
+      "bee design gate --write records families and artifacts in .bee/design/gate-baseline.json"
+    ],
+    "prohibitions": [
+      "No new config key",
+      "No change to the --write refusal while a cell is claimed",
+      "No change to the not-run line"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-doc-1",
+    "outcome": "design gate pins ease-design 0.6.2, counts only baseline families, lints and ratchets chart, diagram, motion and flow artifacts, and gives a pre-feature baseline one advisory line instead of a failure",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+    ],
+    "deviations": [
+      "a missing baseline file counts every family the run returns and applies the D7 ratchet to artifacts in full, rather than the 0.6.1 family set — D9 and D12 protect an existing old baseline, and a project with no baseline has no old count to protect — found a better route",
+      "under --write with artifacts present the failure summary reads N checks failed instead of N pages failed — a failed artifact lint is not a page; with no artifacts the line is unchanged — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-30T15:01:46.554Z",
+    "behavior_change": true,
+    "verification_evidence": "24 design_group tests pass (11 new, 9 seen red first on base); also drove the built bee design gate with BEE_DESIGN_OS_CLI at the real design-os 0.6.2 dist/cli.js on copied examples bar.html, er.html and a flow fixture: exit 0, 2 pages and 3 artifacts, --write recorded families and artifacts, a pre-feature baseline gave no false advisory",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5cc44af2-1258-4ffc-b5fd-d4804a0154b0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_group",
+    "claimed_at": "2026-10-30T14:50:38.986Z",
+    "mistakes": [
+      {
+        "wrong": "ran a python heredoc edit and a CARGO_HOME-expanded cargo line in the worktree session and the guard refused both",
+        "better": "use Edit and plain absolute-path commands from the start, as the worktree guard memory note says",
+        "fix_at": "none"
+      },
+      {
+        "wrong": "first commit put the Co-Authored-By line after cell: doc-1 so the cell trailer was not the last line, then amended",
+        "better": "write the attribution line first and cell: <id> last from the start",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "first proof line in cells finish named the plain cargo command, not the exact approved verify text, and the cap refused it",
+        "better": "copy the verify string from the cell verbatim into the proof line",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "design gate pins ease-design 0.6.2, counts only baseline families, lints and ratchets chart, diagram, motion and flow artifacts, one advisory line for pre-feature baselines. Where: PIN and OLD_FAMILIES consts; ui() runner shared by score() and lint(); score() family-scoped sum with data.errorCount fallback; markers() for chart, diagram and class token scrub; gate() flow walk, artifact ratchet, D12 lenient path, advisory line, scope summary, baseline families and artifacts; output() adds artifacts only when found. Tests per truth: an_old_baseline_counts_the_old_families_and_names_ds_usage_once, a_marked_chart_page_whose_lint_errors_rose_exits_one_naming_the_page_and_the_counts, a_flow_file_with_errors_and_no_baseline_entry_exits_one, a_project_with_no_artifacts_prints_the_same_lines_json_and_pages_as_before, the_advisory_never_counts_as_a_regression_and_never_blocks_write, a_baseline_with_no_artifacts_key_names_a_marked_chart_with_errors_and_exits_zero; plus the_pin_is_ease_design_0_6_2, a_baseline_that_lists_ds_usage_fails_when_ds_usage_rose, write_records_the_pin_the_sorted_families_and_an_artifacts_map, each_marker_runs_its_own_linter_and_scrub_lint_and_scroll_story_never_run, a_linter_that_returns_other_json_is_a_failure_naming_the_kind_and_path",
+      "commit": "ae90738fd",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_group — green:unit — 24 design_group tests pass (11 new, 9 seen red first on base); also drove the built bee design gate with BEE_DESIGN_OS_CLI at the real design-os 0.6.2 dist/cli.js on copied examples bar.html, er.html and a flow fixture: exit 0, 2 pages and 3 artifacts, --write recorded families and artifacts, a pre-feature baseline gave no false advisory",
+      "deviations": [
+        "a missing baseline file counts every family the run returns and applies the D7 ratchet to artifacts in full, rather than the 0.6.1 family set — D9 and D12 protect an existing old baseline, and a project with no baseline has no old count to protect — found a better route",
+        "under --write with artifacts present the failure summary reads N checks failed instead of N pages failed — a failed artifact lint is not a page; with no artifacts the line is unchanged — found a better route"
+      ],
+      "mistakes": [
+        "ran a python heredoc edit and a CARGO_HOME-expanded cargo line in the worktree session and the guard refused both — use Edit and plain absolute-path commands from the start, as the worktree guard memory note says — none",
+        "first commit put the Co-Authored-By line after cell: doc-1 so the cell trailer was not the last line, then amended — write the attribution line first and cell: <id> last from the start — doctrine",
+        "first proof line in cells finish named the plain cargo command, not the exact approved verify text, and the cap refused it — copy the verify string from the cell verbatim into the proof line — none"
+      ],
+      "baseline": "same command on 7cedf4d08 with the new tests added: 15 passed, 9 failed, each on its own assertion (pin, families, artifact ratchet, flow, advisory, markers, linter JSON)",
+      "reaction": "confirm",
+      "unknowns": [
+        "the ds-usage family was not seen live: the copied example dir returned only the six 0.6.1 families; the ds-usage path is proven by fakes and by plan claim 8"
+      ]
+    },
+    "baseline": "same command on 7cedf4d08 with the new tests added: 15 passed, 9 failed, each on its own assertion (pin, families, artifact ratchet, flow, advisory, markers, linter JSON)",
+    "reaction": "confirm",
+    "unknowns": [
+      "the ds-usage family was not seen live: the copied example dir returned only the six 0.6.1 families; the ds-usage path is proven by fakes and by plan claim 8"
+    ],
+    "warnings": [
+      "advisory: this cap's commit changes 419 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An old baseline with no families key and a run whose only new errors are in ds-usage exits 0 and prints one line naming ds-usage and bee design gate --write",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "A page with data-chart-owned=\"true\" whose chart lint errors rose against the baseline exits 1 naming the page and the counts",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "A flow.json with errors and no baseline entry exits 1",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "A project with no artifacts prints exactly the same lines as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "The advisory line never counts as a regression in last-run.json and never blocks --write",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "A baseline with no artifacts key and a marked chart page with chart lint errors exits 0 and the advisory line names that page",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "bee design gate --write records families and artifacts in .bee/design/gate-baseline.json",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          }
+        ],
+        "recorded_at": "2026-10-30T15:02:11.695Z",
+        "recorded_by": "5cc44af2-1258-4ffc-b5fd-d4804a0154b0",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "design_group.rs:256-259 OLD_FAMILIES for a baseline with no families key; :303/:335 one advisory line naming ds-usage and the --write command; test at :478 ok"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "markers() :183 data-chart-owned runs chart lint; :293 'errors rose a -> b'; test at :518 exit 1 and regressions 1 ok"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": ":277/:281 flow.json and *.flow.json in the same walk; :294 new flow has n errors; test at :532 ok"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": ":38-44 artifacts key only when found; :317-325 summary unchanged with none; test at :551 ok"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": ":311 failed counted before the advisory push at :334-336; test at :566 regressions 0 and --write writes ok"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": ":260 lenient when baseline has no artifacts key; :289-290 and :306 advisory names chart index.html; test at :588 exit 0 ok"
+          },
+          {
+            "id": "t7-prohibitions",
+            "status": "PASS",
+            "evidence": "NOT_RUN :15 and --write refusal :231-243 unchanged; only design.pages read; claimed-cell and not-run tests ok"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-30T15:14:23.589Z"
+      }
+    ]
+  }
+}

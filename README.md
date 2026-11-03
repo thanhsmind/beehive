@@ -120,6 +120,16 @@ A hive is a staged, self-regulating system — each bee role maps to a workflow 
 
 Gate-bypass autopilot lives inside `bee-hive` ("Gates"). The maintainer guides for building bee's own skills and running its self-improvement loop moved out of the product into [docs/handbook/writing-skills.md](docs/handbook/writing-skills.md) and [docs/handbook/evolving.md](docs/handbook/evolving.md).
 
+Craft skills sit beside the hive roles. They shape how the agent writes and explains:
+
+| Skill | What it does |
+|---|---|
+| `bee-unslop` | Removes the patterns that make a reply or a document read as machine-generated, and keeps ticks, command output, ids and code verbatim |
+| `bee-technical-writing` | Writes saved documents — plans, specs, READMEs, PR and commit bodies — in a clear technical style that the project's own standard can override |
+| `bee-teach` | Explains what a thing is, how it works and why it is built that way, when the user asks to understand it |
+| `bee-how` | Answers how a command, hook or flow of this repo runs, as a traced path with `path:line` anchors, when the user types `/bee-how` |
+| `bee-why` | Answers why a rule, value or design of this repo is the way it is, from recorded evidence with a confidence tier, when the user types `/bee-why` |
+
 ---
 
 ## The workflow, explained simply
@@ -252,9 +262,9 @@ The level-by-level table (what each of `off`/`normal`/`full`/`total` auto-approv
 
 - At **`normal`** the floor holds: high-risk/hard-gate work (auth, authorization, data loss, security, an external provider, validation removal, a database migration), Gate 3 UAT, P1 findings, and secret reads all still stop for you.
 - **`full`** lifts the high-risk floor. **`total`** lifts everything — no human checkpoint remains anywhere, including UAT, P1 findings, and reading `.env`/keys/credentials.
-- Raising to `full`/`total` is a deliberate act you take; bee never raises it for you, and the active level is printed loudly in the session preamble and `bee_status`.
+- Raising to `full`/`total` is a deliberate act you take; bee never raises it for you, and the active level is printed loudly in the session preamble and `bee status`.
 
-Bypass is **not** the same as headless mode (headless still stops at every gate). It's off by default, persists per-repo, and is surfaced loudly in the session preamble and `bee_status` with a level-specific banner (e.g. `⚡ GATE BYPASS: NORMAL`) so it's never silently in effect.
+Bypass is **not** the same as headless mode (headless still stops at every gate). It's off by default, persists per-repo, and is surfaced loudly in the session preamble and `bee status` with a level-specific banner (e.g. `⚡ GATE BYPASS: NORMAL`) so it's never silently in effect.
 
 ---
 
@@ -337,7 +347,7 @@ Every planning pass counts mechanical **risk flags** (auth · authorization · d
 
 The rule that never bends: **lanes scale ceremony, never memory.** Even a `tiny` cell that changed behavior obliges a spec sync, and a settled decision is logged the moment it settles — in every lane.
 
-A capped `behavior_change` cell also creates **scribing debt** until its meaning reaches `docs/knowledge/` (with a bundle) or, absent one, `docs/specs/`: `bee_status`, the session preamble, and the swarming chain-nudge all surface the count so settled behavior is captured mid-flight, not only when someone remembers (decision 0011).
+A capped `behavior_change` cell also creates **scribing debt** until its meaning reaches `docs/knowledge/` (with a bundle) or, absent one, `docs/specs/`: `bee status`, the session preamble, and the swarming chain-nudge all surface the count so settled behavior is captured mid-flight, not only when someone remembers (decision 0011).
 
 ---
 
@@ -346,7 +356,7 @@ A capped `behavior_change` cell also creates **scribing debt** until its meaning
 Models are not one ladder. Some plan well, some test well, some design well, some code well — so bee asks each piece of work **what job it is**, not how expensive it is, and your config says which model does that job. A cell declares a `role`; the dispatch asks for that role; `.bee/config.json` answers with a model:
 
 ```json
-"models": {
+"team": {
   "claude": { "code": "sonnet", "read": "haiku", "extraction": "haiku", "generation": "sonnet" },
   "codex":  { "code": null,     "read": null,    "extraction": null,    "generation": null }
 }
@@ -356,7 +366,7 @@ Models are not one ladder. Some plan well, some test well, some design well, som
 - **`read`** — the work only reads: retrieval, tracing a call path, mining a transcript, an evidence digest.
 - **`extraction` / `generation`** — the historical names every ordered role list ends with, so upgrading moves no host's model. Leave them set.
 - **Any name you invent is legal.** `test`, `docs`, `design`, `migrate` — add the key, and a cell declaring that role gets that model. bee validates a role's *presence and shape*, never its membership in a list; `code`, `read`, `test`, `docs`, `review`, `design` are recommended words, guidance only.
-- `null` = the runtime can't select a per-agent model (Codex today) → the role is enforced as a read budget + output cap in the worker prompt. Set real ids (e.g. `"code": "gpt-5"`) if your runtime supports switching.
+- `null` = no requested model (does not guarantee that an external CLI retains parent settings). When you configure a specific model ID (such as `"code": "gpt-5"`), Codex 0.154.0 dispatch attaches that model for supported dispatches. Unverifiable native cell dispatches with opaque hook messages are refused at preparation time (`native_hook_input_opaque`), directing to configured herding or CLI routes. For non-cell read-only jobs, configured herding and CLI routes stay explicit, while model-shaped or prompt-budget non-cell roles route through an explicit read-only CLI sandbox.
 
 **A role nothing configures still runs.** The dispatch asks for an ordered list headed by the cell's own role and ending in a name every host has configured for years — `[<cell role>, code, generation]`. An unconfigured head yields to the next name and **warns on stderr**, naming what it fell through to; it never fails, and it never silently picks a model the config did not name for it.
 
@@ -366,7 +376,7 @@ The orchestrator pattern keeps the strongest model scarce:
 
 - **Fan-out delegation** (default): run the session on your strong model; it orchestrates all work and dispatches gather-altitude steps (multi-file reads, document rendering, trace mining) to cheaper read-role workers, collecting digests instead of verbatim output. The Delegation contract (in gates-and-delegation.md) specifies which steps delegate and what a digest must carry. `bee-swarming`'s default.
 
-**To change the worker models**, edit `.bee/config.json` `models.claude.code` / `read` (or add your own role key); the escalated model changes by running the session on a different model. Every field + a full sample to copy: **[docs/config-reference.md](docs/config-reference.md)**.
+**To change the worker models**, edit `.bee/config.json` `team.claude.code` / `read` (or add your own role key); the escalated model changes by running the session on a different model. Every field + a full sample to copy: **[docs/config-reference.md](docs/config-reference.md)**.
 
 ### Model pairs: the full slot set and its five shapes
 
@@ -501,7 +511,7 @@ If a session runs long, bee writes `.bee/HANDOFF.json` at ~65% context and pause
 
 ## Install
 
-Requirement: **nothing but the installer** on x86_64 Linux and Windows — the one-liner downloads the release binary for your platform, verifies its SHA-256 against the release `SHA256SUMS`, and copies it in. A **Rust toolchain** (`cargo`) is needed only on a platform with no published binary, or with `--build-from-source` (supersedes decision 1f4262ca, which kept every host compiling its own). Node.js is not required to run bee. One command installs everything — the per-project skills (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex), `CLAUDE.md`, the `AGENTS.md` BEE block, the `.bee/` runtime + vendored helpers, and the runtime hook wiring for both Claude Code and Codex.
+Requirement: **nothing but the installer** on x86_64 Linux and Windows, macOS (Apple silicon and Intel) and ARM64 Linux (glibc 2.35+) — the one-liner downloads the release binary for your platform, verifies its SHA-256 against the release `SHA256SUMS`, and copies it in. A **Rust toolchain** (`cargo`) is needed only on a platform with no published binary, or with `--build-from-source` (supersedes decision 1f4262ca, which kept every host compiling its own). Node.js is not required to run bee. One command installs everything — the per-project skills (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex), `CLAUDE.md`, the `AGENTS.md` BEE block, the `.bee/` runtime + vendored helpers, and the runtime hook wiring for both Claude Code and Codex.
 
 ### Brownfield — existing project (copy, paste, done)
 
@@ -509,7 +519,7 @@ macOS / Linux / WSL / Git Bash — run from inside the project:
 
 ```bash
 cd /path/to/your-project
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash
 ```
 
 Windows PowerShell:
@@ -517,22 +527,32 @@ Windows PowerShell:
 ```powershell
 cd C:\path\to\your-project
 iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
-.\install-bee.ps1 -Yes
+.\install-bee.ps1
 ```
 
-Safe on existing repos: content outside the managed `BEE:START/END` markers in `AGENTS.md`/`CLAUDE.md` is preserved byte-for-byte, `.bee/` state (`state.json`, `decisions.jsonl`, `cells/`) is never overwritten, the `.claude/settings.json` hook merge keeps a `.bak`, and re-running is idempotent (`up_to_date`). Want to see the plan first? Add `--dry-run` / `-DryRun` — it writes nothing.
+Safe on existing repos: content outside the managed `BEE:START/END` markers in `AGENTS.md`/`CLAUDE.md` is preserved byte-for-byte, `.bee/` state (`state.json`, `decisions.jsonl`, `cells/`) is never overwritten, the `.claude/settings.json` hook merge keeps a `.bak`, and re-running is idempotent (`up_to_date`). Want to see the plan first? Add `--dry-run` / `-DryRun` — it writes nothing. The installer asks before it writes, and in a project with interface files it asks which design skill packs to add; `-y` / `-Yes` skips every question.
+
+To add the design skills in any project, name the packs (`web`, `charts`, `motion`, `apple`, `figma`; a comma list takes several):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- --design-packs web
+```
+
+```powershell
+.\install-bee.ps1 -DesignPacks web
+```
 
 ### Greenfield — brand-new project
 
 Point the installer at a directory that doesn't exist yet (it creates it and offers `git init`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -d ~/projects/my-new-app -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -d ~/projects/my-new-app
 ```
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
-.\install-bee.ps1 -Directory C:\projects\my-new-app -Yes
+.\install-bee.ps1 -Directory C:\projects\my-new-app
 ```
 
 ### Verify / update
@@ -543,7 +563,7 @@ iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/inst
 
 **Update to the latest bee:** re-run the same install command (or `bee onboard --apply`) — drift detection refreshes `AGENTS.md`, `CLAUDE.md`, helpers, hooks, and both skill trees in place; your state and everything outside the managed markers stay untouched.
 
-Useful flags: `--global-skills`/`-GlobalSkills` (also install the legacy global copies under `~/.claude/skills` + `~/.codex/skills`), `--no-claude-md`/`-NoClaudeMd`, `--no-hooks`/`-NoHooks`, `--source <local-checkout>`/`-Source`. Full options, the Claude Code plugin route (`/plugin marketplace add thanhsmind/beehive` + `/plugin install bee@bee`), manual installs, uninstall: [INSTALL.md](INSTALL.md).
+Useful flags: `--global-skills`/`-GlobalSkills` (also install the legacy global copies under `~/.claude/skills` + `~/.codex/skills`), `--no-claude-md`/`-NoClaudeMd`, `--no-statusline`/`-NoStatusline`, `--no-hooks`/`-NoHooks`, `--source <local-checkout>`/`-Source`, `--design-packs <list|none>`/`-DesignPacks` (the design skill packs to install: `web`, `charts`, `motion`, `apple`, `figma`, or `none`). On `bee onboard` only, `--skillstation` also publishes the `bee-deploying` skill into your skillstation hub through the `skillstation` CLI (commit, then activate); without the CLI the onboard still succeeds and reports one skipped entry with target `skillstation`. Full options, the Claude Code plugin route (`/plugin marketplace add thanhsmind/beehive` + `/plugin install bee@bee`), manual installs, uninstall: [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -613,7 +633,7 @@ Copied into every onboarded repo, so enforcement works even for agents that igno
 ### Onboarding — `bee onboard`
 
 ```bash
-bee onboard --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|both] [--no-claude-md] [--claude-md] [--global-skills] [--force-downgrade]
+bee onboard --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|pi|both] [--no-claude-md] [--claude-md] [--no-statusline] [--global-skills] [--skillstation] [--design-packs <list|none>] [--force-downgrade]
 ```
 
 Without `--apply` it only reports the plan. With `--apply` it installs/refreshes the AGENTS.md BEE block, `.bee/` runtime files, and the vendored helpers — **never** overwriting your `state.json`, `decisions.jsonl`, or `cells/`. Re-run after pulling a new bee version; it detects drift via managed hashes in `.bee/onboarding.json`.
@@ -633,7 +653,7 @@ Self-arming (silent unless the repo has `.bee/onboarding.json`); per-repo kill s
 | `bee hook chain-nudge` | subagent stop | nudges the orchestrator to collect worker status / synthesize reviews |
 | `bee hook session-close` | session stop | warns about claimed-uncapped cells, missing HANDOFF, or unlogged decisions |
 
-The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-logger` and `bee hook codex-subagent-audit` complete the 9-hook set. Both runtimes are wired from the same shared catalog — `.codex/hooks.json` (8 lifecycle events) for Codex, `packages/bee/hooks/claude-hooks.json` (7) for Claude Code. Whether an installed Codex CLI actually executes its hooks is unverified, so the *helpers* remain the enforcement floor regardless of hook state, and the AGENTS.md block covers bootstrap either way. Parity matrix: [docs/06-runtime-integration.md](docs/06-runtime-integration.md).
+The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-logger` and `bee hook codex-subagent-audit` complete the 9-hook set. Both runtimes are wired from the same shared catalog — `.codex/hooks.json` (8 lifecycle events) for Codex, `packages/bee/hooks/claude-hooks.json` (7) for Claude Code. Hook execution on installed Codex 0.154.0 is live-verified with an isolated `CODEX_HOME` (`scripts/codex-parity-canary.sh`: denied patch and shell writes, allowed history writes, unmarked spawn denied as `codex-spawn-unmarked`). The helper commands stay the shared foundation across all runtimes. Parity matrix: [docs/06-runtime-integration.md](docs/06-runtime-integration.md).
 
 ### Runtime files — `<repo>/.bee/`
 
@@ -641,7 +661,7 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 |---|---|
 | `onboarding.json` | installed bee version + managed-file hashes (drift detection) |
 | `state.json` | phase, mode, feature, the four gate approvals, workers, next action |
-| `config.json` | per-repo hook/guard toggles, lanes, capabilities, **`gate_bypass`**, **`models`** (runtime-keyed role→model map) |
+| `config.json` | per-repo hook/guard toggles, lanes, capabilities, **`gate_bypass`**, **`team`** (runtime-keyed role→model map) |
 | `HANDOFF.json` | pause context at ~65% budget — surfaced next session, never auto-resumed |
 | `cells/<id>.json` | one cell each: acceptance criteria, verify command, full trace |
 | `decisions.jsonl` / `backlog.jsonl` | append-only decision events / friction & grooming items |
@@ -654,7 +674,7 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 
 | Doc | Read when |
 |---|---|
-| [config-reference.md](docs/config-reference.md) | You want to configure `.bee/config.json` — models/ceiling, commands, bypass, uat/staging (with a sample to copy) |
+| [config-reference.md](docs/config-reference.md) | You want to configure `.bee/config.json` — team/ceiling, commands, bypass, uat/staging (with a sample to copy) |
 | [model-presets.md](docs/model-presets.md) | Copy-paste model pairs: all-Claude, Codex-reviews, Codex-implements, Gemini/agy, opencode, budget |
 | [00-vision.md](docs/00-vision.md) | You want the principles and non-goals |
 | [01-distillation.md](docs/01-distillation.md) | What bee took from each upstream framework, and what it rejected |
@@ -688,10 +708,10 @@ Recent additions, each gated by a decision record:
 - **The beekeeper's brief** (0008; today `bee-shaping`'s "Brief" section) — one human-readable implement plan per feature, plus the post-ship walkthrough.
 - **Artifact scaling + cap-time before-state** (0009) — planning stops fanning out four overlapping documents for small work; capping a behavior change now requires a recorded "before".
 - **Gate bypass** (0010; today `bee-hive`'s "Gates" section) — opt-in autopilot with LEVELS: normal keeps the safety floor (high-risk/hard-gate, Gate 3 UAT, P1 and secrets still stop); full lifts the high-risk floor; total lifts everything and leaves no human checkpoint.
-- **Capture-mode spine / scribing debt** (0011) — behavior_change cells capped since the last spec sync are counted as *scribing debt* and surfaced in `bee_status`, the preamble, and the swarming nudge, so settled behavior reaches `docs/specs/` mid-flight instead of only when a human remembers.
-- **Runtime-keyed model tiers + scarcity signal** (0012) — a per-repo `models` map with one shared resolver; `bee_status`/preamble warn when the session-model share runs high, keeping the strongest model scarce. (Superseded in part: the cost tiers became open-ended **roles** — a cell declares the job it is, and `ceiling` became the `bee cells escalate` flag. See “Model roles” above.)
+- **Capture-mode spine / scribing debt** (0011) — behavior_change cells capped since the last spec sync are counted as *scribing debt* and surfaced in `bee status`, the preamble, and the swarming nudge, so settled behavior reaches `docs/specs/` mid-flight instead of only when a human remembers.
+- **Runtime-keyed model tiers + scarcity signal** (0012) — a per-repo `team` map with one shared resolver; `bee status`/preamble warn when the session-model share runs high, keeping the strongest model scarce. (Superseded in part: the cost tiers became open-ended **roles** — a cell declares the job it is, and `ceiling` became the `bee cells escalate` flag. See “Model roles” above.)
 - **Grooming is project-first** (0014) — the hygiene pass hunts the *current project's* debt in plain language; `.bee/`, `.claude/`, `.codex/` and bee's own plumbing are out of scope (a harness bug becomes a one-line upstream note, not a project kill), and the entropy score is demoted to a short hive-housekeeping side-note. Also fixes two real bugs it caught: `capCell` now honors a cell's declared `behavior_change` even when the CLI flag is omitted, and the write-guard no longer misreads `2>&1` as a file write. (Note: this parenthetical is superseded by skill-sync above — `onboard --apply` now syncs `skills/*` into the host repo's own `.claude/skills/bee-*` and `.agents/skills/bee-*` by default, committed to the repo; downgrades refused by default. `--global-skills` extends the sync to the legacy global `~/.claude/skills` root (and, via the install scripts, `~/.codex/skills`); without it neither global root is touched.)
 
 **Known debt before 1.0** (recorded per skill in `docs/decisions/skills/*-creation-log.md`): the newer skills and the two most recent decisions have not yet been dogfooded/pressure-tested per bee's own Iron Law; the gate-bypass safety floor in particular wants RED-baseline testing on a real high-risk feature.
 
-Try it: onboard a repo, scout with `bee_status`, then ask the agent for a tiny fix and watch it route.
+Try it: onboard a repo, scout with `bee status`, then ask the agent for a tiny fix and watch it route.

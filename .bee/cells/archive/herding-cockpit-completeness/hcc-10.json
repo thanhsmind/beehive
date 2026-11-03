@@ -1,0 +1,109 @@
+{
+  "id": "hcc-10",
+  "feature": "herding-cockpit-completeness",
+  "title": "Sync the herding knowledge docs and config reference with the six new signals",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "hcc-6",
+    "hcc-7",
+    "hcc-8",
+    "hcc-9"
+  ],
+  "decisions": [
+    "afec9446",
+    "9615be76"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+    "docs/knowledge/areas/bee-herding/index.md",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/CONTEXT.md",
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+    "docs/config-reference.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+  ],
+  "action": "Read the merged code of hcc-3..hcc-9 (git log on the worktree) and sync the state layer, D8 word list (afec9446) as the checklist. the-run-verb-and-worker-outcomes.md: add outcomes `interrupted` and `cancelled`, the `retryable` key rule (true only spawn_failed/send_failed/flipped_before_send), the `git` key (when it appears, its six fields), the verbs `bee herding interrupt` and `bee herding cancel` with the `cancel_termination_failed` refusal and its FIX line, `--continue` on an interrupted job, and the job.json mark fields. waves-and-occupancy.md: per-worker `retryable` in bucket rows, the orphan sweep in occupancy. the-supervisor-observer-and-its-interventions.md: `stalled`/`recovered` share the observer's 120 s freshness constant; note near line 288 that herdr's prompt stall is a different `stalled` and status lines carry the job id. index.md: one line per new concept if the area index lists concepts. docs/config-reference.md lines 182-194 and 246-256: add the two verbs and the new outcome/status words where the herding surface is listed. Also record in the run-verb doc that the Pi result-inbox drain (.pi/extensions/bee-guard.ts:729-743) renders only status/summary/proof/report_path from the worker's result file, so the new envelope keys never reach it — verified read, no code change (D8 reader list). Run `bee knowledge index` if the area keeps a generated index, and the registry contract test as the proof that no CLI surface drifted. No behaviour text that the code does not do: every sentence traces to a merged commit.",
+  "must_haves": {
+    "truths": [
+      "every word in the D8 list is documented once in the bee-herding area",
+      "the Pi drain finding (no envelope-key parsing) is recorded",
+      "config-reference lists interrupt and cancel"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "substantive": "new outcomes, retryable, git, interrupt/cancel verbs"
+      },
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "herding verb list updated"
+      }
+    ],
+    "key_links": [
+      "docs cite decisions c943feb9 468c6cb8 1ef811f7 7172010b d5a1f7e1 e0f6b8b5 9615be76 afec9446"
+    ],
+    "prohibitions": [
+      "No code change",
+      "No claim the code does not implement",
+      "No edit to herding-orchestration D1-D18 text"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-hcc-10",
+    "outcome": "Synced herding knowledge docs and config reference with cockpit signals",
+    "files_changed": [
+      "docs/config-reference.md",
+      "docs/knowledge/areas/bee-herding/index.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+      "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+    ],
+    "deviations": [
+      "sync-ack: this cell is the docs sync"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T11:20:24.636Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T11:15:00.496Z",
+    "sync_ack": "this cell is the docs sync",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "report": {
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — contract test for herding CLI registry and flags",
+      "files": [
+        "docs/config-reference.md",
+        "docs/knowledge/areas/bee-herding/index.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+        "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+      ],
+      "mistakes": [],
+      "outcome": "Synced herding knowledge docs and config reference with cockpit signals",
+      "commit": "64abb9c0f8249f76d77d5ccb6f83d3ec1373a2d0",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 203 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

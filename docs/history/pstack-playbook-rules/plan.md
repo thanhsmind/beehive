@@ -1,0 +1,81 @@
+---
+artifact_contract: bee-plan/v1
+mode: small
+---
+
+# Plan: pstack-playbook-rules
+
+## Summary
+
+Three short rules from pstack land in the bee skills that already own those
+moments: what to do when a worker dies, how to read a red CI before rerunning
+it, and how a PR title and body should look. One docs cell, one regen.
+
+Mode: `small` — 0 risk flags (lane by recorded deviation D5).
+
+## Requirements (from CONTEXT.md)
+
+- D1: failure-response rows in bee-swarming. D2: CI-red rule in bee-herding merge role. D3: PR shape in bee-technical-writing, pointer from ship visibility. D4: perf untouched. D5: lane small, one cell.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | The failure table exists and ends at the two-retries rule | read | skills/bee-swarming/references/swarming-reference.md:300 | `## Failure responses` |
+| 2 | The merge role names CI but has no flake rule | ran | `rg -n -i flake skills/bee-herding` | (no output) |
+| 3 | The PR-body sentence exists and names no shape | read | skills/bee-technical-writing/SKILL.md:111 | `A PR body is a briefing that a reviewer can read in under a minute.` |
+| 4 | Ship visibility is the one home for the draft-PR rule | read | skills/bee-hive/references/scout-and-ticks.md:134 | `**Draft PR, push per cap.** Config key \`ship_visibility\` in \`.bee/config.json\`:` |
+| 5 | The perf playbook already freezes the harness after proving it | read | skills/bee-planning/playbooks/perf.md | `Prove the harness separates` / `the target case, then freeze it.` |
+
+## Cells — current slice
+
+```json
+[
+  {
+    "id": "ppr-1",
+    "feature": "pstack-playbook-rules",
+    "title": "Add the worker-failure rows, the CI-red rule and the PR shape to their skill homes",
+    "lane": "small",
+    "role": "docs",
+    "status": "open",
+    "deps": [],
+    "decisions": ["e313792a-4407-4bdb-bcdb-4d8b50edd177", "11984334-3cc8-47cd-ab39-f26ca1a4cc19", "480ed73a-fd40-477c-bf15-4e841f899c34"],
+    "files": [
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-herding/references/role-merge.md",
+      "skills/bee-technical-writing/SKILL.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/pstack-playbook-rules/CONTEXT.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-herding/references/role-merge.md",
+      "skills/bee-technical-writing/SKILL.md"
+    ],
+    "affects_skills": ["skills/bee-swarming/references/swarming-reference.md", "skills/bee-herding/references/role-merge.md", "skills/bee-technical-writing/SKILL.md", "skills/bee-hive/references/scout-and-ticks.md"],
+    "affects_specs": [],
+    "behavior_change": true,
+    "action": "Three prose edits, per pstack-playbook-rules D1, D2, D3; write each in its file's voice, short sentences, no copied pstack prose. EDIT 1 (D1) — skills/bee-swarming/references/swarming-reference.md, section `## Failure responses` (search that heading). Keep the existing five rows. Add rows to the same table: `Silent worker, unsure if stuck` → probe read-only (`bee cells list`, `bee reservations list`, the pane or job record); never resume or re-prompt it to find out — a resume restarts an idle worker. `Context or budget cap hit` → re-dispatch with a smaller scope (split the cell or narrow files). `Transport drop — pane died, connection lost` → re-dispatch the same brief once. `Tool error the worker could not route around` → re-dispatch on a different configured role or transport, with a logged role-reroute decision. `Unknown failure` → one retry, then treat as the two-retries rule. `Late return — a worker reports after its cell was re-dispatched or capped` → reconcile against the current cell state first; salvage a unique finding through a fresh cell, never a blind accept. Then extend the paragraph after the table: after two failed retries the dispatch is abandoned, one postmortem line is written (where: `bee mailbox reflect` or the cap's deviations), and the leader replans around it. Say why in one clause each where the reason is not obvious. EDIT 2 (D2) — skills/bee-herding/references/role-merge.md, near the sentence `CI runs the full declared suite against the merged main on every push` (search it): add one short paragraph headed in the file's style: classify a red CI before any rerun — a flake or infrastructure red earns ONE fresh run of the whole workflow, never a single-job retry; an identical second failure is not flake, read the child log instead of rerunning; a failure in code the diff never touched means a stale base, rebase onto current main before anything else. EDIT 3 (D3) — skills/bee-technical-writing/SKILL.md, at the bullet `PR descriptions and commit messages are writing too` (search it): extend into a short sub-list: title `type(scope): subject`, imperative, no trailing period, a real symbol when one carries the change; body is a one-minute briefing of up to six short sections in this order — Why (1–3 sentences), What changed (1–3 bullets), Scope (what it covers and leaves out), Tradeoffs (only rejected alternatives a reviewer would ask about; skip when none), Blast Radius (who or what it touches and why that is safe), Verification (real run paths and outcomes, one primary number for perf); logs, SHA lists, lane recitals and file-by-file checklists go in a linked artifact, never the body. Then in skills/bee-hive/references/scout-and-ticks.md, in the `**Draft PR, push per cap.**` paragraph (search it), add ONE sentence pointing at bee-technical-writing for the title and body shape — a pointer, never a copy. Do NOT touch skills/bee-planning/playbooks/perf.md (D4). REGEN inside this cell: `.bee/bin/bee dev regen` (it ends with release-manifest --write); commit the regenerated copies with the change, path-scoped.",
+    "verify": "`rg -c 'Late return' skills/bee-swarming/references/swarming-reference.md` prints 1. `rg -c -i 'flake' skills/bee-herding/references/role-merge.md` prints at least 1. `rg -c 'Blast Radius' skills/bee-technical-writing/SKILL.md` prints 1 and `rg -c 'bee-technical-writing' skills/bee-hive/references/scout-and-ticks.md` prints at least 1. `git diff --stat main -- skills/bee-planning/playbooks/perf.md` is empty. `.bee/bin/bee dev regen` runs clean and `.bee/bin/bee dev release-manifest --check` is clean.",
+    "must_haves": {
+      "truths": [
+        "The failure table names what to do for a silent, capped, dropped, tool-erroring, unknown and late-returning worker, and the two-retries abandonment",
+        "The merge role classifies a red CI before any rerun",
+        "The PR title and body shape has one home in bee-technical-writing and ship visibility points at it"
+      ],
+      "artifacts": [
+        {"path": "skills/bee-swarming/references/swarming-reference.md", "substantive": "extended Failure responses table and paragraph"},
+        {"path": "skills/bee-herding/references/role-merge.md", "substantive": "CI-red classification paragraph"},
+        {"path": "skills/bee-technical-writing/SKILL.md", "substantive": "PR title and six-section body shape"}
+      ],
+      "key_links": ["scout-and-ticks.md points at bee-technical-writing; rendered copies match skills/ after regen"],
+      "prohibitions": ["No edit to perf.md", "No copied pstack sentence", "No edit to AGENTS.block.md"]
+    }
+  }
+]
+```
+
+## Proof
+
+- docs → pointer checks named in the cell's verify; `bee dev regen` and `release-manifest --check` clean.

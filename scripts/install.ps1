@@ -34,7 +34,7 @@
 [CmdletBinding()]
 param(
   [string]$Directory = (Get-Location).Path,
-  [ValidateSet('claude', 'codex', 'both')]
+  [ValidateSet('claude', 'codex', 'pi', 'both')]
   [string]$Runtime = 'both',
   [ValidateSet('plugin-first', 'repo-copy')]
   [string]$Distribution = 'repo-copy',
@@ -42,11 +42,13 @@ param(
   [string]$OwnershipLedger = '',
   [string]$Source = '',
   [string]$Ref = 'main',
+  [string]$DesignPacks = '',
   [switch]$BuildFromSource,
   [switch]$NoHooks,
   [switch]$GlobalSkills,
   [switch]$NoClaudeMd,
   [switch]$ClaudeMd,
+  [switch]$NoStatusline,
   [switch]$NoGitInit,
   [switch]$Yes,
   [switch]$DryRun
@@ -56,6 +58,12 @@ $ErrorActionPreference = 'Stop'
 $RepoUrl = 'https://github.com/thanhsmind/beehive.git'
 
 function Fail([string]$Message) { Write-Error $Message; exit 1 }
+
+# Pi has no plugin marketplace, and plugin-first writes no repo skills or
+# hooks - so the pair would install nothing Pi can load. Refuse before any write.
+if ($Runtime -eq 'pi' -and $Distribution -eq 'plugin-first') {
+  Fail '-Runtime pi needs -Distribution repo-copy: Pi has no plugin, and plugin-first writes no repo skills or hooks.'
+}
 
 function Confirm-Step([string]$Question) {
   if ($Yes) { return $true }
@@ -451,12 +459,21 @@ try {
     # nothing from pipelining and cannot afford a coin flip.
     $prevPipelining = $env:CARGO_BUILD_PIPELINING
     $env:CARGO_BUILD_PIPELINING = 'false'
+    # TARGET DIR PINNED, deliberately - same reason as install.sh: the binary
+    # check below reads packages\bee-rs\target\release, and a host that sets
+    # CARGO_TARGET_DIR (or config.toml build.target-dir) would build somewhere
+    # else and fail that check after a green build. The env var outranks every
+    # config file, so pinning it makes the output path the one checked.
+    $prevTargetDir = $env:CARGO_TARGET_DIR
+    $env:CARGO_TARGET_DIR = Join-Path $beeSrc 'packages\bee-rs\target'
     Write-Host 'build    cargo build --release (packages/bee-rs) - first build takes a few minutes'
     try {
       cargo build --release --manifest-path $cargoToml
     } finally {
       if ($null -eq $prevPipelining) { Remove-Item Env:\CARGO_BUILD_PIPELINING -ErrorAction SilentlyContinue }
       else { $env:CARGO_BUILD_PIPELINING = $prevPipelining }
+      if ($null -eq $prevTargetDir) { Remove-Item Env:\CARGO_TARGET_DIR -ErrorAction SilentlyContinue }
+      else { $env:CARGO_TARGET_DIR = $prevTargetDir }
     }
     if ($LASTEXITCODE -ne 0) {
       Fail ('cargo build --release failed. Run `rustup update stable` first - bee needs a current toolchain. ' +
@@ -526,6 +543,8 @@ try {
   elseif (-not $NoHooks) { $onboardFlags += '--repo-hooks' }
   if ($NoClaudeMd) { $onboardFlags += '--no-claude-md' }
   if ($ClaudeMd) { $onboardFlags += '--claude-md' }
+  if ($NoStatusline) { $onboardFlags += '--no-statusline' }
+  if ($DesignPacks) { $onboardFlags += @('--design-packs', $DesignPacks) }
   if ($GlobalSkills) { $onboardFlags += '--global-skills' }
 
   if ($PluginStateFile -and -not (Test-Path $PluginStateFile)) { Fail "-PluginStateFile not found: $PluginStateFile" }
@@ -547,6 +566,30 @@ try {
   Push-Location $beeSrc
   try { & $beeBin onboard --repo-root $Directory @onboardFlags } finally { Pop-Location }
   if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
+
+  if (-not $DesignPacks) {
+    Push-Location $beeSrc
+    try { $previewJson = (& $beeBin onboard --repo-root $Directory --json @onboardFlags) -join "`n" } finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
+    if ((($previewJson | ConvertFrom-Json).design_offer) -eq $true) {
+      $answered = $false
+      if ((-not $Yes) -and (-not $DryRun) -and [Environment]::UserInteractive) {
+        $designAnswer = Read-Host 'Design skill packs for this project? web, charts, motion, apple, figma (comma list) - none stops the offer, Enter skips'
+        if ($designAnswer) {
+          $DesignPacks = $designAnswer
+          $onboardFlags += @('--design-packs', $DesignPacks)
+          Write-Host "design   packs: $DesignPacks"
+          $answered = $true
+          Push-Location $beeSrc
+          try { & $beeBin onboard --repo-root $Directory @onboardFlags } finally { Pop-Location }
+          if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
+        }
+      }
+      if (-not $answered) {
+        Write-Host 'design   this project has interface files; re-run with -DesignPacks web (or charts,motion,apple,figma, or none) to add design skills'
+      }
+    }
+  }
 
   if ($DryRun) {
     Write-Host 'dry-run  nothing written. Re-run without -DryRun to apply.'
@@ -608,8 +651,12 @@ try {
     if ($Runtime -in @('codex', 'both')) { $distributionArgs += @('--user-skill-root', (Join-Path $codexHome 'skills')) }
   }
 
-  & $beeBin dev plugin-distribution @distributionArgs
-  if ($LASTEXITCODE -ne 0) { Invoke-PluginTransitionFailure 'Distribution preflight refused after transition' }
+  if ($Runtime -eq 'pi') {
+    Write-Host 'plugin   Pi has no plugin marketplace - skipping the plugin distribution step'
+  } else {
+    & $beeBin dev plugin-distribution @distributionArgs
+    if ($LASTEXITCODE -ne 0) { Invoke-PluginTransitionFailure 'Distribution preflight refused after transition' }
+  }
 
   # 4. apply onboarding. A refused/blocked apply (e.g. the codex-hybrid hook
   #    write preflight in onboard_bee.mjs applyPlan refusing because
@@ -657,7 +704,11 @@ try {
   Write-Host "  next: open an agent session in $Directory"
   Write-Host '  - Claude Code: the session preamble appears via hooks; or say "Route this through bee: <task>"'
   Write-Host '  - Codex: the AGENTS.md BEE block bootstraps; first step is bee status'
+  if ($Runtime -eq 'pi') {
+    Write-Host '  - Pi: the bee extension and skills are in place; set a Pi default model first (bee runs plain `pi`)'
+  }
   Write-Host '  - scout any time: .bee/bin/bee status --json'
+  @($applyOutput) | Where-Object { $_ -like 'notice: *' } | ForEach-Object { Write-Host $_ }
 } finally {
   if ($cleanupDir -and (Test-Path $cleanupDir)) {
     Remove-Item -Recurse -Force $cleanupDir -ErrorAction SilentlyContinue

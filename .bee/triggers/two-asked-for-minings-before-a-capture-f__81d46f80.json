@@ -1,0 +1,11 @@
+{
+  "id": "two-asked-for-minings-before-a-capture-f__81d46f80",
+  "decision": "81d46f80",
+  "condition": "Two asked-for minings before a capture flush, or an ask followed by a crash, file near-duplicate mined stubs a human has to sort — then the capture queue needs content dedupe (learning-loop-gaps Known gaps)",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-02T09:29:37.787Z",
+  "updated_at": "2026-09-02T09:29:37.787Z",
+  "outcome": null
+}

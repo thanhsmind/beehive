@@ -1,0 +1,105 @@
+{
+  "id": "dse-2",
+  "feature": "deploy-stage-execution",
+  "role": "docs",
+  "lane": "standard",
+  "title": "Document the narrow deployment mutation exception",
+  "action": "Update the source delegation contract and doctrine knowledge entry for the authenticated deployment exception. Build the current source candidate, then regenerate host projections with that candidate. Write and check the release manifest; never conceal drift with sync acknowledgement.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee && CANDIDATE=\"$(cargo metadata --no-deps --format-version 1 --manifest-path packages/bee-rs/Cargo.toml | jq -r .target_directory)/release/bee\" && \"$CANDIDATE\" dev regen && \"$CANDIDATE\" dev release-manifest --write && \"$CANDIDATE\" dev release-manifest --check && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/deploy-stage-execution/CONTEXT.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "files": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    ".agents/skills/bee-hive/references/gates-and-delegation.md",
+    ".claude/skills/bee-hive/references/gates-and-delegation.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [
+    "dse-1"
+  ],
+  "decisions": [
+    "38edea83"
+  ],
+  "must_haves": {
+    "truths": [
+      "The shared contract permits mutation only for an authorized deployment stage.",
+      "Ordinary gather remains explicitly read-only.",
+      "Source and both generated host projections match.",
+      "The release manifest matches all tracked release files."
+    ]
+  },
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [
+    "docs/specs/doctrine-layer.md"
+  ],
+  "acceptance": "Worker-facing instructions and durable knowledge describe one narrow deployment exception with generated parity.",
+  "status": "capped",
+  "trace": {
+    "worker": "dse-docs",
+    "outcome": "Documented the authenticated deployment mutation exception and regenerated every host projection",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-hive/references/gates-and-delegation.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-hive/references/gates-and-delegation.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-hive/references/gates-and-delegation.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+      "skills/bee-hive/references/gates-and-delegation.md"
+    ],
+    "deviations": [
+      "Mandatory dev regen also changed render metadata, onboarding metadata, and all supported host projections beyond the abbreviated cell file list; all were produced from the in-scope source and passed parity checks.",
+      "sync-ack: Full source-first regeneration changed every required host projection and metadata file; both candidate and installed manifest checks matched 376 files, so this records complete parity rather than concealing drift."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T15:40:40.170Z",
+    "behavior_change": false,
+    "verification_evidence": "all projections regenerated from source and 376 manifest files matched",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "01a09fa4-9ac5-747b-a74c-ed78ef782f86",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee && CANDIDATE=\"$(cargo metadata --no-deps --format-version 1 --manifest-path packages/bee-rs/Cargo.toml | jq -r .target_directory)/release/bee\" && \"$CANDIDATE\" dev regen && \"$CANDIDATE\" dev release-manifest --write && \"$CANDIDATE\" dev release-manifest --check && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-14T15:35:09.565Z",
+    "sync_ack": "Full source-first regeneration changed every required host projection and metadata file; both candidate and installed manifest checks matched 376 files, so this records complete parity rather than concealing drift.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Documented the authenticated deployment mutation exception and regenerated every host projection",
+      "commit": "9fd464b7e24b49b692367412fcc5031943046389",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-hive/references/gates-and-delegation.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-hive/references/gates-and-delegation.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-hive/references/gates-and-delegation.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+        "skills/bee-hive/references/gates-and-delegation.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee && CANDIDATE=\"$(cargo metadata --no-deps --format-version 1 --manifest-path packages/bee-rs/Cargo.toml | jq -r .target_directory)/release/bee\" && \"$CANDIDATE\" dev regen && \"$CANDIDATE\" dev release-manifest --write && \"$CANDIDATE\" dev release-manifest --check && .bee/bin/bee dev release-manifest --check — green:static — all projections regenerated from source and 376 manifest files matched",
+      "deviations": [
+        "Mandatory dev regen also changed render metadata, onboarding metadata, and all supported host projections beyond the abbreviated cell file list; all were produced from the in-scope source and passed parity checks."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

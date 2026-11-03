@@ -7,6 +7,7 @@ timestamp: 2026-07-12
 bee:
   id: pattern-20260712-dry-run-negative-grep-verifies-against-their-own
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT26", "original feature: bee-footprint"]
   polarity: pitfall
   critical: false

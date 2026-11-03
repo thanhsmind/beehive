@@ -205,4 +205,153 @@ mod runs {
             "line one went missing when no binary was found:\n{stdout}"
         );
     }
+
+    fn fixture_path_without_jq() -> tempfile::TempDir {
+        let td = tempfile::tempdir().unwrap();
+        if let Some(path_var) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&path_var) {
+                if let Ok(entries) = std::fs::read_dir(&dir) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name();
+                        if name == "jq" {
+                            continue;
+                        }
+                        let src = entry.path();
+                        let dst = td.path().join(&name);
+                        if !dst.exists() && src.is_file() {
+                            let _ = std::os::unix::fs::symlink(&src, &dst);
+                        }
+                    }
+                }
+            }
+        }
+        td
+    }
+
+    /// Precondition for default-on (Slice 0): no jq resolvable on PATH or hardcoded
+    /// candidate paths renders nothing at all and exits 0.
+    #[test]
+    fn statusline_without_jq_prints_nothing_and_exits_zero() {
+        let dir = fixture(false);
+        let script = dir.path().join(".claude").join("statusline-command.sh");
+        let no_jq_path = fixture_path_without_jq();
+
+        let unshare_works = Command::new("unshare")
+            .args(["-m", "-r", "true"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        let (stdout, stderr, ok) = if unshare_works {
+            let runner = format!(
+                concat!(
+                    "for cand in /opt/homebrew/bin/jq /usr/local/bin/jq /usr/bin/jq; do\n",
+                    "  [ -e \"$cand\" ] && mount --bind /dev/null \"$cand\"\n",
+                    "done\n",
+                    "PATH=\"{path}\" exec bash \"{script}\"\n"
+                ),
+                path = no_jq_path.path().display(),
+                script = script.display()
+            );
+            let mut child = Command::new("unshare")
+                .args(["-m", "-r", "bash", "-c", &runner])
+                .env("CLAUDE_PROJECT_DIR", dir.path())
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("cannot spawn unshare");
+            child.stdin.take().unwrap().write_all(PAYLOAD.as_bytes()).unwrap();
+            let out = child.wait_with_output().expect("unshare command did not finish");
+            (
+                String::from_utf8_lossy(&out.stdout).into_owned(),
+                String::from_utf8_lossy(&out.stderr).into_owned(),
+                out.status.success(),
+            )
+        } else {
+            let candidates = ["/opt/homebrew/bin/jq", "/usr/local/bin/jq", "/usr/bin/jq"];
+            let candidates_exist = candidates.iter().any(|p| std::path::Path::new(p).exists());
+            if candidates_exist {
+                eprintln!("statusline_contract: skipped without-jq test, candidates exist and unshare is unavailable");
+                return;
+            }
+            let mut child = Command::new("bash")
+                .arg(&script)
+                .env("CLAUDE_PROJECT_DIR", dir.path())
+                .env("PATH", no_jq_path.path())
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("cannot spawn bash");
+            child.stdin.take().unwrap().write_all(PAYLOAD.as_bytes()).unwrap();
+            let out = child.wait_with_output().expect("statusline script did not finish");
+            (
+                String::from_utf8_lossy(&out.stdout).into_owned(),
+                String::from_utf8_lossy(&out.stderr).into_owned(),
+                out.status.success(),
+            )
+        };
+
+        assert!(ok, "the statusline script must exit 0 when jq is missing; stderr was:\n{stderr}");
+        assert_eq!(
+            stdout, "",
+            "the statusline script with no jq must print nothing at all; stdout was:\n{stdout}"
+        );
+    }
+
+    /// The script fed empty stdin exits 0 and writes nothing to stderr.
+    #[test]
+    fn statusline_with_empty_stdin_exits_zero_and_writes_nothing_to_stderr() {
+        if which_jq().is_none() {
+            eprintln!("statusline_contract: skipped, no jq on this host");
+            return;
+        }
+        let dir = fixture(false);
+        let script = dir.path().join(".claude").join("statusline-command.sh");
+        let mut child = Command::new("bash")
+            .arg(&script)
+            .env("CLAUDE_PROJECT_DIR", dir.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("cannot spawn bash");
+        // Empty stdin: close immediately without writing bytes
+        drop(child.stdin.take());
+        let out = child.wait_with_output().expect("statusline script did not finish");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(out.status.success(), "the statusline script must exit 0 on empty stdin");
+        assert!(
+            stderr.is_empty(),
+            "the statusline script must write nothing to stderr on empty stdin; stderr was:\n{stderr}"
+        );
+    }
+
+    /// The script fed an unparseable payload exits 0 and writes nothing to stderr.
+    #[test]
+    fn statusline_with_unparseable_payload_exits_zero_and_writes_nothing_to_stderr() {
+        if which_jq().is_none() {
+            eprintln!("statusline_contract: skipped, no jq on this host");
+            return;
+        }
+        let dir = fixture(false);
+        let script = dir.path().join(".claude").join("statusline-command.sh");
+        let mut child = Command::new("bash")
+            .arg(&script)
+            .env("CLAUDE_PROJECT_DIR", dir.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("cannot spawn bash");
+        child.stdin.take().unwrap().write_all(b"not-valid-json").unwrap();
+        let out = child.wait_with_output().expect("statusline script did not finish");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(out.status.success(), "the statusline script must exit 0 on unparseable payload");
+        assert!(
+            stderr.is_empty(),
+            "the statusline script must write nothing to stderr on unparseable payload; stderr was:\n{stderr}"
+        );
+    }
 }

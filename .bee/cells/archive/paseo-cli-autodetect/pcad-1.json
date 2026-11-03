@@ -1,0 +1,113 @@
+{
+  "id": "pcad-1",
+  "feature": "paseo-cli-autodetect",
+  "lane": "small",
+  "role": "code",
+  "change_class": "bugfix",
+  "title": "Find the paseo CLI of the running daemon without config",
+  "deps": [],
+  "decisions": [
+    "03ff4564"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/paseo_state.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Per decision 03ff4564, in packages/bee-rs/crates/bee/src/herding/paseo.rs change paseo_command(cfg) (line 76): return herding.paseo.command (or the legacy top-level paseo.command) when set and non-blank; else the PASEO_CLI env value when it names an existing file; else the running daemon's CLI: read <paseo home>/paseo.pid (JSON, key pid; home from crate::herding::paseo_state::home_from with an empty command, PASEO_HOME, HOME), then the PASEO_CLI entry of /proc/<pid>/environ when it names an existing file, else <parent of /proc/<pid>/exe>/resources/bin/paseo when that file exists; else \"paseo\". Put the discovery in a pure helper that takes the env value, the paseo home and a proc root path, so tests drive it with a tempdir. Under cfg(test), paseo_command must not read the real process env or the real /proc (follow the TEST_PASEO_HOME thread_local pattern in paseo_state.rs), so paseo_command_reads_config_and_defaults_to_paseo still passes inside a Paseo agent. Tests red first: config wins over env; env wins over daemon; daemon environ PASEO_CLI; daemon exe-dir fallback; a missing or garbage pid file falls through to paseo; an env value naming a missing file is skipped. In docs/knowledge/areas/bee-herding/the-paseo-channel.md replace 'The key `herding.paseo.command` sets the CLI executable name. The default command is `paseo`.' with the new order, citing decision 03ff4564. Write no code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+  "must_haves": {
+    "truths": [
+      "with no config, bee uses PASEO_CLI when it names an existing file",
+      "with no config and no PASEO_CLI, bee uses the CLI of the daemon named in paseo.pid",
+      "a set herding.paseo.command always wins",
+      "with nothing found, the command is plain paseo"
+    ],
+    "prohibitions": [
+      "no new config key",
+      "no change to any paseo_command call site",
+      "tests never read the real /proc or the real PASEO_CLI env"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "pcad-worker-1",
+    "outcome": "paseo_command now resolves config, then PASEO_CLI, then the running daemon's CLI from paseo.pid, else plain paseo; tests and the paseo-channel concept updated (commit 8f2bf79ed)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "deviations": [
+      "leader gated paseo_command_falls_back_to_the_daemon_exe_dir with cfg(unix) and moved the symlink out of fake_proc so Windows builds compile",
+      "sync-ack: skills/bee-herding never names the paseo command or its resolution; the owning concept the-paseo-channel.md carries the change"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T02:58:12.467Z",
+    "behavior_change": false,
+    "verification_evidence": "herding::paseo module holds paseo_command and its six resolution tests; 33 passed after the leader gated the exe-dir symlink test to unix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "efc35d0c-9131-4bfb-b4f6-eb6ff6058d91",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+    "claimed_at": "2026-10-15T02:48:48.712Z",
+    "sync_ack": "skills/bee-herding never names the paseo command or its resolution; the owning concept the-paseo-channel.md carries the change",
+    "mistakes": [
+      {
+        "wrong": "worker used std::os::unix::fs::symlink in a shared test helper with no cfg(unix)",
+        "better": "gate unix-only test calls per test, as tmux.rs does",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "paseo_command now resolves config, then PASEO_CLI, then the running daemon's CLI from paseo.pid, else plain paseo; tests and the paseo-channel concept updated (commit 8f2bf79ed)",
+      "commit": "8af7c28955340caad0d74e40d6c0093355a543c5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo — green:unit — herding::paseo module holds paseo_command and its six resolution tests; 33 passed after the leader gated the exe-dir symlink test to unix",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 208 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "with no config, bee uses PASEO_CLI when it names an existing file",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "with no config and no PASEO_CLI, bee uses the CLI of the daemon named in paseo.pid",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "a set herding.paseo.command always wins",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "with nothing found, the command is plain paseo",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "knowledge concept states the new order",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-15T02:58:30.934Z",
+        "recorded_by": "efc35d0c-9131-4bfb-b4f6-eb6ff6058d91",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

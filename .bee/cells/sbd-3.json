@@ -1,0 +1,90 @@
+{
+  "id": "sbd-3",
+  "feature": "statusline-by-default",
+  "lane": "standard",
+  "tier": "generation",
+  "role": "code",
+  "title": "Plan the statusline by default, add --no-statusline, and keep the manifest converging",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/statusline-by-default/plan.md",
+    "docs/history/statusline-by-default/reports/advisor-digest.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/merge.rs"
+  ],
+  "action": "SLICE 1, part 2 of 4. Depends on sbd-2's hooks_wiring API (STATUSLINE_COMMAND, statusline_settings_absent, merge_statusline_settings) — it is already merged, use it. Touch NO other file; apply.rs and onboard/tests.rs are other cells.\n\nA. mod.rs — the opt-out.\n  - `parse_args` gains `--no-statusline`, arm placed beside `--no-claude-md` (l.170-171). Keep parse_args_rejects_unknown_flags_and_bad_runtimes green.\n  - `Options` gains `statusline: bool`, computed as: NOT --no-statusline AND NOT the project's recorded opt-out. The recorded opt-out is `.bee/config.json` `\"statusline\": false`, read exactly the way merge.rs::host_shell_is_powershell reads `host_shell` (merge.rs:48-58) — a project-level preference bee READS and never writes. Absent or unrecognised -> true.\n  - ALSO false when `merge::host_shell_is_powershell(&repo_root)` is true. There is no PowerShell variant of this bash script; a failed hook is silent but a failed statusLine is drawn on every prompt, and a bare `bash` on native Windows can resolve to the WSL launcher which cannot open a C:\\… path (this repo already warns about that at hooks_wiring.rs:350). Emit a notice so the skip is visible rather than mysterious — follow how onboard/notices.rs already words its notices.\n  - Update the module header comment (l.5-8) which enumerates what onboarding manages.\n\nB. plan.rs — the plan.\n  - Compute ONE value per run, before stage 3b: `let statusline = opts.statusline && (hw::statusline_opt_in(repo_root) || hw::statusline_settings_absent(repo_root));`  This single value gates stage 3b, the new item, AND build_managed_versions. Do not recompute it from statusline_opt_in alone anywhere — the pre-apply opt-in is false on a fresh host, and feeding that to the manifest makes the post-apply recheck report changes_needed for ever, which scripts/install.sh turns into a FAILED INSTALL.\n  - Stage 3b (l.785): gate on that value instead of `hw::statusline_opt_in(repo_root)`.\n  - New plan item `merge_statusline_settings` targeting \".claude/settings.json\", pushed when the value is true AND hw::statusline_settings_absent(repo_root). Push it AFTER stage 5's merge_repo_hook_settings item so the two writers of that one file run in a known order.\n  - `build_managed_versions` / `subset_managed` (l.256, l.316, l.966-990): feed them the same single value in place of today's `hw::statusline_opt_in(repo_root)` at l.966.\n  - Gate NONE of this on opts.repo_hooks or opts.plugin_source. A Claude plugin cannot supply a statusLine, so a plugin-first host gets the display only if onboarding writes it, and 'plugin-first never touches settings.json' is not a property anything relies on (bee dev plugin-distribution --apply already rewrites that file via clean_hook_config).\n\nC. The help surfaces, so the flag is not a secret.\n  - router.rs:98-99 usage string: append [--no-statusline].\n  - src/generated/registry_payload.json, command \"onboard\": add a \"no-statusline\" boolean property after \"no-claude-md\", description: \"Skip the default status display: neither the .claude/settings.json statusLine entry nor statusline-command.sh is written.\"\n\nNo new tests in this cell — sbd-5 owns onboard/tests.rs. Keep the crate compiling and every existing test green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib onboard",
+  "must_haves": {
+    "truths": [
+      "One `statusline` value per run feeds stage 3b, the new plan item, and build_managed_versions.",
+      "--no-statusline and .bee/config.json statusline:false both suppress every statusline action.",
+      "A PowerShell host is skipped with a visible notice.",
+      "The new plan item is not gated on repo_hooks or plugin_source.",
+      "router.rs usage and the registry payload both list the flag."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4cac0774"
+  ],
+  "deps": [
+    "sbd-2"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "leader-sbd-3",
+    "outcome": "Statusline planned by default from one per-run value; --no-statusline, config opt-out and a PowerShell skip",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "The dispatched worker read for ~50 minutes without a single edit, so the leader took the cell inline and closed the pane; the worker had begun writing mod.rs by then and its edits were kept where they were better factored — worker throughput, not correctness — hit an unforeseen obstacle",
+      "sbd-3 and sbd-4 were planned as separate cells but cannot be green apart: the plan item and its apply case are one behavior. sbd-3 was committed red-in-isolation and proven only once sbd-4 landed — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T10:44:45.326Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b",
+    "claimed_at": "2026-09-04T10:33:22.616Z",
+    "mistakes": [
+      {
+        "wrong": "Split the plan item (sbd-3) and its apply case (sbd-4) into two cells with a dependency, which made the first cell structurally impossible to cap green",
+        "better": "one cell for the plan-and-apply pair would have been honest"
+      }
+    ],
+    "report": {
+      "outcome": "Onboarding plans the statusLine write and the script sync by default, from one per-run value that also feeds the managed manifest",
+      "commit": "f798d0fc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee onboard — green:unit — 167/167 after sbd-4 completed the pair; this cell alone left 7 red because the plan emitted an action apply.rs could not yet execute",
+      "deviations": [
+        "The dispatched worker read for ~50 minutes without a single edit, so the leader took the cell inline and closed the pane; the worker had begun writing mod.rs by then and its edits were kept where they were better factored — worker throughput, not correctness — hit an unforeseen obstacle",
+        "sbd-3 and sbd-4 were planned as separate cells but cannot be green apart: the plan item and its apply case are one behavior. sbd-3 was committed red-in-isolation and proven only once sbd-4 landed — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Split the plan item (sbd-3) and its apply case (sbd-4) into two cells with a dependency, which made the first cell structurally impossible to cap green — one cell for the plan-and-apply pair would have been honest"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

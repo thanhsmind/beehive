@@ -1,0 +1,97 @@
+{
+  "id": "slr-5",
+  "feature": "semantic-role-routing",
+  "role": "code",
+  "lane": "high-risk",
+  "title": "Add controlled cell role re-routing and native guard checks",
+  "action": "Add red-first tests, then implement the Re-route serialization contract under the cell claim lock. Validate status, no claim, configured role, decision feature and tag, unchanged role, plan hash, and history chain. Update native Claude and Codex guards to validate anchored feature, stage, cell identity, and current effective role without resolving an agent twice.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml reroute && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "read_first": [
+    "docs/history/semantic-role-routing/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+  ],
+  "deps": [
+    "slr-3"
+  ],
+  "decisions": [
+    "fc2bb09a",
+    "68bc3484"
+  ],
+  "must_haves": {
+    "truths": [
+      "Only open or blocked unclaimed cells can reroute under the claim lock.",
+      "The cited decision must match the feature and carry role-reroute.",
+      "Every accepted reroute records old role, new configured role, decision, time, and plan hash.",
+      "The immutable approved packet remains the original assignment and only a valid history chain changes the effective role.",
+      "Native direct dispatch cannot bypass cell or stage assignments."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/specs/doctrine-layer.md"
+  ],
+  "acceptance": "Cell role changes are explicit, structured, audited, and enforced by native guards.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-slr-5",
+    "outcome": "Cell role reroutes are validated and audited under lock, while native guards enforce effective approved cell and stage identities",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+    ],
+    "deviations": [
+      "Leader recovered the committed result after transport exited without a result record — the worker pane closed after commit but before cap — hit an unforeseen obstacle",
+      "sync-ack: Decision 7c5c7e0d assigns bee-swarming source, generated mirror, and full regen to integration cell slr-8 before close"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T08:57:49.446Z",
+    "behavior_change": false,
+    "verification_evidence": "5 reroute tests, 72 model-guard tests, and 3 host contract rows passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09ebc-3389-747b-a74c-ed61ea9ddf04",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml reroute && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+    "claimed_at": "2026-09-14T08:09:53.044Z",
+    "sync_ack": "Decision 7c5c7e0d assigns bee-swarming source, generated mirror, and full regen to integration cell slr-8 before close",
+    "mistakes": [
+      {
+        "wrong": "The slr-5 worker closed without cells finish or a report record",
+        "better": "it should have capped and written its structured result before closing"
+      }
+    ],
+    "report": {
+      "outcome": "Cell role reroutes are validated and audited under lock, while native guards enforce effective approved cell and stage identities",
+      "commit": "8d8673584f12b642fcc093b2f7a042f0eb165d6d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml reroute && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard — green:unit — 5 reroute tests, 72 model-guard tests, and 3 host contract rows passed",
+      "deviations": [
+        "Leader recovered the committed result after transport exited without a result record — the worker pane closed after commit but before cap — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "The slr-5 worker closed without cells finish or a report record — it should have capped and written its structured result before closing"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

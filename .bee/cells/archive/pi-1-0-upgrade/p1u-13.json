@@ -1,0 +1,254 @@
+{
+  "id": "p1u-13",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Carry typed context into running Pi workers and tag scope changes in the belt",
+  "deps": [
+    "p1u-11",
+    "p1u-12"
+  ],
+  "decisions": [
+    "D12",
+    "D13",
+    "8972e270-a4b6-43b7-a1e3-e8ace1d19a48",
+    "47677410-2447-4239-b596-f33a69eb87be",
+    "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+    "8b0387f5-833a-4d2e-a655-67639141ac60"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "action": "Red first in pi_plugin_contracts.rs, then in the belt: an input handler that sends steer and follow-up text to session-close as record_scope_input and returns the text unchanged; a worker-side steer drain per contract pi-worker-steer-drain using the main-checkout mailbox, and the same resolution in the verdict tool; a bee_steer leader tool. Add bee_steer to LEADER_TOOL_SET and FULL_TOOL_SET in stage_tools.rs and to BEE_STAGE_TOOLS in the belt. Rebuild .bee/bin/bee, run bee dev regen and bee doctor --runtime pi. No code comments. Apply amendment 8b0387f5-833a-4d2e-a655-67639141ac60 in full; its point (1) — no newest-dir verdict fallback when BEE_HERDING_JOB_ID is set — comes first.",
+  "must_haves": {
+    "truths": [
+      "a steered input is sent to session-close and passes through unchanged",
+      "a worker session delivers each steer file once as a steer message",
+      "a worker whose cwd is a feature worktree records its verdict",
+      "bee_steer runs bee herding steer and refuses when zero or several jobs run with job_id omitted",
+      "bee doctor --runtime pi is READY after rebuild",
+      "with BEE_HERDING_JOB_ID set and its mailbox dir missing, verdict refuses naming the job",
+      "the drain skips a malformed or oversized steer file and reports it",
+      "the delivered steer starts with the fixed prefix line",
+      "an undelivered steer is named in the leader's result header",
+      "bee_steer is in the leader tool set",
+      "bee_steer with job_id omitted lists the running job ids when it refuses",
+      "the input handler never delays or changes the typed text"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "input handler, worker steer drain, bee_steer tool"
+      }
+    ],
+    "key_links": [
+      "doctor.rs:47 embeds the belt, so .bee/bin/bee is rebuilt in this cell"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "The belt never edits or drops typed text",
+      "No scope word list in TypeScript"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)",
+  "trace": {
+    "worker": "p1u-13-coder",
+    "outcome": "belt: async input handler records steer/follow-up text as scope input and passes it unchanged; worker steer drain from the main-checkout mailbox with the fixed prefix, 8 KB and shape limits; verdict refuses a missing job dir when BEE_HERDING_JOB_ID is set; undelivered steers named in the result header; bee_steer leader tool in the leader set",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      ".bee/bin/bee",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the herding worker does not cap, so the leader capped after re-running the verify — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T13:15:06.094Z",
+    "behavior_change": true,
+    "verification_evidence": "leader re-ran the cell verify plus -p bee stage_tools on 5ff056b36: test result: ok. 104 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.01s; test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 3903 filtered out; finished in 0.00s; test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 101 filtered out; finished in 0.18s; bee doctor (pi): READY; whole suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+    "claimed_at": "2026-10-02T12:43:39.496Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "belt: async input handler records steer/follow-up text as scope input and passes it unchanged; worker steer drain from the main-checkout mailbox with the fixed prefix, 8 KB and shape limits; verdict refuses a missing job dir when BEE_HERDING_JOB_ID is set; undelivered steers named in the result header; bee_steer leader tool in the leader set",
+      "commit": "5ff056b36",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        ".bee/bin/bee",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts — green:unit — leader re-ran the cell verify plus -p bee stage_tools on 5ff056b36: test result: ok. 104 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.01s; test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 3903 filtered out; finished in 0.00s; test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 101 filtered out; finished in 0.18s; bee doctor (pi): READY; whole suite not run",
+      "deviations": [
+        "the herding worker does not cap, so the leader capped after re-running the verify — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a steered input is sent to session-close and passes through unchanged",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "a worker session delivers each steer file once as a steer message",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "a worker whose cwd is a feature worktree records its verdict",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "bee_steer runs bee herding steer and refuses when zero or several jobs run with job_id omitted",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "bee doctor --runtime pi is READY after rebuild",
+            "artifact": ".bee/bin/bee"
+          },
+          {
+            "requirement": "with BEE_HERDING_JOB_ID set and its mailbox dir missing, verdict refuses naming the job",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "the drain skips a malformed or oversized steer file and reports it",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "the delivered steer starts with the fixed prefix line",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "an undelivered steer is named in the leader's result header",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "bee_steer is in the leader tool set",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "bee_steer with job_id omitted lists the running job ids when it refuses",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "the input handler never delays or changes the typed text",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          }
+        ],
+        "recorded_at": "2026-10-02T13:27:32.500Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-steered-input-sent-session-close",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2953-2980, tests/pi_plugin_contracts.rs:9455-9502 steer/followUp text sent to session-close as record_scope_input and continues"
+          },
+          {
+            "id": "truth-worker-delivers-steer-once",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2702-2766, tests/pi_plugin_contracts.rs:9504-9556 sends steer message and renames steer file to .delivered"
+          },
+          {
+            "id": "truth-worker-worktree-records-verdict",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2370-2404, tests/pi_plugin_contracts.rs:9405-9453 mainCheckoutRoot writes verdict into main .bee/mailbox"
+          },
+          {
+            "id": "truth-bee-steer-refusals",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2649-2686, tests/pi_plugin_contracts.rs:9558-9635 refuses when 0 or multiple jobs run without job_id"
+          },
+          {
+            "id": "truth-doctor-pi-ready",
+            "status": "PASS",
+            "evidence": "bee doctor --runtime pi exits 0 with READY"
+          },
+          {
+            "id": "truth-verdict-refuses-missing-mailbox-dir",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2380-2385, tests/pi_plugin_contracts.rs:9373-9403 refuses naming job when BEE_HERDING_JOB_ID directory is missing"
+          },
+          {
+            "id": "truth-drain-skips-malformed-or-oversized",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2730-2751, tests/pi_plugin_contracts.rs:9524-9543 skips steer files > 8192 bytes or invalid JSON"
+          },
+          {
+            "id": "truth-delivered-steer-fixed-prefix",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2725,2758, tests/pi_plugin_contracts.rs:9545-9554 prepends fixed prefix line"
+          },
+          {
+            "id": "truth-undelivered-steer-named-in-result-header",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:836,948-969, tests/pi_plugin_contracts.rs:9637-9688 names undelivered steer in result header"
+          },
+          {
+            "id": "truth-bee-steer-in-leader-tool-set",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:25, .pi/extensions/bee-guard.ts:372,506 included in LEADER_TOOL_SET and BEE_STAGE_TOOLS"
+          },
+          {
+            "id": "truth-bee-steer-lists-running-job-ids",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2655-2657, tests/pi_plugin_contracts.rs:9593-9602 refusal lists active job IDs"
+          },
+          {
+            "id": "truth-input-handler-never-delays-or-changes-text",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2953-2980, tests/pi_plugin_contracts.rs:9491-9501 immediately returns { action: 'continue' } unchanged"
+          },
+          {
+            "id": "artifact-bee-guard",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:2341-2466,2613-2766,2953-2980 implements steer drain, input handler, bee_steer tool, and verdict tool"
+          },
+          {
+            "id": "key-link-doctor-embeds-belt",
+            "status": "PASS",
+            "evidence": "bee doctor --runtime pi validates wiring_matches_binary against embedded belt"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "gemini-3.8-flash-high",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-02T14:54:36.246Z"
+      }
+    ]
+  }
+}

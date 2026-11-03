@@ -7,6 +7,7 @@ timestamp: 2026-07-10
 bee:
   id: pattern-20260710-a-frozen-assertion-can-encode-the-defect-it
   lifecycle: active
+  areas: [verify-pipeline]
   decisions: [c45d0fb3, b8fe5c81]
   sources: ["docs/history/learnings/critical-patterns.md#PAT11", "original feature: evolving-loop"]
   polarity: pitfall

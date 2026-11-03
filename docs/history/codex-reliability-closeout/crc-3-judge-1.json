@@ -1,0 +1,35 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "NEEDS_REVISION",
+  "checks": [
+    {
+      "id": "source-guidance-matches-dispatch",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/onboard/templates.rs:412 describes configurable roles and transports, read-only CLI fallback, native dispatch, and unverified effective models. Dispatch implements read-only Codex CLI routing at packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1930-1959 and capability-dependent spawn_agent routing at lines 1961-1973."
+    },
+    {
+      "id": "obsolete-note-regression",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/onboard/agents.rs:578-624 builds generated metadata and rejects both obsolete phrases. docs/history/codex-reliability-closeout/onboarding-red.log:6-22 records the expected pre-fix failure. onboarding-green.log:6-17 records the test passing in the onboard suite."
+    },
+    {
+      "id": "fresh-cli-onboarding-evidence",
+      "status": "FAIL",
+      "evidence": "docs/history/codex-reliability-closeout/onboarding.md:61-72 reports fresh and refresh CLI probes, but no retained CLI output or generated onboarding artifact supports that report. onboarding-green.log contains cargo-test output only.",
+      "failure_signature": "The required actual-CLI proof cannot be reproduced from retained artifacts; only a narrative claim remains."
+    },
+    {
+      "id": "current-onboarding-guidance",
+      "status": "FAIL",
+      "evidence": ".bee/onboarding.json:58-60 still contains `Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design)`. This conflicts with the current renderer at packages/bee-rs/crates/bee/src/onboard/templates.rs:412 and with the dispatch source.",
+      "failure_signature": "Current repository onboarding metadata still emits the exact obsolete guidance that crc-3 claims to remove."
+    },
+    {
+      "id": "artifact-and-prohibitions",
+      "status": "PASS",
+      "evidence": "The substantive renderer artifact is packages/bee-rs/crates/bee/src/onboard/templates.rs:412. Commit 062ff82a changes only onboarding source, its regression test, and retained reports; no role-selection, guard, or credential source changed."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

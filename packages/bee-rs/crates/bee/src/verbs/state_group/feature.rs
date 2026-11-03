@@ -308,7 +308,7 @@ pub(crate) fn check_no_live_workflow_for_feature(
             && &cell_field(wf, "status") != &json!("closed")
     })?;
     Some(format!(
-        "startFeature: refused — a live workflow already exists for feature \"{feature}\" (workflow {}, phase \"{}\", status \"{}\"). FIX: close or resolve that workflow before starting a new one for the same feature.",
+        "startFeature: refused — a live workflow already exists for feature \"{feature}\" (workflow {}, phase \"{}\", status \"{}\"). FIX: bee state session bind --lane {feature} --session-id <session id>.",
         js_disp_opt(conflict.get("id")),
         js_disp_opt(conflict.get("phase")),
         js_disp_opt(conflict.get("status"))

@@ -3,7 +3,7 @@
   "feature": "knowledge-one-home",
   "title": "Require the skill answer on capture stubs for skill-owning areas",
   "lane": "standard",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D4"
@@ -56,48 +56,43 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": "capture add refuses a skill-owning area's stub without --skill-answer and stores the answer as skill_answer",
+    "worker": "koh-w11",
+    "outcome": "bee capture add refuses a stub for a skill-owning area without --skill-answer, and stores the answer as skill_answer",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/verbs/capture.rs",
-      "packages/bee-rs/crates/bee/src/catalog.rs",
       "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
       "docs/knowledge/areas/workflow-state/capture-queue-and-the-blocker-threshold.md",
-      "skills/bee-capturing/SKILL.md",
-      "docs/history/codex-harness-hardening/release-manifest.json"
+      "skills/bee-capturing/SKILL.md"
     ],
     "deviations": [
-      "Tests landed in capture.rs's existing `mod tests` rather than a new verbs/capture_tests.rs — the cell's own instruction says create capture_tests.rs only if no capture tests exist, and six already live inline; verbs/mod.rs therefore unchanged.",
-      "Homed the rule as workflow-state-capture-skill-answer (R102/B51) with an applied_at list and (rule: ...) refs in capture.rs and skills/bee-capturing/SKILL.md, so D4's one-home discipline covers the new rule and knowledge check stays at 0 profile errors."
+      "Capped from main rather than from a worker run — b95a6f04 landed the flag and d3eaa313 fixed the wrapped rule pointer that caused the earlier NEEDS_REVISION; re-running the cell as written would re-add an existing flag and could bump the pinned flag count twice — found a better route",
+      "Capped from main rather than from a worker run — the work landed as b95a6f04 with the pointer fix in d3eaa313, and nobody re-capped after the second PASS verdict"
     ],
     "friction": null,
-    "capped_at": "2026-08-22T06:55:07.625Z",
+    "capped_at": "2026-08-28T05:33:03.846Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
+    "claim_session": "be014001-263f-451f-b775-5f601ff73817",
+    "claimed_at": "2026-08-28T05:32:34.627Z",
     "report": {
-      "outcome": "capture add refuses a skill-owning area's stub without --skill-answer and stores the answer as skill_answer",
-      "commit": "b95a6f04a6d39fac507f84cb9c1c2fd170d13944",
+      "outcome": "bee capture add refuses a stub for a skill-owning area without --skill-answer, and stores the answer as skill_answer",
+      "commit": "b95a6f04",
       "files": [
         "packages/bee-rs/crates/bee/src/verbs/capture.rs",
-        "packages/bee-rs/crates/bee/src/catalog.rs",
         "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
         "docs/knowledge/areas/workflow-state/capture-queue-and-the-blocker-threshold.md",
-        "skills/bee-capturing/SKILL.md",
-        "docs/history/codex-harness-hardening/release-manifest.json"
+        "skills/bee-capturing/SKILL.md"
       ],
-      "tests": "cargo test --release -p bee capture && cargo test --release -p bee --test registry_contracts && bee dev release-manifest --check && bee knowledge check — green — the cell's own verify chain over capture.rs, the payload/catalog flag ratchet, and the shipped-frame manifest; full -p bee run green except the pre-existing opencode_plugin_contracts red",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bins capture and --test registry_contracts, plus bee dev release-manifest --check — green — 48 + 10 passed, 0 failed and 273 files match the stored manifest; the capture verb, the served-and-declared contract, and the regenerated skill projections",
       "deviations": [
-        "Tests landed in capture.rs's existing `mod tests` rather than a new verbs/capture_tests.rs — the cell's own instruction says create capture_tests.rs only if no capture tests exist, and six already live inline; verbs/mod.rs therefore unchanged.",
-        "Homed the rule as workflow-state-capture-skill-answer (R102/B51) with an applied_at list and (rule: ...) refs in capture.rs and skills/bee-capturing/SKILL.md, so D4's one-home discipline covers the new rule and knowledge check stays at 0 profile errors."
+        "Capped from main rather than from a worker run — the work landed as b95a6f04 with the pointer fix in d3eaa313, and nobody re-capped after the second PASS verdict"
       ]
     },
-    "warnings": [
-      "advisory: this cap's commit changes 245 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
-    ],
+    "warnings": [],
     "tests": "boundary",
     "semantic_judge": [
       {
@@ -192,7 +187,9 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     },
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "commit_pending": "Commits b95a6f04 and d3eaa313 predate this cap and carry no cell trailer for koh-11; rewriting merged history to add one is not worth it.",
+    "inline_reason": "No execution worker was dispatched because there is no execution to do: the flag, its refusal, the stub field, both doc surfaces and the inline tests already landed as commit b95a6f04, with the follow-up pointer fix in koh-12 commit d3eaa313. The cell was reopened on a NEEDS_REVISION verdict, the second verdict is PASS, and nobody re-capped it. This cap is bookkeeping over shipped code."
   },
   "tier": "generation",
   "role": "code"

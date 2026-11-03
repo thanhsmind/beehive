@@ -7,6 +7,7 @@ timestamp: 2026-07-24
 bee:
   id: pattern-20260724-a-lost-update-race-closes-only-when-both-writers-lock
   lifecycle: active
+  areas: [workflow-state]
   sources: ["multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "advisor consult finding C1, docs/history/multisession-native/CONTEXT.md D10a"]
   polarity: pitfall
   critical: true

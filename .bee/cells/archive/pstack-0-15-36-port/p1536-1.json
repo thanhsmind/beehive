@@ -1,0 +1,162 @@
+{
+  "id": "p1536-1",
+  "feature": "pstack-0-15-36-port",
+  "title": "Keep only run-proven review findings, decide before measuring, and sharpen the ask at intake",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "8b1213a1-c8e8-4a8c-aa6d-1b96ded0b6b2",
+    "044e8189-f95d-498b-b756-359bf8079004",
+    "2c4960c4-8f02-4286-b915-fc96411704ae",
+    "84e1247d-f38b-40bb-b7d2-db85341bd7a2"
+  ],
+  "files": [
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-reviewing/references/reviewing-reference.md",
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-shaping/references/shaping-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-0-15-36-port/CONTEXT.md",
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-reviewing/references/reviewing-reference.md",
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-shaping/references/shaping-reference.md"
+  ],
+  "affects_skills": [
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-reviewing/references/reviewing-reference.md",
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-shaping/references/shaping-reference.md"
+  ],
+  "affects_specs": [],
+  "behavior_change": true,
+  "action": "Four doctrine edits, per pstack-0-15-36-port CONTEXT.md D1, D2, D3, D5. Each rule has ONE home, states why it holds in one clause, and matches the file's voice and line width. No code comments; no new files. EDIT 1 (D1, home): in skills/bee-reviewing/SKILL.md, add ONE paragraph directly before the paragraph that starts `Then severity:` and after the lead-filter paragraph. Open it with the bold phrase `**A behavior finding survives only on a run.**` It states: the finding carries the exact command, the output it printed, and the output the intent requires; the lead reruns that command before severity and keeps the finding only when the output shows the failure and the failure breaks the intent; a finding no run can show (a doc line the change made wrong, a spec-axis mismatch) carries its file:line instead; everything else goes to Dismissed; the synthesis report gives each reviewer's dropped count with the reason. Why: a finding argued but never shown buries the real ones. EDIT 2 (D1, pointers): in skills/bee-reviewing/references/reviewing-reference.md, (a) in reviewer method step 3 (starts `Reproduce or trace every suspected defect`), add one sentence: a behavior finding is filed with the command that shows it and that command's output, because the lead reruns it and drops what does not reproduce (point at bee-reviewing SKILL.md by the bold phrase, never restate the lead's rule); (b) in the finding schema's `## Evidence` block, after `Why this proves the issue: <one sentence>`, add three lines: `Command: <exact command that shows the failure, or none for a doc or spec finding>`, `Output: <what it printed>`, `Expected: <what the intent requires>`. EDIT 3 (D2): in skills/bee-planning/playbooks/perf.md, insert a new step 1 before the baseline step and renumber the rest (six steps): write down, before the first run, the result that would change the decision and the noise floor (the run-to-run spread on an unchanged build); stop when the spread is larger than the effect. Why: a number with no decision written before it gets fitted to whatever it shows. EDIT 4 (D3 + D5): in skills/bee-shaping/references/shaping-reference.md, section `## Interview craft`. (a) Add a NEW first bullet, before `**Play the goal back first.**`, named `**Sharpen the ask.**`: for any ask above `tiny`, before the playback, answer four things to yourself — what a top professional would do here that the user did not ask for; the rawest material they would start from, not what is already digested; the specific methods and tools they would use; and what, other than you or the user, would show the result is right. Fold the answers into the playback as a sharpened ask, deeper and not bigger, that the user can confirm or correct in a word. Choices that are the user's stay open. The fourth answer seeds the plan's proof. Why: a deeper ask costs one line at intake and a shallow one costs the rework. (b) Rewrite the existing `**Play the goal back first.**` bullet so that: it fires on the first reply of every routed task, not only when a question follows; one line in your own words says the goal, the problem it solves, and the smallest change you expect to meet it, carrying the sharpened ask when one was made; when the evidence rules out the change the user asked for, show that evidence and stop; do not wait for confirmation; the line is never a question; the playback plus sharpened ask stay at most three lines. DELETE the clause `no rewritten request comes back` and the sentence `A clear ask that locks from one confirmation gets no playback line.` (retired by decision 84e1247d). Keep the closing why: a wrong reading caught here costs one line; caught at the gate, it costs the plan. REGEN, inside this cell: run `.bee/bin/bee dev regen` (it ends with `release-manifest --write`); commit the source edits, the regenerated rendered copies, and the manifest together in one commit with the trailer `cell: p1536-1`.",
+  "verify": "rg -c 'survives only on a run' skills/bee-reviewing/SKILL.md && rg -c 'Expected: <what the intent requires>' skills/bee-reviewing/references/reviewing-reference.md && rg -c 'noise floor' skills/bee-planning/playbooks/perf.md && rg -c 'Sharpen the ask' skills/bee-shaping/references/shaping-reference.md && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "bee-reviewing SKILL.md holds the one home of the run-proven finding rule, with the lead rerun and the per-reviewer dropped count",
+      "The finding schema Evidence block asks for Command, Output and Expected",
+      "The perf playbook opens with the decide-before-measure step and its stop rule",
+      "Interview craft opens with the sharpen move, and the playback fires on every routed task without the retired no-rewrite clause"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-reviewing/SKILL.md",
+        "substantive": "a paragraph opening with A behavior finding survives only on a run"
+      },
+      {
+        "path": "skills/bee-reviewing/references/reviewing-reference.md",
+        "substantive": "method step 3 pointer and Command/Output/Expected lines in the Evidence block"
+      },
+      {
+        "path": "skills/bee-planning/playbooks/perf.md",
+        "substantive": "six steps, step 1 is decide-before-measure with the noise floor"
+      },
+      {
+        "path": "skills/bee-shaping/references/shaping-reference.md",
+        "substantive": "first Interview-craft bullet is Sharpen the ask; playback bullet rewritten"
+      }
+    ],
+    "key_links": [
+      "reviewing-reference.md method step 3 points at the bee-reviewing SKILL.md rule by its bold phrase"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "docs-p1536",
+    "outcome": "Four doctrine edits landed (D1 run-proven findings, D2 decide-before-measure, D3 playback on every routed task, D5 sharpen the ask) with regen and manifest in one commit",
+    "files_changed": [
+      "skills/bee-reviewing/SKILL.md",
+      "skills/bee-reviewing/references/reviewing-reference.md",
+      "skills/bee-planning/playbooks/perf.md",
+      "skills/bee-shaping/references/shaping-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "also committed .bee/onboarding.json (updated_at timestamp only) — bee dev regen rewrites it and earlier regen commits carry it — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-31T15:30:32.492Z",
+    "behavior_change": true,
+    "verification_evidence": "docs-only cell: the four pointer checks print 1,1,1,1 and the manifest check reports 582 files match; bee dev regen 3/3 steps green; no test suite run because no code changed",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d8eceeb6-0939-41e1-ac3b-7b5e489e4127",
+    "verify_command": "rg -c 'survives only on a run' skills/bee-reviewing/SKILL.md && rg -c 'Expected: <what the intent requires>' skills/bee-reviewing/references/reviewing-reference.md && rg -c 'noise floor' skills/bee-planning/playbooks/perf.md && rg -c 'Sharpen the ask' skills/bee-shaping/references/shaping-reference.md && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-10-31T15:28:09.308Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "D1 home in skills/bee-reviewing/SKILL.md (paragraph opening 'A behavior finding survives only on a run', before 'Then severity'); D1 pointers in reviewing-reference.md method step 3 and Evidence block Command/Output/Expected; D2 new step 1 in skills/bee-planning/playbooks/perf.md (six steps, noise floor + stop rule); D3+D5 in shaping-reference.md Interview craft (new first bullet 'Sharpen the ask', playback bullet rewritten, retired clauses deleted); regen + manifest in commit 89ec614da",
+      "commit": "89ec614da",
+      "files": [
+        "skills/bee-reviewing/SKILL.md",
+        "skills/bee-reviewing/references/reviewing-reference.md",
+        "skills/bee-planning/playbooks/perf.md",
+        "skills/bee-shaping/references/shaping-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "rg -c 'survives only on a run' skills/bee-reviewing/SKILL.md && rg -c 'Expected: <what the intent requires>' skills/bee-reviewing/references/reviewing-reference.md && rg -c 'noise floor' skills/bee-planning/playbooks/perf.md && rg -c 'Sharpen the ask' skills/bee-shaping/references/shaping-reference.md && .bee/bin/bee dev release-manifest --check — green:static — docs-only cell: the four pointer checks print 1,1,1,1 and the manifest check reports 582 files match; bee dev regen 3/3 steps green; no test suite run because no code changed",
+      "deviations": [
+        "also committed .bee/onboarding.json (updated_at timestamp only) — bee dev regen rewrites it and earlier regen commits carry it — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 384 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee-reviewing SKILL.md holds the one home of the run-proven finding rule, with the lead rerun and the per-reviewer dropped count",
+            "artifact": "skills/bee-reviewing/SKILL.md"
+          },
+          {
+            "requirement": "The finding schema Evidence block asks for Command, Output and Expected",
+            "artifact": "skills/bee-reviewing/references/reviewing-reference.md"
+          },
+          {
+            "requirement": "The perf playbook opens with the decide-before-measure step and its stop rule",
+            "artifact": "skills/bee-planning/playbooks/perf.md"
+          },
+          {
+            "requirement": "Interview craft opens with the sharpen move, and the playback fires on every routed task without the retired no-rewrite clause",
+            "artifact": "skills/bee-shaping/references/shaping-reference.md"
+          },
+          {
+            "requirement": "reviewing-reference.md method step 3 points at the bee-reviewing SKILL.md rule by its bold phrase",
+            "artifact": "skills/bee-reviewing/references/reviewing-reference.md"
+          },
+          {
+            "requirement": "skills/bee-reviewing/SKILL.md",
+            "artifact": "skills/bee-reviewing/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-reviewing/references/reviewing-reference.md",
+            "artifact": "skills/bee-reviewing/references/reviewing-reference.md"
+          },
+          {
+            "requirement": "skills/bee-planning/playbooks/perf.md",
+            "artifact": "skills/bee-planning/playbooks/perf.md"
+          },
+          {
+            "requirement": "skills/bee-shaping/references/shaping-reference.md",
+            "artifact": "skills/bee-shaping/references/shaping-reference.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-10-31T15:31:16.108Z",
+        "recorded_by": "d8eceeb6-0939-41e1-ac3b-7b5e489e4127",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

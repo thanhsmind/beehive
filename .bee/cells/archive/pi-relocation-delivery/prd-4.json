@@ -1,0 +1,93 @@
+{
+  "id": "prd-4",
+  "feature": "pi-relocation-delivery",
+  "title": "Complete the Pi runtime rows in the swarming skills",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "3cb3523c-7aef-4b22-aa90-17970371dae7"
+  ],
+  "files": [
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-relocation-delivery/CONTEXT.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Two Pi gaps, text only. (1) worker-details.md around :272-281 offers a model-shaped advisor transport (claude block), a Codex-native one, and a cli-shaped one — but team.pi.advisor is herding-shaped, so a Pi worker handed an `Advisor:` line has no instruction it can run. Add a `bee:only pi` block naming the herding-shaped transport: run the prepared `bee herding run` command with the evidence bundle on stdin, keep the same `advisor-consult <cell-id>: <advisor-model>` attribution the goal-check reads from .bee/logs/dispatch.jsonl, and keep the existing one-slot transport-error rule. (2) swarming-reference.md :397-404 gives Pi one row (Result collection) where Claude (:375-385) and Codex (:386-396) carry seven. Fill the Pi table so all seven row names are present — Spawn, Model, Result collection, Follow-up/rescue, Harness assist, Isolation guarantee, Subagent type — with an explicit n/a and one-line reason where the mechanism does not exist on Pi (Subagent type has none: every Pi worker runs through `bee herding run`, never a native spawn). Model comes from config.team.pi.<role>; follow-up/rescue is the herding pane verbs; harness assist is the bee-guard belt's result drain. Do not touch the Claude or Codex blocks. Then run the full regen inside this cell — `bee dev regen` — so the rendered skill trees and the release manifest match the edit.",
+  "verify": "rg -n 'bee:only pi' skills/bee-swarming/references/worker-details.md && rg -c 'Follow-up|Harness assist|Isolation guarantee|Subagent type' skills/bee-swarming/references/swarming-reference.md && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "a Pi worker reading worker-details.md finds a transport it can run for a herding-shaped advisor",
+      "the Pi spawn-mechanics table carries all seven row names, with explicit n/a where the mechanism does not exist",
+      "the Claude and Codex blocks are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-swarming/references/worker-details.md",
+        "substantive": "a bee:only pi advisor transport block"
+      },
+      {
+        "path": "skills/bee-swarming/references/swarming-reference.md",
+        "substantive": "the completed Pi table"
+      }
+    ],
+    "key_links": [
+      "the Pi advisor block keeps the same attribution string the goal-check reads"
+    ],
+    "prohibitions": [
+      "Do not edit the claude or codex bee:only blocks",
+      "Do not touch code or tests"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "w-prd-4",
+    "outcome": "Pi advisor transport block and the complete seven-row Pi spawn-mechanics table, with dev regen re-run",
+    "files_changed": [
+      "skills/bee-swarming/references/worker-details.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: affects_skills predicted skills/bee-swarming/SKILL.md; the cell touched that skill's two reference files instead (worker-details.md, swarming-reference.md). Leader's prediction error at cell drafting, not a scope change — the touched files are exactly the ones the approved action names."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T23:04:34.624Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell: the pointer and parity checks plus the release-manifest check the regen obligation owes (376 files match)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "6f3236e7-8071-46e7-aa47-bd47394b0ba6",
+    "verify_command": "rg -n 'bee:only pi' skills/bee-swarming/references/worker-details.md && rg -c 'Follow-up|Harness assist|Isolation guarantee|Subagent type' skills/bee-swarming/references/swarming-reference.md && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-15T22:58:22.023Z",
+    "sync_ack": "affects_skills predicted skills/bee-swarming/SKILL.md; the cell touched that skill's two reference files instead (worker-details.md, swarming-reference.md). Leader's prediction error at cell drafting, not a scope change — the touched files are exactly the ones the approved action names.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pi now has a runnable worker advisor transport (worker-details.md:279 bee:only pi block, attribution string kept) and a complete seven-row spawn-mechanics table (swarming-reference.md Pi block), with dev regen re-run",
+      "commit": "6bad85f45f814ad67022ba0f38665d2f338799ea",
+      "files": [
+        "skills/bee-swarming/references/worker-details.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "rg -n 'bee:only pi' skills/bee-swarming/references/worker-details.md && rg -c 'Follow-up|Harness assist|Isolation guarantee|Subagent type' skills/bee-swarming/references/swarming-reference.md && .bee/bin/bee dev release-manifest --check — green:static — docs-only cell: the pointer and parity checks plus the release-manifest check the regen obligation owes (376 files match)",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

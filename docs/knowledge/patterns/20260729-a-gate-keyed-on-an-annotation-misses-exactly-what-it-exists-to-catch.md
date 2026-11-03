@@ -7,6 +7,7 @@ timestamp: 2026-07-29
 bee:
   id: pattern-20260729-a-gate-keyed-on-an-annotation-misses-exactly-what-it-exists-to-catch
   lifecycle: active
+  areas: [doctrine-layer]
   sources: ["tick-contract-inline cell tci-3 (wording-derived every-turn detection, scripts/tests/test_always_loaded_rules.mjs, commit 69de4c1d, 2026-07-29)", docs/history/tick-contract-inline/CONTEXT.md T5, docs/history/learnings/20260729-tick-contract-inline.md N3, "derived-check-hardening cell dch-6 (the honest-boundary case for hardcoded seeds, commit 60f16da7)"]
   polarity: pitfall
   critical: true

@@ -42,6 +42,7 @@
 // byte-for-byte. Failure shapes that can be detected BEFORE any output (a
 // symlink in the skill source, a missing input tree) return None instead.
 
+mod comment_baseline;
 mod hook_manifests;
 mod install_support;
 mod jspath;
@@ -49,7 +50,7 @@ mod plugin_distribution;
 mod prompts;
 mod release_manifest;
 mod skill_trees;
-mod statusline;
+pub(crate) mod statusline;
 
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
@@ -61,7 +62,8 @@ use std::process::ExitCode;
 /// returns None without it. `statusline` is deliberately absent: it renders a
 /// HOST repo's status line and works anywhere, so guarding it would refuse a
 /// call that succeeds today.
-const SOURCE_CHECKOUT_DEV_VERBS: [&str; 5] = [
+const SOURCE_CHECKOUT_DEV_VERBS: [&str; 6] = [
+    "comment-baseline",
     "render-skill-trees",
     "render-prompt",
     "release-manifest",
@@ -97,6 +99,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "render-prompt" => prompts::run(flags),
         "statusline" => statusline::run(flags),
         "release-manifest" => release_manifest::run(flags),
+        "comment-baseline" => comment_baseline::run(flags),
         "plugin-distribution" => plugin_distribution::run(flags),
         "install-support" => install_support::run(flags),
         "render-hook-manifests" => hook_manifests::run(flags),
@@ -527,21 +530,24 @@ mod tests {
 /// name. `doctor` compares a host's wiring against it byte for byte, and it
 /// has no business knowing hook_manifests' enums to ask that question.
 ///
-/// `opencode` is a recognized runtime label here — accepted, not refused —
-/// but always answers None: hook_manifests::Runtime carries a NAMED
-/// exclusion for it (see that enum's doc comment), because OpenCode's hook
-/// belt is the checked-in `.opencode/plugins/bee-guard.ts` plugin, not a
-/// rendered JSON manifest this function could produce. A caller (e.g.
-/// `doctor`) reads None the same way it already does for any runtime with
-/// nothing to byte-compare.
+/// `opencode` and `pi` are recognized runtime labels here — accepted, not
+/// refused — but always answer None: hook_manifests::Runtime carries a NAMED
+/// exclusion for both (see that enum's doc comment), because their hook belts
+/// are checked-in TypeScript — `.opencode/plugins/bee-guard.ts` and
+/// `.pi/extensions/bee-guard/` — not rendered JSON manifests this function
+/// could produce. A caller (e.g. `doctor`) reads None the same way it already
+/// does for any runtime with nothing to byte-compare.
 pub fn render_projection_text_for(runtime: &str) -> Option<String> {
     let r = match runtime {
         "claude" => hook_manifests::Runtime::Claude,
         "codex" => hook_manifests::Runtime::Codex,
-        // "opencode" is recognized, not merely unmatched — see the doc
-        // comment above — but it shares None with every other unknown
+        // "opencode" and "pi" are recognized, not merely unmatched — see the
+        // doc comment above — but they share None with every other unknown
         // label because there is nothing to render either way.
         "opencode" => return None,
+        // pi-support D4 (named deviation): the Pi belt is the TS extension,
+        // so there is no fourth projection to render and no `Runtime::Pi`.
+        "pi" => return None,
         _ => return None,
     };
     Some(hook_manifests::render_projection_text(r, hook_manifests::Target::Repo))
@@ -552,14 +558,15 @@ mod render_projection_text_for_tests {
     use super::render_projection_text_for;
 
     #[test]
-    fn claude_and_codex_render_something_opencode_recognized_but_none() {
+    fn claude_and_codex_render_something_ts_belts_recognized_but_none() {
         assert!(render_projection_text_for("claude").is_some());
         assert!(render_projection_text_for("codex").is_some());
-        // Recognized runtime label, but hook_manifests::Runtime names an
-        // exclusion for it (opencode's belt is a TS plugin, not a rendered
-        // manifest) — same None an unknown label would get, for a different,
+        // Recognized runtime labels, but hook_manifests::Runtime names an
+        // exclusion for both (their belts are TS files, not rendered
+        // manifests) — same None an unknown label would get, for a different,
         // documented reason.
         assert_eq!(render_projection_text_for("opencode"), None);
+        assert_eq!(render_projection_text_for("pi"), None);
         assert_eq!(render_projection_text_for("emacs"), None);
     }
 }

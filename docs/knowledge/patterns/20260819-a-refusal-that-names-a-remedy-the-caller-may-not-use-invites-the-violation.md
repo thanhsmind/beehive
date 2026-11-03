@@ -7,7 +7,7 @@ bee:
   id: pattern-20260819-refusal-names-remedy-caller-may-not-use
   lifecycle: active
   areas: [workflow-state, doctrine-layer]
-  sources: ["capture stub 88e1ebb6 (herding-orchestration: three workers, same gate, one illegal override)", herding-orchestration cell ho-9 (trace .bee/cells/ho-9.json in the main checkout), skills/bee-swarming/SKILL.md (worker contract — overrides are orchestrator calls)]
+  sources: ["capture stub 88e1ebb6 (herding-orchestration: three workers, same gate, one illegal override)", herding-orchestration cell ho-9 (trace .bee/cells/archive/herding-orchestration/ho-9.json in the main checkout), skills/bee-swarming/SKILL.md (worker contract — overrides are orchestrator calls)]
 ---
 
 Three execution workers met the same judge-debt gate at cap time. Two

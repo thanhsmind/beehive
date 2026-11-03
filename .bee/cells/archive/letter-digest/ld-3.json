@@ -1,0 +1,150 @@
+{
+  "id": "ld-3",
+  "feature": "letter-digest",
+  "title": "Run due digests at work-set and mine weekly lessons into tagged decisions",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "ld-2"
+  ],
+  "decisions": [
+    "dbbe0778-7dc5-469a-8307-6d9da266b9b2",
+    "b343870b-c267-4ac3-948d-88662a55061f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/work.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs"
+  ],
+  "read_first": [
+    "docs/history/letter-digest/CONTEXT.md",
+    "docs/history/letter-digest/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D3 (dbbe0778) and D4 (b343870b): in work.rs, call mailbox_digest::compose_due_digests fail-open at the control root, BESIDE — never inside — the existing recovery call and its armed() early-out (anchor work.rs:300 'file_letter_at_run_end(&ctx.root, session_flag.as_deref(), status.as_deref());' and the record_silent_runs call near work.rs:396): it fires on every bee work set and relies on ld-2's idempotence; D2 letters exist in unarmed checkouts too, so the digest path must not be gated on armed(). Then the weekly fold mines lessons: source ONLY the letters' 'Broken or unfinished' bullets (anchor mailbox.rs:1522 'pub(crate) const SECTION_BROKEN: &str = \"Broken or unfinished\";') plus obstacle / plan-was-wrong / fix-first departure kinds — never better-route lines, never plan-followed statements (advisor P2). Normalize each line: one_line + lowercase + collapse digit runs to '#' + strip trailing punctuation. A shape qualifies when it has >=4 words and appears in letters of 2+ DISTINCT run slugs within the week. For each qualifying shape, append ONE decision tagged 'lesson' through a variant of log_decision (anchor cells/audit.rs:427 'pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> {') that accepts source \"agent\"; the rationale cites the letter filenames and a stable token shape:<first 12 hex of sha256(normalized shape)>. Dedupe before logging: scan .bee/decisions.jsonl for that shape: token across ALL prior lesson-tagged events INCLUDING superseded ones — a retired lesson is never re-logged (D4). A decisions-append failure warns and still files the digest (fail-open). Tests per the plan's ld-3 triad; judge existing coverage first.",
+  "must_haves": {
+    "truths": [
+      "bee work set on a store with a finished undigested period leaves the digest file behind",
+      "A normalized broken-shape in letters of 2 distinct runs in one week yields exactly one decision tagged lesson carrying its shape:<sha-12> token and citing the letter filenames",
+      "A shape whose token already exists in any prior lesson decision (active or superseded) is not logged again"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "substantive": "weekly lesson miner: sourced sections, normalization, distinct-run threshold, token dedupe, with tests"
+      }
+    ],
+    "key_links": [
+      "work.rs work-set path calls compose_due_digests at the control root, outside any armed() gate"
+    ],
+    "prohibitions": [
+      "Never mine better-route departures or plan-followed statements (overview rule 8)",
+      "A lesson decision states only what cited letters carry (D8)",
+      "A digest/lesson failure never refuses bee work set (fail-open)"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "trace": {
+    "worker": "w-ld-3",
+    "outcome": "bee work set folds due digests at the control root and the weekly fold logs deduped lesson decisions",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/work.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs"
+    ],
+    "deviations": [
+      "Mined the departure list from each letter STORED items rather than parsing the rendered departures section back out of the body — the items carry what/why/kind apart, so the miner never has to re-derive a kind from prose and can never disagree with the letter — found a better route",
+      "Dropped ld-2 module-wide #![allow(dead_code)] now that the door is wired, and narrowed it to the two struct fields still read only by tests — a module-wide allow would hide the next real dead path — something else had to be fixed first",
+      "sync-ack: No skill surface moves: this is internal library behaviour on the bee work set path (a digest file appears in .bee/human-mailbox, a lesson row appears in .bee/decisions.jsonl). No verb, flag, or agent procedure changed, and the cell declares affects_skills: []."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T14:55:14.181Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c9eb2d43-4dec-4d2a-8ea5-f7438226e33d",
+    "claimed_at": "2026-08-30T14:42:21.539Z",
+    "sync_ack": "No skill surface moves: this is internal library behaviour on the bee work set path (a digest file appears in .bee/human-mailbox, a lesson row appears in .bee/decisions.jsonl). No verb, flag, or agent procedure changed, and the cell declares affects_skills: [].",
+    "report": {
+      "outcome": "bee work set folds due digests at the control root and the weekly fold logs deduped lesson decisions",
+      "commit": "d0ac0d35",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/work.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox — green — 173 passed, 0 failed; plus verbs::work::tests 10/10, verbs::mailbox_digest::tests 20/20, decision 143/143, verbs::cells 304/304 over the three touched files",
+      "deviations": [
+        "Mined the departure list from each letter STORED items rather than parsing the rendered departures section back out of the body — the items carry what/why/kind apart, so the miner never has to re-derive a kind from prose and can never disagree with the letter — found a better route",
+        "Dropped ld-2 module-wide #![allow(dead_code)] now that the door is wired, and narrowed it to the two struct fields still read only by tests — a module-wide allow would hide the next real dead path — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 809 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/work.rs:313",
+            "id": "work set composes digests outside both armed gates"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/work.rs:456",
+            "id": "hook resolves the CONTROL root"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:778",
+            "id": "shape needs 2 distinct runs, 4+ words"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:818",
+            "id": "one lesson-tagged decision with shape:<sha-12> citing the letters"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:788",
+            "id": "dedupe scans ALL lesson rows including superseded"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:631",
+            "id": "better-route kind excluded from mining"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:448",
+            "id": "plan-followed never becomes a departure, so never mined"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:710",
+            "id": "only SECTION_BROKEN plus mined departures are sources"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:852",
+            "id": "digest and lesson failure never refuse work set"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-30T15:00:50.792Z"
+      }
+    ]
+  }
+}

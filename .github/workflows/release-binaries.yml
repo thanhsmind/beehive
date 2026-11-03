@@ -1,6 +1,6 @@
 name: Release binaries
 
-# Builds the two binaries a host actually installs and attaches them to the
+# Builds the binaries a host actually installs and attaches them to the
 # GitHub Release for the tag.
 #
 # WHY THIS EXISTS. Decision 1f4262ca kept prebuilt binaries out of the repo and
@@ -49,6 +49,19 @@ jobs:
             target: x86_64-pc-windows-msvc
             built: bee.exe
             asset: bee-x86_64-pc-windows-msvc.exe
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            built: bee
+            asset: bee-aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            built: bee
+            asset: bee-x86_64-apple-darwin
+          # 22.04, not 24.04: the binary then needs glibc 2.35, not 2.39.
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            built: bee
+            asset: bee-aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,7 +93,7 @@ jobs:
           bin="packages/bee-rs/target/${{ matrix.target }}/release/${{ matrix.built }}"
           tag="${{ inputs.tag || github.ref_name }}"
           want="${tag#v}"
-          got="$(node -e 'process.stdout.write(require("./.claude-plugin/plugin.json").version)')"
+          got="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' .claude-plugin/plugin.json | head -n 1)"
           [ "$got" = "$want" ] || {
             echo "::error::plugin.json says $got but the tag says $want — the binary would ship a version it is not"
             exit 1

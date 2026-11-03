@@ -1,18 +1,19 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.22.1",
+  "bee_version": "2.71.0",
   "managed": {
-    "agents_block": "85e75a11be5e14e2907382d53975403cfd93d1a96b65d1bf7adf358f27286cd2",
-    "gitignore_block": "cd039e2d90bebd2e32ab0a4ac90c2b5a2d8103f278de19b4f96ad6e92c7d1fa8",
+    "agents_block": "468dcfbc0f941b1cccfe705c954091d5c9a2fc7b39c255b8b555f4e1388180a7",
+    "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
+    "gitattributes_block": "6b45725311706710fbde882c308f5fe127fb73f9bbf1d19851d649c04644bb67",
     "helpers": {},
     "lib": {},
     "expertise": {
       "INDEX.md": "35b7797f402b1928553d8d43f6a82727b330ba53a8beb80ebe3d2806a3ac0026",
       "README.md": "3f9ad922145df53981bce91ae306dd96b7e48283918e7cd2da0074b2ce930e7d",
       "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
-      "architecture.md": "a5cf1eddea09eed19e44b18841e58d91780070cf3cf9ebf13c6cd1c61aeb44c0",
+      "architecture.md": "0df001a4c6bfddd67c26517acc83c92cd0bbb3783b135e3c7a4ce7c76a1f4e83",
       "data.md": "799000e64e6c274447e94571ec8b78dfeba8df015a3d566e7b9afc7ea7ef7785",
-      "debugging.md": "3fb9b82b2d1739393189956ad50be5b446f921c2a2b6846b7277d8f258e79dd5",
+      "debugging.md": "8b2d4018fc461c68f7582c53967f2d76bdbb9f17a4d9461579862959e1423572",
       "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
       "documentation.md": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
       "frontend.md": "1abcec2e73165a5c2c1b4537a377a30d0da9608de64d1cacab97434e77a78439",
@@ -22,10 +23,10 @@
       "merges.md": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
       "operations.md": "464a6e355d640422c617e9f9e6c09a63f495d69c95ef0d0163bbf95d1ed88dba",
       "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
-      "planning.md": "e46c1d07d3d91aa81cf01748d94ee87f115bfd40a5d31508d70fe49c8b9932a7",
-      "review.md": "764ace8584c122e5ce74203919f4d9d6d4f93e82736047529d9b3e2444887d29",
+      "planning.md": "ad649f8ae8e8ae11c83d0c6b9cbc3c7f0430cf99ae1d8c0989e64b585c50d667",
+      "review.md": "320e48016138df67c3b4082bd8a588d190317e4f2623bfb370023ae914c0c681",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
-      "tests.md": "b238fff4cd5af78a4973d74e15fbcaa540d7993ebe560950b0488a40d4804691",
+      "tests.md": "f98ac132b9562658caa93cb50448cf96ac6d956002d804d556e833cc0c77ab25",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
       "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
@@ -35,44 +36,103 @@
       "thinking.md": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617"
     },
     "prompts": {
-      "advisor.md": "cc970fc08c6aa0bdccb77351926b481baa7b6176a281efdbeb5c4f1a3383a05e",
-      "gather.md": "593521c49a0983b1a50ad437f89905ded6cc1ee588730e6402920ae585eeb622",
-      "reviewer.md": "0c830dcb1ee67b8b27ea823984e487c1e16c31d5554d1e49f51a4562526e197c",
-      "worker-cell.md": "e0ed6bb1c8023926929f6023d7c81dc18246163a85f21676f2ff033ae74d14f9"
+      "advisor.md": "62e71f2c7071d3c7395b40a7886b7e60cbefdf3257a72fce9de5fda26dfae5bc",
+      "gather.md": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
+      "reviewer.md": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
+      "worker-cell.md": "ec93f90c38536913f08d5b4534a90161bef469270ab9c8527a3ac5c02c5e72bb"
     },
     "repo_hooks": {
-      ".codex/hooks.json": "c23084ec82ea0418547addc8e3fdf74ffc0fb2d65b7692f54ba5b95a94f8e4ae"
+      ".codex/hooks.json": "b4ecbe18eed3506b7bf3a936aad5ab1f1e61f93379c37257bd26bb90c9b6bd9f"
     },
     "statusline": {
-      "statusline-command.sh": "2b74f863a261598c95d4bfcdc5a7de8b67b2e965b9232846d4b91d92412b1165"
+      "statusline-command.sh": "8d08e709c818639afd7821fb74c51e31a0bc29ceeb96a8d6cb5be0fe7241e8d1"
+    },
+    "verify_skills": {
+      ".claude/skills/verify-app": {
+        "SKILL.md": "2003014d03cbe5d1c1a997d4ad32b12b554410b57b2b1c71b4bdacee64be2c80",
+        "control-bee": "ecccd960bd9d51dfbc6baf11740c438e3017623758853498a4c84ae7ddc3276d",
+        "features/README.md": "8de45c0913f913fa08972366a3aba1be21d4d7f0011dade1070bc2e816b195f6",
+        "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
+        "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
+        "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
+        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
+        "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
+        "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
+        "features/pi-hat-wave.md": "6b32d115c7b8f9e4cfebf78cb1140b33b2c78b8f8402fd51bc56225e4af0f72c",
+        "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
+        "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
+        "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
+        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+      },
+      ".agents/skills/verify-app": {
+        "SKILL.md": "2003014d03cbe5d1c1a997d4ad32b12b554410b57b2b1c71b4bdacee64be2c80",
+        "control-bee": "ecccd960bd9d51dfbc6baf11740c438e3017623758853498a4c84ae7ddc3276d",
+        "features/README.md": "8de45c0913f913fa08972366a3aba1be21d4d7f0011dade1070bc2e816b195f6",
+        "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
+        "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
+        "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
+        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
+        "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
+        "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
+        "features/pi-hat-wave.md": "6b32d115c7b8f9e4cfebf78cb1140b33b2c78b8f8402fd51bc56225e4af0f72c",
+        "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
+        "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
+        "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
+        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+      },
+      ".opencode/skills/verify-app": {
+        "SKILL.md": "2003014d03cbe5d1c1a997d4ad32b12b554410b57b2b1c71b4bdacee64be2c80",
+        "control-bee": "ecccd960bd9d51dfbc6baf11740c438e3017623758853498a4c84ae7ddc3276d",
+        "features/README.md": "8de45c0913f913fa08972366a3aba1be21d4d7f0011dade1070bc2e816b195f6",
+        "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
+        "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
+        "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
+        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
+        "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
+        "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
+        "features/pi-hat-wave.md": "6b32d115c7b8f9e4cfebf78cb1140b33b2c78b8f8402fd51bc56225e4af0f72c",
+        "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
+        "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
+        "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
+        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+      }
     }
   },
   "agents_sync": {
-    "bee_version": "2.22.1",
+    "bee_version": "2.71.0",
     "files": [
+      ".claude/agents/bee-design.md",
       ".claude/agents/bee-review.md"
     ],
     "rendered_from": {
+      "design": "sonnet",
       "review": "opus"
     },
     "codex": {
       "agents": [],
-      "note": "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11)."
+      "note": "Codex defaults unconfigured roles to null (enforced as prompt read-and-output budget), but supports configurable roles and transports (team.codex / models.codex), read-only CLI fallback for non-cell execution, and capability-dependent native dispatch without effective-model proof. No agent files are rendered under .agents/ (AO11)."
     },
     "opencode": {
       "files": [
         ".opencode/agent/bee-build.md",
+        ".opencode/agent/bee-design.md",
         ".opencode/agent/bee-extract.md",
         ".opencode/agent/bee-gather.md",
         ".opencode/agent/bee-review.md"
       ],
       "rendered_from": {
         "generation": "opencode/big-pickle",
+        "design": "opencode/big-pickle",
         "extraction": "opencode/ling-3.0-tiny-free",
+        "read": "opencode/big-pickle",
         "review": "opencode/nemotron-3-ultra-free"
       }
     }
   },
+  "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-26T05:25:31.719Z"
+  "updated_at": "2026-11-03T04:27:25.157Z"
 }

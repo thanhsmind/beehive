@@ -1,0 +1,10 @@
+{"schema":"judge-verdict/1","verdict":"PASS","checks":[
+{"id":"c1","name":"a: ladder rows + effort_for_dispatch rules","status":"PASS","evidence":"models.rs (a30e865fb): EFFORT_LADDER 8 rows; None/off-scale base -> no-base; no row -> unmapped:<kind>/<lane>; clamp 0..=4; tests.rs effort_for_dispatch_moves_every_ladder_row"},
+{"id":"c2","name":"b: applied once at resolve site; escalated untouched","status":"PASS","evidence":"prepare.rs:2324-2337 right after the (resolved, is_escalated) block; Resolved::Inherit skipped; codex sinks at prepare.rs:2773 and :2825 read the replaced value"},
+{"id":"c3","name":"c: [bee-kind:] on every native prompt, [bee-lane:] for cells, after v2 markers","status":"PASS","evidence":"extra_markers = '{v2_markers}[bee-kind: {kind}]{lane_marker}'; tests codex_native_cell_carries_kind_and_lane_markers_and_the_moved_effort, claude_role_with_no_effort_sends_no_effort_key"},
+{"id":"c4","name":"d: claude Agent payload carries effort when Some","status":"PASS","evidence":"prepare.rs:2853-2855; test claude_high_risk_cell_raises_effort_one_step_and_marks_kind_and_lane asserts xhigh"},
+{"id":"c5","name":"e: economics 4 keys after enforcement","status":"PASS","evidence":"guard.rs:418-422; derive_economics_matches_the_honest_mapping pins order for None, raised and no-base cases; prepare.rs:2952 passes effort_choice"},
+{"id":"c6","name":"f: explain_checks effort row","status":"PASS","evidence":"explain_checks adds 'effort' row; role_flag_tests updated to 4 rows; live --explain prints effort: skip when the role did not resolve"},
+{"id":"c7","name":"g: no new code comments","status":"PASS","evidence":"rg '^\\+.*(//|/\\*)' over git show a30e865fb -- packages/ empty; comment-baseline --check 253 at or below baseline"},
+{"id":"c8","name":"h: required tests exist; drivers 446 passed 0 failed","status":"PASS","evidence":"cargo test --release -p bee verbs::drivers: 446 passed; 0 failed; 9 ignored"}
+],"fixability":"automatic","confidence":"high"}

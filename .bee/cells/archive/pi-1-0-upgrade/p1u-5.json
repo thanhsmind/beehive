@@ -1,0 +1,230 @@
+{
+  "id": "p1u-5",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Make the Pi stage tool set lane- and worker-aware so the leader is handed bee_dispatch",
+  "deps": [],
+  "decisions": [
+    "D8",
+    "D9",
+    "D11",
+    "034373cc-aa8d-4df4-a569-c9a761f80710",
+    "82179c5d-3683-4815-bf81-14bf24d58a77"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+  ],
+  "action": "Red first, then change allowed_tools_for to take lane and worker and implement contract pi-stage-loadout exactly. Read the lane from the resolved record's route, the worker from env BEE_HERDING_WORKER, and pi_harness_workflow from config. Keep both notice sentences and add the leader case's sentence naming bee_dispatch and /bee-tools-reopen. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a leader in an approved swarming phase on lane small gets the full set minus edit and write, plus bee_dispatch and bee_advisor",
+      "a worker session gets the full set plus verdict",
+      "lane tiny keeps the full set",
+      "the gated phases keep read and bash only",
+      "the full set names bee_dispatch, bee_advisor and verdict",
+      "pi_harness_workflow false restores today's answer"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+        "substantive": "lane- and worker-aware allowed_tools_for with its tests"
+      }
+    ],
+    "key_links": [
+      "the belt's turn_start narrowing reads allowed_tools from this hook unchanged"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "READ_ONLY_TOOLS unchanged"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "trace": {
+    "worker": "p1u-5-r2",
+    "outcome": "gated phases answer read, bash and bee_advisor (GATED_TOOL_SET) with the harness workflow on; READ_ONLY_TOOLS unchanged; leader set has no verdict; workers keep the full set",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "round 3 (bc6167b0c) adds GATED_TOOL_SET per amendment 82179c5d after the p1u-10 live run showed the planning leader could not reach bee_advisor — the plan was wrong about a fact",
+      "the herding worker does not cap, so the leader capped after re-running the verify — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T11:45:02.448Z",
+    "behavior_change": true,
+    "verification_evidence": "leader re-ran the cell verify on 0d11eaf6e (bc6167b0c plus the two contract assertions updated to 82179c5d): test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 3890 filtered out; finished in 0.00s; test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.17s; whole suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools",
+    "claimed_at": "2026-10-02T11:31:44.750Z",
+    "mistakes": [
+      {
+        "wrong": "ran a shared-index add in a worktree with a live sibling worker and the concurrent-worker guard refused it",
+        "better": "use a path-scoped commit from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "gated phases answer read, bash and bee_advisor (GATED_TOOL_SET) with the harness workflow on; READ_ONLY_TOOLS unchanged; leader set has no verdict; workers keep the full set",
+      "commit": "0d11eaf6e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools — green:unit — leader re-ran the cell verify on 0d11eaf6e (bc6167b0c plus the two contract assertions updated to 82179c5d): test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 3890 filtered out; finished in 0.00s; test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.17s; whole suite not run",
+      "deviations": [
+        "round 3 (bc6167b0c) adds GATED_TOOL_SET per amendment 82179c5d after the p1u-10 live run showed the planning leader could not reach bee_advisor — the plan was wrong about a fact",
+        "the herding worker does not cap, so the leader capped after re-running the verify — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "baseline": null,
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-02T11:24:27.066Z",
+    "reopened_reason": "amendment 82179c5d-3683-4815-bf81-14bf24d58a77: gated phases answer read, bash and bee_advisor",
+    "no_mistakes": true,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a leader in an approved swarming phase on lane small gets the full set minus edit and write, plus bee_dispatch and bee_advisor",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "a worker session gets the full set plus verdict",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "lane tiny keeps the full set",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "the gated phases keep read and bash only",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "the full set names bee_dispatch, bee_advisor and verdict",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "pi_harness_workflow false restores today's answer",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          }
+        ],
+        "recorded_at": "2026-10-02T10:32:51.079Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a leader in an approved swarming phase on lane small gets the full set minus edit and write, plus bee_dispatch and bee_advisor",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "a worker session gets the full set plus verdict",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "lane tiny keeps the full set",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "the gated phases keep read and bash only",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "the full set names bee_dispatch, bee_advisor and verdict",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "pi_harness_workflow false restores today's answer",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          }
+        ],
+        "recorded_at": "2026-10-02T11:51:48.249Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-leader-swarming-small-tools",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:23-26,86-91,395-409 returns LEADER_TOOL_SET (full set minus edit, write, verdict, plus bee_dispatch, bee_advisor, bee_steer)"
+          },
+          {
+            "id": "truth-worker-full-set-plus-verdict",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:19-22,73-75,411-418 returns FULL_TOOL_SET with verdict"
+          },
+          {
+            "id": "truth-lane-tiny-full-set",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:86-92,420-430 lane tiny falls through to FULL_TOOL_SET"
+          },
+          {
+            "id": "truth-gated-phases-tools",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:27,76-80,432-438 returns GATED_TOOL_SET (read, bash, bee_advisor) per amendment 82179c5d"
+          },
+          {
+            "id": "truth-full-set-names-dispatch-advisor-verdict",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:19-22,386-392 FULL_TOOL_SET contains bee_dispatch, bee_advisor, verdict"
+          },
+          {
+            "id": "truth-pi-harness-workflow-false",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:72,79,440-447 restores BASE_TOOL_SET and READ_ONLY_TOOLS"
+          },
+          {
+            "id": "artifact-stage-tools",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:65-93,188-485 allowed_tools_for with unit tests"
+          },
+          {
+            "id": "prohibition-read-only-tools-unchanged",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs:15 pub(crate) const READ_ONLY_TOOLS: [&str; 2] = [\"read\", \"bash\"];"
+          },
+          {
+            "id": "undeclared-file-pi-plugin-contracts-legitimate",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:8736,8850 assertion updates required by amendment 82179c5d adding bee_advisor to GATED_TOOL_SET"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "gemini-3.8-flash-high",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-02T14:54:36.236Z"
+      }
+    ]
+  }
+}

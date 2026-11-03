@@ -1,0 +1,117 @@
+{
+  "id": "psd-9",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Keep the declared hat seat when an unconfigured hat falls through to advisor",
+  "action": "Per D3 and D5, fix-first after psd-6 found the gap. In prepare.rs an undeclared hat seat (no team.<runtime> entry for it) sets fallen_through_seat and rebinds canonical_role to advisor; hat_seat is then derived from marker_role, which carries the rebound role, so a Pi hat that falls through gets --seat advisor, no 600-second ceiling cap, and no seat block. Derive hat_seat (and so the --seat value, the Pi ceiling cap, and the prompt seat block) from the caller's declared hat name, using fallen_through_seat when it is set, while model resolution stays on the advisor slot. Write the test first: with team.pi carrying no hat-* entries, --kind advisor --role hat-risks on runtime pi returns --seat \"hat-risks\", a ceiling no higher than 600, and a prompt naming seat hat-risks; with team.claude carrying no hat-* entries, the claude prompt names seat hat-risks and the command gains no --seat.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers::",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "deps": [
+    "psd-3"
+  ],
+  "decisions": [
+    "a20cf301",
+    "15109d96",
+    "c5aff99f"
+  ],
+  "must_haves": {
+    "truths": [
+      "An unconfigured hat seat on Pi carries --seat with its own hat name and a ceiling no higher than 600",
+      "An unconfigured hat seat prompt names its own seat on every runtime"
+    ],
+    "prohibitions": [
+      "The unconfigured hat still resolves its model through the advisor slot",
+      "Configured hat seats and non-hat roles are unchanged"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-9",
+    "outcome": "Unconfigured hat seat keeps its own name on --seat, Pi 600s ceiling, and prompt seat block while its model resolves through the advisor slot (prepare.rs seat_name; test an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T10:57:35.667Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify covers prepare.rs seat/ceiling/prompt tests, 406 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers::",
+    "claimed_at": "2026-09-15T10:54:09.063Z",
+    "mistakes": [
+      {
+        "wrong": "git commit for psd-9 first put the cell: trailer before the attribution lines",
+        "better": "write the cell: trailer as the last body line on the first commit"
+      }
+    ],
+    "report": {
+      "outcome": "Unconfigured hat seat keeps its own seat name on --seat, the Pi 600s ceiling, and the prompt seat block; model stays on advisor slot",
+      "commit": "6a669429",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers:: — green:unit — cell verify covers prepare.rs seat/ceiling/prompt tests, 406 passed",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "git commit for psd-9 first put the cell: trailer before the attribution lines — write the cell: trailer as the last body line on the first commit"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "psd-9-truth-unconfigured-hat-seat-and-ceiling-pi",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through passed: test verbs::drivers::tests::an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through ... ok; prepare.rs:2237,2438-2442,2453-2458"
+          },
+          {
+            "id": "psd-9-truth-unconfigured-hat-prompt-seat-block",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through passed: stdin for pi contains 'Seat: hat-risks.' and prompt for claude contains 'Seat: hat-risks.'; prepare.rs:2237-2241,2254"
+          },
+          {
+            "id": "psd-9-prohibition-model-resolves-through-advisor-slot",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through passed: command contains --agent \"a\" resolving advisor slot; prepare.rs:1959-1965"
+          },
+          {
+            "id": "psd-9-prohibition-configured-hat-seats-and-non-hat-roles-unchanged",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- a_pi_hat_herding_command_carries_its_seat_and_the_wave_ceiling passed: test verbs::drivers::tests::a_pi_hat_herding_command_carries_its_seat_and_the_wave_ceiling ... ok; cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block passed: test verbs::drivers::tests::a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block ... ok; prepare.rs:2237-2241"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-15T11:32:45.485Z"
+      }
+    ]
+  }
+}

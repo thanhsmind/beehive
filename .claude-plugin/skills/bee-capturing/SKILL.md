@@ -35,13 +35,18 @@ announce what settled, then record it:
 - A rule, behavior, or tuned value settles → `bee decisions log` the
   same turn, plus a one-line stub via `bee capture add`; the full spec
   merge waits for the flush. High-risk work merges now, never queued.
+  The decision's why names its evidence pointer — a commit, a
+  `path:line`, an output path — never prose alone.
   A stub whose `--area` owns a skill must also answer whether that skill
   changed (rule: workflow-state-capture-skill-answer):
   `--skill-answer "changed: <path>"` or `--skill-answer "not: <why>"`,
   or the stub is refused. Mechanism:
   docs/knowledge/areas/workflow-state/capture-queue-and-the-blocker-threshold.md.
-- The user defers work ("later", "phase 2") → `bee backlog add` the
-  same turn, announce-then-do.
+- The user defers product work ("later", "phase 2") → `bee backlog pbi
+  add --brief-file <draft>` the same turn, announce-then-do; the cost
+  paragraph names why it waits and what waiting costs
+  (`docs/knowledge/areas/decision-memory/owner-brief-contract.md`).
+  Friction and findings keep `bee backlog add`.
 - A settlement that contradicts shipped behavior is recorded as "not
   yet implemented — see backlog", never stated as current.
 
@@ -84,8 +89,10 @@ Spec craft — what to write, what to omit, honest gaps:
 `.bee/expertise/documentation.md`. Template and mechanics:
 `references/area-spec.md` ("Area Spec Template", "Merge Rules",
 "Harvest Interview", "Rebuild Checklist"). In a bundle repo the CLI
-names the write target and emits the frontmatter — ask it; never pick
-paths or type frontmatter blocks by eye.
+names the write target and emits the frontmatter — `bee knowledge new`;
+never pick paths or type frontmatter blocks by eye. The full loop —
+search, decide, write, relate, validate — is
+`references/concept-authoring.md`.
 
 ## Compound — close with what you learned
 
@@ -117,15 +124,26 @@ runs it.
    worker reports, review findings — write one dated learnings file
    (`references/promotion.md` ("Harvest Discipline", "Learnings File
    Template")); read the touched areas' existing entries first, so the
-   harvest extends the layer instead of restating it. Delegate
-   the reading to read-only subagents; keep synthesis here. Thin
-   evidence means a thin file, never an invented finding.
+   harvest extends the layer instead of restating it. Before the
+   harvest, check that each capped cell's proof pointer resolves; a
+   dead pointer is a friction entry. Dispatch the readers through the
+   dispatch door as gathers, with two named lenses: **learnings**, and
+   **divergent** — proof the agent only self-reported, second-order
+   effects, and context the user pasted that the agent could have
+   fetched. Keep synthesis here. Thin evidence means a thin file, never
+   an invented finding.
 4. Promote a learning only when it clears all three bars:
    multi-feature relevance, meaningful waste prevented, generalizable.
-   Prefer an executable check over prose, and when an already-promoted
-   pattern recurs, escalate it to a durable owner — hook, guard,
-   doctor check, or test — or record the one-line reason prose stays
-   (`references/promotion.md` ("Promotion Decision Tree")).
+   A single source clears the waste bar only with a named waste figure;
+   two independent sources raise confidence. When the target already
+   states the lesson and the run still broke it, promote a wording or
+   placement change that makes it fire, never a second copy. Prefer an executable check over prose (which routes only into a
+   skill the run actually opened or tunes its description), and when an
+   already-promoted pattern recurs, escalate it to a durable owner —
+   hook, guard, doctor check, or test — or record the one-line reason
+   prose stays (`references/promotion.md` ("Promotion Decision Tree")).
+   A repeated reflection follows
+   `docs/knowledge/areas/human-mailbox/overview.md` ("A mistake seen twice").
 5. Log the decisions future planning must honor; supersede outdated
    ones, never edit them. File unresolved friction with
    `bee backlog add` so grooming can hunt it later.
@@ -160,6 +178,7 @@ critical promotions defer.
 |---|---|
 | `references/area-spec.md` | Area spec + system-overview templates, per-section and merge rules, harvest interview, bootstrap, rebuild checklist |
 | `references/citations.md` | Citation discipline: short8 decision ids in specs and backlog rows |
+| `references/concept-authoring.md` | A fact is about to become a concept file: search-before-write, extend vs new, the `bee knowledge new` write, the relate step (no orphans), validation, the end-of-task review, verb-per-situation table |
 | `references/promotion.md` | Harvest discipline (source ranking, what never becomes a record, denied writes), learnings file template, promotion decision tree, critical promotion format, friction entries |
 | `.bee/expertise/knowledge.md` | The project knowledge layer as a system: what belongs in it, harvesting from finished work, routing, the always-loaded budget, migration rot |
 | `.bee/expertise/documentation.md`, `.bee/expertise/decisions.md` | Spec craft; what deserves a decision record |

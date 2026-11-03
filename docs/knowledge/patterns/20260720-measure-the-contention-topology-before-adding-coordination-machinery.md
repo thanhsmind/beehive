@@ -7,6 +7,7 @@ timestamp: 2026-07-20
 bee:
   id: pattern-20260720-measure-the-contention-topology-before-adding-coordination-machinery
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["docs/history/learnings/critical-patterns.md#PAT44", "original feature: contention-split"]
   polarity: practice
   critical: false

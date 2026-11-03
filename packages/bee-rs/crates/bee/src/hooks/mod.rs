@@ -22,6 +22,8 @@ pub mod session_init;
 pub mod session_preamble;
 pub mod state_sync;
 pub mod tools_logger;
+pub mod stage_tools;
+pub mod worker_guard;
 pub mod write_guard;
 
 use std::ffi::OsString;
@@ -72,7 +74,7 @@ fn emit_undecidable(name: &str) -> ExitCode {
 /// The hook names `bee hook <name>` dispatches to. Kept as one list so the
 /// usage line and the dispatch match arm can never drift apart silently —
 /// add a hook to both, or the usage line lies.
-const HOOK_NAMES: [&str; 10] = [
+const HOOK_NAMES: [&str; 12] = [
     "tools-logger",
     "activity",
     "codex-subagent-audit",
@@ -83,6 +85,8 @@ const HOOK_NAMES: [&str; 10] = [
     "session-close",
     "model-guard",
     "write-guard",
+    "stage-tools",
+    "worker-guard",
 ];
 
 /// The herded-worker marker (herding/run.rs D2): set and non-empty means
@@ -97,7 +101,7 @@ pub(crate) fn herding_worker_marker_set() -> bool {
 /// unknown name in a herded pane is still a hook invocation the pane must
 /// not answer.
 fn marker_short_circuits(name: &str) -> bool {
-    name != "activity"
+    name != "activity" && name != "worker-guard" && name != "write-guard"
 }
 
 fn print_hook_usage() {
@@ -126,6 +130,13 @@ pub(crate) fn herding_env_lock() -> std::sync::MutexGuard<'static, ()> {
 /// Dispatch `bee hook <name> [args...]`. Returns None when argv is not a
 /// hook invocation at all.
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
+    try_native_with(args, &mut read_stdin_once)
+}
+
+pub(crate) fn try_native_with(
+    args: &[OsString],
+    read_stdin: &mut dyn FnMut() -> Vec<u8>,
+) -> Option<ExitCode> {
     if args.first()?.to_str()? != "hook" {
         return None;
     }
@@ -152,8 +163,27 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     // never prints, and always exits 0 — so the guard silence D3 buys is
     // untouched, and the pane gains the one thing the orchestrator needs
     // back: its own state, written into the job mailbox (D2).
-    if herding_worker_marker_set() && marker_short_circuits(&name) {
-        return Some(ExitCode::SUCCESS);
+    if herding_worker_marker_set() {
+        if name == "write-guard" {
+            let stdin = read_stdin();
+            let stdin_str = String::from_utf8_lossy(&stdin).into_owned();
+            return Some(match write_guard::run_herded(&[], &stdin_str) {
+                Outcome::Done(code) => code,
+                Outcome::Delegate => ExitCode::SUCCESS,
+            });
+        }
+        if marker_short_circuits(&name) {
+            return Some(ExitCode::SUCCESS);
+        }
+    }
+    // An unknown hook name is decided by argv alone, so it is refused
+    // BEFORE the blocking stdin read below — `read_stdin_once` waits for
+    // EOF, and a caller holding stdin open but silent (an in-process test
+    // under a live pane socket, a miswired hook entry) would otherwise
+    // hang forever on a name this build cannot serve anyway.
+    if !HOOK_NAMES.contains(&name.as_str()) {
+        eprintln!("bee hook: unknown hook \"{name}\"");
+        return Some(ExitCode::FAILURE);
     }
     let rest: Vec<String> = args
         .get(2..)
@@ -161,7 +191,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         .iter()
         .filter_map(|a| a.to_str().map(str::to_string))
         .collect();
-    let stdin = read_stdin_once();
+    let stdin = read_stdin();
     let stdin_str = String::from_utf8_lossy(&stdin).into_owned();
     let outcome = match name.as_str() {
         "tools-logger" => tools_logger::run(&rest, &stdin_str),
@@ -174,10 +204,11 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "session-close" => session_close::run(&rest, &stdin_str),
         "model-guard" => model_guard::run(&rest, &stdin_str),
         "write-guard" => write_guard::run(&rest, &stdin_str),
-        _ => {
-            eprintln!("bee hook: unknown hook \"{name}\"");
-            return Some(ExitCode::FAILURE);
-        }
+        "stage-tools" => stage_tools::run(&rest, &stdin_str),
+        "worker-guard" => worker_guard::run(&rest, &stdin_str),
+        // Every name that reaches here passed the HOOK_NAMES membership
+        // check above, and the arms cover exactly that list.
+        _ => unreachable!("unknown hook names are refused before the stdin read"),
     };
     Some(match outcome {
         Outcome::Done(code) => code,
@@ -244,23 +275,17 @@ mod tests {
         }
     }
 
-    /// herding-activity-hook D1: the hole in the marker exit is EXACTLY one
-    /// name wide. Asserted over the whole `HOOK_NAMES` list rather than one
-    /// sampled guard — a predicate tested on a single state is a law with a
-    /// hole (docs/knowledge/patterns/20260713).
     #[test]
-    fn under_the_marker_only_activity_passes_through_to_its_handler() {
-        assert!(!marker_short_circuits("activity"), "activity must reach its handler");
+    fn under_the_marker_activity_and_worker_guard_reach_handlers_and_write_guard_runs_its_tree_check() {
+        assert!(!marker_short_circuits("activity"));
+        assert!(!marker_short_circuits("worker-guard"));
+        assert!(!marker_short_circuits("write-guard"));
         for hook_name in HOOK_NAMES {
-            if hook_name == "activity" {
+            if hook_name == "activity" || hook_name == "worker-guard" || hook_name == "write-guard" {
                 continue;
             }
-            assert!(
-                marker_short_circuits(hook_name),
-                "{hook_name} must still exit 0 before stdin is read under the marker"
-            );
+            assert!(marker_short_circuits(hook_name));
         }
-        // An unknown name is not a hole either: it never reaches dispatch.
         assert!(marker_short_circuits("some-unknown-hook"));
     }
 
@@ -277,7 +302,7 @@ mod tests {
         // touches this var.
         unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
 
-        for hook_name in ["tools-logger", "write-guard", "model-guard"] {
+        for hook_name in ["tools-logger", "model-guard"] {
             let args = vec![OsString::from("hook"), OsString::from(hook_name)];
             let code = try_native(&args).expect("bee hook <name> is a hook invocation");
             assert_eq!(

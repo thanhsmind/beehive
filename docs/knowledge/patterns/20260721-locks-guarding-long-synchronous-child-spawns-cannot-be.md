@@ -7,6 +7,7 @@ timestamp: 2026-07-21
 bee:
   id: pattern-20260721-locks-guarding-long-synchronous-child-spawns-cannot-be
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["docs/history/learnings/critical-patterns.md#PAT47", "original feature: hardening-1-7-10"]
   polarity: pitfall
   critical: false

@@ -21,3 +21,8 @@ unchanged record shape whenever that changes.
 ## Answer
 
 The feature-close letter is in scope; no weekly digest — logged as **D14 (a6475e2c)**.
+
+Superseded in effect by letter-digest **LD1 (b610a1dc)**: the weekly digest
+this ticket deferred later shipped, over the unchanged record shape this
+answer predicted — a markdown file beside the letters in
+`.bee/human-mailbox/`, no email transport or scheduler.

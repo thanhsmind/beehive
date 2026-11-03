@@ -321,22 +321,29 @@ use crate::version::BEE_VERSION;
         std::fs::create_dir_all(root.join("docs").join("history").join("f1")).unwrap();
         write(root, "docs/history/f1/CONTEXT.md", "# ctx");
         let mut ctx = ctx_for(root);
-        let packet = build_orient(&mut ctx).unwrap();
-        // exec approved + one ready cell -> ready recommendation + command.
+        let packet = with_session_env(None, Some("claude-test"), || {
+            build_orient(&mut ctx).unwrap()
+        });
         let next = packet.get("next").unwrap();
         assert_eq!(
             vget(next, "action"),
             Some(&json!("1 ready cell(s): c-1 — orchestrator assigns them."))
         );
         assert_eq!(vget(next, "skill"), Some(&json!("bee-swarming")));
-        assert_eq!(vget(next, "command"), Some(&json!("bee cells ready --json")));
+        assert_eq!(
+            vget(next, "command"),
+            Some(&json!("bee dispatch wave --runtime claude --feature f1 --json"))
+        );
+        assert_eq!(
+            vget(next, "run_from"),
+            Some(&json!(root.to_str().unwrap()))
+        );
         let decisions = packet.get("decisions").unwrap();
         assert_eq!(vget(decisions, "context_md"), Some(&json!("docs/history/f1/CONTEXT.md")));
         assert_eq!(vget(decisions, "active_count"), Some(&json!(0)));
         let work = packet.get("work").unwrap();
         assert_eq!(vget(work, "ready"), Some(&json!(["c-1"])));
         assert_eq!(vget(work, "blockers"), Some(&json!([])));
-        // Text renderer.
         let text = render_orient_text(&packet);
         let lines: Vec<&str> = text.split('\n').collect();
         assert_eq!(
@@ -347,6 +354,57 @@ use crate::version::BEE_VERSION;
         assert_eq!(lines[2], "work: open=1 claimed=0 capped=0 | ready: c-1");
         assert_eq!(lines[3], "skill: bee-swarming");
         assert_eq!(lines[4], "next: 1 ready cell(s): c-1 — orchestrator assigns them.");
+        assert_eq!(
+            lines[5],
+            format!("run: bee dispatch wave --runtime claude --feature f1 --json (from {})", root.display())
+        );
+    }
+
+    /// expertise-principles D2: orient's second caller of the ONE shared
+    /// reader. The packet key is omitted outright when nothing is selected, so
+    /// `bee orient` never grows an empty header — and the text block sits
+    /// between the worktree line and `skill:`.
+    #[test]
+    fn orient_names_the_routed_principles_and_stays_silent_without_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        let route = |class: Option<&str>| match class {
+            Some(c) => format!(
+                r#"{{"phase":"swarming","feature":"f1","route":{{"class":"{c}","lane":"standard"}}}}"#
+            ),
+            None => r#"{"phase":"swarming","feature":"f1"}"#.to_string(),
+        };
+
+        // No recorded route: no key, no line.
+        write(root, ".bee/state.json", &route(None));
+        assert!(!build_orient(&mut ctx_for(root)).unwrap().contains_key("principles"));
+
+        // A class no row claims: same silence.
+        write(root, ".bee/state.json", &route(Some("docs")));
+        assert!(!build_orient(&mut ctx_for(root)).unwrap().contains_key("principles"));
+
+        // A matching class: the packet carries the block and the text shows it
+        // ahead of `skill:`.
+        write(root, ".bee/state.json", &route(Some("refactor")));
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        assert_eq!(
+            packet.get("principles"),
+            Some(&json!([
+                "- Principles (class=refactor) — name each one you apply and the decision it changed:",
+                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it",
+                "  - `bee-principle-one-home` — a rule lives in one place and every other surface points at it",
+            ]))
+        );
+        let text = render_orient_text(&packet);
+        let lines: Vec<&str> = text.split('\n').collect();
+        let at = lines
+            .iter()
+            .position(|l| l.starts_with("- Principles (class=refactor)"))
+            .expect("principles block in the orient text");
+        assert!(lines[at + 1].starts_with("  - `bee-principle-red-before-green`"));
+        assert!(lines[at + 3].starts_with("skill: "));
     }
 
     #[test]
@@ -722,12 +780,47 @@ use crate::version::BEE_VERSION;
             .expect("main-side worktree block");
         assert_eq!(block.get("location"), Some(&json!("main")));
         assert_eq!(block.get("id"), Some(&json!("wt-granted")));
-        assert!(tpl(block.get("guidance")).starts_with("open your session at "));
+        assert_eq!(tpl(block.get("guidance")), "bee worktree enter --id wt-granted");
         // A docs lane is exempt -> no block, byte-unchanged orient.
         status_main.insert("route".into(), json!({"lane": "docs"}));
         assert!(orient_worktree_context(&mut ctx_at(&main), &status_main)
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn unmerged_granted_worktree_distinguishes_fresh_from_merged_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = worktree_fixture(tmp.path());
+        write(&granted, ".bee/runtime/worktree-identity.json", "{\"feature\":\"demo\"}");
+        let (id, path) = find_unmerged_granted_worktree_for_feature(&main, "demo").unwrap();
+        assert_eq!(id, "wt-granted");
+        assert!(crate::roots::same_path(&path, granted.to_str().unwrap()), "{path}");
+        let mut status_main = JMap::new();
+        status_main.insert("feature".into(), json!("demo"));
+        status_main.insert("route".into(), json!({"lane": "small"}));
+        assert!(orient_worktree_context(&mut ctx_at(&main), &status_main)
+            .unwrap()
+            .is_some());
+        write(&granted, "feature.txt", "feature content");
+        git(&granted, &["add", "feature.txt"]);
+        git(&granted, &["commit", "-qm", "feat"]);
+        git(&main, &["merge", "--no-ff", "-m", "merge feat", "wt/granted"]);
+        assert_eq!(
+            find_unmerged_granted_worktree_for_feature(&main, "demo"),
+            None
+        );
+        assert!(orient_worktree_context(&mut ctx_at(&main), &status_main)
+            .unwrap()
+            .is_none());
+        write(
+            &main,
+            ".git/worktrees/wt-granted/HEAD",
+            "0123456789abcdef0123456789abcdef01234567\n",
+        );
+        let (id, path) = find_unmerged_granted_worktree_for_feature(&main, "demo").unwrap();
+        assert_eq!(id, "wt-granted");
+        assert!(crate::roots::same_path(&path, granted.to_str().unwrap()), "{path}");
     }
 
     /// The whole orient packet from inside a granted worktree carries the
@@ -1150,7 +1243,7 @@ use crate::version::BEE_VERSION;
         assert_eq!(blockers.len(), 1, "{blockers:?}");
         assert!(
             blockers[0]
-                == "promote proposal unapplied: 1 feature(s) — f3 (2 capped cell(s), docs/history/f3/promote-proposals.md)",
+                == "promote proposal unapplied: 1 feature(s) — f3 (2 capped cell(s), docs/history/f3/promote-proposals.md) — after you apply or decide to skip the proposals: bee deferred-queue complete --kind promote --feature f3",
             "{blockers:?}"
         );
 
@@ -1171,6 +1264,37 @@ use crate::version::BEE_VERSION;
             ),
         );
         assert_eq!(orient_blockers(root), Vec::<String>::new());
+    }
+
+    #[test]
+    fn orient_caps_the_promote_proposal_blocker_at_three_features() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for f in ["p1", "p2", "p3", "p4", "p5"] {
+            write(
+                root,
+                &format!("docs/history/{f}/promote-proposals.md"),
+                &format!(
+                    "promote proposal for work item \"{f}\" (docs/history/{f}/CONTEXT.md) — 1 capped cell(s): b-1\nanchor: history — docs/history/{f}/CONTEXT.md\n"
+                ),
+            );
+        }
+        let blockers = orient_blockers(root);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        let line = &blockers[0];
+        assert!(
+            line.starts_with("promote proposal unapplied: 5 feature(s) — "),
+            "{line}"
+        );
+        let (named, tail) = line.split_once(" — after you apply or decide to skip the proposals: ").unwrap();
+        for f in ["p1", "p2", "p3"] {
+            assert!(named.contains(&format!("{f} (1 capped cell(s), docs/history/{f}/promote-proposals.md)")), "{named}");
+        }
+        for f in ["p4", "p5"] {
+            assert!(!named.contains(f), "{named}");
+        }
+        assert!(named.contains("; +2 more"), "{named}");
+        assert_eq!(tail.split("; ").count(), 3, "{tail}");
     }
 
     /// trun-9 (D5): the SAME proposal, cleared through the deferred-queue
@@ -1227,6 +1351,38 @@ use crate::version::BEE_VERSION;
         let blockers = orient_blockers(root);
         assert_eq!(blockers.len(), 1, "{blockers:?}");
         assert!(blockers[0].contains("f5"), "{blockers:?}");
+    }
+
+    #[test]
+    fn the_reminder_names_the_command_that_clears_a_pre_queue_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/history/f6/promote-proposals.md",
+            "promote proposal for work item \"f6\" (docs/history/f6/CONTEXT.md) — 1 capped cell(s): b-1\nanchor: history — docs/history/f6/CONTEXT.md\n",
+        );
+        let blockers = orient_blockers(root);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        assert!(
+            blockers[0].ends_with(
+                "after you apply or decide to skip the proposals: bee deferred-queue complete --kind promote --feature f6"
+            ),
+            "{blockers:?}"
+        );
+        assert!(
+            crate::verbs::deferred_queue::items_for(root, "promote", "f6").is_empty(),
+            "the fixture starts with no queue item at all — a pre-queue feature"
+        );
+
+        crate::verbs::deferred_queue::complete_by_kind_feature(
+            root,
+            "promote",
+            "f6",
+            "deferred-queue complete",
+        )
+        .unwrap();
+        assert_eq!(orient_blockers(root), Vec::<String>::new());
     }
 
     // ── sweep-at-every-door (D1/D6): bee orient's sweep door ────────────────
@@ -2977,7 +3133,9 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert_eq!(problems[0].agent, Some("bee-gather"));
-        assert_eq!(problems[0].slot.as_deref(), Some("generation"));
+        // The finding is filed under the FIRST role the agent declares —
+        // `read` since gather-reads-the-read-slot D4.
+        assert_eq!(problems[0].slot.as_deref(), Some("read"));
         assert!(problems[0].message.contains("still pins model: \"opus\""));
         assert!(problems[0].message.contains("bee onboard --apply"));
 
@@ -3113,6 +3271,31 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert!(problems[0].message.contains("is now a cli executor"));
+
+        // (f) gather-reads-the-read-slot D4: bee-gather declares
+        // `["read", "generation"]`, so a configured `read` slot is what the
+        // check expects of its file, and the finding is filed under `read`.
+        // The check reads that list from AGENT_ROLES_BY_NAME — it does not
+        // restate it — so this is the same walk onboarding renders from.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        let cfg = json!({"models": {"opencode": {
+            "read": "opencode/reader",
+            "generation": "opencode/big-pickle"
+        }}});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
+        assert_eq!(problems[0].slot.as_deref(), Some("read"));
+        assert!(problems[0].message.contains("is \"opencode/reader\""));
+        // The file rendered from the read slot is clean.
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/reader");
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+        // A legacy host with no `read` key keeps expecting generation's
+        // model — byte for byte the pre-D4 verdict.
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        let legacy = json!({"models": {"opencode": {"generation": "opencode/big-pickle"}}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&legacy)).is_empty());
     }
 
     /// The point of the cell (scripts/tests/test_config_validate.mjs header):
@@ -3151,7 +3334,7 @@ use crate::version::BEE_VERSION;
             .iter()
             .find(|w| w.starts_with("config validate [cli-malformed]"))
             .unwrap_or_else(|| panic!("no cli-malformed warning in {warnings:?}"));
-        assert!(hit.contains(" models.claude.generation:"), "{hit}");
+        assert!(hit.contains(" team.claude.generation:"), "{hit}");
         assert!(hit.contains("silently reverts to the seeded default"), "{hit}");
 
         // Control: the same tier, now well-formed, is adopted AND silent.
@@ -4574,7 +4757,7 @@ use crate::version::BEE_VERSION;
         assert_eq!(codes(&invented), vec!["slot-value-malformed"]);
         assert_eq!(codes(&invented), codes(&historical));
         assert_eq!(invented[0].slot.as_deref(), Some("test"));
-        assert!(invented[0].message.contains("models.claude.test"), "{}", invented[0].message);
+        assert!(invented[0].message.contains("team.claude.test"), "{}", invented[0].message);
 
         // (b) every check below the entry point reaches an invented name too,
         // not just the value-shape one at the top.
@@ -4723,9 +4906,222 @@ use crate::version::BEE_VERSION;
         let mut ctx = ctx_for(root);
         let status = build_status(&mut ctx, false).unwrap();
         let raw = read_config_raw(root);
-        let before = Value::Object(normalize_models(raw.get("models")));
+        let before = Value::Object(normalize_models(raw.get("team")));
         assert_eq!(
             serde_json::to_string(status.get("models").expect("models section")).unwrap(),
             serde_json::to_string(&before).unwrap()
         );
+    }
+
+    #[test]
+    fn orient_lane_bound_session_reports_lane_feature_and_phase() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"feature":"default-feat","phase":"idle"}"#);
+        let lanes = root.join(".bee/lanes");
+        std::fs::create_dir_all(&lanes).unwrap();
+        write(
+            root,
+            ".bee/lanes/lane-feat.json",
+            r#"{"feature":"lane-feat","phase":"planning","approved_gates":{"context":true}}"#,
+        );
+        let sessions = root.join(".bee/sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        write(
+            root,
+            ".bee/sessions/s-bound.json",
+            r#"{"id":"s-bound","lane":"lane-feat"}"#,
+        );
+        let packet = with_session_env(Some("s-bound"), None, || {
+            build_orient(&mut ctx_for(root)).unwrap()
+        });
+        let where_ = packet.get("where").unwrap();
+        assert_eq!(where_.get("feature"), Some(&json!("lane-feat")));
+        assert_eq!(where_.get("phase"), Some(&json!("planning")));
+
+        let unbound_packet = with_session_env(None, None, || {
+            build_orient(&mut ctx_for(root)).unwrap()
+        });
+        let unbound_where = unbound_packet.get("where").unwrap();
+        assert_eq!(unbound_where.get("feature"), Some(&json!("default-feat")));
+        assert_eq!(unbound_where.get("phase"), Some(&json!("idle")));
+    }
+
+    #[test]
+    fn orient_broken_lane_binding_gives_blocker_and_null_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"feature":"default-feat","phase":"swarming"}"#);
+        let sessions = root.join(".bee/sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        write(
+            root,
+            ".bee/sessions/s-broken.json",
+            r#"{"id":"s-broken","lane":"missing-lane"}"#,
+        );
+        let packet = with_session_env(Some("s-broken"), None, || {
+            build_orient(&mut ctx_for(root)).unwrap()
+        });
+        let where_ = packet.get("where").unwrap();
+        assert_ne!(where_.get("feature"), Some(&json!("default-feat")));
+        let work = packet.get("work").unwrap();
+        let blockers = work.get("blockers").and_then(Value::as_array).unwrap();
+        assert!(blockers.iter().any(|b| b.as_str().map(|s| s.contains("broken") || s.contains("lane")).unwrap_or(false)));
+        let next = packet.get("next").unwrap();
+        assert_eq!(next.get("command"), Some(&Value::Null));
+        assert_eq!(next.get("run_from"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn next_operation_branches_return_expected_command_and_run_from() {
+        let mock_root = Path::new("/mock/control/root");
+
+        let facts_wt = NextOpFacts {
+            granted_worktree_id: Some("wt-99"),
+            handoff: true,
+            ready_count: 3,
+            execution_gate_approved: true,
+            feature: Some("feat-wt"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_wt = next_operation(&facts_wt);
+        assert_eq!(op_wt.command.as_deref(), Some("bee worktree enter --id wt-99"));
+        assert_eq!(op_wt.run_from.as_deref(), Some(mock_root));
+
+        let facts_handoff = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: true,
+            ready_count: 3,
+            execution_gate_approved: true,
+            feature: Some("feat-h"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_handoff = next_operation(&facts_handoff);
+        assert_eq!(op_handoff.command.as_deref(), Some("bee state handoff show --json"));
+        assert_eq!(op_handoff.run_from.as_deref(), Some(mock_root));
+
+        let facts_wave = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 2,
+            execution_gate_approved: true,
+            feature: Some("feat-wave"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_wave = next_operation(&facts_wave);
+        assert_eq!(op_wave.command.as_deref(), Some("bee dispatch wave --runtime claude --feature feat-wave --json"));
+        assert_eq!(op_wave.run_from.as_deref(), Some(mock_root));
+
+        let facts_no_rt = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 2,
+            execution_gate_approved: true,
+            feature: Some("feat-wave"),
+            caller_runtime: None,
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_no_rt = next_operation(&facts_no_rt);
+        assert_eq!(op_no_rt.command, None);
+        assert_eq!(op_no_rt.run_from, None);
+
+        let facts_gate_unapproved = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 2,
+            execution_gate_approved: false,
+            feature: Some("feat-wave"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_unapproved = next_operation(&facts_gate_unapproved);
+        assert_eq!(op_unapproved.command, None);
+        assert_eq!(op_unapproved.run_from, None);
+
+        let facts_wf = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 0,
+            execution_gate_approved: false,
+            feature: None,
+            caller_runtime: None,
+            control_root: Some(mock_root),
+            wayfinding_resume: true,
+        };
+        let op_wf = next_operation(&facts_wf);
+        assert_eq!(op_wf.command.as_deref(), Some("bee discovery list --json"));
+        assert_eq!(op_wf.run_from.as_deref(), Some(mock_root));
+
+        let facts_none = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 0,
+            execution_gate_approved: false,
+            feature: None,
+            caller_runtime: None,
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_none = next_operation(&facts_none);
+        assert_eq!(op_none.command, None);
+        assert_eq!(op_none.run_from, None);
+    }
+
+    #[test]
+    fn next_operation_wayfinding_resume_with_granted_worktree_id() {
+        let mock_root = Path::new("/mock/control/root");
+        let facts = NextOpFacts {
+            granted_worktree_id: Some("wt-99"),
+            handoff: true,
+            ready_count: 3,
+            execution_gate_approved: true,
+            feature: Some("feat-wt"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: true,
+        };
+        let op = next_operation(&facts);
+        assert_eq!(op.command.as_deref(), Some("bee discovery list --json"));
+        assert_eq!(op.run_from.as_deref(), Some(mock_root));
+    }
+
+    #[test]
+    fn render_orient_text_includes_run_line_when_command_present() {
+        let mut packet = JMap::new();
+        let mut where_ = JMap::new();
+        where_.insert("phase".into(), json!("planning"));
+        where_.insert("feature".into(), json!("demo"));
+        where_.insert("mode".into(), json!("standard"));
+        where_.insert("gates".into(), json!({"execution": true}));
+        where_.insert("gate_bypass_level".into(), json!("off"));
+        packet.insert("where".into(), Value::Object(where_));
+        let mut decisions = JMap::new();
+        decisions.insert("active_count".into(), json!(0));
+        packet.insert("decisions".into(), Value::Object(decisions));
+        let mut work = JMap::new();
+        let mut cells = JMap::new();
+        cells.insert("open".into(), json!(1));
+        cells.insert("claimed".into(), json!(0));
+        cells.insert("capped".into(), json!(0));
+        work.insert("cells".into(), Value::Object(cells));
+        packet.insert("work".into(), Value::Object(work));
+        let mut next = JMap::new();
+        next.insert("action".into(), json!("Prepare current-slice cells."));
+        next.insert("skill".into(), json!("bee-planning"));
+        next.insert("command".into(), json!("bee dispatch wave --runtime claude --feature demo --json"));
+        next.insert("run_from".into(), json!("/path/to/repo"));
+        packet.insert("next".into(), Value::Object(next));
+
+        let rendered = render_orient_text(&packet);
+        assert!(rendered.contains("run: bee dispatch wave --runtime claude --feature demo --json (from /path/to/repo)"));
     }

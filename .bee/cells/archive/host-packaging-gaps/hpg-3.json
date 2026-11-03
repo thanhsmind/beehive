@@ -1,0 +1,155 @@
+{
+  "id": "hpg-3",
+  "feature": "host-packaging-gaps",
+  "title": "Install on pi, macOS and ARM Linux",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "331bc33e-0d7f-4c2f-9ab4-4889ee55cd1c",
+    "320fcad4-af38-4ab4-a120-9509c30d2e86"
+  ],
+  "files": [
+    "scripts/install.sh",
+    "scripts/install.ps1",
+    "INSTALL.md",
+    "README.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/host-packaging-gaps/CONTEXT.md",
+    "docs/history/host-packaging-gaps/plan.md",
+    "scripts/install.sh",
+    "scripts/install.ps1",
+    "packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs",
+    "packages/bee-rs/crates/bee/tests/installer_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "The installer half of D3 (store 331bc33e) and D4 (store 320fcad4). Read scripts/install.sh fully first. (1) Runtime pi in install.sh. `case \"$RUNTIME\" in claude|codex|both) ;; *) fail \"--runtime must be claude, codex, or both\" ;; esac` accepts pi, message `--runtime must be claude, codex, pi, or both`; update the usage text at the `--runtime <which>` line. With RUNTIME=pi, `runtime_active` is false for claude and codex, so `probe_plugin_state` calls no CLI and `transition_plugin`/`rollback_plugin` skip — leave those. The one call that must not see pi is `\"$BEE_BIN\" dev plugin-distribution \"${DIST_ARGS[@]}\" || {` (and its plugin-first siblings with `--apply` and the recheck): plugin_distribution.rs `parse_runtime` has no pi value. Skip every plugin-distribution call when RUNTIME is pi, with one log line saying Pi has no plugin marketplace. Refuse `--distribution plugin-first` together with `--runtime pi` early, before any write, with a message that names repo-copy (plugin-first creates no repo skills or hooks, and Pi has no plugin). Pass `--runtime pi` to `bee onboard` as today's flag threading does. When RUNTIME is pi, the final banner names Pi and says Pi must have a default model set (bee's default Pi role table runs plain `pi`). (2) Same in scripts/install.ps1: `[ValidateSet('claude', 'codex', 'both')]` gains 'pi'; mirror the skips (the codex|both and claude|both CLI probes, the plugin loops, the plugin-distribution calls), the plugin-first refusal and the banner. Keep the file ASCII-only (a repo test guards non-ASCII bytes in scripts/*.ps1). (3) Platforms in install.sh. The case with `Linux/x86_64)                          PREBUILT_ASSET=\"bee-x86_64-unknown-linux-gnu\" ;;` gains `Linux/aarch64|Linux/arm64` → bee-aarch64-unknown-linux-gnu, `Darwin/arm64` → bee-aarch64-apple-darwin, `Darwin/x86_64` → bee-x86_64-apple-darwin. The checksum step (`sha256sum -c want.txt >/dev/null 2>&1 ); then`) uses `shasum -a 256 -c` when `sha256sum` is not on PATH; neither present → treat as a verify failure (source build, never an unverified binary). After the checksum passes, run the binary once (`\"$STATE_TMP_BIN/$PREBUILT_ASSET\" rs-info >/dev/null 2>&1`); if it fails (for example an old glibc on ARM Linux), log the reason and fall back to the source build. (4) Docs. INSTALL.md: the `--runtime` row names pi and says the Pi extension and skills are written for every runtime value and pi skips the Claude/Codex plugin steps; the platforms line (x86_64 Linux/Windows need nothing) adds macOS (Apple silicon and Intel) and ARM64 Linux (glibc 2.35+). README.md: the `bee onboard` synopsis `[--runtime claude|codex|both]` and the platform line name the same. (5) Release manifest: editing an installer makes `docs/history/codex-harness-hardening/release-manifest.json` stale. Run `.bee/bin/bee dev release-manifest --write` last and commit it with the rest. If `bee dev regen` is the documented chain in this repo, run it instead.",
+  "must_haves": {
+    "truths": [
+      "install.sh --runtime pi reaches bee onboard --runtime pi and never calls plugin-distribution with pi",
+      "install.sh and install.ps1 refuse plugin-first with pi before any write",
+      "install.sh picks a prebuilt asset on Darwin arm64, Darwin x86_64 and Linux aarch64/arm64",
+      "install.sh verifies the checksum with shasum when sha256sum is absent, and refuses an unverified binary",
+      "install.sh falls back to a source build when the downloaded binary does not run",
+      "install.ps1 accepts -Runtime pi and stays ASCII-only",
+      "the release manifest matches the edited installers"
+    ],
+    "artifacts": [
+      {
+        "path": "scripts/install.sh",
+        "substantive": "pi runtime, plugin-distribution skip, plugin-first refusal, platform map, shasum fallback, smoke run"
+      },
+      {
+        "path": "scripts/install.ps1",
+        "substantive": "pi runtime, skips and refusal"
+      },
+      {
+        "path": "docs/history/codex-harness-hardening/release-manifest.json",
+        "substantive": "regenerated installer hashes"
+      }
+    ],
+    "key_links": [
+      "install.sh asset names equal the release-binaries.yml asset names"
+    ],
+    "prohibitions": [
+      "No change to claude, codex or both behavior in either installer",
+      "No new plugin marketplace for pi",
+      "No non-ASCII byte in install.ps1",
+      "No edit to .github/workflows/release-binaries.yml or scripts/release.sh"
+    ]
+  },
+  "verify": "bash -n scripts/install.sh && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test installer_contracts && .bee/bin/bee dev release-manifest --check",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hpg-3",
+    "outcome": "Installers accept runtime pi, and install.sh gains the macOS and ARM Linux asset map, a shasum fallback and a smoke-run fallback",
+    "files_changed": [
+      "scripts/install.sh",
+      "scripts/install.ps1",
+      "INSTALL.md",
+      "README.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Fixed a literal backslash-n on the assert-recheck line of scripts/install.sh (it passed a stray 'n' argument instead of continuing the line) — found while editing the same file; harmless today because assert-recheck ignores args — something else had to be fixed first",
+      "install.ps1 needed no probe/plugin-loop edits: its existing -in @('codex','both') / -notin @($rt,'both') checks already skip pi; only ValidateSet, refusal, the plugin-distribution call and the banner changed — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T02:15:07.425Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify: 15/15 installer_contracts passed, manifest 376 files match; plus live refusal smoke (install.sh --runtime pi --distribution plugin-first exits 1 before any write) and a sha256_check fallback probe (shasum-only OK=0, mismatch=1, no tool=1); a full install.sh --runtime pi run into a temp repo was NOT run (left to the orchestrator's close-time live install, it needs hpg-2's onboard --runtime pi)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b8694b6-f141-42bc-bb57-01f903640b0e",
+    "verify_command": "bash -n scripts/install.sh && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test installer_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-22T02:09:04.689Z",
+    "mistakes": [
+      {
+        "wrong": "the first cargo test runs failed on E0425/E0308 in sibling workers' in-flight onboard Rust edits in the shared worktree",
+        "better": "a retry loop from the start would have saved two runs"
+      }
+    ],
+    "report": {
+      "outcome": "install.sh/install.ps1 accept runtime pi (repo-copy only, plugin-distribution skipped, Pi banner); install.sh maps Darwin arm64/x86_64 and Linux aarch64/arm64 assets, verifies via shasum fallback (no tool = source build), smoke-runs rs-info before trusting the binary; INSTALL.md/README.md and release manifest updated",
+      "commit": "ff4128da8",
+      "files": [
+        "scripts/install.sh",
+        "scripts/install.ps1",
+        "INSTALL.md",
+        "README.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash -n scripts/install.sh && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test installer_contracts && .bee/bin/bee dev release-manifest --check — green:unit — cell verify: 15/15 installer_contracts passed, manifest 376 files match; plus live refusal smoke (install.sh --runtime pi --distribution plugin-first exits 1 before any write) and a sha256_check fallback probe (shasum-only OK=0, mismatch=1, no tool=1); a full install.sh --runtime pi run into a temp repo was NOT run (left to the orchestrator's close-time live install, it needs hpg-2's onboard --runtime pi)",
+      "deviations": [
+        "Fixed a literal backslash-n on the assert-recheck line of scripts/install.sh (it passed a stray 'n' argument instead of continuing the line) — found while editing the same file; harmless today because assert-recheck ignores args — something else had to be fixed first",
+        "install.ps1 needed no probe/plugin-loop edits: its existing -in @('codex','both') / -notin @($rt,'both') checks already skip pi; only ValidateSet, refusal, the plugin-distribution call and the banner changed — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "the first cargo test runs failed on E0425/E0308 in sibling workers' in-flight onboard Rust edits in the shared worktree — a retry loop from the start would have saved two runs"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "install.sh --runtime pi reaches bee onboard --runtime pi and never calls plugin-distribution with pi",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "install.sh and install.ps1 refuse plugin-first with pi before any write",
+            "artifact": "scripts/install.ps1"
+          },
+          {
+            "requirement": "install.sh picks a prebuilt asset on Darwin arm64, Darwin x86_64 and Linux aarch64/arm64",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "install.sh verifies the checksum with shasum when sha256sum is absent, and refuses an unverified binary",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "install.sh falls back to a source build when the downloaded binary does not run",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "install.ps1 accepts -Runtime pi and stays ASCII-only",
+            "artifact": "scripts/install.ps1"
+          },
+          {
+            "requirement": "the release manifest matches the edited installers",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-09-22T02:15:36.521Z",
+        "recorded_by": "6b8694b6-f141-42bc-bb57-01f903640b0e",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

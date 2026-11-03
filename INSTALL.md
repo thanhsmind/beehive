@@ -4,19 +4,40 @@ Source: **https://github.com/thanhsmind/beehive**
 
 ## Quick install (recommended): the install script
 
-One command does everything below — fetches bee, installs the skills for the chosen runtimes, and onboards the target repo (greenfield or brownfield). **The current directory is the target by default** — `cd` into your project first. It always shows the exact plan and asks before writing (skip prompts with `-y`/`-Yes`).
+One command does everything below — fetches bee, installs the skills for the chosen runtimes, and onboards the target repo (greenfield or brownfield). **The current directory is the target by default** — `cd` into your project first. It always shows the exact plan and asks before writing. In a project with interface files it also asks which design skill packs to add. Add `-y`/`-Yes` only for an unattended run: it skips every question, and installs no design pack unless you pass `--design-packs`/`-DesignPacks`.
 
 macOS / Linux / Git Bash:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash
 ```
 
 Windows PowerShell:
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
-.\install-bee.ps1 -Yes
+.\install-bee.ps1
+```
+
+To add the design skills (`bee-design` and the packs you name), pass `--design-packs` (bash) / `-DesignPacks` (PowerShell). Packs: `web`, `charts`, `motion`, `apple`, `figma`; a comma list takes several. The installer asks about design only in a project with interface files, so in any other project this flag is the way in:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- --design-packs web
+```
+
+```powershell
+.\install-bee.ps1 -DesignPacks web
+```
+
+Unattended install (auto yes, no questions). Name the design packs here, because `-y`/`-Yes` adds none on its own:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y --design-packs web,charts,motion
+```
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
+.\install-bee.ps1 -Yes -DesignPacks 'web,charts,motion'
 ```
 
 To target another directory instead, add `-d /path/to/project` (bash) / `-Directory C:\path\to\project` (PowerShell).
@@ -28,14 +49,16 @@ Useful flags (same semantics in both scripts):
 | bash                            | PowerShell        | Effect                                                                                                                                     |
 | ------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--dry-run`                   | `-DryRun`       | Show the exact plan for YOUR repo; write nothing                                                                                           |
-| `--runtime claude\|codex\|both` | `-Runtime …`   | Which runtime skills to install (default both)                                                                                             |
+| `--runtime claude\|codex\|pi\|both` | `-Runtime …`   | Which runtime skills to install (default both). The Pi extension and skills are written for every value; `pi` skips the Claude/Codex plugin steps and needs `--distribution repo-copy` |
 | `--global-skills`             | `-GlobalSkills` | Also copy skills into the legacy global runtime dirs (`~/.claude/skills`, `~/.codex/skills`). Off by default — see "two layers" below |
 | `--no-claude-md`              | `-NoClaudeMd`   | Skip writing/extending CLAUDE.md with the`@AGENTS.md` import (written by default)                                                        |
 | `--claude-md`                 | `-ClaudeMd`     | Accepted for compatibility; a no-op alias of the default (CLAUDE.md is written unless`--no-claude-md`/`-NoClaudeMd` is passed)         |
+| `--no-statusline`             | `-NoStatusline` | Skip vendoring the status-display script and adding the statusLine entry (written by default)                                            |
+| `--design-packs <list\|none>` | `-DesignPacks …` | Design skill packs to install: a comma list of `web`, `charts`, `motion`, `apple`, `figma`, or `none`. Without it, an interactive install in a project with UI files asks which packs to add; with `-y`/`-Yes` it prints one line naming this flag |
 | `--no-hooks`                  | `-NoHooks`      | Skip repo-local hook wiring for Claude Code                                                                                                |
 | `--no-git-init`               | `-NoGitInit`    | Greenfield: don't offer`git init`                                                                                                        |
 | `--source <path>`             | `-Source …`    | Use a local bee checkout instead of cloning                                                                                                |
-| `-y`                          | `-Yes`          | Non-interactive                                                                                                                            |
+| `-y`                          | `-Yes`          | Non-interactive: skips every question, including the design-pack question                                                                 |
 
 **Greenfield** (new/empty directory): the script creates the directory, offers `git init`, and installs everything fresh. **Brownfield** (existing repo): existing `AGENTS.md`/`CLAUDE.md` content is preserved byte-for-byte outside the managed BEE markers; `.bee/` state, decisions, and cells are never overwritten; `.claude/settings.json` merges get a `.bak` backup; re-running is idempotent (`up_to_date`). Run `--dry-run` first if you want to see the plan before anything is written.
 
@@ -50,7 +73,9 @@ bee installs in two layers:
 1. **Repo layer** (once per project, the default): onboarding installs the `AGENTS.md` BEE block, the `.bee/` runtime directory, the vendored `bee` binary, a `CLAUDE.md` `@AGENTS.md` import, and a per-project copy of the `bee-*` skills into the repo itself — `<repo>/.claude/skills` for Claude Code, `<repo>/.agents/skills` for Codex. These skill trees are committed to the host repo (same policy as the vendored CLI), so every teammate and CI job sees identical skills without any machine-wide install; re-onboarding refreshes them.
 2. **Runtime layer** (opt-in, once per machine): a legacy global copy of the `bee-*` skills into `~/.claude/skills` and/or `~/.codex/skills`. Nothing in this layer is touched unless you pass `--global-skills` (`-GlobalSkills`) — the per-project copy above is what agents actually discover by default. On Claude Code, the hook skeleton still needs one of the routes below (the plugin, or `--repo-hooks` during onboarding).
 
-Requirement for both on x86_64 Linux/Windows: **none** — each installer downloads the release binary for the platform, checks it against the release `SHA256SUMS`, and falls back to a source build only if no asset fits or `--build-from-source` / `-BuildFromSource` is given. For that fallback: **a Rust toolchain** (`cargo --version`, stable). bee ships
+The deploy skill (`bee-deploying`) installs in one of two ways. The default is the per-project copy: every onboard writes it into the repo's skill folders with the other `bee-*` skills. The other way is your skillstation hub: run `bee onboard --apply --skillstation` and onboard also publishes the skill there through the `skillstation` CLI. The install scripts do not pass `--skillstation` through yet, so run `bee onboard` for it.
+
+Requirement for both on x86_64 Linux/Windows, macOS (Apple silicon and Intel) and ARM64 Linux (glibc 2.35+): **none** — each installer downloads the release binary for the platform, checks it against the release `SHA256SUMS`, and falls back to a source build only if no asset fits or `--build-from-source` / `-BuildFromSource` is given. For that fallback: **a Rust toolchain** (`cargo --version`, stable). bee ships
 as a single native binary and, by decision 1f4262ca, no prebuilt binaries live in
 the repo — you build it once per machine from the source checkout:
 
@@ -174,7 +199,10 @@ Flags:
 | `--repo-hooks`    | Additionally copy hooks into`.bee/bin/hooks/` and merge them into `<repo>/.claude/settings.json` (Claude Code fallback when not using the plugin manager)                         |
 | `--no-claude-md`  | Skip writing/extending CLAUDE.md's`@AGENTS.md` import (written by default)                                                                                                          |
 | `--claude-md`     | Accepted for compatibility; a no-op alias of the default                                                                                                                              |
+| `--no-statusline` | Skip vendoring the status-display script and adding the statusLine entry (written by default)                                                                                        |
+| `--design-packs <list\|none>` | Install `bee-design` plus these design skill packs (a comma list of `web`, `charts`, `motion`, `apple`, `figma`) and record the pick; `none` removes them and stops the offer |
 | `--global-skills` | Also sync the legacy global`~/.claude/skills` root (Claude Code only — Codex's `~/.codex/skills` global copy is handled by the install scripts, not this script). Off by default |
+| `--skillstation`  | Also publish the `bee-deploying` skill into your skillstation hub through the `skillstation` CLI (commit, then activate). Without the CLI the onboard still succeeds and reports one skipped entry with target `skillstation`. Off by default. Not yet wired in `install.sh` or `install.ps1` (no `-Skillstation`) |
 | `--json`          | Machine-readable output                                                                                                                                                               |
 
 What onboarding installs:
@@ -182,6 +210,8 @@ What onboarding installs:
 ```
 <repo>/AGENTS.md          ← BEE block between <!-- BEE:START --> / <!-- BEE:END --> (content outside markers untouched)
 <repo>/CLAUDE.md          ← @AGENTS.md import, appended once (default; opt out with --no-claude-md)
+<repo>/.claude/settings.json ← statusLine entry, add-only (default; opt out with --no-statusline)
+<repo>/.claude/statusline-command.sh ← status-display script (default; opt out with --no-statusline)
 <repo>/.bee/              ← onboarding.json, state.json, config.json (+ empty cells/, logs/)
 <repo>/.bee/bin/          ← bee[.exe] (the binary, machine-local) + prompts/
 <repo>/.claude/skills/    ← bee-* skills, per-project copy for Claude Code (committed to the repo)
@@ -246,6 +276,18 @@ Smoke the enforcement (any runtime, any agent):
 **Uninstall (per repo):** delete the BEE block (everything between and including the `BEE:START`/`BEE:END` markers) from `AGENTS.md`, remove `.bee/`, and — if `--repo-hooks` was used — remove every `bee-*` entry from `.claude/settings.json`. `docs/history/` is yours; keep it.
 
 **Uninstall (runtime):** `/plugin uninstall bee` on Claude Code, or delete the copied skill folders.
+
+---
+
+## Orchestrator (waggledance)
+
+Everything above sets up one project as an ordinary bee repo — the leader setup. The machine that supervises bee repos from the outside — receives specs, opens lead agents, tracks their runs — is the orchestrator, [waggledance](https://github.com/thanhsmind/waggledance), and it installs with its own one-liner:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/waggledance/main/install.sh | sh
+```
+
+Re-run the same line to update it to the current orchestrator standard; project installs are untouched.
 
 ---
 

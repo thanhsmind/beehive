@@ -147,7 +147,7 @@ absorbed because the skill had no place to send it.
 - The placement law that keeps these clauses in the body rather than a reference is
   `areas/doctrine-layer/placement-and-anchoring.md`.
 - Landed by feature `skill-report-stamps` (cells srs-1, srs-2, srs-3; merged at `0544b9c`).
-  Evidence: `.bee/cells/srs-1.json`, `.bee/cells/srs-2.json`, `.bee/cells/srs-3.json`, and
+  Evidence: `.bee/cells/archive/skill-report-stamps/srs-1.json`, `.bee/cells/archive/skill-report-stamps/srs-2.json`, `.bee/cells/archive/skill-report-stamps/srs-3.json`, and
   `docs/history/skill-report-stamps/CONTEXT.md`, which records the baseline: three real reports
   (`docs/history/bee-footprint/reports/review-1.md`,
   `docs/history/budget-fence-removal/reports/stale-rule-pointers.md`,

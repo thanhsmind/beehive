@@ -9,7 +9,7 @@ bee:
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
   decisions: [9927fafb (a switch that narrows what an upgrade compares must equally narrow what it claims; repo-hook opt-in is sticky), b7af1bf9 (full compatible Codex lifecycle-hook parity), 73ed41d6 (workspace-scoped Codex executors; blanket bypass forbidden), d7d5f459 (current Codex dispatch contract first; custom profiles deferred), "codex-hook-state-parity D1-D3, D8-D14", "e0f3e40e (packages-restructure D1-D5: vendor payload relocated to packages/bee/, skills instruction-only, PLUGIN_ROOT-relative resolution)", "opencode-support D1-D3, D4/D5"]
-  sources: ["sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity D2 (lifecycle enforcement contract, 2026-07-11)", "codex-runtime-parity D3 (nested-executor safety boundary, 2026-07-11)", "codex-runtime-parity D4 (dispatch-contract scope, 2026-07-11)", "opencode-support cells oc-11, oc-13 (models.opencode made real across every tier reader; bee onboard --apply vendors the third runtime's skill tree and guard file idempotently; capped traces .bee/cells/oc-11.json, .bee/cells/oc-13.json, 2026-08-11)", "docs/specs/onboarding.md#R6", "docs/specs/onboarding.md#R7", "docs/specs/onboarding.md#R8", "docs/specs/onboarding.md#E9", "docs/specs/onboarding.md#P13", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)"]
+  sources: ["sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity D2 (lifecycle enforcement contract, 2026-07-11)", "codex-runtime-parity D3 (nested-executor safety boundary, 2026-07-11)", "codex-runtime-parity D4 (dispatch-contract scope, 2026-07-11)", "opencode-support cells oc-11, oc-13 (team.opencode made real across every tier reader; bee onboard --apply vendors the third runtime's skill tree and guard file idempotently; capped traces .bee/cells/archive/opencode-support/oc-11.json, .bee/cells/archive/opencode-support/oc-13.json, 2026-08-11)", "docs/specs/onboarding.md#R6", "docs/specs/onboarding.md#R7", "docs/specs/onboarding.md#R8", "docs/specs/onboarding.md#E9", "docs/specs/onboarding.md#P13", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)"]
   authoritative_for: "onboarding: repo-local guardrails and multi-runtime lifecycle wiring"
 ---
 
@@ -127,11 +127,27 @@ asymmetry named above for the second runtime does not repeat here
   longer be resolved — the same fresh-diff discipline R27 already applies to
   a retired library module, so a helper never lingers on disk advertising a
   dispatch that would no longer resolve (opencode-support oc-14).
+- **The fourth runtime's guard is a folder, vendored as a folder.** The Pi
+  guard ships as `.pi/extensions/bee-guard/` (entry `index.ts`, one module per
+  concern). Onboard copies every `.ts` file of that folder when it is missing
+  or drifted. When the source ships the folder, onboard first removes a legacy
+  `.pi/extensions/bee-guard.ts`, before any copy, because Pi loads top-level
+  files and folder entries alike and would register the guard twice. It then
+  removes host `.ts` files in the folder that bee no longer ships. Non-`.ts`
+  files, symlinks and any path outside the folder are never removed. An empty
+  source plans no removal at all, so an old install is never stripped with
+  nothing to replace it. The doctor's Pi wiring row checks every module byte
+  for byte and names `bee onboard --apply` as the fix (pi-extension-split
+  D3, D4, D6; module map in
+  `docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md`).
 
 ## Edge Cases Settled
 
 - A local guardrail file deleted or corrupted in a project that opted in → the
   next plain run restores it from source. Nothing else in the project is touched.
+- A host that still carries `.pi/extensions/bee-guard.ts` after an upgrade →
+  the doctor row fails until onboard runs; onboard removes the file before it
+  writes the folder (pi-extension-split D3, D6).
 
 ## Open Gaps
 
@@ -160,5 +176,11 @@ asymmetry named above for the second runtime does not repeat here
   `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`,
   `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs`. Agent files:
   `.opencode/agent/bee-{build,gather,extract,review}.md`. Evidence:
-  `.bee/cells/oc-11.json`, `.bee/cells/oc-13.json`,
+  `.bee/cells/archive/opencode-support/oc-11.json`, `.bee/cells/archive/opencode-support/oc-13.json`,
   `docs/history/opencode-support/discovery.md`.
+- Fourth-runtime vendoring: `packages/bee-rs/crates/bee/src/onboard/plan.rs`
+  (`list_pi_extension_files`, the ordered `remove_pi_extension` /
+  `copy_pi_extension` plan step), `packages/bee-rs/crates/bee/src/onboard/apply.rs`
+  (`remove_pi_extension_admissible`), `packages/bee-rs/crates/bee/build.rs`
+  (generated `PI_GUARD_FILES`), `packages/bee-rs/crates/bee/src/doctor.rs`
+  (Pi `wiring_matches_binary` row). Evidence: `docs/history/pi-extension-split/`.

@@ -1,0 +1,130 @@
+{
+  "id": "thf-3",
+  "feature": "three-findings",
+  "title": "Publish the two herding flags in the command registry",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "read_first": [
+    "docs/history/three-findings/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D3. `bee herding run` parses --seat and --inbox-session (herding/run.rs:369-373) and bee dispatch prepare emits both for runtime pi, but neither appears in the command registry, so neither shows in `bee herding run --help`. Add both to the herding.run entry's parameters.properties in packages/bee-rs/crates/bee/src/generated/registry_payload.json, as string flags, each with a description written from the parser and its call sites — --seat names the seat this detached run belongs to and rides the result envelope and the result-inbox marker; --inbox-session names the orchestrator session token that makes the run detached, writing the .bee/result-inbox marker the Pi drain reads. Match the surrounding entries' wording style. This payload is checked in and no bee dev verb regenerates it, so edit it directly and keep the file's existing single-line JSON formatting. Both names are new spellings nowhere else in the registry, so the distinct flag-name count moves 208 to 210: bump PINNED_FLAG_COUNT at catalog.rs:788 and add one ledger comment in the same style as the entries above it, recording the +2 and stating that the check for an existing flag meaning the same thing was made and found none.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "`bee herding run --help` lists both flags with their descriptions",
+      "The pinned flag-count test passes at 210",
+      "The ledger comment records the +2 and the reuse check"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "herding.run carries seat and inbox-session; file stays valid JSON in its existing format"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+        "substantive": "PINNED_FLAG_COUNT is 210 with a ledger comment"
+      }
+    ],
+    "key_links": [
+      "the descriptions match what herding/run.rs actually does with each flag"
+    ],
+    "prohibitions": [
+      "No new flag beyond these two",
+      "No rename of any existing flag",
+      "No change to herding/run.rs parsing"
+    ]
+  },
+  "trace": {
+    "worker": "w-thf-3",
+    "outcome": "Publish the two herding flags in the command registry",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "The worker proved with a filtered subset (cargo test ... -p bee -- catalog) instead of the cell's approved verify, so the leader re-ran the full declared command before this cap — the worker narrowed the proof, the plan did not — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-18T14:42:10.952Z",
+    "behavior_change": true,
+    "verification_evidence": "leader re-ran the declared suite on the merged tree: exit 0, 36 result blocks, 0 failures, 4068 passed, including the catalog pinned-count test at 210",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5a2a6f63-6aa3-4e56-9873-ac37dc35bfa9",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-09-18T14:29:36.223Z",
+    "mistakes": [
+      {
+        "wrong": "The ledger comment the worker wrote reads 'Checked first: checked for an existing flag meaning the same thing and found none', which repeats itself and, unlike every neighbouring entry, names no near-miss flag",
+        "better": "the entry should name the flags it considered and why each fails, and the leader is tightening it in the wave-close commit"
+      }
+    ],
+    "report": {
+      "outcome": "herding.run now publishes --seat and --inbox-session in the command registry, so both appear in its help; the distinct flag-name pin moves 208 to 210 with its reason in the catalog ledger.",
+      "commit": "d5f2d3948",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — leader re-ran the declared suite on the merged tree: exit 0, 36 result blocks, 0 failures, 4068 passed, including the catalog pinned-count test at 210",
+      "deviations": [
+        "The worker proved with a filtered subset (cargo test ... -p bee -- catalog) instead of the cell's approved verify, so the leader re-ran the full declared command before this cap — the worker narrowed the proof, the plan did not — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "The ledger comment the worker wrote reads 'Checked first: checked for an existing flag meaning the same thing and found none', which repeats itself and, unlike every neighbouring entry, names no near-miss flag — the entry should name the flags it considered and why each fails, and the leader is tightening it in the wave-close commit"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "flags-appear-in-help",
+            "name": "both flags appear in the verb's help",
+            "status": "PASS",
+            "evidence": "A binary built from this tree prints, under `bee herding run --help`: `--seat (str) — Seat name this detached run belongs to, written into the result envelope and the result-inbox marker.` and `--inbox-session (str) — Orchestrator session token that makes the run detached, writing the .bee/result-inbox marker the Pi drain reads.`"
+          },
+          {
+            "id": "descriptions-match-behavior",
+            "name": "the descriptions match what the code does with each flag",
+            "status": "PASS",
+            "evidence": "herding/run.rs:369-373 parses both; run.rs:2220 and :3261 insert `seat` into the inbox marker and the result envelope; run.rs:2200-2213 writes the .bee/result-inbox marker under the --inbox-session token."
+          },
+          {
+            "id": "flag-count-moved-deliberately",
+            "name": "the pinned distinct-flag count moved deliberately, not accidentally",
+            "status": "PASS",
+            "evidence": "catalog.rs PINNED_FLAG_COUNT is 210, a live count of the payload returns 210, and the ledger entry names --agent, --job-id and --worker as the near misses and why none carries either concept."
+          },
+          {
+            "id": "no-collateral-change",
+            "name": "no other command or flag changed",
+            "status": "PASS",
+            "evidence": "git diff for thf-3 touches only registry_payload.json and catalog.rs; herding.run's other 13 flags are unchanged and no other command's properties moved."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-18T14:46:19.714Z"
+      }
+    ]
+  }
+}

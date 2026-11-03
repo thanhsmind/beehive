@@ -1,0 +1,117 @@
+{
+  "id": "nop-3",
+  "feature": "pi-slp-next-ops",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "refactor",
+  "title": "Name bee worktree enter in worktree denies and notices",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "dfd7ae10-e654-47c1-852f-49848bd930e4",
+    "80987a3f-83ae-4b51-a954-f40d1f1a259c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-slp-next-ops/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D4, text only; when each message fires does not change. In packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs: (1) the worktree-first deny with a grant (about line 817, `FIX: open your session at {grant_root} and make this edit there, then land it from main with ...`) names `bee worktree enter --id {grant_id}` and to make the edit in {grant_root} after it; keep the merge sentence and the override sentence. (2) the no-grant deny (about line 907, `FIX: run \\`bee worktree new --feature {feature}\\`, then open your session at the printed worktree path and make this edit there.`) names `bee worktree new --feature {feature}`, then `bee worktree enter --id <the id it prints>`. (3) GENERIC_CONTAINMENT_MESSAGE and GENERIC_BASH_CONTAINMENT_MESSAGE (about lines 17-23): keep the first sentence; the FIX adds that a path outside this project belongs to the user — ask them to change it, never write it through another tool. In packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs the route notices (about lines 739 and 748) replace `open your session at {worktree_root}` with `bee worktree enter --id {id}`, and `then open your session at the printed worktree path` with `then bee worktree enter --id <the id it prints>`. Tests red first: in hooks/write_guard/tests.rs assert each deny names `bee worktree enter --id` (or the outside-project sentence) and none says `open your session at`; in verbs/state_group/tests.rs the same for both notices. Find pins with `rg -n \"open your session at|in-worktree path without traversal\" packages/bee-rs/crates/bee/src` and update them. Write no code comments.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee hooks::write_guard && cargo test --release -p bee --bin bee verbs::state_group",
+  "must_haves": {
+    "truths": [
+      "both worktree-first denies name bee worktree enter --id and never open your session at",
+      "both route worktree notices name bee worktree enter --id and never open your session at",
+      "the generic containment denies say a path outside the project belongs to the user"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+        "substantive": "deny texts name worktree enter or the outside-project owner"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "substantive": "notices name worktree enter"
+      }
+    ],
+    "key_links": [
+      "write_guard and state_group tests pin the new texts"
+    ],
+    "prohibitions": [
+      "No change to when any deny or notice fires",
+      "Writes outside the project stay denied"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-nop-3",
+    "outcome": "Worktree-first denies and route notices name bee worktree enter --id; the generic containment deny says outside-project paths belong to the user",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: only deny and notice wording changed; no workflow-state skill quotes these texts"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T04:34:36.681Z",
+    "behavior_change": false,
+    "verification_evidence": "write_guard 279, state_group 243; asserts added to existing deny and notice tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --bin bee hooks::write_guard && cargo test --release -p bee --bin bee verbs::state_group",
+    "claimed_at": "2026-10-03T04:19:00.308Z",
+    "sync_ack": "only deny and notice wording changed; no workflow-state skill quotes these texts",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Worktree-first denies and route notices name bee worktree enter --id; the generic containment deny says outside-project paths belong to the user",
+      "commit": "3ba98d0a9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --bin bee hooks::write_guard && cargo test --release -p bee --bin bee verbs::state_group — green:unit — write_guard 279, state_group 243; asserts added to existing deny and notice tests",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both worktree-first denies name bee worktree enter --id and never open your session at",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs"
+          },
+          {
+            "requirement": "both route worktree notices name bee worktree enter --id and never open your session at",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+          },
+          {
+            "requirement": "the generic containment denies say a path outside the project belongs to the user",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T04:54:07.382Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

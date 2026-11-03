@@ -1,0 +1,201 @@
+{
+  "id": "nop-1",
+  "feature": "pi-slp-next-ops",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Give orient one runnable next command from the session's own record",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "b3f14c45-93a6-4d4e-855b-6518f4933ebb",
+    "fbde3d6f-8a77-47ff-a90c-d08711a28db7",
+    "80987a3f-83ae-4b51-a954-f40d1f1a259c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-slp-next-ops/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/state.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D1: build_orient (verbs/status_full/orient.rs) gets its status from build_status(ctx, false), which starts with read_state_full(ctx) reading ctx.root/.bee/state.json (store.rs about line 270). For orient only, when the calling session is bound to a lane, read that lane's record instead, using the same resolution as resolve_pipeline in hooks/session_preamble/state.rs (about line 461, `pub(crate) fn resolve_pipeline(root: &Path, session_id: Option<&str>) -> Pipeline {`); take the session id from `crate::session_identity::env_session_id()` (a CLI verb has no hook payload). An unbound session reads the default record exactly as today. A bound session whose lane resolves `ok:false` (invalid, missing or corrupt binding) reads NO record: orient reports the binding problem as a blocker and next.command is null. `bee status` keeps its current behavior. Per D2: replace orient_next_command (orient.rs about line 35) with one pub(crate) function next_operation over a plain-facts struct (wayfinding resume with discovery map, handoff present, ready count, execution gate approved, feature, granted worktree id, control root) so any caller can fill it without a Ctx; it returns the command and run_from: (a) when orient's worktree context says location main with a granted worktree id, `bee worktree enter --id <id>` with the real id; (b) a handoff keeps `bee state handoff show --json`; (c) ready cells with the execution gate approved give `bee dispatch wave --runtime <rt> --feature <feature> --json` with the real feature and <rt> the caller's runtime from `crate::session_identity::locate_caller()` (the plain-facts struct carries it); when the runtime is unknown this branch yields null, never a literal placeholder; (d) the wayfinding resume branch keeps `bee discovery list --json`; (e) otherwise null. Keep the existing priority order between these unless a test pins another. run_from is the absolute main checkout root (the control root) whenever the command is non-null. build_orient adds next.run_from (null when command is null), and render_orient_text (about line 680) prints `run: <command> (from <run_from>)` after `next:` when the command is non-null. Change the worktree guidance string at orient.rs about line 128 (`open your session at {worktree_root}`) to name the same `bee worktree enter --id <id>` command. Tests red first in verbs/status_full/tests.rs: a lane-bound session's orient reports its lane's feature, not the default record's; a broken binding gives a blocker and a null command; each next_operation branch returns its command and run_from; the guidance no longer starts with `open your session at` (update the pin at tests.rs about line 772). Write no code comments.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::status_full",
+  "must_haves": {
+    "truths": [
+      "a lane-bound session's orient reports its lane's feature and phase",
+      "an unbound session's orient reads the default record as before",
+      "a broken lane binding gives an orient blocker and a null next.command, never the default record",
+      "orient next.command is bee worktree enter --id, bee state handoff show --json, bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null",
+      "orient never emits a literal <runtime> placeholder",
+      "orient next.run_from is the main checkout root when next.command is non-null",
+      "plain-text bee orient prints a run line when next.command is non-null",
+      "orient worktree guidance never says open your session at"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "substantive": "pub(crate) next_operation over a plain-facts struct, used by build_orient"
+      }
+    ],
+    "key_links": [
+      "build_orient reads the lane record through the resolve_pipeline resolution for a bound session"
+    ],
+    "prohibitions": [
+      "No change to bee status output",
+      "No second copy of the next-command rule"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-nop-1",
+    "outcome": "orient reads the session's lane record, names one runnable next command with run_from, and prints a run line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "round 1 reordered the next-command priority (worktree before wayfinding resume); round 2 restored the old order with a test — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T04:38:39.758Z",
+    "behavior_change": true,
+    "verification_evidence": "116 passed (111 at base); lane-bound, broken-binding, each next_operation branch, priority order and guidance tests added",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::status_full",
+    "claimed_at": "2026-10-03T04:19:00.063Z",
+    "mistakes": [
+      {
+        "wrong": "verbs/status_full/orient.rs next_operation changed the branch order the plan said to keep",
+        "better": "a priority-order test should pin every branch pair",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "orient reads the session's lane record, names one runnable next command with run_from, and prints a run line",
+      "commit": "d9958ea3e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::status_full — green:unit — 116 passed (111 at base); lane-bound, broken-binding, each next_operation branch, priority order and guidance tests added",
+      "deviations": [
+        "round 1 reordered the next-command priority (worktree before wayfinding resume); round 2 restored the old order with a test — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "verbs/status_full/orient.rs next_operation changed the branch order the plan said to keep — a priority-order test should pin every branch pair — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a lane-bound session's orient reports its lane's feature and phase",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "an unbound session's orient reads the default record as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+          },
+          {
+            "requirement": "a broken lane binding gives an orient blocker and a null next.command, never the default record",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "orient next.command is bee worktree enter --id, bee state handoff show --json, bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "orient never emits a literal <runtime> placeholder",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "orient next.run_from is the main checkout root when next.command is non-null",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "plain-text bee orient prints a run line when next.command is non-null",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "orient worktree guidance never says open your session at",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T04:54:07.369Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "a lane-bound session's orient reports its lane's feature and phase",
+            "status": "PASS",
+            "evidence": "verbs/status_full/orient.rs:399-418 build_orient calls session_preamble::resolve_pipeline(&ctx.root, env_session_id()) and feeds pipeline.record into build_status_with_state (build.rs:115) when source==\"lane\"; test orient_lane_bound_session_reports_lane_feature_and_phase (tests.rs:4856) asserts feature=lane-feat, phase=planning; green in cargo test verbs::status_full (117 passed)"
+          },
+          {
+            "id": "an unbound session's orient reads the default record as before",
+            "status": "PASS",
+            "evidence": "orient.rs:417 else-branch keeps build_status(ctx,false) -> read_state_full (store.rs:269); same test, second half (tests.rs:4882-4887) asserts default-feat/idle with no session env"
+          },
+          {
+            "id": "a broken lane binding gives an orient blocker and a null next.command, never the default record",
+            "status": "PASS",
+            "evidence": "orient.rs:402-413 pipeline.ok==false -> blocker 'broken lane binding: ...' and build_status_with_state(ctx,false,JMap::new()) (no default record); ready cells skipped (orient.rs ~439), worktree context None, next_op forced to {None,None} (orient.rs ~668-675); test orient_broken_lane_binding_gives_blocker_and_null_command (tests.rs:4891) asserts feature!=default-feat, blocker present, command and run_from null"
+          },
+          {
+            "id": "orient next.command is bee worktree enter --id, bee state handoff show --json, bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null",
+            "status": "PASS",
+            "evidence": "orient.rs:52-89 next_operation returns exactly those five outcomes; the old orient_next_command ('bee cells ready --json') is gone (rg finds no caller); the priority order matches the old one (wayfinding, then the main-worktree guidance, then handoff, then ready); runtime comes from session_identity::locate_caller() (orient.rs ~648); test next_operation_branches_return_expected_command_and_run_from covers every branch"
+          },
+          {
+            "id": "orient never emits a literal <runtime> placeholder",
+            "status": "PASS",
+            "evidence": "orient.rs:69-82 the dispatch-wave branch needs Some non-empty caller_runtime AND feature, else it returns command None; no '<runtime>' literal in orient.rs; the op_no_rt assertion in the branch test checks command==None"
+          },
+          {
+            "id": "orient next.run_from is the main checkout root when next.command is non-null",
+            "status": "PASS",
+            "evidence": "every non-null branch sets run_from=facts.control_root; build_orient passes control_root_for(&ctx.root) (session_preamble/state.rs:441, maps a linked worktree to main_root); null branches set run_from None. Gap (not a failure): the branch test checks this only with a mock root, and no build_orient integration test asserts run_from==root for a non-null command"
+          },
+          {
+            "id": "plain-text bee orient prints a run line when next.command is non-null",
+            "status": "PASS",
+            "evidence": "render_orient_text orient.rs ~777-784 pushes 'run: {command} (from {run_from})' after 'next:' when command is not null; test render_orient_text_includes_run_line_when_command_present asserts the exact line"
+          },
+          {
+            "id": "orient worktree guidance never says open your session at",
+            "status": "PASS",
+            "evidence": "orient.rs:175 guidance = format!(\"bee worktree enter --id {id}\"); the tests.rs pin now asserts 'bee worktree enter --id wt-granted'; rg 'open your session at' finds only negative assertions in tests"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-03T06:39:51.052Z"
+      }
+    ]
+  }
+}

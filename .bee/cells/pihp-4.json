@@ -1,0 +1,253 @@
+{
+  "id": "pihp-4",
+  "feature": "pi-harness-workflow-parity",
+  "title": "Bind gate approval to exact cell packets",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "pihp-2",
+    "pihp-3"
+  ],
+  "decisions": [
+    "D3",
+    "D4",
+    "d59befe3-73c6-415a-91f1-f43b485a1eeb"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    ".bee/verify/verify-app/features/feature-gates.md"
+  ],
+  "read_first": [
+    "docs/history/pi-harness-workflow-parity/CONTEXT.md",
+    ".bee/verify/verify-app/features/feature-gates.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/gates.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "action": "Add a gate preview mode that reads the feature worktree plan, parses the exact JSON cell packet, validates required execution fields, and records its plan hash. Refuse shape approval without a fresh preview. Compare cells add input with the approved packet. Update the planning source skill and verification map, then run the required regen chain.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee pihp_gate_packet",
+  "must_haves": {
+    "truths": [
+      "The preview output shows action, files, read_first, must_haves, and exact verify for every current cell",
+      "Shape approval refuses a missing or stale preview",
+      "Cells add refuses a packet that differs from the approved preview",
+      "Gate and advisor reads use the feature worktree plan"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "substantive": "parses, validates, hashes, and renders preview packets"
+      }
+    ],
+    "key_links": [
+      "gate preview stores the plan hash that approval checks",
+      "cells add compares against the packet approved for the current plan revision"
+    ],
+    "prohibitions": [
+      "Do not persist cells before execution approval",
+      "Do not accept a guessed or malformed packet",
+      "Do not hand-edit generated skill trees"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "Ken",
+    "outcome": "Bind gate approval to exact cell packets.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md",
+      ".bee/verify/verify-app/features/feature-gates.md"
+    ],
+    "deviations": [
+      "semantic repair amended the one cell commit instead of adding a second commit — kept one-commit-per-cell",
+      "sync-ack: the planning skill, its reference, and feature-gate verification map changed in the amended commit; generated artifacts remain assigned to pihp-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T15:19:17.703Z",
+    "behavior_change": true,
+    "verification_evidence": "9 gate preview, plan resolution, approval binding, stale-packet, and packet verification tests passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09047-0959-7691-b59a-0a7a5e4db177",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee pihp_gate_packet",
+    "claimed_at": "2026-09-11T15:11:17.237Z",
+    "sync_ack": "the planning skill, its reference, and feature-gate verification map changed in the amended commit; generated artifacts remain assigned to pihp-7",
+    "mistakes": [
+      {
+        "wrong": "The rework worker used an extra --bin bee argument and left the cell claimed.",
+        "better": "Copy cell.verify byte-for-byte and confirm the cap status before reporting."
+      }
+    ],
+    "report": {
+      "outcome": "Bind gate approval to exact cell packets.",
+      "commit": "61cb760cc306b870963bb0581d355400e2d0e0a9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-planning/references/planning-reference.md",
+        ".bee/verify/verify-app/features/feature-gates.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee pihp_gate_packet — green:unit — 9 gate preview, plan resolution, approval binding, stale-packet, and packet verification tests passed",
+      "deviations": [
+        "semantic repair amended the one cell commit instead of adding a second commit — kept one-commit-per-cell"
+      ],
+      "mistakes": [
+        "The rework worker used an extra --bin bee argument and left the cell claimed. — Copy cell.verify byte-for-byte and confirm the cap status before reporting."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "pihp-4/execution-fields",
+            "status": "PASS",
+            "evidence": "The approved packet requires action, files, read_first, must_haves, and verify in docs/history/pi-harness-workflow-parity/plan.md:150-190; plan_packets.rs:81-169 validates the packet and :195-229 renders those fields. The isolated approved command `CARGO_TARGET_DIR=/tmp/bee-pihp-review-target PATH=... cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee pihp_gate_packet` printed 6 passed, 0 failed."
+          },
+          {
+            "id": "pihp-4/missing-plan-approval",
+            "status": "FAIL",
+            "evidence": "The cell is high-risk in .bee/cells/pihp-4.json:2-6 and the plan is high-risk in docs/history/pi-harness-workflow-parity/plan.md:1-5. gate_preview_refusal reads the plan, then returns None when plan.md is missing at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:326-330. set_gate.rs:898-909 calls this refusal for shape or merged approval, so a high-risk approval can proceed without a plan or preview."
+          },
+          {
+            "id": "pihp-4/stale-packet-after-plan-change",
+            "status": "FAIL",
+            "evidence": "The approved packet lookup at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:365-388 reads only approved_cell_packet or gate_preview, and the add check at :391-476 compares incoming fields without reading plan.md or its hash. cells add invokes that check at packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:178-184 and :347-353, while set_gate.rs:898-909 checks staleness only during gate approval. After approval, a changed plan can therefore still use the old packet when cells are added."
+          },
+          {
+            "id": "pihp-4/worktree-only-plan-resolution",
+            "status": "FAIL",
+            "evidence": "advisor_plan_path finds the granted worktree at packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs:78-87, but returns the worktree plan only when it exists or the main plan does not exist at :88-89. If both plans exist, it falls through to the main-checkout path at :93. The gate and advisor callers use this resolver at plan_packets.rs:275 and advisor_ref.rs:118, so both can read the wrong plan."
+          },
+          {
+            "id": "pihp-4/historical-packets",
+            "status": "PASS",
+            "evidence": "get_approved_preview_cells prefers the stored approved_cell_packet and falls back to gate_preview at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:365-385. The approved packet is stamped during shape or merged approval at packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs:972-977, preserving stored packet reads for unchanged historical records."
+          },
+          {
+            "id": "pihp-4/prohibitions-and-proof",
+            "status": "PASS",
+            "evidence": "Packet validation runs before cell writes at packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:178-184 and :343-357. The capped record contains verify_command, verify_output, verify_passed, and verification_evidence at .bee/cells/pihp-4.json:90-94, with the approved command recorded at :42 and :94."
+          },
+          {
+            "id": "pihp-4/commit-alignment",
+            "status": "PASS",
+            "evidence": "The capped record identifies commit 0f7339ef64936f0ab7c881fd611648c940d6ac2a and its nine files at .bee/cells/pihp-4.json:103-117. `git diff-tree --no-commit-id --name-only -r 0f7339ef64936f0ab7c881fd611648c940d6ac2a` printed the same nine paths, and the feature worktree HEAD is that commit."
+          },
+          {
+            "id": "pihp-4/observable-tests",
+            "status": "FAIL",
+            "evidence": "The approved test command printed 6 passing tests, including packet rendering, execution-field validation, approval staleness, worktree resolution with no main plan, and packet comparison. The test cases are at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:529-688, :692-740, and :742-784. No test covers high-risk approval with a missing plan, cells add after a plan change, or both main and worktree plans existing; those are the three failing paths above."
+          }
+        ],
+        "failure_signature": "missing-plan approval bypass; stale approved packet accepted after plan change; main-plan fallback when a granted worktree plan also exists",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "openai-codex/gpt-5.6-luna:high",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T15:10:53.863Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pihp-4/execution-fields",
+            "status": "PASS",
+            "evidence": "The approved pihp-4 packet requires action, files, read_first, must_haves, and verify at docs/history/pi-harness-workflow-parity/plan.md:140-159. parse_plan_packets validates those fields at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:80-180, and render_preview_text emits them at :195-229."
+          },
+          {
+            "id": "pihp-4/missing-plan-approval",
+            "status": "PASS",
+            "evidence": "gate_preview_refusal returns a refusal when the selected plan.md is missing at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:343-358; set_gate applies it to shape or merged approval at packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs:892-910. The focused test pihp_gate_packet_high_risk_approval_refuses_missing_plan is at plan_packets.rs:889-903 and passed."
+          },
+          {
+            "id": "pihp-4/stale-packet-after-plan-change",
+            "status": "PASS",
+            "evidence": "cells-add packet checking hashes the current plan and refuses a changed hash at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:416-448; both batch and single-cell add paths call it before persistence at packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:165-205 and :343-357. pihp_gate_packet_cells_add_refuses_stale_packet_after_plan_change at cells/tests.rs:10040-10097 passed."
+          },
+          {
+            "id": "pihp-4/worktree-plan-resolution",
+            "status": "PASS",
+            "evidence": "advisor_plan_path selects a granted feature worktree before the main checkout at packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs:78-90. The both-plans test proves the worktree path and hash win at plan_packets.rs:838-886, and the test passed."
+          },
+          {
+            "id": "pihp-4/packet-binding-and-prohibitions",
+            "status": "PASS",
+            "evidence": "The approved execution-field binding compares id, action, verify, files, read_first, must_haves, title, lane, and role at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:450-524; the planning contract names the same fields at skills/bee-planning/references/planning-reference.md:493-497. Validation and gated-phase checks run before any cell write at cells/handlers_write.rs:173-184 and :343-357."
+          },
+          {
+            "id": "pihp-4/historical-packet-behavior",
+            "status": "PASS",
+            "evidence": "Approved packet lookup prefers approved_cell_packet and falls back to gate_preview at packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:385-405; approval stamps the packet at set_gate.rs:975-978. Historical structured-proof compatibility remains covered by pihp_replayable_proof_historical_caps_remain_readable at cells/tests.rs:9929-9959."
+          },
+          {
+            "id": "pihp-4/d4-proof",
+            "status": "PASS",
+            "evidence": "The current control-store record is capped and records the exact verify command, green result, pass flag, and evidence at .bee/cells/pihp-4.json:68-94. Running that exact command in the feature worktree produced 9 passed and 0 failed pihp_gate_packet tests."
+          },
+          {
+            "id": "pihp-4/commit-alignment",
+            "status": "PASS",
+            "evidence": "The record names amended commit 61cb760cc306b870963bb0581d355400e2d0e0a9 and its nine changed paths at .bee/cells/pihp-4.json:103-117. Feature worktree HEAD equals that commit, and git diff-tree --no-commit-id --name-only -r 61cb760cc306b870963bb0581d355400e2d0e0a9 returned the same nine paths."
+          },
+          {
+            "id": "pihp-4/observable-tests",
+            "status": "PASS",
+            "evidence": "The approved command `PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee pihp_gate_packet` ran against amended HEAD and reported 9 tests passed, 0 failed, including missing-plan approval, stale add, no-main-plan worktree resolution, both-plans worktree selection, packet binding, and preview validation."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "openai-codex/gpt-5.6-luna:high",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T15:29:11.680Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-09-11T15:10:53.863Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-09-11T15:19:17.703Z",
+        "reason": "The semantic judge supplied three automatic source repairs; the amended commit and nine tests cover them, and a fresh judge follows.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  }
+}

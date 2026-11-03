@@ -175,6 +175,12 @@ fn unproven_argv_shapes_defer_to_the_catalog() {
     assert!(try_native(&osv(&["status"])).is_none(), "doctor must not claim another verb");
 }
 
+#[test]
+fn doctor_accepts_runtime_pi() {
+    let osv = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+    assert!(try_native(&osv(&["doctor", "--runtime", "pi"])).is_some(), "doctor must accept runtime pi");
+}
+
 // ─── binary_freshness ───────────────────────────────────────────────────
 
 /// A minimal bee SOURCE checkout: `packages/bee-rs/Cargo.toml` (the
@@ -496,4 +502,1333 @@ fn binary_freshness_is_absent_outside_a_source_checkout() {
         rows_of(&root, Runtime::Claude).iter().all(|(k, _)| k != "binary_freshness"),
         "a host project must never carry the binary_freshness row"
     );
+}
+
+// ═══ lane-model-diversity D3 — the hat-description advisory ════════════════
+
+fn repo_with_config(tmp: &Path, config: &str) -> PathBuf {
+    let root = repo(tmp, true, true, None);
+    std::fs::write(root.join(".bee/config.json"), config).unwrap();
+    root
+}
+
+/// D3 — a configured hat that does not say what it is for is named, one hat
+/// per name, so the operator can fix exactly the slots that are silent.
+#[test]
+fn every_configured_hat_without_a_description_is_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = repo_with_config(
+        tmp.path(),
+        r#"{"models":{"claude":{
+            "generation":"sonnet",
+            "advisor":"opus",
+            "lane-1":"fable",
+            "hat-risks":{"model":"haiku","description":"what could go wrong"},
+            "hat-value":{"model":"haiku"},
+            "hat-facts-gaps":{"model":"haiku","description":"   "},
+            "hat-alternatives":"opus"
+        }}}"#,
+    );
+    let missing = hat_slots_missing_a_description(&root, Runtime::Claude);
+    // Reported in the CONFIG's own order, never sorted: the operator is about
+    // to scan their own file top to bottom, and a re-ordered list makes them
+    // hunt for each name.
+    assert_eq!(
+        missing,
+        vec!["hat-value", "hat-facts-gaps", "hat-alternatives"],
+        "an absent, a whitespace-only and a string-shaped hat are all undescribed"
+    );
+    // A LANE is never asked for one — interchangeable seats have no per-seat
+    // purpose to state (D3), and nagging about them would train the operator
+    // to ignore the row.
+    assert!(!missing.iter().any(|s| s.starts_with("lane-")), "{missing:?}");
+    // The advisory names every one of them and says it does not vote.
+    let (row, detail) = hat_description_advisory(&root, Runtime::Claude).expect("an advisory");
+    assert_eq!(row.get("status"), Some(&json!("advisory")));
+    assert_eq!(row.get("row"), Some(&json!("hat_slot_descriptions")));
+    for slot in &missing {
+        assert!(detail.contains(slot.as_str()), "the advisory names {slot}: {detail}");
+    }
+    assert!(detail.contains("does not change the verdict"), "{detail}");
+}
+
+/// The advisory is SILENT when it has nothing to say — a described host, a
+/// hat-less host, and a host whose hats are switched off all read exactly as
+/// they did before this row existed.
+#[test]
+fn a_host_with_nothing_undescribed_gets_no_advisory_at_all() {
+    let tmp = tempfile::tempdir().unwrap();
+    for config in [
+        r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#,
+        r#"{"models":{"claude":{"hat-risks":{"model":"haiku","description":"risks"}}}}"#,
+        // A null hat is a seat switched OFF: it falls through to the advisor
+        // at dispatch and has no purpose to state.
+        r#"{"models":{"claude":{"hat-risks":null,"hat-value":null}}}"#,
+        r#"{}"#,
+    ] {
+        let root = repo_with_config(&tmp.path().join(sha256_of(config.as_bytes())), config);
+        assert!(
+            hat_description_advisory(&root, Runtime::Claude).is_none(),
+            "config {config} must raise no advisory"
+        );
+    }
+}
+
+/// The advisory NEVER votes. A host that is otherwise green stays ready with
+/// undescribed hats — a missing sentence costs clarity, never a dispatch — and
+/// the row is not a mechanical row at all.
+#[test]
+fn the_advisory_never_moves_the_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = repo_with_config(
+        tmp.path(),
+        r#"{"models":{"claude":{"generation":"sonnet","hat-risks":"opus"}}}"#,
+    );
+    std::fs::create_dir_all(root.join(".claude")).unwrap();
+    std::fs::write(
+        root.join(".claude/settings.json"),
+        r#"{"hooks":{"PreToolUse":[{"hooks":[{"command":".bee/bin/bee hook"}]}]}}"#,
+    )
+    .unwrap();
+    let rows = rows_of(&root, Runtime::Claude);
+    assert!(
+        rows.iter().all(|(k, _)| k != "hat_slot_descriptions"),
+        "the advisory must not be a mechanical row: {rows:?}"
+    );
+    assert!(
+        rows.iter().all(|(_, ok)| *ok == Some(true)),
+        "fixture must be mechanically green for this test to mean anything: {rows:?}"
+    );
+    assert!(hat_description_advisory(&root, Runtime::Claude).is_some(), "and it does have one");
+}
+
+/// Each runtime answers for its OWN table: a hat described under `codex` says
+/// nothing about the same-named hat under `claude`.
+#[test]
+fn the_advisory_reads_the_runtimes_own_table() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = repo_with_config(
+        tmp.path(),
+        r#"{"models":{
+            "claude":{"hat-risks":{"model":"haiku","description":"risks"}},
+            "codex":{"hat-risks":{"model":"gpt-5"}}
+        }}"#,
+    );
+    assert!(hat_description_advisory(&root, Runtime::Claude).is_none());
+    assert_eq!(hat_slots_missing_a_description(&root, Runtime::Codex), vec!["hat-risks"]);
+}
+
+// ═══ team-config-rename D2 — the legacy models advisory ════════════════════
+
+#[test]
+fn doctor_emits_one_advisory_on_models_only_config_and_none_on_team() {
+    let tmp = tempfile::tempdir().unwrap();
+
+    // 1. models-only config: exactly one advisory emitted
+    let root_models = repo_with_config(
+        &tmp.path().join("models_only"),
+        r#"{"models":{"claude":{"code":"opus"}}}"#,
+    );
+    let (row, detail) = team_config_advisory(&root_models).expect("advisory on models-only config");
+    assert_eq!(row.get("status"), Some(&json!("advisory")));
+    assert_eq!(row.get("row"), Some(&json!("legacy_models_key")));
+    assert_eq!(
+        detail,
+        ".bee/config.json still uses the models key — rename it to team (models is read as an alias for now)."
+    );
+
+    // 2. team-only config: no advisory emitted
+    let root_team = repo_with_config(
+        &tmp.path().join("team_only"),
+        r#"{"team":{"claude":{"code":"opus"}}}"#,
+    );
+    assert!(
+        team_config_advisory(&root_team).is_none(),
+        "team-only config must emit no advisory"
+    );
+
+    // 3. both keys present: advisory names the ignored key and says team is used
+    let root_both = repo_with_config(
+        &tmp.path().join("both_keys"),
+        r#"{"team":{"claude":{"code":"opus"}},"models":{"claude":{"code":"sonnet"}}}"#,
+    );
+    let (row_both, detail_both) = team_config_advisory(&root_both).expect("advisory on both keys");
+    assert_eq!(row_both.get("status"), Some(&json!("advisory")));
+    assert!(detail_both.contains("team is used and models is ignored"), "{detail_both}");
+    assert_eq!(
+        detail_both,
+        ".bee/config.json still uses the models key — team is used and models is ignored."
+    );
+
+    // 4. neither key: no advisory emitted
+    let root_neither = repo_with_config(&tmp.path().join("neither"), r#"{}"#);
+    assert!(team_config_advisory(&root_neither).is_none());
+}
+
+// ═══ Runtime::Pi doctor tests ══════════════════════════════════════════════
+
+fn mock_herdr_env(key: &str) -> Option<String> {
+    match key {
+        "HERDR_ENV" => Some("1".to_string()),
+        "HERDR_PANE_ID" => Some("w1:p1".to_string()),
+        _ => None,
+    }
+}
+
+fn mock_tmux_env(key: &str) -> Option<String> {
+    match key {
+        "TMUX" => Some("1".to_string()),
+        "TMUX_PANE" => Some("%1".to_string()),
+        _ => None,
+    }
+}
+
+#[cfg(unix)]
+const fn find_index_ts() -> &'static str {
+    let mut i = 0;
+    while i < PI_GUARD_FILES.len() {
+        let (name, content) = PI_GUARD_FILES[i];
+        let bytes = name.as_bytes();
+        let target = b"index.ts";
+        if bytes.len() == target.len() {
+            let mut j = 0;
+            let mut matches = true;
+            while j < bytes.len() {
+                if bytes[j] != target[j] {
+                    matches = false;
+                    break;
+                }
+                j += 1;
+            }
+            if matches {
+                return content;
+            }
+        }
+        i += 1;
+    }
+    panic!("index.ts not found in PI_GUARD_FILES")
+}
+
+#[cfg(unix)]
+const PI_EXTENSION_SOURCE: &str = find_index_ts();
+
+#[cfg(unix)]
+fn pi_repo(
+    tmp: &Path,
+    with_binary: bool,
+    with_skills: bool,
+    extension: Option<&str>,
+    plugin_version: Option<&str>,
+    config: Option<&str>,
+) -> PathBuf {
+    let root = tmp.join("repo");
+    std::fs::create_dir_all(root.join(".bee/bin")).unwrap();
+    if with_binary {
+        let bin = root.join(".bee/bin/bee");
+        let ver = plugin_version.unwrap_or("0.1.0");
+        write_executable_binary(&bin, "0.1.0", ver);
+    }
+    if with_skills {
+        std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
+    }
+    if let Some(text) = extension {
+        let guard_dir = root.join(".pi/extensions/bee-guard");
+        std::fs::create_dir_all(&guard_dir).unwrap();
+        for (name, content) in PI_GUARD_FILES {
+            let body = if *name == "index.ts" { text } else { *content };
+            std::fs::write(guard_dir.join(name), body).unwrap();
+        }
+    }
+    if let Some(ver) = plugin_version {
+        std::fs::create_dir_all(root.join(".claude-plugin")).unwrap();
+        std::fs::write(
+            root.join(".claude-plugin/plugin.json"),
+            format!("{{\"name\": \"bee\", \"version\": \"{ver}\"}}\n"),
+        )
+        .unwrap();
+    }
+    if let Some(cfg) = config {
+        std::fs::write(root.join(".bee/config.json"), cfg).unwrap();
+    }
+    root
+}
+
+#[cfg(unix)]
+fn pi_rows_of(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Vec<(String, Option<bool>, String)> {
+    mechanical_rows_with_env(root, Runtime::Pi, env)
+        .into_iter()
+        .map(|r| (r.key.to_string(), r.ok, r.detail))
+        .collect()
+}
+
+/// A complete, current Pi installation reports ready and exits zero.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_ready_case() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    assert_eq!(rows.len(), 6, "Pi doctor must have exactly 6 required rows");
+    for (key, ok, detail) in &rows {
+        assert_eq!(*ok, Some(true), "row {key} failed: {detail}");
+    }
+
+    assert!(rows.iter().all(|(_, ok, _)| *ok == Some(true)));
+}
+
+/// Pi doctor reports not_ok / unknown on absent artifacts: extension, binary, skills, or plugin manifest.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_absent_cases() {
+    let tmp = tempfile::tempdir().unwrap();
+
+    // 1. Missing extension
+    let root_no_ext = pi_repo(
+        &tmp.path().join("no_ext"),
+        true,
+        true,
+        None,
+        Some("0.1.0"),
+        None,
+    );
+    let rows = pi_rows_of(&root_no_ext, &mock_herdr_env);
+    let hooks_file = rows.iter().find(|(k, _, _)| k == "hooks_file").unwrap();
+    assert_eq!(hooks_file.1, Some(false), "missing extension must report not_ok");
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false), "missing extension must report not_ok for wiring");
+
+    // 2. Missing binary
+    let root_no_bin = pi_repo(
+        &tmp.path().join("no_bin"),
+        false,
+        true,
+        Some(PI_EXTENSION_SOURCE),
+        Some("0.1.0"),
+        None,
+    );
+    let rows_no_bin = pi_rows_of(&root_no_bin, &mock_herdr_env);
+    let hook_handler = rows_no_bin.iter().find(|(k, _, _)| k == "hook_handler").unwrap();
+    assert_eq!(hook_handler.1, Some(false), "missing binary must report not_ok");
+    let freshness = rows_no_bin.iter().find(|(k, _, _)| k == "binary_freshness").unwrap();
+    assert_eq!(freshness.1, None, "missing binary freshness must report unknown");
+
+    // 3. Missing skills
+    let root_no_skills = pi_repo(
+        &tmp.path().join("no_skills"),
+        true,
+        false,
+        Some(PI_EXTENSION_SOURCE),
+        Some("0.1.0"),
+        None,
+    );
+    let rows_no_skills = pi_rows_of(&root_no_skills, &mock_herdr_env);
+    let skills = rows_no_skills.iter().find(|(k, _, _)| k == "skills_installed").unwrap();
+    assert_eq!(skills.1, Some(false), "missing skills must report not_ok");
+
+    // 4. Missing plugin manifest in host repo
+    let root_no_plugin = pi_repo(
+        &tmp.path().join("no_plugin"),
+        true,
+        true,
+        Some(PI_EXTENSION_SOURCE),
+        None,
+        None,
+    );
+    let rows_no_plugin = pi_rows_of(&root_no_plugin, &mock_herdr_env);
+    let freshness_no_plugin = rows_no_plugin.iter().find(|(k, _, _)| k == "binary_freshness").unwrap();
+    assert_eq!(freshness_no_plugin.1, None, "missing plugin manifest must report unknown");
+}
+
+/// Pi doctor reports unknown on unreadable extension or skills.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_unreadable_cases() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+
+    // Unreadable extension
+    let ext_path = root.join(".pi/extensions/bee-guard/index.ts");
+    let orig_perms = std::fs::metadata(&ext_path).unwrap().permissions();
+    let mut zero_perms = orig_perms.clone();
+    zero_perms.set_mode(0o000);
+    std::fs::set_permissions(&ext_path, zero_perms).unwrap();
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let hooks_file = rows.iter().find(|(k, _, _)| k == "hooks_file").unwrap();
+    assert_eq!(hooks_file.1, None, "unreadable hooks_file must be unknown: {:?}", hooks_file.2);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, None, "unreadable wiring must be unknown: {:?}", wiring.2);
+
+    // Restore permissions
+    std::fs::set_permissions(&ext_path, orig_perms).unwrap();
+
+    // Unreadable skills directory
+    let skills_dir = root.join(".agents/skills");
+    let orig_skills_perms = std::fs::metadata(&skills_dir).unwrap().permissions();
+    let mut zero_skills_perms = orig_skills_perms.clone();
+    zero_skills_perms.set_mode(0o000);
+    std::fs::set_permissions(&skills_dir, zero_skills_perms).unwrap();
+
+    let rows_skills = pi_rows_of(&root, &mock_herdr_env);
+    let skills = rows_skills.iter().find(|(k, _, _)| k == "skills_installed").unwrap();
+    assert_eq!(skills.1, None, "unreadable skills must be unknown: {:?}", skills.2);
+
+    // Restore permissions
+    std::fs::set_permissions(&skills_dir, orig_skills_perms).unwrap();
+}
+
+/// Pi doctor reports not_ok on drifted extension bytes.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_drifted_extension() {
+    let tmp = tempfile::tempdir().unwrap();
+    let drifted = format!("{PI_EXTENSION_SOURCE}\n// modification");
+    let root = pi_repo(tmp.path(), true, true, Some(&drifted), Some("0.1.0"), None);
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false), "drifted extension bytes must report not_ok");
+    assert!(wiring.2.contains("differs from what this bee embeds"), "{}", wiring.2);
+}
+
+/// Pi doctor reports unknown on malformed transport config.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_malformed_config() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(
+        tmp.path(),
+        true,
+        true,
+        Some(PI_EXTENSION_SOURCE),
+        Some("0.1.0"),
+        Some(r#"{"herding": {"transport": "invalid_transport"}}"#),
+    );
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let transport = rows.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport.1, None, "malformed transport config must report unknown");
+    assert!(transport.2.contains("herding.transport is \"invalid_transport\""), "{}", transport.2);
+}
+
+/// Pi doctor reports not_ok on missing herding pane.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_missing_pane() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+
+    // 1. Completely missing environment
+    let rows_none = pi_rows_of(&root, &|_| None);
+    let transport_none = rows_none.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport_none.1, Some(false), "missing HERDR_ENV must report not_ok");
+    assert!(transport_none.2.contains("HERDR_ENV is not set"), "{}", transport_none.2);
+
+    // 2. HERDR_ENV set but missing HERDR_PANE_ID
+    let rows_no_pane = pi_rows_of(&root, &|k| if k == "HERDR_ENV" { Some("1".to_string()) } else { None });
+    let transport_no_pane = rows_no_pane.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport_no_pane.1, Some(false), "missing HERDR_PANE_ID must report not_ok");
+    assert!(transport_no_pane.2.contains("HERDR_PANE_ID is not set"), "{}", transport_no_pane.2);
+}
+
+/// Pi doctor reports not_ok on stale binary release version.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_stale_binary() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    std::fs::create_dir_all(root.join(".bee/bin")).unwrap();
+    let bin = root.join(".bee/bin/bee");
+    write_executable_binary(&bin, "0.1.0", "0.0.9");
+    std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
+    std::fs::create_dir_all(root.join(".pi/extensions/bee-guard")).unwrap();
+    std::fs::write(root.join(".pi/extensions/bee-guard/index.ts"), PI_EXTENSION_SOURCE).unwrap();
+    std::fs::create_dir_all(root.join(".claude-plugin")).unwrap();
+    std::fs::write(
+        root.join(".claude-plugin/plugin.json"),
+        "{\"name\": \"bee\", \"version\": \"0.1.0\"}\n",
+    )
+    .unwrap();
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let freshness = rows.iter().find(|(k, _, _)| k == "binary_freshness").unwrap();
+    assert_eq!(freshness.1, Some(false), "stale binary version must report not_ok");
+    assert!(freshness.2.contains("0.0.9"), "{}", freshness.2);
+    assert!(freshness.2.contains("0.1.0"), "{}", freshness.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_legacy_extension_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard.ts"), "legacy").unwrap();
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false), "legacy extension file must report not_ok");
+    assert!(wiring.2.contains(".pi/extensions/bee-guard.ts"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+/// Pi doctor refuses attest because Pi has no trust-unknown rows to attest.
+#[test]
+fn pi_doctor_attest_is_refused() {
+    let code = run_attest(Runtime::Pi, None, true);
+    assert_ne!(
+        format!("{code:?}"),
+        format!("{:?}", ExitCode::SUCCESS),
+        "attesting pi must refuse"
+    );
+}
+
+/// Pi doctor supports tmux transport when configured.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_supports_configured_tmux_transport() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(
+        tmp.path(),
+        true,
+        true,
+        Some(PI_EXTENSION_SOURCE),
+        Some("0.1.0"),
+        Some(r#"{"herding": {"transport": "tmux"}}"#),
+    );
+
+    // When tmux environment is present: ok
+    let rows_ok = pi_rows_of(&root, &mock_tmux_env);
+    let transport_ok = rows_ok.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport_ok.1, Some(true), "tmux transport with env present must be ok");
+
+    // When tmux environment is missing: not_ok
+    let rows_fail = pi_rows_of(&root, &mock_herdr_env);
+    let transport_fail = rows_fail.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport_fail.1, Some(false), "tmux transport without tmux env must be not_ok");
+}
+
+// ═══ host-packaging-gaps D1/D5: Pi rows judge a host by what it has ════════
+
+#[cfg(unix)]
+fn write_onboarding(root: &Path, bee_version: &str) {
+    std::fs::write(
+        root.join(".bee/onboarding.json"),
+        format!("{{\"schema_version\": \"1.0\", \"bee_version\": \"{bee_version}\"}}\n"),
+    )
+    .unwrap();
+}
+
+#[cfg(unix)]
+fn freshness_of(root: &Path) -> (Option<bool>, String) {
+    let rows = pi_rows_of(root, &mock_herdr_env);
+    let (_, ok, detail) = rows.into_iter().find(|(k, _, _)| k == "binary_freshness").unwrap();
+    (ok, detail)
+}
+
+/// A host with no plugin manifest judges freshness against onboarding.json.
+#[cfg(unix)]
+#[test]
+fn pi_host_freshness_matches_onboarding_record() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), None, None);
+    write_onboarding(&root, "0.1.0");
+    let (ok, detail) = freshness_of(&root);
+    assert_eq!(ok, Some(true), "{detail}");
+}
+
+/// A host whose binary differs from onboarding.json names the record and the installer.
+#[cfg(unix)]
+#[test]
+fn pi_host_freshness_mismatch_names_record_and_installer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), None, None);
+    write_onboarding(&root, "0.2.0");
+    let (ok, detail) = freshness_of(&root);
+    assert_eq!(ok, Some(false), "{detail}");
+    assert!(detail.contains(".bee/onboarding.json"), "{detail}");
+    assert!(detail.contains("scripts/install.sh"), "{detail}");
+    assert!(!detail.contains("cargo"), "{detail}");
+}
+
+/// When both files exist in a host and disagree, onboarding.json wins.
+#[cfg(unix)]
+#[test]
+fn pi_host_freshness_onboarding_record_beats_plugin_manifest() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(
+        root.join(".claude-plugin/plugin.json"),
+        "{\"name\": \"bee\", \"version\": \"9.9.9\"}\n",
+    )
+    .unwrap();
+    write_onboarding(&root, "0.1.0");
+    let (ok, detail) = freshness_of(&root);
+    assert_eq!(ok, Some(true), "{detail}");
+}
+
+#[cfg(unix)]
+const PI_TEAM_CONFIG: &str = r#"{
+  "team": {"pi": {
+    "code": {"kind": "herding", "agent": "pi-worker"},
+    "advisor": {"kind": "herding", "agent": "SLOT2"}
+  }},
+  "herding": {"agents": {"pi-worker": ["pi"], "claude-pane": ["claude"]}}
+}"#;
+
+/// Every team.pi slot is a no-pane Pi agent: no multiplexer is needed.
+#[cfg(unix)]
+#[test]
+fn pi_transport_ok_without_multiplexer_when_every_slot_is_no_pane_pi() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cfg = PI_TEAM_CONFIG.replace("SLOT2", "pi-worker");
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), Some(&cfg));
+    let rows = pi_rows_of(&root, &|_| None);
+    assert_eq!(rows.len(), 6);
+    for (key, ok, detail) in &rows {
+        assert_eq!(*ok, Some(true), "row {key} failed: {detail}");
+    }
+}
+
+/// One non-Pi team.pi slot keeps the HERDR/TMUX check.
+#[cfg(unix)]
+#[test]
+fn pi_transport_keeps_pane_check_when_a_slot_is_not_pi() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cfg = PI_TEAM_CONFIG.replace("SLOT2", "claude-pane");
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), Some(&cfg));
+    let rows = pi_rows_of(&root, &|_| None);
+    let (_, ok, detail) = rows.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(*ok, Some(false), "{detail}");
+    assert!(detail.contains("HERDR_ENV is not set"), "{detail}");
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_fails_when_one_guard_module_differs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard/events.ts"), "modified").unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false));
+    assert!(wiring.2.contains("events.ts"), "{}", wiring.2);
+    assert!(wiring.2.contains("1"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_fails_when_one_guard_module_is_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::remove_file(root.join(".pi/extensions/bee-guard/state.ts")).unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false));
+    assert!(wiring.2.contains("state.ts"), "{}", wiring.2);
+    assert!(wiring.2.contains("1"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_fails_on_unshipped_host_ts_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard/extra.ts"), "export {}").unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false));
+    assert!(wiring.2.contains("extra.ts"), "{}", wiring.2);
+    assert!(wiring.2.contains("1"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_ignores_non_ts_file_in_guard_dir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard/notes.md"), "# notes").unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(true), "non-.ts file must not fail wiring: {}", wiring.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_failure_detail_names_count_and_first_few_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard/events.ts"), "modified").unwrap();
+    std::fs::remove_file(root.join(".pi/extensions/bee-guard/state.ts")).unwrap();
+    std::fs::write(root.join(".pi/extensions/bee-guard/extra.ts"), "export {}").unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false));
+    assert!(wiring.2.contains("3"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+#[cfg(unix)]
+struct FakeDoctorPaseoCli {
+    version_out: Result<String, String>,
+    inspect_map: std::collections::HashMap<String, Result<String, String>>,
+}
+
+#[cfg(unix)]
+impl crate::herding::paseo::PaseoCli for FakeDoctorPaseoCli {
+    fn call(&self, args: &[String]) -> Result<String, String> {
+        if args.first().map(|s| s.as_str()) == Some("--version") {
+            return self.version_out.clone();
+        }
+        if args.first().map(|s| s.as_str()) == Some("inspect") {
+            let id = args
+                .iter()
+                .skip(1)
+                .find(|s| *s != "--json")
+                .cloned()
+                .unwrap_or_default();
+            if let Some(res) = self.inspect_map.get(&id) {
+                return res.clone();
+            }
+            return Err(format!("unknown agent {id}"));
+        }
+        Err(format!("unhandled fake call: {args:?}"))
+    }
+}
+
+#[cfg(unix)]
+fn pi_repo_with_paseo(tmp: &Path, team_cfg: &str, agents_cfg: &str) -> PathBuf {
+    let root = pi_repo(tmp, true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    let cfg = json!({
+        "team": {
+            "pi": serde_json::from_str::<Value>(team_cfg).unwrap()
+        },
+        "agents": serde_json::from_str::<Value>(agents_cfg).unwrap()
+    });
+    std::fs::write(root.join(".bee/config.json"), cfg.to_string()).unwrap();
+    root
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_no_row_without_paseo_slot() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    let env = mock_herdr_env;
+    assert!(paseo_ready_row_with_env_and_cli(&root, &env, None, None).is_none());
+    let rows = pi_rows_of(&root, &env);
+    assert!(!rows.iter().any(|(k, _, _)| k == "paseo_ready"));
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_ok_when_every_check_passes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let hb_dir = root.join(".bee/runtime/paseo-heartbeat");
+    std::fs::create_dir_all(&hb_dir).unwrap();
+    std::fs::write(
+        hb_dir.join("agent-1.json"),
+        r#"{"agent_id": "agent-1", "schedule_id": "sched-1"}"#,
+    )
+    .unwrap();
+    let mut inspect_map = std::collections::HashMap::new();
+    inspect_map.insert(
+        "agent-1".to_string(),
+        Ok(r#"{"Status": "running", "Archived": false}"#.to_string()),
+    );
+    let fake_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map,
+    };
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&fake_cli), Some(true)).expect("row");
+    assert_eq!(row.key, "paseo_ready");
+    assert_eq!(row.ok, Some(true));
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_each_failing_check_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+
+    let daemon_down_row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(false)).expect("row");
+    assert_eq!(daemon_down_row.ok, Some(false));
+    assert!(
+        daemon_down_row.detail.contains("start the daemon with paseo daemon start"),
+        "{}",
+        daemon_down_row.detail
+    );
+
+    let old_version_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.11.4".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let old_version_row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&old_version_cli), Some(true)).expect("row");
+    assert_eq!(old_version_row.ok, Some(false));
+    assert!(
+        old_version_row.detail.contains("upgrade to 0.12.0 with npm @getpaseo/cli"),
+        "{}",
+        old_version_row.detail
+    );
+
+    let fail_version_cli = FakeDoctorPaseoCli {
+        version_out: Err("spawn failed".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let fail_version_row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&fail_version_cli), Some(true)).expect("row");
+    assert_eq!(fail_version_row.ok, Some(false));
+    assert!(
+        fail_version_row.detail.contains("upgrade to 0.12.0 with npm @getpaseo/cli"),
+        "{}",
+        fail_version_row.detail
+    );
+
+    let missing_home_env = |k: &str| match k {
+        "HOME" => Some("/tmp/nonexistent-home-for-test".to_string()),
+        _ => mock_herdr_env(k),
+    };
+    let missing_auth_row = paseo_ready_row_with_env_and_cli(&root, &missing_home_env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(missing_auth_row.ok, Some(false));
+    assert!(
+        missing_auth_row.detail.contains("log in with pi"),
+        "{}",
+        missing_auth_row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_orphan_marker_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let hb_dir = root.join(".bee/runtime/paseo-heartbeat");
+    std::fs::create_dir_all(&hb_dir).unwrap();
+    std::fs::write(
+        hb_dir.join("orphan-agent.json"),
+        r#"{"agent_id": "orphan-agent", "schedule_id": "sched-orphan"}"#,
+    )
+    .unwrap();
+    let mut inspect_map = std::collections::HashMap::new();
+    inspect_map.insert(
+        "orphan-agent".to_string(),
+        Ok(r#"{"Status": "closed", "Archived": true}"#.to_string()),
+    );
+    let cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map,
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("orphan-agent"), "{}", row.detail);
+    assert!(
+        row.detail.contains("delete the orphan heartbeat with paseo heartbeat delete sched-orphan and remove the marker"),
+        "{}",
+        row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_delete_failed_marker_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let hb_dir = root.join(".bee/runtime/paseo-heartbeat");
+    std::fs::create_dir_all(&hb_dir).unwrap();
+    std::fs::write(
+        hb_dir.join("failed-agent.json"),
+        r#"{"agent_id": "failed-agent", "schedule_id": "sched-failed", "delete_failed": "timed out waiting for delete"}"#,
+    )
+    .unwrap();
+    let mut inspect_map = std::collections::HashMap::new();
+    inspect_map.insert(
+        "failed-agent".to_string(),
+        Ok(r#"{"Status": "running", "Archived": false}"#.to_string()),
+    );
+    let cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map,
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("failed-agent"), "{}", row.detail);
+    assert!(
+        row.detail.contains("delete the orphan heartbeat with paseo heartbeat delete sched-failed and remove the marker"),
+        "{}",
+        row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_appimage_version_output_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let appimage_cli = FakeDoctorPaseoCli {
+        version_out: Ok("[desktop] app startup { version: '0.12.0' }\n0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&appimage_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(
+        row.detail.contains("set herding.paseo.command to the npm @getpaseo/cli paseo"),
+        "{}",
+        row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_appimage_wrapper_script_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let bin_dir = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    let script_path = bin_dir.join("paseo");
+    std::fs::write(&script_path, "#!/bin/sh\nexec /opt/Paseo.AppImage \"$@\"\n").unwrap();
+    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let bin_str = bin_dir.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        "PATH" => Some(bin_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(
+        row.detail.contains("set herding.paseo.command to the npm @getpaseo/cli paseo"),
+        "{}",
+        row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_npm_style_passes() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let bin_dir = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    let script_path = bin_dir.join("paseo");
+    std::fs::write(&script_path, "#!/bin/sh\nexec node /usr/lib/node_modules/@getpaseo/cli/bin/paseo.js \"$@\"\n").unwrap();
+    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let bin_str = bin_dir.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        "PATH" => Some(bin_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(true));
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_broken_isolated_folder_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    let home_auth = home.join(".pi/agent/auth.json");
+    std::fs::write(&home_auth, "{}").unwrap();
+
+    let agent_dir = root.join(".bee/runtime/pi-agent/pi-iso");
+    std::fs::create_dir_all(&agent_dir).unwrap();
+    std::fs::write(
+        agent_dir.join("settings.json"),
+        r#"{"defaultProjectTrust": "never"}"#,
+    ).unwrap();
+    std::os::unix::fs::symlink(&home_auth, agent_dir.join("auth.json")).unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("pi-iso"), "{}", row.detail);
+    assert!(row.detail.contains("defaultProjectTrust"), "{}", row.detail);
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_replaced_non_link_auth_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+
+    let agent_dir = root.join(".bee/runtime/pi-agent/pi-iso");
+    std::fs::create_dir_all(&agent_dir).unwrap();
+    std::fs::write(
+        agent_dir.join("settings.json"),
+        r#"{"defaultProjectTrust": "always"}"#,
+    ).unwrap();
+    std::fs::write(agent_dir.join("auth.json"), "{}").unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("pi-iso"), "{}", row.detail);
+    assert!(row.detail.contains("auth.json"), "{}", row.detail);
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_broken_symlink_auth_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+
+    let agent_dir = root.join(".bee/runtime/pi-agent/pi-iso");
+    std::fs::create_dir_all(&agent_dir).unwrap();
+    std::fs::write(
+        agent_dir.join("settings.json"),
+        r#"{"defaultProjectTrust": "always"}"#,
+    ).unwrap();
+    std::os::unix::fs::symlink(home.join(".pi/agent/nonexistent.json"), agent_dir.join("auth.json")).unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("pi-iso"), "{}", row.detail);
+    assert!(row.detail.contains("auth.json"), "{}", row.detail);
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_missing_folder_home_auth_present_passes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(true));
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_good_isolated_folder_passes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    let home_auth = home.join(".pi/agent/auth.json");
+    std::fs::write(&home_auth, "{}").unwrap();
+
+    let agent_dir = root.join(".bee/runtime/pi-agent/pi-iso");
+    std::fs::create_dir_all(&agent_dir).unwrap();
+    std::fs::write(
+        agent_dir.join("settings.json"),
+        r#"{"defaultProjectTrust": "always"}"#,
+    ).unwrap();
+    std::os::unix::fs::symlink(&home_auth, agent_dir.join("auth.json")).unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.12.0".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(true));
+}
+
+fn claude_ready_repo(tmp: &Path) -> PathBuf {
+    let root = repo(tmp, true, true, None);
+    std::fs::create_dir_all(root.join(".claude")).unwrap();
+    std::fs::write(
+        root.join(".claude/settings.json"),
+        r#"{"hooks":{"PreToolUse":[{"hooks":[{"command":".bee/bin/bee hook write-guard"}]}]}}"#,
+    )
+    .unwrap();
+    root
+}
+
+fn path_with_tools(dir: &Path, tools: &[&str]) -> impl Fn(&str) -> Option<String> + use<> {
+    std::fs::create_dir_all(dir).unwrap();
+    let marker = dir.join("executed");
+    for tool in tools {
+        std::fs::write(dir.join(tool), format!("#!/bin/sh\ntouch {}\n", marker.display())).unwrap();
+    }
+    let path = dir.to_string_lossy().to_string();
+    move |k: &str| (k == "PATH").then(|| path.clone())
+}
+
+fn runtime_check<'a>(checks: &'a [RuntimeCheck], name: &str) -> &'a RuntimeCheck {
+    checks.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("no runtime row for {name}"))
+}
+
+#[test]
+fn a_current_runtime_row_is_ok_without_a_fix_and_the_tool_is_never_run() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = claude_ready_repo(tmp.path());
+    let bin_dir = tmp.path().join("bin");
+    let env = path_with_tools(&bin_dir, &["claude"]);
+    let checks = runtime_checks_with_env(&root, &env);
+    let claude = runtime_check(&checks, "claude");
+    assert!(claude.fix.is_none(), "{}", claude.detail);
+    assert!(claude.detail.contains("claude found at"), "{}", claude.detail);
+    assert!(!bin_dir.join("executed").exists(), "doctor must locate the tool, never run it");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_stale_pi_belt_row_names_bee_onboard_apply() {
+    let tmp = tempfile::tempdir().unwrap();
+    let drifted = format!("{PI_EXTENSION_SOURCE}\n");
+    let root = pi_repo(tmp.path(), true, true, Some(&drifted), Some("0.1.0"), None);
+    let env = path_with_tools(&tmp.path().join("bin"), &["pi"]);
+    let checks = runtime_checks_with_env(&root, &env);
+    let pi = runtime_check(&checks, "pi");
+    assert_eq!(pi.fix.as_deref(), Some("bee onboard --apply"), "{}", pi.detail);
+    assert!(pi.lines().iter().any(|l| l.contains("fix: bee onboard --apply")));
+}
+
+#[test]
+fn a_missing_tool_row_names_an_install_line_for_that_tool() {
+    let tmp = tempfile::tempdir().unwrap();
+    let good = crate::devtools::render_projection_text_for("codex").unwrap();
+    let root = repo(tmp.path(), true, true, Some(&good));
+    let env = path_with_tools(&tmp.path().join("bin"), &[]);
+    let checks = runtime_checks_with_env(&root, &env);
+    let codex = runtime_check(&checks, "codex");
+    assert_eq!(codex.fix.as_deref(), Some("install codex: npm install -g @openai/codex"), "{}", codex.detail);
+}
+
+#[test]
+fn absent_runtimes_print_advisory_rows_and_never_change_the_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = claude_ready_repo(tmp.path());
+    let env = path_with_tools(&tmp.path().join("bin"), &[]);
+    let (payload, lines) = doctor_report(&root, Runtime::Claude, &env);
+    assert_eq!(payload["overall_status"], "ready", "{payload}");
+    let runtime_rows: Vec<&Value> = payload["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["row"].as_str().is_some_and(|k| k.starts_with("runtime_")))
+        .collect();
+    let names: Vec<&str> = runtime_rows.iter().map(|r| r["row"].as_str().unwrap()).collect();
+    assert_eq!(
+        names,
+        ["runtime_claude", "runtime_codex", "runtime_opencode", "runtime_pi", "runtime_paseo"]
+    );
+    for row in &runtime_rows {
+        assert_eq!(row["status"], "advisory");
+        assert_eq!(row["ok"], false, "{row}");
+        assert!(row["fix"].as_str().is_some_and(|f| !f.is_empty()), "{row}");
+    }
+    assert!(lines.iter().any(|l| l.contains("fix: install opencode")), "{lines:?}");
+    assert!(lines.last().unwrap().contains("ready"), "{lines:?}");
+}
+
+#[test]
+fn the_opencode_row_reports_the_belt_contract_check() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = claude_ready_repo(tmp.path());
+    std::fs::create_dir_all(root.join(".opencode/plugins")).unwrap();
+    let plugin = root.join(".opencode/plugins/bee-guard.ts");
+    let env = path_with_tools(&tmp.path().join("bin"), &["opencode"]);
+    let opencode = |root: &Path| {
+        let checks = runtime_checks_with_env(root, &env);
+        let c = runtime_check(&checks, "opencode");
+        (c.detail.clone(), c.fix.clone())
+    };
+
+    std::fs::write(&plugin, format!("export const BELT_CONTRACT_VERSION = {BELT_CONTRACT};\n")).unwrap();
+    let (detail, fix) = opencode(&root);
+    assert!(fix.is_none() && detail.contains("matches the binary"), "{detail}");
+
+    std::fs::write(&plugin, format!("const BELT_CONTRACT_VERSION = {};\n", BELT_CONTRACT - 1)).unwrap();
+    let (detail, fix) = opencode(&root);
+    assert_eq!(fix.as_deref(), Some("bee onboard --apply"), "{detail}");
+
+    std::fs::write(&plugin, format!("const BELT_CONTRACT_VERSION = {};\n", BELT_CONTRACT + 1)).unwrap();
+    let (detail, fix) = opencode(&root);
+    assert!(detail.contains("newer than the binary"), "{detail}");
+    assert!(fix.as_deref().is_some_and(|f| f.contains("install.sh")), "{fix:?}");
+
+    std::fs::write(&plugin, "export default {};\n").unwrap();
+    let (detail, fix) = opencode(&root);
+    assert!(fix.is_none() && detail.contains("belt contract unknown"), "{detail}");
+}
+
+#[test]
+fn a_missing_owner_brief_is_a_note_that_never_moves_the_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = claude_ready_repo(tmp.path());
+    let env = |_: &str| -> Option<String> { None };
+    let (before, _) = doctor_report(&root, Runtime::Claude, &env);
+    assert!(owner_briefs_advisory(&root).is_none());
+    std::fs::write(
+        root.join(".bee/backlog.jsonl"),
+        "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"p-0000000a\",\"title\":\"t\",\"status\":\"proposed\"}\n",
+    )
+    .unwrap();
+    let (after, lines) = doctor_report(&root, Runtime::Claude, &env);
+    assert_eq!(after["overall_status"], before["overall_status"]);
+    let row = after["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["row"] == "owner_briefs")
+        .expect("the owner_briefs row");
+    assert_eq!(row["status"], "note");
+    assert!(row["detail"].as_str().unwrap().starts_with("1 live item(s)"), "{row}");
+    assert!(lines.iter().any(|l| l.starts_with("  note owner_briefs") && l.contains("bee backlog briefs")), "{lines:?}");
 }

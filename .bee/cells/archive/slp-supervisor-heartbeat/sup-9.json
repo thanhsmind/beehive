@@ -1,0 +1,155 @@
+{
+  "id": "sup-9",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Exactly one WakeReport when the human comes back",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "sup-8"
+  ],
+  "decisions": [
+    "9f5cd250",
+    "66c4c251"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/generated/*",
+    "packages/bee/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "behavior_change": true,
+  "action": "Plan Phase 3, second half (per 9f5cd250 and 66c4c251): on `bee supervisor back`, emit EXACTLY ONE WakeReport for the window sup-8 just closed. Shape is fixed and enforced by a test, not by prose: markdown, AT MOST 10 lines, exactly four sections in this order — 'What happened', 'What was decided', 'What needs you', 'Next action'. Build it in packages/bee-rs/crates/bee/src/verbs/supervisor.rs from records already in the store or already readable in .bee, never from a new subsystem: observation rows in the window (what happened), decision-log events whose timestamp falls in the window (what was decided), queued intervention/escalation rows released by back plus any waiting-on mark (what needs you), and a single next-action line. Order items inside a section by impact-if-wrong DESCENDING (66c4c251): urgent before escalation before intervention, and a one-way-door decision before a reversible one; when nothing distinguishes two rows keep store order. Truncation is part of the shape, not a bug: when the honest content exceeds 10 lines, keep the highest-impact items and end with a '+N more' count on the last line — never silently drop. An empty window still yields a legal report whose sections say plainly that nothing happened. Persist each rendered report as a row in .bee/supervisor/reports.jsonl keyed by the window id, and add `bee supervisor report [--window <id>] [--json]` that READS the stored report and never regenerates it. Exactly-once is the hard rule: a second `back` cannot produce a second report for the same window, and `report` called twice returns the same bytes. Fire exactly ONE notification through the sup-7 notifier seam (notifier_argv/spawn_notifier), best-effort, honoring the same supervisor.notify opt-out, and never let a failed notifier fail `back`. Tests in the same tests module: away, plant three events of different impact, back -> exactly one stored report, at most 10 lines, four sections in order, highest impact first; back twice stores one report; an empty window renders a legal report; over-long content ends in '+N more'; report reads back byte-identical; notify disabled builds no argv. Regen deferred to the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "back on a window with events stores exactly one report of at most 10 lines with the four sections in order",
+      "a second back stores no second report and report returns the same bytes"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "substantive": "WakeReport renderer, reports store, report verb, one best-effort notification"
+      }
+    ],
+    "key_links": [
+      "the renderer reads sup-8's closed window and the sup-7 notifier seam, duplicating neither"
+    ],
+    "prohibitions": [
+      "no second report for one window",
+      "no new notification transport",
+      "a failed notifier never fails back"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-sup-9",
+    "outcome": "back renders and stores exactly one 4-section WakeReport per window; supervisor report reads it; one best-effort notification through the sup-7 seam",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "The report notification is a sibling of notifier_argv (report_notifier_argv) rather than notifier_argv called with a fabricated mailbox row — a WakeReport is not an urgent intervention, so a fake row would have lied to every reader of the store; it shares NOTIFIER, spawn_notifier and the same supervisor.notify opt-out, so no second transport exists — found a better route",
+      "Added the flag name --window and bumped catalog.rs PINNED_FLAG_COUNT 194 -> 195 with the reason recorded there: --id already means a mailbox row id on this same supervisor surface, and a stored report is keyed by a row of a different store (the presence window) — the ratchet's own documented process, same reasoning sup-2 recorded for --target-session — something else had to be fixed first",
+      "One sup-8 test (away_and_back_write_nothing_outside_the_supervisor_store) now expects reports.jsonl beside interventions.jsonl and presence.jsonl, because back writes the report inside the supervisor store — hit an unforeseen obstacle",
+      "One-way-door ranking for decisions reads the irreversible member the decision log actually carries (type supersede, or a non-empty supersedes) because the log has no explicit door field; the fuller confidence x door predicate is Phase 4 (a8f4b8ab) — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T13:31:15.622Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e689c2df-430b-44e5-b7ad-a04a3826431b",
+    "claimed_at": "2026-08-27T13:15:33.152Z",
+    "report": {
+      "outcome": "back renders and stores exactly one 4-section WakeReport per window; supervisor report reads it back byte-identical; one best-effort notification reuses the sup-7 notifier seam",
+      "commit": "4b9943bc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor; cargo test --manifest-path packages/bee-rs/Cargo.toml catalog; cargo test --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch --test registry_contracts — green (50 supervisor + 11 catalog + 18 registry passed, 0 failed) — the cell touched only the supervisor verb module, the catalog flag pin and the registry payload, so the proof is those three surfaces: the store/renderer unit tests, the flag-vocabulary ratchet, and the walk that dispatches every declared command against the real binary",
+      "deviations": [
+        "The report notification is a sibling of notifier_argv (report_notifier_argv) rather than notifier_argv called with a fabricated mailbox row — a WakeReport is not an urgent intervention, so a fake row would have lied to every reader of the store; it shares NOTIFIER, spawn_notifier and the same supervisor.notify opt-out, so no second transport exists — found a better route",
+        "Added the flag name --window and bumped catalog.rs PINNED_FLAG_COUNT 194 -> 195 with the reason recorded there: --id already means a mailbox row id on this same supervisor surface, and a stored report is keyed by a row of a different store (the presence window) — the ratchet's own documented process, same reasoning sup-2 recorded for --target-session — something else had to be fixed first",
+        "One sup-8 test (away_and_back_write_nothing_outside_the_supervisor_store) now expects reports.jsonl beside interventions.jsonl and presence.jsonl, because back writes the report inside the supervisor store — hit an unforeseen obstacle",
+        "One-way-door ranking for decisions reads the irreversible member the decision log actually carries (type supersede, or a non-empty supersedes) because the log has no explicit door field; the fuller confidence x door predicate is Phase 4 (a8f4b8ab) — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1033 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "exactly-one-report-per-window-is-a-store-property",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1240-1245 back_into calls ensure_report_for_window on the one path that closes a window; :2120 ensure_report_for_window is keyed by window id; tests back_stores_exactly_one_legal_report_over_the_window_it_closed and a_second_back_stores_no_second_report_and_report_reads_the_same_bytes ok"
+          },
+          {
+            "id": "fixed-shape-four-sections-ten-lines",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1653 REPORT_SECTIONS is the one ordered constant, :1660 REPORT_MAX_LINES = 10, :1932 render_report_markdown with debug_assert on the ceiling; tests an_empty_window_still_renders_a_legal_report and the_renderer_is_pure_and_keeps_the_shape_whatever_it_is_handed ok"
+          },
+          {
+            "id": "built-only-from-records-that-already-exist",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1744 collect_happened, :1777 collect_decided, :1806 live_waiting_on, :1821 collect_needs_you - no new subsystem; test the_report_reads_the_window_and_never_the_records_outside_it ok"
+          },
+          {
+            "id": "impact-if-wrong-descending",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1695 observation_rank, :1708 needs_you_rank (urgent > escalation > intervention), :1763 decision_is_one_way; stable sort at :1943-1946 keeps store order on ties; test the_report_sorts_by_impact_if_wrong_descending ok"
+          },
+          {
+            "id": "truncation-keeps-highest-impact-and-counts-the-rest",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1949-1997 allowance/more arithmetic ends the report with +N more, never a silent drop; test an_over_long_report_keeps_the_highest_impact_items_and_counts_the_rest ok"
+          },
+          {
+            "id": "report-verb-reads-and-never-regenerates",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2084 report_for_window is a pure read of reports.jsonl and :3138 run_report calls only it; asserted byte-identical by a_second_back_stores_no_second_report_and_report_reads_the_same_bytes"
+          },
+          {
+            "id": "one-notification-through-the-sup-7-seam",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2141 report_notifier_argv and :2174 notify_report share NOTIFIER/spawn_notifier and the same supervisor.notify opt-out; test the_report_notification_reuses_the_urgent_seam_and_honors_the_opt_out ok"
+          },
+          {
+            "id": "scope-and-frozen-judge",
+            "status": "PASS",
+            "evidence": "git show --stat 4b9943bc = verbs/supervisor.rs, catalog.rs, generated/registry_payload.json - all inside the declared files, including the recorded PINNED_FLAG_COUNT 194->195 bump for --window; bee cells judge --id sup-9 --json -> hits []"
+          },
+          {
+            "id": "tests-green-at-head",
+            "status": "PASS",
+            "evidence": "cargo test supervisor -> 61 passed, 0 failed; --test registry_contracts --test registry_dispatch --test front_door --test hook_contracts --test installer_invocations -> 35 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-27T20:54:04.743Z"
+      }
+    ]
+  }
+}

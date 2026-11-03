@@ -1,0 +1,84 @@
+{
+  "id": "slr-7",
+  "feature": "semantic-role-routing",
+  "role": "code",
+  "lane": "standard",
+  "title": "Support verified Pi switching between linked worktrees",
+  "action": "Reproduce the linked-to-linked failure in tests, then split enter_worktree_core into canonical control_root and source_root inputs. Allow ordinary and linked-valid entry, use main for grant and Git-link authority, emit the active root as sourceCwd, reject same-worktree entry before marker emission, and prove that the unchanged Pi validator accepts the new marker while forged paths still fail.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml enter_worktree && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml pi_plugin_contracts",
+  "read_first": [
+    "docs/history/semantic-role-routing/CONTEXT.md",
+    "docs/history/pi-worktree-session-relocation/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "deps": [],
+  "decisions": [
+    "bf919268"
+  ],
+  "must_haves": {
+    "truths": [
+      "Linked worktree A can emit a valid enter transition to linked worktree B.",
+      "The transition source is A and still equals Pi ctx.cwd.",
+      "Same-worktree, absent-grant, bad-link, wrong-session, and forged-source cases refuse.",
+      "Main-to-worktree and worktree-to-main behavior stay unchanged."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/specs/worktree-first.md"
+  ],
+  "acceptance": "Pi changes session automatically from one granted linked worktree to another without weakening authenticity.",
+  "status": "capped",
+  "trace": {
+    "worker": "slr-7-worker",
+    "outcome": "Bee now emits authenticated Pi transitions from one granted linked worktree to another without weakening existing checks",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "Used --test pi_plugin_contracts for the integration suite — the plan name filter selected zero integration tests — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T08:08:46.754Z",
+    "behavior_change": false,
+    "verification_evidence": "approved command passed 7 worktree tests; supplemental --test pi_plugin_contracts proof passed all 66 contracts",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09ebc-3389-747b-a74c-ed61ea9ddf04",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml enter_worktree && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml pi_plugin_contracts",
+    "claimed_at": "2026-09-14T08:08:31.278Z",
+    "verified_at": null,
+    "mistakes": [
+      {
+        "wrong": "The first worker result omitted cells finish",
+        "better": "it should have capped and released its reservations before reporting done"
+      }
+    ],
+    "report": {
+      "outcome": "Bee now emits authenticated Pi transitions from one granted linked worktree to another without weakening existing checks",
+      "commit": "5d5783e29124c9cb12b264aa892da7dca26c25cf",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml enter_worktree && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml pi_plugin_contracts — green:unit — approved command passed 7 worktree tests; supplemental --test pi_plugin_contracts proof passed all 66 contracts",
+      "deviations": [
+        "Used --test pi_plugin_contracts for the integration suite — the plan name filter selected zero integration tests — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "The first worker result omitted cells finish — it should have capped and released its reservations before reporting done"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "a-feature-picks-up-the-backlog-row-recor__null",
+  "decision": "null",
+  "condition": "A feature picks up the backlog row 'Record usage and cost for Paseo claude workers'",
+  "tier": "manual",
+  "predicate": null,
+  "status": "resolved",
+  "created_at": "2026-10-13T02:34:32.135Z",
+  "updated_at": "2026-10-13T02:34:43.557Z",
+  "outcome": "Created by mistake with decision null; replaced by the trigger on decision ce30c059"
+}

@@ -1,0 +1,44 @@
+{
+ "schema": "judge-verdict/1",
+ "verdict": "PASS",
+ "checks": [
+  {
+   "name": "a: judge-tier 4th row",
+   "status": "PASS",
+   "evidence": "gates-and-delegation.md:411 names the LEADER, git diff --stat <capped sha>..HEAD, cumulative since the cap, under 30 changed lines, return to the lane's normal row, sampled judge still covers the cell, the tick text, and a Why clause",
+   "id": "c1"
+  },
+  {
+   "name": "b: playback bullet first, says when it does not fire, no rewritten request",
+   "status": "PASS",
+   "evidence": "shaping-reference.md:8-14 before 'One question per turn' (line 15)",
+   "id": "c2"
+  },
+  {
+   "name": "c: twice-rule section complete",
+   "status": "PASS",
+   "evidence": "human-mailbox/overview.md:220-233; FIX_AT_VALUES unchanged (mailbox.rs:628 still 4 values)",
+   "id": "c3"
+  },
+  {
+   "name": "d: pointers carry no rule text",
+   "status": "PASS",
+   "evidence": "bee-evolving/SKILL.md:96-97 and bee-capturing/SKILL.md:142-143 are one sentence each, naming path + heading only",
+   "id": "c4"
+  },
+  {
+   "name": "e: rendered .claude/skills copies match",
+   "status": "PASS",
+   "evidence": "diff: shaping-reference, bee-evolving, bee-capturing identical; gates-and-delegation differs only by the stripped bee:only pi/codex blocks",
+   "id": "c5"
+  },
+  {
+   "name": "f: no edit to AGENTS.block.md, AGENTS.md, bee-swarming, bee-rs",
+   "status": "PASS",
+   "evidence": "git show --name-only dcf06bc00 | rg 'AGENTS|bee-swarming|bee-rs' -> no output",
+   "id": "c6"
+  }
+ ],
+ "fixability": "automatic",
+ "confidence": "high"
+}

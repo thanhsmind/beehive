@@ -281,6 +281,9 @@ pub(crate) fn rebuild_handoff_projection_reporting(root: &Path) -> Result<Proj<(
     }
     let mut newest: Option<(Map<String, Value>, String)> = None;
     for wf in &workflows {
+        if matches!(wf.get("status"), Some(Value::String(s)) if s == "closed") {
+            continue;
+        }
         let id = wf_id(wf);
         let open: Vec<Map<String, Value>> = list_handoff_mailbox(root, &id)?
             .into_iter()

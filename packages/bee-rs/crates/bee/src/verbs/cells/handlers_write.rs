@@ -29,12 +29,43 @@ pub(crate) fn dispatch(
     t0: Instant,
     f: impl FnOnce(&rsv::Ctx) -> MR<Out>,
 ) -> Option<ExitCode> {
+    if matches!(
+        cmd,
+        "cells add"
+            | "cells update"
+            | "cells schedule"
+            | "cells escalate"
+            | "cells reroute"
+            | "cells judge"
+            | "cells judge-record"
+            | "cells dissent"
+            | "cells dissent-verdict"
+            | "cells leader-check"
+    ) {
+        return dispatch_serving_granted(cmd, use_json, t0, f);
+    }
     let ctx = match rsv::prelude(cmd, use_json, t0)? {
         rsv::Pre::Go(c) => c,
         rsv::Pre::Emitted(code) => return Some(code),
     };
     let out = f(&ctx);
     rsv::finish(&ctx, to_r2(out))
+}
+
+pub(crate) fn dispatch_serving_granted(
+    cmd: &'static str,
+    use_json: bool,
+    t0: Instant,
+    f: impl FnOnce(&rsv::Ctx) -> MR<Out>,
+) -> Option<ExitCode> {
+    let cwd = std::env::current_dir().ok()?;
+    let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
+    let ctx = match crate::verbs::drivers::ctx_serving_granted(cmd, use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = f(&ctx);
+    crate::verbs::drivers::finish_serving_granted(&ctx, to_r2(out), served_main.as_deref())
 }
 
 /// requireFlag(flags, name) — Missing/empty/boolean-true refuse with the
@@ -179,6 +210,9 @@ pub(crate) fn build_add_cells_report(root: &Path, cells: &[Value]) -> MR<(bool, 
             if let Some(reason) = gated_add_refusal(root, feature)? {
                 problems.push(reason);
             }
+            if let Err(reason) = crate::verbs::state_group::check_cell_matches_approved_preview(root, feature, cell) {
+                problems.push(reason);
+            }
         }
         if let Some(Value::String(cid)) = cell.get("id") {
             if !cid.is_empty() {
@@ -190,6 +224,18 @@ pub(crate) fn build_add_cells_report(root: &Path, cells: &[Value]) -> MR<(bool, 
             }
         }
         rows.push(AddReportRow { id, ok: problems.is_empty(), problems });
+    }
+    if cells.len() > 1 {
+        if let Some(first) = cells.first() {
+            if let Some(Value::String(feature)) = first.get("feature") {
+                if let Err(reason) = crate::verbs::state_group::check_batch_matches_approved_preview(root, feature, cells) {
+                    if let Some(first_row) = rows.first_mut() {
+                        first_row.problems.push(reason);
+                        first_row.ok = false;
+                    }
+                }
+            }
+        }
     }
     let mut normalized: Option<Vec<Value>> = None;
     if rows.iter().all(|r| r.ok) {
@@ -318,6 +364,7 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
                 write_cell(&root, cell)?;
             }
             emit_manifest_lint_warnings(&normalized);
+            emit_design_gate_warnings(&root, &normalized);
             let text = normalized
                 .iter()
                 .map(|c| format!("Added {}", summarize_cell(c)))
@@ -333,11 +380,15 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
             if let Some(reason) = gated_add_refusal(&root, feature)? {
                 return Err(Fail::Thrown(reason));
             }
+            if let Err(reason) = crate::verbs::state_group::check_cell_matches_approved_preview(&root, feature, &payload) {
+                return Err(Fail::Thrown(reason));
+            }
         }
         let normalized = normalize_new_cell(&payload)?;
         assert_no_cycle(&root, "addCell", std::slice::from_ref(&normalized))?;
         write_cell(&root, &normalized)?;
         emit_manifest_lint_warnings(std::slice::from_ref(&normalized));
+        emit_design_gate_warnings(&root, std::slice::from_ref(&normalized));
         let text = format!("Added {}", summarize_cell(&normalized));
         Ok(Out::Emit(normalized, text, 0))
     })
@@ -442,9 +493,13 @@ pub(crate) fn update_frozen_hint(key: &str) -> Option<&'static str> {
         "tier" => Some(
             "tier is retired as the model selector — a cell's \"role\" is the job that picks its model, and escalation is the \"escalate\" flag (bee cells escalate --id ID)",
         ),
+        "role" => Some(
+            "a cell role changes only through controlled re-routing (bee cells reroute --id ID --role ROLE --decision DECISION)",
+        ),
         _ => None,
     }
 }
+
 
 pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !rsv::keys_known(&flags, &["id", "file", "stdin"]) {
@@ -1056,6 +1111,411 @@ pub(crate) fn red_base_refusal(control: &Path, cell_id: &str, fix_first: Option<
     }
 }
 
+// ─── slp-contract S4: the contract-citation tripwire (D3, store 9c0104e0) ──
+//
+// D3 locks that a cell cites contract decisions in the EXISTING
+// `cell.decisions` field, and that a tripwire refuses the dispatch when a
+// cited decision is retired or trigger-waiting. This is that tripwire, and
+// it is the ONE producer of the refusal — both doors that check it (the
+// claim body below, and `dispatch prepare`'s `kind == "cell"` arm in
+// verbs/drivers/prepare.rs) call this function rather than each walking
+// the field themselves. A rule checked at two points needs one shared
+// read, or the two points drift and the guard stops meaning one thing.
+//
+// WHAT IT REFUSES ON, and — the load-bearing half — what it does NOT:
+//
+// `cell.decisions` does not hold store decision ids. Measured over the 92
+// live cells: 48 cite something, 81 citations total, and only 11 (13%)
+// resolve to a decision in `.bee/decisions.jsonl`; the entry-length
+// histogram is `{2: 61, 3: 5, 8: 11, 24: 1, 25: 3}`, so the field is
+// dominated by LOCAL D-IDs (`D1`, `D2`) pointing into a CONTEXT.md table.
+// An entry that does not resolve to a store decision is therefore PASSED
+// OVER — silently, refusing nothing and warning nothing. Refusing on it
+// would refuse 87% of citing cells for using the field the way this repo
+// has always used it, and a false refusal stalls every worker.
+//
+// An entry that DOES resolve is checked, and refuses on two of the three
+// derived statuses (verbs/decisions/read.rs, S3):
+//
+//   - `Unknown` — the id is not in the ACTIVE decision set. That is D3's
+//     word "retired", resolved: the store has no `retired` state, only
+//     supersession, redaction and archiving, and all three drop the id out
+//     of `active_decisions`.
+//   - `Unsettled` — active, but a trigger keyed to it is `waiting` or
+//     `due`, so the contract it names has an unanswered revisit condition
+//     (D2).
+//
+// `Settled` passes. So does a cell with no `decisions` field, an empty
+// list, or a list of local D-IDs only — and each of those costs zero store
+// reads, because the walk returns before the first one.
+//
+// Resolution runs against the active+archive UNION of decide/supersede
+// events (`decision_target_candidates`), never against the active set
+// alone. That is what makes the `Unknown` arm reachable at all: a
+// superseded id is not active, so resolving against the active set would
+// hand back `None` and pass the very citation D3 exists to refuse.
+
+/// One refused citation, in the grammar each door dresses in its own way.
+pub(crate) struct ContractCitationRefusal {
+    /// The claim door's typed code; the dispatch door lowercases it into
+    /// its own `reason` field.
+    pub(crate) code: &'static str,
+    /// The whole sentence — IDENTICAL at both doors, because there is one
+    /// producer of it. The same cell refused at claim and at dispatch reads
+    /// the same, which is the only way a worker can tell it is one rule.
+    pub(crate) message: String,
+}
+
+/// The three store reads BOTH contract rules at the claim door run over —
+/// scor-4's citation tripwire and S5's mint trap below. A rule checked at
+/// two points needs one shared read; two rules over the same walk need one
+/// too, or the second one silently doubles the cost of every claim and the
+/// two can disagree about what the store said.
+///
+/// Every field is a plain read. Nothing here writes: `open_trigger_keys`
+/// goes through `triggers::read_without_evaluating`, the read that leaves
+/// every trigger file byte-identical (the ordinary `triggers list` reader
+/// persists a waiting-to-due flip mid-read; a refusal path may not).
+pub(crate) struct ContractReads {
+    /// The active+ARCHIVE union of decide/supersede ids —
+    /// `resolve_store_citation`'s candidate set. Never the active set
+    /// alone: a superseded id is exactly the one D3 wants refused, and
+    /// against the active set it would resolve to `None` and be passed
+    /// over.
+    known_ids: Vec<String>,
+    /// `(id, overlay-applied event)` for every ACTIVE decide/supersede.
+    /// The events are here for their `tags` — the mint trap is the
+    /// tag-AWARE rule, where the tripwire is deliberately tag-blind.
+    /// Overlay-applied, so a decision retro-tagged by `decisions tag`
+    /// counts exactly like one tagged at log time.
+    active: Vec<(String, Value)>,
+    /// The ids of `active`, same order — `active_decision_ids`' value,
+    /// taken from the same single read rather than a second one.
+    active_ids: Vec<String>,
+    /// Every `decision` short8 carried by a trigger that is still open.
+    open_trigger_keys: Vec<String>,
+}
+
+impl ContractReads {
+    /// `None` means "this guard could not read its evidence" — it says so
+    /// out loud and lets the work through, the same shape
+    /// `red_base_refusal`'s Unknown arm takes. A guard that refuses on a
+    /// store it never read is worse than no guard.
+    fn load(root: &Path, cell_id: &str) -> Option<Self> {
+        let known_ids: Vec<String> = crate::verbs::decisions::decision_target_candidates(root)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        let active = match crate::verbs::decisions::active_decide_or_supersede_candidates(root) {
+            Ok(v) => v,
+            Err(_) => {
+                eprintln!(
+                    "WARNING: the decision log could not be read — cannot check cell \"{cell_id}\"'s contract citations; claim proceeding."
+                );
+                return None;
+            }
+        };
+        let active_ids: Vec<String> = active.iter().map(|(id, _)| id.clone()).collect();
+        let open_trigger_keys = crate::verbs::decisions::open_trigger_decision_keys(root);
+        Some(Self { known_ids, active, active_ids, open_trigger_keys })
+    }
+
+    /// The RAMP condition, derived from the read above and from nothing
+    /// else: does the ACTIVE decision set hold even one decision tagged in
+    /// the `contract:` namespace? No config key, no flag, no stored
+    /// counter — D1's "nothing new to forget to update" is the whole
+    /// reason this is a derived read rather than a switch.
+    fn any_contract_tagged(&self) -> bool {
+        self.active.iter().any(|(_, ev)| event_has_contract_tag(ev))
+    }
+
+    /// Does THIS active decision carry a `contract:` tag?
+    fn contract_tagged(&self, id: &str) -> bool {
+        self.active.iter().any(|(k, ev)| k == id && event_has_contract_tag(ev))
+    }
+}
+
+/// A decision event carrying at least one tag in the `contract:<name>`
+/// namespace — D2's convention, spelled exactly as locked.
+///
+/// The BARE tag `contract` does not count. Five live decisions carry it
+/// and none of them names a contract; counting them would arm the trap on
+/// history that never opted in. The namespace comparison is
+/// ASCII-case-insensitive, and `tag_pattern_test` already keeps stored
+/// tags lowercase, so that can only ever add a match.
+fn event_has_contract_tag(event: &Value) -> bool {
+    let Some(Value::Array(tags)) = event.get("tags") else {
+        return false;
+    };
+    tags.iter().any(|t| match t {
+        Value::String(s) => match js_trim(s).split_once(':') {
+            Some((ns, name)) => ns.eq_ignore_ascii_case("contract") && !name.is_empty(),
+            None => false,
+        },
+        _ => false,
+    })
+}
+
+/// The non-empty, trimmed string entries of `cell.decisions` — the field
+/// both rules read, walked once for both.
+fn citation_entries(cell: Option<&Value>) -> Vec<String> {
+    match cell.and_then(|c| c.get("decisions")) {
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|v| match v {
+                Value::String(s) if !js_trim(s).is_empty() => Some(js_trim(s).to_string()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The tripwire itself, over an already-loaded read. Behaviour is scor-4's,
+/// unchanged: the walk, the two refusals and their sentences are the same
+/// bytes the dispatch door prints.
+fn citation_refusal_over(
+    reads: &ContractReads,
+    cell_id: &str,
+    entries: &[String],
+) -> Option<ContractCitationRefusal> {
+    for entry in entries {
+        let Some(id) = crate::verbs::decisions::resolve_store_citation(&reads.known_ids, entry)
+        else {
+            continue; // a local D-ID, or an id this store never logged
+        };
+        let short = crate::textutil::truncate_chars_head(&id, 8);
+        match crate::verbs::decisions::contract_status_over(
+            &reads.active_ids,
+            &reads.open_trigger_keys,
+            &id,
+        ) {
+            crate::verbs::decisions::ContractStatus::Settled => {}
+            crate::verbs::decisions::ContractStatus::Unknown => {
+                return Some(ContractCitationRefusal {
+                    code: "CONTRACT_RETIRED",
+                    message: format!(
+                        "cell \"{cell_id}\" refused — its \"decisions\" field cites \"{entry}\", which resolves to store decision {id}, and that decision is no longer in the active set (superseded, redacted or archived). D3: work may not run against a retired contract decision — the contract it names has already been replaced. FIX: run `bee decisions active --json` to find the decision that replaced {short}, cite that id instead (`bee cells update --id \"{cell_id}\" --stdin` with a `{{\"decisions\": [...]}}` patch — the cell is still open, so it is updatable), then retry."
+                    ),
+                });
+            }
+            crate::verbs::decisions::ContractStatus::Unsettled => {
+                return Some(ContractCitationRefusal {
+                    code: "CONTRACT_UNSETTLED",
+                    message: format!(
+                        "cell \"{cell_id}\" refused — its \"decisions\" field cites \"{entry}\", which resolves to store decision {id}, and that decision still carries an OPEN revisit trigger (waiting or due), so the contract it names is unsettled. D2/D3: work may not run against a contract nobody has settled — tests written against it would mint the contract instead of checking it. FIX: run `bee triggers list` to see the open trigger keyed to {short}, settle it (`bee triggers resolve --id <trigger> --outcome \"<what settled>\"`, or supersede the decision), then retry."
+                    ),
+                });
+            }
+        }
+    }
+    None
+}
+
+/// The tripwire. `None` means "nothing to refuse on" — including every
+/// unresolvable entry, and including a store this call could not read.
+///
+/// This is the DISPATCH door's spelling (verbs/drivers/prepare.rs) and the
+/// single-rule spelling generally: it runs the citation tripwire and
+/// nothing else. The claim door calls `contract_claim_refusal` below,
+/// which runs this rule and then the mint trap over one shared read.
+///
+/// Reads are hoisted ABOVE the walk: a cell citing N decisions pays three
+/// store reads, never three per citation.
+pub(crate) fn contract_citation_refusal(
+    root: &Path,
+    cell_id: &str,
+    cell: Option<&Value>,
+) -> Option<ContractCitationRefusal> {
+    let entries = citation_entries(cell);
+    if entries.is_empty() {
+        return None;
+    }
+    let reads = ContractReads::load(root, cell_id)?;
+    citation_refusal_over(&reads, cell_id, &entries)
+}
+
+// ─── slp-contract S5 (D4, store 9c0104e0): the MINT TRAP ──────────────────
+//
+// D4 locks that a test-writing cell citing NO contract decision is refused.
+// The absence problem is the whole point: a contract nobody ever logged
+// reads exactly like "there is no contract", so a worker writes tests
+// against it and the TESTS become the de-facto contract. The tripwire above
+// answers "the contract you cited moved"; this answers "you cited no
+// contract at all".
+//
+// THE SIGNAL, with its limits rather than around them. The cell record has
+// no field marking a test-writing cell (verbs/cells/validate.rs), so this
+// has two arms and they are not equals:
+//
+//   - ARMED (can refuse): the cell declares a test-shaped path in `files`,
+//     or carries `role: "test"`. The path test is `path_looks_like_test`
+//     (verbs/cells/finish_support.rs) — the classifier this repo already
+//     owns, with its own anti-false-positive notes, NOT a new glob set.
+//     Measured over the 92 live cells it fires on 30 with 0 false
+//     positives. `role: "test"` fires on 0 of them today and the role
+//     vocabulary is deliberately open and never membership-checked, so
+//     role is an ADDITIONAL trigger and never the signal.
+//   - ADVISORY (warns, never refuses, in any state): any other cell whose
+//     `title` or `action` names test writing. That is 67 of 92 cells —
+//     too soft to refuse on, loud enough to say.
+//
+// THE HOLE, named rather than hidden: a `role: code` cell adding a
+// `#[cfg(test)]` module inside a source file it was ALREADY touching is the
+// dominant test-writing shape in this repo, and the armed arm cannot see
+// it — only 27 of those 67 title/action matches carry any test-shaped path.
+// The advisory arm is what covers it. Closing it properly needs a real cell
+// field declaring test intent, which D1's "nothing new to forget to update"
+// spirit argues against inventing on a guess, so it is deferred WITH this
+// measurement attached. A guard that tests one state is a law with a hole;
+// this one says which hole.
+//
+// "CITES NO CONTRACT DECISION" is precise, not "cites nothing": the cell
+// trips the trap when NONE of its `cell.decisions` entries resolves to a
+// store decision carrying a `contract:<name>` tag. A local D-ID resolves to
+// nothing and therefore satisfies nothing, and a real store decision with
+// no `contract:` tag does not satisfy it either. This is the tag-AWARE
+// rule; the tripwire above stays tag-blind, and they share one read.
+//
+// THE RAMP, per decision d853e4c6 (touches 9c0104e0). The refusal ships
+// fully built, but while the ACTIVE decision set holds ZERO decisions
+// tagged `contract:<name>` no cell on earth could satisfy the rule, and a
+// rule nobody can satisfy is a dead workflow rather than a guard. So in
+// that state the armed arm WARNS and says what will make it refuse; the
+// moment the first `contract:<name>` decision exists it refuses. The
+// condition is derived from the same active-decision read the tripwire
+// uses — no config key, no flag, no stored counter, because a second thing
+// to forget to update is exactly what D1 refuses.
+//
+// PLACEMENT is the claim door only, unlike the tripwire's two doors. The
+// tripwire needs the dispatch door because a citation's STATUS can change
+// between claim and dispatch; the trap's signal is `files`, `role`,
+// `title` and `action` — static properties of the cell record, with no
+// claim-then-change window to miss.
+
+/// The first test-shaped path this cell declares in `files`, if any — the
+/// armed arm's primary signal, and the string the refusal quotes back so a
+/// worker can see WHICH path armed it.
+fn declared_test_path(cell: Option<&Value>) -> Option<String> {
+    let Some(Value::Array(files)) = cell.and_then(|c| c.get("files")) else {
+        return None;
+    };
+    files.iter().find_map(|v| match v {
+        Value::String(s) if path_looks_like_test(js_trim(s)) => Some(js_trim(s).to_string()),
+        _ => None,
+    })
+}
+
+/// `role: "test"` — the additional trigger. Never the signal on its own
+/// evidence (0 of 92 live cells carry it), but free to honour and the one
+/// declaration a cell CAN make today.
+fn cell_role_is_test(cell: Option<&Value>) -> bool {
+    matches!(cell.and_then(|c| c.get("role")), Some(Value::String(s)) if js_trim(s).eq_ignore_ascii_case("test"))
+}
+
+/// The advisory arm's read: does this text NAME test writing? Tokenised on
+/// non-alphanumerics, so `contest`, `latest` and `attest` never match a
+/// bare `test` substring — the same false-positive care
+/// `path_looks_like_test` takes with path segments.
+fn text_names_tests(text: &str) -> bool {
+    text.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| {
+        matches!(w.to_ascii_lowercase().as_str(), "test" | "tests" | "tested" | "testing")
+    })
+}
+
+/// The advisory arm's signal: `title` or `action` names test writing.
+fn names_test_writing(cell: Option<&Value>) -> bool {
+    let Some(cell) = cell else { return false };
+    ["title", "action"].iter().any(|k| match cell.get(*k) {
+        Some(Value::String(s)) => text_names_tests(s),
+        _ => false,
+    })
+}
+
+/// The ADVISORY arm's one line — a single representation, so the test that
+/// pins its wording pins the bytes the worker actually reads.
+pub(crate) fn mint_trap_advisory_line(cell_id: &str) -> String {
+    format!(
+        "WARNING: cell \"{cell_id}\" names test writing in its title or action, and its \"decisions\" field cites no decision tagged `contract:<name>` — tests written against a contract nobody logged BECOME the contract (D4, the mint trap). ADVISORY ONLY: this arm never refuses, because title/action wording is too soft to refuse on (67 of 92 live cells match it). FIX: cite the decision that settles what these tests check, or log it first with `bee decisions log --tags contract:<name> ...`."
+    )
+}
+
+/// The RAMP warning the armed arm prints INSTEAD of refusing, while the
+/// active decision set holds no `contract:<name>` decision. It has to say
+/// what will make it start refusing, or it is a warning about nothing.
+pub(crate) fn mint_trap_ramp_warning(cell_id: &str, signal: &str) -> String {
+    format!(
+        "WARNING: cell \"{cell_id}\" {signal} and cites no decision tagged `contract:<name>` — tests written against a contract nobody logged BECOME the contract (D4, the mint trap). This is a warning ONLY because the active decision set holds no `contract:<name>` decision yet, so no cell could satisfy the rule. The moment the first one is logged (`bee decisions log --tags contract:<name> ...`), this same claim REFUSES."
+    )
+}
+
+/// The trap, over the same already-loaded read the tripwire just used.
+/// `None` means "nothing to refuse on" — which includes both warn paths,
+/// because a warning is not a refusal.
+fn mint_trap_over(
+    reads: &ContractReads,
+    cell_id: &str,
+    cell: Option<&Value>,
+    entries: &[String],
+) -> Option<ContractCitationRefusal> {
+    let cites_contract = entries.iter().any(|e| {
+        crate::verbs::decisions::resolve_store_citation(&reads.known_ids, e)
+            .is_some_and(|id| reads.contract_tagged(&id))
+    });
+    if cites_contract {
+        return None;
+    }
+    let test_path = declared_test_path(cell);
+    let role_test = cell_role_is_test(cell);
+    if test_path.is_none() && !role_test {
+        // The advisory arm. It warns and returns None — always, in every
+        // ramp state. It is a heuristic over prose; it never refuses.
+        if names_test_writing(cell) {
+            eprintln!("{}", mint_trap_advisory_line(cell_id));
+        }
+        return None;
+    }
+    let signal = match &test_path {
+        Some(p) => format!("declares the test-shaped file \"{p}\""),
+        None => "carries role \"test\"".to_string(),
+    };
+    if !reads.any_contract_tagged() {
+        eprintln!("{}", mint_trap_ramp_warning(cell_id, &signal));
+        return None;
+    }
+    Some(ContractCitationRefusal {
+        code: "CONTRACT_UNCITED",
+        message: format!(
+            "cell \"{cell_id}\" refused — it {signal}, and its \"decisions\" field cites no decision tagged `contract:<name>`. D4: a test-writing cell that cites no contract decision is refused — a contract nobody logged reads exactly like \"there is no contract\", so the tests would MINT the contract instead of checking it. FIX: run `bee decisions active --tag contract:<name> --json` to find the decision that settles what these tests check and cite its id (`bee cells update --id \"{cell_id}\" --stdin` with a `{{\"decisions\": [...]}}` patch — the cell is still open, so it is updatable); if nothing settles it yet, settle it first with `bee decisions log --tags contract:<name> ...`."
+        ),
+    })
+}
+
+/// The CLAIM door's contract check: the citation tripwire (D3) and then the
+/// mint trap (D4), over ONE shared store read, each keeping its own typed
+/// code so a single red proof says which rule fired.
+///
+/// The reads are skipped entirely when neither rule could possibly speak —
+/// no citations to check and nothing that names tests — so the common cell
+/// pays exactly what it paid before the trap existed.
+pub(crate) fn contract_claim_refusal(
+    root: &Path,
+    cell_id: &str,
+    cell: Option<&Value>,
+) -> Option<ContractCitationRefusal> {
+    let entries = citation_entries(cell);
+    let trap_may_speak =
+        declared_test_path(cell).is_some() || cell_role_is_test(cell) || names_test_writing(cell);
+    if entries.is_empty() && !trap_may_speak {
+        return None;
+    }
+    let reads = ContractReads::load(root, cell_id)?;
+    if let Some(refusal) = citation_refusal_over(&reads, cell_id, &entries) {
+        return Some(refusal);
+    }
+    mint_trap_over(&reads, cell_id, cell, &entries)
+}
+
 // ─── D4 (route-record warn-to-deny escalation, docs/history/counter-teeth
 // CONTEXT.md) ────────────────────────────────────────────────────────────
 //
@@ -1237,6 +1697,15 @@ pub(crate) fn claim_cell_from_flags_ex(
         }
 
         let session_id = resolve_session_flag_env(session_flag);
+        if let Some(sid) = session_id.as_deref() {
+            if let Err(e) = crate::verbs::state_group::check_not_borrowed_closed_session(sid, &control) {
+                let msg = match e {
+                    Err2::Msg(m) => m,
+                    Err2::Ex => format!("refused \u{2014} session \"{sid}\" is closed and belongs to another session."),
+                };
+                return Err(Fail::Thrown(msg));
+            }
+        }
 
         // applyWritePolicy (state.mjs) with enforceIsolation:false — only the
         // observe/shared-disjoint arms can act; 'isolated' passes through.
@@ -1420,6 +1889,11 @@ pub(crate) fn claim_cell_cross_session_ex(
         }
         ClaimFileOutcome::Ok { claim } => claim,
     };
+    let claim_session: Option<String> = match file_claim.get("session") {
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    };
+    let session = claim_session.as_deref();
     // Budget check inside the O_EXCL window.
     if let Some(Value::Object(cell_map)) = cell_for_budget {
         match check_cell_budgets(cell_map) {
@@ -1483,6 +1957,33 @@ pub(crate) fn claim_cell_cross_session_ex(
     if let Some(reason) = red_base_refusal(control, &cell_id, fix_first) {
         release_claim(control, session, &cell_id)?;
         return Ok(CrossClaim::Refused { code: "RED_BASE".to_string(), reason });
+    }
+    // slp-contract S4/S5 (D3 and D4, store 9c0104e0) — the two contract
+    // rules, in the SAME pre-store-lock slot and with the SAME unwind as
+    // the three denies above, for the same reason each of them states: a
+    // refusal here releases the claim file and never touches cell status.
+    // This ONE placement covers `cells claim`, `cells claim-next` and
+    // `dispatch prepare --claim`, because all three funnel through this
+    // body.
+    //
+    // Ordered LAST of the pre-lock denies, on the same principle the D4 and
+    // D2 notes above set out: a racing loser sees CLAIMED, a session owed
+    // its one-time route warning sees NO_ROUTE_RECORD, and a red base sees
+    // RED_BASE — each of those is a fact about the CLAIMANT, and it
+    // outranks a fact about the cell's citations. `cell_for_budget` is the
+    // caller's already-read record (Some on all three doors), so this pays
+    // no second cell read.
+    //
+    // ONE call for both rules: the citation tripwire (CONTRACT_RETIRED /
+    // CONTRACT_UNSETTLED) runs first, then the mint trap
+    // (CONTRACT_UNCITED), over a single shared store read. Separately named
+    // codes, so one red proof says which rule fired.
+    if let Some(refusal) = contract_claim_refusal(root, &cell_id, cell_for_budget) {
+        release_claim(control, session, &cell_id)?;
+        return Ok(CrossClaim::Refused {
+            code: refusal.code.to_string(),
+            reason: refusal.message,
+        });
     }
     // claimCell under the per-cell store lock; every throw unwinds the
     // claim file and surfaces as CLAIM_CELL_FAILED.
@@ -2158,3 +2659,689 @@ pub(crate) fn run_backfill_roles(flags: rsv::Flags, use_json: bool, t0: Instant)
         Ok(Out::Emit(role_backfill_json(&report, dry_run), role_backfill_text(&report, dry_run), 0))
     })
 }
+
+pub(crate) fn reroute_cell_core(
+    root: &Path,
+    id: &str,
+    new_role: &str,
+    decision_id: &str,
+) -> MR<Value> {
+    assert_not_archived(root, "cells reroute", id)?;
+
+    let mut _guard = acquire_named_lock(root, &format!("cells:{id}"))?;
+
+    let cell_opt = read_cell_norm(root, id)?;
+    let mut cell = match cell_opt {
+        Some(c) => c,
+        None => return Err(Fail::Thrown(format!("cells reroute: cell \"{id}\" not found."))),
+    };
+
+    let status = cell.get("status").and_then(Value::as_str).unwrap_or("");
+    if status != "open" && status != "blocked" {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_status: cell \"{id}\" has status \"{status}\" — only open or blocked cells can be re-routed."
+        )));
+    }
+
+    if read_claim(root, id)?.is_some() {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_claimed: cell \"{id}\" has an active claim — only unclaimed cells can be re-routed."
+        )));
+    }
+
+    let current_role = cell.get("role").and_then(Value::as_str).unwrap_or("");
+    if current_role == new_role {
+        return Err(Fail::Thrown(format!(
+            "role_unchanged: cell \"{id}\" role is already \"{new_role}\"."
+        )));
+    }
+
+    let feature = cell.get("feature").and_then(Value::as_str)
+        .ok_or_else(|| Fail::Thrown(format!("cells reroute: cell \"{id}\" has no feature.")))?;
+
+    let approved_packet = get_approved_preview_packet(root, feature)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_no_approved_packet: feature \"{feature}\" has no approved preview packet.")))?;
+
+    let role_plan = crate::verbs::state_group::get_approved_role_plan(root, feature)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_no_role_plan: feature \"{feature}\" has no approved role plan.")))?;
+
+    let runtime = role_plan.get("runtime").and_then(Value::as_str).unwrap_or("");
+    let table_val = crate::verbs::models_group::team_table(root, Some(runtime))
+        .map_err(|e| Fail::Thrown(format!("role_reroute_unsupported_runtime: {e}")))?;
+    let runtimes_arr = table_val.get("runtimes").and_then(Value::as_array)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_unsupported_runtime: no runtimes returned for \"{runtime}\"")))?;
+    let rt_entry = runtimes_arr.iter()
+        .find(|r| r.get("runtime").and_then(Value::as_str) == Some(runtime))
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_unsupported_runtime: runtime \"{runtime}\" not found in team table")))?;
+    let roles_arr = rt_entry.get("roles").and_then(Value::as_array)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_unsupported_runtime: no roles found for runtime \"{runtime}\"")))?;
+    let (_, configured_roles) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+    if !configured_roles.contains(new_role) {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_unconfigured_role: role \"{new_role}\" is not configured for runtime \"{runtime}\"."
+        )));
+    }
+
+    let approved_sha = approved_packet.get("plan_sha256").and_then(Value::as_str).unwrap_or("");
+    let plan_path = crate::verbs::state_group::advisor_plan_path(root, feature);
+    if plan_path.exists() {
+        let bytes = std::fs::read(&plan_path).map_err(|e| Fail::Thrown(format!("role_reroute_plan_read_failed: {e}")))?;
+        let current_sha = crate::verbs::state_group::compute_plan_sha256(&bytes);
+        if !approved_sha.is_empty() && approved_sha != current_sha {
+            return Err(Fail::Thrown(format!(
+                "role_reroute_plan_hash_mismatch: plan.md changed since preview was approved (expected {approved_sha}, got {current_sha})."
+            )));
+        }
+    }
+
+    let candidates = crate::verbs::decisions::decision_target_candidates(root);
+    let resolved_decision_id = crate::verbs::decisions::resolve_tag_target(&candidates, Some(&Value::String(decision_id.to_string())))
+        .map_err(|e| Fail::Thrown(format!("role_reroute_decision_not_found: {e}")))?;
+
+    let all_decisions = crate::verbs::decisions::active_decisions(root, true)
+        .map_err(|_| Fail::Thrown("role_reroute_decision_store_corrupt: cannot read decisions store".to_string()))?;
+    let decision = all_decisions.iter()
+        .find(|d| d.get("id").and_then(Value::as_str) == Some(&resolved_decision_id))
+        .or_else(|| candidates.iter().find(|(k, _)| k == &resolved_decision_id).map(|(_, v)| v))
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_decision_not_found: decision \"{resolved_decision_id}\" not found.")))?;
+
+    let dec_feature = decision.get("feature").and_then(Value::as_str).unwrap_or("");
+    if dec_feature != feature {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_decision_feature_mismatch: decision \"{resolved_decision_id}\" belongs to feature \"{dec_feature}\", not cell feature \"{feature}\"."
+        )));
+    }
+
+    let has_tag = decision.get("tags")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().any(|t| t.as_str() == Some("role-reroute")))
+        .unwrap_or(false);
+    if !has_tag {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_decision_missing_tag: decision \"{resolved_decision_id}\" does not carry required tag \"role-reroute\"."
+        )));
+    }
+
+    let approved_cells = approved_packet.get("cells").and_then(Value::as_array)
+        .ok_or_else(|| Fail::Thrown("role_reroute_no_cells: approved preview packet has no cells.".into()))?;
+    let approved_cell = approved_cells.iter()
+        .find(|c| c.get("id").and_then(Value::as_str) == Some(id))
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_cell_not_in_plan: cell \"{id}\" was not declared in approved preview packet.")))?;
+    let original_role = approved_cell.get("role").and_then(Value::as_str)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_cell_missing_role: cell \"{id}\" in approved packet has no role.")))?;
+
+    validate_cell_role_chain(original_role, &cell)
+        .map_err(Fail::Thrown)?;
+
+    let now = rsv::now_iso();
+    let reroute_record = json!({
+        "from": current_role,
+        "to": new_role,
+        "decision": resolved_decision_id,
+        "at": now,
+        "plan_sha256": approved_sha
+    });
+
+    let cell_map = cell.as_object_mut().ok_or_else(|| Fail::Thrown("corrupt cell".into()))?;
+    cell_map.insert("role".into(), Value::String(new_role.to_string()));
+
+    let reroutes = cell_map.entry("role_reroutes".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    if let Value::Array(arr) = reroutes {
+        arr.push(reroute_record);
+    } else {
+        *reroutes = Value::Array(vec![reroute_record]);
+    }
+
+    let cell_file = cells_dir(root).join(format!("{id}.json"));
+    write_json_atomic(&cell_file, &cell)
+        .map_err(|e| Fail::Thrown(format!("cannot write cell file: {e}")))?;
+
+    Ok(cell)
+}
+
+pub(crate) fn run_reroute(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["id", "role", "decision"]) {
+        return None;
+    }
+    let id = flags.req_str("id")?.to_string();
+    let role = flags.req_str("role")?.to_string();
+    let decision = flags.req_str("decision")?.to_string();
+    dispatch("cells reroute", use_json, t0, move |ctx| {
+        let root = ctx.root.clone();
+        let cell = reroute_cell_core(&root, &id, &role, &decision)?;
+        let prev_role = cell.get("role_reroutes")
+            .and_then(Value::as_array)
+            .and_then(|arr| arr.last())
+            .and_then(|e| e.get("from"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let text = format!("Re-routed cell \"{id}\" from \"{prev_role}\" to \"{role}\" (decision {decision}).");
+        Ok(Out::Emit(cell, text, 0))
+    })
+}
+
+// ── cells rebind-session ────────────────────────────────────────────────────
+
+/// Rebind every active claim in `.bee/claims` owned by `--from` session to `--to` session via `adopt_claim`.
+///
+/// A bumped fence_epoch causes any other holder presenting a stale epoch to be refused with CLAIM_FENCE_STALE on subsequent renew or release.
+pub(crate) fn rebind_session_core(control: &Path, from: &str, to: &str) -> MR<Vec<Value>> {
+    let from_id = require_id(from, "from session id")?;
+    let to_id = require_id(to, "to session id")?;
+    let dir = claims_dir(control);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Vec::new());
+        }
+        Err(e) => return Err(Fail::Thrown(format!("cannot read claims directory: {e}"))),
+    };
+
+    let mut cell_ids: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(cell_id) = name.strip_suffix(".json") {
+            cell_ids.push(cell_id.to_string());
+        }
+    }
+    cell_ids.sort();
+
+    let now = rsv::now_ms();
+    let mut rebound = Vec::new();
+
+    for cell_id in cell_ids {
+        let claim = match read_claim(control, &cell_id)? {
+            Some(c) => c,
+            None => continue,
+        };
+        // Claims of any other session, and expired claims, are untouched.
+        if !claim_active(Some(&claim), now)? {
+            continue;
+        }
+        let owner = match claim.get("session") {
+            Some(Value::String(s)) => s,
+            _ => continue,
+        };
+        if owner != &from_id {
+            continue;
+        }
+
+        match adopt_claim(control, &cell_id, &to_id)? {
+            AdoptClaimOutcome::Ok { claim: adopted_val, .. } => {
+                let fence_epoch = match &adopted_val {
+                    Value::Object(m) => {
+                        let f = current_fence_epoch(m);
+                        if f.fract() == 0.0 {
+                            json!(f as u64)
+                        } else {
+                            json!(f)
+                        }
+                    }
+                    _ => json!(1),
+                };
+                rebound.push(json!({
+                    "cell": cell_id,
+                    "from": from_id,
+                    "to": to_id,
+                    "fence_epoch": fence_epoch,
+                }));
+            }
+            AdoptClaimOutcome::Refused(refusal) => {
+                return Err(Fail::Thrown(format!(
+                    "rebind-session: adopt failed for cell \"{cell_id}\": {}",
+                    refusal.reason
+                )));
+            }
+        }
+    }
+
+    Ok(rebound)
+}
+
+/// Rebind active cell claims from one session to another across relocation.
+///
+/// A bumped fence_epoch causes any other holder presenting a stale epoch to be refused with CLAIM_FENCE_STALE on subsequent renew or release.
+pub(crate) fn run_rebind_session(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["from", "to"]) {
+        return None;
+    }
+    let from = flags.req_str("from")?.to_string();
+    let to = flags.req_str("to")?.to_string();
+    dispatch("cells rebind-session", use_json, t0, move |ctx| {
+        let root = ctx.root.clone();
+        let control = control_root(&root)?;
+        let rebound = rebind_session_core(&control, &from, &to)?;
+        let text = if rebound.is_empty() {
+            "No claims rebound.".to_string()
+        } else {
+            let lines: Vec<String> = rebound
+                .iter()
+                .filter_map(|r| {
+                    let cell = r.get("cell").and_then(Value::as_str)?;
+                    Some(format!("Rebound cell \"{cell}\" from \"{from}\" to \"{to}\"."))
+                })
+                .collect();
+            lines.join("\n")
+        };
+        let payload = json!({ "rebound": rebound });
+        Ok(Out::Emit(payload, text, 0))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rebind_rewrites_only_active_claims_for_matching_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        // 1. Active claim for session-a
+        match claim_cell_file(control, Some("session-a"), "c-1", Some(3600.0)).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("failed to create claim c-1"),
+        }
+
+        // 2. Active claim for session-b (different session)
+        match claim_cell_file(control, Some("session-b"), "c-2", Some(3600.0)).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("failed to create claim c-2"),
+        }
+
+        // 3. Expired claim for session-a
+        let outcome = claim_cell_file(control, Some("session-a"), "c-3", Some(60.0)).unwrap();
+        let mut claim_map = match outcome {
+            ClaimFileOutcome::Ok { claim } => claim.as_object().unwrap().clone(),
+            _ => panic!("failed to create claim c-3"),
+        };
+        claim_map.insert("claimed_at".into(), Value::String("2020-01-01T00:00:00.000Z".into()));
+        let c3_path = claim_path(control, "c-3").unwrap();
+        write_json_atomic(&c3_path, &Value::Object(claim_map)).unwrap();
+
+        // Rebind session-a to session-new
+        let rebound = rebind_session_core(control, "session-a", "session-new").unwrap();
+
+        // Must rebind exactly c-1
+        assert_eq!(rebound.len(), 1);
+        assert_eq!(rebound[0]["cell"], "c-1");
+        assert_eq!(rebound[0]["from"], "session-a");
+        assert_eq!(rebound[0]["to"], "session-new");
+        assert_eq!(rebound[0]["fence_epoch"], json!(2));
+
+        // Verify c-1 on disk
+        let c1_disk = read_claim(control, "c-1").unwrap().unwrap();
+        assert_eq!(c1_disk.get("session"), Some(&Value::String("session-new".into())));
+        assert_eq!(c1_disk.get("adopted_from"), Some(&Value::String("session-a".into())));
+        assert_eq!(current_fence_epoch(&c1_disk), 2.0);
+
+        // Verify c-2 on disk (untouched)
+        let c2_disk = read_claim(control, "c-2").unwrap().unwrap();
+        assert_eq!(c2_disk.get("session"), Some(&Value::String("session-b".into())));
+        assert_eq!(current_fence_epoch(&c2_disk), 1.0);
+
+        // Verify c-3 on disk (expired, untouched)
+        let c3_disk = read_claim(control, "c-3").unwrap().unwrap();
+        assert_eq!(c3_disk.get("session"), Some(&Value::String("session-a".into())));
+        assert_eq!(current_fence_epoch(&c3_disk), 1.0);
+    }
+
+    #[test]
+    fn rebind_increments_fence_epoch_by_exactly_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        match claim_cell_file(control, Some("sess-old"), "c-epoch", Some(3600.0)).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("failed to create claim"),
+        }
+
+        // Set fence_epoch to 5 manually
+        let mut claim_map = read_claim(control, "c-epoch").unwrap().unwrap();
+        claim_map.insert("fence_epoch".into(), json!(5.0));
+        let path = claim_path(control, "c-epoch").unwrap();
+        write_json_atomic(&path, &Value::Object(claim_map)).unwrap();
+
+        let rebound = rebind_session_core(control, "sess-old", "sess-new").unwrap();
+        assert_eq!(rebound.len(), 1);
+        assert_eq!(rebound[0]["fence_epoch"], json!(6));
+
+        let on_disk = read_claim(control, "c-epoch").unwrap().unwrap();
+        assert_eq!(current_fence_epoch(&on_disk), 6.0);
+    }
+
+    #[test]
+    fn rebind_no_matching_claims_is_clean_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        // 1. Directory does not exist yet
+        let rebound = rebind_session_core(control, "sess-old", "sess-new").unwrap();
+        assert!(rebound.is_empty());
+
+        // 2. Directory exists, but no claims match
+        std::fs::create_dir_all(claims_dir(control)).unwrap();
+        let rebound = rebind_session_core(control, "sess-old", "sess-new").unwrap();
+        assert!(rebound.is_empty());
+    }
+
+    #[test]
+    fn rebind_flag_validation_and_keys_known() {
+        // Missing --from
+        let toks = vec!["--to=sess-2"];
+        let (flags, json) = rsv::parse_flags(&toks).unwrap();
+        assert!(run_rebind_session(flags, json, Instant::now()).is_none());
+
+        // Missing --to
+        let toks = vec!["--from=sess-1"];
+        let (flags, json) = rsv::parse_flags(&toks).unwrap();
+        assert!(run_rebind_session(flags, json, Instant::now()).is_none());
+
+        // Unknown flag
+        let toks = vec!["--from=sess-1", "--to=sess-2", "--unknown=foo"];
+        let (flags, json) = rsv::parse_flags(&toks).unwrap();
+        assert!(run_rebind_session(flags, json, Instant::now()).is_none());
+
+        // Valid flags
+        let toks = vec!["--from=sess-1", "--to=sess-2"];
+        let (flags, _) = rsv::parse_flags(&toks).unwrap();
+        assert!(rsv::keys_known(&flags, &["from", "to"]));
+        assert_eq!(flags.req_str("from"), Some("sess-1"));
+        assert_eq!(flags.req_str("to"), Some("sess-2"));
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn fixture_e32f3a66_cells(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        crate::verbs::worktree::run_git(&main, &["init", "-q"]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.name", "test"]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.email", "test@test.test"]);
+        std::fs::write(main.join("README.md"), "# main\n").unwrap();
+        crate::verbs::worktree::run_git(&main, &["add", "README.md"]);
+        crate::verbs::worktree::run_git(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        let ungranted = tmp.join("wt-ungranted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/u"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-granted\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(ungranted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(ungranted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            ungranted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo-ungranted\"}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            main.join(".bee").join("state.json"),
+            "{\"schema_version\":\"1.0\",\"phase\":\"idle\",\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        (main, granted, ungranted)
+    }
+
+
+
+    #[test]
+    #[ignore = "spawned by contract_control_plane_from_worktree_e32f3a66_cells_verbs"]
+    fn refused_verbs_print_the_granted_worktree_text_child() {
+        let verbs: [&[&str]; 8] = [
+            &["cells", "claim", "--id", "demo-1", "--worker", "w1"],
+            &["cells", "claim-next", "--worker", "w1"],
+            &["cells", "unclaim", "--id", "demo-1"],
+            &["cells", "reopen", "--id", "demo-1", "--reason", "test"],
+            &["cells", "cap", "--id", "demo-1", "--report", "{\"outcome\":\"done\",\"commit\":\"none\",\"files\":[],\"tests\":\"true — green:unit — ok\",\"deviations\":[]}", "--no-mistakes"],
+            &["cells", "block", "--id", "demo-1", "--reason", "test"],
+            &["cells", "drop", "--id", "demo-1", "--reason", "test"],
+            &["cells", "rebind-session", "--from", "sess-1", "--to", "sess-2"],
+        ];
+        for argv in verbs {
+            let args: Vec<OsString> = argv.iter().map(OsString::from).collect();
+            let code = crate::verbs::cells::try_native(&args, Instant::now());
+            assert_eq!(code, Some(ExitCode::FAILURE), "{argv:?}");
+        }
+    }
+
+    #[test]
+    fn contract_control_plane_from_worktree_e32f3a66_cells_verbs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, ungranted) = fixture_e32f3a66_cells(tmp.path());
+        let cell_json = tmp.path().join("cell.json");
+        std::fs::write(
+            &cell_json,
+            "{\"id\":\"demo-1\",\"feature\":\"demo\",\"title\":\"t\",\"lane\":\"standard\",\"role\":\"code\",\"action\":\"act\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"ok\"]},\"verify\":\"true\",\"affects_skills\":[],\"affects_specs\":[]}\n",
+        )
+        .unwrap();
+
+        {
+            let _cwd = CwdGuard::enter(&granted);
+            let code_add = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("add"),
+                    OsString::from("--file"),
+                    cell_json.as_os_str().to_os_string(),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_add, Some(ExitCode::SUCCESS));
+            assert!(main.join(".bee").join("cells").join("demo-1.json").exists());
+            assert!(!granted.join(".bee").join("cells").join("demo-1.json").exists());
+
+            let code_list = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("list"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_list, Some(ExitCode::SUCCESS));
+
+            let code_claim = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("claim"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--worker"),
+                    OsString::from("w1"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_claim, Some(ExitCode::FAILURE));
+
+            let code_claim_next = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("claim-next"),
+                    OsString::from("--worker"),
+                    OsString::from("w1"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_claim_next, Some(ExitCode::FAILURE));
+
+            let code_unclaim = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("unclaim"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_unclaim, Some(ExitCode::FAILURE));
+
+            let code_reopen = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("reopen"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--reason"),
+                    OsString::from("test"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_reopen, Some(ExitCode::FAILURE));
+
+            let code_cap = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("cap"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--report"),
+                    OsString::from("{\"outcome\":\"done\",\"commit\":\"none\",\"files\":[],\"tests\":\"true — green:unit — ok\",\"deviations\":[]}"),
+                    OsString::from("--no-mistakes"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_cap, Some(ExitCode::FAILURE));
+
+            let code_block = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("block"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--reason"),
+                    OsString::from("test"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_block, Some(ExitCode::FAILURE));
+
+            let code_drop = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("drop"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--reason"),
+                    OsString::from("test"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_drop, Some(ExitCode::FAILURE));
+
+            let code_rebind = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("rebind-session"),
+                    OsString::from("--from"),
+                    OsString::from("sess-1"),
+                    OsString::from("--to"),
+                    OsString::from("sess-2"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_rebind, Some(ExitCode::FAILURE));
+
+            let exe = std::env::current_exe().expect("test binary path");
+            let out = std::process::Command::new(&exe)
+                .args([
+                    "--exact",
+                    "verbs::cells::handlers_write::tests::refused_verbs_print_the_granted_worktree_text_child",
+                    "--ignored",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .current_dir(&granted)
+                .output()
+                .unwrap();
+            let combined = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&out.stderr),
+                String::from_utf8_lossy(&out.stdout)
+            );
+            assert_eq!(
+                combined
+                    .matches("refused inside a granted feature worktree — this command reads the shared control plane")
+                    .count(),
+                8,
+                "{combined}"
+            );
+
+            let code_finish = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("finish"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--files"),
+                    OsString::from("src/main.rs"),
+                    OsString::from("--commit-pending"),
+                    OsString::from("test"),
+                    OsString::from("--report"),
+                    OsString::from("{\"outcome\":\"done\",\"commit\":\"none\",\"files\":[\"src/main.rs\"],\"tests\":\"true — green:unit — ok\",\"deviations\":[]}"),
+                    OsString::from("--no-mistakes"),
+                    OsString::from("--force-ownership"),
+                    OsString::from("--inline-reason"),
+                    OsString::from("test"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_finish, Some(ExitCode::SUCCESS));
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&main);
+            let code_main_list = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("list"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_main_list, Some(ExitCode::SUCCESS));
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&ungranted);
+            let code_ungranted_add = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("add"),
+                    OsString::from("--file"),
+                    cell_json.as_os_str().to_os_string(),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_ungranted_add, Some(ExitCode::FAILURE));
+        }
+    }
+}
+

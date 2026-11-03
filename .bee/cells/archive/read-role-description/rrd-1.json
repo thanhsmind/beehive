@@ -1,0 +1,63 @@
+{
+  "id": "rrd-1",
+  "feature": "read-role-description",
+  "title": "Reword the seeded read-role description so it stops promising a broad hunt",
+  "lane": "tiny",
+  "role": "docs",
+  "action": "In packages/bee-rs/crates/bee/src/onboard/templates.rs, replace team.claude.read's description 'multi-file gathers and codebase scans, read-only' with wording that names the narrow read job and points a broad multi-file scan at a role-less --kind gather. Change nothing else: no alias, no pinned agent, no model.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "goal": "A leader reading bee team show no longer names --role read for a broad hunt and receives bee-extract's narrow contract. Routing, aliases and pinned agents are untouched (gather-reads-the-read-slot D3, store dd4c22d3).",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard and drivers tests green; bee dispatch prepare --runtime claude --kind gather --role read still returns the bee-extract payload.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "leader-inline",
+    "outcome": "read role's seeded description now names the narrow read job and points a broad scan at a role-less --kind gather; routing untouched",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+      ".bee/config.json"
+    ],
+    "deviations": [
+      "bee config set is not built into this binary (its own help says so); .bee/config.json was edited directly, which is the CLI-only rule taking its named fallback"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-10T15:23:47.123Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "4a486d78-96ee-4e43-8fd1-5c1bcbca3766",
+    "claimed_at": "2026-09-10T15:21:46.910Z",
+    "mistakes": [
+      {
+        "wrong": "I proposed making --role read render the bee-gather prompt and the user approved that",
+        "better": "the fence check then found gather-reads-the-read-slot D3 locks the opposite — I should have read the feature CONTEXT for the alias BEFORE recommending a fix, so the recommendation never contradicted a locked decision"
+      }
+    ],
+    "report": {
+      "outcome": "read role description reworded to match the agent the door actually returns; B17 gains the read spelling; routing, aliases and pinned agents untouched",
+      "commit": "0a669ccc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+        ".bee/config.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard + drivers:: — green:unit — 185 and 364 passed, 0 failed; the seed template and the dispatch door are the only surfaces the reworded string reaches, and bee team show plus bee dispatch prepare --role read were run live to confirm the roster and the returned payload now agree",
+      "deviations": [
+        "bee config set is not built into this binary (its own help says so); .bee/config.json was edited directly, which is the CLI-only rule taking its named fallback"
+      ],
+      "mistakes": [
+        "I proposed making --role read render the bee-gather prompt and the user approved that — the fence check then found gather-reads-the-read-slot D3 locks the opposite — I should have read the feature CONTEXT for the alias BEFORE recommending a fix, so the recommendation never contradicted a locked decision"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "id": "pprf-1",
+  "feature": "pi-parity-review-fixes",
+  "title": "Select the runtime in injected dispatch guidance",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "7da86fdb-40de-415c-b3ac-ae84a4c89d60"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-parity-review-fixes/CONTEXT.md",
+    "docs/history/pi-parity-review-fixes/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "regen_obligation_ack": "pprf-2 owns the final serialized Pi extension bytes and runs the release-manifest regeneration after both extension edits",
+  "action": "Apply red-before-green for F1 and D1-D2. Add compiling tests that show Pi session-init renders Claude dispatch guidance on both normal and compact branches. Keep existing default builders compatible, add runtime-aware paths, allow only the dispatch runtime set, and make malformed or absent runtime input fall back to Claude. Send runtime pi from the Pi extension. In the real Pi contract harness, extract each dispatch prepare command from normal and compact injected text, execute it without adding a runtime flag, and require the team.pi Bash/herding payload. Assert explicit and default Claude remain Claude and explicit Codex remains Codex. Do not change Pi transport.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_init && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts injected",
+  "must_haves": {
+    "truths": [
+      "Normal and compact Pi session-init output publish dispatch prepare --runtime pi.",
+      "Commands extracted from both injected outputs execute as team.pi herding payloads without test-added runtime flags.",
+      "Absent, null, non-string, and unknown runtime values cannot inject command text and preserve Claude behavior.",
+      "Pi remains herding-only and receives no Agent-tool route."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "substantive": "allowlisted runtime propagation into both injected builders"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "substantive": "runtime-aware normal preamble rendering"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+        "substantive": "runtime-aware compact capsule rendering"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "preamble-derived command execution for Pi"
+      }
+    ],
+    "key_links": [
+      "bee-guard.ts sends runtime pi to session-init",
+      "session-init passes one selected runtime to normal and compact builders",
+      "both builders use model_guard::dispatch_door_lines",
+      "the test executes the command parsed from injected output"
+    ],
+    "prohibitions": [
+      "Do not add a Pi Agent tool or second worker transport.",
+      "Do not hand-write --runtime pi in the proof command.",
+      "Do not accept arbitrary runtime strings into rendered command text.",
+      "Do not add OMP support."
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pprf-1",
+    "outcome": "Pi session initialization now injects runtime-correct dispatch guidance on normal and compact paths.",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T17:43:05.780Z",
+    "behavior_change": true,
+    "verification_evidence": "runtime normalization, both injected branches, extracted command execution, and Pi herding-only dispatch passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09b73-3f97-7737-b6f6-765cf6382c55",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_init && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts injected",
+    "claimed_at": "2026-09-13T16:34:43.600Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pi normal and compact session-init paths now publish and execute runtime-correct dispatch guidance.",
+      "commit": "52012cb11b5a0e6d82680e911241c2ee6686adc4",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_init && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts injected — green:unit — runtime normalization, both injected branches, extracted command execution, and Pi herding-only dispatch passed",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "runtime-propagates-to-both-injections",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/src/hooks/session_init.rs:79-105,164-236` allowlists claude/codex/pi and passes one selected runtime to normal and compact builders; `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs:482-488` and `packages/bee-rs/crates/bee/src/hooks/compaction.rs:1376-1382` render the dispatch door with that runtime."
+          },
+          {
+            "id": "preamble-derived-pi-herding-proof",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:2179-2350` extracts dispatch commands from normal and compact injected text, executes them without adding a runtime flag, and asserts Bash/herding plus `team.pi`; the focused test passed."
+          },
+          {
+            "id": "safe-fallback-and-transport-boundary",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/src/hooks/session_init.rs:972-1002` covers known runtimes and absent/null/non-string/unknown fallback to Claude; `.pi/extensions/bee-guard.ts:1647` sends `runtime: \"pi\"`, with no Agent route added. The full suite passed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-14T02:49:19.505Z"
+      }
+    ]
+  }
+}

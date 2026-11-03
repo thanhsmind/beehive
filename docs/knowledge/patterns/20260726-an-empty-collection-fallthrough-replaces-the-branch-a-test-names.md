@@ -7,7 +7,7 @@ timestamp: 2026-07-26
 bee:
   id: pattern-20260726-an-empty-collection-fallthrough-replaces-the-branch-a-test-names
   lifecycle: active
-  areas: []
+  areas: [verify-pipeline]
   required_context: []
   decisions: []
   sources: [rust-port (cell rust-port-17 goal-check finding state-sync-side-effect-parity; cell rust-port-21 worker-ladder observation), docs/history/rust-port/reports/rust-port-21.md]

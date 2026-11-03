@@ -1,0 +1,218 @@
+{
+  "id": "cpc-4",
+  "feature": "codex-parity-completion",
+  "title": "Publish verified Codex parity contracts",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "cpc-2",
+    "cpc-3"
+  ],
+  "decisions": [
+    "ee16df03-e88d-4f5e-9f64-400114d9d234"
+  ],
+  "files": [
+    "README.md",
+    "docs/06-runtime-integration.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/hook-runtime/native-spawn-and-transport-classification.md",
+    "docs/knowledge/areas/hook-runtime/codex-spawn-agent-dispatch-payload-schema-and-schema-agnosti.md",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+    "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/verify/verify-app/features/codex-runtime.md",
+    "docs/history/codex-parity-completion/CREATION-LOG.md"
+  ],
+  "read_first": [
+    "docs/history/codex-parity-completion/CONTEXT.md",
+    "docs/history/codex-parity-completion/plan.md",
+    "docs/knowledge/areas/hook-runtime/overview.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    ".bee/verify/verify-app/features/README.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "action": "Per D1, reconcile owning knowledge concepts and runtime documentation against cpc-1/2/3 code and actual evidence. Remove false claims that doctor is absent or that all Codex builds lack model selection. Document supported sandbox fallback and retained platform differences precisely. Update only runtime-sensitive swarming reference instructions required by changed dispatch behavior; use bee-writing-skills for that edit and pressure-test relevant scenarios. Add a verification feature recipe for installed Codex guard, dispatch, transcript and lifecycle paths. Mark source/canary/runtime-test evidence separately; never equate doctor attestation with live proof. Use existing concepts rather than creating duplicates. Leader runs regeneration and full-suite integration after this commit.",
+  "verify": "git diff --check",
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "Documentation names the actual supported paths and limits at the tested CLI version.",
+      "The verification map drives deny, allow, read-only dispatch and turn completion.",
+      "Installed instructions describe the supported dispatch schema and sandbox fallback."
+    ],
+    "artifacts": [
+      {
+        "path": "docs/06-runtime-integration.md",
+        "substantive": "Current evidence-backed runtime parity reference."
+      }
+    ],
+    "key_links": [
+      "Installed bee commands reach the updated production behavior."
+    ],
+    "prohibitions": [
+      "Do not weaken Claude guards, alter real credentials, or claim unobserved platform support."
+    ]
+  },
+  "trace": {
+    "worker": "Dana",
+    "outcome": "Publish verified Codex runtime limits, dispatch instructions and executable sandbox recipe.",
+    "files_changed": [
+      "README.md",
+      "docs/06-runtime-integration.md",
+      "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/hook-runtime/native-spawn-and-transport-classification.md",
+      "docs/knowledge/areas/hook-runtime/codex-spawn-agent-dispatch-payload-schema-and-schema-agnosti.md",
+      "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+      "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      ".bee/verify/verify-app/features/README.md",
+      ".bee/verify/verify-app/features/codex-runtime.md",
+      "docs/history/codex-parity-completion/CREATION-LOG.md"
+    ],
+    "deviations": [
+      "Leader owns wave-barrier regeneration and integration proof; worker amended cpc-4 through user-approved bounded revisions."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T04:26:38.505Z",
+    "behavior_change": true,
+    "verification_evidence": "final instruction scenarios passed in job-1789272594951-3409518-1; actual prepared a3600d96-c439-433d-90dc-4186da0994fd executed through documented bash-c helper: raw read-only denials both status1, exit0, unchanged target hash and no continuation file, /var/tmp/bee-verify/evidence/20260913-112318-3463334/001 through 005; before-state old guide eval failed127 and old instructions failed B/B/A. Installed final-code canary VVDuwM separately proves writes and persisted parent Stop, native spawn skipped; earlier ZPuEAI guard and Cm0jce child evidence retained. Regen chain and pointer/manifest checks passed; full integration suite running.",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+    "verify_command": "git diff --check",
+    "claimed_at": "2026-09-13T04:23:00.752Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-13T03:48:23.674Z",
+        "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+        "claimed_at": "2026-09-13T03:36:20.576Z",
+        "acquired_at": "2026-09-13T03:36:20.576Z",
+        "worker": "Dana",
+        "verdict": "blocked",
+        "failure_signature": "d1e75b18129b",
+        "note": "First cpc-4 completeness revision of 69e9bc69. Verified failures: (1) swarming reference and CREATION-LOG claim native model status pinned/unverified; current model_guard.rs:1372 and drivers/guard.rs:378 report native-requested with effective_model null when model supplied, inherited-or-unknown without it. Original scenario rerun job-1789271154072-3336152-1 returned A/A/B; S2 is a real new instruction FAIL, S1 also ignores installed 0.154.0 opaque-input refusal. Keep exact rationalizations and correct instructions; leader repeats afterward. (2) callable fork_turns is STRING none/all/positive integer string, not integer. Null slot means no requested model, not a guarantee CLI retains parent settings. Native 0.154.0 cell refusal precedes schema examples. Configured herding/CLI routes stay explicit; do not claim every non-cell slot becomes sandbox CLI. (3) recipe direct write-guard unified diff returned exit0 instead of deny; evidence /var/tmp/bee-verify/evidence/20260913-102057-3257505/001-bee-hook-write-guard.*. Fake Stop without transcript left waiting_on null (002...). Replace these false live recipes with actual scripts/codex-parity-canary.sh invocation (BEE_BIN via control-bee bin, direct CODEX_BIN, approved private CANARY_CODEX_HOME, TMPDIR=/var/tmp), inspect retained installed commands, raw guard exits and unchanged/allowed bytes. For readonly use supported fixture put + ACTUAL prepared command/stdin with direct binary PATH and private CODEX_HOME; script prints both inner denial statuses and finishes0 so real tool output is visible. Existing cpc-2-recovery-green.log gives exact successful probe prompt/outputs. Persisted transcript is required for parent Stop mark, stored in repo .bee/state.json, not per-session record. Do not fabricate mock Stop as installed proof. Map child denial as current supported outcome; previous Cm0jce actual child isolation evidence and unit tests separate. (4) Production manifest has activity ONLY UserPromptSubmit/PreToolUse/PostToolUse/Stop. SessionStart has session-init, SessionEnd is observer-only in canary, not shipped activity. Correct activity/catalog/runtime docs, separate source wiring vs actual observed events and untested privacy/reservations/PreCompact/Windows. (5) native-spawn concept intro/frontmatter still teaches unjudged pass-through despite changed B19; update owning intro/dictionary/current pointers (Rust) and new native_hook_input_opaque classification, keep historical evidence labeled historical. Do not claim user-global config untouched by all test automation; parent found PATH probe can reach mise wrapper; private canary isolation is scoped. Correct only assigned files, preserve other runtime rules/frozen headings, amend cpc-4 commit. Leader owns GREEN, regen and full suite."
+      },
+      {
+        "n": 2,
+        "at": "2026-09-13T03:56:17.187Z",
+        "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+        "claimed_at": "2026-09-13T03:48:47.768Z",
+        "acquired_at": "2026-09-13T03:48:47.768Z",
+        "worker": "Dana",
+        "verdict": "blocked",
+        "failure_signature": "abf6b9f47d22",
+        "note": "Second cpc-4 completeness revision of 17951faf, within original docs scope. Remaining exact corrections:\n1. Replace every new phrase unconfigured read-only roles with model-shaped or prompt-budget non-cell roles (includes Model, Native and null/budget resolutions). Explicit unknown --role is REFUSED, never granted fallback. Explicit herding/CLI transports remain as configured. Source prepare.rs branch _ if runtime codex && purpose_is_gather after explicit transport arms.\n2. Do not conflate guard and prepare errors. installed_native_transport_classification in prepare.rs measures exact version and returns native_hook_input_opaque; dispatch prepare uses that reason. evaluate_codex_spawn in model_guard.rs cannot see marker and returns transport codex-spawn-unmarked with exit2. It does not produce native_hook_input_opaque. Correct reference, concept intro/dictionary/B19, runtime docs and recipe. Current pointer claims read_native_transport_classification/write_native_transport_probe in doctor.rs do NOT exist (rg confirmed). Cite actual installed_native_transport_classification/native_transport_classification_with_cmd in prepare.rs, evaluate_codex_spawn in model_guard.rs, read_attestation/run_attest in doctor.rs, not invented symbols.\n3. Make recipe executable, not a prose handoff. Spell helper commands literally as bash .bee/verify/verify-app/control-bee (including command substitutions). Set BEE_CODEX_PROBE_BIN to the direct Codex executable for prepare, and direct binary PATH plus private CODEX_HOME for execution. Supply the bounded adversarial test PROMPT through prepare --purpose BEFORE preparation; execute exactly returned payload.command and payload.stdin. Never replace prepared stdin with a raw shell script. Include literal put calls with printf for readable.txt=READ_OK_CPC2 newline and target.txt=UNCHANGED_CPC2 newline. Actual supported probe prompt and shell script with captured statuses are in cpc-2-recovery-green.log near BEGIN_ACTUAL_PREPARE_OBSERVED_INTERFACE. Preserve output/error/exit and compare hash; include patch probe from earlier successful prepared run if claiming read-only patch proof.\n4. Canary may skip native spawn. Latest final-code run /var/tmp/bee-codex-canary-VVDuwM/evidence exits0 with write deny/allow and persisted parent Stop, but skipped_capabilities lists native spawn not observed because child declined it. Require checking skipped_capabilities and raw actual model-guard call, never count absence of child event alone as proof of denial. Retain earlier actual ZPuEAI guard exit2 and Cm0jce child-isolation as separate evidence, not a guarantee every canary invokes spawn.\n5. Correct the new activity wording: SubagentStart runs audit only; SubagentStop runs audit+state-sync+chain-nudge. The no-activity-on-child rule is unchanged. Remove blanket sentence behavior stays identical across every runtime where the same paragraph lists proven differences.\nKeep source changes inside cpc-4 declared files, amend cpc-4 only. Do not change Rust, scripts, auth or config. Do not run live tests, regen or full suite. The leader repeats instruction GREEN and actual recipe checks. Retain all baseline and failed-GREEN rationalizations. No further speculative prose."
+      },
+      {
+        "n": 3,
+        "at": "2026-09-13T04:11:05.923Z",
+        "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+        "claimed_at": "2026-09-13T03:56:17.417Z",
+        "acquired_at": "2026-09-13T03:56:17.417Z",
+        "worker": "Dana",
+        "verdict": "blocked",
+        "failure_signature": "c0f3ad03e66c",
+        "note": "Second re-dispatch remains incomplete at 89810053: control-bee sh -- eval fails because helper record executes through env, which requires an executable. Isolated evidence 003-eval-printf-RECIPE-EVAL-CHECK has inner exit127. Harmless replacement check sh -- bash -c returned exit0 in 004-bash-c-printf-RECIPE-BASH-CHECK. Both under /var/tmp/bee-verify/evidence/20260913-102057-3257505. No source fix applied. Pause required by bee-swarming after two failed re-dispatches. Need bounded recipe correction and actual prepared execution, then instruction acceptance, regen, full suite, semantic judge, consolidation and merge/UAT."
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-09-13T04:22:27.730Z",
+    "reopened_reason": "User approved another bounded recipe repair. Replace unsupported helper eval execution with bash -c, verify exact emitted command/stdin, record already-passing final instruction GREEN job-1789272594951-3409518-1 in CREATION-LOG. Do not edit Rust or the tested swarming reference. The two full-suite failures are known pending generated mirrors, owned by leader at wave barrier. Amend cpc-4 commit; leader owns live checks and regen.",
+    "budget_resets": [
+      {
+        "reset_at": "2026-09-13T04:23:00.626Z",
+        "reason": "User explicitly approved another bounded guide repair on this turn. Prior failure is reproduced inner127 for eval through env; candidate bash-c mechanism passed a harmless check. Preserve all attempts; no source scope expansion.",
+        "by_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+        "by_actor": "Codex"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "The guide used eval through an env-based helper and returned exit127",
+        "better": "use bash -c and execute the exact prepared command before accepting documentation."
+      },
+      {
+        "wrong": "An earlier reference claimed native model pinning",
+        "better": "preserve native-requested and null effective model as observed."
+      }
+    ],
+    "report": {
+      "outcome": "Publish verified Codex runtime limits, dispatch instructions and executable sandbox recipe.",
+      "commit": "c47f73be6eecdf2bd49e4903bdee9c579b0a8b54",
+      "files": [
+        "README.md",
+        "docs/06-runtime-integration.md",
+        "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "docs/knowledge/areas/hook-runtime/native-spawn-and-transport-classification.md",
+        "docs/knowledge/areas/hook-runtime/codex-spawn-agent-dispatch-payload-schema-and-schema-agnosti.md",
+        "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+        "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        ".bee/verify/verify-app/features/README.md",
+        ".bee/verify/verify-app/features/codex-runtime.md",
+        "docs/history/codex-parity-completion/CREATION-LOG.md"
+      ],
+      "tests": "git diff --check — green:live — final instruction scenarios passed in job-1789272594951-3409518-1; actual prepared a3600d96-c439-433d-90dc-4186da0994fd executed through documented bash-c helper: raw read-only denials both status1, exit0, unchanged target hash and no continuation file, /var/tmp/bee-verify/evidence/20260913-112318-3463334/001 through 005; before-state old guide eval failed127 and old instructions failed B/B/A. Installed final-code canary VVDuwM separately proves writes and persisted parent Stop, native spawn skipped; earlier ZPuEAI guard and Cm0jce child evidence retained. Regen chain and pointer/manifest checks passed; full integration suite running.",
+      "deviations": [
+        "Leader owns wave-barrier regeneration and integration proof; worker amended cpc-4 through user-approved bounded revisions."
+      ],
+      "mistakes": [
+        "The guide used eval through an env-based helper and returned exit127 — use bash -c and execute the exact prepared command before accepting documentation.",
+        "An earlier reference claimed native model pinning — preserve native-requested and null effective model as observed."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 451 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "tested paths and limits documented",
+            "status": "PASS",
+            "evidence": "docs/06-runtime-integration.md:56-71 distinguishes shipped hooks, observed events, opaque native refusal, read-only fallback, and unproved live paths. docs/history/codex-parity-completion/verification-summary.md:29-34 records the tested limits."
+          },
+          {
+            "id": "verification map drives required behavior",
+            "status": "PASS",
+            "evidence": ".bee/verify/verify-app/features/codex-runtime.md:35-75 gives executable checks for deny, allow, model guard, read-only dispatch, turn completion, and child isolation."
+          },
+          {
+            "id": "installed dispatch and sandbox instructions",
+            "status": "PASS",
+            "evidence": "skills/bee-swarming/references/swarming-reference.md:387-395 documents the supported schema, Codex 0.154.0 refusal, external routes, fork_turns strings, and read-only sandbox. CREATION-LOG.md:25-43 retains the failed model-pinning instruction and final three-scenario GREEN result."
+          },
+          {
+            "id": "generated parity and full suite",
+            "status": "PASS",
+            "evidence": "docs/history/codex-parity-completion/verification-summary.md:10-18 records 3,920 passed, zero failed, 20 ignored, three generated hook projections, 376 release files, and git diff --check exit 0; final-green-suite.log:4168-4742 contains the raw successful suite results."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T04:31:09.269Z"
+      }
+    ]
+  }
+}

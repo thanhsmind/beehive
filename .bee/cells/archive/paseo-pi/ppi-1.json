@@ -1,0 +1,149 @@
+{
+  "id": "ppi-1",
+  "feature": "paseo-pi",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "api",
+  "title": "Add the Paseo agent block, CLI argv and status reading",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi/CONTEXT.md",
+    "docs/history/paseo-pi/plan.md",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "action": "Red first. Create packages/bee-rs/crates/bee/src/herding/paseo.rs and declare it with `pub(crate) mod paseo;` in herding.rs beside the other herding modules. Pure functions plus one injectable runner, all unit-tested in a #[cfg(test)] mod tests inside paseo.rs: (1) `PaseoSpec::from_config(cfg: &Value, agent: &str) -> Option<Result<PaseoSpec, String>>` reads `herding.agents.<agent>.paseo` when the entry is an object carrying a `paseo` object: `provider` required non-empty string; `model`, `thinking`, `mode` optional strings; None when the entry has no `paseo` block; Err naming the agent when `provider` is missing or not a string. (2) `paseo_command(cfg) -> String` reads `herding.paseo.command`, default `paseo`. (3) `run_argv(spec, job_id, cwd, env: &[(String,String)], prompt) -> Vec<String>` builds `run -d --json --provider <provider>[/<model>] [--thinking t] [--mode m] --cwd <cwd> --title <job_id> --label bee_job=<job_id> --env K=V ... <prompt>` in that order, one --env per pair. (4) `parse_run_agent_id(stdout) -> Result<String,String>` reads `agentId` from the first JSON object in stdout (Paseo prints lines before the JSON). (5) `PaseoState { Working, Idle, Blocked, Dead }` and `parse_inspect(stdout) -> Option<PaseoState>`: key `Status` (capitalized): running → Working unless `PendingPermissions` is a non-empty array → Blocked; idle → Idle; error and closed → Dead; any other value or unparseable body → None. (6) `version_at_least(output, (0,10,3)) -> bool` parses the last semver-looking token of `paseo --version` output; false when none parses. (7) `inspect_argv(id)`, `archive_argv(id)` = `archive --force <id>`, `logs_argv(id)`. (8) `trait PaseoCli { fn call(&self, args: &[String]) -> Result<String, String>; }` and `RealPaseoCli { command: String }` that runs the command with stdin null and returns stdout on exit 0, else Err with stderr. No code comments.",
+  "must_haves": {
+    "truths": [
+      "an agent entry with a paseo block parses into PaseoSpec with provider, model, thinking and mode",
+      "an agent entry with no paseo block returns None",
+      "a paseo block without provider returns Err naming the agent",
+      "run_argv joins provider and model with a slash and emits one --env per pair and the bee_job label",
+      "parse_run_agent_id reads agentId after leading non-JSON lines",
+      "parse_inspect maps running, idle, error and closed, maps non-empty PendingPermissions to Blocked, and returns None for an unknown status or bad body",
+      "version_at_least accepts 0.10.3 and newer and refuses 0.6.1 and unparseable output"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "substantive": "PaseoSpec, argv builders, parse_inspect, version_at_least, PaseoCli"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding.rs",
+        "substantive": "the paseo module declaration"
+      }
+    ],
+    "key_links": [
+      "PaseoSpec::from_config reads herding.agents.<name>.paseo"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to TransportKind or herding.transport",
+      "No paseo send argv anywhere"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppi-1",
+    "outcome": "herding::paseo module with config parse, argv, status and version",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs"
+    ],
+    "deviations": [
+      "from_config also accepts a top-level agents key besides herding.agents; harmless superset",
+      "sync-ack: skills/bee-herding covers the cockpit roles, not how herding run carries a worker; the Paseo channel concept (ppi-4) is the owning doc"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-05T16:02:10.611Z",
+    "behavior_change": false,
+    "verification_evidence": "10 passed 0 failed, run by the leader after the worker",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+    "claimed_at": "2026-10-05T15:54:37.676Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T16:02:10.610Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T16:18:34.829Z"
+      }
+    ],
+    "sync_ack": "skills/bee-herding covers the cockpit roles, not how herding run carries a worker; the Paseo channel concept (ppi-4) is the owning doc",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "herding::paseo parses the paseo agent block, builds Paseo CLI argv, reads inspect status and the CLI version",
+      "commit": "062d03614",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo — green:unit — 10 passed 0 failed, run by the leader after the worker",
+      "deviations": [
+        "from_config also accepts a top-level agents key besides herding.agents; harmless superset"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 519 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "an agent entry with a paseo block parses into PaseoSpec with provider, model, thinking and mode",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "an agent entry with no paseo block returns None",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "a paseo block without provider returns Err naming the agent",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "run_argv joins provider and model with a slash and emits one --env per pair and the bee_job label",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "parse_run_agent_id reads agentId after leading non-JSON lines",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "parse_inspect maps running, idle, error and closed, maps non-empty PendingPermissions to Blocked, and returns None for an unknown status or bad body",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "version_at_least accepts 0.10.3 and newer and refuses 0.6.1 and unparseable output",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          }
+        ],
+        "recorded_at": "2026-10-05T16:18:34.829Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -1,0 +1,165 @@
+{
+  "id": "scor-5",
+  "feature": "slp-contract-original-request",
+  "title": "Trip the mint trap on a test-writing cell that cites no contract decision",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "scor-4"
+  ],
+  "decisions": [
+    "D4"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "read_first": [
+    "docs/history/slp-contract-original-request/plan.md",
+    "docs/history/slp-contract-original-request/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+  ],
+  "action": "Per D4 (plan.md, Approach, S5): a test-writing cell that cites NO contract decision is refused - the mint trap. Without it, a contract nobody logged reads exactly like 'there is no contract', and the worker mints one by writing tests against it. This cell adds the trap beside the tripwire the previous cell built, and nothing else.\n\nStep 1 - the signal, with its limits, not around them. There is NO cell field marking a test-writing cell (verbs/cells/validate.rs:230-473). Two arms:\n(a) ARMED, can refuse: the cell declares a test-shaped path in files, or carries role 'test'. Do NOT invent globs - reuse path_looks_like_test (verbs/cells/finish_support.rs:693), which already covers a bare test/tests path segment and .test. filenames and carries its own anti-false-positive notes. Measured on the 92 live cells this fires on 30 with 0 false positives; role 'test' fires on 0 today and the role vocabulary is deliberately open and never membership-checked (validate.rs:43,48), so treat role as an additional trigger, never as the signal.\n(b) ADVISORY, warns and never refuses: any other cell whose title or action names test writing. That is 67 of 92 cells - too soft to refuse on, loud enough to say.\nName the hole in the code's own doc comment: a role 'code' cell adding a #[cfg(test)] module inside a source file it was already touching is the DOMINANT test-writing shape in this repo and the armed arm cannot see it. That is accepted and recorded, not hidden.\n\nStep 2 - 'cites no contract decision' is precise, not 'cites nothing'. A cell trips the trap when NONE of its cell.decisions entries resolves to a store decision carrying a tag in the contract:<name> namespace. Reuse the citation resolver and the tag read from verbs/decisions/read.rs; a local D-ID resolves to nothing and therefore does not satisfy the requirement. A cell citing a real store decision that carries no contract tag also does not satisfy it.\n\nStep 3 - the ramp, exactly as logged (decision d853e4c6, relation touches:9c0104e0). The refusal ships fully built, but while the ACTIVE decision set holds zero decisions tagged in the contract: namespace, the armed arm WARNS instead of refusing - in that state no cell can satisfy the rule, and a rule nobody can satisfy is a dead workflow rather than a guard. The moment the first contract:<name> decision exists, the armed arm refuses. Derive that condition from the same active-decision read the tripwire already uses; do NOT add a config switch, a flag, or a stored counter - a second thing to forget to update is exactly what D1 refuses. Follow the warn-then-refuse wording already in this function: NO_ROUTE_RECORD at handlers_write.rs:1465-1471 warns once per session, then refuses; match its voice, and say in the warn text what will make it start refusing.\n\nStep 4 - placement. Same door, same block as the previous cell's tripwire in claim_cell_cross_session_ex, pre-store-lock, zero mutation on refusal, release_claim before returning. The trap and the tripwire are two rules over the same walk - share the read, keep the two refusals separately named so one red proof says which rule fired.\n\nStep 5 - tests in verbs/cells/tests.rs; judge existing coverage first and author only the gap. REFUSE cases (with at least one contract: decision in the fixture store, so the ramp is armed): a cell with a test-shaped path in files and no citation; the same with role 'test' and no test-shaped path; a cell citing a store decision that carries no contract tag. ALLOW cases: a cell with a test-shaped path that DOES cite a contract-tagged decision; a cell with no test-shaped path and no citation; the named hole - a role 'code' cell whose files are source-only, which must PASS, with the test's own name saying that this is the accepted hole. RAMP cases: with zero contract: decisions in the store the same refuse-case cell claims successfully and emits the warning; after one contract: decision is added it is refused. Every refusal leaves the cell open and unclaimed - assert the record.\n\nStep 6 - extend docs/knowledge/areas/workflow-state/dispatch.md: the trap, both arms, the ramp and what flips it, and the named hole with its measurement. Do not restate the tripwire the previous cell documented there; point at it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells",
+  "must_haves": {
+    "truths": [
+      "With at least one contract-tagged decision in the store, a cell declaring a test-shaped file and citing no contract decision is refused, and is left open and unclaimed",
+      "A cell with a test-shaped file that cites a contract-tagged decision claims normally",
+      "A role code cell touching only source files claims normally - the named, accepted hole",
+      "With zero contract-tagged decisions in the store the same refusable cell claims and only warns, and the warning says what will make it refuse"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "substantive": "the two-arm trap with its ramp, beside the tripwire, sharing its read"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "refuse, allow, ramp and named-hole cases, each asserting the cell record after the call"
+      }
+    ],
+    "key_links": [
+      "the armed arm calls path_looks_like_test from finish_support.rs rather than a new glob set",
+      "the ramp condition is derived from the active decision set, not from config or a stored flag"
+    ],
+    "prohibitions": [
+      "No new cell field, config key, or stored counter",
+      "No new test-path glob set",
+      "No mutation on a refusal path",
+      "The advisory arm never refuses, in any state"
+    ]
+  },
+  "trace": {
+    "worker": "scor-w5",
+    "outcome": "Mint trap refuses a test-writing cell that cites no contract decision, with an armed arm, an advisory arm, a derived ramp and its named hole",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "docs/knowledge/areas/workflow-state/dispatch.md"
+    ],
+    "deviations": [
+      "Extracted the two warning strings into mint_trap_ramp_warning / mint_trap_advisory_line producers instead of inlining the eprintln text — the ramp truth requires proving the warning says what ends the ramp, and stderr is not capturable in-process; matches the existing advisory_untested_lines_line single-representation idiom — found a better route",
+      "Refactored scor-4's contract_citation_refusal into a shared ContractReads load plus citation_refusal_over, and pointed the claim door at a new contract_claim_refusal that runs both rules over one read — the cell required sharing the read, and prepare.rs (not in scope) still calls contract_citation_refusal with an unchanged signature and unchanged behaviour — found a better route",
+      "Capped with --sync-ack: the area sync door asks for one of the workflow-state skills; the cell declares affects_skills: [] and does not list a skill file, so that is the orchestrator's scope call — something else had to be fixed first",
+      "sync-ack: Cell scor-5 declares affects_skills: [] and scopes its files to handlers_write.rs, cells/tests.rs and docs/knowledge/areas/workflow-state/dispatch.md; the knowledge doc IS updated (R19, the two arms, the ramp, the named hole). The trap is a CLI-internal claim-door refusal that names its own remedy in the refusal text, so no bee-planning/swarming/reviewing/capturing skill text changes behaviour here. A skill file is outside this cell's declared files and is the orchestrator's scope call."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T02:07:13.689Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "28e79000-c79d-4001-98f1-3de084df4673",
+    "claimed_at": "2026-08-29T01:55:07.776Z",
+    "sync_ack": "Cell scor-5 declares affects_skills: [] and scopes its files to handlers_write.rs, cells/tests.rs and docs/knowledge/areas/workflow-state/dispatch.md; the knowledge doc IS updated (R19, the two arms, the ramp, the named hole). The trap is a CLI-internal claim-door refusal that names its own remedy in the refusal text, so no bee-planning/swarming/reviewing/capturing skill text changes behaviour here. A skill file is outside this cell's declared files and is the orchestrator's scope call.",
+    "report": {
+      "outcome": "Mint trap refuses a test-writing cell that cites no contract decision, with an armed arm, an advisory arm, a derived ramp and its named hole",
+      "commit": "ef9541e6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "docs/knowledge/areas/workflow-state/dispatch.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells — green (342 passed, 0 failed; 7 new trap tests confirmed by name) — the claim door and its cell tests are the only surface this cell changed; the shared tripwire refactor is re-proved by -p bee --bin bee drivers, 300 passed",
+      "deviations": [
+        "Extracted the two warning strings into mint_trap_ramp_warning / mint_trap_advisory_line producers instead of inlining the eprintln text — the ramp truth requires proving the warning says what ends the ramp, and stderr is not capturable in-process; matches the existing advisory_untested_lines_line single-representation idiom — found a better route",
+        "Refactored scor-4's contract_citation_refusal into a shared ContractReads load plus citation_refusal_over, and pointed the claim door at a new contract_claim_refusal that runs both rules over one read — the cell required sharing the read, and prepare.rs (not in scope) still calls contract_citation_refusal with an unchanged signature and unchanged behaviour — found a better route",
+        "Capped with --sync-ack: the area sync door asks for one of the workflow-state skills; the cell declares affects_skills: [] and does not list a skill file, so that is the orchestrator's scope call — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "armed-arm-refuses",
+            "status": "PASS",
+            "evidence": "claiming_a_test_path_cell_that_cites_no_contract_decision_is_refused + claiming_a_role_test_cell_with_no_test_shaped_path_is_refused (both ok); each calls assert_untouched_by_refusal (cells/tests.rs:1773-1784), which asserts the CELL RECORD status is open, no trace.worker stamped, claim file released"
+          },
+          {
+            "id": "armed-arm-allows",
+            "status": "PASS",
+            "evidence": "a_test_path_cell_citing_a_contract_tagged_decision_claims and a_cell_with_no_test_shaped_path_and_no_citation_claims - both ok, both assert status claimed"
+          },
+          {
+            "id": "reuses-existing-classifier",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:1349 calls path_looks_like_test; sole definition is finish_support.rs:693, untouched by the commit (diff touches only handlers_write.rs, cells/tests.rs, dispatch.md); no new glob set"
+          },
+          {
+            "id": "named-hole-passes",
+            "status": "PASS",
+            "evidence": "a_role_code_cell_writing_tests_inside_a_source_file_claims_the_accepted_hole ... ok; the code names it in the THE HOLE, named rather than hidden block of the mint-trap comment and in dispatch.md R19"
+          },
+          {
+            "id": "ramp-derived-not-configured",
+            "status": "PASS",
+            "evidence": "the_mint_trap_warns_until_the_first_contract_decision_exists_then_refuses ... ok; ContractReads::any_contract_tagged derives from active_decide_or_supersede_candidates (read.rs:260, tag overlay at read.rs:243); diff adds no config key, flag, cell field or counter (validate.rs untouched); mint_trap_ramp_warning names the flip condition"
+          },
+          {
+            "id": "advisory-never-refuses",
+            "status": "PASS",
+            "evidence": "mint_trap_over's advisory branch returns None unconditionally after the warning, before any ramp check; pinned by a_role_code_cell_writing_tests_inside_a_source_file_claims_the_accepted_hole with the ramp fully armed"
+          },
+          {
+            "id": "refactor-preserved-scor4",
+            "status": "PASS",
+            "evidence": "prepare.rs:1106-1107 still calls cells::contract_citation_refusal (tripwire only); CONTRACT_RETIRED/CONTRACT_UNSETTLED messages byte-identical between parent (1170-1180) and HEAD (1241-1251); citation_refusal_over has no tag logic, so the tripwire stays tag-blind; all scor-4 tests ok, none changed meaning"
+          },
+          {
+            "id": "zero-mutation-on-refusal",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:1912-1918 - contract_claim_refusal precedes acquire_named_lock at :1922 and calls release_claim; ContractReads is plain reads via triggers::read_without_evaluating; assert_untouched_by_refusal asserted in every trap refusal test"
+          },
+          {
+            "id": "separately-named-refusals",
+            "status": "PASS",
+            "evidence": "trap code CONTRACT_UNCITED vs tripwire codes CONTRACT_RETIRED/CONTRACT_UNSETTLED (handlers_write.rs:1241/1249); refusal prefix asserted per code in tests"
+          },
+          {
+            "id": "tests-actually-ran",
+            "status": "PASS",
+            "evidence": "cargo test -p bee --bins -- trap cit mint contract role_ test_path at worktree HEAD ef9541e6, clean tree - test result: ok. 168 passed; 0 failed; 2928 filtered out; all seven new mint-trap test names present in the output"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-29T02:13:42.584Z"
+      }
+    ]
+  }
+}

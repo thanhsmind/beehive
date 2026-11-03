@@ -75,7 +75,7 @@ pub(crate) fn wave_ledger_path(root: &Path) -> PathBuf {
 }
 
 /// One worker slot inside a wave row.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct WorkerRow {
     pub(crate) name: String,
     pub(crate) pane_id: String,
@@ -88,6 +88,8 @@ pub(crate) struct WorkerRow {
     /// commit — whatever the caller's proof for this worker actually is),
     /// never the evidence itself.
     pub(crate) evidence: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) retryable: Option<bool>,
 }
 
 /// One wave: the row this module appends exactly once per wave.
@@ -100,14 +102,18 @@ pub(crate) struct WaveRow {
 }
 
 fn worker_row_to_json(w: &WorkerRow) -> Value {
-    json!({
+    let mut obj = json!({
         "name": w.name,
         "pane_id": w.pane_id,
         "worktree": w.worktree,
         "task": w.task,
         "outcome": w.outcome,
         "evidence": w.evidence,
-    })
+    });
+    if let Some(r) = w.retryable {
+        obj.as_object_mut().unwrap().insert("retryable".to_string(), Value::Bool(r));
+    }
+    obj
 }
 
 fn wave_row_to_json(row: &WaveRow) -> Value {
@@ -139,6 +145,7 @@ fn worker_row_from_json(v: &Value) -> Option<WorkerRow> {
         task: obj.get("task")?.as_str()?.to_string(),
         outcome: obj.get("outcome").and_then(Value::as_str).map(str::to_string),
         evidence: obj.get("evidence").and_then(Value::as_str).map(str::to_string),
+        retryable: obj.get("retryable").and_then(Value::as_bool),
     })
 }
 
@@ -307,6 +314,103 @@ pub(crate) fn live_worker_count_now(root: &Path) -> Occupancy {
     live_worker_count(root, None, chrono::Utc::now().timestamp_millis(), DEFAULT_STALE_AFTER_MS)
 }
 
+/// The cap on worker names and outcomes returned in an empty-fleet verdict.
+/// Keeps a huge wave from producing an unbounded string or report payload.
+pub(crate) const EMPTY_FLEET_NAME_CAP: usize = 10;
+#[allow(dead_code)]
+pub(crate) const DEFAULT_EMPTY_FLEET_MAX_NAMES: usize = EMPTY_FLEET_NAME_CAP;
+
+/// One worker's name and outcome reported as part of an empty-fleet verdict.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EmptyFleetWorker {
+    pub(crate) name: String,
+    pub(crate) outcome: String,
+}
+
+impl EmptyFleetWorker {
+    #[allow(dead_code)]
+    pub(crate) fn new(name: impl Into<String>, outcome: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            outcome: outcome.into(),
+        }
+    }
+}
+
+/// The empty-fleet verdict for a closed wave in which no worker succeeded.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EmptyFleet {
+    pub(crate) wave_id: String,
+    pub(crate) workers: Vec<EmptyFleetWorker>,
+}
+
+/// Pure predicate: is `row` an empty fleet?
+///
+/// A wave is an EMPTY FLEET when all three hold:
+/// 1. It is closed by the existing `is_closed` predicate (every worker reported an outcome).
+/// 2. It has at least one worker (a wave with zero workers launched nothing).
+/// 3. No worker's outcome is "done".
+///
+/// Furthermore, a wave whose workers all carry "dry_run" did nothing real and is
+/// NOT an empty fleet.
+#[allow(dead_code)]
+pub(crate) fn is_empty_fleet(row: &WaveRow) -> bool {
+    if !is_closed(row) || row.workers.is_empty() {
+        return false;
+    }
+    let has_done = row.workers.iter().any(|w| w.outcome.as_deref() == Some("done"));
+    if has_done {
+        return false;
+    }
+    let all_dry_run = row.workers.iter().all(|w| w.outcome.as_deref() == Some("dry_run"));
+    if all_dry_run {
+        return false;
+    }
+    true
+}
+
+/// Pure verdict over a single wave row, capping returned worker names at `max_names`.
+#[allow(dead_code)]
+pub(crate) fn empty_fleet_verdict_with_cap(row: &WaveRow, max_names: usize) -> Option<EmptyFleet> {
+    if !is_empty_fleet(row) {
+        return None;
+    }
+    let workers = row
+        .workers
+        .iter()
+        .take(max_names)
+        .map(|w| EmptyFleetWorker {
+            name: w.name.clone(),
+            outcome: w.outcome.clone().unwrap_or_default(),
+        })
+        .collect();
+    Some(EmptyFleet {
+        wave_id: row.wave_id.clone(),
+        workers,
+    })
+}
+
+/// Pure verdict over a single wave row, capping returned worker names at `EMPTY_FLEET_NAME_CAP`.
+#[allow(dead_code)]
+pub(crate) fn empty_fleet_verdict(row: &WaveRow) -> Option<EmptyFleet> {
+    empty_fleet_verdict_with_cap(row, EMPTY_FLEET_NAME_CAP)
+}
+
+/// Pure verdict over folded waves, returning all waves that are empty fleets.
+#[allow(dead_code)]
+pub(crate) fn empty_fleet_verdicts(waves: &[WaveRow]) -> Vec<EmptyFleet> {
+    waves.iter().filter_map(empty_fleet_verdict).collect()
+}
+
+/// Read and fold waves from the ledger at `root`, returning all empty fleets.
+#[allow(dead_code)]
+pub(crate) fn empty_fleet_waves(root: &Path) -> Vec<EmptyFleet> {
+    empty_fleet_verdicts(&fold_waves_by_wave_id(root))
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,6 +427,7 @@ mod tests {
             task: "do the thing".to_string(),
             outcome: outcome.map(str::to_string),
             evidence: outcome.map(|_| format!(".bee/logs/wave/{name}.log")),
+            retryable: None,
         }
     }
 
@@ -594,4 +699,256 @@ mod tests {
         assert_eq!(occupancy, Occupancy::Fallback(1), "the timer-based fallback must still count a fresh unresolved worker");
         assert!(occupancy.is_fallback(), "the degraded nature of this answer must be visible to the caller, not hidden behind a bare count");
     }
+
+    #[test]
+    fn old_ledger_row_without_retryable_parses_cleanly() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let json_line = serde_json::json!({
+            "wave_id": "old-wave",
+            "started_at": iso(0),
+            "workers": [
+                {
+                    "name": "worker-1",
+                    "pane_id": "p1",
+                    "worktree": "/tmp/wt",
+                    "task": "task",
+                    "outcome": "succeeded",
+                    "evidence": null
+                }
+            ]
+        });
+        crate::fsutil::append_jsonl(&wave_ledger_path(root), &json_line).unwrap();
+
+        let waves = read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers.len(), 1);
+        assert_eq!(waves[0].workers[0].retryable, None, "old ledger row without retryable must parse with retryable: None");
+    }
+
+    #[test]
+    fn done_worker_row_carries_no_retryable_key_in_json() {
+        let w = WorkerRow {
+            name: "worker-done".to_string(),
+            pane_id: "p1".to_string(),
+            worktree: "/tmp/wt".to_string(),
+            task: "task".to_string(),
+            outcome: Some("succeeded".to_string()),
+            evidence: None,
+            retryable: None,
+        };
+        let val = worker_row_to_json(&w);
+        assert!(val.get("retryable").is_none(), "done/succeeded worker row must carry no retryable key in JSON");
+
+        let serde_val = serde_json::to_value(&w).unwrap();
+        assert!(serde_val.get("retryable").is_none(), "serde serialization must omit retryable when None");
+    }
+
+    #[test]
+    fn send_failed_worker_row_carries_retryable_true() {
+        let w = WorkerRow {
+            name: "worker-send-fail".to_string(),
+            pane_id: "p1".to_string(),
+            worktree: "/tmp/wt".to_string(),
+            task: "task".to_string(),
+            outcome: Some("send_failed".to_string()),
+            evidence: None,
+            retryable: Some(true),
+        };
+        let val = worker_row_to_json(&w);
+        assert_eq!(val.get("retryable"), Some(&Value::Bool(true)), "send_failed worker row must carry retryable: true");
+
+        let serde_val = serde_json::to_value(&w).unwrap();
+        assert_eq!(serde_val.get("retryable"), Some(&Value::Bool(true)));
+    }
+
+    #[test]
+    fn unverifiable_after_send_worker_row_carries_retryable_false() {
+        let w = WorkerRow {
+            name: "worker-unverifiable".to_string(),
+            pane_id: "p1".to_string(),
+            worktree: "/tmp/wt".to_string(),
+            task: "task".to_string(),
+            outcome: Some("unverifiable_after_send".to_string()),
+            evidence: None,
+            retryable: Some(false),
+        };
+        let val = worker_row_to_json(&w);
+        assert_eq!(val.get("retryable"), Some(&Value::Bool(false)), "unverifiable_after_send worker row must carry retryable: false");
+
+        let serde_val = serde_json::to_value(&w).unwrap();
+        assert_eq!(serde_val.get("retryable"), Some(&Value::Bool(false)));
+    }
+
+    // ─── wlf-4: Empty fleet tests ──────────────────────────────────────────
+
+    #[test]
+    fn empty_fleet_names_closed_wave_where_all_workers_failed() {
+        let row = WaveRow {
+            wave_id: "w-failed".to_string(),
+            started_at: iso(0),
+            workers: vec![
+                worker("w1", Some("blocked")),
+                worker("w2", Some("died")),
+            ],
+        };
+        assert!(is_empty_fleet(&row), "a closed wave whose workers all failed must be an empty fleet");
+        let verdict = empty_fleet_verdict(&row);
+        assert_eq!(
+            verdict,
+            Some(EmptyFleet {
+                wave_id: "w-failed".to_string(),
+                workers: vec![
+                    EmptyFleetWorker::new("w1", "blocked"),
+                    EmptyFleetWorker::new("w2", "died"),
+                ],
+            }),
+            "the verdict must return the wave_id and worker names with their outcomes"
+        );
+    }
+
+    #[test]
+    fn empty_fleet_rejects_closed_wave_with_at_least_one_done() {
+        let row = WaveRow {
+            wave_id: "w-success".to_string(),
+            started_at: iso(0),
+            workers: vec![
+                worker("w1", Some("done")),
+                worker("w2", Some("died")),
+            ],
+        };
+        assert!(!is_empty_fleet(&row), "a closed wave with at least one done outcome is not an empty fleet");
+        assert_eq!(empty_fleet_verdict(&row), None);
+    }
+
+    #[test]
+    fn empty_fleet_rejects_wave_with_zero_workers() {
+        let row = WaveRow {
+            wave_id: "w-empty".to_string(),
+            started_at: iso(0),
+            workers: vec![],
+        };
+        assert!(!is_empty_fleet(&row), "a wave with zero workers launched nothing, so it is not an empty fleet");
+        assert_eq!(empty_fleet_verdict(&row), None);
+    }
+
+    #[test]
+    fn empty_fleet_rejects_wave_with_unreported_worker() {
+        let row = WaveRow {
+            wave_id: "w-running".to_string(),
+            started_at: iso(0),
+            workers: vec![
+                worker("w1", Some("blocked")),
+                worker("w2", None),
+            ],
+        };
+        assert!(!is_empty_fleet(&row), "a wave with any unreported worker is still running, so it is not an empty fleet");
+        assert_eq!(empty_fleet_verdict(&row), None);
+    }
+
+    #[test]
+    fn empty_fleet_rejects_closed_wave_where_all_workers_are_dry_run() {
+        let row = WaveRow {
+            wave_id: "w-dry".to_string(),
+            started_at: iso(0),
+            workers: vec![
+                worker("w1", Some("dry_run")),
+                worker("w2", Some("dry_run")),
+            ],
+        };
+        assert!(!is_empty_fleet(&row), "a closed wave whose workers are all dry_run did nothing real, so it is not an empty fleet");
+        assert_eq!(empty_fleet_verdict(&row), None);
+    }
+
+    #[test]
+    fn empty_fleet_caps_returned_worker_names_when_wave_exceeds_cap() {
+        let mut workers = Vec::new();
+        for i in 0..15 {
+            workers.push(worker(&format!("worker-{i}"), Some("failed")));
+        }
+        let row = WaveRow {
+            wave_id: "w-huge".to_string(),
+            started_at: iso(0),
+            workers,
+        };
+        assert!(is_empty_fleet(&row));
+        let verdict = empty_fleet_verdict(&row).expect("must be empty fleet");
+        assert_eq!(verdict.wave_id, "w-huge");
+        assert_eq!(
+            verdict.workers.len(),
+            EMPTY_FLEET_NAME_CAP,
+            "returned worker names must be capped at EMPTY_FLEET_NAME_CAP"
+        );
+        for i in 0..EMPTY_FLEET_NAME_CAP {
+            assert_eq!(verdict.workers[i].name, format!("worker-{i}"));
+            assert_eq!(verdict.workers[i].outcome, "failed");
+        }
+    }
+
+    #[test]
+    fn empty_fleet_folded_waves_picks_up_empty_fleet_from_ledger() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+
+        // 1. Success wave: at least one done
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "w-done".to_string(),
+                started_at: iso(0),
+                workers: vec![worker("a", Some("done")), worker("b", Some("failed"))],
+            },
+        )
+        .unwrap();
+
+        // 2. Empty fleet wave: all failed
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "w-empty-fleet".to_string(),
+                started_at: iso(0),
+                workers: vec![worker("c", Some("blocked")), worker("d", Some("died"))],
+            },
+        )
+        .unwrap();
+
+        // 3. Running wave: worker pending
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "w-running".to_string(),
+                started_at: iso(0),
+                workers: vec![worker("e", None)],
+            },
+        )
+        .unwrap();
+
+        // 4. Dry run wave
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "w-dry".to_string(),
+                started_at: iso(0),
+                workers: vec![worker("f", Some("dry_run"))],
+            },
+        )
+        .unwrap();
+
+        // 5. Zero workers
+        append_wave(
+            root,
+            &WaveRow {
+                wave_id: "w-zero".to_string(),
+                started_at: iso(0),
+                workers: vec![],
+            },
+        )
+        .unwrap();
+
+        let empty_fleets = empty_fleet_waves(root);
+        assert_eq!(empty_fleets.len(), 1, "only the closed wave with no done workers must be picked up");
+        assert_eq!(empty_fleets[0].wave_id, "w-empty-fleet");
+        assert_eq!(empty_fleets[0].workers.len(), 2);
+    }
 }
+

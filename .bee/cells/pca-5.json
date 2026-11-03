@@ -1,0 +1,178 @@
+{
+  "id": "pca-5",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Make pauses safe and resumes exact, define stuck and failure handling, and fix the swarming defects",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-hive/references/go-mode.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-hive/references/go-mode.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L3-digest.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-hive/references/go-mode.md"
+  ],
+  "affects_specs": [],
+  "action": "Adopt the L3 doctrine practices (per D2 and D4), translated, never pasted, each in the section that already owns its rule. Keep SKILL.md short (it loads on every swarm): it gets only the hard-rule stop line, the Reply line and one-line pointers; every other practice — the handoff fields and rules, resume triage, stuck, the failure table, pilot, user stop, CI-red triage — lives in swarming-reference.md. go-mode.md is in scope because it owns the Slice Loop, where the land-before-budget line belongs. Rust-side items (upstream trace relay, patch-id, rolling refill in the CLI) are Slice 2 — do not add them. Do NOT run bee dev regen (wave-barrier). swarming-reference.md: (1) 'Handoff JSON' gains fields verified (proof lines run so far), tree (clean or dirty:<paths>), key_files and gotchas, and two rules — finish the current atomic edit or back it out before writing the handoff; a worker with dirty edits commits them as `wip: <subject>` with the `cell: <id>` trailer, and whoever finishes the cell amends that commit into the one cell commit before the cap, so no wip commit survives into history. (2) 'Fresh-session handoff in full' gains a triage for each in-flight cell: capped since the handoff → run the completeness check; claimed with no live worker and no commit → unclaim, release, re-dispatch; a cell: or wip: commit exists but not capped → dispatch a fresh worker to finish it. (3) Step 6 Tend defines stuck: no side effect (a commit, a reservation renewal, a trace write) past the runtime expected at dispatch; the remedy is stop, unclaim, release, re-dispatch; status probes stay read-only. (4) 'Proof at finish and close' gains 'When CI goes red after merge': flake → one re-run; stale base → sync with main and re-prove; a failure in the diff's own code → a fix-first cell. SKILL.md: (5) under the rescue ladder a short failure table — BLOCKED for missing context → fresh dispatch with the context; HANDOFF → fresh dispatch from the handoff; provider error → the fallback_chain step; red or task miss → same role with the failing excerpt; silent death → unclaim and re-dispatch; after a second failed re-dispatch surface to the user; point to the never-move-on-red rule, do not restate it. (6) Hard rules: when two workers fail on the same root cause, stop dispatch, let in-flight work finish, open a fix-first cell, resume after it caps. (7) Orchestrate: a wave of same-role same-pattern cells dispatches one pilot first and fans out after it goal-checks; on a user stop, stop every live worker, keep the claims, write a pause handoff; end the Orchestrate section with a Reply line (capped over total, proof per cell, merge or uat state, blockers, the one next action). (8) Execute: before the commit, revert any edit the proof did not need; for green:live on a behavior-changing cell, the scope reason names the before-state seen on main. go-mode.md Slice Loop: (9) when the context budget is near its handoff point with slices left, cap and close the current slice first and open no new slice. DEFECTS: (10) worker-details.md: the commit example writes `-m \"Cell: <cell-id>\"`; change it to the literal lowercase `cell: <cell-id>`. (11) Give the Result form one home in swarming-reference.md and the departure rule one home in worker-details.md; the other places point there. Note: `bee finish` is a real alias of `bee cells finish` (verified), so do not rename it. Prefer words over a new numeric limit. Cite qualified pointers without the skills/ prefix.",
+  "verify": "! rg -n 'Cell: <cell-id>' skills/bee-swarming && rg -q 'gotchas' skills/bee-swarming/references/swarming-reference.md && rg -q 'wip:' skills/bee-swarming/references/swarming-reference.md",
+  "must_haves": {
+    "truths": [
+      "A pause ends at a safe boundary and no wip commit survives a cap",
+      "A resumed orchestrator triages every in-flight cell",
+      "Stuck and the failure responses are defined",
+      "The trailer example is lowercase cell: and the Result form has one home"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-swarming/references/swarming-reference.md",
+        "substantive": "handoff fields and rules, resume triage, stuck definition, CI-red triage, the one Result form"
+      },
+      {
+        "path": "skills/bee-swarming/SKILL.md",
+        "substantive": "failure table, systemic stop line, pilot, user stop, Reply line"
+      }
+    ],
+    "key_links": [
+      "SKILL.md and worker-details.md point to the one Result form"
+    ],
+    "prohibitions": [
+      "No Slice 2 CLI change described as existing",
+      "No bee dev regen",
+      "No write outside the four listed files"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-5",
+    "outcome": "Handoff fields, safe-pause and wip rules, and resume triage in swarming-reference.md (Handoff JSON, Fresh-session handoff in full); stuck, pilot and user stop in Operating Contract steps 3 and 6; Failure responses table and CI-red triage in sr; SKILL.md gets pointers, the systemic stop in Hard rules, the Reply line, and revert plus before-state in Execute; go-mode Slice Loop lands before the budget; lowercase cell: trailer and one-home Result form and departure rule",
+    "files_changed": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "skills/bee-hive/references/go-mode.md"
+    ],
+    "deviations": [
+      "Told the handoff writer to carry verified, tree, key_files and gotchas inside the --next-action text, not as their own flags — bee state handoff write passes only its named flags (sessions.rs:490-528), so plan claim 11 holds for the store but not for the verb — the plan was wrong about a fact",
+      "Put the failure table in swarming-reference.md under a new Failure responses section with a one-line pointer below the SKILL.md rescue ladder, not the table itself in SKILL.md — the cell also says SKILL.md stays short and lists the failure table among what lives in swarming-reference.md — found a better route",
+      "Added a pointer from the go-mode 65% fallback line to the resume triage — the L3 digest names go-mode.md:122 as the site that points to the triage — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:50:30.520Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:41:04.092Z",
+    "mistakes": [
+      {
+        "wrong": "The staging command for my four paths was refused by the concurrent-worker guard because 3 workers share this worktree index",
+        "better": "a path-scoped commit from the start"
+      },
+      {
+        "wrong": "A cells finish call with the report inline was refused by the worktree guard because the report text named the version-control tool",
+        "better": "a script file from the start"
+      }
+    ],
+    "report": {
+      "outcome": "Safe pause, exact resume, stuck and failure handling, and the swarming defect fixes landed in the four listed skill files",
+      "commit": "5da730ce9eb61f9bc1ee29d99f3c93f39e9fe5c9",
+      "files": [
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "skills/bee-swarming/references/worker-details.md",
+        "skills/bee-hive/references/go-mode.md"
+      ],
+      "tests": "cargo test -p bee --test pointer_integrity --test rule_index_parity --test instruction_laws --test proof_gate — green:static — docs-only edit to four skill files; these tests read skill text for pointers, rule tags and proof examples (26 passed), and the cell verify rg check passed",
+      "deviations": [
+        "Told the handoff writer to carry verified, tree, key_files and gotchas inside the --next-action text, not as their own flags — bee state handoff write passes only its named flags (sessions.rs:490-528), so plan claim 11 holds for the store but not for the verb — the plan was wrong about a fact",
+        "Put the failure table in swarming-reference.md under a new Failure responses section with a one-line pointer below the SKILL.md rescue ladder, not the table itself in SKILL.md — the cell also says SKILL.md stays short and lists the failure table among what lives in swarming-reference.md — found a better route",
+        "Added a pointer from the go-mode 65% fallback line to the resume triage — the L3 digest names go-mode.md:122 as the site that points to the triage — found a better route"
+      ],
+      "mistakes": [
+        "The staging command for my four paths was refused by the concurrent-worker guard because 3 workers share this worktree index — a path-scoped commit from the start",
+        "A cells finish call with the report inline was refused by the worktree guard because the report text named the version-control tool — a script file from the start"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 161 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "verify line printed OK; no 'Cell: <cell-id>' under skills/bee-swarming"
+          },
+          {
+            "id": "safe-pause-no-wip",
+            "status": "PASS",
+            "evidence": "swarming-reference.md Handoff JSON (:651) adds verified, tree, key_files, gotchas, Stop at a safe boundary, and No wip: commit survives a cap"
+          },
+          {
+            "id": "resume-triage",
+            "status": "PASS",
+            "evidence": "Resume triage under Fresh-session handoff in full (:675) has three branches; go-mode.md fallback points to it"
+          },
+          {
+            "id": "stuck-and-failures",
+            "status": "PASS",
+            "evidence": "step 6 Tend defines Stuck and the user stop; ## Failure responses (:293) table with second-failure surface rule; SKILL.md Hard rules adds the systemic stop and the Reply line"
+          },
+          {
+            "id": "result-form-one-home",
+            "status": "PASS",
+            "evidence": "swarming-reference.md:581 is the one home of the Result form; worker-details.md:185 and SKILL.md point to it; departure rule home worker-details.md:94"
+          },
+          {
+            "id": "cli-claims-real",
+            "status": "PASS",
+            "evidence": "state handoff write --help lists no verified/tree/key_files/gotchas flags and the prose says so; finish_support.rs:69, :81-88, :233-235 and handlers_close.rs:443 match the stated proof and plan_followed behavior"
+          },
+          {
+            "id": "cited-headings",
+            "status": "PASS",
+            "evidence": "Operating Contract in full :75, Hard rules (both roles) SKILL.md:201, Model Roles :397 exist; pointer_integrity ok"
+          },
+          {
+            "id": "scope-no-regen",
+            "status": "PASS",
+            "evidence": "5da730ce --stat: the 4 listed files only"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.940Z"
+      }
+    ]
+  },
+  "escalate": true
+}

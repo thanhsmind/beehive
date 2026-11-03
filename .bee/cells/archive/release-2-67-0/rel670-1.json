@@ -1,0 +1,140 @@
+{
+  "id": "rel670-1",
+  "feature": "release-2-67-0",
+  "title": "Publish release 2.67.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-67-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.67.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and BEE_OPENCODE_SUITE_ALLOW_SKIP=1 (the local opencode install is a wrapper the opencode contract test cannot read; CI runs that suite). The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.67.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.67.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.67.0",
+      "tag v2.67.0 exists locally and on the remote",
+      "the GitHub release for v2.67.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.67.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.67.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "w-rel670-1",
+    "outcome": "bee 2.67.0 is live",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "release.sh ran inline in the leader under permit 243d147d, as releases 2.58.0-2.66.0 did — the paseo deploy worker is slow and had timed out earlier in the day — found a better route",
+      "First run under permit ecd0cee0 went red on the pinned flag-vocabulary test; PINNED_FLAG_COUNT moved to 234 with decision ea32ab90 and a fresh permit was issued — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-30T11:12:56.001Z",
+    "behavior_change": false,
+    "verification_evidence": "script printed OK after the declared cargo suite (opencode suite allowed to skip as in 2.60.0-2.66.0), tag push, green release-binaries run https://github.com/thanhsmind/beehive/actions/runs/41045668914 and asset check; log /mnt/data/Projects/goglbe/beehive/.bee/workers/release-2.67.0-run2.log",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7",
+    "verify_command": "bash scripts/release.sh 2.67.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-10-30T10:54:47.897Z",
+    "mistakes": [
+      {
+        "wrong": "The full suite run in the worktree did not catch catalog::tests::distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision before the release gate did",
+        "better": "run the catalog pin test whenever a verb flag is added",
+        "fix_at": "check"
+      }
+    ],
+    "commit_pending": "the release commit f0af1e04 is made by scripts/release.sh with its own fixed subject; the tag points at it, as for 2.58.0-2.66.0",
+    "report": {
+      "outcome": "DONE",
+      "commit": "f0af1e04",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.67.0 && bee dev release-manifest --check — green:live — script printed OK after the declared cargo suite (opencode suite allowed to skip as in 2.60.0-2.66.0), tag push, green release-binaries run https://github.com/thanhsmind/beehive/actions/runs/41045668914 and asset check; log /mnt/data/Projects/goglbe/beehive/.bee/workers/release-2.67.0-run2.log",
+      "deviations": [
+        "release.sh ran inline in the leader under permit 243d147d, as releases 2.58.0-2.66.0 did — the paseo deploy worker is slow and had timed out earlier in the day — found a better route",
+        "First run under permit ecd0cee0 went red on the pinned flag-vocabulary test; PINNED_FLAG_COUNT moved to 234 with decision ea32ab90 and a fresh permit was issued — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "The full suite run in the worktree did not catch catalog::tests::distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision before the release gate did — run the catalog pin test whenever a verb flag is added — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both plugin manifests report 2.67.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "tag v2.67.0 exists locally and on the remote",
+            "artifact": ".codex-plugin/plugin.json"
+          },
+          {
+            "requirement": "the GitHub release for v2.67.0 carries the binaries and SHA256SUMS",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "the script printed its final OK line",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "the pushed tag is what triggers release-binaries.yml",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": ".claude-plugin/plugin.json",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": ".codex-plugin/plugin.json",
+            "artifact": ".codex-plugin/plugin.json"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-10-30T11:13:06.493Z",
+        "recorded_by": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  }
+}

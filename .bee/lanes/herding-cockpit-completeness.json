@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-cockpit-completeness",
+  "mode": "standard",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Shaped: six herding cockpit signals from pi-herdr-agents xia; CONTEXT.md committed on wt/herding-cockpit-completeness; Gate 1 auto-approved under bypass full.",
+  "next_action": "bee close finished \"herding-cockpit-completeness\" — feature is closed.",
+  "created_at": "2026-09-06T03:45:21.482Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: herding-cockpit-completeness",
+    "asked_at": "2026-09-06T11:28:01.297Z",
+    "session": "832a0c00-85cf-4f54-b8f8-b5624be2083d"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "cross-platform",
+      "public-contracts",
+      "covered-contract-change"
+    ],
+    "product_files": 9,
+    "rationale": "Six cockpit signals across herding.rs/run.rs/mailbox.rs/pane_verbs.rs/tmux.rs/wave.rs/wave_ledger.rs/bee-guard.ts plus a new verbs module; tmux and herdr transports; envelope and status words are read by Pi and the control loop.",
+    "updated_at": "2026-09-06T04:14:24.316Z",
+    "feature": "herding-cockpit-completeness"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-06T04:27:10.443Z",
+    "feature": "herding-cockpit-completeness",
+    "newest_decision_id": "b5f32b16-9e0b-4f2b-bf21-2b66ea705ac3",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave: opus x2 (claude-agent) + agy-flash (herding pane)",
+    "digest_head": "# Hat wave — plan check (herding-cockpit-completeness)\n\nWave: 2026-09-06, three seats, all returned inside the 10-minute ceiling.\n\n| Seat | Dispatch | Channel | Result |\n|------|----------|---------|--------|\n| hat-facts-gaps | 559549ba | claude-agent (opus) | returned |\n| hat-alternatives | 7d04885a | claude-agent (opus) | returned |\n| hat-user-impact | fd9e7d9d | herding pane w1:pN, agy-flash, job hat-user-impact-hcc | returned as `malformed_result` (UTF-8 BOM on result-1.json); report-1.md re"
+  },
+  "last_scribing_run": {
+    "feature": "herding-cockpit-completeness",
+    "date": "2026-09-06",
+    "at": "2026-09-06T11:27:47.612Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "uat: reload main and test the cockpit signals, then bee gate --name uat --approved true --lane herding-cockpit-completeness"
+  }
+}

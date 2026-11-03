@@ -1,0 +1,11 @@
+{
+  "id": "transcript-text-reaches-an-external-cli-b__81d46f80",
+  "decision": "81d46f80",
+  "condition": "Transcript text reaches an external CLI because a host configured a herding read slot and someone objects, or a secret survives redaction into a pane — then the pane transport needs its own rule (learning-loop-gaps Known gaps)",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-02T09:29:45.791Z",
+  "updated_at": "2026-09-02T09:29:45.791Z",
+  "outcome": null
+}

@@ -1,0 +1,70 @@
+{
+  "id": "dse-1",
+  "feature": "deploy-stage-execution",
+  "role": "code",
+  "lane": "high-risk",
+  "title": "Build an executable deployment payload rooted at main",
+  "action": "Write red behavior tests for deployment payload stdin and cwd with and without a granted feature worktree, non-main root refusal, and deployment-shaped requests without an approved v2 plan. Then implement a validated Pi-herding deployment brief and unconditional main-root cwd. Preserve ordinary gather bytes, runtime and role refusals, and all authorization behavior.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests",
+  "read_first": [
+    "docs/history/deploy-stage-execution/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "deps": [],
+  "decisions": [
+    "38edea83",
+    "c0a4d406"
+  ],
+  "must_haves": {
+    "truths": [
+      "Deployment stdin permits mutation and names the exact authorized positional release command.",
+      "Deployment herding cwd is main with or without a feature worktree.",
+      "Non-main, wrong-runtime, wrong-role, and no-plan deployment requests refuse before payload creation.",
+      "Ordinary gather stays byte-identical, read-only, and feature-worktree rooted.",
+      "Authorization and replay checks remain unchanged."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/specs/doctrine-layer.md"
+  ],
+  "acceptance": "Focused driver tests prove an executable deployment payload without changing ordinary gather or authorization behavior.",
+  "status": "capped",
+  "trace": {
+    "worker": "dse-code",
+    "outcome": "Built an executable deployment payload rooted at main",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-14T15:34:59.448Z",
+    "behavior_change": false,
+    "verification_evidence": "exit 0; deployment payload, branch refusal, no-plan refusal, ordinary gather, and authorization regression scope",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09fa4-9ac5-747b-a74c-ed78ef782f86",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests",
+    "claimed_at": "2026-09-14T15:21:47.283Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Built an executable deployment payload rooted at main",
+      "commit": "055e2bfd08e28a6dbb49d269ef064cc6fb6135ff",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests — green:unit — exit 0; deployment payload, branch refusal, no-plan refusal, ordinary gather, and authorization regression scope",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

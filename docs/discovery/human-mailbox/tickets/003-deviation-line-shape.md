@@ -34,6 +34,7 @@ plan says so explicitly rather than leaving the field empty.
 
 D5 narrows the free-form one-line `--deviation` value that decision
 dc6a2d26 established. Its "no flag = today's behaviour byte-identical"
-clause and the new explicit no-departure statement have to be squared
-with each other before this ships — carried as
-`tickets/010-no-departure-vs-unchanged.md`.
+clause and the new explicit no-departure statement collided; **D10
+(1fb69f4b)** resolved it — the explicit statement is enforced only while
+the mailbox is armed for the run, and an unarmed cap stays
+byte-identical (`tickets/010-no-departure-vs-unchanged.md`).

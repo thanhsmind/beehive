@@ -295,6 +295,24 @@ pub(crate) fn kept_by_keep_set(name: &str, keep: &[String]) -> bool {
         .any(|id| name == id || name.starts_with(&format!("{id}.")))
 }
 
+/// is_cell_file_capped — returns true if cell JSON exists, parses, and has status == "capped".
+/// Missing or corrupt cell files return false (fall open to keep).
+fn is_cell_file_capped(path: &Path) -> Result<bool, Err2> {
+    match std::fs::read(path) {
+        Err(_) => Ok(false), // JSON.parse throws → cell null → keep
+        Ok(bytes) => {
+            let text = String::from_utf8_lossy(&bytes).into_owned();
+            match parse_json_v8(&text).map_err(Err2::from)? {
+                ParsedJson::Unparseable => Ok(false),
+                ParsedJson::Parsed(v) => Ok(
+                    truthy(&v)
+                        && matches!(jget(&v, "status"), Some(Value::String(s)) if s == "capped"),
+                ),
+            }
+        }
+    }
+}
+
 /// readPruneKeepSet — strict state read + non-capped/corrupt cell stems.
 pub(crate) fn read_prune_keep_set(root: &Path) -> Result<Vec<String>, Err2> {
     let state = read_state_strict(root)?;
@@ -313,40 +331,70 @@ pub(crate) fn read_prune_keep_set(root: &Path) -> Result<Vec<String>, Err2> {
             keep.push(s);
         }
     };
+    let cells_dir = root.join(".bee").join("cells");
     for w in &workers {
         if !truthy(w) {
             continue;
         }
         match jget(w, "cell") {
             None | Some(Value::Null) => {}
-            Some(cell) => push_unique(js_disp(cell)),
+            Some(cell) => {
+                let cell_id = js_disp(cell);
+                let capped = is_cell_file_capped(&cells_dir.join(format!("{cell_id}.json")))?;
+                if !capped {
+                    push_unique(cell_id);
+                }
+            }
         }
     }
-    let cells_dir = root.join(".bee").join("cells");
     if cells_dir.exists() {
         let entries = std::fs::read_dir(&cells_dir).map_err(|_| Err2::Ex)?;
         for entry in entries.flatten() {
             let file = entry.file_name().to_string_lossy().into_owned();
             let Some(stem) = file.strip_suffix(".json") else { continue };
-            let capped = match std::fs::read(cells_dir.join(&file)) {
-                Err(_) => false, // JSON.parse throws → cell null → keep
-                Ok(bytes) => {
-                    let text = String::from_utf8_lossy(&bytes).into_owned();
-                    match parse_json_v8(&text).map_err(Err2::from)? {
-                        ParsedJson::Unparseable => false,
-                        ParsedJson::Parsed(v) => {
-                            truthy(&v)
-                                && matches!(jget(&v, "status"), Some(Value::String(s)) if s == "capped")
-                        }
-                    }
-                }
-            };
+            let capped = is_cell_file_capped(&cells_dir.join(&file))?;
             if !capped {
                 push_unique(stem.to_string());
             }
         }
     }
     Ok(keep)
+}
+
+pub(crate) fn reconcile_capped_workers(root: &Path) -> Result<usize, Err2> {
+    let mut changed = 0;
+    let cells_dir = root.join(".bee").join("cells");
+    worker_mutate(root, |workers| {
+        let mut updates: Vec<(String, String, Option<String>)> = Vec::new();
+        for w in workers.iter() {
+            if !truthy(w) {
+                continue;
+            }
+            let Some(nickname) = jget(w, "nickname").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let Some(cell) = jget(w, "cell").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            if matches!(jget(w, "status"), Some(Value::String(s)) if s == "capped") {
+                continue;
+            }
+            let cell_file = cells_dir.join(format!("{cell}.json"));
+            if is_cell_file_capped(&cell_file)? {
+                let tier = jget(w, "tier")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.trim().is_empty())
+                    .map(ToString::to_string);
+                updates.push((nickname.to_string(), cell.to_string(), tier));
+            }
+        }
+        for (nickname, cell, tier) in updates {
+            push_worker_record(workers, &nickname, &cell, tier.as_deref(), Some("capped"))?;
+            changed += 1;
+        }
+        Ok(format!("Reconciled {changed} worker(s)."))
+    })?;
+    Ok(changed)
 }
 
 pub(crate) fn run_worker_prune(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {

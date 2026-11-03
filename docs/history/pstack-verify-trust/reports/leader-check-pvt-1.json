@@ -1,0 +1,9 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "A MEDIUM or HIGH risk row cannot pass the gate on a reason alone; it names its one fact and the run that proved it", "artifact": "skills/bee-planning/references/planning-reference.md"},
+    {"requirement": "verify-app's Launch defines ready as usable and discards evidence captured earlier", "artifact": ".bee/verify/verify-app/SKILL.md"},
+    {"requirement": "The slice-close tick names the judge model or says frozen judge only", "artifact": "skills/bee-swarming/references/swarming-reference.md"},
+    {"requirement": "rendered copies under .claude/skills match skills/ and .bee/verify after regen", "artifact": "docs/history/codex-harness-hardening/release-manifest.json"}
+  ]
+}

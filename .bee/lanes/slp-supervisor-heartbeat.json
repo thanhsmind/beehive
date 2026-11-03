@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "slp-supervisor-heartbeat",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"slp-supervisor-heartbeat\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"slp-supervisor-heartbeat\" — feature is closed.",
+  "created_at": "2026-08-27T01:36:44.583Z",
+  "run_state": "shaping",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "multi-domain"
+    ],
+    "product_files": 10,
+    "rationale": "slp-supervisor-heartbeat: observer role across herding control loop + hooks + new state records; story-sized; no hard-gate flags",
+    "updated_at": "2026-08-27T01:43:24.110Z",
+    "feature": "slp-supervisor-heartbeat"
+  }
+}

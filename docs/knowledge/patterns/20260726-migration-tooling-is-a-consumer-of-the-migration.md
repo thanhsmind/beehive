@@ -7,7 +7,7 @@ timestamp: 2026-07-26
 bee:
   id: pattern-20260726-migration-tooling-is-a-consumer-of-the-migration
   lifecycle: active
-  areas: []
+  areas: [onboarding]
   required_context: []
   decisions: []
   sources: ["packages-restructure (validation B1/C1: render_plugin_skill_trees.mjs imported ../skills/bee-hive/templates/lib/lock.mjs while cell 1 moved that tree; C5: package_payload manifest role originally one cell late)", docs/history/packages-restructure/reports/validation-slice1.md, docs/history/learnings/20260726-packages-restructure.md]

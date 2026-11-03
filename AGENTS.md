@@ -1,6 +1,6 @@
 # bee
 
-<!-- [unknown] one-line project description - replace me -->
+<!-- bee: a gated, verified agent-coding workflow — a Rust CLI plus a skill tree that routes work through explore, gate, plan, execute, scribe, compound. -->
 
 - README.md
 
@@ -78,6 +78,20 @@ presupposes an environment fact (a CI, a git history, a runnable regen
 chain) checks that fact first — absent, it names the gap and takes its
 recorded fallback instead of demanding the ritual.
 
+Every rule id here can be spoken: the user may say "apply
+never-build-on-red" mid-run. Resolve the id in the rule index
+(`docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md`,
+§ AGENTS.md rule homes), apply the rule to the work in hand, and name in
+the reply the decision or step it changed — or say plainly that it
+changed nothing. A bare acknowledgement is not an answer.
+
+<!-- rule: agents-name-applied-principles -->
+The same answer is owed to a principle nobody spoke: `bee orient` names
+the craft principles a task routes to, and on a multi-step task the
+reply names each one it applied and the decision that principle
+changed — or says plainly it changed nothing.
+<!-- /rule -->
+
 ## Start a session
 
 Read the injected preamble instead of re-fetching state. One ritual, one
@@ -104,11 +118,12 @@ context before planning or executing.
 <!-- rule: agents-proof-at-cap -->
 - The agent owns test scope: pick the proof your change type needs
   (code → related tests green; docs → parity/pointer checks; behavior
-  → judge verdict), run it yourself, and record it on the cap as a
-  proof line `<command> — <result> — <scope reason>`. `bee close` and
-  `bee worktree merge` check that recorded proof; they run nothing
-  themselves — CI runs the full declared command on every push, the
-  one deterministic net.
+  → judge verdict; a user-facing surface → its mapped feature driven,
+  evidence attached — `green:live`), run it yourself, and record it on
+  the cap as a proof line `<command> — <result> — <scope reason>`.
+  `bee close` and `bee worktree merge` check that recorded proof; they
+  run nothing themselves — CI runs the full declared command on every
+  push, the one deterministic net.
 <!-- /rule -->
 <!-- rule: agents-never-build-on-red -->
 - A red proof refuses the cap — never build on a red base, in every
@@ -120,6 +135,16 @@ context before planning or executing.
 <!-- /rule -->
 - Write "done", "green", or "fixed" only beside fresh command output
   in the same message, naming the command or path first.
+- Report the whole proof, never the flattering half: name what was
+  skipped, filtered, or narrowed beside what passed. Freshness is not
+  completeness — a scoped-green cap that quotes the suite it ran and
+  omits the one it never ran satisfies the rule above and is still a
+  misleading report.
+- Cheapest proof first. Before an expensive wave or a long run, run the
+  short check that would catch a broken environment, and stop on its
+  red rather than paying for the long one. A run narrowed by a flag or
+  a filter says so wherever its result is reported — a narrowed check
+  is never quoted as the whole one.
 - Evidence is what the build already emits — red test output, a diff,
   a stack trace. Never author an artifact whose only purpose is to be
   deleted as proof.
@@ -135,12 +160,27 @@ context before planning or executing.
   gates, synthesis, state writes, and the human conversation stay on
   the session model.
 - The ONE door for any dispatch is `.bee/bin/bee dispatch prepare
-  --runtime <rt> --kind cell|gather|reviewer|advisor --json` — run it
+  --runtime <rt> --kind cell|gather|reviewer|advisor [--role <name>]
+  --json` — `--role` names the job outright, and is how a read-shaped
+  gather reaches the cheap reader (`--kind gather --role extraction`) — run it
   first, then run exactly the tool and payload it returns (an Agent
   call naming a rendered bee agent, or a Bash `bee herding run` / cli
-  call). Never hand-pick `subagent_type`, a `model` param, or a
-  leading `[bee-tier: …]` marker: those are what prepare RETURNS, and
-  the model-guard hook refuses or rewrites anything else.
+  call). Pick the team member by job — the role's description says what
+  it is good at; whether it runs as a native model, a herding pane or a
+  cli is config, never the leader's choice. Never hand-pick `subagent_type`, a
+  `model` param, or a leading `[bee-tier: …]` marker: those are what prepare
+  RETURNS, and the model-guard hook refuses or rewrites anything else.
+- Dispatches follow the cell or stage role in the approved plan. Changed work
+  requires a decision tagged `role-reroute` and `bee cells reroute`; never
+  select a different role ad hoc during execution.
+- The internal consult is ONE thing: the plan-step **hat wave**, fixed
+  perspectives dispatched `--kind advisor` at the plan step, once per
+  feature. Its synthesis is the plan check AND the high-risk gate's
+  advisor consult (recorded with `bee state advisor-ref record` after
+  plan.md reaches its gate-ready bytes) — synthesis stays with the
+  leader, and independent review is untouched and still user-invoked.
+  Procedure home: `bee-hive/references/gates-and-delegation.md`
+  ("Hat wave").
 <!-- rule: agents-never-zero-execution-workers -->
 - From `small` up, cells run through dispatched workers — never zero
   *execution* workers; a tiny cell may run inline. This rule counts
@@ -165,7 +205,9 @@ not: a Task-tool subagent inherits the session's OS cwd, so dispatching an
 execution worker while cwd is main cannot write into the feature's
 worktree and dies on the write guard. Move the session into the worktree
 (EnterWorktree, or a session/pane opened at the worktree path) before
-dispatching execution workers.
+dispatching execution workers. Follow the `instruction` line bee prints
+on `worktree new`, `enter`, `exit` and `merge`; leave with `bee worktree exit`;
+never `cd` to main inside a shell call to merge.
 
 File overlap with an in-flight cell or live worktree is triage data,
 never a user question: take disjoint items first, split scope to the
@@ -183,18 +225,31 @@ close every task with a capture line or an explicit "nothing settled".
 A close with neither is not a close, in every lane, the docs lane and
 non-cell quick work included.
 `docs/knowledge/` is the state layer: read it first, sync it when
-behavior changes.
+behavior changes. `.bee/verify/verify-app/features/` is the second — a
+README index plus one file per user-facing feature: what it is, how a
+user reaches it, how to drive it, its gotchas. Read the index at
+shaping, the ONE matching feature file at planning, and carry that file
+into the execution worker's brief with its last-modified date — a stale
+map is judged, never trusted blind. Absent or empty path is the
+environment-fact check of § Judgment and deviation: proceed silently,
+treating the ask as new.
 <!-- /rule -->
 
 ## Communication
 
 <!-- rule: agents-one-next-action -->
 The user hears the work in their own terms, never bee mechanics. Open
-with one line of state; keep narration under five lines; link records
+with one line of state; keep narration to what the user needs to act on;
+link records
 instead of pasting them — name a doc by its bare repo-relative path
 (`docs/...`), never a viewer URL; close on exactly ONE next action — the
 agent's own next move, or the one thing only the user can decide,
-never a menu. Emit one short progress line per visible step, on by
+never a menu. When that next action is the agent's own move, the agent
+TAKES it in the same turn: between the merged gate and the uat stop, a
+finished slice with approved work remaining continues without asking —
+"Say go" / "continue?" mid-work is drift, not a stop; the only asks are
+the gates, the uat door, and questions shaping needs before the plan.
+Emit one short progress line per visible step, on by
 default — `▸` started, `✓` green, `⚡` auto-approved, `✗` red — and a
 red or refusal line is never silenced, composited, or delayed by any
 switch or bypass level. The work is the subject of every line; ids and
@@ -218,6 +273,10 @@ bee term — if nothing the user needs is lost, those terms did not
 belong there. The full turn shape and rules load with the `bee-hive`
 skill ("Communication contract").
 
+A saved document with no bee template (a README, a guide, a handbook
+page) is written through the `bee-technical-writing` skill: type first,
+one type per file, linked where types meet.
+
 ## Token efficiency
 
 - Never re-read a file you just wrote or edited — you know its contents.
@@ -228,7 +287,7 @@ skill ("Communication contract").
 - Batch related edits into one operation — never five edits where one
   serves.
 - Skip filler confirmations ("I'll continue…") — just do it.
-- If a task needs one tool call, do not spend three. Plan before acting.
+- If a task needs one tool call, do not spend three.
 - Do not summarize what you just did unless the result is ambiguous or
   you need additional input.
 
@@ -245,6 +304,47 @@ skill ("Communication contract").
   cell id rides the last line of the body as a trailer (`cell: <id>`),
   and the diff carries the numbers.
 <!-- /rule -->
+<!-- rule: agents-no-code-comments -->
+- No comment in code, in any language: not `//`, not `///` or `//!`,
+  not `/* */`, not `#`. The why a comment used to carry has two homes
+  and no third — a `docs/knowledge` concept whose Pointers name the
+  file, or a `bee decisions log` entry; a public item's description
+  lives in the owning concept; a workaround is fixed, or filed with
+  `bee backlog add` and cited from the concept, never from the code.
+  Three exceptions only: a `#!` line, a `SAFETY:` line on an unsafe
+  block, and a license header at the top of a file. Where
+  `no_code_comments` is on, the write guard refuses the write, and the
+  comment baseline reds the suite on any count that rises.
+<!-- /rule -->
+<!-- rule: agents-bee-defect-report -->
+- When bee itself is at fault — a crash, a typed error on correct
+  input, a wrong result, or a guard refusing work that is approved and
+  correct — run `bee report issue --title --symptom --evidence
+  --root-cause --command`, and add bee's exact output with `--output`.
+  It files a scrubbed issue upstream on its own; add `--dry-run` first
+  when unsure. One report per defect, never one per retry. After
+  filing, tell the human the issue link in one line. On a gh error,
+  tell the human once to run `gh auth login`, then keep working. Never
+  patch, rebuild or hand-edit bee in this repo. Not a bee defect: a
+  deny that names its remedy, a gate waiting for approval, or your own
+  mistake — that one is `bee mailbox reflect`.
+<!-- /rule -->
+- Write a mistake down the MOMENT you notice it, never composed from
+  memory at the end: `bee mailbox reflect --wrong "<what went wrong>"
+  --better "<what would have been better>" --fix-at
+  <architecture|check|doctrine|none>`. Name a concrete thing in
+  the first part — a file, a command, or something you saw — never
+  "the approach". The layer is required and names what stops the
+  mistake coming back: `architecture` — a code change makes the
+  mistake impossible; `check` — a test, hook, guard or doctor row
+  catches it; `doctrine` — only prose can carry it; `none` — a one-off
+  nobody would guard. Pick the strongest layer someone would actually
+  build now: a known and accepted state is `doctrine`, and a mistake
+  nobody would guard against is `none`. A cap answers the same
+  question for its own cell (`--mistake "<wrong> — <better>" --fix-at
+  <layer>`, or `--no-mistakes` when it hit none), and `bee close`
+  refuses a feature whose capped cells never answered: silence and a
+  clean run must not read alike.
 - Before ending substantial work: cap or release every claimed cell,
   release reservations, leave `.bee/state.json` honest, run
   `commands.test` over what changed when one is recorded, and name the
@@ -266,6 +366,9 @@ The full mechanics live in `skills/bee-hive/SKILL.md` and its
 references, loaded when routing work: lanes and gate wording; § Gate
 bypass mode; § Progress ticks; § Judgment contract; § Goal-check
 judge tier; § Concurrency law in full; § Delegation contract;
+§ Hat wave (the plan-step consult, single home); § Blind lanes and
+convergence; the class-bound playbook each route class cites
+(`bee-planning/references/planning-reference.md`, "Playbooks");
 worktrees; plus the worker contract
 in `bee-swarming` ("Execute") — including native-Codex subagent tending on
 a Codex runtime — the capture discipline in
@@ -313,6 +416,58 @@ take to add Y?" is not "add Y."
 
 When in doubt, assume it is a question. Answer first. Act when the
 user says go.
+
+## Report back to waggledance
+
+Every task that arrives from waggledance (a `t-<hex>` correlation id)
+closes with a completion report in the `--kind result` mail body. The
+report carries the four parts the task asks for (`Done:`, `Proof:`,
+`Left:`, `Where:`) and, above them, this block:
+
+```markdown
+### [COMPLETION-REPORT] Task: <task name> / <t-xxxxxx>
+- **Correlation ID:** t-xxxxxx
+- **Status:** COMPLETED | PARTIAL | BLOCKED
+- **Wall-Clock Duration:** <hh:mm:ss> (Start: <ISO 8601> | End: <ISO 8601>)
+- **Total Tokens:** <n> (Input: <n> | Output: <n> | Cache: <n>)
+
+#### Token Breakdown by Model:
+| Model Name | Input Tokens | Output Tokens | Total Tokens | Accounting Source |
+| :--- | :--- | :--- | :--- | :--- |
+| <model> | ... | ... | ... | <source> |
+
+#### Key Artifacts & Deliverables:
+- Commit / Files: ...
+- Verification & Test Proof: ...
+```
+
+The rules for the numbers:
+
+- **Tokens come from telemetry only.** Never estimate, never average,
+  never round a guess. The first source is `bee report usage --corr
+  <t-hex>`: it prints the header and the per-model table for the task
+  window, and the leader pastes its output. The fallbacks, in order:
+  the feature's `.bee/usage/<feature>.json` (`bee-usage/v1`, written by
+  a green `bee close`); the session's latest `bee-perf/v1` row in
+  `~/.config/beehive/performance.jsonl` (written at each turn end, main
+  and `subagent_models` apart); or the `message.usage` fields of the
+  session transcript and its `subagents/*.jsonl`. Name the source in
+  the table's last column.
+- **One meaning per number.** Input = every prompt token (fresh +
+  cache write + cache read). Cache = the cache write + cache read part
+  of Input. Total = Input + Output. One row per model; a model used by
+  the leader and by workers sums into one row.
+- **Wall clock is one span.** Start = the moment the leader received
+  the task (the first transcript event of the task turn); End = the
+  moment the report is composed. Never add up worker or cell durations
+  — parallel time overlaps.
+- **Name the gap.** Telemetry written after the report (the report
+  turn's own tokens, a worker still running) is not in the numbers;
+  say so on one line. A source that is missing gets "not recorded",
+  never a number.
+- **Workers do not report this.** Cells and workers report to the
+  leader as before; their tokens are already in the leader's
+  `subagent_models` and transcript. Only the leader composes the block.
 
 ## ASD-STE100 Simplified Technical English
 

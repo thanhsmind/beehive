@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "reviewer-lens-naming",
+  "closed_at": "2026-09-17T09:56:30.411Z",
+  "sessions": [
+    {
+      "session_id": "56ecea1f-ddd1-440e-919d-9edff0cff7d7",
+      "models": {
+        "claude-opus-5": {
+          "input": 56,
+          "output": 9649,
+          "cache_write": 64567,
+          "cache_read": 1915850,
+          "new": 74272,
+          "cached": 1915850,
+          "total": 1990122
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1789638710137,
+      "ended_ms": 1789638989626,
+      "totals": {
+        "new": 74272,
+        "cached": 1915850,
+        "total": 1990122
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 74272,
+      "cached": 1915850,
+      "total": 1990122
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 74272,
+      "cached": 1915850,
+      "total": 1990122
+    }
+  }
+}

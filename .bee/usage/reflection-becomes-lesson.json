@@ -1,0 +1,67 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "reflection-becomes-lesson",
+  "closed_at": "2026-08-31T15:36:14.622Z",
+  "sessions": [
+    {
+      "session_id": "42e9abd1-7a36-4512-a5e3-cb7fa626dea9",
+      "models": {
+        "claude-opus-5": {
+          "input": 412,
+          "output": 144100,
+          "cache_write": 689442,
+          "cache_read": 43183550,
+          "new": 833954,
+          "cached": 43183550,
+          "total": 44017504
+        }
+      },
+      "subagent_models": {
+        "claude-fable-5": {
+          "input": 166,
+          "output": 13001,
+          "cache_write": 301566,
+          "cache_read": 4400483,
+          "new": 314733,
+          "cached": 4400483,
+          "total": 4715216
+        },
+        "claude-opus-5": {
+          "input": 494,
+          "output": 48826,
+          "cache_write": 384849,
+          "cache_read": 33209500,
+          "new": 434169,
+          "cached": 33209500,
+          "total": 33643669
+        }
+      },
+      "subagent_count": 7,
+      "started_ms": 1788185335883,
+      "ended_ms": 1788190569924,
+      "totals": {
+        "new": 1582856,
+        "cached": 80793533,
+        "total": 82376389
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 833954,
+      "cached": 43183550,
+      "total": 44017504
+    },
+    "subagents": {
+      "new": 748902,
+      "cached": 37609983,
+      "total": 38358885
+    },
+    "total": {
+      "new": 1582856,
+      "cached": 80793533,
+      "total": 82376389
+    }
+  }
+}

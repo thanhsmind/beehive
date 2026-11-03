@@ -1,0 +1,90 @@
+{
+  "id": "prm-1",
+  "feature": "pi-result-mailbox",
+  "title": "Report rides the herding mailbox and the detach fact becomes a flag",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-result-mailbox/CONTEXT.md",
+    "docs/history/pi-result-mailbox/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee",
+  "action": "Per plan Approach 1-2 (rev 2). mailbox.rs: contract template gains the report instruction — write the full deliverable to report-{round}.md FIRST (atomic temp+rename), result JSON LAST; a resumed attempt REWRITES the report before its result; result JSON gains optional report_path. MailboxResult gains report_path and the resolved round; parse stays tolerant (legacy result with no field and no file = legal, envelope unchanged byte-for-byte). run.rs read_result: resolve the report at parse time — worker-declared path wins; else convention probe accepts report-{round}.md only when fresh (mtime >= the round brief/ack delivery time), stale = report_note; Malformed arm surfaces an existing report path beside the error. Envelope: report_path/report_note added ONLY when present — EXTEND the exact-key test family at run.rs:5133 with additive rows, never loosen it (no-new-key law, the-run-verb-and-worker-outcomes.md:211). New flag --inbox-session <token>: presence = detached fact; marker .bee/result-inbox/<token>/<job-id>.json (atomic; job id, mailbox path, cell id) written BEFORE the pane spawns; no flag = no marker; empty/unresolvable token = no marker + stderr note. Unit tests per the plan matrix Contract/Freshness/Delivery rows.",
+  "must_haves": {
+    "truths": [
+      "legacy result with no report yields an envelope byte-identical to today",
+      "stale same-round report becomes report_note, never a silent attach",
+      "--inbox-session writes the marker before spawn; absent flag writes none",
+      "malformed result with a good report surfaces both error and report_path"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "report resolution at parse site, additive envelope keys, --inbox-session marker path"
+      }
+    ],
+    "key_links": [
+      "result_envelope stays a pure builder; report resolves in read_result"
+    ],
+    "prohibitions": [
+      "No inline report body in the run output at any size",
+      "No unconditional new envelope key",
+      "No exactly-once claim in code or test names"
+    ]
+  },
+  "trace": {
+    "worker": "prm-w1",
+    "outcome": "The report rides the mailbox as a path-only additive envelope key, and --inbox-session makes the detached fact a flag with a pre-spawn marker",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "Named the .gitignore gap instead of fixing it — .bee/result-inbox/ needs an ignore line, but that block is generated from onboard/templates.rs, a file this cell does not name — hit an unforeseen obstacle",
+      "Wrote the marker in execute() rather than execute_new() alone, so a detached --continue round also leaves one — the plan named the spawn path only, and a continue with no marker loses its result the same way — found a better route",
+      "Added MailboxResult.report_note beside report_path — the plan names report_note as an envelope key, and the pure envelope builder needs a carrier for it — something else had to be fixed first",
+      "sync-ack: The plan puts every skills/docs/knowledge edit for this feature in prm-4 (docs role), which names skills/bee-swarming/references/swarming-reference.md and both bee-herding knowledge homes as its own targets; this code cell writes no skill so the two never race the same file."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T17:36:03.949Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T17:23:43.743Z",
+    "sync_ack": "The plan puts every skills/docs/knowledge edit for this feature in prm-4 (docs role), which names skills/bee-swarming/references/swarming-reference.md and both bee-herding knowledge homes as its own targets; this code cell writes no skill so the two never race the same file.",
+    "report": {
+      "outcome": "The report rides the mailbox as a path-only additive envelope key, and --inbox-session makes the detached fact a flag with a pre-spawn marker",
+      "commit": "990f06b1e931bf0c22319662bc67fa19edfa9257",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee — green (3173 passed, 0 failed, 20 ignored) — the cell verify: both changed files live in this binary, and the envelope exact-key family it carries is the contract this cell edits",
+      "deviations": [
+        "Named the .gitignore gap instead of fixing it — .bee/result-inbox/ needs an ignore line, but that block is generated from onboard/templates.rs, a file this cell does not name — hit an unforeseen obstacle",
+        "Wrote the marker in execute() rather than execute_new() alone, so a detached --continue round also leaves one — the plan named the spawn path only, and a continue with no marker loses its result the same way — found a better route",
+        "Added MailboxResult.report_note beside report_path — the plan names report_note as an envelope key, and the pure envelope builder needs a carrier for it — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 687 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

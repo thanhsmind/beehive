@@ -1,0 +1,128 @@
+{
+  "id": "rrf-1",
+  "feature": "release-red-fixes",
+  "title": "Turn the three release-gate reds green without changing release behavior",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+    ".gitignore",
+    ".bee/onboarding.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+    "docs/history/release-red-fixes/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "judge_obligation_ack": "The only hooks/ change is one entry in KNOWN_HISTORICAL_EXCEPTIONS inside #[cfg(test)] mod documented_invocations (cli_shape.rs:1075-1076): test-only code, the guard's runtime refusal path is untouched, so there is no guard behavior for an independent judge to read.",
+  "action": "RED BASE: `scripts/release.sh 2.37.3` stopped at its test gate on three failures. Reproduce each first (they are red on main today). (1) `cargo test --release -p bee --bin bee no_shipped_command_spelling` fails on `docs/history/deploy-issuer-session/plan.md`: its fenced cells JSON (line 48) holds the prose span `bee dispatch prepare --stage deployment` inside a cell action. docs/history is immutable, so do NOT edit that plan: add one entry to `const KNOWN_HISTORICAL_EXCEPTIONS` in `hooks/cli_shape.rs` (anchor `1152:    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 2] = [`; bump the array length) whose string is exactly the candidate the test prints, with a comment in the same style naming cell dis-1 of deploy-issuer-session and why it is a prose mention, not a transcript. (2) The `.bee/authorizations/` line was added by hand inside the onboarding-managed gitignore block, and `bee dev regen` (which release.sh runs) rewrites that block from `GITIGNORE_BLOCK_PATTERNS` in `onboard/templates.rs` and drops it (reproduced: regen then `git check-ignore -q .bee/authorizations/x.json` exits 1). Append `\".bee/authorizations/\"` at the TAIL of `GITIGNORE_BLOCK_PATTERNS` (after `\".bee/result-inbox/\",`) with a comment in the style of the tail entries (runtime data, one-use deploy permit markers written by `bee dispatch authorize`; joined at the tail because the order is hashed). Then remove the hand-added `.bee/authorizations/` line from the middle of the block in `.gitignore`, build the binary from THIS worktree (`cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee`), and run THAT freshly built binary's `dev regen` from the worktree root so `.gitignore` and `.bee/onboarding.json` carry the new rendered block and hash — never the vendored `.bee/bin/bee`, which is a stale copy (pattern 20260830 release-regen-with-a-stale-vendored-binary). Keep only `.gitignore` and `.bee/onboarding.json` from that regen; revert any other file it rewrites (for example the verify-app feature copies), because that drift is not this cell's. Confirm `git check-ignore -q .bee/authorizations/x.json` exits 0 after regen. (3) `BEE_SESSION_ID=repro cargo test --release -p bee --test work_verbs the_session_env_var_resolves_the_record_when_no_flag_names_one` fails (`left: Null`, `right: \"the env ask\"`) because the test at `tests/work_verbs.rs:188-193` strips BEE_HERDING_WORKER and BEE_HERDING_JOB_ID but not BEE_SESSION_ID or PI_SESSION_ID, and BEE_SESSION_ID outranks CLAUDE_CODE_SESSION_ID. Add `.env_remove(\"BEE_SESSION_ID\")` and `.env_remove(\"PI_SESSION_ID\")` beside the existing removes, matching the neighbour test at line 209. Do not change any product behavior, release.sh, or the session resolution order.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee no_shipped_command_spelling && BEE_SESSION_ID=pane-issuer-session PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test work_verbs && git check-ignore -q .bee/authorizations/x.json && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard::",
+  "must_haves": {
+    "truths": [
+      "the widened CLI-shape spelling test passes on the repo docs",
+      "work_verbs passes with BEE_SESSION_ID set in the environment",
+      "after bee dev regen with the fresh binary, .bee/authorizations/ stays git-ignored"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "substantive": "one commented KNOWN_HISTORICAL_EXCEPTIONS entry for the dis-1 prose span"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "substantive": ".bee/authorizations/ appended at the tail of GITIGNORE_BLOCK_PATTERNS with a comment"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+        "substantive": "the env-session test strips BEE_SESSION_ID and PI_SESSION_ID"
+      },
+      {
+        "path": ".gitignore",
+        "substantive": "managed block as rendered by the fresh binary, authorizations at the tail"
+      },
+      {
+        "path": ".bee/onboarding.json",
+        "substantive": "managed gitignore hash matching the new block"
+      }
+    ],
+    "key_links": [
+      ".gitignore managed block is the regen rendering of GITIGNORE_BLOCK_PATTERNS"
+    ],
+    "prohibitions": [
+      "No edit to docs/history/deploy-issuer-session/plan.md",
+      "No change to scripts/release.sh, dispatch authorize, or session resolution order",
+      "No regen drift outside .gitignore and .bee/onboarding.json in the commit"
+    ]
+  },
+  "trace": {
+    "worker": "rrf-worker-1",
+    "outcome": "the three release-gate reds are green without changing release behavior",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+      ".gitignore",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "rrf-1 escalated to the session model: the dispatched agy-flash worker never started because DNS failed for every host, so the leader made the edits inline",
+      "the cli_shape change grew from one pinned exception entry to that entry plus counting distinct pinned exceptions hit, because release-red-fixes plan.md quotes the pinned span again inside its fenced cells JSON and occurrence counting read that as a dead exception; still test-only code, the recorded judge_obligation_ack holds",
+      "sync-ack: skills owned by the touched areas never document the CLI spelling test's exception list, the gitignore template entries, or the work_verbs test env; rg over the owning skills finds none, so no owned skill text goes stale"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T06:57:39.999Z",
+    "behavior_change": false,
+    "verification_evidence": "each red reproduced on main first (spelling test FAILED on the dis-1 span; work_verbs left Null with BEE_SESSION_ID set; regen then check-ignore exit=1); after the fix: spelling test 1 passed, work_verbs 14 passed with BEE_SESSION_ID set, check-ignore exit=0 after fresh-binary regen, onboard:: 182 passed; full suite with the deploy pane env: suite exit=0, 36 result lines ok, 0 FAILED, 3997 passed (BEE_SESSION_ID, BEE_DISPATCH_ID, BEE_RELEASE_VERSION set)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee no_shipped_command_spelling && BEE_SESSION_ID=pane-issuer-session PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test work_verbs && git check-ignore -q .bee/authorizations/x.json && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard::",
+    "claimed_at": "2026-09-15T06:48:24.023Z",
+    "escalation_reason": "The dispatched agy-flash worker never started: pane w1:p9B showed the brief line typed at a bare shell four times, no agy process ran, the job mailbox never got ack-1.json, and DNS failed for every host (google.com, crates.io), so no remote worker model can run on this machine now; the cell is three small offline edits plus a local regen and cargo tests, so the leader finishes it inline",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f",
+        "owner_bypassed": null,
+        "at": "2026-09-15T06:57:39.999Z"
+      }
+    ],
+    "sync_ack": "skills owned by the touched areas never document the CLI spelling test's exception list, the gitignore template entries, or the work_verbs test env; rg over the owning skills finds none, so no owned skill text goes stale",
+    "mistakes": [
+      {
+        "wrong": "docs/history/release-red-fixes/plan.md quoted the pinned span bee dispatch prepare --stage deployment a second time inside its own fenced cells JSON, which doubled known_hits in the spelling test",
+        "better": "quote a guard-refused spelling only outside fenced blocks, or check the scan before committing a plan"
+      }
+    ],
+    "report": {
+      "outcome": "the three release-gate reds are green: pinned dis-1 exception with distinct-hit counting, .bee/authorizations/ in the onboarding gitignore template (regenerated with a fresh binary), work_verbs env-session test strips BEE_SESSION_ID and PI_SESSION_ID",
+      "commit": "3ec02af6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/tests/work_verbs.rs",
+        ".gitignore",
+        ".bee/onboarding.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee no_shipped_command_spelling && BEE_SESSION_ID=pane-issuer-session PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test work_verbs && git check-ignore -q .bee/authorizations/x.json && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard:: — green:unit — each red reproduced on main first (spelling test FAILED on the dis-1 span; work_verbs left Null with BEE_SESSION_ID set; regen then check-ignore exit=1); after the fix: spelling test 1 passed, work_verbs 14 passed with BEE_SESSION_ID set, check-ignore exit=0 after fresh-binary regen, onboard:: 182 passed; full suite with the deploy pane env: suite exit=0, 36 result lines ok, 0 FAILED, 3997 passed (BEE_SESSION_ID, BEE_DISPATCH_ID, BEE_RELEASE_VERSION set)",
+      "deviations": [
+        "rrf-1 escalated to the session model: the dispatched agy-flash worker never started because DNS failed for every host, so the leader made the edits inline",
+        "the cli_shape change grew from one pinned exception entry to that entry plus counting distinct pinned exceptions hit, because release-red-fixes plan.md quotes the pinned span again inside its fenced cells JSON and occurrence counting read that as a dead exception; still test-only code, the recorded judge_obligation_ack holds"
+      ],
+      "mistakes": [
+        "docs/history/release-red-fixes/plan.md quoted the pinned span bee dispatch prepare --stage deployment a second time inside its own fenced cells JSON, which doubled known_hits in the spelling test — quote a guard-refused spelling only outside fenced blocks, or check the scan before committing a plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "escalate": true
+}

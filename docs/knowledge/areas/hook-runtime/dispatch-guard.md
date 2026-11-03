@@ -126,7 +126,7 @@ caller — and charged a round trip for every guess.
   Both orientations a session can start from — the full startup preamble
   and the narrowed post-compaction orientation — carry a "Dispatch door"
   block: the one preparation verb, then one line publishing the roles
-  `models.<runtime>` actually configures plus the `--role` spelling, capped
+  `team.<runtime>` actually configures plus the `--role` spelling, capped
   at six names with a "+N more" count and never rendering a slot's effort
   value (fbbadad5, which re-rendered dispatch-door-upfront D2's original
   four-tier line in role language after the model-role split). The line is
@@ -227,6 +227,18 @@ decision auditable.
 
 ## Edge Cases Settled
 
+- **A role that renders no helper of its own is never repaired onto another
+  role's helper.** The advisor role is that case: its prepared dispatch travels
+  under the catch-all helper type with the advisor's own model attached, and the
+  guard allows the pair because the declared role and the model agree. Naming a
+  different role's rendered helper by hand does not carry the advisor model with
+  it — the helper stands for that other role, and where the prompt declares that
+  role too, the guard rewrites the model to the role's configured one and
+  announces the repair. An advisor-model reviewer is therefore reached only by
+  running the prepared payload exactly as the door returns it; a hand-assembled
+  pair either loses the model or leaves its two halves describing different
+  roles, and the independence recorded on the verdict follows whichever model
+  actually ran.
 - The second-runtime branch of the anchored tier-marker check alone
   recognizes an advisor role token in addition to the existing tier names
   (the first runtime's branch is byte-unchanged); before this, a confirmed

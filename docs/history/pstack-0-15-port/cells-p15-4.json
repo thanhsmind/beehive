@@ -1,0 +1,31 @@
+[
+  {
+    "id": "p15-4",
+    "feature": "pstack-0-15-port",
+    "title": "Write git stdin from a thread so a long patch-id stream cannot deadlock",
+    "lane": "tiny",
+    "role": "code",
+    "status": "open",
+    "deps": ["p15-1"],
+    "decisions": ["91835aa0-9361-4a38-9833-af796910044f", "0154bcb7-5daa-480c-aee1-af90bbc8143f"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": ["docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"],
+    "behavior_change": false,
+    "action": "Fix found by the p15-1 slice judge, per pstack-0-15-port D2 (fail open on every git error — a hang is not fail-open). In packages/bee-rs/crates/bee/src/verbs/worktree/git.rs, `run_git_stdin` (search `pub(crate) fn run_git_stdin`) calls `write_all` on the child's stdin BEFORE reading stdout. `git patch-id --stable` prints one line per commit while it reads, so past roughly 800 commits its 64 KiB stdout pipe fills, it stops reading, `write_all` blocks, and `bee worktree merge` hangs. Change it so the write and the read cannot block each other: take the child's stdin, move the input into a `std::thread::spawn` that does the `write_all` and drops the handle, then call `wait_with_output` on the child; join the thread after (ignore its result — a broken pipe on the write side is the child exiting early, which the exit status already reports). Keep the return shape and every fail-open path exactly as they are. Also fix the typo in docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md: the bullet heading `A cleaner rebase is not stale proof` reads `A clean rebase is not stale proof`. No new test is required by this cell: the existing rebase and stale tests pin the behavior; the deadlock needs an 800-commit fixture that is not worth its runtime. No code comments (comment ratchet `bee dev comment-baseline --check`).",
+    "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green. `rg -n 'A clean rebase is not stale proof' docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` returns one line. `.bee/bin/bee dev comment-baseline --check` is clean.",
+    "must_haves": {
+      "truths": ["run_git_stdin never blocks on a full stdout pipe", "every existing worktree test stays green"],
+      "artifacts": [{"path": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs", "substantive": "stdin written from a spawned thread, stdout read with wait_with_output"}],
+      "key_links": ["phases.rs callers unchanged"],
+      "prohibitions": ["No change to the GitOut shape", "No new code comments"]
+    }
+  }
+]

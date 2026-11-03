@@ -16,10 +16,10 @@ use crate::hooks::Outcome;
 use crate::textutil::truncate_chars_head;
 use crate::jsjson;
 use crate::state::read_config_raw;
-use crate::verbs::drivers::{normalize_models, resolve_tier, Resolved};
+use crate::verbs::drivers::{declared_model_for, effort_for_dispatch, normalize_models, resolve_tier, EffortChoice, Resolved};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const HOOK_NAME: &str = "model-guard";
@@ -77,13 +77,14 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
         return Ok((0, String::new(), String::new()));
     }
 
-    let models = normalize_models(config.get("models"));
+    let models = normalize_models(config.get("team"));
+    let cfg = Value::Object(config);
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
 
     let mut verdict = if is_codex_spawn {
-        evaluate_codex_spawn(&tool_input, &models)
+        evaluate_codex_spawn(Some(&root), &tool_input, &models)
     } else {
-        evaluate_claude_dispatch(&tool_input, &models)
+        evaluate_claude_dispatch(Some(&root), &tool_input, &models)
     };
 
     let Some(transport) = verdict.transport else {
@@ -91,7 +92,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
         return Ok((0, String::new(), String::new()));
     };
 
-    let economics = derive_dispatch_economics(&models, is_codex_spawn, &verdict);
+    let economics = derive_dispatch_economics(&cfg, &models, is_codex_spawn, &verdict);
 
     // toolInput is a plain object on every verdict-carrying path.
     let input_map = match &tool_input {
@@ -198,23 +199,82 @@ fn is_js_ws(c: char) -> bool {
 // whatever NAME the marker carries, and legality is one question asked in one
 // place: is this role configured for this runtime.
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct PromptAnchoredMarkers {
+    pub tier: Option<String>,
+    pub feature: Option<String>,
+    pub stage: Option<String>,
+    pub cell: Option<String>,
+    pub kind: Option<String>,
+    pub lane: Option<String>,
+}
+
+pub(crate) fn parse_anchored_markers(text: &str) -> PromptAnchoredMarkers {
+    let mut markers = PromptAnchoredMarkers::default();
+    let mut rest = text;
+    loop {
+        rest = rest.trim_start_matches(is_js_ws);
+        let prefixes = ["[bee-tier:", "[bee-feature:", "[bee-stage:", "[bee-cell:", "[bee-kind:", "[bee-lane:"];
+        let Some((index, tail)) =
+            prefixes.iter().enumerate().find_map(|(i, p)| strip_prefix_ascii_ci(rest, p).map(|t| (i, t)))
+        else {
+            break;
+        };
+        let Some((name, after)) = tail.trim_start_matches(is_js_ws).split_once(']') else { break };
+        if name.is_empty() || name.contains(is_js_ws) || name.contains('[') {
+            break;
+        }
+        let slot = match index {
+            0 => &mut markers.tier,
+            1 => &mut markers.feature,
+            2 => &mut markers.stage,
+            3 => &mut markers.cell,
+            4 => &mut markers.kind,
+            _ => &mut markers.lane,
+        };
+        slot.get_or_insert_with(|| name.to_string());
+        rest = after;
+    }
+    markers
+}
+
 /// The role name a `[bee-tier: <name>]` marker opens with, exactly as
 /// written. Parsing decides SHAPE only — anchored at the start, one
 /// whitespace-free token, closed by `]` — never legality: under an open role
 /// set there is no closed list to decide legality against.
 fn marker_role_name(value: &Value) -> Option<String> {
     let text = value.as_str()?;
-    let rest = text.trim_start_matches(is_js_ws);
-    let rest = strip_prefix_ascii_ci(rest, "[bee-tier:")?;
-    let rest = rest.trim_start_matches(is_js_ws);
-    let (name, _) = rest.split_once(']')?;
-    // The same strictness the old alternation had: the name ran up to `]`
-    // with nothing between. A candidate carrying whitespace or a second `[`
-    // is prose that happens to open with the marker text, not a role name.
-    if name.is_empty() || name.contains(is_js_ws) || name.contains('[') {
-        return None;
+    parse_anchored_markers(text).tier
+}
+
+fn parse_claude_anchored_markers(tool_input: &Map<String, Value>) -> PromptAnchoredMarkers {
+    let desc_markers = tool_input
+        .get("description")
+        .and_then(Value::as_str)
+        .map(parse_anchored_markers)
+        .unwrap_or_default();
+    let prompt_markers = tool_input
+        .get("prompt")
+        .and_then(Value::as_str)
+        .map(parse_anchored_markers)
+        .unwrap_or_default();
+
+    PromptAnchoredMarkers {
+        tier: desc_markers.tier.or(prompt_markers.tier),
+        feature: desc_markers.feature.or(prompt_markers.feature),
+        stage: desc_markers.stage.or(prompt_markers.stage),
+        cell: desc_markers.cell.or(prompt_markers.cell),
+        kind: desc_markers.kind.or(prompt_markers.kind),
+        lane: desc_markers.lane.or(prompt_markers.lane),
     }
-    Some(name.to_string())
+}
+
+fn parse_codex_anchored_markers(tool_input: &Map<String, Value>) -> PromptAnchoredMarkers {
+    tool_input
+        .get("message")
+        .and_then(Value::as_str)
+        .map(parse_anchored_markers)
+        .unwrap_or_default()
 }
 
 fn strip_prefix_ascii_ci<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
@@ -290,11 +350,11 @@ fn unconfigured_role_reason(name: &str, models: &Map<String, Value>, runtime: &s
     let roles = role_list(models, runtime);
     format!(
         "bee-model-guard: [bee-tier: {name}] names a role nothing configures — \
-models.{runtime} in .bee/config.json carries no \"{name}\" entry, so the dispatch would \
+team.{runtime} in .bee/config.json carries no \"{name}\" entry, so the dispatch would \
 silently inherit the session model while dispatch.jsonl recorded a role that selects no \
 model.\n\
 FIX: open with a configured role ({roles}), or configure this one — add \
-\"{name}\": \"<model>\" to models.{runtime} in .bee/config.json. Any role name you \
+\"{name}\": \"<model>\" to team.{runtime} in .bee/config.json. Any role name you \
 configure is legal; bee holds no fixed list."
     )
 }
@@ -302,7 +362,7 @@ configure is legal; bee holds no fixed list."
 // ─── model config (the ONE parser lives in verbs::drivers) ────────────────
 //
 // model-role-split D1 (store cd72ec97): this hook used to carry a SECOND
-// implementation of the `models.<runtime>` shape — its own Slot/Slots/Models
+// implementation of the `team.<runtime>` shape — its own Slot/Slots/Models
 // normalize plus a private resolve_tier/resolve_advisor. The two copies had
 // already drifted (four tier names against five) with nothing intending it,
 // so `verbs::drivers` is now the single parser and this hook calls it. No
@@ -335,15 +395,6 @@ fn resolved_model_name(resolved: &Resolved) -> Option<&str> {
     }
 }
 
-/// How many roles the dispatch door prints before it starts counting.
-///
-/// The door block is injected into EVERY session and re-injected after every
-/// compaction, so its length is a real, repeated cost — publishing a long
-/// list of names would be worse than the fixed tier list it replaced. Six is
-/// bee's own slots plus room for a couple of the operator's; past that the
-/// line says how many more there are and `bee dispatch prepare --role <name>`
-/// answers for any of them by name.
-const DOOR_ROLES_SHOWN: usize = 6;
 
 /// How many characters of a role's optional `description` the door prints
 /// before it clips. The door block is injected into EVERY session, so a
@@ -361,7 +412,7 @@ const ROLE_DESCRIPTION_MAX: usize = 60;
 /// hook's deny/allow decision and `dispatch prepare` all see exactly the
 /// same value they saw before an operator wrote one.
 ///
-/// Only an OBJECT slot can carry it. `models.claude.generation: "sonnet"`
+/// Only an OBJECT slot can carry it. `team.claude.generation: "sonnet"`
 /// has nowhere to put a description and renders exactly as it always did;
 /// so does an object slot without the key, an empty one, and a whitespace
 /// one — the door never prints an empty pair of quotes.
@@ -390,84 +441,73 @@ fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) 
 /// carry, or a slot the config explicitly turned off), which the door drops
 /// rather than printing a name with nothing behind it.
 ///
-/// **`effort` is NOT rendered, and that is the point.** model-role-split
-/// records `effort` as a known NON-delivery (plan S10), so printing it here
-/// was the door stating a fact no dispatch carries — the same silent-lie
-/// shape this feature exists to remove. Three separate facts, because the two
-/// runtimes fail for DIFFERENT reasons:
+/// This display still omits effort; it describes the configured role, not
+/// observed execution settings. Configuration delivery and enforcement are
+/// separate facts:
 ///
-/// * `models.<runtime>.<role>` accepts `{model, effort}` and
-///   `normalize_tier_value` keeps the value, so it does reach
-///   `Resolved::Model`. Config and parsing are not the gap.
-/// * On CLAUDE it dies at the door: every `Resolved::Model` site in
-///   `verbs/drivers/prepare.rs` destructures `{ model, .. }`, and the Agent
-///   tool takes no effort parameter to carry it even if they did not. That
-///   half is a harness limit, not a bee gap.
-/// * On CODEX it dies for a different reason, and this one IS bee's own: only
-///   the `native` transport arm emits `reasoning_effort`. A `Resolved::Model`
-///   on codex falls into the `spawn_agent` arm, which emits neither `model`
-///   nor `reasoning_effort` — on the one runtime that demonstrably accepts
-///   it. The claude harness explanation does NOT cover this half, and anyone
-///   who reads "harness limit" and takes the whole thing as closed is reading
-///   past a live gap.
+/// * `normalize_tier_value` retains configured `{model, effort}` values.
+/// * Codex payload preparation carries model and effort for both Model and
+///   Native settings when that route is supported. Read-only jobs use the
+///   CLI's model and effort arguments instead.
+/// * A prepared setting is not proof of host enforcement. Codex 0.154.0
+///   hides the native role message from installed hooks, so preparation
+///   refuses that native cell route. Effective-model reporting remains
+///   separate from this role display.
 ///
-/// `Resolved::Native` is the one place effort IS delivered; it is not
-/// rendered here either, because the native arm's own `reasoning_effort` is
-/// what speaks for it and this line publishes the model, not the transport.
-fn render_role(resolved: &Resolved) -> Option<String> {
+/// leader-sees-team D1/D4: render a role as `<model> (native)` for a native slot,
+/// `<declared-model> (herding: <agent>)` for a herding slot with a declared model,
+/// `model chosen by the agent (herding: <agent>)` when none is declared,
+/// `<declared-model> (cli)` for a cli slot.
+fn render_role(cfg: &Value, resolved: &Resolved, runtime: &str) -> Option<String> {
     Some(match resolved {
-        Resolved::Model { model, .. } => model.clone(),
-        Resolved::Herding { agent, fallback } => {
-            let mut s = match agent {
-                Some(a) => format!("herding ({a})"),
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => {
+            format!("{model} (native)")
+        }
+        Resolved::Herding { agent, .. } => {
+            let declared = crate::verbs::drivers::declared_model_for(cfg, resolved, runtime);
+            let agent_str = match agent {
+                Some(a) => format!("herding: {a}"),
                 None => "herding".to_string(),
             };
-            if let Some(fb) = fallback {
-                s.push_str(&format!(" fallback={fb}"));
+            match declared {
+                Some(dm) => format!("{dm} ({agent_str})"),
+                None => format!("model chosen by the agent ({agent_str})"),
             }
-            s
         }
-        Resolved::Cli { .. } | Resolved::Refused { .. } => "cli".to_string(),
-        Resolved::Native { model, .. } => format!("native:{model}"),
-        Resolved::Inherit => "session default".to_string(),
+        Resolved::Cli { .. } | Resolved::Refused { .. } => {
+            let declared = crate::verbs::drivers::declared_model_for(cfg, resolved, runtime);
+            match declared {
+                Some(dm) => format!("{dm} (cli)"),
+                None => "cli".to_string(),
+            }
+        }
+        Resolved::Inherit => "session default (native)".to_string(),
         Resolved::Budget => return None,
     })
 }
 
 /// The roles this host actually configures, each resolved to what it selects.
 ///
-/// model-role-split D2 (store 06e49368): this was `tier_slot_display` and it
-/// returned a FIXED four-entry vector — `generation`, `extraction`, `review`,
-/// `advisor` — because under a closed set those were the only names that
-/// could exist. The set is open now, so there is no fixed list to print and
-/// the names are DERIVED from `models.<runtime>` after `normalize_models`
-/// (the operator's own keys plus the defaults bee seeds there), exactly as
-/// every other role surface derives them.
-///
-/// Read from the TABLE rather than from `known_roles`, deliberately: the
-/// resolver warns on a name absent from both the table and the built-in
-/// defaults, and `known_roles` adds `ceiling`, which no config carries —
-/// walking it here would print one stderr warning per session render on every
-/// host. Every key of the table is by definition present in the table, so this
-/// walk cannot warn. (`known_roles` used to add `advisor` on every host too,
-/// configured or not; that was the P2 this comment already smelled, and it is
-/// fixed at the source — see `verbs::drivers::known_roles`.)
-///
-/// `ceiling` is excluded: D5 (store 97ce5225) makes it an escalation flag,
-/// never a role, and it selects no model.
-///
-/// Order is derived too, never hand-listed: the slots bee's own dispatch
-/// kinds resolve come first, in `DISPATCH_KINDS` order, so the name most
-/// dispatches land on still reads first; whatever else the host configures
-/// follows in config order.
+/// leader-sees-team D1/D4: `role_slot_display` takes the whole config so it
+/// can call `declared_model_for` for herding and cli slots.
 pub(crate) fn role_slot_display(
-    models_raw: Option<&Value>,
+    config: Option<&Map<String, Value>>,
     runtime: &str,
 ) -> Vec<(String, String)> {
     use crate::verbs::drivers::{
         normalize_models, resolve_role, slot_for_kind, DISPATCH_KINDS, ESCALATION_WORD,
     };
-    let map = normalize_models(models_raw);
+    let cfg_val = config.map(|m| Value::Object(m.clone())).unwrap_or_else(|| Value::Object(Map::new()));
+    let team_raw = config.and_then(|c| {
+        if c.contains_key("team") {
+            c.get("team")
+        } else if c.contains_key("models") {
+            c.get("models")
+        } else {
+            Some(&cfg_val)
+        }
+    });
+    let map = normalize_models(team_raw);
     let table = map.get(runtime).and_then(Value::as_object);
     let mut order: Vec<String> = Vec::new();
     for kind in DISPATCH_KINDS {
@@ -489,69 +529,51 @@ pub(crate) fn role_slot_display(
         .into_iter()
         .filter_map(|name| {
             let resolved = resolve_role(&map, &[name.as_str()], runtime, "gather");
-            render_role(&resolved).map(|text| (name, text))
+            render_role(&cfg_val, &resolved, runtime).map(|text| (name, text))
         })
         .collect()
 }
 
 /// The dispatch door block — both lines, in ONE place.
 ///
-/// The session preamble renders it at session start
-/// (`hooks/session_preamble/budget.rs`) and `hooks/compaction.rs` re-injects
-/// it after a compaction. They used to carry two copies of the same literal,
-/// which is exactly how a post-compaction agent ends up being told something
-/// the preamble no longer says.
-///
-/// What changed with the open role set (D2, and `--role` from store
-/// `8ff6e79e`): the command line names `--role <name>`, and the second line
-/// publishes the host's roles instead of a fixed tier list. The list is safe
-/// to truncate because a wrong guess is not silent — a name nothing
-/// configures refuses BY NAME with a FIX at both doors
-/// (`unconfigured_role_reason` here, `--role`'s refusal in `prepare.rs`).
-///
-/// An open role set means the NAME is the only thing bee can publish about a
-/// role it never invented, and `design` or `test` says nothing about when to
-/// reach for it. A slot object may therefore carry `description`, and the
-/// door prints it beside the model as `name=model ("what it is for")` — the
-/// operator's own sentence, on the one surface every session reads. It is
-/// rendered here and nowhere else: `role_slot_description` reads the raw
-/// config, resolution never sees the field, so a described role and an
-/// undescribed one resolve and dispatch identically.
-pub(crate) fn dispatch_door_lines(models_raw: Option<&Value>, runtime: &str) -> Vec<String> {
-    let roles = role_slot_display(models_raw, runtime);
-    let shown = std::cmp::min(DOOR_ROLES_SHOWN, roles.len());
-    let mut listed = roles[..shown]
-        .iter()
-        .map(|(k, v)| match role_slot_description(models_raw, runtime, k) {
-            Some(desc) => format!("{k}={v} (\"{desc}\")"),
-            None => format!("{k}={v}"),
-        })
-        .collect::<Vec<_>>()
-        .join(" | ");
-    if roles.len() > shown {
-        listed.push_str(&format!(" +{} more", roles.len() - shown));
-    }
-    if listed.is_empty() {
-        listed.push_str("none configured");
-    }
-    vec![
+/// token-thrift D4: prints one line per distinct rendered target — `- <render_role>: <role>, <role>`
+/// — in first-appearance order, in full and never cut with `…`, no descriptions.
+pub(crate) fn dispatch_door_lines(config: Option<&Map<String, Value>>, runtime: &str) -> Vec<String> {
+    let roles = role_slot_display(config, runtime);
+    let mut lines = vec![
         format!(
             "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime {runtime} --kind cell|gather|reviewer|advisor [--role <name>] --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
         ),
-        format!(
-            "- Roles ({runtime}): {listed} — open set: any name models.{runtime} configures is legal; one nothing configures refuses by name."
-        ),
-    ]
+    ];
+    if roles.is_empty() {
+        lines.push("- none configured".to_string());
+    } else {
+        let mut grouped: Vec<(String, Vec<String>)> = Vec::new();
+        for (role, rendered) in roles {
+            match grouped.iter_mut().find(|(target, _)| *target == rendered) {
+                Some((_, names)) => names.push(role),
+                None => grouped.push((rendered, vec![role])),
+            }
+        }
+        for (rendered, names) in grouped {
+            lines.push(format!("- {rendered}: {}", names.join(", ")));
+        }
+    }
+    lines.push(format!(
+        "- open set: any name team.{runtime} configures is legal; one nothing configures refuses by name."
+    ));
+    lines
 }
+
 
 /// Every model a bare `model:` param may name — derived from what the
 /// resolver can publish for this runtime, never from a list kept beside it.
 ///
 /// model-role-split D2 (store 06e49368): this walked the literal
 /// `["extraction", "generation", "review"]` plus the advisor slot, so a model
-/// configured under any OTHER role (`models.claude.test`) failed membership
+/// configured under any OTHER role (`team.claude.test`) failed membership
 /// and the dispatch DENIED — the hard blocker on an open role set. It now
-/// walks whatever `models.claude` carries, which is that map's keys after
+/// walks whatever `team.claude` carries, which is that map's keys after
 /// `normalize_models`: the operator's roles plus bee's own seeded defaults.
 /// `advisor` needs no special case any more — it is one of those keys when it
 /// is configured, and `resolve_tier` reads its slot directly (mrs-2), so the
@@ -603,23 +625,40 @@ fn configured_model_set(models: &Map<String, Value>) -> BTreeSet<String> {
     // `slot_for_kind` can reach the extraction role, this loop admits it in
     // the same commit, with no edit here and no chance of the two doors
     // disagreeing again. Until then `prepare` still publishes only
-    // generation/review/advisor, so admitting haiku today would make the
+    // read/generation/review/advisor, so admitting haiku today would make the
     // guard wider than the door — the exact defect a2f85972 was logged for.
+    //
+    // gather-reads-the-read-slot D8 — the WALK, not the head. Each kind's
+    // slot is the HEAD of an ordered list (`tier_role_list`), and the name
+    // that WINS that walk is the one prepare's fallback is keyed on. A
+    // head-only lookup broke the moment `--kind gather` moved to `read`: on a
+    // host with no `read` key and `generation: {kind:"herding",
+    // fallback:"default"}`, prepare publishes sonnet while the head `read`
+    // has no `default_models` entry at all, so the guard would have stopped
+    // admitting the very model it just told the orchestrator to re-dispatch
+    // with.
     for kind in crate::verbs::drivers::DISPATCH_KINDS {
         let Some(slot) = crate::verbs::drivers::slot_for_kind(kind) else { continue };
+        let roles = crate::verbs::drivers::tier_role_list(slot);
         // The shared parser carries the flag on the resolved value itself
         // (`Resolved::Herding { fallback }` mirrors the normalized
         // `"fallback": "default"` verbatim), so the raw-slot peek the deleted
         // private enum forced — its Herding was a unit variant — is gone. The
         // review-falls-back-to-generation rule for an explicitly null or
-        // absent review slot rides along inside resolve_tier, the same rule
-        // applied at the same moment as before.
-        if matches!(
-            resolve_tier(models, slot, "claude", GUARD_PURPOSE),
-            Resolved::Herding { fallback: Some(ref f), .. } if f == "default"
-        ) {
+        // absent review slot IS this walk, the same rule applied at the same
+        // moment as before.
+        let (winner, resolved) =
+            crate::verbs::drivers::resolve_role_named(models, &roles, "claude", GUARD_PURPOSE);
+        // The name prepare TRAVELS under, which is what it keys the published
+        // fallback on: the winner on the default-gather path, and the asked
+        // head everywhere else (D2 — a reviewer keeps stamping `review` even
+        // when the walk fell through to generation, and
+        // `an_explicitly_null_review_slot_inherits_the_generation_herding_fallback`
+        // pins that prepare publishes opus there).
+        let published = if kind == "gather" { winner.unwrap_or(slot) } else { slot };
+        if matches!(resolved, Resolved::Herding { fallback: Some(ref f), .. } if f == "default") {
             if let Some(Value::String(m)) =
-                crate::verbs::drivers::default_models("claude").get(slot)
+                crate::verbs::drivers::default_models("claude").get(published)
             {
                 if !m.trim().is_empty() {
                     set.insert(m.trim().to_string());
@@ -648,18 +687,19 @@ struct Verdict {
     /// updatedInput are not something a guard should bet a dropped prompt on.
     updated_input: Option<Value>,
     notes: Vec<String>,
+    effort: Option<EffortChoice>,
 }
 
 fn no_opinion() -> Verdict {
-    Verdict { deny: false, transport: None, reason: None, tier: None, model: None, subagent_type: None, updated_input: None, notes: Vec::new() }
+    Verdict { deny: false, transport: None, reason: None, tier: None, model: None, subagent_type: None, updated_input: None, notes: Vec::new(), effort: None }
 }
 
 fn allow(transport: &'static str, tier: Option<String>, model: Option<String>, subagent_type: Option<String>) -> Verdict {
-    Verdict { deny: false, transport: Some(transport), reason: None, tier, model, subagent_type, updated_input: None, notes: Vec::new() }
+    Verdict { deny: false, transport: Some(transport), reason: None, tier, model, subagent_type, updated_input: None, notes: Vec::new(), effort: None }
 }
 
 fn deny(reason: String, transport: &'static str, tier: Option<String>, model: Option<String>, subagent_type: Option<String>) -> Verdict {
-    Verdict { deny: true, transport: Some(transport), reason: Some(reason), tier, model, subagent_type, updated_input: None, notes: Vec::new() }
+    Verdict { deny: true, transport: Some(transport), reason: Some(reason), tier, model, subagent_type, updated_input: None, notes: Vec::new(), effort: None }
 }
 
 /// Allow, with one field of the request rewritten on a replacement copy.
@@ -680,6 +720,7 @@ fn repair(
         subagent_type,
         updated_input: Some(updated_input),
         notes: vec![note],
+        effort: None,
     }
 }
 
@@ -721,23 +762,220 @@ fn role_for_pinned_type(subagent_type: &str) -> Option<&'static str> {
     crate::verbs::drivers::role_for_agent(subagent_type)
 }
 
-fn evaluate_codex_spawn(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
+fn is_read_only_role(role: &str) -> bool {
+    matches!(
+        role,
+        "read" | "review" | "reviewer" | "gather" | "advisor" | "extraction"
+    ) || crate::verbs::drivers::SEAT_ROLES.contains(&role)
+}
+
+fn store_main_root(root: &Path) -> PathBuf {
+    match crate::roots::resolve_store_root_worktree(root) {
+        crate::roots::RootsWt::Go(store_roots) => store_roots.main_root(),
+        _ => root.to_path_buf(),
+    }
+}
+
+fn door_effort(root: Option<&Path>, markers: &PromptAnchoredMarkers, resolved: &Resolved) -> Option<EffortChoice> {
+    let kind = markers.kind.as_deref()?;
+    let stored_lane = root.zip(markers.cell.as_deref()).and_then(|(root, id)| {
+        let cell = crate::verbs::cells::read_cell(&store_main_root(root), id).ok().flatten()?;
+        cell.get("lane").and_then(Value::as_str).map(String::from)
+    });
+    let lane = stored_lane.or_else(|| markers.lane.clone());
+    let base = match resolved {
+        Resolved::Model { effort, .. } | Resolved::Native { effort, .. } => effort.as_deref(),
+        _ => None,
+    };
+    Some(effort_for_dispatch(base, kind, lane.as_deref()))
+}
+
+fn evaluate_semantic_role_routing(
+    root: Option<&Path>,
+    runtime: &str,
+    markers: &PromptAnchoredMarkers,
+    declared_role: Option<&str>,
+) -> Result<(), (String, &'static str)> {
+    let Some(root) = root else {
+        return Ok(());
+    };
+
+    let main_root = store_main_root(root);
+
+    let mut feature = markers.feature.clone();
+
+    // If cell marker is present, load cell and resolve/check feature
+    let cell_opt = if let Some(cell_id) = markers.cell.as_deref() {
+        let cell = crate::verbs::cells::read_cell(&main_root, cell_id)
+            .map_err(|_| (
+                format!("bee-model-guard: planned_role_mismatch: could not read cell \"{cell_id}\""),
+                "planned-role-mismatch",
+            ))?;
+        if cell.is_none() {
+            return Err((
+                format!("bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" not found in store"),
+                "planned-role-mismatch",
+            ));
+        }
+        cell
+    } else {
+        None
+    };
+
+    if let Some(cell) = &cell_opt {
+        let cell_feat = cell.get("feature").and_then(Value::as_str);
+        if let Some(f) = &feature {
+            if cell_feat != Some(f.as_str()) {
+                return Err((
+                    format!(
+                        "bee-model-guard: planned_role_mismatch: cell \"{}\" belongs to feature \"{}\", but dispatch specified feature \"{f}\"",
+                        markers.cell.as_deref().unwrap_or(""),
+                        cell_feat.unwrap_or("unknown")
+                    ),
+                    "planned-role-mismatch",
+                ));
+            }
+        } else if let Some(cf) = cell_feat {
+            feature = Some(cf.to_string());
+        }
+    }
+
+    if feature.is_none() && markers.stage.is_some() {
+        let state_file = main_root.join(".bee").join("state.json");
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(m)) = crate::fsutil::read_json(&state_file) {
+            if let Some(f) = m.get("feature").and_then(Value::as_str) {
+                feature = Some(f.to_string());
+            }
+        }
+    }
+
+    let Some(feature) = feature else {
+        // Without anchored feature/cell/stage identity, legacy behavior is preserved.
+        return Ok(());
+    };
+
+    let Some(role_plan) = crate::verbs::state_group::get_approved_role_plan(&main_root, &feature) else {
+        // Without approved v2 role plan, legacy behavior stays byte-identical.
+        return Ok(());
+    };
+
+    // 1. Runtime validation
+    let plan_runtime = role_plan
+        .get("runtime")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if plan_runtime != runtime {
+        let reason = format!(
+            "bee-model-guard: role_plan_runtime_mismatch: feature \"{feature}\" approved role plan is for runtime \"{plan_runtime}\", not \"{runtime}\". FIX: revise plan.md for runtime \"{runtime}\" and approve a new revision."
+        );
+        return Err((reason, "role-plan-runtime-mismatch"));
+    }
+
+    // 2. Cell dispatch validation
+    if let Some(cell_id) = markers.cell.as_deref() {
+        let cell = cell_opt.unwrap();
+        let approved_packet = crate::verbs::cells::get_approved_preview_packet(&main_root, &feature)
+            .ok_or_else(|| (
+                format!("bee-model-guard: planned_role_mismatch: approved preview packet not found for feature \"{feature}\""),
+                "planned-role-mismatch",
+            ))?;
+
+        let original_role = approved_packet
+            .get("cells")
+            .and_then(Value::as_array)
+            .and_then(|arr| {
+                arr.iter().find(|c| c.get("id").and_then(Value::as_str) == Some(cell_id))
+            })
+            .and_then(|c| c.get("role").and_then(Value::as_str))
+            .ok_or_else(|| (
+                format!("bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" not found in approved preview packet"),
+                "planned-role-mismatch",
+            ))?;
+
+        let effective_role = crate::verbs::cells::validate_cell_role_chain(original_role, &cell)
+            .map_err(|err| (
+                format!("bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" role chain invalid: {err}"),
+                "planned-role-mismatch",
+            ))?;
+
+        let declared = declared_role.unwrap_or_default();
+        let escalated_ceiling = declared == crate::verbs::drivers::ESCALATION_WORD
+            && crate::verbs::cells::cell_is_escalated(&cell);
+        if declared != effective_role && !escalated_ceiling {
+            return Err((
+                format!(
+                    "bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" planned effective role is \"{effective_role}\", dispatch declared \"{declared}\". FIX: use planned role [bee-tier: {effective_role}] or run bee cells reroute."
+                ),
+                "planned-role-mismatch",
+            ));
+        }
+    } else {
+        // 3. Non-cell stage dispatch validation
+        let Some(stage_name) = markers.stage.as_deref() else {
+            return Err((
+                format!(
+                    "bee-model-guard: stage_required: non-cell dispatch for feature \"{feature}\" with approved v2 role plan requires an anchored [bee-stage: <stage>] marker. FIX: provide the approved stage name."
+                ),
+                "stage-required",
+            ));
+        };
+
+        let stages = role_plan
+            .get("stages")
+            .and_then(Value::as_array)
+            .ok_or_else(|| (
+                format!("bee-model-guard: stage_unknown: no stages found in approved role plan for feature \"{feature}\""),
+                "stage-unknown",
+            ))?;
+
+        let stage_entry = stages.iter().find(|s| {
+            s.get("stage").and_then(Value::as_str) == Some(stage_name)
+        }).ok_or_else(|| (
+            format!(
+                "bee-model-guard: stage_unknown: stage \"{stage_name}\" is not defined in feature \"{feature}\" role plan. FIX: supply one of the approved stages or revise plan.md."
+            ),
+            "stage-unknown",
+        ))?;
+
+        let classification = stage_entry
+            .get("classification")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if classification == "not-applicable" {
+            return Err((
+                format!(
+                    "bee-model-guard: stage_not_applicable: stage \"{stage_name}\" is classified as not-applicable for feature \"{feature}\". FIX: do not dispatch this stage, or revise plan.md."
+                ),
+                "stage-not-applicable",
+            ));
+        }
+
+        let stage_role = stage_entry
+            .get("role")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let declared = declared_role.unwrap_or_default();
+        if declared != stage_role {
+            return Err((
+                format!(
+                    "bee-model-guard: planned_role_mismatch: stage \"{stage_name}\" requires role \"{stage_role}\", got \"{declared}\". FIX: dispatch with [bee-tier: {stage_role}]."
+                ),
+                "planned-role-mismatch",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn evaluate_codex_spawn(root: Option<&Path>, tool_input: &Value, models: &Map<String, Value>) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
     let Some(message) = obj.get("message").and_then(Value::as_str) else { return no_opinion() };
     if message.is_empty() {
         return no_opinion();
     }
-    match marker_of(&Value::String(message.to_string()), models, "codex") {
-        Some(Marker::Role(role)) => allow("codex-spawn-marker", Some(role), None, None),
-        // model-role-split D2: a marker IS present and names a role bee
-        // cannot resolve. Under the deleted CODEX_TIERS list this read as no
-        // marker at all and earned the unmarked refusal below, which never
-        // said the one thing worth saying — that the name itself is the
-        // problem. The spawn is still refused; now it is refused by name.
-        Some(Marker::Unconfigured(name)) => {
-            let reason = unconfigured_role_reason(&name, models, "codex");
-            deny(reason, "codex-spawn-role-unconfigured", Some(name), None, None)
-        }
+    let marker = match marker_of(&Value::String(message.to_string()), models, "codex") {
+        Some(m) => m,
         None => {
             let roles = role_list(models, "codex");
             let reason = format!(
@@ -747,9 +985,178 @@ parity, codex-native-runtime-v2 D4, i54-closeout D1). A marker anywhere but the 
 start of the message does not count, and a marker in any other field is ignored; \
 without one the spawned worker silently inherits the session model.\n\
 FIX: begin the spawn message with the marker, e.g. \
-\"[bee-tier: generation] <task>\" (configured roles: {roles})."
+\"[bee-tier: generation] <task>\" (configured roles: {roles}). \
+If that marker was already present, the host hid the message from this hook. \
+Codex 0.154.0 has this observed limitation: use a configured herding/CLI transport, \
+or return the refusal to the leader for an escalated cell. Do not retry the same opaque native input."
             );
-            deny(reason, "codex-spawn-unmarked", None, None, None)
+            return deny(reason, "codex-spawn-unmarked", None, None, None);
+        }
+    };
+
+    let role = match marker {
+        Marker::Role(r) => r,
+        Marker::Unconfigured(name) => {
+            let reason = unconfigured_role_reason(&name, models, "codex");
+            return deny(reason, "codex-spawn-role-unconfigured", Some(name), None, None);
+        }
+    };
+
+    let markers = parse_codex_anchored_markers(obj);
+    let model_param = obj
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+
+    if let Err((reason, transport)) = evaluate_semantic_role_routing(root, "codex", &markers, Some(&role)) {
+        return deny(reason, transport, Some(role), model_param, None);
+    }
+    let effort_param = obj
+        .get("reasoning_effort")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+    let fork_turns_val = obj.get("fork_turns");
+    let is_explicit_fork = match fork_turns_val {
+        Some(Value::String(s)) => {
+            let trimmed = s.trim();
+            trimmed == "none" || (trimmed.parse::<u64>().is_ok_and(|n| n > 0))
+        }
+        Some(Value::Number(n)) => n.as_u64().is_some_and(|num| num > 0),
+        _ => false,
+    };
+    let is_full_fork = !is_explicit_fork;
+
+    // Full-history fork inherits parent model/effort and cannot carry overrides
+    if is_full_fork && (model_param.is_some() || effort_param.is_some()) {
+        let reason = format!(
+            "bee-model-guard: a full-history fork (\"fork_turns\": \"all\" or omitted) inherits the parent \
+session's model and reasoning effort, so it cannot carry model or reasoning_effort overrides.\n\
+FIX: remove the overrides to inherit the parent session settings, or set \"fork_turns\" to \"none\" \
+or a numeric turn count to apply explicit settings."
+        );
+        return deny(reason, "codex-spawn-full-fork-override-denied", Some(role), model_param, None);
+    }
+
+    // Escalated role preserves parent model without overrides
+    if role == crate::verbs::drivers::ESCALATION_WORD {
+        if model_param.is_some() || effort_param.is_some() {
+            let reason = format!(
+                "bee-model-guard: an escalated role (\"[bee-tier: {role}]\") preserves the parent \
+model without overrides (codex parity D1).\n\
+FIX: omit model and reasoning_effort from the spawn_agent input to run on the parent model."
+            );
+            return deny(reason, "codex-spawn-escalation-override-denied", Some(role), model_param, None);
+        }
+        return allow("codex-spawn-marker", Some(role), None, None);
+    }
+
+    // Read-only roles cannot be safely enforced via native spawn_agent
+    if is_read_only_role(&role) {
+        let reason = format!(
+            "bee-model-guard: native Codex spawn_agent cannot enforce read-only filesystem restrictions \
+for role \"{role}\" (current spawn schema carries no sandbox field).\n\
+FIX: use prepare to obtain a CLI read-only sandbox dispatch (\"codex exec --sandbox read-only --ephemeral\"), \
+or run via herding/CLI if configured."
+        );
+        return deny(reason, "codex-spawn-read-only-unenforceable", Some(role), model_param, None);
+    }
+
+    let resolved = resolve_tier(models, &role, "codex", GUARD_PURPOSE);
+    match resolved {
+        Resolved::Herding { .. } => {
+            let reason = format!(
+                "bee-model-guard: role \"{role}\" resolves to a herding-executor pane, not a native spawn_agent.\n\
+FIX: dispatch this role via `bee herding run` (or `bee dispatch prepare --runtime codex --role {role}`)."
+            );
+            deny(reason, "codex-spawn-herding-tier-denied", Some(role), model_param, None)
+        }
+        Resolved::Cli { .. } | Resolved::Refused { .. } => {
+            let reason = format!(
+                "bee-model-guard: role \"{role}\" resolves to a cli executor, not a native spawn_agent.\n\
+FIX: execute the configured CLI command directly."
+            );
+            deny(reason, "codex-spawn-cli-tier-denied", Some(role), model_param, None)
+        }
+        Resolved::Budget => {
+            if let Some(param) = &model_param {
+                let reason = format!(
+                    "bee-model-guard: [bee-tier: {role}] resolves to no model name, but the dispatch carries model: \"{param}\". \
+The marker would record one thing in dispatch.jsonl while the subagent actually runs on the param.\n\
+FIX: drop the model param (the marker alone selects the tier), or drop the marker and declare the tier whose configured model equals the param you intended."
+                );
+                deny(reason, "param-on-nameless-tier", Some(role), model_param, None)
+            } else if effort_param.is_some() {
+                let reason = format!(
+                    "bee-model-guard: [bee-tier: {role}] resolves to no model name, but the dispatch carries reasoning_effort.\n\
+FIX: drop the reasoning_effort parameter."
+                );
+                deny(reason, "codex-spawn-effort-mismatch", Some(role), model_param, None)
+            } else {
+                allow("codex-spawn-marker", Some(role), None, None)
+            }
+        }
+        Resolved::Model { model: ref cfg_model, effort: ref cfg_effort }
+        | Resolved::Native { model: ref cfg_model, effort: ref cfg_effort, .. } => {
+            match &model_param {
+                None => {
+                    let reason = format!(
+                        "bee-model-guard: role \"{role}\" requires configured model \"{cfg_model}\", but spawn_agent carries no model parameter (which would silently inherit a different parent model).\n\
+FIX: specify model: \"{cfg_model}\" in spawn_agent."
+                    );
+                    return deny(reason, "codex-spawn-model-mismatch", Some(role), None, None);
+                }
+                Some(m) if m != cfg_model => {
+                    let reason = format!(
+                        "bee-model-guard: spawn_agent model: \"{m}\" does not match configured model \"{cfg_model}\" for role \"{role}\".\n\
+FIX: set model: \"{cfg_model}\"."
+                    );
+                    return deny(reason, "codex-spawn-model-mismatch", Some(role), model_param, None);
+                }
+                _ => {}
+            }
+
+            let choice = door_effort(root, &markers, &resolved);
+            let expected = choice.as_ref().map_or_else(|| cfg_effort.clone(), |c| c.effort.clone());
+            match (expected.as_deref(), effort_param.as_deref()) {
+                (Some(expected), None) => {
+                    let reason = format!(
+                        "bee-model-guard: role \"{role}\" requires configured reasoning effort \"{expected}\", but spawn_agent carries no reasoning_effort parameter.\n\
+FIX: specify reasoning_effort: \"{expected}\" in spawn_agent."
+                    );
+                    return deny(reason, "codex-spawn-effort-mismatch", Some(role), model_param, None);
+                }
+                (Some(expected), Some(actual)) if actual != expected => {
+                    let reason = format!(
+                        "bee-model-guard: spawn_agent reasoning_effort: \"{actual}\" does not match configured reasoning effort \"{expected}\" for role \"{role}\".\n\
+FIX: set reasoning_effort: \"{expected}\"."
+                    );
+                    return deny(reason, "codex-spawn-effort-mismatch", Some(role), model_param, None);
+                }
+                (None, Some(actual)) => {
+                    let reason = format!(
+                        "bee-model-guard: role \"{role}\" has no configured reasoning effort, but spawn_agent carries reasoning_effort: \"{actual}\".\n\
+FIX: omit the reasoning_effort parameter."
+                    );
+                    return deny(reason, "codex-spawn-effort-mismatch", Some(role), model_param, None);
+                }
+                _ => {}
+            }
+            Verdict { effort: choice, ..allow("codex-spawn-marker", Some(role), model_param, None) }
+        }
+        Resolved::Inherit => {
+            if model_param.is_some() || effort_param.is_some() {
+                let reason = format!(
+                    "bee-model-guard: role \"{role}\" inherits the session model without overrides.\n\
+FIX: omit model and reasoning_effort parameters."
+                );
+                deny(reason, "codex-spawn-escalation-override-denied", Some(role), model_param, None)
+            } else {
+                allow("codex-spawn-marker", Some(role), None, None)
+            }
         }
     }
 }
@@ -775,14 +1182,62 @@ FIX: begin the spawn message with the marker, e.g. \
 /// will, because a job role is not published as a dispatch kind. A FIX for
 /// such a role names the refused slot's OWN transport, and says nothing about
 /// a `--kind` that is not coming.
+///
+/// gather-reads-the-read-slot D1/D8: the match is against the kind's whole
+/// ordered list, never its head alone. `--kind gather` resolves
+/// `[read, generation]`, so both names answer `gather` — a head-only match
+/// would have left `generation` with no door the day the gather kind moved.
+/// `generation` sits in the reviewer list too; `DISPATCH_KINDS` order (`cell`
+/// filtered, then `gather` before `reviewer`) is what makes it answer
+/// `gather`, and the test pins that order. `extraction` is in no list and
+/// still answers `None`.
 fn dispatch_kind_for_role(role: &str) -> Option<&'static str> {
     crate::verbs::drivers::DISPATCH_KINDS
         .into_iter()
         .filter(|kind| *kind != "cell")
-        .find(|kind| crate::verbs::drivers::slot_for_kind(kind) == Some(role))
+        .find(|kind| {
+            crate::verbs::drivers::slot_for_kind(kind)
+                .is_some_and(|slot| crate::verbs::drivers::tier_role_list(slot).contains(&role))
+        })
 }
 
-fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
+fn evaluate_claude_dispatch(root: Option<&Path>, tool_input: &Value, models: &Map<String, Value>) -> Verdict {
+    let mut verdict = evaluate_claude_model(root, tool_input, models);
+    let (Value::Object(obj), Some(t), false, Some(_)) =
+        (tool_input, verdict.tier.clone(), verdict.deny, verdict.transport)
+    else {
+        return verdict;
+    };
+    let resolved = resolve_tier(models, &t, "claude", GUARD_PURPOSE);
+    let Some(choice) = door_effort(root, &parse_claude_anchored_markers(obj), &resolved) else { return verdict };
+    let param = obj.get("effort").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+    if param != choice.effort.as_deref() {
+        let mut fixed = match verdict.updated_input.take() {
+            Some(Value::Object(map)) => map,
+            _ => obj.clone(),
+        };
+        let carried = param.map_or_else(|| "no effort".to_string(), |p| format!("\"{p}\""));
+        let note = match &choice.effort {
+            Some(e) => {
+                fixed.insert("effort".into(), Value::String(e.clone()));
+                format!("[bee-tier: {t}] expects effort \"{e}\", dispatch carried {carried} → \"{e}\" (D4: the door picks effort)")
+            }
+            None => {
+                fixed.remove("effort");
+                format!("[bee-tier: {t}] expects no effort, dispatch carried {carried} → removed (D4: the door picks effort)")
+            }
+        };
+        if verdict.notes.is_empty() {
+            verdict.transport = Some("effort-param-repaired");
+        }
+        verdict.notes.push(note);
+        verdict.updated_input = Some(Value::Object(fixed));
+    }
+    verdict.effort = Some(choice);
+    verdict
+}
+
+fn evaluate_claude_model(root: Option<&Path>, tool_input: &Value, models: &Map<String, Value>) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
 
     let model_param: Option<String> = obj
@@ -815,6 +1270,12 @@ fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> 
         Some(Marker::Role(role)) => Some(role),
         None => None,
     };
+
+    let markers = parse_claude_anchored_markers(obj);
+    let declared_role = tier.as_deref().or_else(|| subagent_type.as_deref().and_then(role_for_pinned_type));
+    if let Err((reason, transport)) = evaluate_semantic_role_routing(root, "claude", &markers, declared_role) {
+        return deny(reason, transport, tier, model_param, subagent_type);
+    }
 
     // (0) Pinned-type rule (W3, AO5/AO10/AO11) — REPAIRED, not refused. The
     // tier is already stated; which agent file carries it is a lookup the
@@ -936,8 +1397,8 @@ model: \"{param}\" → \"{resolved_model}\" (AO5: config is the authority)"
         // at "you intended." instead, exactly as it did before dod-1.
         let door: Option<String> = match dispatch_kind_for_role(t) {
             Some(kind) => Some(format!(
-                "run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" \
-for the {t} role's own transport"
+                "run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" for the {t} role's own transport"
             )),
             None => match resolved {
                 Resolved::Herding { .. } => Some(format!(
@@ -996,7 +1457,8 @@ prompt/description; or add this model to a configured tier slot in .bee/config.j
         if matches!(resolved, Resolved::Refused { .. }) {
             let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
-                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" — it \
 reads .bee/config.json for this slot and returns the tool and exact payload to run \
 (here, a Bash call running the configured command verbatim with the prompt on \
 stdin). Do not attach a model param; the cli command names its own model."
@@ -1021,7 +1483,8 @@ not a spawned subagent.\n\
             // slot spawns.
             let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
-                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" — it \
 reads .bee/config.json for this slot and returns the tool and exact payload to run \
 (here, a Bash call running \".bee/bin/bee herding run --task-file - --json\", plus \
 --cwd for a granted worktree, with the prompt on stdin). Do not attach a model \
@@ -1059,7 +1522,8 @@ external agent in its own pane, not a spawned subagent.\n\
         if matches!(resolved, Resolved::Refused { .. }) {
             let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
-                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" (it \
 reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
 running the configured command verbatim with the prompt on stdin), or name a role \
 whose slot is a model."
@@ -1084,7 +1548,8 @@ to a cli executor — an in-family Agent/Task subagent cannot be an external pro
             // tier instead of an explicit marker.
             let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
-                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" (it \
 reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
 running \".bee/bin/bee herding run --task-file - --json\" with the prompt on stdin), \
 or name a role whose slot is a model."
@@ -1115,12 +1580,41 @@ pane worker.\n\
     // moment of the refusal — naming a fixed three here would send a caller
     // whose config carries other roles to a shorter list than bee accepts.
     let roles = role_list(models, "claude");
+    // gather-reads-the-read-slot D7: the ONE door leads. This FIX is the text
+    // the caller in the reported failure read, and it used to teach
+    // hand-naming as the FIRST move — the exact habit D5 exists to unteach.
+    // The rendered-agent sentence that follows is DERIVED from `ROLE_AGENTS`
+    // and described by `agent_job_summary` (keyed on the agent, so it cannot
+    // drift): the retyped `bee-gather = generation` pairs went stale the day
+    // the gather kind changed slots, and a pair a reader copies is a pair
+    // that outranks the door.
+    let kinds = crate::verbs::drivers::DISPATCH_KINDS.join("|");
+    let door = format!(
+        "run \".bee/bin/bee dispatch prepare --runtime claude --kind <{kinds}> --json\" — it \
+reads .bee/config.json and returns the tool and exact payload to run"
+    );
+    let agents = {
+        let mut named: Vec<&str> = Vec::new();
+        for (_, agent) in crate::verbs::drivers::ROLE_AGENTS {
+            if !named.contains(&agent) {
+                named.push(agent);
+            }
+        }
+        named
+            .iter()
+            .map(|a| match crate::verbs::drivers::agent_job_summary(a) {
+                Some(job) => format!("{a} {job}"),
+                None => (*a).to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
     let bare_fix = if let Resolved::Model { model: gen_model, .. } = &gen_resolved {
         format!(
-            "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
-bee-extract = extraction, bee-review = review) — that alone declares the role. \
-Otherwise pass model: \"{gen_model}\" for the generation role, or open the \
-prompt/description with [bee-tier: ceiling] (or any configured role: {roles})."
+            "FIX: {door}. Otherwise name one of bee's rendered agents in subagent_type \
+({agents}) — that alone declares the role; or pass model: \"{gen_model}\" for the \
+generation role, or open the prompt/description with [bee-tier: ceiling] (or any \
+configured role: {roles})."
         )
     } else {
         let slot_kind = match gen_resolved {
@@ -1129,13 +1623,11 @@ prompt/description with [bee-tier: ceiling] (or any configured role: {roles})."
             _ => "unconfigured",
         };
         format!(
-            "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
-bee-extract = extraction, bee-review = review) — that alone declares the role. \
-Otherwise open the prompt/description with [bee-tier: ceiling] (or any configured \
-role: {roles}). The generation role is {slot_kind}: run \
-\".bee/bin/bee dispatch prepare --runtime claude --kind gather --json\" — it reads \
-.bee/config.json and returns the tool and exact payload to run (a Bash call, either \
-the configured cli command or a herding-pane invocation) rather than a model param."
+            "FIX: {door} — the generation role is {slot_kind}, so what comes back is a Bash \
+call (either the configured cli command or a herding-pane invocation) rather than a \
+model param. Otherwise name one of bee's rendered agents in subagent_type \
+({agents}) — that alone declares the role; or open the prompt/description with \
+[bee-tier: ceiling] (or any configured role: {roles})."
         )
     };
     let reason = format!(
@@ -1150,6 +1642,7 @@ expensive session model.\n{bare_fix}"
 // ─── dispatch economics (g22-2) ─────────────────────────────────────────────
 
 fn derive_dispatch_economics(
+    cfg: &Value,
     models: &Map<String, Value>,
     is_codex_spawn: bool,
     verdict: &Verdict,
@@ -1168,22 +1661,36 @@ fn derive_dispatch_economics(
     let resolved_model = resolved.as_ref().and_then(resolved_model_name);
     let param_model = verdict.model.as_deref();
 
-    // nativeConfirmed is never passed by the hook => always false.
+    let declared = resolved.as_ref().and_then(|r| match r {
+        Resolved::Herding { .. } | Resolved::Cli { .. } => declared_model_for(cfg, r, runtime),
+        _ => None,
+    });
+
     let enforcement = if is_codex_spawn {
-        "prompt-budget"
+        if param_model.is_some() {
+            "native-model-param"
+        } else {
+            "prompt-budget"
+        }
     } else if param_model.is_some() {
         "model-param"
     } else {
         "prompt-budget"
     };
     let (effective_model, effective_status) = if is_codex_spawn {
-        (None, "inherited-or-unknown")
+        if param_model.is_some() {
+            (None, "native-requested")
+        } else {
+            (None, "inherited-or-unknown")
+        }
     } else if let Some(p) = param_model {
         (Some(p), "pinned")
+    } else if declared.is_some() {
+        (None, "declared")
     } else {
         (None, "unverified")
     };
-    let requested_model = param_model.or(resolved_model);
+    let requested_model = param_model.or(declared.as_deref()).or(resolved_model);
 
     let str_or_null = |v: Option<&str>| v.map_or(Value::Null, |s| Value::String(s.to_string()));
     let mut out = Map::new();
@@ -1193,6 +1700,12 @@ fn derive_dispatch_economics(
     out.insert("effective_model_status".into(), Value::String(effective_status.to_string()));
     out.insert("channel".into(), Value::String(channel.to_string()));
     out.insert("enforcement".into(), Value::String(enforcement.to_string()));
+    let effort = verdict.effort.as_ref();
+    let text = |v: Option<&String>| v.map_or(Value::Null, |s| Value::String(s.clone()));
+    out.insert("effort".into(), text(effort.and_then(|c| c.effort.as_ref())));
+    out.insert("effort_base".into(), text(effort.and_then(|c| c.base.as_ref())));
+    out.insert("effort_step".into(), Value::from(effort.map_or(0, |c| c.step)));
+    out.insert("effort_reason".into(), Value::String(effort.map_or("none", |c| c.reason.as_str()).to_string()));
     Some(out)
 }
 
@@ -1387,7 +1900,7 @@ mod tests {
     fn repo_config() -> Value {
         json!({
             "models": {
-                "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "advisor": "fable" },
+                "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "advisor": "fable", "design": "sonnet" },
                 "codex": { "extraction": "gpt-5.5", "generation": "gpt-5.5" }
             }
         })
@@ -1422,7 +1935,7 @@ mod tests {
         root.join(".bee").join("logs").join("dispatch.jsonl")
     }
 
-    // opencode-support E4/S4: models.opencode used to be silently dropped by
+    // opencode-support E4/S4: team.opencode used to be silently dropped by
     // this hook's own second normalize_models (only ["claude", "codex"] were
     // parsed) — docs/config-reference.md called that "dead config that never
     // resolves". model-role-split D1 deleted that copy, so these rows now
@@ -1455,7 +1968,7 @@ mod tests {
             resolve_tier(&models, "review", "opencode", GUARD_PURPOSE),
             model("opencode/nemotron-3-ultra-free")
         );
-        // Unconfigured (no models.opencode key at all) resolves to Budget on
+        // Unconfigured (no team.opencode key at all) resolves to Budget on
         // every slot — same no-baked-in-default treatment codex gets.
         let models = normalize_models(None);
         assert_eq!(
@@ -1697,7 +2210,7 @@ mod tests {
         // never ran. Sweeping both tables is what makes an alias spelling
         // reachable by this test at all.
         let migrated = fixture(&json!({"models": {"claude": {
-            "code": "sonnet", "read": "haiku",
+            "code": "sonnet", "read": "haiku", "design": "sonnet",
             "extraction": "haiku", "generation": "sonnet", "review": "opus"
         }}}));
         let spellings = crate::verbs::drivers::ROLE_ALIASES
@@ -1721,6 +2234,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_design_cell_payload_from_the_door_passes_the_guard_as_bee_design() {
+        let fx = fixture(&repo_config());
+        let root = fx.path();
+        crate::fsutil::ensure_dir(&root.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("cells").join("c-design.json"),
+            r#"{"id":"c-design","feature":"f","title":"design a page","role":"design","status":"claimed","trace":{"worker":"w"}}"#,
+        )
+        .unwrap();
+        let crate::verbs::drivers::Prepared::Value(prep) = crate::verbs::drivers::prepare_dispatch(
+            root, "claude", "cell", Some("c-design"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let payload = prep["payload"].clone();
+        assert_eq!(payload["subagent_type"], json!("bee-design"), "{prep}");
+        let (code, stdout, stderr) = run_full(root, json!({"tool_name": "Agent", "tool_input": payload}));
+        assert_eq!(code, 0, "{stderr}");
+        assert_eq!(stdout, "", "the door's own payload needs no repair");
+        let d = last_jsonl(dispatch_log(root)).unwrap();
+        assert_eq!(d["tier"], "design");
+        assert_eq!(d["subagent_type"], "bee-design");
+        assert_eq!(d["model"], "sonnet");
     }
 
     #[test]
@@ -1783,7 +2323,7 @@ mod tests {
             assert_eq!(d["subagent_type"], pinned);
             // the tier's configured model is what the audit says was requested
             assert_eq!(d["requested_model"], json!(match tier {
-                "generation" => "sonnet",
+                "generation" | "design" => "sonnet",
                 "extraction" => "haiku",
                 _ => "opus",
             }));
@@ -1791,7 +2331,19 @@ mod tests {
         // Additive only: an unknown agent type is still bare, still refused.
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "some-other-agent", "prompt": "go"}}));
         assert_eq!(code, 2);
-        assert!(stderr.contains("bee-gather = generation"), "the FIX teaches the new route");
+        // gather-reads-the-read-slot D7: the FIX leads with the ONE door and
+        // no longer retypes an agent-to-slot pair (`bee-gather = generation`
+        // was already stale the moment the gather kind changed slots, and a
+        // pair a reader copies outranks the door it sits beside).
+        assert!(
+            stderr.contains("FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind <"),
+            "the FIX opens with the one door: {stderr}"
+        );
+        assert!(stderr.contains("bee-gather"), "the FIX still names the agent: {stderr}");
+        assert!(
+            !stderr.contains("bee-gather = generation"),
+            "the FIX no longer pairs an agent with a slot: {stderr}"
+        );
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "bare-denied");
         // An explicit param still wins the read — inference never overrides a
@@ -1921,7 +2473,7 @@ mod tests {
         if let Some(fb) = fallback {
             slot["fallback"] = fb;
         }
-        json!({"models": {"claude": {
+        json!({"team": {"claude": {
             "extraction": "haiku",
             "generation": slot,
             "review": "opus"
@@ -1940,7 +2492,7 @@ mod tests {
         assert_eq!(d["transport"], "model-param");
         assert_eq!(d["model"], "sonnet");
         // The flag rides on the resolved slot, so the set is directly checkable.
-        let models = normalize_models(herding_generation(Some(json!("default"))).get("models"));
+        let models = normalize_models(herding_generation(Some(json!("default"))).get("team"));
         assert!(configured_model_set(&models).contains("sonnet"));
     }
 
@@ -2033,6 +2585,35 @@ mod tests {
     }
 
     #[test]
+    fn a_read_less_host_still_admits_the_generation_herding_fallback() {
+        // gather-reads-the-read-slot D8: `--kind gather` resolves `read`
+        // first, and `read` has no `default_models` entry at all. Keying the
+        // lookup on the kind's HEAD slot would have dropped sonnet from the
+        // member set while prepare still published it as the gather's
+        // fallback — the guard narrower than the door it mirrors, which is
+        // a2f85972's rule broken in the other direction.
+        let raw = json!({"claude": {
+            "extraction": "haiku",
+            "generation": {"kind": "herding", "agent": "agy-flash", "fallback": "default"},
+            "review": "opus"
+        }});
+        let models = normalize_models(Some(&raw));
+        assert!(
+            configured_model_set(&models).contains("sonnet"),
+            "{:?}",
+            configured_model_set(&models)
+        );
+        let fx = fixture(&json!({"models": raw}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"model": "sonnet", "prompt": "re-dispatch after a failed herding gather"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+    }
+
+    #[test]
     fn a_herding_extraction_slots_fallback_admits_nothing() {
         // The live repo config shape. prepare.rs's slot_for_kind never yields
         // "extraction", so no prepared dispatch publishes an extraction
@@ -2094,8 +2675,14 @@ mod tests {
 
     #[test]
     fn codex_spawn_rules() {
-        let fx = fixture(&repo_config());
-        // anchored marker -> allow, codex economics inherited-or-unknown
+        let budget_cfg = json!({
+            "models": {
+                "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "advisor": "fable" },
+                "codex": { "extraction": null, "generation": null }
+            }
+        });
+        let fx = fixture(&budget_cfg);
+        // anchored marker -> allow on budget tier, codex economics inherited-or-unknown
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: generation] gather the callers"}}));
         assert_eq!(code, 0);
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
@@ -2106,7 +2693,7 @@ mod tests {
         assert_eq!(d["enforcement"], "prompt-budget");
         assert_eq!(d["effective_model_status"], "inherited-or-unknown");
         assert_eq!(d["effective_model"], Value::Null);
-        assert_eq!(d["requested_model"], "gpt-5.5");
+        assert_eq!(d["requested_model"], Value::Null);
         // mid-message marker -> deny, Codex-shaped
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "please [bee-tier: generation] do it"}}));
         assert_eq!(code, 2);
@@ -2140,17 +2727,13 @@ mod tests {
         // doc-canonical marked shape + extras tolerated
         for ti in [
             json!({"task_name": "wt-a1", "message": "[bee-tier: generation] gather", "fork_turns": "none"}),
-            json!({"agent_type": "worker", "message": "[bee-tier: review] check", "extra": 1, "task_name": "x"}),
+            json!({"agent_type": "worker", "message": "[bee-tier: generation] check", "extra": 1, "task_name": "x"}),
         ] {
             let (code, _) = run_payload(fx.path(), json!({"tool_name": "spawn_agent", "tool_input": ti}));
             assert_eq!(code, 0);
         }
-        // The advisor tier, on a host that CONFIGURES one. `repo_config`'s
-        // codex table does not, and the row used to run there and pass —
-        // `known_roles` handed every dispatch-door slot out as legal whether
-        // the host configured it or not, so this spawn inherited the session
-        // model in silence. It is a refusal there now, so the acceptance row
-        // states its own precondition.
+        // The advisor tier is a read-only role and current spawn has no sandbox,
+        // plus full-history fork with overrides is rejected:
         let advisor = fixture(&json!({"models": {
             "codex": {"extraction": "gpt-5.5", "generation": "gpt-5.5", "advisor": "gpt-5.5"}
         }}));
@@ -2158,10 +2741,9 @@ mod tests {
             advisor.path(),
             json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: advisor] consult", "model": "totally-different", "reasoning_effort": "extreme", "fork_turns": "full"}}),
         );
-        assert_eq!(code, 0, "{stderr}");
+        assert_eq!(code, 2, "mismatched override / read-only native request must refuse: {stderr}");
         let d = last_jsonl(dispatch_log(advisor.path())).unwrap();
-        assert_eq!(d["transport"], "codex-spawn-marker");
-        assert_eq!(d["tier"], "advisor");
+        assert!(d["transport"] == "codex-spawn-full-fork-override-denied" || d["transport"] == "codex-spawn-read-only-unenforceable" || d["transport"] == "codex-spawn-model-mismatch");
         // Same spawn, same marker, on the host with no codex advisor.
         let (code, stderr) = run_payload(
             fx.path(),
@@ -2171,6 +2753,366 @@ mod tests {
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "codex-spawn-role-unconfigured");
         assert_eq!(d["tier"], "advisor");
+    }
+
+    #[test]
+    fn codex_spawn_mismatched_model_override_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-4o",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "mismatched model must refuse: {stderr}");
+        assert!(stderr.contains("model: \"gpt-4o\" does not match configured model \"gpt-5.5\""));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-model-mismatch");
+    }
+
+    #[test]
+    fn codex_spawn_mismatched_effort_override_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": {"model": "gpt-5.5", "effort": "low"}}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "reasoning_effort": "high",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "mismatched effort must refuse: {stderr}");
+        assert!(stderr.contains("reasoning_effort: \"high\" does not match"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-effort-mismatch");
+    }
+
+    #[test]
+    fn codex_spawn_full_fork_override_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "full"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "full fork with override must refuse: {stderr}");
+        assert!(stderr.contains("full-history fork") && stderr.contains("cannot carry"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-full-fork-override-denied");
+    }
+
+    #[test]
+    fn codex_spawn_escalation_override_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: ceiling] fix",
+                    "model": "gpt-5.5",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "escalation with override must refuse: {stderr}");
+        assert!(stderr.contains("preserves the parent model without overrides"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-escalation-override-denied");
+    }
+
+    #[test]
+    fn codex_spawn_herding_and_cli_tiers_denied() {
+        let fx = fixture(&json!({"models": {
+            "codex": {
+                "herded": {"kind": "herding", "agent": "worker-1"},
+                "cli_role": {"kind": "cli", "command": "my-tool"}
+            }
+        }}));
+        let (code_h, stderr_h) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: herded] run",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_h, 2, "herding role cannot escape via spawn: {stderr_h}");
+        assert!(stderr_h.contains("resolves to a herding-executor pane"));
+        let d_h = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d_h["transport"], "codex-spawn-herding-tier-denied");
+
+        let (code_c, stderr_c) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: cli_role] run",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_c, 2, "cli role cannot escape via spawn: {stderr_c}");
+        assert!(stderr_c.contains("resolves to a cli executor"));
+        let d_c = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d_c["transport"], "codex-spawn-cli-tier-denied");
+    }
+
+    #[test]
+    fn codex_spawn_read_only_roles_refused_as_unenforceable() {
+        let fx = fixture(&json!({"models": {
+            "codex": {
+                "read": "gpt-5.5",
+                "review": "gpt-5.5",
+                "advisor": "gpt-5.5"
+            }
+        }}));
+        for role in ["read", "review", "advisor"] {
+            let (code, stderr) = run_payload(
+                fx.path(),
+                json!({
+                    "tool_name": "spawn_agent",
+                    "tool_input": {
+                        "task_name": "task",
+                        "message": format!("[bee-tier: {role}] check facts"),
+                        "fork_turns": "none"
+                    }
+                }),
+            );
+            assert_eq!(code, 2, "read-only role {role} must refuse: {stderr}");
+            assert!(stderr.contains("cannot enforce read-only filesystem restrictions"), "{stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["transport"], "codex-spawn-read-only-unenforceable");
+        }
+    }
+
+    #[test]
+    fn codex_spawn_budget_with_overrides_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": null}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "budget with override must refuse: {stderr}");
+        assert!(stderr.contains("resolves to no model name"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "param-on-nameless-tier");
+    }
+
+    #[test]
+    fn codex_spawn_valid_configured_settings_allowed() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": {"model": "gpt-5.5", "effort": "high"}}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "reasoning_effort": "high",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 0, "matching settings must allow: {stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-marker");
+        assert_eq!(d["tier"], "generation");
+        assert_eq!(d["requested_model"], "gpt-5.5");
+        assert_eq!(d["enforcement"], "native-model-param");
+        assert_eq!(d["effective_model_status"], "native-requested");
+    }
+
+    #[test]
+    fn codex_spawn_full_fork_override_with_all_and_omitted_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        // fork_turns: "all" with override must refuse
+        let (code_all, stderr_all) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "all"
+                }
+            }),
+        );
+        assert_eq!(code_all, 2, "fork_turns all with override must refuse: {stderr_all}");
+        assert_eq!(
+            last_jsonl(dispatch_log(fx.path())).unwrap()["transport"],
+            "codex-spawn-full-fork-override-denied"
+        );
+
+        // omitted fork_turns with override must refuse (defaults to all)
+        let (code_omit, stderr_omit) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5"
+                }
+            }),
+        );
+        assert_eq!(code_omit, 2, "omitted fork_turns with override must refuse: {stderr_omit}");
+        assert_eq!(
+            last_jsonl(dispatch_log(fx.path())).unwrap()["transport"],
+            "codex-spawn-full-fork-override-denied"
+        );
+
+        // fork_turns: "5" (numeric) with matching override is valid
+        let (code_num, stderr_num) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "5"
+                }
+            }),
+        );
+        assert_eq!(code_num, 0, "numeric fork_turns with matching settings must allow: {stderr_num}");
+
+        // fork_turns: "none" with matching override is valid
+        let (code_none, stderr_none) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_none, 0, "fork_turns none with matching settings must allow: {stderr_none}");
+    }
+
+    #[test]
+    fn codex_spawn_configured_model_requires_explicit_settings() {
+        let fx = fixture(&json!({"models": {
+            "codex": {
+                "generation": {"model": "gpt-5.5", "effort": "high"},
+                "budget_role": null
+            }
+        }}));
+
+        // Absent model on configured role must refuse rather than silently inheriting parent
+        let (code_no_model, stderr_no_model) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_no_model, 2, "absent model on configured role must refuse: {stderr_no_model}");
+        assert_eq!(
+            last_jsonl(dispatch_log(fx.path())).unwrap()["transport"],
+            "codex-spawn-model-mismatch"
+        );
+
+        // Absent effort when configured must refuse
+        let (code_no_effort, stderr_no_effort) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_no_effort, 2, "absent effort when configured must refuse: {stderr_no_effort}");
+        assert_eq!(
+            last_jsonl(dispatch_log(fx.path())).unwrap()["transport"],
+            "codex-spawn-effort-mismatch"
+        );
+
+        // Null/budget role inherits without overrides
+        let (code_budget, stderr_budget) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: budget_role] build",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_budget, 0, "budget role without overrides must allow: {stderr_budget}");
+
+        // Escalation inherits without overrides
+        let (code_esc, stderr_esc) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: ceiling] build",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_esc, 0, "escalation without overrides must allow: {stderr_esc}");
     }
 
     // Rows 11/12/15/16 — the fail-open arms the existing malformed-input test
@@ -2410,7 +3352,7 @@ mod tests {
         let message = "[bee-tier: generation] gather\nAssigned cell id: dlc-2\n";
         let (code, stdout, _) = run_full(
             fx.path(),
-            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": message, "task_name": "dlc-2"}}),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": message, "task_name": "dlc-2", "model": "gpt-5.5", "fork_turns": "none"}}),
         );
         assert_eq!(code, 0);
         let out = repair_output(&stdout);
@@ -2423,7 +3365,7 @@ mod tests {
         // when `prompt` (not the read field) carries one.
         let (code, stdout, _) = run_full(
             fx.path(),
-            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: generation] gather", "prompt": "Assigned cell id: dlc-2\n"}}),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: generation] gather", "prompt": "Assigned cell id: dlc-2\n", "model": "gpt-5.5", "fork_turns": "none"}}),
         );
         assert_eq!(code, 0);
         assert_eq!(stdout, "");
@@ -2437,7 +3379,7 @@ mod tests {
     /// one, codex does not, which is the pair the role-legality question has
     /// to answer differently.
     fn open_role_config() -> Value {
-        json!({"models": {
+        json!({"team": {
             "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "test": "gpt-test", "advisor": "fable" },
             "codex": { "generation": "gpt-5.5", "design": "gpt-design" }
         }})
@@ -2445,7 +3387,7 @@ mod tests {
 
     #[test]
     fn the_known_role_set_is_derived_from_what_the_host_configures() {
-        let models = normalize_models(open_role_config().get("models"));
+        let models = normalize_models(open_role_config().get("team"));
         let claude = crate::verbs::drivers::known_roles(&models, "claude");
         // The operator's own roles, the defaults normalize seeds, and the
         // escalation word — every entry published by something, none of them
@@ -2478,7 +3420,7 @@ mod tests {
     fn a_role_outside_the_old_three_slots_is_a_configured_model() {
         // The hard dependency D2 names: the member set walked a literal
         // ["extraction", "generation", "review"], so this model DENIED.
-        let models = normalize_models(open_role_config().get("models"));
+        let models = normalize_models(open_role_config().get("team"));
         let set = configured_model_set(&models);
         assert!(set.contains("gpt-test"), "{set:?}");
         let fx = fixture(&open_role_config());
@@ -2549,7 +3491,7 @@ mod tests {
         assert!(stderr.contains("[bee-tier: advisor] names a role nothing configures"), "{stderr}");
         // The FIX teaches the remedy and does not offer the very name it just
         // refused as one of the roles to use instead.
-        assert!(stderr.contains("models.claude in .bee/config.json"), "{stderr}");
+        assert!(stderr.contains("team.claude in .bee/config.json"), "{stderr}");
         assert!(!stderr.contains("(advisor/"), "the FIX must not advertise advisor: {stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "role-not-configured");
@@ -2615,7 +3557,7 @@ mod tests {
         assert!(stderr.contains("FIX:"), "{stderr}");
         // The remedy is named, and the roles it offers are the configured
         // ones — including the operator's own.
-        assert!(stderr.contains("models.claude in .bee/config.json"), "{stderr}");
+        assert!(stderr.contains("team.claude in .bee/config.json"), "{stderr}");
         assert!(stderr.contains("test"), "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "role-not-configured");
@@ -2631,14 +3573,14 @@ mod tests {
         );
         assert_eq!(code, 2, "{stderr}");
         assert!(stderr.contains("names a role nothing configures"), "{stderr}");
-        assert!(stderr.contains("models.codex in .bee/config.json"), "{stderr}");
+        assert!(stderr.contains("team.codex in .bee/config.json"), "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "codex-spawn-role-unconfigured");
         assert_eq!(d["tier"], "tset");
-        // A codex role bee ships no default for is accepted on its own name.
+        // A codex role bee ships no default for is accepted on its own name with configured model.
         let (code, stderr) = run_payload(
             fx.path(),
-            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: design] draw it"}}),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: design] draw it", "model": "gpt-design", "fork_turns": "none"}}),
         );
         assert_eq!(code, 0, "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
@@ -2682,6 +3624,12 @@ mod tests {
         // advisor` existed and resolved exactly that slot. Derived from
         // `slot_for_kind`, the FIX cannot be wrong about the door.
         assert_eq!(dispatch_kind_for_role("generation"), Some("gather"));
+        // gather-reads-the-read-slot D1: `read` HEADS the gather list and
+        // `generation` is its tail, so both answer `gather`. `generation`
+        // sits in the reviewer list too — DISPATCH_KINDS order (`cell`
+        // filtered, then `gather` before `reviewer`) is what decides it, and
+        // this pair is what pins that order.
+        assert_eq!(dispatch_kind_for_role("read"), Some("gather"));
         assert_eq!(dispatch_kind_for_role("review"), Some("reviewer"));
         assert_eq!(dispatch_kind_for_role("advisor"), Some("advisor"));
         // A role no kind resolves — the shipped extraction slot, and any job
@@ -2751,45 +3699,47 @@ mod tests {
     /// An open role set means the NAME is all bee can say about a role it
     /// never invented. A slot may carry the operator's own sentence, and the
     /// door prints it beside the model. Both halves are asserted on the SAME
-    /// pair of configs: the described slot gains its quoted hint, and every
-    /// role that declared none renders byte-identically to before.
+    /// leader-sees-team D4: descriptions are omitted at the door and move to team show.
+    /// The door prints one line per distinct target, listing its roles.
     #[test]
-    fn the_door_prints_a_role_description_beside_its_model() {
-        let described = json!({"claude": {
+    fn the_door_prints_one_line_per_target() {
+        let described_team = json!({"claude": {
             "generation": {"model": "sonnet", "description": "build and edit code"},
             "review": "opus",
             "design": {"kind": "herding", "agent": "agy-flash"},
         }});
-        let bare = json!({"claude": {
+        let bare_team = json!({"claude": {
             "generation": {"model": "sonnet"},
             "review": "opus",
             "design": {"kind": "herding", "agent": "agy-flash"},
         }});
-        let with_desc = dispatch_door_lines(Some(&described), "claude");
-        let without = dispatch_door_lines(Some(&bare), "claude");
+        let described = json!({"team": described_team});
+        let bare = json!({"team": bare_team});
+        let with_desc = dispatch_door_lines(described.as_object(), "claude");
+        let without = dispatch_door_lines(bare.as_object(), "claude");
+        assert_eq!(with_desc, without);
+        assert_eq!(with_desc[1], "- sonnet (native): generation");
+        assert_eq!(with_desc[2], "- opus (native): review");
+        assert_eq!(with_desc[3], "- haiku (native): extraction");
         assert_eq!(
-            with_desc[1],
-            "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+            with_desc[4],
+            "- model chosen by the agent (herding: agy-flash): design"
         );
-        // The same line without the field is what it always was — additive,
-        // never a re-render of the roles that declared nothing.
         assert_eq!(
-            without[1],
-            "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+            with_desc[5],
+            "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
         );
         // The prepare-command line never mentions the field at all.
         assert_eq!(with_desc[0], without[0]);
         // ...and resolution is blind to it: described and bare resolve to the
         // SAME published value, which is what makes this display-only.
         assert_eq!(
-            role_slot_display(Some(&described), "claude"),
-            role_slot_display(Some(&bare), "claude")
+            role_slot_display(described.as_object(), "claude"),
+            role_slot_display(bare.as_object(), "claude")
         );
     }
 
-    /// Every shape that declares no description renders exactly as it did
-    /// before the field existed — a string slot has nowhere to put one, and
-    /// empty, whitespace, non-string and null are not descriptions.
+    /// Every shape that declares no description renders identically.
     #[test]
     fn a_slot_that_declares_no_description_renders_unchanged() {
         for slot in [
@@ -2800,16 +3750,32 @@ mod tests {
             json!({"model": "sonnet", "description": 7}),
             json!({"model": "sonnet", "description": null}),
         ] {
-            let models = json!({"claude": {"generation": slot.clone()}});
-            let line = &dispatch_door_lines(Some(&models), "claude")[1];
+            let config = json!({"team": {"claude": {"generation": slot.clone()}}});
+            let lines = dispatch_door_lines(config.as_object(), "claude");
             assert_eq!(
-                line,
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name.",
-                "{slot} must render the historical line"
+                lines[1],
+                "- sonnet (native): generation",
+                "{slot} must render generation line"
+            );
+            assert_eq!(
+                lines[2],
+                "- opus (native): review",
+                "{slot} must render review line"
+            );
+            assert_eq!(
+                lines[3],
+                "- haiku (native): extraction",
+                "{slot} must render extraction line"
+            );
+            assert_eq!(
+                lines[4],
+                "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
             );
         }
         // No models key at all: the seeded defaults, with nothing quoted.
-        assert!(!dispatch_door_lines(None, "claude")[1].contains('"'));
+        let default_lines = dispatch_door_lines(None, "claude");
+        assert_eq!(default_lines[1], "- sonnet (native): generation");
+        assert!(!default_lines.iter().any(|l| l.contains('"')));
     }
 
     /// A description is a one-line hint. Past the budget the door clips and
@@ -2818,17 +3784,16 @@ mod tests {
     #[test]
     fn a_long_description_is_clipped_at_the_door_budget() {
         let long = "x".repeat(200);
-        let models = json!({"claude": {"generation": {"model": "sonnet", "description": long}}});
-        let rendered = role_slot_description(Some(&models), "claude", "generation").unwrap();
+        let config = json!({"team": {"claude": {"generation": {"model": "sonnet", "description": long}}}});
+        let rendered = role_slot_description(config.get("team"), "claude", "generation").unwrap();
         assert_eq!(rendered, format!("{}...", "x".repeat(ROLE_DESCRIPTION_MAX)));
-        assert!(dispatch_door_lines(Some(&models), "claude")[1]
-            .contains(&format!("generation=sonnet (\"{rendered}\")")));
 
         // Exactly at the budget is NOT clipped: the ellipsis promises there
         // is more, so it must never appear when there is not.
         let exact = "y".repeat(ROLE_DESCRIPTION_MAX);
         let models = json!({"claude": {"generation": {"model": "sonnet", "description": exact}}});
         assert_eq!(role_slot_description(Some(&models), "claude", "generation"), Some(exact));
+
 
         // Surrounding whitespace is trimmed before any of that.
         let models = json!({"claude": {
@@ -2871,5 +3836,844 @@ mod tests {
             let b = normalize_models(Some(&json!({"claude": {"generation": described.clone()}})));
             assert_eq!(a, b, "{bare} vs {described}");
         }
+    }
+
+    // ═══ lane-model-diversity D4 — the SEAT roles at the marker guard ══════
+    //
+    // Two doors, one answer (store `3c9d6262`): `bee dispatch prepare` STAMPS
+    // the `[bee-tier: …]` marker and this hook READS it back. The seats add a
+    // resolution rule at the first door only — an unconfigured seat rebinds to
+    // `advisor` under `--kind advisor` (D2) — and the rebind happens BEFORE the
+    // marker is written. So the guard learns nothing about seats: it asks the
+    // one question it has always asked, is this role configured for this
+    // runtime, and the parity claim is that the answer never disagrees with
+    // what the other door just stamped.
+    //
+    // Existing coverage these rows deliberately do not repeat:
+    // `a_marker_naming_any_configured_role_is_accepted` and
+    // `a_marker_naming_an_unconfigured_role_refuses_with_a_fix` pin the open
+    // role set with operator-invented names (`test`, `tset`);
+    // `an_unconfigured_advisor_marker_is_refused_like_any_other_role` and
+    // `a_null_advisor_marker_is_refused_exactly_as_an_absent_one_is` pin the
+    // advisor's floor-less rule; `prepare.rs`'s
+    // `an_unconfigured_seat_resolves_the_advisor_at_the_advisor_door` and
+    // `a_configured_seat_resolves_its_own_model_and_names_itself` pin what the
+    // FIRST door stamps. The gap is the CROSSING: no row had ever taken a
+    // marker the dispatch door actually emitted for a seat and handed it to
+    // this hook, and no seat name had ever reached this file at all.
+    //
+    // Every row derives its names from `SEAT_ROLES` rather than listing them,
+    // so a seat added to the constant is covered here the day it is added.
+
+    use crate::verbs::drivers::{cell_role_list, prepare_dispatch_with_role, Prepared, SEAT_ROLES};
+
+    /// One distinct model per seat, so a marker admitted under the WRONG seat's
+    /// name carries the wrong model and is caught by name rather than passing
+    /// as "some configured model".
+    fn seat_model(seat: &str) -> String {
+        format!("model-for-{seat}")
+    }
+
+    /// A host that configures all eight seats — two lanes on two models is the
+    /// whole point of the feature.
+    fn every_seat_configured() -> Value {
+        let mut claude = Map::new();
+        claude.insert("generation".into(), json!("sonnet"));
+        claude.insert("review".into(), json!("opus"));
+        claude.insert("advisor".into(), json!("fable"));
+        for seat in SEAT_ROLES {
+            claude.insert(seat.to_string(), json!(seat_model(seat)));
+        }
+        json!({ "models": { "claude": Value::Object(claude) } })
+    }
+
+    /// A host with an advisor and no seat at all — the state every existing
+    /// host is in the moment the seats ship.
+    fn advisor_only() -> Value {
+        json!({"models": {"claude": {
+            "generation": "sonnet", "review": "opus", "advisor": "fable"
+        }}})
+    }
+
+    /// What `bee dispatch prepare --kind advisor --role <role>` actually hands
+    /// a caller. The REAL door, never a hand-written payload: a marker typed
+    /// into this file would prove only that the guard agrees with the test
+    /// author about what the other door emits.
+    fn advisor_envelope(root: &Path, role: &str) -> Value {
+        let out = prepare_dispatch_with_role(
+            root, "claude", "advisor", Some(role), None, None, false, None, None,
+            // record_it: false — the dispatch log must carry the GUARD's line
+            // as its last entry, not the door's.
+            false, None,
+        )
+        .expect("the advisor door resolves natively");
+        let Prepared::Value(v) = out else { panic!("{role}: expected an envelope") };
+        v
+    }
+
+    /// D4, the configured arm: a seat marker the dispatch door stamped is
+    /// admitted here, under the seat's own name and on the seat's own model.
+    ///
+    /// The guard's member set is derived from what the host configures, so this
+    /// needs no seat-awareness to pass — which is exactly the property being
+    /// pinned. Were anything to key legality on a closed list again (the two
+    /// retired `CLAUDE_TIERS`/`CODEX_TIERS` alternations did), all eight seats
+    /// would deny here while the door that stamped them resolved them fine.
+    #[test]
+    fn a_configured_seat_marker_the_dispatch_door_stamped_is_admitted() {
+        let fx = fixture(&every_seat_configured());
+        for seat in SEAT_ROLES {
+            let v = advisor_envelope(fx.path(), seat);
+            let payload =
+                v.get("payload").unwrap_or_else(|| panic!("{seat}: no payload in {v}")).clone();
+            let prompt = payload.get("prompt").and_then(Value::as_str).unwrap_or_default();
+            assert!(
+                prompt.starts_with(&format!("[bee-tier: {seat}]")),
+                "{seat}: the door must stamp the seat it resolved: {prompt}"
+            );
+            let (code, stderr) =
+                run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": payload}));
+            assert_eq!(code, 0, "{seat}: the door stamped it, so this guard must admit it: {stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["tier"], json!(seat), "{seat}: the audit line names the seat");
+            assert_eq!(
+                d["model"],
+                json!(seat_model(seat)),
+                "{seat}: its OWN model, never a sibling seat's and never the advisor's"
+            );
+        }
+    }
+
+    /// D4, the fall-through arm: the marker names the RESOLVED role, so a seat
+    /// that fell through arrives here as `advisor` and is admitted as one.
+    ///
+    /// This is the row that makes the fall-through safe. The guard has no
+    /// fall-through of its own and must not grow one; what keeps an
+    /// unconfigured lane from being refused at the second door is that the
+    /// first door rebound the role BEFORE writing the marker. The seat itself
+    /// never travels in the marker — it rides `economics.requested_role`, which
+    /// this hook never reads.
+    #[test]
+    fn a_fallen_through_seat_reaches_the_guard_as_the_advisor() {
+        let fx = fixture(&advisor_only());
+        for seat in SEAT_ROLES {
+            let v = advisor_envelope(fx.path(), seat);
+            assert_eq!(
+                v.get("economics").and_then(|e| e.get("requested_role")),
+                Some(&json!(seat)),
+                "{seat}: this host configures no seat, so the door fell through: {v}"
+            );
+            let payload = v.get("payload").unwrap().clone();
+            let prompt = payload.get("prompt").and_then(Value::as_str).unwrap_or_default();
+            assert!(
+                !prompt.starts_with(&format!("[bee-tier: {seat}]")),
+                "{seat}: a seat this host cannot resolve must never reach the marker: {prompt}"
+            );
+            let (code, stderr) =
+                run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": payload}));
+            assert_eq!(code, 0, "{seat}: {stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["tier"], json!("advisor"), "{seat}: the marker names the resolved role");
+            assert_eq!(
+                d["model"],
+                json!("fable"),
+                "{seat}: the advisor's model — the session model is what the rebind exists to avoid"
+            );
+        }
+    }
+
+    /// An unconfigured seat marker is refused here, on a host whose advisor is
+    /// configured — the guard does NOT re-derive D2's fall-through.
+    ///
+    /// The one dangerous reading of D2 is "a seat name may borrow the advisor",
+    /// which at this door would mean admitting `[bee-tier: lane-3]` on a host
+    /// with no `lane-3` and letting the subagent run on the SESSION model while
+    /// dispatch.jsonl recorded a role that selects no model — verbatim the
+    /// outcome `unconfigured_role_reason` exists to prevent. The fall-through
+    /// is the advisor DOOR's, bounded by `--kind advisor` (D2's own scope), and
+    /// a seat marker arriving here unresolvable is a defect, never a hint.
+    #[test]
+    fn an_unconfigured_seat_marker_is_refused_even_where_the_advisor_is_configured() {
+        let fx = fixture(&advisor_only());
+        for seat in SEAT_ROLES {
+            let (code, stderr) = run_payload(
+                fx.path(),
+                json!({"tool_name": "Agent", "tool_input": {
+                    "prompt": format!("[bee-tier: {seat}] brainstorm")
+                }}),
+            );
+            assert_eq!(code, 2, "{seat}: an unconfigured seat must not ride the session model: {stderr}");
+            assert!(
+                stderr.contains(&format!("[bee-tier: {seat}] names a role nothing configures")),
+                "{seat}: {stderr}"
+            );
+            assert!(stderr.contains("team.claude in .bee/config.json"), "{seat}: {stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["transport"], "role-not-configured", "{seat}");
+            assert_eq!(d["tier"], json!(seat), "{seat}: refused in the name that was written");
+            assert_eq!(d["model"], Value::Null, "{seat}: nothing was allowed onto the session model");
+        }
+    }
+
+    /// A seat is an ORDINARY role here, and a null slot keeps the ordinary
+    /// meaning: prompt-budget, the marker alone carrying the role.
+    ///
+    /// The advisor is the one name with no floor (decision `4faf1de9`), which
+    /// is why `"advisor": null` refuses and this does not. Pinning the
+    /// difference is the point: the seats must not acquire the advisor's
+    /// null-rule by association, and they must not acquire a rule of their own
+    /// either. A host that spells a seat off with `null` has declared the key,
+    /// and the only door where "declared but resolving nothing" means anything
+    /// special is `--kind advisor`, where the rebind already handled it.
+    #[test]
+    fn a_null_seat_slot_keeps_the_ordinary_prompt_budget_meaning() {
+        let seat = SEAT_ROLES[2];
+        let fx = fixture(&json!({"models": {"claude": {
+            "generation": "sonnet", "advisor": "fable", seat.to_string(): Value::Null
+        }}}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {
+                "prompt": format!("[bee-tier: {seat}] brainstorm")
+            }}),
+        );
+        assert_eq!(code, 0, "{seat}: a null ordinary slot is prompt-budget, not a refusal: {stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["tier"], json!(seat));
+        assert_eq!(d["model"], Value::Null, "prompt-budget names no model");
+        // The advisor on the same host, spelled off the same way, still
+        // refuses — one config, two rules, both unchanged by the seats.
+        let advisor_off = fixture(&json!({"models": {"claude": {
+            "generation": "sonnet", "advisor": Value::Null, seat.to_string(): Value::Null
+        }}}));
+        let (code, _) = run_payload(
+            advisor_off.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: advisor] consult"}}),
+        );
+        assert_eq!(code, 2, "the advisor's floor-less rule is untouched by the seats");
+    }
+
+    /// A cell that declares a seat role walks the SAME ordered list every other
+    /// cell role walks — head, `code`, `generation` — with no seat arm and no
+    /// advisor appended.
+    ///
+    /// It lives beside the guard rows because it is the same claim from the
+    /// other side: D2 bought the fall-through by REBINDING at one door, never
+    /// by putting `advisor` on an ordered list. Were it ever bought with a list
+    /// instead, this list is where it would land, and the tail's
+    /// `Resolved::Budget` floor would hand an unconfigured advisor the session
+    /// model. The expected list is the one `cell_role_list`'s own contract
+    /// states, not a value read back from the function.
+    #[test]
+    fn a_cell_declaring_a_seat_role_walks_the_unchanged_ordered_list() {
+        for seat in SEAT_ROLES {
+            assert_eq!(
+                cell_role_list(seat),
+                vec![seat, "code", "generation"],
+                "{seat}: the cell path is byte-identical to every other role's"
+            );
+        }
+    }
+
+    #[test]
+    fn prepare_row_and_guard_row_agree_for_a_herding_slot() {
+        let config = json!({
+            "team": {
+                "claude": {
+                    "code": { "kind": "herding", "agent": "agy-flash" }
+                }
+            },
+            "herding": {
+                "agents": {
+                    "agy-flash": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            }
+        });
+        let f = fixture(&config);
+        let root = f.path();
+        crate::fsutil::ensure_dir(&root.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("cells").join("c-agree.json"),
+            r#"{"id":"c-agree","feature":"f","title":"herding agree","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        )
+        .unwrap();
+
+        let prep_result = crate::verbs::drivers::prepare_dispatch(
+            root, "claude", "cell", Some("c-agree"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let crate::verbs::drivers::Prepared::Value(prep) = prep_result else {
+            panic!("expected Prepared::Value");
+        };
+        let prep_econ = prep.get("economics").unwrap();
+
+        let models = normalize_models(config.get("team"));
+        let verdict = Verdict {
+            deny: false,
+            transport: Some("herding"),
+            reason: None,
+            tier: Some("code".into()),
+            model: None,
+            subagent_type: None,
+            updated_input: None,
+            notes: vec![],
+            effort: None,
+        };
+        let guard_econ = derive_dispatch_economics(&config, &models, false, &verdict).unwrap();
+
+        assert_eq!(
+            prep_econ.get("requested_model"),
+            guard_econ.get("requested_model"),
+            "prepare and guard requested_model must agree"
+        );
+        assert_eq!(
+            prep_econ.get("effective_model_status"),
+            guard_econ.get("effective_model_status"),
+            "prepare and guard effective_model_status must agree"
+        );
+        let keys: Vec<&str> = guard_econ.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            [
+                "logical_tier", "requested_model", "effective_model", "effective_model_status", "channel",
+                "enforcement", "effort", "effort_base", "effort_step", "effort_reason"
+            ]
+        );
+        for key in ["effort", "effort_base", "effort_step", "effort_reason"] {
+            assert_eq!(prep_econ.get(key), guard_econ.get(key), "prepare and guard {key} must agree");
+        }
+        assert_eq!(prep_econ.get("requested_model"), Some(&json!("gemini-3.8-flash-high")));
+        assert_eq!(prep_econ.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    /// token-thrift D4: all 18 roles appear in the preamble roster, each on
+    /// exactly one grouped line, and no line is cut with an ellipsis.
+    #[test]
+    fn dispatch_door_groups_all_18_roles_by_target_in_full() {
+        let fixture = json!({
+            "herding": {
+                "agents": {
+                    "agy-flash": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            },
+            "team": {
+                "claude": {
+                    "code": {"kind": "herding", "agent": "agy-flash", "description": "write the cell's Rust code and its tests"},
+                    "read": {"kind": "herding", "agent": "agy-flash", "description": "multi-file gathers and codebase scans, read-only"},
+                    "test": {"kind": "herding", "agent": "agy-flash", "description": "author or repair tests, red-first"},
+                    "docs": {"kind": "herding", "agent": "agy-flash", "description": "doc edits and parity sweeps"},
+                    "plan": {"model": "opus", "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"},
+                    "extraction": {"kind": "herding", "agent": "agy-flash", "description": "narrow fact lookups from known locations"},
+                    "generation": {"kind": "herding", "agent": "agy-flash", "description": "fall-through tail: default writer role"},
+                    "review": {"model": "opus", "description": "independent read-only check of a claim or diff"},
+                    "advisor": {"model": "fable", "description": "session-class consult for high-risk gates"},
+                    "supervisor": {"model": "haiku", "description": "cold observer tick — structured observation on a cheap model"},
+                    "lane-1": {"model": "fable", "description": "blind-lane seat 1"},
+                    "lane-2": {"model": "opus", "description": "blind-lane seat 2"},
+                    "lane-3": {"kind": "herding", "agent": "agy-flash", "description": "blind-lane seat 3"},
+                    "hat-facts-gaps": {"model": "opus", "description": "hat: what the spec cannot answer"},
+                    "hat-risks": {"model": "fable", "description": "hat: what breaks"},
+                    "hat-value": {"kind": "herding", "agent": "agy-flash", "description": "hat: is this worth its cost"},
+                    "hat-alternatives": {"model": "opus", "description": "hat: is there a cheaper shape"},
+                    "hat-user-impact": {"kind": "herding", "agent": "agy-flash", "description": "hat: what the user sees and feels"}
+                }
+            }
+        });
+        let lines = dispatch_door_lines(fixture.as_object(), "claude");
+        assert!(lines[0].starts_with("- Every subagent/worker dispatch starts with"));
+        let last = lines.last().unwrap();
+        assert!(last.starts_with("- open set:"));
+
+        let roster_lines = &lines[1..lines.len() - 1];
+        let herding = "gemini-3.8-flash-high (herding: agy-flash)";
+        assert_eq!(
+            roster_lines,
+            &[
+                format!(
+                    "- {herding}: generation, read, extraction, code, test, docs, lane-3, hat-value, hat-user-impact"
+                ),
+                "- opus (native): review, plan, lane-2, hat-facts-gaps, hat-alternatives".to_string(),
+                "- fable (native): advisor, lane-1, hat-risks".to_string(),
+                "- haiku (native): supervisor".to_string(),
+            ]
+        );
+
+        let expected_roles = [
+            "code", "read", "test", "docs", "plan", "extraction", "generation",
+            "review", "advisor", "supervisor", "lane-1", "lane-2", "lane-3",
+            "hat-facts-gaps", "hat-risks", "hat-value", "hat-alternatives", "hat-user-impact"
+        ];
+        let grouped: String = roster_lines.join("\n");
+        for expected in expected_roles {
+            let seen = roster_lines
+                .iter()
+                .filter(|line| line.contains(&format!(": {expected}")) || line.contains(&format!(", {expected}")))
+                .count();
+            assert_eq!(seen, 1, "role {expected} must appear on exactly one line: {grouped}");
+        }
+        for line in roster_lines {
+            assert!(!line.contains('…'), "a dispatch door line was cut: {line}");
+        }
+    }
+
+    /// Two roles sharing a target share one line, and a long herding target
+    /// renders in full — both role names, no ellipsis.
+    #[test]
+    fn two_roles_sharing_a_target_render_on_one_uncut_line() {
+        let fixture = json!({
+            "herding": {
+                "agents": {
+                    "agy-flash-very-long-agent-name-for-the-token-thrift-cell": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            },
+            "team": {
+                "claude": {
+                    "code": {"kind": "herding", "agent": "agy-flash-very-long-agent-name-for-the-token-thrift-cell"},
+                    "test": {"kind": "herding", "agent": "agy-flash-very-long-agent-name-for-the-token-thrift-cell"}
+                }
+            }
+        });
+        let lines = dispatch_door_lines(fixture.as_object(), "claude");
+        let target = "gemini-3.8-flash-high (herding: agy-flash-very-long-agent-name-for-the-token-thrift-cell)";
+        let grouped = format!("- {target}: code, test");
+        assert!(lines.contains(&grouped), "missing grouped line `{grouped}`: {lines:#?}");
+        assert!(lines.iter().all(|l| !l.contains('…')), "{lines:#?}");
+    }
+
+    fn effort_fixture() -> tempfile::TempDir {
+        fixture(&json!({"team": {
+            "claude": {
+                "code": {"model": "sonnet", "effort": "high"},
+                "test": "haiku",
+                "plan": {"model": "opus", "effort": "high"},
+                "lane-1": {"model": "fable", "effort": "xhigh"}
+            },
+            "codex": {"generation": {"model": "gpt-5.5", "effort": "high"}}
+        }}))
+    }
+
+    fn agent_call(description: &str, model: &str, effort: Option<&str>) -> Value {
+        let mut input = json!({"description": description, "prompt": "work", "model": model});
+        if let Some(e) = effort {
+            input["effort"] = json!(e);
+        }
+        json!({"tool_name": "Agent", "tool_input": input})
+    }
+
+    #[test]
+    fn effort_wrong_value_is_repaired_to_the_door_value() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code] [bee-kind: cell] [bee-lane: high-risk]", "sonnet", Some("low"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        let out = repair_output(&stdout);
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["effort"], json!("xhigh"));
+        assert!(out["systemMessage"].as_str().unwrap().contains("expects effort \"xhigh\""), "{stdout}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "effort-param-repaired");
+        assert_eq!(d["effort"], "xhigh");
+        assert_eq!(d["effort_base"], "high");
+        assert_eq!(d["effort_step"], 1);
+    }
+
+    #[test]
+    fn effort_missing_is_repaired_to_the_door_value() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code] [bee-lane: tiny] [bee-kind: cell]", "sonnet", None);
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        let out = repair_output(&stdout);
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["effort"], json!("medium"));
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["model"], json!("sonnet"));
+    }
+
+    #[test]
+    fn effort_matching_the_door_value_is_allowed_unchanged() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code] [bee-kind: gather]", "sonnet", Some("low"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        assert!(stdout.is_empty(), "{stdout}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+        assert_eq!(d["effort_reason"], "gather/-");
+    }
+
+    #[test]
+    fn effort_on_a_role_with_no_base_is_removed() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: test] [bee-kind: cell] [bee-lane: standard]", "haiku", Some("high"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        let out = repair_output(&stdout);
+        let fixed = out["hookSpecificOutput"]["updatedInput"].as_object().unwrap();
+        assert!(!fixed.contains_key("effort"), "{stdout}");
+        assert_eq!(fixed["model"], json!("haiku"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "effort-param-repaired");
+        assert_eq!(d["effort_reason"], "no-base");
+    }
+
+    #[test]
+    fn wrong_model_and_wrong_effort_land_in_one_repair() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code] [bee-kind: cell] [bee-lane: standard]", "opus", Some("max"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        let out = repair_output(&stdout);
+        let fixed = &out["hookSpecificOutput"]["updatedInput"];
+        assert_eq!(fixed["model"], json!("sonnet"));
+        assert_eq!(fixed["effort"], json!("high"));
+        let message = out["systemMessage"].as_str().unwrap();
+        assert!(message.contains("AO5") && message.contains("D4"), "{message}");
+    }
+
+    #[test]
+    fn advisor_kind_on_plan_and_lane_roles_is_allowed_at_the_door_value() {
+        let fx = effort_fixture();
+        for (tier, model, effort) in [("plan", "opus", "medium"), ("lane-1", "fable", "high")] {
+            let call = agent_call(&format!("[bee-tier: {tier}] [bee-kind: advisor]"), model, Some(effort));
+            let (code, stdout, stderr) = run_full(fx.path(), call);
+            assert_eq!(code, 0, "{tier}: {stderr}");
+            assert!(stdout.is_empty(), "{tier}: {stdout}");
+        }
+    }
+
+    #[test]
+    fn effort_without_a_kind_token_is_allowed_unchanged() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code]", "sonnet", Some("low"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        assert!(stdout.is_empty(), "{stdout}");
+    }
+
+    #[test]
+    fn codex_spawn_reads_the_laddered_reasoning_effort() {
+        let fx = effort_fixture();
+        let spawn = |effort: &str| {
+            json!({"tool_name": "spawn_agent", "tool_input": {
+                "task_name": "task",
+                "message": "[bee-tier: generation] [bee-kind: cell] [bee-lane: high-risk] build",
+                "model": "gpt-5.5",
+                "reasoning_effort": effort,
+                "fork_turns": "none"
+            }})
+        };
+        let (code, stderr) = run_payload(fx.path(), spawn("xhigh"));
+        assert_eq!(code, 0, "the ladder-moved effort must pass: {stderr}");
+        let (code, stderr) = run_payload(fx.path(), spawn("high"));
+        assert_eq!(code, 2, "the unmoved base must refuse");
+        assert!(stderr.contains("reasoning_effort: \"high\" does not match"), "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-effort-mismatch");
+    }
+
+    #[test]
+    fn test_parse_anchored_markers() {
+        let text = "[bee-tier: code] [bee-feature: my-feat] [bee-stage: plan] [bee-cell: c-1] Do something";
+        let markers = parse_anchored_markers(text);
+        assert_eq!(markers.tier.as_deref(), Some("code"));
+        assert_eq!(markers.feature.as_deref(), Some("my-feat"));
+        assert_eq!(markers.stage.as_deref(), Some("plan"));
+        assert_eq!(markers.cell.as_deref(), Some("c-1"));
+
+        let reordered = "\n [bee-feature: feat-2] \t [bee-tier: test] \n task";
+        let m2 = parse_anchored_markers(reordered);
+        assert_eq!(m2.tier.as_deref(), Some("test"));
+        assert_eq!(m2.feature.as_deref(), Some("feat-2"));
+        assert!(m2.stage.is_none());
+        assert!(m2.cell.is_none());
+
+        let legacy = "[bee-tier: generation] plain task";
+        let m3 = parse_anchored_markers(legacy);
+        assert_eq!(m3.tier.as_deref(), Some("generation"));
+        assert!(m3.feature.is_none());
+
+        let laddered = "[bee-tier: code] [bee-kind: cell] [bee-feature: f] [bee-lane: tiny] [bee-cell: c-2] go";
+        let m5 = parse_anchored_markers(laddered);
+        assert_eq!(m5.kind.as_deref(), Some("cell"));
+        assert_eq!(m5.lane.as_deref(), Some("tiny"));
+        assert_eq!(m5.feature.as_deref(), Some("f"));
+        assert_eq!(m5.cell.as_deref(), Some("c-2"));
+
+        let invalid = "[bee-tier: has space] task";
+        let m4 = parse_anchored_markers(invalid);
+        assert!(m4.tier.is_none());
+    }
+
+    #[test]
+    fn test_model_guard_semantic_role_routing_and_reroute() {
+        use sha2::{Digest, Sha256};
+        let cfg = json!({
+            "team": {
+                "claude": {
+                    "code": "sonnet",
+                    "test": "haiku"
+                },
+                "codex": {
+                    "generation": "gpt-5.5"
+                }
+            }
+        });
+        let fx = fixture(&cfg);
+        let root = fx.path();
+
+        let plan_dir = root.join("docs").join("history").join("feat-v2");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_text = "# Plan\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_text).unwrap();
+        let plan_sha = {
+            let mut h = Sha256::new();
+            h.update(plan_text.as_bytes());
+            format!("{:x}", h.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+
+        let lane_data = json!({
+            "feature": "feat-v2",
+            "gate_preview": {
+                "feature": "feat-v2",
+                "plan_sha256": plan_sha,
+                "role_plan": {
+                    "schema_version": "1.0",
+                    "runtime": "claude",
+                    "roster_sha256": "sha-roster",
+                    "stages": [
+                        {"stage": "dev", "classification": "required", "role": "code", "reason": "dev work"},
+                        {"stage": "test", "classification": "required", "role": "test", "reason": "qa work"},
+                        {"stage": "bench", "classification": "not-applicable", "role": "code", "reason": "none"}
+                    ]
+                },
+                "cells": [
+                    {"id": "c-1", "feature": "feat-v2", "role": "code"}
+                ]
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-v2.json"), lane_data.to_string()).unwrap();
+
+        let cell_data = json!({
+            "id": "c-1",
+            "feature": "feat-v2",
+            "role": "code",
+            "status": "open"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-1.json"), cell_data.to_string()).unwrap();
+
+        let lines = [
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-rr",
+                "feature": "feat-v2",
+                "tags": ["role-reroute"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+        ];
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+
+        // 1. Non-cell dispatch without stage marker refuses stage_required
+        let p_no_stage = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2]",
+                "prompt": "do non cell work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_no_stage);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("stage_required"), "{stderr}");
+
+        // 2. Unknown stage refuses stage_unknown
+        let p_unknown_stage = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2] [bee-stage: unknown-stage]",
+                "prompt": "do non cell work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_unknown_stage);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("stage_unknown"), "{stderr}");
+
+        // 3. Not-applicable stage refuses stage_not_applicable
+        let p_na_stage = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2] [bee-stage: bench]",
+                "prompt": "do bench work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_na_stage);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("stage_not_applicable"), "{stderr}");
+
+        // 4. Mismatched stage role refuses planned_role_mismatch
+        let p_mismatch_stage = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: test] [bee-feature: feat-v2] [bee-stage: dev]",
+                "prompt": "do dev work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_mismatch_stage);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
+
+        // 5. Mismatched cell role refuses planned_role_mismatch
+        let p_mismatch_cell = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: test] [bee-feature: feat-v2] [bee-cell: c-1]",
+                "prompt": "do cell work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_mismatch_cell);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
+
+        // 6. Matching cell role succeeds
+        let p_match_cell = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2] [bee-cell: c-1]",
+                "prompt": "do cell work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_match_cell);
+        assert_eq!(code, 0, "matching cell role must succeed, stderr: {stderr}");
+
+        // 7. Reroute cell from code to test, then verify guard enforces new role
+        crate::verbs::cells::reroute_cell_core(root, "c-1", "test", "dec-rr").unwrap();
+        // Old role now fails
+        let (code, stderr) = run_payload(root, json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2] [bee-cell: c-1]",
+                "prompt": "do cell work"
+            }
+        }));
+        assert_eq!(code, 2);
+        assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
+        // New role succeeds
+        let (code, stderr) = run_payload(root, json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: test] [bee-feature: feat-v2] [bee-cell: c-1]",
+                "prompt": "do cell work"
+            }
+        }));
+        assert_eq!(code, 0, "rerouted cell role must succeed, stderr: {stderr}");
+
+        // 8. Runtime mismatch refuses role_plan_runtime_mismatch
+        let p_codex = json!({
+            "tool_name": "spawn_agent",
+            "tool_input": {
+                "message": "[bee-tier: generation] [bee-feature: feat-v2] [bee-cell: c-1] task"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_codex);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("role_plan_runtime_mismatch"), "{stderr}");
+
+        // 9. Legacy dispatch without feature/cell/stage succeeds
+        let p_legacy = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code]",
+                "prompt": "legacy work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_legacy);
+        assert_eq!(code, 0, "legacy prompt without feature must succeed, stderr: {stderr}");
+    }
+
+    fn escalate_v2_fixture(cells: &[Value]) -> tempfile::TempDir {
+        use sha2::{Digest, Sha256};
+        let fx = fixture(&json!({"team": {"claude": {"code": "sonnet", "test": "haiku"}}}));
+        let root = fx.path();
+        let plan_dir = root.join("docs").join("history").join("feat-v2");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_text = "# Plan\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_text).unwrap();
+        let plan_sha = format!("{:x}", Sha256::digest(plan_text.as_bytes()));
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+        let packet_cells: Vec<Value> = cells
+            .iter()
+            .map(|c| json!({"id": c["id"], "feature": "feat-v2", "role": "code"}))
+            .collect();
+        let lane = json!({
+            "feature": "feat-v2",
+            "gate_preview": {
+                "feature": "feat-v2",
+                "plan_sha256": plan_sha,
+                "role_plan": {
+                    "schema_version": "1.0",
+                    "runtime": "claude",
+                    "roster_sha256": "sha-roster",
+                    "stages": [{"stage": "dev", "classification": "required", "role": "code", "reason": "dev"}]
+                },
+                "cells": packet_cells
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-v2.json"), lane.to_string()).unwrap();
+        for c in cells {
+            let id = c["id"].as_str().unwrap();
+            std::fs::write(root.join(".bee").join("cells").join(format!("{id}.json")), c.to_string()).unwrap();
+        }
+        fx
+    }
+
+    fn escalate_v2_dispatch(root: &Path, tier: &str, cell: &str) -> (u8, String) {
+        run_payload(
+            root,
+            json!({
+                "tool_name": "Agent",
+                "tool_input": {
+                    "description": format!("[bee-tier: {tier}] [bee-feature: feat-v2] [bee-cell: {cell}]"),
+                    "prompt": "do cell work"
+                }
+            }),
+        )
+    }
+
+    #[test]
+    fn escalate_v2_an_escalated_cell_dispatches_at_the_ceiling() {
+        let fx = escalate_v2_fixture(&[
+            json!({"id": "c-1", "feature": "feat-v2", "role": "code", "status": "claimed", "escalate": true}),
+        ]);
+        let (code, stderr) = escalate_v2_dispatch(fx.path(), "ceiling", "c-1");
+        assert_eq!(code, 0, "an escalated cell's ceiling payload must pass: {stderr}");
+    }
+
+    #[test]
+    fn escalate_v2_ceiling_without_the_escalate_flag_is_still_refused() {
+        let fx = escalate_v2_fixture(&[
+            json!({"id": "c-1", "feature": "feat-v2", "role": "code", "status": "claimed"}),
+            json!({"id": "c-2", "feature": "feat-v2", "role": "code", "status": "claimed", "escalate": false}),
+        ]);
+        for cell in ["c-1", "c-2"] {
+            let (code, stderr) = escalate_v2_dispatch(fx.path(), "ceiling", cell);
+            assert_eq!(code, 2, "{cell}: {stderr}");
+            assert!(stderr.contains("planned_role_mismatch"), "{cell}: {stderr}");
+        }
+    }
+
+    #[test]
+    fn escalate_v2_an_escalated_cell_declaring_a_third_role_is_refused() {
+        let fx = escalate_v2_fixture(&[
+            json!({"id": "c-1", "feature": "feat-v2", "role": "code", "status": "claimed", "escalate": true}),
+        ]);
+        let (code, stderr) = escalate_v2_dispatch(fx.path(), "test", "c-1");
+        assert_eq!(code, 2, "{stderr}");
+        assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
     }
 }

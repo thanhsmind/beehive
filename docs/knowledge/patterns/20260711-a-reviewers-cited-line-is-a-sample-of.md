@@ -7,6 +7,7 @@ timestamp: 2026-07-11
 bee:
   id: pattern-20260711-a-reviewers-cited-line-is-a-sample-of
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT21", "original feature: grill-deltas", docs/history/learnings/20260711-grill-deltas.md]
   polarity: pitfall
   critical: false

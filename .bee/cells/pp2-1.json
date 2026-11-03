@@ -1,0 +1,80 @@
+{
+  "id": "pp2-1",
+  "feature": "pstack-part2-skills",
+  "title": "Port the unslop and technical-writing skills",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D6",
+    "D7"
+  ],
+  "files": [
+    ".claude/skills/unslop/*",
+    ".claude/skills/technical-writing/*"
+  ],
+  "read_first": [
+    "docs/history/pstack-part2-skills/plan.md",
+    ".claude/skills/create-verification-skill/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Port two pstack skills into this repo. The pstack source is a read-only clone at /tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/pstack-src/pstack/skills/ — read unslop/SKILL.md and technical-writing/SKILL.md there in full before writing anything. Write .claude/skills/unslop/SKILL.md and .claude/skills/technical-writing/SKILL.md. These two are prose-rule catalogs with no subagent dispatch, so the port is close to verbatim; keep every numbered unslop rule and its number, because other skills cite those numbers. Apply the adaptation contract in the plan's Approach section: keep the frontmatter name and description, keep disable-model-invocation true (per D6), add one provenance line at the top of each body naming cursor/plugins pstack/skills/<name> as the source, and remove every pstack-only reference. In technical-writing, the line telling the reader to propose new offenders as a diff to unslop's abstract-metaphor rule stays; the reference to a /deslop command does not exist here, so drop or reword it. Note in technical-writing that this repo's CLAUDE.md already asks for ASD-STE100 Simplified Technical English, so its STE layer is the house style rather than an option. Write to .claude/skills/ only (per D7) — never to skills/, .agents/skills/, AGENTS.md or CLAUDE.md.",
+  "verify": "python3 -c \"import sys,re;[sys.exit('bad frontmatter: '+p) for p in ['.claude/skills/unslop/SKILL.md','.claude/skills/technical-writing/SKILL.md'] if not re.match(r'^---\\\\n(?:.*\\\\n)*?---\\\\n', open(p).read()) or 'disable-model-invocation: true' not in open(p).read()]\" && ! rg -n 'cursor-team-kit|pstack/skills/|poteto-agent|generalPurpose|pstack-models|~/\\.cursor|/deslop|grok-4|gpt-5\\.6-sol|claude-fable-5-1-thinking|claude-opus-5-thinking' .claude/skills/unslop .claude/skills/technical-writing",
+  "must_haves": {
+    "truths": [
+      "Both SKILL.md files parse as YAML frontmatter plus a body and carry name, description and disable-model-invocation: true",
+      "Every numbered unslop rule from the source survives with its original number"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude/skills/unslop/SKILL.md",
+        "substantive": "the full slop-pattern catalog with stable rule numbers, no TODO stubs"
+      },
+      {
+        "path": ".claude/skills/technical-writing/SKILL.md",
+        "substantive": "the four-layer standard (Diataxis, Google style, STE, Global English) with its worked example and review checklist"
+      }
+    ],
+    "key_links": [
+      "technical-writing names the unslop skill as the owner of the slop-pattern catalog"
+    ],
+    "prohibitions": [
+      "No write outside .claude/skills/unslop/ and .claude/skills/technical-writing/",
+      "No pstack, Cursor, or model-name string in either file"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pp2-1",
+    "outcome": "Ported unslop and technical-writing into .claude/skills/, rule numbers intact",
+    "files_changed": [
+      ".claude/skills/unslop/SKILL.md",
+      ".claude/skills/technical-writing/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-10T15:44:54.085Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "claimed_at": "2026-09-10T15:36:59.615Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Ported unslop and technical-writing into .claude/skills/, rule numbers intact",
+      "commit": "220dc5676f2f1e656281914e4002f95fa8c621dd",
+      "files": [
+        ".claude/skills/unslop/SKILL.md",
+        ".claude/skills/technical-writing/SKILL.md"
+      ],
+      "tests": "python3 check_port.py over the nine ported skill trees — green:static — printed OK 9 skills: frontmatter parses, links resolve, no pstack token; .claude/skills/** is markdown an agent loads, not Rust, and the declared cargo suite does not reach it (plan claim 7)",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

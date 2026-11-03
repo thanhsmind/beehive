@@ -1,0 +1,28 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "correct session turn-end mark",
+      "status": "PASS",
+      "evidence": "/var/tmp/bee-codex-canary-VVDuwM/evidence/state.json:16-20 contains a turn-end mark for the observed session. packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:589-637 checks transcript final text, kind, subject, and session."
+    },
+    {
+      "id": "no cumulative usage double count",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:1205-1295 and 1491-1621 test cumulative totals, repeated counts, and multiple requests. final-green-suite.log:1022,1052 records both relevant tests passing."
+    },
+    {
+      "id": "malformed and cross-session isolation",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:840-914 checks missing and malformed transcripts produce no mark; lines 1468-1484 assert separate session IDs and subjects."
+    },
+    {
+      "id": "Claude and child lifecycle preservation",
+      "status": "PASS",
+      "evidence": "final-green-suite.log:823 records subagent_stop_and_child_session_events_leave_parent_working passed. /var/tmp/bee-codex-canary-Cm0jce/evidence/report.json:95-160 separately records child and parent session identities and transcripts."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

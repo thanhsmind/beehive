@@ -1,0 +1,40 @@
+# Less leader toil and a cheaper Paseo wait — Context
+
+**Feature slug:** herding-leader-toil
+**Date:** 2026-10-06
+**Shaping session:** complete (gate bypass full; the user asked to finish all seven items: "ok hoàn thiện tất cả các phần trên")
+**Scope:** High-risk
+**Domain types:** CALL | RUN
+
+## Feature Boundary
+
+The paseo-pi-hardening run showed where the leader's time goes: hand-built cap
+reports for herded workers, control verbs refused inside the feature worktree,
+judge verdicts copied by hand, and a Paseo wait loop that still polls. It also
+showed three small Paseo gaps: workers load the user's whole Pi setup, the
+desktop AppImage CLI passes doctor but cannot spawn, and workers are hard to
+read in the Paseo app. This feature closes those seven. The leader still checks
+every cell before it caps it; nothing here caps on a worker's word.
+
+## Locked Decisions
+
+| ID | Decision | Rationale (only if it changes implementation) |
+|----|----------|-----------------------------------------------|
+| D1 | `bee cells finish --id <cell> --from-job <job-id> --proof-result <green:unit\|green:static\|green:live> [--proof-reason <text>]` plus the usual mistakes answer (`--no-mistakes` or `--mistake`, required with --from-job) builds the cap report from the job's latest `result-N.json` (through the herding mailbox helpers, made reachable inside the crate) and a fresh git read of the job's working directory: outcome = the result summary; files = the result's `files_changed`, or the git changed paths when that list is empty, and the cap output names which source it used; commit = the working directory's HEAD; tests = `<cell verify> — <proof-result> — <proof-reason, default the worker's proof text>`; deviations = the worker's dissent claim, else empty. `--proof-result` is the leader's own verdict after checking. It refuses, naming the fix, when: --report is also given; --proof-result or the mistakes answer is missing; the job has no result; the result is not done; the job names another cell; the working directory is gone; the proof text is empty and no --proof-reason is given. Everything after building the report runs the existing cap path. `bee herding run`'s uncapped-success line names this command. Revised after the hat wave. | The leader re-typed data the run already holds. The leader keeps the check: the cap happens only when the leader states the proof result. |
+| D2 | An allow-list of control verbs, run from inside a granted feature worktree, serve the main checkout's control plane instead of refusing: every `state` verb, `gate`, `route`, `close`, and `cells` add, list, show, ready, update, schedule, escalate, reroute, judge, judge-record, dissent, dissent-verdict and leader-check. The shared narrow door is not widened: each listed verb opts in through the existing serve-granted resolver, so every unlisted verb keeps the GrantedWorktree refusal, among them `cells` claim, claim-next, unclaim, reopen, cap, block, drop, archive, unarchive, reset-budget, backfill-roles and rebind-session, and `dispatch prepare --claim`, `dispatch wave` and `dispatch authorize`. `cells finish` stays as it is (already served). Reads of `docs/history/<feature>/` files come from the worktree: gate and plan reads already do (the advisor plan path), and `close` gains the same. A served verb's text output names the main root; JSON objects gain `control_root`, JSON arrays stay as they are. Narrows decision d7b83394. Revised after the hat wave. | The refusal only sent the leader to a wrapper script that ran the same verb from main; `dispatch prepare` already re-roots this way (`resolve_root_serving_granted`). |
+| D3 | `bee cells judge-record --from-text <path\|->` reads a judge agent's free answer, extracts each fenced block whose info string is `json <cell-id>`, validates each as judge-verdict/1, and records each valid one on its cell. Zero blocks, a duplicate cell id, a block id different from a given `--id`, or --from-text with --file refuses by name before recording anything. Invalid blocks are reported by id with the validator's errors, and the verb exits non-zero when any block failed. The judge brief in the Judge tier paragraph of `gates-and-delegation.md` asks for exactly that block form. Revised after the hat wave. | The leader copied six JSON blocks into files by hand. |
+| D4 | The Paseo wait loop learns state changes from `paseo agent wait <id> --timeout <n> --json` through a WaitSource seam with arm, poll and cancel: the real source spawns the wait as a child process, polls it with a non-blocking check on the existing 200 ms tick, and kills it when the round ends or a new wait is armed; no thread. idle maps to Idle, permission to Blocked, error to Dead, timeout to still working. A new wait is armed only after a timeout or after idle handling, never sooner than 3 s after the last one returned; while Blocked, and after an Error until a state is known, the loop falls back to one `inspect` every 3 s (so the three-read died debounce still runs). One `inspect` after spawn still records the model (paseo-pi-hardening D4). The 200 ms mailbox checks, the silent-idle nudge (paseo-pi-hardening D2) and the idle and ceiling timeouts are unchanged. Revised after the hat wave. | `paseo agent wait` blocks in the daemon and returns on the exact state change, so bee stops spawning a Node process every 3 s and reacts at once. |
+| D5 | A Paseo agent block may set `"isolated_config": true` (provider `pi` only; default false). bee then keeps a per-agent Pi folder at `.bee/runtime/pi-agent/<agent>/` (symlinks to `~/.pi/agent/auth.json`, and to `models.json`, `models-store.json` and `npm` when they exist; `settings.json` with `defaultProjectTrust: "always"` and `quietStartup: true`; empty `skills/` and `extensions/`) and passes `PI_CODING_AGENT_DIR=<that folder>` to the worker. A real directory or file where a link belongs is never replaced; it is reported. | The worker loads the repo's bee-guard (project trust stays always) but not the user's own skills and extensions, so a cheap model gets a smaller context. Opt-in, because it changes what a worker loads. |
+| D6 | The doctor `paseo_ready` row fails when the configured paseo command's `--version` first stdout line is not a bare version, or when the command resolves to a script that execs an AppImage, with FIX: set herding.paseo.command to the npm @getpaseo/cli paseo. For each Pi agent with `isolated_config`: when its folder exists, the row fails if `settings.json` does not set `defaultProjectTrust` to `always` or `auth.json` is not a working link; when the folder does not exist yet, the row only checks that `~/.pi/agent/auth.json` exists. Revised after the hat wave. | The live proof on 2026-10-06 found the AppImage CLI passing doctor and failing spawn. |
+| D7 | A Paseo worker's title is `<cell-id> <agent>` when the run has a cell id, else `<agent> <job-id>`, and it carries the labels `bee_cell=<cell-id>` (when set) and `bee_agent=<agent>` beside `bee_job`. bee adds no parent flag: Paseo already records the leader as parent when `bee herding run` runs inside the leader's agent (paseo-pi-hardening D10). | Workers read by cell and role in the Paseo app. |
+
+## Environment facts
+
+- `paseo agent wait` (0.10.3): flags `--timeout`, `--json`; output `{agentId, status, message}`; status idle, timeout, permission or error; exit 0 for all of them; returns at once on an idle or permission-pending agent (refs/paseo `wait.ts`, `agent-manager.ts:2970-3115`).
+- `paseo run --env` reaches the Pi process; Pi reads `PI_CODING_AGENT_DIR`; project trust in print and RPC mode comes from the agent folder's `defaultProjectTrust` (Pi 0.87.1 `security.md:57-80`).
+- The AppImage CLI prints two log lines before `--version`'s `0.10.3`; the npm CLI prints only `0.10.3`.
+
+## Specific Ideas And References
+
+- Research digests 2026-10-06 (two advisor consults); seatworks `plugin/harness/pi/*` for D5.
+- Rejected: auto-capping on the worker's result (the leader must check first); a `--parent` flag (Paseo has none and inherits it).

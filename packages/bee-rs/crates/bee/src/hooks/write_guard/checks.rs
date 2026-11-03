@@ -37,8 +37,91 @@ pub(crate) fn resolve_write_topology(root: &str, control_root_override: Option<&
 }
 
 pub(crate) enum RecordResolution {
-    Ok { record: Map<String, Value>, source: &'static str },
+    Ok {
+        record: Map<String, Value>,
+        /// `"default"` (the control-root state.json), `"lane"` (the session's
+        /// DECLARED lane) or `"claim"` (sfg-1: the lane derived from this
+        /// session's own live claim).
+        source: &'static str,
+        /// sfg-1 (D2): this session HAS a record of its own and that record
+        /// carries no non-empty `lane`. Only such a session can be told to
+        /// bind itself — a sessionless call has nothing to bind, and
+        /// `bee state session bind` itself refuses a session with no record.
+        session_unbound: bool,
+    },
     Fail { reason: String },
+}
+
+/// laneRecordFrom merged over defaultLaneRecord — the ONE copy of that merge.
+/// Both arms below call it: the DECLARED-lane arm and sfg-1's claim-derived
+/// arm, so a lane record resolved either way is byte-identical.
+pub(crate) fn lane_record_from(feature: &str, record: &Map<String, Value>) -> Map<String, Value> {
+    let mut merged = Map::new();
+    merged.insert("schema_version".into(), Value::String("1.0".into()));
+    merged.insert("feature".into(), Value::String(feature.to_string()));
+    merged.insert("mode".into(), Value::Null);
+    merged.insert("phase".into(), Value::String("idle".into()));
+    let mut gates = Map::new();
+    for g in ["context", "shape", "execution", "review"] {
+        gates.insert(g.into(), Value::Bool(false));
+    }
+    merged.insert("approved_gates".into(), Value::Object(gates.clone()));
+    merged.insert("summary".into(), Value::String(String::new()));
+    merged.insert("next_action".into(), Value::String(String::new()));
+    merged.insert("created_at".into(), Value::Null);
+    for (k, v) in record {
+        merged.insert(k.clone(), v.clone());
+    }
+    let mut merged_gates = gates;
+    if let Some(Value::Object(over)) = record.get("approved_gates") {
+        for (k, v) in over {
+            merged_gates.insert(k.clone(), v.clone());
+        }
+    }
+    merged.insert("approved_gates".into(), Value::Object(merged_gates));
+    if merged.get("phase") == Some(&Value::String("validating".into())) {
+        merged.insert("phase".into(), Value::String("planning".into()));
+    }
+    merged
+}
+
+/// sfg-1 / slp-followup-gaps D1. The acting record for an UNBOUND session,
+/// derived from its own live claims: exactly ONE distinct claimed feature
+/// whose `.bee/lanes/<feature>.json` exists and parses with a matching
+/// `feature` key. Every other shape — no claim, two or more features, a
+/// missing, corrupt or mismatched lane record — returns `None`, and the
+/// caller falls back to the default record exactly as it did before.
+///
+/// Deliberately silent, and deliberately never `Fail`: the loud typed lane
+/// refusals belong to a session that DECLARED a lane and got it wrong. A
+/// session whose lane was merely inferred is owed no refusal at all, so this
+/// path can never be MORE restrictive than today either.
+///
+/// sfg-3: infallible by signature, like the claim readers it calls. An error
+/// escaping here would leave `resolve_write_record` undecidable, and an
+/// undecidable write guard fails OPEN on every path — the store data this
+/// arm reads must never be able to switch the guard off.
+fn claim_derived_lane_record(control_root: &str, session_id: &str) -> Option<Map<String, Value>> {
+    let features = session_claimed_features(control_root, session_id);
+    let feature = match features.as_slice() {
+        [only] => only.clone(),
+        _ => return None, // no claim at all, or two features = ambiguous
+    };
+    // Same lane-name validity requireLaneFeature enforces on the bound path —
+    // here it simply disqualifies the derivation instead of refusing.
+    if !plain_id_ok(&feature) {
+        return None;
+    }
+    let file = Path::new(control_root)
+        .join(".bee")
+        .join("lanes")
+        .join(format!("{}.json", feature));
+    match read_json_g(&file).unwrap_or(None) {
+        Some(Value::Object(m)) if m.get("feature") == Some(&Value::String(feature.clone())) => {
+            Some(lane_record_from(&feature, &m))
+        }
+        _ => None, // missing, corrupt, or naming a different feature
+    }
 }
 
 /// provenance: guards.mjs resolveWriteRecord + state.mjs resolvePipeline.
@@ -51,24 +134,50 @@ pub(crate) fn resolve_write_record(
     let sid = match session_id.map(js_trim).filter(|s| !s.is_empty()) {
         Some(s) => s,
         None => {
-            return Ok(RecordResolution::Ok { record: state.clone(), source: "default" });
+            return Ok(RecordResolution::Ok {
+                record: state.clone(),
+                source: "default",
+                session_unbound: false, // there is no session to bind
+            });
         }
     };
-    // resolvePipeline(controlRoot, { sessionId }).
-    let control2 = control_root_for_state(control_root)?;
-    let defaults = |_: &mut Emit| -> R<RecordResolution> {
+    // resolvePipeline(controlRoot, { sessionId }). sfg-4: infallible now —
+    // this `?` used to hand a broken `.git` file or an unreadable
+    // `product_root` straight to `emit_undecidable`, which switched the whole
+    // guard off. See `control_root_for_state` for why the root in hand is the
+    // safe answer.
+    let control2 = control_root_for_state(control_root);
+    let defaults = |session_unbound: bool| -> R<RecordResolution> {
         Ok(RecordResolution::Ok {
             record: read_state(Path::new(control_root))?,
             source: "default",
+            session_unbound,
         })
     };
     let session = match read_session(&control2, sid)? {
         Some(s) => s,
-        None => return defaults(emit),
+        // No record of its own: `bee state session bind` refuses such a
+        // session, so naming the binding as a remedy would be a dead end.
+        None => return defaults(false),
     };
     let bound = match session.get("lane") {
         Some(Value::String(s)) if !js_trim(s).is_empty() => js_trim(s).to_string(),
-        _ => return defaults(emit),
+        _ => {
+            // sfg-1 (D1): before the default record answers, ask this
+            // session's OWN live claims which feature it is working under.
+            // A claim is a fact the store already holds, written by
+            // `bee cells claim` under this same session id — never a guess.
+            // Anything short of exactly one usable feature is no opinion, and
+            // the default record answers byte-identically to before.
+            if let Some(record) = claim_derived_lane_record(&control2, sid) {
+                return Ok(RecordResolution::Ok {
+                    record,
+                    source: "claim",
+                    session_unbound: true,
+                });
+            }
+            return defaults(true);
+        }
     };
     let session_id_disp = js_disp_opt(session.get("id"));
     // lanePath validity (state.mjs requireLaneFeature).
@@ -115,34 +224,13 @@ pub(crate) fn resolve_write_record(
         }
         Some(m) => m,
     };
-    // laneRecordFrom merge over defaultLaneRecord.
-    let mut merged = Map::new();
-    merged.insert("schema_version".into(), Value::String("1.0".into()));
-    merged.insert("feature".into(), Value::String(bound.clone()));
-    merged.insert("mode".into(), Value::Null);
-    merged.insert("phase".into(), Value::String("idle".into()));
-    let mut gates = Map::new();
-    for g in ["context", "shape", "execution", "review"] {
-        gates.insert(g.into(), Value::Bool(false));
-    }
-    merged.insert("approved_gates".into(), Value::Object(gates.clone()));
-    merged.insert("summary".into(), Value::String(String::new()));
-    merged.insert("next_action".into(), Value::String(String::new()));
-    merged.insert("created_at".into(), Value::Null);
-    for (k, v) in &record {
-        merged.insert(k.clone(), v.clone());
-    }
-    let mut merged_gates = gates;
-    if let Some(Value::Object(over)) = record.get("approved_gates") {
-        for (k, v) in over {
-            merged_gates.insert(k.clone(), v.clone());
-        }
-    }
-    merged.insert("approved_gates".into(), Value::Object(merged_gates));
-    if merged.get("phase") == Some(&Value::String("validating".into())) {
-        merged.insert("phase".into(), Value::String("planning".into()));
-    }
-    Ok(RecordResolution::Ok { record: merged, source: "lane" })
+    // laneRecordFrom merge over defaultLaneRecord — the shared helper above,
+    // the same one sfg-1's claim-derived arm calls.
+    Ok(RecordResolution::Ok {
+        record: lane_record_from(&bound, &record),
+        source: "lane",
+        session_unbound: false,
+    })
 }
 
 // ─── plan.md freeze (hook-teeth D1) ────────────────────────────────────────
@@ -167,10 +255,10 @@ pub(crate) fn plan_freeze_feature(normalized: &str) -> Option<String> {
 
 /// Lane-aware gate read for the plan-freeze check: `.bee/lanes/<feature>.json`
 /// wins when it parses to an object, mirroring resolve_write_record's lane
-/// precedence over the default pipeline. Otherwise the default state (the
-/// `state` the caller already read) is consulted only when its own `feature`
-/// field names this same feature — a mismatched, absent, or corrupt-lane
-/// resolution is "no opinion", never a guess, so the caller allows.
+/// precedence over the default pipeline. Otherwise the control root's own
+/// `.bee/state.json` answers (D8, #101), and the `state` handed in answers
+/// only when that file is unusable or names another feature. A mismatched
+/// feature is "no opinion", never a guess, so the caller allows.
 pub(crate) fn plan_freeze_shape_approved(
     control_root: &str,
     state: &Map<String, Value>,
@@ -189,14 +277,19 @@ pub(crate) fn plan_freeze_shape_approved(
             .unwrap_or(false);
         return Ok(shape);
     }
-    let state_feature = match state.get("feature") {
+    let control_state = read_json_g(&Path::new(control_root).join(".bee").join("state.json"))?;
+    let effective = match &control_state {
+        Some(Value::Object(m)) if m.get("feature") == Some(&Value::String(feature.to_string())) => m,
+        _ => state,
+    };
+    let state_feature = match effective.get("feature") {
         Some(Value::String(s)) => Some(s.as_str()),
         _ => None,
     };
     if state_feature != Some(feature) {
         return Ok(false);
     }
-    let shape = state
+    let shape = effective
         .get("approved_gates")
         .and_then(|g| g.as_object())
         .and_then(|g| g.get("shape"))
@@ -267,7 +360,10 @@ pub(crate) fn check_workspace_ownership(control_root: &str, ctx: &JsCtx, session
         Some(s) if matches!(s.get("status"), Some(Value::String(st)) if st == "closed" || st == "dead") => {
             false // a closed/dead owner session never holds the path live.
         }
-        Some(s) => !heartbeat_stale(&s, now_ms())?,
+        // sfg-4: infallible now. A `last_heartbeat` this reader cannot parse
+        // is no evidence the owner went away, so the owner reads LIVE and
+        // this guard REFUSES the write — it never falls open.
+        Some(s) => !heartbeat_stale(control_root, &s, now_ms()),
         None => false,
     };
     if !live {
@@ -345,10 +441,18 @@ unapprove the shape gate first to redraft the plan.",
         }
     }
 
-    let (record, source) = match resolve_write_record(&control_root, state, session_id, emit)? {
-        RecordResolution::Fail { reason } => return Ok(WV::Deny(reason)),
-        RecordResolution::Ok { record, source } => (record, source),
-    };
+    let (record, source, session_unbound) =
+        match resolve_write_record(&control_root, state, session_id, emit)? {
+            RecordResolution::Fail { reason } => return Ok(WV::Deny(reason)),
+            RecordResolution::Ok { record, source, session_unbound } => {
+                (record, source, session_unbound)
+            }
+        };
+    // sfg-1 (D2): the binding remedy is named only when the DEFAULT record
+    // answered AND this session has a record carrying no lane. A lane-bound
+    // session, a claim-derived one, and a sessionless call each already have
+    // their own correct answer and are never told to bind.
+    let bind_remedy = source == "default" && session_unbound;
 
     // Cross-session hold deny (fsh-7 D3) — sessionId-gated.
     if let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) {
@@ -364,7 +468,12 @@ FIX: inspect/restore the reservation store, then retry.",
                 res_rel
             )));
         }
-        let hold_conflicts = find_session_conflicts(root, sid, &[normalized.clone()])?;
+        // sfg-5: infallible now. These lease readers used to `?` a
+        // `date_parse_ms` error out of `check_write` to `emit_undecidable`, so
+        // ONE lease file carrying an unreadable `expires_at` switched the whole
+        // guard off. An unreadable expiry is NOT expired — the lease still
+        // conflicts, and this deny still fires.
+        let hold_conflicts = find_session_conflicts(root, sid, &[normalized.clone()]);
         if !hold_conflicts.is_empty() {
             let acting_workspace = ctx.workspace_id.clone().unwrap_or_else(|| "main".to_string());
             let mut same_workspace: Vec<&Resv> = Vec::new();
@@ -382,7 +491,7 @@ Wait for the hold to expire or coordinate with that session — a cross-session 
                     js_disp_opt(holder.session.as_ref()),
                     js_disp_opt(holder.agent.as_ref()),
                     js_disp_opt(holder.cell.as_ref()),
-                    hold_expiry(holder)?
+                    hold_expiry(holder)
                 )));
             }
         }
@@ -398,7 +507,9 @@ treating it as empty. FIX: inspect/restore the ledger in the main checkout, then
                     .to_string(),
             ));
         }
-        let foreign = find_foreign_holds(&main_root, &holder_id, &[normalized.clone()])?;
+        // sfg-5: infallible now, same class as the lease readers above — an
+        // unreadable `mirrored_at` is not evidence the hold lapsed.
+        let foreign = find_foreign_holds(&main_root, &holder_id, &[normalized.clone()]);
         if let Some(hold) = foreign.first() {
             let feature_disp = match hold.get("feature") {
                 Some(v) if truthy(v) => js_disp(v),
@@ -416,7 +527,7 @@ Wait for the hold to expire or coordinate with that checkout — a cross-worktre
                     js_disp_opt(hold.get("holder")),
                     feature_disp,
                     cell_clause,
-                    foreign_hold_expiry(hold)?
+                    foreign_hold_expiry(hold)
                 )));
             }
             return Ok(WV::AllowWarn(format!(
@@ -428,7 +539,7 @@ between the two checkouts at merge time.",
                 js_disp_opt(hold.get("holder")),
                 feature_disp,
                 cell_clause,
-                foreign_hold_expiry(hold)?
+                foreign_hold_expiry(hold)
             )));
         }
     }
@@ -441,7 +552,23 @@ between the two checkouts at merge time.",
 
     // Workspace-ownership deny (msn-21, class (c)).
     if let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) {
-        if source == "default" && phase != Value::String("swarming".into()) {
+        // sfg-1/sfg-3: `"claim"` is grouped with `"default"` because neither
+        // source says anything about who OWNS this checkout — only a
+        // DECLARED lane carries that, so a claim-derived session stays
+        // subject to this guard exactly as an unbound one always was.
+        //
+        // What the claim arm DID change is the phase this guard reads:
+        // `phase` above comes from the ACTING record, so a claim-derived
+        // session is judged on its claimed lane's phase, never on
+        // `.bee/state.json`'s. That is the honest reading — the claimed lane
+        // IS the phase this session works in — and it moves the trigger set
+        // BOTH ways: an unbound session whose claimed lane is `swarming`
+        // now skips this deny where an `idle` default record used to reach
+        // it, and one whose claimed lane is not `swarming` now reaches it
+        // where a `swarming` default record used to skip it. Both
+        // directions are pinned by
+        // `sfg3_the_ownership_guard_reads_the_claim_derived_phase_not_the_default_one`.
+        if matches!(source, "default" | "claim") && phase != Value::String("swarming".into()) {
             let config = read_config(Path::new(&control_root))?;
             if resolve_write_policy_mode(&config) == "isolated" {
                 match check_workspace_ownership(&control_root, ctx, sid)? {
@@ -488,6 +615,7 @@ in a fresh worktree instead.",
                 &phase,
                 &format!("writing \"{}\"", normalized),
                 "",
+                bind_remedy,
             )));
         }
         return Ok(WV::Allow);
@@ -518,7 +646,7 @@ Get execution approval (bee-hive) before touching source files.",
             .map(|s| s.to_string())
             .or(env_agent);
         if let Some(agent) = agent {
-            let conflicts = find_conflicts(root, &agent, &[normalized.clone()])?;
+            let conflicts = find_conflicts(root, &agent, &[normalized.clone()]);
             if !conflicts.is_empty() {
                 let hard: Vec<&Resv> =
                     conflicts.iter().filter(|c| is_hard_conflict(c, &normalized)).collect();
@@ -586,15 +714,28 @@ pub(crate) fn check_git_bash_command(
     cwd: &str,
     session_id: Option<&str>,
     control_root_override: Option<&str>,
+    worktree_resolution: &str,
     emit: &mut Emit,
 ) -> R<Option<WV>> {
-    let deep = tokenize_deep(command);
+    let fenced = fence_heredocs(command);
+    let deep = tokenize_deep(&fenced);
+    let invocations = find_git_invocations(&deep.tokens);
+    if let Some(verdict) = outward_arm(
+        root,
+        cwd,
+        control_root_override,
+        worktree_resolution,
+        &deep,
+        &invocations,
+        emit,
+    )? {
+        return Ok(Some(verdict));
+    }
     if deep.truncated {
         // A wrapper nested past the depth bound could hide a git verb this
         // scan cannot see — fail open (delegate) rather than silently allow.
         return Err(Nd);
     }
-    let invocations = find_git_invocations(&deep.tokens);
     if invocations.is_empty() {
         // This guard judges git invocations and nothing else. Resolving the
         // acting record first made a lane-resolution failure deny EVERY Bash
@@ -609,10 +750,15 @@ pub(crate) fn check_git_bash_command(
     }
 
     let topo = resolve_write_topology(root, control_root_override)?;
-    let record = match resolve_write_record(&topo.control_root, state, session_id, emit)? {
-        RecordResolution::Fail { reason } => return Ok(Some(WV::Deny(reason))),
-        RecordResolution::Ok { record, .. } => record,
-    };
+    let (record, source, session_unbound) =
+        match resolve_write_record(&topo.control_root, state, session_id, emit)? {
+            RecordResolution::Fail { reason } => return Ok(Some(WV::Deny(reason))),
+            RecordResolution::Ok { record, source, session_unbound } => {
+                (record, source, session_unbound)
+            }
+        };
+    // sfg-1 (D2), same condition as check_write's.
+    let bind_remedy = source == "default" && session_unbound;
     let phase = match record.get("phase") {
         Some(v) if truthy(v) => v.clone(),
         _ => Value::String("idle".into()),
@@ -629,8 +775,8 @@ pub(crate) fn check_git_bash_command(
             &phase,
             cwd,
             command,
-            invocation.subcommand.as_deref(),
-            &invocation.rest,
+            &invocation,
+            bind_remedy,
         )? {
             return Ok(Some(wv));
         }
@@ -649,9 +795,11 @@ fn evaluate_git_invocation(
     phase: &Value,
     cwd: &str,
     command: &str,
-    subcommand: Option<&str>,
-    rest: &[String],
+    invocation: &GitInvocation,
+    bind_remedy: bool,
 ) -> R<Option<WV>> {
+    let subcommand = invocation.subcommand.as_deref();
+    let rest = &invocation.rest;
     // gc-2: concurrent-worker whole-tree denial — phase-independent.
     if let Some(classified) = classify_concurrent_tree_verb(subcommand, rest) {
         match resolve_live_worker_count(root, &topo.control_root, &topo.ctx)? {
@@ -709,9 +857,9 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         return Ok(None);
     }
 
-    const READONLY: [&str; 12] = [
+    const READONLY: [&str; 13] = [
         "status", "log", "diff", "show", "rev-parse", "ls-files", "check-ignore", "merge-base",
-        "rev-list", "describe", "blame", "cat-file",
+        "rev-list", "describe", "blame", "cat-file", "fetch",
     ];
     if let Some(sub) = subcommand {
         if READONLY.contains(&sub) {
@@ -723,10 +871,14 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
     }
 
     if subcommand == Some("push") {
+        if invocation.globals.is_empty() && push_main_bookkeeping(rest) {
+            return Ok(None);
+        }
         return Ok(Some(WV::Deny(intake_refusal(
             phase,
             "`git push`",
             "git push is outward-facing and is never exempted from this gate, regardless of what it would push. ",
+            bind_remedy,
         ))));
     }
 
@@ -751,6 +903,7 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
                             sub
                         ),
                         "",
+                        bind_remedy,
                     ))));
                 }
                 Some(p) => p,
@@ -764,6 +917,7 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
                     phase,
                     &format!("running `git {}` — it would change \"{}\"", sub, off),
                     "",
+                    bind_remedy,
                 ))));
             }
             return Ok(None); // { allow: true, kind: 'git-bookkeeping' }
@@ -778,6 +932,7 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         phase,
         &format!("running `git {}`", named),
         "This git subcommand is not recognized as read-only or as a modeled bookkeeping-eligible mutation, so it is refused rather than assumed safe. ",
+        bind_remedy,
     ))))
 }
 
@@ -823,6 +978,284 @@ writers (\"bee staging add\", \"bee staging rebuild\"), never a hand-run commit.
 branch, then \"bee staging add --feature <slug>\" to re-merge it into staging.",
         record.worktree_root.display()
     )))
+}
+
+const OUTWARD_AGENTS: [&str; 4] = ["claude", "codex", "pi", "opencode"];
+
+const GH_READ_ONLY_LIST: &str = "pr view|list|status|checks|diff, run list|view|watch|download, \
+issue view|list, release view|list|download, repo view, workflow list|view, search <any>, \
+cache list, label list, status, auth status, api with an explicit GET, and api graphql with no mutation";
+
+#[allow(clippy::too_many_arguments)]
+fn outward_arm(
+    root: &str,
+    cwd: &str,
+    control_root_override: Option<&str>,
+    worktree_resolution: &str,
+    deep: &DeepTokens,
+    invocations: &[GitInvocation],
+    emit: &mut Emit,
+) -> R<Option<WV>> {
+    if worktree_resolution != "linked-valid" {
+        return Ok(None);
+    }
+    let mut config: Option<Map<String, Value>> = None;
+    if deep.truncated {
+        let words: Vec<String> = deep
+            .tokens
+            .iter()
+            .flat_map(|t| t.split_whitespace().map(str::to_string))
+            .collect();
+        let pushed = find_git_invocations(&words)
+            .iter()
+            .any(|i| i.subcommand.as_deref() == Some("push"));
+        let launched = words
+            .iter()
+            .map(|t| command_basename(t))
+            .find(|b| b == "gh" || OUTWARD_AGENTS.contains(&b.as_str()));
+        let (form, blocked) = match (pushed, launched) {
+            (true, _) => (OutwardForm::Push, "`git push`".to_string()),
+            (false, Some(head)) if head == "gh" => (OutwardForm::Gh, "`gh`".to_string()),
+            (false, Some(head)) => (OutwardForm::Launch, format!("`{head}`")),
+            (false, None) => {
+                push_gap(
+                    emit,
+                    Path::new(root),
+                    "worker-outward-opaque-wrapper",
+                    "a wrapper nested past the depth bound hid its payload from the worker-outward scan".to_string(),
+                );
+                return Ok(None);
+            }
+        };
+        if !outward_guard_on(&mut config, root, control_root_override)? {
+            return Ok(None);
+        }
+        return Ok(Some(WV::Deny(outward_refusal(form, &blocked, cwd))));
+    }
+
+    if invocations.iter().any(|i| i.subcommand.as_deref() == Some("push")) {
+        if !outward_guard_on(&mut config, root, control_root_override)? {
+            return Ok(None);
+        }
+        return Ok(Some(WV::Deny(outward_refusal(OutwardForm::Push, "`git push`", cwd))));
+    }
+
+    for segment in deep.tokens.split(|t| is_separator(t)) {
+        let Some((head_index, head)) = outward_segment_head(segment) else {
+            continue;
+        };
+        let rest = &segment[head_index + 1..];
+        if head == "gh" {
+            let (sub, args) = gh_sub_and_args(rest);
+            if gh_read_only_form(sub, args) {
+                continue;
+            }
+            if !outward_guard_on(&mut config, root, control_root_override)? {
+                return Ok(None);
+            }
+            let verb = args.iter().find(|t| !t.starts_with('-'));
+            let blocked = match verb {
+                Some(v) => format!("`gh {sub} {v}`"),
+                None => format!("`gh {sub}`"),
+            };
+            return Ok(Some(WV::Deny(outward_refusal(OutwardForm::Gh, &blocked, cwd))));
+        }
+        if OUTWARD_AGENTS.contains(&head.as_str()) {
+            if codex_read_only_exec(&head, rest) {
+                continue;
+            }
+            if !outward_guard_on(&mut config, root, control_root_override)? {
+                return Ok(None);
+            }
+            let configured = config
+                .as_ref()
+                .is_some_and(|c| configured_cli_command(c, &segment[head_index..]));
+            if configured {
+                continue;
+            }
+            return Ok(Some(WV::Deny(outward_refusal(
+                OutwardForm::Launch,
+                &format!("`{head}`"),
+                cwd,
+            ))));
+        }
+    }
+    Ok(None)
+}
+
+fn outward_guard_on(
+    slot: &mut Option<Map<String, Value>>,
+    root: &str,
+    control_root_override: Option<&str>,
+) -> R<bool> {
+    if slot.is_none() {
+        let topo = resolve_write_topology(root, control_root_override)?;
+        let config = read_config(Path::new(&topo.control_root))?;
+        if matches!(
+            config.get("guards"),
+            Some(g) if truthy(g) && g.get("worker_outward") == Some(&Value::Bool(false))
+        ) {
+            return Ok(false);
+        }
+        *slot = Some(config);
+    }
+    Ok(true)
+}
+
+fn outward_refusal(form: OutwardForm, blocked: &str, cwd: &str) -> String {
+    let id = derive_current_worktree(cwd).ok().flatten().map(|(_, id)| id);
+    let named = id.as_deref().unwrap_or("<worktree-id>");
+    let head = match form {
+        OutwardForm::Push => format!(
+            "bee worker-outward guard denied this shell command: {blocked} is outward-facing and is \
+never exempted inside a linked worktree, regardless of what it would push."
+        ),
+        OutwardForm::Gh => format!(
+            "bee worker-outward guard denied this shell command: {blocked} writes to GitHub or moves \
+the checkout, and a linked worktree never does either. Reads still run here: {GH_READ_ONLY_LIST}."
+        ),
+        OutwardForm::Launch => format!(
+            "bee worker-outward guard denied this shell command: {blocked} starts another agent, and \
+a worker inside the linked worktree \"{named}\" runs exactly the one cell it was handed — starting \
+helpers is the leader's."
+        ),
+    };
+    format!("{head} {}", outward_fix_line(form, id.as_deref()))
+}
+
+pub(crate) fn command_basename(token: &str) -> String {
+    token.replace('\\', "/").rsplit('/').next().unwrap_or("").to_string()
+}
+
+pub(crate) fn outward_segment_head(segment: &[String]) -> Option<(usize, String)> {
+    let mut i = 0usize;
+    while i < segment.len() {
+        let token = segment[i].as_str();
+        if token == "timeout" {
+            let numeric = segment.get(i + 1).is_some_and(|n| {
+                !n.is_empty() && n.chars().all(|c| c.is_ascii_digit() || c == '.')
+            });
+            i += if numeric { 2 } else { 1 };
+            continue;
+        }
+        let skipped = matches!(
+            token,
+            "env" | "npx" | "bunx" | "sudo" | "nohup" | "command" | "exec" | "(" | "{" | "!"
+        ) || token.starts_with('-')
+            || is_env_assignment(token);
+        if skipped {
+            i += 1;
+            continue;
+        }
+        return Some((i, command_basename(token)));
+    }
+    None
+}
+
+fn is_env_assignment(token: &str) -> bool {
+    let Some(eq) = token.find('=') else {
+        return false;
+    };
+    let name = &token[..eq];
+    let mut chars = name.chars();
+    let head = chars.next();
+    head.is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+pub(crate) fn codex_read_only_exec(head: &str, rest: &[String]) -> bool {
+    head == "codex"
+        && rest.first().map(String::as_str) == Some("exec")
+        && rest
+            .windows(2)
+            .any(|w| (w[0] == "--sandbox" || w[0] == "-s") && w[1] == "read-only")
+}
+
+fn configured_cli_command(config: &Map<String, Value>, segment: &[String]) -> bool {
+    let line = segment.join(" ");
+    let Some(Value::Object(models)) = config.get("team").or_else(|| config.get("models")) else {
+        return false;
+    };
+    models
+        .values()
+        .filter_map(Value::as_object)
+        .flat_map(|runtime| runtime.values())
+        .any(|slot| {
+            slot.get("kind").and_then(Value::as_str) == Some("cli")
+                && slot
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .is_some_and(|c| !c.is_empty() && line.starts_with(c))
+        })
+}
+
+pub(crate) fn gh_sub_and_args(rest: &[String]) -> (&str, &[String]) {
+    let mut i = 0usize;
+    while i < rest.len() {
+        let token = rest[i].as_str();
+        if matches!(token, "-R" | "--repo" | "--hostname") {
+            i += 2;
+            continue;
+        }
+        if token.starts_with('-') {
+            i += 1;
+            continue;
+        }
+        return (token, &rest[i + 1..]);
+    }
+    ("", &rest[rest.len()..])
+}
+
+pub(crate) fn gh_read_only_form(sub: &str, rest: &[String]) -> bool {
+    let verb = rest.iter().find(|t| !t.starts_with('-')).map(String::as_str);
+    match sub {
+        "pr" => matches!(verb, Some("view" | "list" | "status" | "checks" | "diff")),
+        "run" => matches!(verb, Some("list" | "view" | "watch" | "download")),
+        "issue" => matches!(verb, Some("view" | "list")),
+        "release" => matches!(verb, Some("view" | "list" | "download")),
+        "repo" => verb == Some("view"),
+        "workflow" => matches!(verb, Some("list" | "view")),
+        "cache" => verb == Some("list"),
+        "label" => verb == Some("list"),
+        "auth" => verb == Some("status"),
+        "search" | "status" => true,
+        "api" => gh_api_read_only_form(verb, rest),
+        _ => false,
+    }
+}
+
+fn gh_api_read_only_form(target: Option<&str>, rest: &[String]) -> bool {
+    if rest.iter().any(|t| t == "--input" || t.starts_with("--input=")) {
+        return false;
+    }
+    if target == Some("graphql") {
+        return !rest.iter().any(|t| t.contains("mutation"));
+    }
+    match gh_api_method(rest) {
+        Some(method) => method.eq_ignore_ascii_case("get"),
+        None => !rest.iter().any(|t| {
+            matches!(t.as_str(), "-f" | "-F" | "--field" | "--raw-field")
+                || t.starts_with("--field=")
+                || t.starts_with("--raw-field=")
+        }),
+    }
+}
+
+fn gh_api_method(rest: &[String]) -> Option<&str> {
+    for (i, token) in rest.iter().enumerate() {
+        if token == "-X" || token == "--method" {
+            return rest.get(i + 1).map(String::as_str);
+        }
+        if let Some(glued) = token.strip_prefix("-X") {
+            if !glued.is_empty() {
+                return Some(glued);
+            }
+        }
+        if let Some(joined) = token.strip_prefix("--method=") {
+            return Some(joined);
+        }
+    }
+    None
 }
 
 /// Idle-gate safe-form table: per-verb predicates that admit a read-only

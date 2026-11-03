@@ -16,10 +16,14 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 pub mod backlog;
+pub mod brief;
+pub mod blind;
 pub mod capture;
 pub mod cells;
 pub mod decisions;
 pub mod deferred_queue;
+pub mod design_group;
+pub mod detector;
 pub mod discovery;
 pub mod drivers;
 pub mod feedback;
@@ -27,13 +31,17 @@ pub mod help;
 pub mod intent_group;
 pub mod knowledge;
 pub mod mailbox;
+pub mod mailbox_digest; // library module (no try_native) — never probed below
 pub mod models_group;
+pub mod report;
+pub mod report_usage;
 pub mod reservations;
 pub mod reviews;
 pub mod staging;
 pub mod state_group;
 pub mod status_brief;
 pub mod status_full;
+pub mod supervisor;
 pub mod test_runner;
 pub mod timings;
 pub mod tmp_group;
@@ -101,6 +109,12 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if let Some(code) = feedback::try_native(args, t0) {
         return Some(code);
     }
+    if let Some(code) = report::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = report_usage::try_native(args, t0) {
+        return Some(code);
+    }
     if let Some(code) = intent_group::try_native(args, t0) {
         return Some(code);
     }
@@ -108,6 +122,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = tmp_group::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = design_group::try_native(args, t0) {
         return Some(code);
     }
     // hm-1 registered `mailbox` as a library module with no probe, because the
@@ -118,6 +135,18 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = triggers::try_native(args, t0) {
+        return Some(code);
+    }
+    // slp-blind-lanes D2(d) — the convergence door. `bee blind check` reads a
+    // dossier the caller names and refuses a malformed one by the name of the
+    // offending section; it owns no store of its own.
+    if let Some(code) = blind::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = supervisor::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = detector::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = work::try_native(args, t0) {

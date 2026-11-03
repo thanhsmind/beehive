@@ -195,6 +195,7 @@ fn bee_cmd(fx: &Fixture, args: &[String]) -> Command {
     cmd.args(args)
         .current_dir(&fx.root)
         .env_remove("BEE_RS_TRACE")
+        .env_remove("PI_SESSION_ID")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

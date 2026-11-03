@@ -97,6 +97,8 @@ All functions are sync unless noted. `root` = absolute repo root path.
 - `checkWrite(root, state, relPath, agentName=null)` → `{allow:true}` or `{allow:false, kind:'intake'|'gate'|'reservation', reason}`.
   - intake (v0.1.1, repository-harness lesson): when `state.phase` is `idle` AND path not under GATE_ALLOWED_PREFIXES → deny with `kind:'intake'` pointing at bee-hive routing. Default-on; disable per repo via `config.guards.idle_gate: false`. This closes the "first ad-hoc edit slips through before any workflow starts" hole.
   - gate: block only when `state.phase` ∈ {`exploring`,`planning`} (`GATED_PHASES` — validation-diet D3 retired the standalone `validating` phase; the standalone execution gate folded into Gate 2, both carried by `planning`) AND path not under GATE_ALLOWED_PREFIXES AND `approved_gates.execution` is false. During `swarming`: reservation check via `findConflicts` when `agentName`/`BEE_AGENT_NAME` provided; unreserved-but-conflicting → deny.
+- `checkGitBashCommand(root, state, command, cwd, …)` → judges shell requests (Bash / codex exec), not file writes.
+  - outward (worker-outward-guard D1-D11): cwd resolves to a linked-valid worktree → deny `git push`, any `gh` form outside the read-only list, and an unsanctioned nested agent launch, in every phase; the refusal leads with the remedy for its form. Default-on; disable per repo via `config.guards.worker_outward: false` in the MAIN checkout. The list and the gotchas live in config-reference.md § guards.worker_outward.
 - `checkRead(relPath)` → `{allow:true}` or `{allow:false, kind:'privacy'|'scout', reason, marker}` where privacy marker = `@@BEE_PRIVACY@@{json}@@END@@` containing `{file, question}`.
 - `extractBashTargets(command)` → `{paths:[], broadWrite:boolean}` (khuym patterns: `sed -i`, `tee`, `rm`, `mv`, `cp`, `mkdir`, `touch`, `git add|mv|rm`, redirection `>`).
 
@@ -200,7 +202,7 @@ Enforced invariants only — this section states no promise the code above does 
   never trusted as-is. `bee feedback rank`/`collect` only ever consume `mergeDigests`'s output,
   never a foreign digest file directly.
 - **Bee-repo-only (D3).** [handbook/evolving.md](handbook/evolving.md) step 0 is a hard guard
-  (`test -f packages/bee/lib/feedback.mjs && test -f docs/handbook/writing-skills.md`)
+  (`test -f packages/bee/AGENTS.block.md && test -f packages/bee-rs/crates/bee/Cargo.toml && test -f skills/bee-writing-skills/SKILL.md`)
   that refuses to proceed anywhere the bee-repo-only files are absent; pressure-tested RED-first
   under the full Iron Law (decision `ff26725d`) — see
   `docs/history/evolving-loop/reports/evolving-10-pressure.md`.

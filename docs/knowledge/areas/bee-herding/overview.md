@@ -1,22 +1,22 @@
 ---
 type: bee.area
-title: "Bee Herding — the three-role cockpit, its safety boundaries, and adoption"
-description: "A cockpit that runs several Claude Code sessions in parallel worktrees, over whichever pane transport one config key names (herdr or tmux): a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
-timestamp: 2026-08-20
+title: "Bee Herding — the four-role cockpit, its safety boundaries, and adoption"
+description: "A cockpit that runs several Claude Code sessions in parallel worktrees, over whichever pane transport one config key names (herdr or tmux): a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, a read-only supervisor role that observes beside them, a route role that reads finished worktrees and — inside the cockpit only, under a named carve-out — starts a reviewer on a different agent and hands a CHANGES verdict back to the coder's own pane, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
+timestamp: 2026-09-09
 bee:
   id: bee-herding-overview
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), "herding-orchestration D8 (the control loop is a native command, not a script)", "herding-orchestration D13 (the control and working panes do not share a permission posture)", "herding-orchestration D19 (the live Windows run is an owner-run gap, not a blocker)", "tmux-herding-cockpit D1 (one herding.transport key selects the transport for the WHOLE cockpit)", "tmux-herding-cockpit D2 (the roles and bootstrap act on panes only through transport-neutral bee pane verbs)", "tmux-herding-cockpit D3 (the tmux mapping: session = workspace, window = tab, pane title = label, the bootstrap pane = chat)", "tmux-herding-cockpit D5 (the pane-verb pre-send guard fails open on an unreadable screen and always refuses a blocked one)"]
-  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", docs/history/herding-orchestration/CONTEXT.md, docs/history/tmux-herding-cockpit/CONTEXT.md]
-  authoritative_for: "bee-herding: the three-role cockpit, its safety boundaries, and adoption"
+  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), "herding-orchestration D8 (the control loop is a native command, not a script)", "herding-orchestration D13 (the control and working panes do not share a permission posture)", "herding-orchestration D19 (the live Windows run is an owner-run gap, not a blocker)", "tmux-herding-cockpit D1 (one herding.transport key selects the transport for the WHOLE cockpit)", "tmux-herding-cockpit D2 (the roles and bootstrap act on panes only through transport-neutral bee pane verbs)", "tmux-herding-cockpit D3 (the tmux mapping: session = workspace, window = tab, pane title = label, the bootstrap pane = chat)", "tmux-herding-cockpit D5 (the pane-verb pre-send guard fails open on an unreadable screen and always refuses a blocked one)", "herding-route-role D1 a685d557 (route is the fourth control-loop role; its finish signal is a finished worktree, read from role-merge.md's four conditions)", "herding-route-role D2 8388df3e (the named, scoped carve-out to agents-review-user-invoked: cockpit only, enable marker AND gate_bypass full/total, reviewer on a different herding.agents entry)", "herding-route-role D3 4a395ea7 (CHANGES becomes a cell in the finished feature's lane; a blocked reviewer stops routing cold; unclassifiable is reported and left)", "herding-route-role D4 (route may hand a CHANGES brief into the producing coder's still-open pane; it never starts a coder or creates a pane)", "slp-role-gaps D7 8a826f2f (a write worker with a frozen worktree fingerprint past herding.stall_after_secs reads stalled/no_diff_progress, one notice per stretch, observe-only)"]
+  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", docs/history/herding-orchestration/CONTEXT.md, docs/history/tmux-herding-cockpit/CONTEXT.md, docs/history/herding-route-role/CONTEXT.md, "docs/history/herding-route-role/plan.md (revision 2, rebuilt on a five-seat hat wave)", "herding-route-role cells hrr-1..hrr-8 (capped traces, 2026-09-08/09)"]
+  authoritative_for: "bee-herding: the four-role cockpit, its safety boundaries, and adoption"
   owns.code: [packages/bee-rs/crates/bee/src/herding.rs, "packages/bee-rs/crates/bee/src/herding/*", packages/bee-rs/crates/bee/src/herding/tmux.rs, packages/bee-rs/crates/fleet/src/backend/tmux.rs, packages/bee-rs/crates/fleet/src/screen.rs]
   owns.skills: ["skills/bee-herding/*"]
   owns.tests: [packages/bee-rs/crates/fleet/tests/choreography.rs, packages/bee-rs/crates/fleet/tests/herdr_backend.rs, packages/bee-rs/crates/fleet/tests/tmux_backend.rs, packages/bee-rs/crates/fleet/tests/manifest_boundary.rs]
 ---
 
-# Bee Herding — the three-role cockpit, its safety boundaries, and adoption
+# Bee Herding — the four-role cockpit, its safety boundaries, and adoption
 
 This page is the cockpit itself: who may act, what arms it, and what bounds it.
 The machinery it starts is documented beside it:
@@ -27,6 +27,8 @@ The machinery it starts is documented beside it:
 | [Handing a foreign agent its brief](handing-a-foreign-agent-its-brief.md) | The mailbox channel, the standalone-worker contract, and delivery receipts |
 | [The run verb and worker outcomes](the-run-verb-and-worker-outcomes.md) | The poll's signal ladder, the typed outcomes, and pane lifecycle |
 | [Waves and occupancy](waves-and-occupancy.md) | Fan-out over running workers, the ledger, and slot counting |
+| [The supervisor observer and its interventions](the-supervisor-observer-and-its-interventions.md) | The cold observer role, its one-record tick, and how an open question reaches a session |
+| [Presence, wake reports, and earned autonomy](presence-wake-reports-and-earned-autonomy.md) | The away/back mark, the single bounded report, health counters, and silence-is-consent |
 
 ## Entry Points & Triggers
 
@@ -43,6 +45,25 @@ The machinery it starts is documented beside it:
   role calls it — see [waves and occupancy](waves-and-occupancy.md).
 - **A herding run** is a fifth entry point that starts a worker rather than briefing one that
   already exists — see [the run verb and worker outcomes](the-run-verb-and-worker-outcomes.md).
+- **The supervisor** is a fourth role of the same control loop, and bootstrap does not start it.
+- **Route** is the control loop's fourth *cold* role beside dispatch, merge and supervisor
+  (herding-route-role D1). Its trigger is a **finished worktree** — the same four conditions the
+  merge role tests, read from that one home, never restated. It reads and announces on every
+  run; only inside the cockpit, and only while the owner's enable marker exists **and**
+  `gate_bypass` is `full` or `total`, may it start a reviewer — on a **different**
+  `herding.agents` entry than the one that produced the work (D2, the named carve-out to
+  `agents-review-user-invoked`). It writes `.bee/tmp/bee-herding.review.<slug>` before the
+  reviewer starts so merge stays off the worktree mid-review, maps every verdict onto the review
+  store's `approved|blocked`, turns CHANGES into a cell plus a brief handed to the coder's own
+  still-open pane (D3, D4), and stops cold on a blocked reviewer with a durable marker and a
+  `waiting-on` mark. It never merges, never picks a PBI, never starts a coder, never creates a
+  pane, never touches main. Its whole contract is `skills/bee-herding/references/route-prompt.md`.
+  The reviewer runs in a pane labelled `<slug>-review`; when the merge role lands that worktree
+  it closes this pane too, and a pane that is already gone is not an error (herding-route-role
+  hrr-7).
+  It is an OBSERVER: it reads, asks open questions, and reports, and it may never dispatch, merge,
+  approve, or write product code — see
+  [the supervisor observer and its interventions](the-supervisor-observer-and-its-interventions.md).
 
 ## Data Dictionary
 
@@ -146,6 +167,35 @@ form was a shell script that depended on GNU utilities and a modern shell, so it
 Windows at all. The one-shot cockpit setup is still a shell script and is a recorded gap
 (herding-orchestration D8).
 
+**A role's opening prompt is searched for, never assumed at one path.** Every role — dispatch,
+merge and supervisor — gets its prompt from `bee-herding/references/<role>-prompt.md`, but the
+root that file sits under depends on how bee arrived. The bee source repo carries the skill tree
+at `skills/`; every host project installs it under a runtime prefix instead. `read_prompt_file`
+therefore walks an ordered candidate list — `skills`, `.claude/skills`, `.agents/skills`,
+`.opencode/skills`, `.codex/skills` — and takes the first readable hit, with `skills` leading so
+the source repo resolves exactly as it always did. When no candidate reads, the error names every
+path tried. The single hardcoded `skills/` join this replaced is why the whole cockpit ran only
+inside the bee repo and died with "prompt file not found" in every host project.
+
+**A write worker whose worktree stops changing reads `stalled`, once per stretch
+(slp-role-gaps D7, store `8a826f2f`).** A worker can keep its activity fresh — reading file after
+file — and still make no progress. So for a job whose record does not say `read_only: true`, and
+whose status would otherwise be `working`, `bee herding status` takes a fingerprint of the job
+record's `cwd`: `git rev-parse HEAD` plus a SHA-256 of `git diff HEAD`. The record keeps
+`diff_fingerprint` and `diff_fingerprint_since`, and resets both when the fingerprint moves. When
+the fingerprint stays the same for longer than `herding.stall_after_secs` (default 900, a positive
+integer; anything else reads as the default), the status is `stalled` with
+`stall_reason: no_diff_progress`. The older activity stall writes `stall_reason: activity`, and
+status shows the reason beside a `stalled` word. On the move into a `no_diff_progress` stretch, one
+`progress` message goes to the job's messages file — `bee: stalled — no_diff_progress for <N>s;
+observe only, nothing was stopped; check with bee herding status` — so the leader sees it as an
+unread message. A change of reason starts a new stretch; a repeat read does not. The signal is
+computed only when status is read: no timer runs, so the notice lands on the first read past the
+window. It is observe-only — nothing is stopped, retried or archived — and `recovered` follows when
+the fingerprint moves. A git failure in `cwd` (or no `cwd`) leaves the status as it was. Both stall
+sites — the pane job's `compute_job_status` and the Paseo branch of the status list — call the one
+helper `stall_word` in `herding.rs`.
+
 ## Actors & Access
 
 - **The owner** performs three acts and only three: bootstrap once, set the enable marker to arm
@@ -217,10 +267,27 @@ Windows at all. The one-shot cockpit setup is still a shell script and is a reco
   description, never opening the feature's own context. Reading the real work is the honest form of
   the safety check and is not yet built — the interlock (R3) is the compensating control meanwhile.
 - **The supervised acceptance cycle (R7) is owner-run and outstanding** for this repo.
+- **The pi-herdr-agents 1.5.1 distill is a brief, not behavior.** Its dependency
+  matrix and ranked candidates live in
+  `docs/history/research/pi-herdr-agents-xia.md`
+  (8ab31189, written while 9f5c6d17 held — Pi dispatch stays herding-only —
+  so it carries design rules only; 9f5c6d17 is since superseded by `0d11a415`,
+  which gives Pi a native dispatch path beside herding, as amended by
+  `31fb9e15`). The candidates that survived shaping became herding-cockpit-completeness
+  D1–D8 — interrupted and cancelled outcomes, stalled/recovered, the retryable
+  bit, fail-closed cancel, the orphan sweep, the git handoff block, no automatic
+  behavior, the new-words list
+  (`docs/history/herding-cockpit-completeness/CONTEXT.md`)
+  and are stated in the concept files above. Agent fallback and review
+  discipline stayed parked as backlog proposals; the two research briefs
+  (pi-herdr-agents-xia, pi-workflows-xia) and the pi-beehive context are
+  history that cites 9f5c6d17 as written and is not rewritten — read those
+  citations as dated: `0d11a415` superseded 9f5c6d17 on 2026-09-18 and native
+  Pi dispatch is now the default.
 
 ## Pointers (implementation)
 
-- The skill and its three roles: `skills/bee-herding/SKILL.md`; the loop driver
+- The skill and its four roles: `skills/bee-herding/SKILL.md`; the loop driver
   `bee herding control-loop`
   (`packages/bee-rs/crates/bee/src/herding/control_loop.rs`); the one-shot
   `skills/bee-herding/scripts/bootstrap-cockpit.sh`.
@@ -235,7 +302,10 @@ Windows at all. The one-shot cockpit setup is still a shell script and is a reco
   gesture is their only live form (see Data Dictionary). `status` is live
   (`herding.rs`, the `"status"` arm): enable state plus transport
   `{ready, reason, pane_id, kind}`. Test coverage is inline:
-  the `#[cfg(test)] mod tests` block in `herding.rs`.
+  the `#[cfg(test)] mod tests` block in `herding.rs`. The stall reason and the worktree
+  fingerprint are `stall_word`, `diff_frozen_secs`, `worktree_fingerprint` and the
+  `stall_after_secs` knob reader in `herding.rs`; the notice goes through
+  `append_message` in `packages/bee-rs/crates/bee/src/herding/notify.rs`.
 - The transport-neutral pane verbs are
   `packages/bee-rs/crates/bee/src/herding/pane_verbs.rs`: a `CockpitTransport` trait on top of the
   run verb's `PaneTransport`, implemented for both `RealHerdr` and `RealTmux`, plus the envelope
@@ -245,3 +315,19 @@ Windows at all. The one-shot cockpit setup is still a shell script and is a reco
   [waves and occupancy](waves-and-occupancy.md) for why it lives there.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.
+- The herdr pane-transport craft — one-door delivery through `bee herding run`, ack/result-file
+  receipts, never a blind Enter into a stalled composer, and reading `herdr-result`'s response as
+  the wrapped envelope `{ok, transport, result: {...}}` rather than a bare `result-N.json` (piping
+  the mailbox file straight in fails with "herdr response missing result.status" — unwrap first) —
+  is a dedicated skill, `skills/bee-herdr/SKILL.md`, built RED-first with its baselines recorded in
+  `docs/history/herdr-skill/CREATION-LOG.md`.
+
+## Patterns in this area
+
+- [A symmetric probe value cannot tell two opposite readings of a parameter apart](../../patterns/20260821-a-symmetric-probe-value-cannot-tell-two-opposite-readings-apart.md) — A share parameter was only ever exercised at 0.5, where "the share the parent keeps" and "the share the child gets" produce identical output, so the reading was assumed — and the assumption was backwards
+- [An allowlist that names a client grants every subcommand it has](../../patterns/20260828-an-allowlist-that-names-a-client-grants-every-subcommand-it-has.md) — An allowlist that names a client grants every subcommand it has
+- [bee herding run completes the worker but drops the gather digest when transport is not ready](../../patterns/20260829-herding-run-loses-its-gather-digest-when-transport-is-not-ready.md) — bee herding run --task-file - dispatched from a session with transport_ready=false completes the worker but returns ONLY the job-summary JSON — the gather digest dies with the closed pane
+- [A test that inherits the session's HERDR env can block on a real socket outside CI](../../patterns/20260830-a-test-inheriting-the-session-s-herdr-env-hangs-outside-ci.md) — hooks::tests::without_the_marker_the_same_invocation_reaches_dispatch inherited the session's HERDR_ENV/HERDR_SOCKET_PATH and blocked reading the real herdr socket, hanging a release test run for 45 minutes; CI has no HERDR env so it passes there
+- [Split automation where an action becomes irreversible — automate the recoverable half, keep the irreversible half a human gesture](../../patterns/20260723-split-automation-where-an-action-becomes-irreversible.md) — When automation both produces work and lands it, the two halves have different blast radii. Autonomy should track blast radius, not convenience.
+- [A listing verb aimed at one item can answer for its whole container](../../patterns/20260823-a-listing-verb-aimed-at-one-item-answers-for-its-container.md) — tmux's list-panes -t <pane> lists every pane in that pane's WINDOW, not the one pane named; a caller that trusts 'one row back' silently reads a sibling's row. Any query-by-target API can have this shape — a target that is also a member of a container may select the container. Filter the answer by the target's own id, never by position.
+- [A settling window rebuilt inside each call never closes when the caller polls in bursts shorter than the window](../../patterns/20260823-a-settling-window-rebuilt-per-call-never-closes.md) — A 'screen is quiet' window of six seconds was rebuilt from zero on every agent_wait call while the caller polled in 200 ms bursts, so the window could never fill and the ready gate burned its full 60 s ceiling on a pane that had been idle from the start. State that must accumulate across calls lives on the long-lived object (per pane), not in the call frame. A unit test per call shipped green; only a poller-shaped test shows the hang.

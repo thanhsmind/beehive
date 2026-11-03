@@ -236,10 +236,46 @@ pub(crate) fn clear_failure_log(log_root: &Path, runner: &str, index: usize) {
     remove_file_if_exists(&log_root.join(failure_log_relative(runner, index)));
 }
 
+pub(crate) fn retry_executable_busy<T>(mut spawn: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut attempt = 1;
+    loop {
+        match spawn() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy && attempt < 10 => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            result => return result,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn retry_executable_busy_retries_only_busy() {
+        let mut calls = 0;
+        let got = retry_executable_busy(|| {
+            calls += 1;
+            if calls < 3 {
+                Err(std::io::ErrorKind::ExecutableFileBusy.into())
+            } else {
+                Ok(calls)
+            }
+        });
+        assert_eq!(got.unwrap(), 3);
+        assert_eq!(calls, 3);
+
+        let mut calls = 0;
+        let got: std::io::Result<()> = retry_executable_busy(|| {
+            calls += 1;
+            Err(std::io::ErrorKind::NotFound.into())
+        });
+        assert_eq!(got.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+        assert_eq!(calls, 1);
+    }
 
     #[test]
     fn atomic_write_matches_node_byte_shape() {

@@ -15,6 +15,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 use std::process::ExitCode;
 use std::time::Instant;
+use crate::session_identity::{locate_caller, read_caller_session_cwd, CallerSession};
 
 // ─── worktree new / merge ─────────────────────────────────────────────────
 
@@ -32,6 +33,683 @@ pub(crate) fn bool_flag_true(flags: &Flags, name: &str) -> bool {
         Some(FlagV::S(s)) => s == "true",
         None => false,
     }
+}
+
+pub(crate) fn canonical_path_str(path: &Path) -> Result<String, String> {
+    dunce::canonicalize(path)
+        .map(|c| c.to_string_lossy().into_owned())
+        .map_err(|e| format!("cannot canonicalize path {}: {}", path.display(), e))
+}
+
+pub(crate) fn build_session_transition_with_session_id(
+    operation: &str,
+    source_cwd: &Path,
+    target_cwd: &Path,
+    worktree_id: &str,
+    feature: Option<&str>,
+    continuation: Option<Value>,
+    pi_session_id: Option<&str>,
+) -> Result<Value, String> {
+    let source_canon = canonical_path_str(source_cwd)?;
+    let target_canon = canonical_path_str(target_cwd)?;
+    Ok(json!({
+        "schemaVersion": 1,
+        "operation": operation,
+        "sourceCwd": source_canon,
+        "targetCwd": target_canon,
+        "worktreeId": worktree_id,
+        "feature": feature.map_or(Value::Null, |f| json!(f)),
+        "piSessionId": pi_session_id.map_or(Value::Null, |id| json!(id)),
+        "continuation": continuation.unwrap_or(Value::Null),
+    }))
+}
+
+pub(crate) fn build_session_transition(
+    operation: &str,
+    source_cwd: &Path,
+    target_cwd: &Path,
+    worktree_id: &str,
+    feature: Option<&str>,
+    continuation: Option<Value>,
+) -> Result<Value, String> {
+    let pi_session_id = std::env::var("PI_SESSION_ID")
+        .ok()
+        .filter(|s| !s.is_empty());
+    build_session_transition_with_session_id(
+        operation,
+        source_cwd,
+        target_cwd,
+        worktree_id,
+        feature,
+        continuation,
+        pi_session_id.as_deref(),
+    )
+}
+
+pub(crate) fn build_merge_continuation(
+    no_cleanup: bool,
+    skip_uat: bool,
+    queue_wait_ms: Option<f64>,
+) -> Value {
+    let queue_wait_val = match queue_wait_ms {
+        Some(ms) => {
+            if ms.fract() == 0.0 && ms >= 0.0 && ms <= (u64::MAX as f64) {
+                json!(ms as u64)
+            } else {
+                json!(ms)
+            }
+        }
+        None => Value::Null,
+    };
+    json!({
+        "operation": "merge-worktree",
+        "noCleanup": no_cleanup,
+        "skipUat": skip_uat,
+        "queueWaitMs": queue_wait_val,
+    })
+}
+
+pub(crate) fn format_pi_transition_marker(transition: &Value) -> Option<String> {
+    if transition.get("piSessionId").and_then(|v| v.as_str()).is_some() {
+        serde_json::to_string(transition)
+            .ok()
+            .map(|s| format!("@@BEE_SESSION_TRANSITION@@ {s}"))
+    } else {
+        None
+    }
+}
+
+pub(crate) fn emit_pi_transition_marker_if_present(transition: &Value) {
+    if let Some(marker) = format_pi_transition_marker(transition) {
+        eprintln!("{marker}");
+    }
+}
+
+pub(crate) fn build_instruction_for_runtime(
+    runtime: Option<&str>,
+    operation: &str,
+    target: &str,
+    worktree_id: Option<&str>,
+) -> String {
+    match runtime {
+        Some("pi") => format!("Pi moves this session to {target} when this turn settles."),
+        Some("claude") => match operation {
+            "enter-worktree" => format!("Call EnterWorktree with path={target}."),
+            "exit-worktree" => "Call ExitWorktree with action=keep.".to_string(),
+            "exit-worktree-before-merge" => {
+                let id = worktree_id.unwrap_or_default();
+                format!("Call ExitWorktree with action=keep, then run bee worktree merge --id {id} from {target}.")
+            }
+            _ => format!("Open a session at {target}."),
+        },
+        Some("codex") => format!("Ask the user to type /cd {target}, then send any message to continue."),
+        Some("opencode") => format!("Ask the user to type /move {target}, then send any message to continue."),
+        _ => format!("Open a session at {target}."),
+    }
+}
+
+pub(crate) fn build_instruction(
+    caller: Option<&CallerSession>,
+    operation: &str,
+    target: &str,
+    worktree_id: Option<&str>,
+) -> String {
+    build_instruction_for_runtime(caller.map(|c| c.runtime.as_str()), operation, target, worktree_id)
+}
+
+pub(crate) fn enter_worktree_core(
+    control_root: &Path,
+    source_root: &Path,
+    id: &str,
+    caller: Option<&CallerSession>,
+) -> Result<(Value, String), String> {
+    let control_canon = dunce::canonicalize(control_root)
+        .map_err(|e| format!("cannot canonicalize control root {}: {}", control_root.display(), e))?;
+    let source_canon = dunce::canonicalize(source_root)
+        .map_err(|e| format!("cannot canonicalize source root {}: {}", source_root.display(), e))?;
+
+    let grants = read_grants_strict(&control_canon.join(".bee"))
+        .ok_or_else(|| "cannot read worktree grants".to_string())?;
+    if grants.get(id) != Some(&Value::Bool(true)) {
+        return Err(format!(
+            "no granted worktree found for id \"{id}\". Run \"bee worktree list\" to see granted worktrees."
+        ));
+    }
+    let target_root = resolve_worktree_by_id(&control_canon, id).ok_or_else(|| {
+        format!(
+            "no matching, bidirectionally-valid git worktree link was found for id \"{id}\"."
+        )
+    })?;
+
+    if crate::path_identity::canonical_paths_equal(&target_root, &source_canon) {
+        return Err(format!(
+            "cannot enter worktree \"{id}\": target directory is identical to source directory"
+        ));
+    }
+
+    let feature_info = resolve_worktree_feature(&target_root);
+    let feature = feature_info.feature;
+    let transition = build_session_transition(
+        "enter-worktree",
+        &source_canon,
+        &target_root,
+        id,
+        feature.as_deref(),
+        None,
+    )?;
+    let mut result = Map::new();
+    result.insert("ok".into(), json!(true));
+    result.insert("id".into(), json!(id));
+    result.insert("worktreeRoot".into(), json!(p(&target_root)));
+    if let Some(ref f) = feature {
+        result.insert("feature".into(), json!(f));
+    }
+    result.insert("sessionTransition".into(), transition);
+    result.insert(
+        "sessionRuntime".into(),
+        caller.map_or(Value::Null, |c| json!(c.runtime)),
+    );
+    let instruction = build_instruction(
+        caller,
+        "enter-worktree",
+        &p(&target_root),
+        Some(id),
+    );
+    result.insert("instruction".into(), json!(&instruction));
+
+    let stay_desc = if crate::path_identity::canonical_paths_equal(&source_canon, &control_canon) {
+        "this session stays on main until relocated."
+    } else {
+        "this session stays in the worktree until relocated."
+    };
+    let text = format!(
+        "Session transition intent emitted for worktree \"{id}\" (feature: \"{}\"): target at {}.\nOpen next session with cwd={} — {stay_desc}\n{instruction}",
+        feature.as_deref().unwrap_or(id),
+        p(&target_root),
+        p(&target_root)
+    );
+    Ok((Value::Object(result), text))
+}
+
+pub(crate) fn run_enter(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !crate::verbs::reservations::keys_known(&flags, &["id"]) {
+        return None;
+    }
+    let id = match flags.get("id") {
+        Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
+        _ => return None,
+    };
+    let ctx = match prelude("worktree enter", use_json, t0)? {
+        Pre::Go(c) => c,
+        Pre::Emitted(code) => return Some(code),
+    };
+    let (control_root, source_root) = match ctx.kind {
+        "ordinary" => (ctx.work_root.clone(), ctx.work_root.clone()),
+        "linked-valid" => {
+            let main_root = match ctx.main_root.as_deref() {
+                Some(r) => r.to_path_buf(),
+                None => return Some(ctx.fail("Cannot resolve main checkout root")),
+            };
+            (main_root, ctx.work_root.clone())
+        }
+        _ => {
+            return Some(ctx.fail(&format!(
+                "\"bee worktree enter\" must be run from inside the main checkout or a linked worktree, not a \"{}\" checkout — run it from a granted repository root to switch to a worktree.",
+                ctx.kind
+            )));
+        }
+    };
+    let caller = locate_caller();
+    match enter_worktree_core(&control_root, &source_root, &id, caller.as_ref()) {
+        Ok((result, text)) => {
+            if let Some(transition) = result.get("sessionTransition") {
+                emit_pi_transition_marker_if_present(transition);
+            }
+            Some(ctx.emit(&result, &text))
+        }
+        Err(err) => Some(ctx.fail(&err)),
+    }
+}
+
+pub(crate) fn maybe_record_waiting_on(
+    main_root: &Path,
+    feature: Option<&str>,
+    target_path: &Path,
+    caller: Option<&CallerSession>,
+) {
+    let Some(caller) = caller else { return };
+    if caller.runtime != "codex" && caller.runtime != "opencode" {
+        return;
+    }
+    let subject = p(target_path);
+
+    let workflows = match crate::verbs::workflow_store::list_workflows(main_root) {
+        Ok(wfs) => wfs,
+        Err(_) => {
+            eprintln!("warning: cannot list workflows to record waiting-on question for session {}", caller.id);
+            return;
+        }
+    };
+
+    let wf_opt = feature
+        .and_then(|f| crate::verbs::workflow_store::find_live_workflow(&workflows, f));
+
+    let wf_id = match wf_opt {
+        Some(wf) => crate::verbs::workflow_store::wf_id(wf),
+        None => {
+            match crate::verbs::state_group::resolve_waiting_on_target(
+                main_root,
+                "worktree",
+                None,
+                false,
+                Some(&caller.id),
+            ) {
+                Ok(Some((id, _))) => id,
+                _ => {
+                    eprintln!("warning: cannot record waiting-on question for session {}: no live workflow found", caller.id);
+                    return;
+                }
+            }
+        }
+    };
+
+    if let Err(e) = crate::verbs::workflow_store::set_workflow_waiting_on(
+        main_root,
+        &wf_id,
+        "question",
+        &subject,
+        &caller.id,
+    ) {
+        eprintln!("warning: cannot record waiting-on question for session {}: {:?}", caller.id, e);
+    } else {
+        if let Some(f) = feature {
+            let _ = crate::verbs::workflow_store::rebuild_lane_projection(main_root, f);
+        }
+        let _ = crate::verbs::workflow_store::rebuild_state_projection(main_root);
+    }
+}
+
+pub(crate) fn linked_worktree_exit_core(
+    worktree_root: &Path,
+    current_id: &str,
+    main_root: &Path,
+    passed_id: Option<&str>,
+    caller: Option<&CallerSession>,
+) -> Result<(Value, String), String> {
+    if let Some(pid) = passed_id {
+        if pid != current_id {
+            return Err(format!(
+                "cannot exit worktree \"{pid}\" from inside worktree \"{current_id}\" — omit --id to exit the active worktree, or run from the main checkout"
+            ));
+        }
+    }
+    let grants = read_grants_strict(&main_root.join(".bee"))
+        .ok_or_else(|| "cannot read worktree grants".to_string())?;
+    if grants.get(current_id) != Some(&Value::Bool(true)) {
+        return Err(format!(
+            "no granted worktree found for id \"{current_id}\". Run \"bee worktree list\" from the main checkout to see granted worktrees."
+        ));
+    }
+    if resolve_worktree_by_id(main_root, current_id).is_none() {
+        return Err(format!(
+            "no granted worktree found for id \"{current_id}\". Run \"bee worktree list\" from the main checkout to see granted worktrees."
+        ));
+    }
+
+    let feature_info = resolve_worktree_feature(worktree_root);
+    let feature = feature_info.feature;
+    let transition = build_session_transition(
+        "exit-worktree",
+        worktree_root,
+        main_root,
+        current_id,
+        feature.as_deref(),
+        None,
+    )?;
+
+    maybe_record_waiting_on(main_root, feature.as_deref(), main_root, caller);
+
+    let mut result = Map::new();
+    result.insert("ok".into(), json!(true));
+    result.insert("id".into(), json!(current_id));
+    result.insert("worktreeRoot".into(), json!(p(worktree_root)));
+    result.insert("mainRoot".into(), json!(p(main_root)));
+    if let Some(ref f) = feature {
+        result.insert("feature".into(), json!(f));
+    }
+    result.insert("sessionTransition".into(), transition);
+    result.insert(
+        "sessionRuntime".into(),
+        caller.map_or(Value::Null, |c| json!(c.runtime)),
+    );
+    let instruction = build_instruction(
+        caller,
+        "exit-worktree",
+        &p(main_root),
+        Some(current_id),
+    );
+    result.insert("instruction".into(), json!(&instruction));
+
+    let text = format!(
+        "Session transition intent emitted for worktree \"{current_id}\" (feature: \"{}\"): return to main checkout at {}.\nSwitch session to cwd={} — this session stays in the worktree until relocated.\n{instruction}",
+        feature.as_deref().unwrap_or(current_id),
+        p(main_root),
+        p(main_root)
+    );
+    Ok((Value::Object(result), text))
+}
+
+pub(crate) fn main_checkout_worktree_exit_core(
+    main_root: &Path,
+    id: &str,
+    caller: Option<&CallerSession>,
+) -> Result<(Value, String), String> {
+    let grants = read_grants_strict(&main_root.join(".bee"))
+        .ok_or_else(|| "cannot read worktree grants".to_string())?;
+    if grants.get(id) != Some(&Value::Bool(true)) {
+        return Err(format!(
+            "no granted worktree found for id \"{id}\". Run \"bee worktree list\" from the main checkout to see granted worktrees."
+        ));
+    }
+    let target_root = resolve_worktree_by_id(main_root, id).ok_or_else(|| {
+        format!("no granted worktree found for id \"{id}\". Run \"bee worktree list\" from the main checkout to see granted worktrees.")
+    })?;
+
+    let caller_sess = caller.ok_or_else(|| {
+        format!("no calling session sits in worktree \"{id}\"")
+    })?;
+    let caller_cwd_str = read_caller_session_cwd(main_root, &caller_sess.id).ok_or_else(|| {
+        format!("no calling session sits in worktree \"{id}\"")
+    })?;
+    let caller_cwd_path = Path::new(&caller_cwd_str);
+    let caller_canon = dunce::canonicalize(caller_cwd_path)
+        .map_err(|e| format!("cannot canonicalize caller cwd {}: {}", caller_cwd_path.display(), e))?;
+    let target_canon = dunce::canonicalize(&target_root)
+        .map_err(|e| format!("cannot canonicalize worktree root {}: {}", target_root.display(), e))?;
+    if !caller_canon.starts_with(&target_canon) {
+        return Err(format!("no calling session sits in worktree \"{id}\""));
+    }
+
+    let feature_info = resolve_worktree_feature(&target_root);
+    let feature = feature_info.feature;
+    let transition = build_session_transition(
+        "exit-worktree",
+        &caller_canon,
+        main_root,
+        id,
+        feature.as_deref(),
+        None,
+    )?;
+
+    maybe_record_waiting_on(main_root, feature.as_deref(), main_root, Some(caller_sess));
+
+    let mut result = Map::new();
+    result.insert("ok".into(), json!(true));
+    result.insert("id".into(), json!(id));
+    result.insert("worktreeRoot".into(), json!(p(&target_canon)));
+    result.insert("mainRoot".into(), json!(p(main_root)));
+    if let Some(ref f) = feature {
+        result.insert("feature".into(), json!(f));
+    }
+    result.insert("sessionTransition".into(), transition);
+    result.insert("sessionRuntime".into(), json!(caller_sess.runtime));
+    let instruction = build_instruction(
+        Some(caller_sess),
+        "exit-worktree",
+        &p(main_root),
+        Some(id),
+    );
+    result.insert("instruction".into(), json!(&instruction));
+
+    let text = format!(
+        "Session transition intent emitted for worktree \"{id}\" (feature: \"{}\"): return to main checkout at {}.\nSwitch session to cwd={} — this session stays in the worktree until relocated.\n{instruction}",
+        feature.as_deref().unwrap_or(id),
+        p(main_root),
+        p(main_root)
+    );
+    Ok((Value::Object(result), text))
+}
+
+pub(crate) fn exit_worktree_core(
+    control_root: &Path,
+    source_root: &Path,
+    passed_id: Option<&str>,
+    current_id: Option<&str>,
+    caller: Option<&CallerSession>,
+) -> Result<(Value, String), String> {
+    let control_canon = dunce::canonicalize(control_root)
+        .map_err(|e| format!("cannot canonicalize control root {}: {}", control_root.display(), e))?;
+    let source_canon = dunce::canonicalize(source_root)
+        .map_err(|e| format!("cannot canonicalize source root {}: {}", source_root.display(), e))?;
+
+    let is_main = crate::path_identity::canonical_paths_equal(&source_canon, &control_canon);
+    if is_main {
+        let id = match passed_id {
+            Some(id) if !id.is_empty() => id,
+            _ => {
+                return Err(
+                    "\"bee worktree exit\" requires --id <worktree-id> when run from the main checkout. Run \"bee worktree list\" to see granted worktrees."
+                        .to_string(),
+                );
+            }
+        };
+        main_checkout_worktree_exit_core(&control_canon, id, caller)
+    } else {
+        let auto_id;
+        let cid = match current_id {
+            Some(id) => id,
+            None => {
+                if let Ok(rev_raw) = std::fs::read_to_string(source_canon.join(".git")) {
+                    if let Some(pointer) = parse_gitdir_pointer(js_trim(&rev_raw)) {
+                        let p_git = Path::new(pointer);
+                        if let Some(name) = p_git.file_name().and_then(|n| n.to_str()) {
+                            auto_id = name.to_string();
+                            &auto_id
+                        } else {
+                            return Err("Worktree has no git-verified id".to_string());
+                        }
+                    } else {
+                        return Err("Worktree has no git-verified id".to_string());
+                    }
+                } else {
+                    return Err("Worktree has no git-verified id".to_string());
+                }
+            }
+        };
+        linked_worktree_exit_core(&source_canon, cid, &control_canon, passed_id, caller)
+    }
+}
+
+pub(crate) fn run_exit_with_caller(
+    flags: Flags,
+    use_json: bool,
+    t0: Instant,
+    caller: Option<&CallerSession>,
+) -> Option<ExitCode> {
+    if !crate::verbs::reservations::keys_known(&flags, &["id"]) {
+        return None;
+    }
+    let passed_id = match flags.get("id") {
+        Some(FlagV::S(s)) if !s.is_empty() => Some(s.clone()),
+        Some(_) => return None,
+        None => None,
+    };
+    let ctx = match prelude("worktree exit", use_json, t0)? {
+        Pre::Go(c) => c,
+        Pre::Emitted(code) => return Some(code),
+    };
+    let (control_root, source_root) = match ctx.kind {
+        "ordinary" => (ctx.work_root.clone(), ctx.work_root.clone()),
+        "linked-valid" => {
+            let main_root = match ctx.main_root.as_deref() {
+                Some(r) => r.to_path_buf(),
+                None => return Some(ctx.fail("Cannot resolve main checkout root")),
+            };
+            (main_root, ctx.work_root.clone())
+        }
+        _ => {
+            return Some(ctx.fail(&format!(
+                "\"bee worktree exit\" must be run from inside the main checkout or a linked worktree, not a \"{}\" checkout.",
+                ctx.kind
+            )));
+        }
+    };
+    match exit_worktree_core(
+        &control_root,
+        &source_root,
+        passed_id.as_deref(),
+        ctx.id.as_deref(),
+        caller,
+    ) {
+        Ok((result, text)) => {
+            if let Some(transition) = result.get("sessionTransition") {
+                emit_pi_transition_marker_if_present(transition);
+            }
+            Some(ctx.emit(&result, &text))
+        }
+        Err(err) => Some(ctx.fail(&err)),
+    }
+}
+
+pub(crate) fn run_exit(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    let caller = locate_caller();
+    run_exit_with_caller(flags, use_json, t0, caller.as_ref())
+}
+
+pub(crate) fn linked_worktree_merge_core(
+    worktree_root: &Path,
+    current_id: &str,
+    main_root: &Path,
+    passed_id: Option<&str>,
+    no_cleanup: bool,
+    skip_uat: bool,
+    queue_wait_ms: Option<f64>,
+    caller: Option<&CallerSession>,
+) -> Result<(Value, String), String> {
+    if let Some(pid) = passed_id {
+        if pid != current_id {
+            return Err(format!(
+                "cannot merge worktree \"{pid}\" from inside worktree \"{current_id}\" — omit --id to merge the active worktree, or run from the main checkout"
+            ));
+        }
+    }
+    let grants = read_grants_strict(&main_root.join(".bee"))
+        .ok_or_else(|| "cannot read worktree grants".to_string())?;
+    if grants.get(current_id) != Some(&Value::Bool(true)) {
+        return Err(format!(
+            "no granted worktree found for id \"{current_id}\". Run \"bee worktree list\" from the main checkout to see granted worktrees."
+        ));
+    }
+
+    let feature_info = resolve_worktree_feature(worktree_root);
+    let feature = feature_info.feature;
+    let continuation = build_merge_continuation(no_cleanup, skip_uat, queue_wait_ms);
+    let transition = build_session_transition(
+        "exit-worktree-before-merge",
+        worktree_root,
+        main_root,
+        current_id,
+        feature.as_deref(),
+        Some(continuation),
+    )?;
+
+    let mut result = Map::new();
+    result.insert("ok".into(), json!(true));
+    result.insert("id".into(), json!(current_id));
+    result.insert("worktreeRoot".into(), json!(p(worktree_root)));
+    result.insert("mainRoot".into(), json!(p(main_root)));
+    if let Some(ref f) = feature {
+        result.insert("feature".into(), json!(f));
+    }
+    result.insert("sessionTransition".into(), transition);
+    result.insert(
+        "sessionRuntime".into(),
+        caller.map_or(Value::Null, |c| json!(c.runtime)),
+    );
+    let instruction = build_instruction(
+        caller,
+        "exit-worktree-before-merge",
+        &p(main_root),
+        Some(current_id),
+    );
+    result.insert("instruction".into(), json!(&instruction));
+
+    let text = format!(
+        "Session transition intent emitted for worktree \"{current_id}\" (feature: \"{}\"): return to main checkout at {}.\nSwitch session to cwd={} to run merge — this session stays in the worktree until relocated.\n{instruction}",
+        feature.as_deref().unwrap_or(current_id),
+        p(main_root),
+        p(main_root)
+    );
+    Ok((Value::Object(result), text))
+}
+
+pub(crate) fn check_merge_exit_before_merge(
+    main_root: &Path,
+    id: &str,
+    no_cleanup: bool,
+    skip_uat: bool,
+    queue_wait_ms: Option<f64>,
+    caller: Option<&CallerSession>,
+) -> Result<Option<(Value, String)>, String> {
+    let Some(caller_sess) = caller else {
+        return Ok(None);
+    };
+    let caller_cwd_str = match read_caller_session_cwd(main_root, &caller_sess.id) {
+        Some(cwd) => cwd,
+        None => return Ok(None),
+    };
+    let target_root = match resolve_worktree_by_id(main_root, id) {
+        Some(r) => r,
+        None => return Ok(None),
+    };
+    let caller_cwd_path = Path::new(&caller_cwd_str);
+    let caller_canon = dunce::canonicalize(caller_cwd_path)
+        .map_err(|e| format!("cannot canonicalize caller cwd {}: {}", caller_cwd_path.display(), e))?;
+    let target_canon = dunce::canonicalize(&target_root)
+        .map_err(|e| format!("cannot canonicalize target root {}: {}", target_root.display(), e))?;
+    if !caller_canon.starts_with(&target_canon) {
+        return Ok(None);
+    }
+
+    let continuation = build_merge_continuation(no_cleanup, skip_uat, queue_wait_ms);
+    let feature_info = resolve_worktree_feature(&target_root);
+    let feature = feature_info.feature;
+    let transition = build_session_transition(
+        "exit-worktree-before-merge",
+        &caller_canon,
+        main_root,
+        id,
+        feature.as_deref(),
+        Some(continuation),
+    )?;
+
+    maybe_record_waiting_on(main_root, feature.as_deref(), main_root, Some(caller_sess));
+
+    let mut result = Map::new();
+    result.insert("ok".into(), json!(true));
+    result.insert("id".into(), json!(id));
+    result.insert("worktreeRoot".into(), json!(p(&target_canon)));
+    result.insert("mainRoot".into(), json!(p(main_root)));
+    if let Some(ref f) = feature {
+        result.insert("feature".into(), json!(f));
+    }
+    result.insert("sessionTransition".into(), transition);
+    result.insert("sessionRuntime".into(), json!(caller_sess.runtime));
+    let instruction = build_instruction(
+        Some(caller_sess),
+        "exit-worktree-before-merge",
+        &p(main_root),
+        Some(id),
+    );
+    result.insert("instruction".into(), json!(&instruction));
+
+    let text = format!(
+        "Session transition intent emitted for worktree \"{id}\" (feature: \"{}\"): return to main checkout at {}.\nSwitch session to cwd={} to run merge — this session stays in the worktree until relocated.\nThe merge did NOT run yet.\n{instruction}",
+        feature.as_deref().unwrap_or(id),
+        p(main_root),
+        p(main_root)
+    );
+    Ok(Some((Value::Object(result), text)))
 }
 
 pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -161,8 +839,53 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         p(&created.worktree_root),
         created.id
     );
-    let (result, text) = new_result_and_text(&feature, &created, &next_step);
+    let caller = locate_caller();
+    let (result, text) = match new_worktree_transition_result_and_text(
+        &feature,
+        &created,
+        &next_step,
+        &main_root,
+        caller.as_ref(),
+    ) {
+        Ok(pair) => pair,
+        Err(err) => return Some(ctx.fail(&err)),
+    };
+    if let Some(transition) = result.get("sessionTransition") {
+        emit_pi_transition_marker_if_present(transition);
+    }
     Some(ctx.emit(&Value::Object(result), &text))
+}
+
+pub(crate) fn new_worktree_transition_result_and_text(
+    feature: &str,
+    created: &Created,
+    next_step: &str,
+    main_root: &Path,
+    caller: Option<&CallerSession>,
+) -> Result<(Map<String, Value>, String), String> {
+    let (mut result, text) = new_result_and_text(feature, created, next_step);
+    let transition = build_session_transition(
+        "enter-worktree",
+        main_root,
+        &created.worktree_root,
+        &created.id,
+        Some(feature),
+        None,
+    )?;
+    result.insert("sessionTransition".into(), transition);
+    result.insert(
+        "sessionRuntime".into(),
+        caller.map_or(Value::Null, |c| json!(c.runtime)),
+    );
+    let instruction = build_instruction(
+        caller,
+        "enter-worktree",
+        &p(&created.worktree_root),
+        Some(&created.id),
+    );
+    result.insert("instruction".into(), json!(instruction));
+    let text = format!("{text}\n{instruction}");
+    Ok((result, text))
 }
 
 /// bee.mjs handleWorktreeNew's result/text, split out the same way
@@ -198,6 +921,9 @@ pub(crate) fn new_result_and_text(feature: &str, created: &Created, next_step: &
     // can hit the exact same symlinked-path refusal.
     if let Some(sync) = created.bootstrap.get("cellsSync") {
         result.insert("cellsSync".into(), sync.clone());
+    }
+    if let Some(paseo) = &created.paseo_workspace {
+        result.insert("paseoWorkspace".into(), paseo.clone());
     }
     result.insert("next_step".into(), json!(next_step));
 
@@ -270,6 +996,15 @@ pub(crate) fn new_result_and_text(feature: &str, created: &Created, next_step: &
             field("mountPath"),
             field("worktreePath")
         ));
+    }
+    if let Some(paseo) = &created.paseo_workspace {
+        match (paseo.get("id").and_then(Value::as_str), paseo.get("error")) {
+            (Some(id), _) => lines.push(format!("  paseo:       workspace {id}")),
+            (None, error) => lines.push(format!(
+                "  paseo:       workspace not registered — {}",
+                error.map(jsjson::js_to_string).unwrap_or_default()
+            )),
+        }
     }
     lines.push(next_step.to_string());
     let text = lines.join("\n");
@@ -437,9 +1172,26 @@ pub(crate) fn resolve_cleanup_on_merge(
 }
 
 pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    let caller = locate_caller();
+    run_merge_with_caller(flags, use_json, t0, caller.as_ref())
+}
+
+pub(crate) fn run_merge_with_caller(
+    flags: Flags,
+    use_json: bool,
+    t0: Instant,
+    caller: Option<&CallerSession>,
+) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
-        &["id", "cleanup", "no-cleanup", "queue-wait-ms", "skip-uat"],
+        &[
+            "id",
+            "cleanup",
+            "no-cleanup",
+            "queue-wait-ms",
+            "skip-uat",
+            "detached",
+        ],
     ) {
         return None;
     }
@@ -462,6 +1214,11 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     // `no-cleanup` — a non-boolean value refuses outright rather than
     // silently reading as either outcome.
     if !bool_flag_ok(&flags, "skip-uat") {
+        return None;
+    }
+    // `--detached` (hwr-2 D2): opt out of exit-before-merge detection when
+    // merging from the main checkout. Validated fail-closed like `no-cleanup`.
+    if !bool_flag_ok(&flags, "detached") {
         return None;
     }
     // `--queue-wait-ms`: a registry `type:"number"` flag. validate() runs
@@ -489,25 +1246,94 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
             }
         }
     }
-    let id = match flags.get("id") {
-        Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
-        _ => return None,
+    let passed_id = match flags.get("id") {
+        Some(FlagV::S(s)) if !s.is_empty() => Some(s.clone()),
+        Some(_) => return None,
+        None => None,
     };
     let cleanup_flag = bool_flag_true(&flags, "cleanup");
     let no_cleanup_flag = bool_flag_true(&flags, "no-cleanup");
     let skip_uat_flag = bool_flag_true(&flags, "skip-uat");
+    let detached_flag = bool_flag_true(&flags, "detached");
 
     let ctx = match prelude("worktree merge", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
+    if ctx.kind == "linked-valid" {
+        let worktree_root = ctx.work_root.clone();
+        let current_id = match ctx.id.as_deref() {
+            Some(id) => id,
+            None => return Some(ctx.fail("Worktree has no git-verified id")),
+        };
+        let main_root = match ctx.main_root.as_deref() {
+            Some(r) => r,
+            None => return Some(ctx.fail("Cannot resolve main checkout root")),
+        };
+        let queue_wait_opt = if flags.get("queue-wait-ms").is_some() {
+            Some(queue_wait_bound_ms)
+        } else {
+            None
+        };
+        match linked_worktree_merge_core(
+            &worktree_root,
+            current_id,
+            main_root,
+            passed_id.as_deref(),
+            no_cleanup_flag,
+            skip_uat_flag,
+            queue_wait_opt,
+            caller,
+        ) {
+            Ok((result, text)) => {
+                if let Some(transition) = result.get("sessionTransition") {
+                    emit_pi_transition_marker_if_present(transition);
+                }
+                return Some(ctx.emit(&result, &text));
+            }
+            Err(err) => return Some(ctx.fail(&err)),
+        }
+    }
     if ctx.kind != "ordinary" {
         return Some(ctx.fail(&format!(
             "\"bee worktree merge\" must be run from inside the main checkout, not a \"{}\" checkout — a worktree, including the one being merged, cannot merge itself.",
             ctx.kind
         )));
     }
+    let id = match passed_id {
+        Some(id) => id,
+        None => {
+            return Some(ctx.fail(
+                "\"bee worktree merge\" requires --id <worktree-id> when run from the main checkout. Run \"bee worktree list\" to see granted worktrees."
+            ));
+        }
+    };
     let main_root = ctx.work_root.clone();
+
+    if !detached_flag {
+        let queue_wait_opt = if flags.get("queue-wait-ms").is_some() {
+            Some(queue_wait_bound_ms)
+        } else {
+            None
+        };
+        match check_merge_exit_before_merge(
+            &main_root,
+            &id,
+            no_cleanup_flag,
+            skip_uat_flag,
+            queue_wait_opt,
+            caller,
+        ) {
+            Ok(Some((result, text))) => {
+                if let Some(transition) = result.get("sessionTransition") {
+                    emit_pi_transition_marker_if_present(transition);
+                }
+                return Some(ctx.emit(&result, &text));
+            }
+            Ok(None) => {}
+            Err(err) => return Some(ctx.fail(&err)),
+        }
+    }
 
     // wkm-1 (D1): the worktree is KEPT by default; `--cleanup` or an
     // explicit `worktree_cleanup_on_merge: true` opts a merge into
@@ -683,6 +1509,22 @@ pub(crate) fn merge_text_lines(id: &str, main_root: &Path, answer: &MergeAnswer)
                 }
             });
         }
+        // D4 (proof-strength-and-expiry): the `proof-stale` advisory, on the
+        // line after the `verify` field it qualifies. It names an age, not a
+        // fault — the merge above it already landed (phases.rs writes this
+        // key only on a merge that committed).
+        if let Some(stale) = r.get("proof_stale") {
+            lines.push(format!(
+                "  proof-stale: {}",
+                stale.get("message").map(jsjson::js_to_string).unwrap_or_default()
+            ));
+        }
+        if let Some(carried) = r.get("proof_carried") {
+            lines.push(format!(
+                "  proof-carried: {}",
+                carried.get("message").map(jsjson::js_to_string).unwrap_or_default()
+            ));
+        }
         if let Some(warning) = r.get("warning") {
             lines.push(format!(
                 "  WARNING ({}): {}",
@@ -762,6 +1604,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "register" => run_register(flags, use_json, t0),
         "unregister" => run_unregister(flags, use_json, t0),
         "new" => run_new(flags, use_json, t0),
+        "enter" => run_enter(flags, use_json, t0),
+        "exit" => run_exit(flags, use_json, t0),
         "merge" => run_merge(flags, use_json, t0),
         "prune" => run_prune(flags, use_json, t0),
         _ => None,

@@ -26,6 +26,7 @@ use super::templates::{
     AGENT_TIER_DEFAULTS_OPENCODE, CODEX_AGENTS_NOTE,
 };
 use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists};
+use crate::textutil::split_frontmatter;
 use crate::verbs::drivers::{normalize_tier_value, resolve_role, Resolved};
 use serde_json::{json, Map, Value};
 use std::path::Path;
@@ -55,7 +56,7 @@ pub fn roles_for_agent(agent_name: &str) -> Option<&'static [&'static str]> {
 ///
 /// model-role-split D1/D2 (store `cd72ec97`, `06e49368`): this module used to
 /// carry its own `normalizeAgentTierValueLocal` + `resolveAgentTierModel`
-/// pair — a second parser of the `models.<runtime>` shape, keyed to a closed
+/// pair — a second parser of the `team.<runtime>` shape, keyed to a closed
 /// three-slot table. Both are gone. What is left is the one thing onboarding
 /// legitimately owns: the SEED, bee's baked-in model per role for agent
 /// FILES, which differs from `drivers::default_models` on opencode by design
@@ -70,11 +71,14 @@ pub fn roles_for_agent(agent_name: &str) -> Option<&'static [&'static str]> {
 /// normalizes to `Null`, replaces the seed, and turns the role off, so
 /// "absent" and "refused" stay different reads.
 fn agent_models(repo_root: &Path, runtime_key: &str, seed: &[(&str, &str)]) -> Map<String, Value> {
-    let config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
+    let mut config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
+    if let Some(Value::Object(ref mut map)) = config {
+        crate::verbs::drivers::fold_team_key(map);
+    }
     let raw_runtime = config
         .as_ref()
         .filter(|c| c.is_object())
-        .and_then(|c| c.get("models"))
+        .and_then(|c| c.get("team"))
         .filter(|m| m.is_object())
         .and_then(|m| m.get(runtime_key))
         .and_then(|c| c.as_object())
@@ -129,7 +133,7 @@ pub fn resolve_agent_model(repo_root: &Path, agent_name: &str) -> Option<String>
 }
 
 /// opencode-support oc-14's counterpart: same roles, same shared resolver,
-/// keyed off `models.opencode` and seeded with the free `opencode/*` names
+/// keyed off `team.opencode` and seeded with the free `opencode/*` names
 /// instead of haiku/sonnet/opus.
 pub fn resolve_opencode_agent_model(repo_root: &Path, agent_name: &str) -> Option<String> {
     let roles = roles_for_agent(agent_name)?;
@@ -164,21 +168,6 @@ pub fn render_claude_agent_file(engine: &Engine, agent_name: &str) -> Option<Str
         }
     }
     Some(out)
-}
-
-/// Splits a `.md.tmpl` source into (frontmatter, body): the frontmatter is
-/// the text strictly between the opening and closing `---` lines, the body
-/// is everything from just past the closing `---` line onward (including
-/// the blank line that conventionally follows it). A file with no closing
-/// delimiter is treated as having no frontmatter at all — the whole source
-/// is the body — so a malformed template degrades to "no fields found"
-/// rather than panicking.
-fn split_frontmatter(source: &str) -> (&str, &str) {
-    let Some(after_open) = source.strip_prefix("---\n") else { return ("", source) };
-    let Some(close_at) = after_open.find("\n---\n") else { return ("", source) };
-    let front = &after_open[..close_at];
-    let body = &after_open[close_at + "\n---\n".len()..];
-    (front, body)
 }
 
 /// Reads one `key: value` line out of a frontmatter block (first match,
@@ -436,7 +425,7 @@ mod tests {
     }
 
     /// The capability the whole rebase exists for: a host configures a role
-    /// name of its own under `models.<runtime>`, an agent declares it, and
+    /// name of its own under `team.<runtime>`, an agent declares it, and
     /// the rendered agent file pins that model — no bee code knows the name.
     /// The role list is declared here rather than in `AGENT_ROLES_BY_NAME`
     /// because WHICH names bee publishes is a separate decision (D3); the
@@ -537,6 +526,20 @@ mod tests {
         .unwrap();
         assert!(compute_agent_file_plan(&engine, &repo).is_empty());
 
+        // gather-reads-the-read-slot D6: the same holds for the slot
+        // bee-gather now asks for FIRST. A herding-shaped `read` slot opens a
+        // pane instead of a subagent, and it still must not remove the
+        // rendered bee-gather file — that file carries the read-only tool
+        // permissions no bare general-purpose type can express.
+        std::fs::write(
+            repo.join(".bee").join("config.json"),
+            json!({"models":{"claude":{"read":{"kind":"herding","agent":"agy-flash"}}}})
+                .to_string(),
+        )
+        .unwrap();
+        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
+        assert!(repo.join(".claude").join("agents").join("bee-gather.md").exists());
+
         // An unknown template (no AGENT_ROLES_BY_NAME entry) still renders
         // nothing, and a stale copy of it is still removed.
         std::fs::write(
@@ -564,6 +567,61 @@ mod tests {
         assert_eq!(rec["rendered_from"]["extraction"], "haiku");
         assert_eq!(rec["codex"]["agents"].as_array().unwrap().len(), 0);
         assert!(rec["codex"]["note"].as_str().unwrap().contains("AO11"));
+    }
+
+    /// Regression test for F7: generated onboarding metadata must describe
+    /// configurable Codex roles and transports rather than asserting universal
+    /// lack of per-agent model selection, must document read-only CLI fallback
+    /// and capability-dependent native dispatch, and must disclaim effective-model
+    /// verification.
+    #[test]
+    fn codex_onboarding_note_describes_configurable_transports_without_obsolete_claims() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine_with_agents(dir.path());
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let rec = compute_agents_sync_record(&engine, &repo, &json!("1.2.3"));
+        let note = rec["codex"]["note"]
+            .as_str()
+            .expect("codex note must be a string");
+
+        // Absence of obsolete universal claims:
+        assert!(
+            !note.contains("Codex has no per-agent model selection"),
+            "obsolete claim: note must not state Codex has no per-agent model selection (got: {note})"
+        );
+        assert!(
+            !note.contains("DEFAULT_MODELS.codex is all-null by design"),
+            "obsolete claim: note must not claim DEFAULT_MODELS.codex is all-null by design (got: {note})"
+        );
+
+        // Independent expected supported statements:
+        assert!(
+            note.contains("configurable roles and transports")
+                || (note.contains("configurable") && note.contains("transport")),
+            "note must explain configurable roles and transports (got: {note})"
+        );
+        assert!(
+            note.contains("read-only CLI fallback"),
+            "note must explain read-only CLI fallback (got: {note})"
+        );
+        assert!(
+            note.contains("capability-dependent native dispatch"),
+            "note must explain capability-dependent native dispatch (got: {note})"
+        );
+        assert!(
+            note.contains("without effective-model proof")
+                || (note.contains("effective-model") && note.contains("proof")),
+            "note must disclose lack of effective-model proof (got: {note})"
+        );
+        assert!(
+            note.contains("unconfigured") && note.contains("null"),
+            "note must describe unconfigured null defaults (got: {note})"
+        );
+        assert!(
+            note.contains("No agent files are rendered under .agents/ (AO11)"),
+            "note must preserve absence of rendered agent files under .agents/ (got: {note})"
+        );
     }
 
     #[test]
@@ -601,6 +659,51 @@ mod tests {
         assert_eq!(resolve_opencode_agent_model(&repo, "bee-review").as_deref(), Some("opencode/x"));
         write(json!({"models":{"opencode":{"review":{"kind":"cli","command":"x"}}}}));
         assert_eq!(resolve_opencode_agent_model(&repo, "bee-review"), None);
+    }
+
+    /// gather-reads-the-read-slot D4: `bee-gather` declares `["read",
+    /// "generation"]`, so a host that configures a `read` slot sees it in the
+    /// rendered agent file, and a host that never heard of `read` renders
+    /// exactly the bytes it rendered before. The walk is the shared
+    /// resolver's — nothing here re-implements the fall-through.
+    #[test]
+    fn bee_gather_pins_the_read_slot_and_falls_through_to_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(repo.join(".bee")).unwrap();
+        let write = |cfg: Value| {
+            std::fs::write(repo.join(".bee").join("config.json"), cfg.to_string()).unwrap()
+        };
+
+        // (a) a configured read slot pins that model.
+        write(json!({"models":{"opencode":{"read":"opencode/reader","generation":"opencode/x"},
+                                "claude":{"read":"haiku-r","generation":"sonnet-x"}}}));
+        assert_eq!(
+            resolve_opencode_agent_model(&repo, "bee-gather").as_deref(),
+            Some("opencode/reader")
+        );
+        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("haiku-r"));
+        // bee-build is untouched by the read slot — it declares generation.
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-build").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-build").as_deref(), Some("sonnet-x"));
+
+        // (b) no `read` key at all — the legacy host — renders generation's
+        // model, byte for byte what it rendered before D4.
+        write(json!({"models":{"opencode":{"extraction":"opencode/tiny","generation":"opencode/x"},
+                                "claude":{"extraction":"haiku","generation":"sonnet-x"}}}));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("sonnet-x"));
+
+        // (c) an explicitly null read slot falls through the same way a null
+        // review slot does — it is a two-name list, not bee-extract's one.
+        write(json!({"models":{"opencode":{"read":null,"generation":"opencode/x"}}}));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather").as_deref(), Some("opencode/x"));
+
+        // (d) a read slot that names no model (cli) removes the opencode
+        // file, exactly as a cli generation slot does today.
+        write(json!({"models":{"opencode":{"read":{"kind":"cli","command":"x"},
+                                            "generation":"opencode/x"}}}));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather"), None);
     }
 
     #[test]

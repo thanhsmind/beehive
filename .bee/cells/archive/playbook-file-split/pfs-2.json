@@ -1,0 +1,144 @@
+{
+  "id": "pfs-2",
+  "feature": "playbook-file-split",
+  "title": "Point every citer at the new anchor; regen",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "pfs-1"
+  ],
+  "decisions": [
+    "D2",
+    "D4",
+    "D6"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "docs/02-architecture.md",
+    "docs/04-skills-spec.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "skills/bee-planning/playbooks/spike.md"
+  ],
+  "read_first": [
+    "packages/bee/AGENTS.block.md:348-353",
+    "skills/bee-planning/SKILL.md:42-47",
+    "skills/bee-hive/references/scout-and-ticks.md:33-37",
+    "docs/02-architecture.md:34",
+    "docs/04-skills-spec.md:63"
+  ],
+  "affects_skills": [
+    "skills/bee-planning",
+    "skills/bee-hive"
+  ],
+  "affects_specs": [],
+  "action": "In each of the 3 real citers, change ONLY the quoted anchor text from `\"Class playbooks\"` to `\"Playbooks\"` — do not touch surrounding wording. (1) packages/bee/AGENTS.block.md:351 — current text `(`bee-planning/references/planning-reference.md`, \"Class playbooks\");` becomes `(`bee-planning/references/planning-reference.md`, \"Playbooks\");`. (2) skills/bee-planning/SKILL.md:45 — current text `anchor — `references/planning-reference.md` (\"Class playbooks\") — never by` becomes `anchor — `references/planning-reference.md` (\"Playbooks\") — never by`. (3) skills/bee-hive/references/scout-and-ticks.md:36 — current text `` `bee-planning/references/planning-reference.md` (\"Class playbooks\") `` becomes `` `bee-planning/references/planning-reference.md` (\"Playbooks\") ``. Do NOT touch scout-and-ticks.md line 34 (the `` `class` ∈ `` line — route_class_parity.rs parses it) or line 35. Then, in the two living docs, add a `playbooks/` mention beside the existing reference-file list: (4) docs/02-architecture.md:34 — append `+ playbooks/{perf,bugfix,refactor,research,feature,docs,release,spike,content}.md` into the existing `references/{...}` clause on that line, before the ` — also owns` clause, changing nothing else on the line. (5) docs/04-skills-spec.md:63 — append `, `playbooks/<class>.md` (one file per route class, per the \"Playbooks\" pointer)` to the end of the existing **References:** sentence, before its final period, changing nothing else on the line. Then run, in order: `.bee/bin/bee dev regen` (renders AGENTS.md from AGENTS.block.md, re-renders any mirrored skill trees, and updates docs/history/codex-harness-hardening/release-manifest.json), then `.bee/bin/bee dev release-manifest --check` to confirm it is clean. Finally, run `rg -n \"Class playbooks\" .` across the whole repo (excluding docs/history/**, docs/knowledge/**, docs/decisions/**, and docs/discovery/** — those are historical/decision records, per CONTEXT.md's Integration Points, and are never edited by this feature) and confirm zero hits outside those excluded trees.",
+  "must_haves": {
+    "truths": [
+      "AGENTS.md (post-regen) and packages/bee/AGENTS.block.md both quote \"Playbooks\", not \"Class playbooks\"",
+      "skills/bee-planning/SKILL.md and skills/bee-hive/references/scout-and-ticks.md both quote \"Playbooks\"",
+      "scout-and-ticks.md line 34's `class ∈` list is byte-for-byte unchanged",
+      "rg -n \"Class playbooks\" across the repo, excluding docs/history/**, docs/knowledge/**, docs/decisions/**, docs/discovery/**, returns zero hits",
+      "bee dev release-manifest --check reports clean"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "Deep contracts pointer sentence quotes \"Playbooks\""
+      },
+      {
+        "path": "docs/02-architecture.md",
+        "substantive": "bee-planning repository-layout line names playbooks/"
+      },
+      {
+        "path": "docs/04-skills-spec.md",
+        "substantive": "bee-planning References line names playbooks/<class>.md"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md is regenerated from AGENTS.block.md after the edit, not hand-edited"
+    ],
+    "prohibitions": [
+      "No hand-edit of the generated AGENTS.md file directly",
+      "No change to scout-and-ticks.md line 34",
+      "No edit to any file under docs/history/**, docs/knowledge/**, docs/decisions/**, or docs/discovery/**"
+    ]
+  },
+  "trace": {
+    "worker": "leader-dispatch",
+    "outcome": "Citers quote Playbooks; living docs name playbooks/; spike.md pointer fixed; regen clean",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/02-architecture.md",
+      "docs/04-skills-spec.md",
+      "skills/bee-planning/playbooks/spike.md",
+      "AGENTS.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Fixed skills/bee-planning/playbooks/spike.md:7 by dropping a doubled skills/ path segment — pfs-2's verify found that pointer_integrity was already red on base 433f6a7ce, a defect from pfs-1; the leader added the file to scope — something else had to be fixed first",
+      "Left the \"Class playbooks\" hits in .bee/decisions.jsonl, .bee/backlog.jsonl and .bee/cells/archive/** unchanged — they are history records in the store, and only the CLI may change them; tracked docs and code outside the excluded trees have zero hits — the plan was wrong about a fact",
+      "sync-ack: AGENTS.md change is only the Deep contracts pointer anchor text (Class playbooks -> Playbooks), regenerated from AGENTS.block.md; the capture-line rule text is untouched, so its applied_at files need no sync"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-25T00:02:10.275Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell own verify in full: parity fences 13/13, manifest 403 files match, full suite 4279 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9250ca52-184b-4f7d-bdb6-12e43371f1a7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test agents_block_render_parity --test route_class_parity && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-09-25T00:00:07.950Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-24T23:59:55.971Z",
+        "claim_session": "9250ca52-184b-4f7d-bdb6-12e43371f1a7",
+        "claimed_at": "2026-09-24T23:58:37.217Z",
+        "acquired_at": "2026-09-24T23:57:25.806Z",
+        "worker": "leader-dispatch",
+        "verdict": "blocked",
+        "failure_signature": "11b55439e30b",
+        "note": "pfs-1 left a broken pointer_integrity citation in skills/bee-planning/playbooks/spike.md:7 (a leading skills/ prefix pointer_integrity itself re-prepends, doubling the path) — pfs-2's own verify caught it since pointer_integrity is in its verify command; adding spike.md to pfs-2's files so the same worker fixes it in place rather than opening a separate fix-first cell for one path segment"
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "baseline": "On base 433f6a7ce, pointer_integrity failed 1 of 10 (spike.md:7 target does not exist); the other parity fences passed",
+    "dropped_reason": null,
+    "reopened_at": "2026-09-25T00:00:07.864Z",
+    "reopened_reason": "added skills/bee-planning/playbooks/spike.md to files so the same worker can fix the doubled skills/ path segment pfs-1 left behind",
+    "sync_ack": "AGENTS.md change is only the Deep contracts pointer anchor text (Class playbooks -> Playbooks), regenerated from AGENTS.block.md; the capture-line rule text is untouched, so its applied_at files need no sync",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Three citers quote \"Playbooks\" (AGENTS.block.md:351, bee-planning/SKILL.md:45, scout-and-ticks.md:36); 02-architecture.md:34 and 04-skills-spec.md:63 name playbooks/; spike.md:7 pointer fixed; regen rendered AGENTS.md, mirrors and manifest",
+      "commit": "7d061491a",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-hive/references/scout-and-ticks.md",
+        "docs/02-architecture.md",
+        "docs/04-skills-spec.md",
+        "skills/bee-planning/playbooks/spike.md",
+        "AGENTS.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test agents_block_render_parity --test route_class_parity && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the cell own verify in full: parity fences 13/13, manifest 403 files match, full suite 4279 passed 0 failed",
+      "deviations": [
+        "Fixed skills/bee-planning/playbooks/spike.md:7 by dropping a doubled skills/ path segment — pfs-2's verify found that pointer_integrity was already red on base 433f6a7ce, a defect from pfs-1; the leader added the file to scope — something else had to be fixed first",
+        "Left the \"Class playbooks\" hits in .bee/decisions.jsonl, .bee/backlog.jsonl and .bee/cells/archive/** unchanged — they are history records in the store, and only the CLI may change them; tracked docs and code outside the excluded trees have zero hits — the plan was wrong about a fact"
+      ],
+      "mistakes": [],
+      "baseline": "On base 433f6a7ce, pointer_integrity failed 1 of 10 (spike.md:7 target does not exist); the other parity fences passed"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 2081 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test agents_block_render_parity --test route_class_parity && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml"
+}

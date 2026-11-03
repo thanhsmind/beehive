@@ -41,8 +41,17 @@
 //      `model-guard`) can actually put on the wire by scanning that rule's
 //      own emit-path source, so a whole SHAPE — not only a whole rule — now
 //      fails this suite by name if it goes missing on a belt. For every
-//      such (rule, shape) pair, the test asserts FOUR independent signals
-//      exist, failing by name (rule + shape + belt) if any is missing:
+//      such (rule, shape) pair, the test asserts FIVE independent signals
+//      exist, failing by name (rule + shape + belt) if any is missing.
+//
+//      FIVE, not four: pi-support's cell pis-3 added the PI belt
+//      (`.pi/extensions/bee-guard.ts`) as the fourth belt, derived from its
+//      own source the same way the opencode belt already was. The test's
+//      NAME still says "three_belt" and stays that way on purpose — two
+//      documents cite it by name (docs/knowledge/areas/hook-runtime/
+//      catalog-projections-and-activation.md, docs/history/opencode-support/
+//      discovery.md), and renaming it would dangle both pointers to buy
+//      nothing but an accurate numeral. The signals:
 //        - HELPER level  — `bee hook <rule>` itself emits this shape for its
 //          known-triggering payload (the shared FIRST belt every runtime's
 //          translation layer calls into — plan.md's Approach section:
@@ -72,6 +81,14 @@
 //          emits invalid JSON of its own) and is checked once, globally, at
 //          the end of the test — see the doc comment above
 //          `emittable_shapes`.
+//        - PI belt      — the same routing+implementation cross-check
+//          against `.pi/extensions/bee-guard.ts`, whose live fixture proof
+//          is the sibling file `tests/pi_plugin_contracts.rs`. This belt is
+//          the one that may legally route NOTHING to a rule — but only as a
+//          NAMED EXCLUSION written on that rule's own line in the belt
+//          source. `model-guard` is today's instance (Pi has no Agent/Task
+//          surface at all, store decision 7f9c8518), asserted BY NAME after
+//          the loop rather than left to the derived predicate alone.
 //
 // The design and any environment-skip behavior are recorded in
 // `docs/history/opencode-support/discovery.md`.
@@ -106,6 +123,51 @@ fn bee_bin() -> PathBuf {
 /// `docs/history/opencode-support/discovery.md` documents and this test
 /// exercises live via `node`. Never copied or re-derived by hand.
 const PLUGIN_SOURCE: &str = include_str!("../../../../../.opencode/plugins/bee-guard.ts");
+
+/// The real PI belt source, embedded the same way (pi-support pis-3). The
+/// parity test below derives the FOURTH belt's rows from this file, never
+/// from a hand list — the belt's own live deny/allow/crash/absent/ask/
+/// unparseable/passivity proof lives in `tests/pi_plugin_contracts.rs`, the
+/// sibling of part 1 above.
+///
+/// The parity test KEEPS ITS NAME (`three_belt_parity_…`) even though it now
+/// covers four belts: two documents cite it by name
+/// (`docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md`
+/// and `docs/history/opencode-support/discovery.md`), and a rename would turn
+/// both pointers into dangling references to buy nothing.
+fn pi_plugin_source() -> &'static str {
+    static SOURCE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SOURCE.get_or_init(|| {
+        let dir = repo_root().join(".pi/extensions/bee-guard");
+        let index_file = dir.join("index.ts");
+        let index_content = std::fs::read_to_string(&index_file)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", index_file.display()));
+
+        let mut other_files = Vec::new();
+        let entries = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("failed to read_dir {}: {e}", dir.display()));
+        for entry in entries {
+            let entry = entry.unwrap_or_else(|e| panic!("dir entry error in {}: {e}", dir.display()));
+            let path = entry.path();
+            if path.is_file()
+                && path.extension().and_then(|s| s.to_str()) == Some("ts")
+                && entry.file_name() != "index.ts"
+            {
+                other_files.push((entry.file_name(), path));
+            }
+        }
+        other_files.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut sources = Vec::with_capacity(1 + other_files.len());
+        sources.push(index_content);
+        for (_name, path) in other_files {
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+            sources.push(content);
+        }
+        sources.join("\n")
+    }).as_str()
+}
 
 /// `hook_contracts.rs`'s own source, embedded so the parity test can look
 /// for the CLAUDE belt's deny fixtures by what they actually assert, rather
@@ -163,6 +225,16 @@ const ASK_SHAPE: &str = "exit-0 permissionDecision ask";
 const WRITE_GUARD_MAIN_SOURCE: &str = include_str!("../src/hooks/write_guard/main.rs");
 const MODEL_GUARD_SOURCE: &str = include_str!("../src/hooks/model_guard.rs");
 const WRITE_GUARD_TESTS_SOURCE: &str = include_str!("../src/hooks/write_guard/tests.rs");
+const WORKER_GUARD_SOURCE: &str = include_str!("../src/hooks/worker_guard.rs");
+
+const CLAUDE_AND_PI_ONLY: &[(&str, &str)] = &[(
+    "worker-guard",
+    "claude-read-only D2 (store 63bd6725): Paseo workers run on Claude and Pi only, so Codex and OpenCode carry no worker-guard",
+)];
+
+fn claude_and_pi_only(hook: &str) -> Option<&'static str> {
+    CLAUDE_AND_PI_ONLY.iter().find(|(h, _)| *h == hook).map(|(_, why)| *why)
+}
 
 /// The verdict shapes rule `hook`'s own emit-path source can actually put
 /// on the wire, derived by scanning that source for the literal markers
@@ -179,13 +251,14 @@ fn emittable_shapes(hook: &str) -> Vec<&'static str> {
     let source = match hook {
         "write-guard" => WRITE_GUARD_MAIN_SOURCE,
         "model-guard" => MODEL_GUARD_SOURCE,
+        "worker-guard" => WORKER_GUARD_SOURCE,
         other => panic!(
             "no known emit-path source for BLOCKING rule \"{other}\" — add one to \
              `emittable_shapes` before trusting verdict-shape derivation for it"
         ),
     };
     let mut shapes = Vec::new();
-    if source.contains("emit.code = 2") || source.contains("Ok((2,") {
+    if source.contains("emit.code = 2") || source.contains("Ok((2,") || source.contains("ExitCode::from(2)") {
         shapes.push(DENY_SHAPE);
     }
     if source.contains("\"updatedInput\".into()") {
@@ -407,6 +480,126 @@ fn opencode_advisory_hooks() -> BTreeSet<String> {
     set
 }
 
+// ─── the pi extension's own routing, derived from its source ──────────────
+
+/// Every `(Pi tool, bee hook)` pair `.pi/extensions/bee-guard.ts`'s own
+/// `mapToolCall` switch routes — same derivation as
+/// `opencode_tool_hook_pairs` above, with one difference that matters: this
+/// parser is FALL-THROUGH aware. Pi's belt shares one body between
+/// `case "bash":` and `case "powershell":`, and a parser that only credits
+/// the case carrying the `hook:` literal would under-report the routed set
+/// and could let a rule look unrouted on this belt when it is not.
+///
+/// The assertion below names Pi 0.84.3's eight built-ins. That version is the
+/// Pi docs the list was read from, not the version the belt supports: the
+/// supported floor is 0.84.4 (see the belt header). The same eight names were
+/// re-verified unchanged in Pi 0.85.1 on 2026-09-18.
+fn pi_direct_blocking_hooks() -> BTreeSet<String> {
+    let mut set = BTreeSet::new();
+    for seg in pi_plugin_source().split("runBlockingHook(").skip(1) {
+        let rest = seg.trim_start();
+        let Some(rest) = rest.strip_prefix("directory") else { continue };
+        let Some(rest) = rest.trim_start().strip_prefix(',') else { continue };
+        let Some(rest) = rest.trim_start().strip_prefix('"') else { continue };
+        if let Some(end) = rest.find('"') {
+            set.insert(rest[..end].to_string());
+        }
+    }
+    set
+}
+
+fn pi_tool_hook_pairs() -> Vec<(String, String)> {
+    let fn_start = pi_plugin_source()
+        .find("function mapToolCall")
+        .expect(".pi/extensions/bee-guard.ts: mapToolCall not found — has the routing function been renamed?");
+    let unbounded = &pi_plugin_source()[fn_start..];
+    // Bound the slice at mapToolCall's own closing brace (the first `}` at
+    // column 0 — every brace inside the body is indented). Unbounded, the
+    // scan runs on into `sessionSource`'s `switch (reason)` and reads its
+    // `case "new"` / `case "reload"` labels as routed TOOL names.
+    let body = &unbounded[..unbounded
+        .find("\n}\n")
+        .expect(".pi/extensions/bee-guard.ts: could not find the end of mapToolCall")];
+    let switch_start = body
+        .find("switch (tool)")
+        .expect(".pi/extensions/bee-guard.ts: mapToolCall no longer switches on `tool` — routing derivation needs an update");
+    let switch_body = &body[switch_start..];
+
+    let mut pairs = Vec::new();
+    let mut pending: Vec<String> = Vec::new();
+    for seg in switch_body.split("case \"").skip(1) {
+        let tool_end = seg
+            .find('"')
+            .expect(".pi/extensions/bee-guard.ts: unterminated `case \"...\"` tool literal");
+        pending.push(seg[..tool_end].to_string());
+        if let Some(h) = seg.find("hook: \"") {
+            let rest = &seg[h + "hook: \"".len()..];
+            let hend = rest
+                .find('"')
+                .expect(".pi/extensions/bee-guard.ts: unterminated `hook: \"...\"` literal");
+            let hook = rest[..hend].to_string();
+            for tool in pending.drain(..) {
+                pairs.push((tool, hook.clone()));
+            }
+        }
+    }
+    assert!(
+        pending.is_empty(),
+        ".pi/extensions/bee-guard.ts: case label(s) {pending:?} fall through to no `hook:` literal \
+         — a routed tool with no destination is exactly the silent allow that belt exists to close"
+    );
+    assert!(
+        pairs.len() >= 8,
+        ".pi/extensions/bee-guard.ts: mapToolCall derivation found only {} routed tool cases — \
+         expected at least Pi 0.84.3's eight built-ins; either the switch changed shape or this \
+         parser broke",
+        pairs.len()
+    );
+    pairs
+}
+
+/// The literal marker in `.pi/extensions/bee-guard.ts`'s own
+/// `runBlockingHook` that proves it still implements `shape`. Same three
+/// conditionals as the OpenCode belt's — the Pi belt is that file re-targeted
+/// at Pi's event names, so the verdict-parsing code is deliberately identical
+/// and any divergence here is a defect, not a dialect.
+fn pi_belt_shape_marker(shape: &str) -> &'static str {
+    opencode_belt_shape_marker(shape)
+}
+
+/// True iff `.pi/extensions/bee-guard.ts` names `rule` as a NAMED EXCLUSION
+/// **on the same line** — never merely "both strings appear somewhere in the
+/// file". Same narrowing, for the same reason, as
+/// `discovery_doc_names_as_a_gap` below (F5): a document-global marker search
+/// passes for any name mentioned anywhere, whether or not that mention was
+/// tagged as an exclusion.
+fn pi_belt_names_the_exclusion(rule: &str) -> bool {
+    pi_plugin_source().lines().any(|line| line.contains(rule) && line.contains("NAMED EXCLUSION"))
+}
+
+/// Every ADVISORY hook name the Pi belt wires, parsed from its own
+/// `runAdvisoryHook(directory, "<name>", ...)` call sites — same derivation
+/// as `opencode_advisory_hooks`.
+fn pi_advisory_hooks() -> BTreeSet<String> {
+    const MARKER: &str = "runAdvisoryHook(directory, \"";
+    let mut set = BTreeSet::new();
+    let mut idx = 0usize;
+    while let Some(pos) = pi_plugin_source()[idx..].find(MARKER) {
+        let start = idx + pos + MARKER.len();
+        let rest = &pi_plugin_source()[start..];
+        let end = rest
+            .find('"')
+            .expect(".pi/extensions/bee-guard.ts: unterminated runAdvisoryHook name literal");
+        set.insert(rest[..end].to_string());
+        idx = start + end;
+    }
+    assert!(
+        !set.is_empty(),
+        ".pi/extensions/bee-guard.ts: found zero runAdvisoryHook call sites — advisory derivation broke"
+    );
+    set
+}
+
 // ─── node availability (named, non-fatal skip) ─────────────────────────────
 //
 // "Node is absent" is not the only way this belt is unrunnable — a `node`
@@ -520,7 +713,9 @@ function readStdin() {
 
 const payload = JSON.parse(await readStdin());
 const mod = await import(pathToFileURL(pluginPath).href);
-const hooks = await mod.default({ directory, worktree: directory, client: {}, $: {}, project: {}, app: {} });
+const toasts = [];
+const client = { tui: { showToast: async (arg) => { toasts.push(arg); return true; } } };
+const hooks = await mod.default({ directory, worktree: directory, client, $: {}, project: {}, app: {} });
 
 const fn = hooks[surface];
 if (typeof fn !== "function") {
@@ -539,6 +734,11 @@ try {
     const input = { event: payload.event };
     await fn(input);
     result = { threw: false, message: null, output: null };
+  } else if (surface === "shell.env") {
+    const input = { cwd: payload.cwd ?? directory, sessionID: payload.sessionID, callID: payload.callID };
+    const output = { env: payload.env ?? {} };
+    await fn(input, output);
+    result = { threw: false, message: null, output };
   } else {
     const input = { tool: payload.tool, sessionID: payload.sessionID ?? "sess1", callID: payload.callID ?? "call1", args: payload.args };
     const output = { args: payload.args ?? {} };
@@ -548,6 +748,7 @@ try {
 } catch (err) {
   result = { threw: true, message: String(err && err.message ? err.message : err), output: null };
 }
+result.toasts = toasts;
 console.log(JSON.stringify(result));
 "#;
 
@@ -555,6 +756,7 @@ struct HarnessResult {
     threw: bool,
     message: Option<String>,
     output: Option<Value>,
+    toasts: Vec<Value>,
 }
 
 fn write_harness(dir: &Path) -> PathBuf {
@@ -600,6 +802,7 @@ fn run_harness(harness: &Path, plugin: &Path, directory: &Path, surface: &str, p
         threw: v["threw"].as_bool().unwrap_or(false),
         message: v["message"].as_str().map(str::to_string),
         output: v.get("output").cloned().filter(|o| !o.is_null()),
+        toasts: v["toasts"].as_array().cloned().unwrap_or_default(),
     }
 }
 
@@ -625,6 +828,7 @@ enum StubBehavior {
     /// D6: exit-0 stdout that is non-empty but not valid JSON — undecidable,
     /// and undecidable must stay fail-closed on the BLOCKING path.
     UnparseableVerdict,
+    BeltContractLine(String),
 }
 
 /// Writes (or, for `Missing`, deliberately does NOT write) a stub
@@ -665,6 +869,9 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
                 format!("#!/bin/sh\n{capture}\nprintf '%s' '{stdout}'\nexit 0\n")
             }
             StubBehavior::UnparseableVerdict => format!("#!/bin/sh\n{capture}\nprintf '%s' 'not-json{{{{{{'\nexit 0\n"),
+            StubBehavior::BeltContractLine(line) => format!(
+                "#!/bin/sh\n{capture}\ncase \"$2\" in\n  session-init) cp \"$(dirname \"$0\")/last_stdin.json\" \"$(dirname \"$0\")/session_init_stdin.json\"; printf '%s\\n\\nPREAMBLE' '{line}' ;;\nesac\nexit 0\n"
+            ),
             StubBehavior::Missing => unreachable!(),
         };
         let path = bin_dir.join("bee");
@@ -1003,6 +1210,80 @@ fn advisory_surfaces_never_throw_regardless_of_the_bee_binarys_behavior() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn shell_env_hook_exports_session_id_and_runtime_when_session_id_present() {
+    node_or_skip!("shell_env_hook_exports_session_id_and_runtime_when_session_id_present");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let plugin = repo_root().join(".opencode/plugins/bee-guard.ts");
+    let fx = tempfile::tempdir().expect("tempdir");
+
+    // The plugin source embeds and exposes `shell.env`.
+    assert!(
+        PLUGIN_SOURCE.contains("\"shell.env\":"),
+        "bee-guard.ts must define shell.env hook beside tool.execute.after"
+    );
+
+    // Calling shell.env with a sessionID yields BEE_SESSION_ID and BEE_RUNTIME=opencode,
+    // and keeps existing env entries.
+    let payload_with_session = json!({
+        "sessionID": "opencode-session-123",
+        "env": {
+            "EXISTING_ENV_VAR": "kept_value"
+        }
+    });
+    let r1 = run_harness(&harness, &plugin, fx.path(), "shell.env", &payload_with_session);
+    assert!(!r1.threw, "shell.env must never throw: {:?}", r1.message);
+    let output1 = r1.output.expect("shell.env must be exposed and return output");
+    let env1 = output1.get("env").and_then(Value::as_object).expect("output must have env object");
+    assert_eq!(
+        env1.get("BEE_SESSION_ID").and_then(Value::as_str),
+        Some("opencode-session-123"),
+        "shell.env must set BEE_SESSION_ID to the hook's sessionID"
+    );
+    assert_eq!(
+        env1.get("BEE_RUNTIME").and_then(Value::as_str),
+        Some("opencode"),
+        "shell.env must set BEE_RUNTIME to \"opencode\""
+    );
+    assert_eq!(
+        env1.get("EXISTING_ENV_VAR").and_then(Value::as_str),
+        Some("kept_value"),
+        "shell.env must keep existing env entries"
+    );
+
+    // Calling shell.env without a sessionID adds neither variable and keeps existing env.
+    let payload_without_session = json!({
+        "env": {
+            "EXISTING_ENV_VAR": "kept_value"
+        }
+    });
+    let r2 = run_harness(&harness, &plugin, fx.path(), "shell.env", &payload_without_session);
+    assert!(!r2.threw, "shell.env must never throw when sessionID is absent: {:?}", r2.message);
+    let output2 = r2.output.expect("shell.env must return output");
+    let env2 = output2.get("env").and_then(Value::as_object).expect("output must have env object");
+    assert!(
+        !env2.contains_key("BEE_SESSION_ID"),
+        "shell.env must not set BEE_SESSION_ID when sessionID is absent"
+    );
+    assert!(
+        !env2.contains_key("BEE_RUNTIME"),
+        "shell.env must not set BEE_RUNTIME when sessionID is absent"
+    );
+    assert_eq!(
+        env2.get("EXISTING_ENV_VAR").and_then(Value::as_str),
+        Some("kept_value"),
+        "shell.env must keep existing env entries when sessionID is absent"
+    );
+
+    // Calling shell.env with empty payload (no env, no sessionID) never throws.
+    let payload_empty = json!({});
+    let r3 = run_harness(&harness, &plugin, fx.path(), "shell.env", &payload_empty);
+    assert!(!r3.threw, "shell.env must never throw on empty payload: {:?}", r3.message);
+}
+
 #[cfg(not(unix))]
 #[test]
 fn opencode_plugin_fixtures_skip_on_non_unix() {
@@ -1047,11 +1328,29 @@ fn helper_fixture() -> HelperFixture {
     HelperFixture { _dir: dir, root }
 }
 
+fn helper_env(hook: &str) -> &'static [(&'static str, &'static str)] {
+    match hook {
+        "worker-guard" => &[
+            ("BEE_HERDING_WORKER", "1"),
+            ("PASEO_AGENT_ID", "agent-parity"),
+            ("BEE_HERDING_READ_ONLY", "1"),
+            ("BEE_HERDING_JOB_ID", "job-parity"),
+        ],
+        _ => &[],
+    }
+}
+
 fn run_helper_hook(hook: &str, stdin: &[u8], cwd: &Path) -> Output {
     let mut child = Command::new(bee_bin())
         .args(["hook", hook])
         .current_dir(cwd)
         .env("BEE_HOOK_NO_DELEGATE", "1")
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("PASEO_AGENT_ID")
+        .env_remove("BEE_HERDING_READ_ONLY")
+        .env_remove("BEE_HERDING_JOB_ID")
+        .env_remove("BEE_SUPERVISOR_ALLOWED")
+        .envs(helper_env(hook).iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1077,6 +1376,11 @@ fn helper_deny_payload(hook: &str, claude_tool_name: &str, root: &Path) -> Value
         "model-guard" => json!({
             "tool_name": claude_tool_name,
             "tool_input": { "prompt": "implement the widget", "description": "some description" },
+            "cwd": root.to_string_lossy(),
+        }),
+        "worker-guard" => json!({
+            "tool_name": claude_tool_name,
+            "tool_input": { "file_path": "src/a.rs" },
             "cwd": root.to_string_lossy(),
         }),
         other => panic!("no known deny-payload shape for BLOCKING rule \"{other}\" — add one before trusting this parity check"),
@@ -1133,6 +1437,9 @@ fn claude_belt_test_block_has(source: &str, tool_names: &[String], markers: &[&s
 /// rule's fixtures live in is not itself derivable from the emit path.
 fn claude_belt_shape_fixture_exists(hook: &str, shape: &str, tool_names: &[String]) -> bool {
     if shape == DENY_SHAPE {
+        if hook == "worker-guard" {
+            return claude_belt_test_block_has(WORKER_GUARD_SOURCE, tool_names, &["ExitCode::from(2)"]);
+        }
         return claude_belt_deny_fixture_exists(tool_names);
     }
     let source = match hook {
@@ -1277,6 +1584,21 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
     let opencode_pairs = opencode_tool_hook_pairs();
     let opencode_hooks: BTreeSet<&str> = opencode_pairs.iter().map(|(_, h)| h.as_str()).collect();
 
+    // The FOURTH belt (pi-support pis-3), derived from its own source exactly
+    // like the third one above.
+    let pi_pairs = pi_tool_hook_pairs();
+    let pi_direct = pi_direct_blocking_hooks();
+    let pi_hooks: BTreeSet<&str> =
+        pi_pairs.iter().map(|(_, h)| h.as_str()).chain(pi_direct.iter().map(String::as_str)).collect();
+
+    for (hook, why) in CLAUDE_AND_PI_ONLY {
+        assert!(
+            catalog.get(*hook).is_some_and(|r| r.blocking && !r.claude_pretooluse_matchers.is_empty()),
+            "\"{hook}\" is exempt from the Codex and OpenCode belts ({why}) but is no longer a BLOCKING \
+             Claude rule in the derived catalog, so the exemption is vacuous; remove it"
+        );
+    }
+
     let mut gaps: Vec<String> = Vec::new();
 
     for row in &blocking {
@@ -1321,7 +1643,14 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
             // its PreToolUse command execs `bee hook <rule>` directly, byte
             // for byte the same call the HELPER check above already
             // exercised for this exact shape.
-            if row.codex_pretooluse_matchers.is_empty() {
+            if let Some(why) = claude_and_pi_only(hook) {
+                if !row.codex_pretooluse_matchers.is_empty() {
+                    gaps.push(format!(
+                        "{hook} / {shape} / codex belt: wired under PreToolUse in \
+                         packages/bee/hooks/hooks.json, but {why}"
+                    ));
+                }
+            } else if row.codex_pretooluse_matchers.is_empty() {
                 gaps.push(format!(
                     "{hook} / {shape} / codex belt: not wired under PreToolUse in \
                      packages/bee/hooks/hooks.json"
@@ -1336,7 +1665,11 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
             // this is the routing+implementation cross-check that keeps
             // that proof from silently going vacuous if the shape's own
             // handling were ever deleted from the plugin.
-            if !opencode_hooks.contains(hook) {
+            if let Some(why) = claude_and_pi_only(hook) {
+                if opencode_hooks.contains(hook) {
+                    gaps.push(format!("{hook} / {shape} / opencode belt: bee-guard.ts routes a tool to this hook, but {why}"));
+                }
+            } else if !opencode_hooks.contains(hook) {
                 gaps.push(format!(
                     "{hook} / {shape} / opencode belt: bee-guard.ts's mapToolCall routes no tool \
                      to this hook (derived pairs: {opencode_pairs:?})"
@@ -1348,7 +1681,58 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
                     opencode_belt_shape_marker(shape)
                 ));
             }
+
+            // PI belt: the same routing+implementation cross-check against
+            // `.pi/extensions/bee-guard.ts`, whose live deny/allow/crash/
+            // absent/ask/unparseable/passivity PROOF is
+            // `tests/pi_plugin_contracts.rs`. One difference from the three
+            // belts above: a rule this belt routes NOTHING to is allowed —
+            // but ONLY as a NAMED EXCLUSION written on that rule's own line in
+            // the belt source, never as a silent absence. `model-guard` is
+            // today's instance (Pi has no Agent/Task surface at all, store
+            // decision 7f9c8518, so a model-guard row would be a vacuous
+            // name-match that can never fire), and nothing here NAMES it: the
+            // next unrouted rule is judged by the same derived predicate.
+            if !pi_hooks.contains(hook) {
+                if !pi_belt_names_the_exclusion(hook) {
+                    gaps.push(format!(
+                        "{hook} / {shape} / pi belt: .pi/extensions/bee-guard.ts's mapToolCall routes \
+                         no tool to this hook AND does not name it as a NAMED EXCLUSION on its own \
+                         line (derived pairs: {pi_pairs:?})"
+                    ));
+                }
+            } else if !pi_plugin_source().contains(pi_belt_shape_marker(shape)) {
+                gaps.push(format!(
+                    "{hook} / {shape} / pi belt: .pi/extensions/bee-guard.ts's runBlockingHook no \
+                     longer implements this shape (marker {:?} not found)",
+                    pi_belt_shape_marker(shape)
+                ));
+            }
         }
+    }
+
+    // The Pi belt's ONE named exclusion, asserted BY NAME rather than left to
+    // the derived loop above (advisor condition 4 / reviewer P1-6). Two halves,
+    // both load-bearing:
+    //   - model-guard really IS a BLOCKING rule in the derived catalog, so the
+    //     exclusion is about a live rule and not about a name that stopped
+    //     existing; and
+    //   - as long as this belt routes nothing to it, the belt source must SAY
+    //     SO by name. Deleting that comment while leaving Pi's guard surface
+    //     unwired is exactly the silent hole this assertion refuses.
+    assert!(
+        catalog.get("model-guard").is_some_and(|r| r.blocking),
+        "model-guard is no longer a BLOCKING rule in the derived catalog — the Pi belt's named \
+         exclusion for it would now be vacuous; re-derive the exclusion before trusting it"
+    );
+    if !pi_hooks.contains("model-guard") {
+        assert!(
+            pi_belt_names_the_exclusion("model-guard"),
+            "pi belt: model-guard is wired to no Pi tool, so `.pi/extensions/bee-guard.ts` must name \
+             it as a NAMED EXCLUSION on its own line, stating why (Pi has no Agent/Task/subagent \
+             surface — store decision 7f9c8518). A missing rule with no written reason is \
+             indistinguishable from a rule someone forgot."
+        );
     }
 
     // UNPARSEABLE_SHAPE: see the doc comment above `emittable_shapes` — not
@@ -1363,12 +1747,21 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
          belt in this repo actually parses bee's own stdout: the opencode belt \
          (bee-guard.ts's runBlockingHook, live-proven by \
          every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary's \
-         StubBehavior::UnparseableVerdict scenario)."
+         StubBehavior::UnparseableVerdict scenario) and the pi belt \
+         (.pi/extensions/bee-guard.ts's runBlockingHook, live-proven by \
+         pi_plugin_contracts.rs's own UnparseableVerdict scenario)."
     );
     if !PLUGIN_SOURCE.contains("could not parse") {
         gaps.push(
             "unparseable exit-0 verdict / opencode belt: bee-guard.ts's runBlockingHook no longer \
              throws a \"could not parse\" Error on invalid exit-0 verdict JSON"
+                .to_string(),
+        );
+    }
+    if !pi_plugin_source().contains("could not parse") {
+        gaps.push(
+            "unparseable exit-0 verdict / pi belt: .pi/extensions/bee-guard.ts's runBlockingHook no \
+             longer blocks with a \"could not parse\" reason on invalid exit-0 verdict JSON"
                 .to_string(),
         );
     }
@@ -1400,12 +1793,12 @@ fn discovery_doc_names_as_a_gap(name: &str, markers: &[&str]) -> bool {
 }
 
 /// The parity test above only requires BLOCKING rules to hit all three
-/// belts. ADVISORY rules the OpenCode plugin does not wire
+/// belts. ADVISORY rules the OpenCode plugin and Pi extension do not wire
 /// (`codex-subagent-audit`, `chain-nudge`) are allowed to be missing — but
 /// ONLY if that gap is already a NAMED, documented exclusion, never a
 /// silent one. This is the coverage-gate half of the contract: any future
-/// ADVISORY hook the catalog gains that the plugin does not wire, and that
-/// discovery.md does not name (on that rule's own line — F5), fails here
+/// ADVISORY hook the catalog gains that a belt does not wire, and that
+/// is not named as a gap (on that rule's own line — F5), fails here
 /// rather than shipping silently.
 #[test]
 fn advisory_gaps_the_plugin_does_not_wire_are_named_not_silent() {
@@ -1416,27 +1809,38 @@ fn advisory_gaps_the_plugin_does_not_wire_are_named_not_silent() {
         "derived catalog found too few ADVISORY rules to be a meaningful check: {advisory_rules:?}"
     );
 
-    let wired = opencode_advisory_hooks();
+    let opencode_wired = opencode_advisory_hooks();
+    let pi_wired = pi_advisory_hooks();
     let mut unnamed_gaps: Vec<String> = Vec::new();
     for rule in advisory_rules {
-        if wired.contains(rule) {
-            continue; // covered live by `advisory_surfaces_never_throw_regardless_of_the_bee_binarys_behavior`
+        if !opencode_wired.contains(rule) {
+            // Not wired — must be named in discovery.md ON ITS OWN LINE (F5),
+            // not silently dropped and not merely co-mentioned with an unrelated
+            // gap's marker elsewhere in the document.
+            if !discovery_doc_names_as_a_gap(rule, &["NAMED EXCLUSION", "Deferred"]) {
+                unnamed_gaps.push(format!(
+                    "{rule} / opencode belt: not wired by bee-guard.ts's runAdvisoryHook AND not documented on its own \
+                     line as a named gap in docs/history/opencode-support/discovery.md"
+                ));
+            }
         }
-        // Not wired — must be named in discovery.md ON ITS OWN LINE (F5),
-        // not silently dropped and not merely co-mentioned with an unrelated
-        // gap's marker elsewhere in the document.
-        if !discovery_doc_names_as_a_gap(rule, &["NAMED EXCLUSION", "Deferred"]) {
-            unnamed_gaps.push(format!(
-                "{rule}: not wired by bee-guard.ts's runAdvisoryHook AND not documented on its own \
-                 line as a named gap in docs/history/opencode-support/discovery.md"
-            ));
+
+        if !pi_wired.contains(rule) {
+            // Not wired — must be named in .pi/extensions/bee-guard.ts ON ITS OWN LINE,
+            // not silently dropped.
+            if !pi_belt_names_the_exclusion(rule) {
+                unnamed_gaps.push(format!(
+                    "{rule} / pi belt: not wired by .pi/extensions/bee-guard.ts's runAdvisoryHook AND not documented \
+                     on its own line as a NAMED EXCLUSION"
+                ));
+            }
         }
     }
 
     assert!(
         unnamed_gaps.is_empty(),
-        "silent ADVISORY coverage gap(s) — every hook the opencode belt does not wire must be a \
-         NAMED exclusion in discovery.md:\n{}",
+        "silent ADVISORY coverage gap(s) — every hook an enforcement belt does not wire must be a \
+         NAMED exclusion:\n{}",
         unnamed_gaps.join("\n")
     );
 }
@@ -1484,7 +1888,83 @@ fn resolve_opencode_binary() -> Result<PathBuf, String> {
     if raw.is_empty() {
         return Err("`command -v opencode` produced no path".to_string());
     }
-    std::fs::canonicalize(&raw).map_err(|e| format!("could not canonicalize \"{raw}\": {e}"))
+    let path = std::fs::canonicalize(&raw)
+        .map_err(|e| format!("could not canonicalize \"{raw}\": {e}"))?;
+    if !is_wrapper_script(&path) {
+        return path_ok(path);
+    }
+    // The PATH entry is a wrapper, not the payload. Ask each version manager
+    // that ships one to name the executable it actually execs.
+    for manager in VERSION_MANAGER_RESOLVERS {
+        let Some(candidate) = ask_resolver(manager) else { continue };
+        if !is_wrapper_script(&candidate) {
+            return path_ok(candidate);
+        }
+    }
+    Err(format!(
+        "the PATH entry {} is a WRAPPER SCRIPT, not the bundled executable this derivation greps, \
+         and no version-manager resolver ({}) could name the real binary — install opencode-ai so \
+         `command -v opencode` lands on the payload, or make the owning manager resolvable on PATH",
+        path.display(),
+        VERSION_MANAGER_RESOLVERS.join(", ")
+    ))
+}
+
+/// Managers that install a shebang shim on PATH and answer `<manager> which
+/// <tool>` with the executable it execs. Ordered, first usable answer wins;
+/// an absent manager is skipped, never an error.
+const VERSION_MANAGER_RESOLVERS: &[&str] = &["mise", "asdf", "volta"];
+
+fn ask_resolver(manager: &str) -> Option<PathBuf> {
+    let out = Command::new(manager).arg("which").arg("opencode").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if raw.is_empty() {
+        return None;
+    }
+    std::fs::canonicalize(&raw).ok()
+}
+
+/// A wrapper is a text script standing in for the executable — a shebang
+/// script (mise/asdf/volta shims, npm bin stubs) or a Windows `.cmd` batch
+/// stub. Either way its bytes carry no bundled payload, so a derivation that
+/// greps them reports zero tools and calls it a shape change. Named here
+/// rather than papered over: the resolver above walks past it or says why it
+/// could not.
+fn is_wrapper_script(path: &Path) -> bool {
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat")) {
+        return true;
+    }
+    let Ok(bytes) = std::fs::read(path) else { return false };
+    bytes.starts_with(b"#!")
+}
+
+fn path_ok(path: PathBuf) -> Result<PathBuf, String> {
+    Ok(path)
+}
+
+/// The resolver's own contract, pinned without needing an opencode install:
+/// a shebang script and a `.cmd` stub are wrappers; an ELF payload is not.
+#[test]
+fn a_wrapper_script_is_never_mistaken_for_the_bundled_payload() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let shim = tmp.path().join("opencode");
+    std::fs::write(&shim, b"#!/bin/bash\nexec mise x opencode -- opencode \"$@\"\n").expect("write shim");
+    assert!(is_wrapper_script(&shim), "a shebang shim must read as a wrapper");
+
+    let cmd = tmp.path().join("opencode.cmd");
+    std::fs::write(&cmd, b"@echo off\r\n").expect("write cmd");
+    assert!(is_wrapper_script(&cmd), "a .cmd stub must read as a wrapper");
+
+    let elf = tmp.path().join("opencode-real");
+    std::fs::write(&elf, b"\x7fELF\x02\x01\x01\x00payload").expect("write elf");
+    assert!(!is_wrapper_script(&elf), "an ELF payload must NOT read as a wrapper");
+
+    let missing = tmp.path().join("absent");
+    assert!(!is_wrapper_script(&missing), "an unreadable path is not a wrapper claim");
 }
 
 /// Reads the resolved opencode binary's own bytes as text. The installed
@@ -1709,5 +2189,87 @@ fn every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_
         "silent write/read-capable OpenCode tool-registry gap(s) — the exact defect class \
          apply_patch was before oc-3 closed it:\n{}",
         gaps.join("\n")
+    );
+}
+
+/// Every hook name the OpenCode belt asks bee for must be a hook bee actually serves.
+///
+/// The executable owner for decision 06fea069. Cell pnsd-6 shipped a belt calling
+/// `runAdvisoryHook(directory, "stage-tools", ...)` before bee had that hook: the real
+/// `bee hook stage-tools` answered `unknown hook "stage-tools"` and exited 1, the belt's
+/// advisory wrapper swallowed it exactly as designed, and the whole per-stage tool gate
+/// silently did nothing. The suite stayed green throughout, because it only asserted that
+/// the belt SOURCE contained the call — the shape the "instruction text is an untested code
+/// path" pattern warns about. Source-shape assertions cannot catch this; only running the
+/// binary can, so this test runs it.
+///
+/// `bee hook <name>` decides an unknown name from argv alone, before it reads stdin, so this
+/// stays cheap and cannot hang.
+#[test]
+fn every_advisory_hook_the_opencode_belt_calls_is_a_hook_bee_serves() {
+    use std::io::Write;
+
+    let names = opencode_advisory_hooks();
+    assert!(
+        !names.is_empty(),
+        "OpenCode belt: derived zero advisory hook names — the derivation broke, and this \
+         test would then pass vacuously"
+    );
+
+    let mut unknown: Vec<String> = Vec::new();
+    for name in &names {
+        let mut child = std::process::Command::new(bee_bin())
+            .args(["hook", name.as_str()])
+            .env_remove("BEE_HERDING_WORKER")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("failed to spawn bee hook");
+        child
+            .stdin
+            .as_mut()
+            .expect("bee hook stdin")
+            .write_all(b"{}\n")
+            .expect("failed to write bee hook stdin");
+        let out = child.wait_with_output().expect("failed to wait for bee hook");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if stderr.contains("unknown hook") {
+            unknown.push(name.clone());
+        }
+    }
+
+    assert!(
+        unknown.is_empty(),
+        "OpenCode belt calls hook name(s) bee does not serve: {unknown:?} — every one of \
+         these reaches `bee hook <name>`, gets `unknown hook`, and is swallowed by the \
+         advisory wrapper, so the behaviour they were wired for silently does nothing. \
+         Add the hook to HOOK_NAMES (and a module beside the others), or stop calling it. \
+         Derived names: {names:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn session_init_carries_the_belt_contract_and_a_mismatch_line_is_toasted() {
+    node_or_skip!("session_init_carries_the_belt_contract_and_a_mismatch_line_is_toasted");
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    let line = "bee belt contract: opencode belt contract 0 is older than the binary. Fix: bee onboard --apply";
+    write_stub_bee(dir.path(), &StubBehavior::BeltContractLine(line.to_string()));
+
+    let plugin = repo_root().join(".opencode/plugins/bee-guard.ts");
+    let r = run_harness(&harness, &plugin, dir.path(), "chat.message", &json!({"sessionID": "s1", "messageID": "m1"}));
+    assert!(!r.threw, "{:?}", r.message);
+    let sent: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join(".bee/bin/session_init_stdin.json")).expect("session-init stdin"),
+    )
+    .expect("session-init stdin is JSON");
+    assert_eq!(sent["belt_contract"], json!({"belt": "opencode", "version": 1}), "{sent}");
+    assert!(
+        r.toasts.iter().any(|t| t["body"]["message"] == line && t["body"]["variant"] == "warning"),
+        "the mismatch line must reach the human as a toast: {:?}",
+        r.toasts
     );
 }

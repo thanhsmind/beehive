@@ -41,7 +41,7 @@ pub(crate) const LANES: [&str; 5] = ["tiny", "small", "standard", "high-risk", "
 /// path may turn it into a membership test.
 ///
 /// Enforcing a list here would undo D2 (store `06e49368`): the role set is
-/// open, any name present in `models.<runtime>` is legal, and a closed enum
+/// open, any name present in `team.<runtime>` is legal, and a closed enum
 /// in this file would move drift from author habit into a hand-maintained
 /// list — the exact defect the one-parser work exists to remove. If you are
 /// reaching for `ROLE_VOCABULARY.contains(...)`, stop: that is the bug.
@@ -278,6 +278,31 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             ));
         }
     }
+    // slp-contract S4 (D3, store 9c0104e0): a NEW cell's `status` must be
+    // "open", or absent — `normalize_new_cell` defaults an absent or falsy
+    // status to "open", and that default is the whole allowed shape.
+    //
+    // Why authoring owes this check at all: `normalize_new_cell` PRESERVES
+    // any truthy status the payload carries, and nothing here used to look
+    // at it, so `bee cells add` with `"status":"claimed"` minted a cell
+    // that never passes the claim door at all. Every pre-claim deny — the
+    // contract-citation tripwire, the red base, the no-route escalation,
+    // the uncapped-deps check — was bypassable in one line of JSON. A guard
+    // that tests one state is a law with a hole; this closes the door the
+    // guard is reached through.
+    //
+    // Scoped to AUTHORING only, deliberately: the claim/verify/cap/block/
+    // drop transitions are guarded where each of them happens
+    // (handlers_write.rs), and nothing here touches them.
+    if let Some(status) = map.get("status") {
+        let ok = !js_truthy(status) || matches!(status, Value::String(s) if s == "open");
+        if !ok {
+            problems.push(format!(
+                "addCell: \"status\" must be \"open\" on a new cell (omit it — it defaults to \"open\"), got {}. A cell leaves \"open\" only through the verb that owns the transition — bee cells claim, verify, cap, block, drop — never by being authored there, which would skip every check that verb's door runs.",
+                jsjson::stringify(status)
+            ));
+        }
+    }
     let lane_ok = matches!(map.get("lane"), Some(Value::String(s)) if LANES.contains(&s.as_str()));
     if !lane_ok {
         problems.push(format!(
@@ -326,7 +351,7 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
     //
     // models-show-verb D2 (CONTEXT.md): the author is refused at the exact
     // moment they are choosing a role, so this is where the READ-FIRST
-    // reminder belongs. `bee models show` returns the whole table with each
+    // reminder belongs. `bee team show` returns the whole table with each
     // role's description, and guess-and-fill — picking a name because it
     // sounds right — is the defect being replaced. The reminder names the
     // verb rather than the config path on purpose (D1): an agent that is told
@@ -334,7 +359,7 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
     // stop.
     if !nonblank_string(map.get("role")) {
         problems.push(format!(
-            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. {}. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee models show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace.",
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. {}. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose team.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set team.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee team show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace.",
             ROLE_VOCABULARY.join(", ")
         ));
     }
@@ -826,3 +851,91 @@ pub(crate) fn check_cell_budgets(cell: &Map<String, Value>) -> MR<BudgetCheck> {
     }
     Ok(BudgetCheck::Ok)
 }
+
+/// Resolves the approved preview packet from `.bee/lanes/<feature>.json` or `.bee/state.json`.
+pub(crate) fn get_approved_preview_packet(root: &Path, feature: &str) -> Option<Map<String, Value>> {
+    let lane_file = lanes_dir(root).join(format!("{feature}.json"));
+    if let Ok(text) = std::fs::read_to_string(&lane_file) {
+        if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
+            if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+                return Some(p.clone());
+            }
+        }
+    }
+    let state_file = root.join(".bee").join("state.json");
+    if let Ok(text) = std::fs::read_to_string(&state_file) {
+        if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
+            let feat_match = m.get("feature").and_then(Value::as_str) == Some(feature);
+            if feat_match {
+                if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+                    return Some(p.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Validates the `role_reroutes` history chain of a cell starting from `original_role`.
+/// Returns Ok(effective_role) on success, or Err(refusal_message) on chain failure.
+pub(crate) fn validate_cell_role_chain(original_role: &str, cell: &Value) -> Result<String, String> {
+    let current_role = cell.get("role").and_then(Value::as_str)
+        .ok_or_else(|| "role_reroute_history_invalid: cell has no role".to_string())?;
+
+    let reroutes = match cell.get("role_reroutes") {
+        None => {
+            if current_role != original_role {
+                return Err(format!(
+                    "role_reroute_history_invalid: cell has role \"{current_role}\" without any recorded re-routes, but approved plan role is \"{original_role}\""
+                ));
+            }
+            return Ok(current_role.to_string());
+        }
+        Some(Value::Array(arr)) if arr.is_empty() => {
+            if current_role != original_role {
+                return Err(format!(
+                    "role_reroute_history_invalid: cell has role \"{current_role}\" without any recorded re-routes, but approved plan role is \"{original_role}\""
+                ));
+            }
+            return Ok(current_role.to_string());
+        }
+        Some(Value::Array(arr)) => arr,
+        Some(_) => return Err("role_reroute_history_invalid: role_reroutes must be an array".to_string()),
+    };
+
+    let mut prev_role = original_role;
+    for (idx, entry_val) in reroutes.iter().enumerate() {
+        let Value::Object(entry) = entry_val else {
+            return Err(format!("role_reroute_history_invalid: reroute entry {idx} is not an object"));
+        };
+        let from = entry.get("from").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'from'"))?;
+        let to = entry.get("to").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'to'"))?;
+        let decision = entry.get("decision").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'decision'"))?;
+        let at = entry.get("at").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'at'"))?;
+        let plan_sha = entry.get("plan_sha256").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'plan_sha256'"))?;
+
+        if from.is_empty() || to.is_empty() || decision.is_empty() || at.is_empty() || plan_sha.is_empty() {
+            return Err(format!("role_reroute_history_invalid: reroute entry {idx} has empty field"));
+        }
+        if from != prev_role {
+            return Err(format!(
+                "role_reroute_history_invalid: reroute entry {idx} 'from' is \"{from}\" but previous role was \"{prev_role}\""
+            ));
+        }
+        prev_role = to;
+    }
+
+    if current_role != prev_role {
+        return Err(format!(
+            "role_reroute_history_invalid: cell role \"{current_role}\" does not match final reroute 'to' \"{prev_role}\""
+        ));
+    }
+
+    Ok(current_role.to_string())
+}
+

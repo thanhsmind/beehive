@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "pi-1-4-capability-audit",
+  "closed_at": "2026-10-27T14:24:04.678Z",
+  "sessions": [
+    {
+      "session_id": "4694b993-475c-4851-8570-7fc0a93483b0",
+      "models": {
+        "claude-fable-5-1": {
+          "input": 2192,
+          "output": 53017,
+          "cache_write": 179642,
+          "cache_read": 9730286,
+          "new": 234851,
+          "cached": 9730286,
+          "total": 9965137
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1793108336997,
+      "ended_ms": 1793111043613,
+      "totals": {
+        "new": 234851,
+        "cached": 9730286,
+        "total": 9965137
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 234851,
+      "cached": 9730286,
+      "total": 9965137
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 234851,
+      "cached": 9730286,
+      "total": 9965137
+    }
+  }
+}

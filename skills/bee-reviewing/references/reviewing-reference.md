@@ -1,40 +1,57 @@
 # Reviewing Reference
 
-Companion to SKILL.md — judgment lives there; reviewer role cards, the
+Companion to SKILL.md — judgment lives there; reviewer lens cards, the
 finding schema, and the acceptance wording live here.
 
-## Reviewer roles
+## Reviewer lenses
 
-Every dispatched reviewer receives a role card in the same shape:
+A lens here is a review angle, never a team member. Dispatch every lens
+through `bee dispatch prepare --kind reviewer` with no `--role`: `--role`
+names a team member configured in `.bee/config.json`, and a lens name
+there refuses. The lens rides the prompt below.
+
+Every dispatched reviewer receives a lens card in the same shape:
 **Purpose** (one line — the lens), **Scope** (set by the invoking
 layer: the frozen diff, the in-scope `CONTEXT.md` and `plan.md`,
 nothing else — never widened by the reviewer), and **Method** (the
 numbered steps below, whose quoted names resolve to entries in
-`.bee/expertise/review.md`). Role cards stay thin lens contracts — no
+`.bee/expertise/review.md`). Lens cards stay thin lens contracts — no
 failure-mode catalogs. The model already knows the domain; the trigger
 and the lens are the value.
 
 Dispatch prompt shape, every reviewer:
 
 ```text
-You are the <role> reviewer.
-Purpose: <the role's Purpose line>
+You are the <lens> reviewer.
+Purpose: <the lens's Purpose line>
 Scope: <the frozen scope the invoking layer hands you>
 Method: follow the reviewer method; your step-2 lens is your Purpose.
 Lead with findings. Do not rewrite code.
 ```
 
-### Reviewer method (shared by all roles)
+### Reviewer method (shared by all lenses)
 
 1. From the scope you were handed, write down what a correct change
-   must handle before reading the diff — "Adversarial reading".
+   must handle before reading the diff — "Adversarial reading". The
+   five layers that list must cover, and where each one is already
+   written down, are in "The 5-Layer rubric".
 2. Read the diff through your Purpose's lens only, hunting what the
    diff does not say: absent handling, the cases the author was least
    likely to run, the edges just outside the changed region —
-   "Adversarial reading".
+   "Adversarial reading". Name the other side of every branch the diff
+   adds — "The Truth Table Test" — and where the change brings a thing
+   into being, walk its create, read, update and delete together —
+   "The CRUD Lifecycle check". Follow a changed value past symbol
+   search: into wire shapes, stored columns, flags, and readers written
+   in another language that a name search never finds.
 3. Reproduce or trace every suspected defect before filing — "Verify
    before reporting"; what qualifies as a finding at all — "What a
-   finding is".
+   finding is". Name the one fact the change's safety rests on and the
+   rung it reached — "Label uncertainty exactly"; a P1 whose fact stands
+   below rung 4 (ran it) is labelled unproven. File a behavior finding
+   with the command that shows it and that command's output, because
+   the lead reruns it and drops what does not reproduce — bee-reviewing
+   SKILL.md, "A behavior finding survives only on a run".
 4. Set severity by consequence, not offense — "Severity calibration";
    torn between two levels, take the lower and name the condition for
    the higher — "Severity is a spent signal".
@@ -43,7 +60,7 @@ Lead with findings. Do not rewrite code.
    "Label uncertainty exactly"; keep out-of-scope bugs in a separate
    follow-up note, never against the verdict — "Scope discipline".
 
-### Core roles — always dispatched, in parallel
+### Core lenses — always dispatched, in parallel
 
 #### code-quality
 
@@ -53,9 +70,9 @@ Lead with findings. Do not rewrite code.
 
 #### architecture
 
-- **Purpose:** Catch structural damage — boundaries, coupling, API design, maintainability, drift from plan.md structure.
+- **Purpose:** Catch structural damage — boundaries, coupling, API design, maintainability, drift from plan.md structure, and the bolted-on test: known on day one, would it look like this?
 - **Scope:** Set by the invoking layer; drift is judged against the in-scope plan.md, never against memory.
-- **Method:** Reviewer method 1–5, step-2 lens as Purpose.
+- **Method:** Reviewer method 1–5, step-2 lens as Purpose; a branch or mode the change could delete outright, named, files as a P2 standards finding.
 
 #### security
 
@@ -69,12 +86,12 @@ Lead with findings. Do not rewrite code.
 - **Scope:** Set by the invoking layer.
 - **Method:** Reviewer method 1–5, step-2 lens as Purpose; a missing test is filed with the uncovered scenario named — "What a finding is".
 
-### Conditional roles — spawned by diff triggers
+### Conditional lenses — spawned by diff triggers
 
 Scan the diff once, mechanically — file paths and hunks, not vibes —
-and spawn every matched role in the same parallel wave, same isolation
+and spawn every matched lens in the same parallel wave, same isolation
 contract, same card shape. Cap the wave at six total; if more triggers
-match, fold the extra lens into the closest core role's Purpose and say
+match, fold the extra lens into the closest core lens's Purpose and say
 so in the synthesis.
 
 #### performance
@@ -129,6 +146,9 @@ File: `path`
 Line(s): <line>
 Snippet: <small relevant snippet>
 Why this proves the issue: <one sentence>
+Command: <exact command that shows the failure, or none for a doc or spec finding>
+Output: <what it printed>
+Expected: <what the intent requires>
 
 ## Proposed Fix
 Recommended: <smallest credible fix>
@@ -141,6 +161,23 @@ Tradeoff: <if any>
 `autofix_class` routes the work — `gated_auto` (concrete fix applied
 after orchestrator judgment), `manual` (needs design input), `advisory`
 (report-only) — and never bypasses judgment or the merge question.
+
+## Dismissal shape
+
+A suspicion that was raised and then dropped is NOT a finding: it takes
+no severity, no axis, no `autofix_class`, and it never enters the summary
+line's counts. It takes one line in the report's Dismissed section:
+
+```markdown
+- <suspicion, one line> — `path:line` — dismissed: <reason>
+```
+
+`reason` is REQUIRED and names what was checked, never a verdict word —
+"traced `retry()`; the guard at `src/net/retry.ts:118` already catches
+it", "could not reproduce against the frozen diff", "duplicate of [P2]
+<title>". "Not a problem" and "low value" are not reasons. Omit the whole
+section when nothing was dismissed; an empty section is noise, not
+honesty.
 
 ## Human UAT
 

@@ -109,6 +109,10 @@ fn models_with_descriptions(normalized: &JMap, raw_models: Option<&Value>) -> JM
 
 pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     let state = read_state_full(ctx)?;
+    build_status_with_state(ctx, lanes_full, state)
+}
+
+pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JMap) -> R<JMap> {
     let onboarding_raw = read_onboarding(ctx)?.unwrap_or(Value::Null);
     let handoff = read_handoff(ctx)?.unwrap_or(Value::Null);
     let cells = list_cells(ctx, None, None)?;
@@ -172,11 +176,11 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     }
     let raw_for_validation = read_raw_config_for_validation(ctx)?;
     for problem in validate_models_config(raw_for_validation.as_ref()) {
-        // `${problem.runtime ? ` models.${runtime}.${slot}:` : ''}` — slot is
+        // `${problem.runtime ? ` team.${runtime}.${slot}:` : ''}` — slot is
         // explicitly null on runtime-level rows, templating as "null".
         let runtime_part = match (problem.runtime, problem.slot) {
             (Some(rt), slot) if !rt.is_empty() => {
-                format!(" models.{rt}.{}:", slot.as_deref().unwrap_or("null"))
+                format!(" team.{rt}.{}:", slot.as_deref().unwrap_or("null"))
             }
             _ => String::new(),
         };
@@ -340,7 +344,7 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         "models".into(),
         Value::Object(models_with_descriptions(
             &config_models.models,
-            config_models.raw.get("models"),
+            config_models.raw.get("team"),
         )),
     );
     // ── PUBLIC CONTRACT: `tier_mix` is renamed to `role_mix` (D6) ──────────

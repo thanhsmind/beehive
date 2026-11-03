@@ -54,7 +54,7 @@ pattern.
 - `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs:37`
 - `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:31`
 - `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:34-40`
-- `.bee/config.json` — `models.claude.extraction: "sonnet"`, live and unused
+- `.bee/config.json` — `team.claude.extraction: "sonnet"`, live and unused
 - `rg -n extraction packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` — no match
 - `packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs:32-39` — `"extraction" => "bee-extract"`, the only mapping, unreachable from `prepare`
 - `packages/bee-rs/crates/bee/src/hooks/model_guard.rs:653-659` — source comment: "there is no `--kind` value that resolves the extraction slot today"

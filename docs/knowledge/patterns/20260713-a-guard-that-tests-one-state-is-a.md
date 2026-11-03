@@ -7,6 +7,7 @@ timestamp: 2026-07-13
 bee:
   id: pattern-20260713-a-guard-that-tests-one-state-is-a
   lifecycle: active
+  areas: [hook-runtime]
   sources: ["docs/history/learnings/critical-patterns.md#PAT31", "original feature: terminal-phase-gate"]
   polarity: pitfall
   critical: true

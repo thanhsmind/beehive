@@ -52,18 +52,86 @@ pub(crate) fn test_results_path(root: &Path) -> PathBuf {
 // flag" posture). Absent `--report` never touches `trace.report` at all —
 // old finish behavior stays byte-identical.
 
-/// The Result form's five keys, in the order worker-cell.md documents them.
+/// The Result form's five REQUIRED keys, in the order worker-cell.md
+/// documents them.
 pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests", "deviations"];
+
+/// reflection-becomes-lesson: the Result form's optional keys — accepted,
+/// never demanded.
+///
+/// `mistakes` is the worker's answer to "did anything go wrong": an array,
+/// each entry one mistake in two parts. It is OPTIONAL here on purpose. Every
+/// caller that shipped before it exists keeps working byte for byte, and the
+/// cap adds no refusal of its own — the door that demands the answer is
+/// `bee close`, which reads the capped cells and names the ones that never
+/// answered. Making the key required here would refuse caps mid-flight for a
+/// field their prompt never mentioned.
+///
+/// `baseline` (proof-honesty D4, decision f4261145): what the same proof
+/// command produced on the base commit before this change — the floor a
+/// result is read against. Optional here so callers without a baseline keep
+/// capping cleanly; validated as a non-empty string when present and stored
+/// on the cell trace.
+pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 7] = [
+    "mistakes",
+    "baseline",
+    "reaction",
+    "skipped",
+    "unknowns",
+    "found",
+    "stopped",
+];
+
+pub(crate) const REACTION_VALUES: [&str; 4] = ["confirm", "partial", "challenge", "blocked"];
 
 /// D8 (docs/history/test-doctrine/CONTEXT.md) proof-string separator —
 /// three segments joined by `" — "` (space, em dash U+2014, space).
 pub(crate) const PROOF_SEPARATOR: &str = " — ";
+
+/// D1/D3 (docs/history/proof-strength-and-expiry/CONTEXT.md) — the closed
+/// vocabulary a cap's proof line may record in its RESULT segment. Each
+/// value's meaning is written beside it HERE and nowhere else: a meaning
+/// restated in a second place is how a closed vocabulary decays back into
+/// three free-text values. Checked on the WRITE path only, in
+/// [`parse_report_flag`] — see the D2 note on [`parse_tests_proof`].
+pub(crate) const PROOF_RESULT_VALUES: [&str; 3] = [
+    // the real product or command was driven and its observable result inspected
+    "green:live",
+    // automated tests passed
+    "green:unit",
+    // it compiled, type-checked, linted, or a parity/pointer check passed,
+    // with nothing executed
+    "green:static",
+];
+
+pub(crate) fn proof_reason_names_evidence(reason: &str) -> bool {
+    reason.split_whitespace().any(|token| {
+        token.starts_with("http://")
+            || token.starts_with("https://")
+            || token.starts_with('/')
+            || token.contains("evidence/")
+    })
+}
 
 /// parseTestsProof — splits a D8 proof string `<command> — <result> —
 /// <scope reason>` into its three segments, splitting on the FIRST TWO
 /// occurrences of [`PROOF_SEPARATOR`] only, so the reason segment may
 /// itself contain the same separator. `None` when fewer than two
 /// separators are found, or any segment trims to empty.
+///
+/// This parser checks SHAPE only and is deliberately blind to
+/// [`PROOF_RESULT_VALUES`]. D2 (docs/history/proof-strength-and-expiry):
+/// the READ path — `feature_proof_check` (proof.rs) — calls this same
+/// function over already-capped cells, so a vocabulary check HERE would
+/// retroactively refuse the ~200 historical caps that carry a bare
+/// `green`. The vocabulary is checked in [`parse_report_flag`] instead, on
+/// the tuple this returns, write path only. That inaction IS the write/read
+/// split; do not "fix" it by moving the check down here.
+///
+/// D4 (docs/history/pi-harness-workflow-parity/CONTEXT.md): this same parsed
+/// proof tuple feeds both command validation against cell.verify and the four
+/// structured trace proof fields (`verify_command`, `verify_output`,
+/// `verify_passed`, `verification_evidence`) on a successful cap.
 pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
     let first = s.find(PROOF_SEPARATOR)?;
     let (command, rest) = s.split_at(first);
@@ -88,23 +156,25 @@ pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
 /// split on the FIRST TWO ` — ` separators only, so the reason may itself
 /// carry the same separator) — never the retired `boundary`/`undeclared`
 /// enum. A result segment reading `red` refuses the cap outright (D6's
-/// spirit: a red is fix-first, never a done). Every refusal names the
+/// spirit: a red is fix-first, never a done), and every other result
+/// segment must be one of [`PROOF_RESULT_VALUES`] (D1). Every refusal names the
 /// offending key so a cold reader fixes it without re-deriving the shape
 /// from this function.
 pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
     let parsed: Value = serde_json::from_str(raw)
         .map_err(|e| Fail::Thrown(format!("cells finish: --report is not valid JSON: {e}")))?;
-    let Value::Object(map) = parsed else {
+    let Value::Object(mut map) = parsed else {
         return Err(Fail::Thrown(format!(
             "cells finish: --report must be a JSON object with keys {}.",
             REPORT_KEYS.join(", ")
         )));
     };
     for key in map.keys() {
-        if !REPORT_KEYS.contains(&key.as_str()) {
+        if !REPORT_KEYS.contains(&key.as_str()) && !REPORT_OPTIONAL_KEYS.contains(&key.as_str()) {
             return Err(Fail::Thrown(format!(
-                "cells finish: --report has unknown key \"{key}\" — only {} are allowed.",
-                REPORT_KEYS.join(", ")
+                "cells finish: --report has unknown key \"{key}\" — only {} (plus the optional {}) are allowed.",
+                REPORT_KEYS.join(", "),
+                REPORT_OPTIONAL_KEYS.join(", ")
             )));
         }
     }
@@ -147,6 +217,82 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
             ))
         }
     }
+    // reflection-becomes-lesson: `mistakes` is optional, but a `mistakes` that
+    // is not an array is a typo, not an answer — and the shape is refused here
+    // rather than silently read as "no mistakes", which would turn a worker's
+    // written mistake into the clean-run statement. This widens no existing
+    // refusal: before this key existed, ANY spelling of it was refused
+    // outright as an unknown key.
+    match map.get("mistakes") {
+        None | Some(Value::Array(_)) => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"mistakes\" must be an array — one entry per mistake, each \"<what went wrong> — <what would have been better> — <fix-at>\" (fix-at is one of architecture | check | doctrine | none) or {wrong, better, fix_at}; an empty array states that this cell hit none.".to_string(),
+            ))
+        }
+    }
+    // proof-honesty D4 (decision f4261145): `baseline` is optional, but
+    // when present it must be a non-empty string. Any other JSON type, or
+    // an empty/whitespace string, is refused by name with a fix line.
+    // Absent is legal and distinct from empty.
+    match map.get("baseline") {
+        None => {}
+        Some(Value::String(s)) if !js_trim(s).is_empty() => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"baseline\" must be a non-empty string — name what the same proof command produced on the base commit, or omit the key entirely.".to_string(),
+            ))
+        }
+    }
+    if let Some(value) = map.get("reaction") {
+        let lowered = match value {
+            Value::String(s) => js_trim(s).to_lowercase(),
+            _ => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: --report key \"reaction\" must be a string — the worker's stance toward the brief, one of {}.",
+                    REACTION_VALUES.join(", ")
+                )))
+            }
+        };
+        if !REACTION_VALUES.contains(&lowered.as_str()) {
+            return Err(Fail::Thrown(format!(
+                "cells finish: --report key \"reaction\" must be one of {} — the worker's stance toward the brief.",
+                REACTION_VALUES.join(", ")
+            )));
+        }
+        map.insert("reaction".into(), Value::String(lowered));
+    }
+    for key in ["skipped", "unknowns", "found"] {
+        match map.get(key) {
+            None => {}
+            Some(Value::Array(items))
+                if items
+                    .iter()
+                    .all(|item| matches!(item, Value::String(s) if !js_trim(s).is_empty())) => {}
+            _ => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: --report key \"{key}\" must be an array of non-empty strings — [] states none, an absent key states no answer."
+                )))
+            }
+        }
+    }
+    match map.get("stopped") {
+        None => {}
+        Some(Value::String(s)) if !js_trim(s).is_empty() => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"stopped\" must be a non-empty string — name the part of the cell not done and the evidence for it.".to_string(),
+            ))
+        }
+    }
+    if matches!(map.get("reaction"), Some(Value::String(r)) if r == "partial")
+        && !map.contains_key("stopped")
+    {
+        return Err(Fail::Thrown(
+            "cells finish: --report key \"reaction\" is \"partial\" without \"stopped\" — add \"stopped\": \"<the part not done> — <evidence>\"."
+                .to_string(),
+        ));
+    }
     // D8 (docs/history/test-doctrine/CONTEXT.md): a cap's own proof lives
     // WITH the cell, not in a fixed enum — `tests` is a proof string
     // `<command> — <result> — <scope reason>`, written by the agent that
@@ -161,7 +307,7 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
     match map.get("tests") {
         Some(Value::String(s)) if s == "boundary" || s == "undeclared" => {
             return Err(Fail::Thrown(format!(
-                "cells finish: --report key \"tests\" no longer accepts \"{s}\" — the boundary/undeclared enum is retired. Record a proof string instead: \"<command> — <result> — <scope reason>\" (e.g. \"cargo test -p bee — green — touched close.rs\"). In a no-test-sentinel repo, name the command segment \"none\" and put the parity/docs proof used in the reason segment (e.g. \"none — green — regen parity check only\")."
+                "cells finish: --report key \"tests\" no longer accepts \"{s}\" — the boundary/undeclared enum is retired. Record a proof string instead: \"<command> — <result> — <scope reason>\" (e.g. \"cargo test -p bee — green:unit — touched close.rs\"). In a no-test-sentinel repo, name the command segment \"none\" and put the parity/docs proof used in the reason segment (e.g. \"none — green:static — regen parity check only\")."
             )))
         }
         Some(Value::String(s)) => match parse_tests_proof(s) {
@@ -170,10 +316,29 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
                     "cells finish: --report key \"tests\" result segment is \"red\" — a red is fix-first, never a cap. Fix the failure, re-run the proof, and cap with a passing result.".to_string(),
                 ))
             }
+            // D1 (docs/history/proof-strength-and-expiry/CONTEXT.md): the
+            // result segment is closed over `PROOF_RESULT_VALUES`, checked
+            // HERE — on the tuple, beside `red`, write path only — so the
+            // read path keeps accepting historical bare-`green` caps (D2).
+            // The refusal names the whole legal set, `ROUTE_CLASS_VALUES`
+            // style, because this message is what a cold worker fixes from.
+            Some((_, result, _)) if !PROOF_RESULT_VALUES.contains(&result.as_str()) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: --report key \"tests\" result segment is \"{result}\" — a cap records HOW the change was shown to work, so the result must be one of {} (a bare \"green\" no longer says which).",
+                    PROOF_RESULT_VALUES.join(", ")
+                )))
+            }
+            Some((_, result, reason))
+                if result == "green:live" && !proof_reason_names_evidence(&reason) =>
+            {
+                return Err(Fail::Thrown(
+                    "cells finish: --report key \"tests\" result \"green:live\" names no evidence locator in its scope reason — a live proof must say where it can be reopened: a run URL (http:// or https://), an absolute path, or a path containing evidence/ (control-bee writes to $VERIFY_HOME/evidence/<run-id>).".to_string(),
+                ))
+            }
             Some(_) => {}
             None => {
                 return Err(Fail::Thrown(
-                    "cells finish: --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\" — three non-empty segments separated by \" — \" (e.g. \"cargo test -p bee — green — touched close.rs\")."
+                    "cells finish: --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\" — three non-empty segments separated by \" — \" (e.g. \"cargo test -p bee — green:unit — touched close.rs\")."
                         .to_string(),
                 ))
             }
@@ -762,4 +927,179 @@ pub(crate) fn prescan_claim(root: &Path, id: &str) -> MR<()> {
         delegate_only(read_claim(&control, id))?;
     }
     Ok(())
+}
+
+// ─── slp-advisor-nudge an-3: the cap path's advisor-nudge arm (9e5eda5b) ───
+
+/// Pinned prefix of the cap-path advisor-nudge refusal headline
+/// (message-contract test: `cap_refuses_while_an_advisor_nudge_for_the_cells_
+/// feature_is_unanswered`, verbs/cells/tests.rs). It reads `capCell: …` like
+/// every other refusal this door emits, rather than borrowing the close
+/// door's own `CLOSE_ADVISOR_NUDGE_DEBT_PREFIX`: a reader looking at a
+/// refused cap must see WHICH verb refused, in its own voice.
+pub(crate) const CAP_ADVISOR_NUDGE_DEBT_PREFIX: &str = "capCell: advisor nudge debt for";
+
+/// The cap door's advisor-nudge refusal text, or `None` when this cell's
+/// feature owes nothing. 9e5eda5b arms the debt at the CELL level too, and
+/// this is that tooth: the cap is where the obligation bites first, long
+/// before `bee close` or `bee worktree merge` ever run.
+///
+/// The count is `feature_advisor_nudge_debt` (verbs/supervisor.rs) and
+/// nothing else — the SAME function both boundary doors call. One obligation
+/// read three ways would be three obligations; what is shared is the count,
+/// and each door writes its own prose.
+///
+/// An empty feature name owes nothing: a nudge row carries no feature when
+/// its target held no claim (423871d7), so "no name" already means "counts
+/// against nothing" in the store, and asking the debt about `""` must not
+/// invent an answer the record cannot support.
+pub(crate) fn advisor_nudge_cap_refusal(root: &Path, id: &str, feature: &str) -> MR<Option<String>> {
+    if feature.is_empty() {
+        return Ok(None);
+    }
+    let debt = crate::verbs::supervisor::feature_advisor_nudge_debt(root, feature)
+        .map_err(|_: crate::verbs::drivers::Delegate| Fail::Delegate)?;
+    if debt.count == 0 {
+        return Ok(None);
+    }
+    Ok(Some(
+        [
+            format!(
+                "{CAP_ADVISOR_NUDGE_DEBT_PREFIX} \"{feature}\" — cell \"{id}\" cannot cap: {} advisor nudge(s) with no consult and no recorded decline ({}).",
+                debt.count,
+                crate::verbs::drivers::js_join(&debt.ids, ", ")
+            ),
+            "remedy: run the advisor consult for each row above, then record what came of it with bee decisions log --tags advisor-nudge — or record a reasoned decline the same way. The decision text must NAME the row id; one decision answers one row, and a decision naming no row clears nothing.".to_string(),
+            format!("next: settle the advisor-nudge debt above, then re-run the cap for {id}"),
+        ]
+        .join("\n"),
+    ))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GitFacts {
+    pub(crate) head: String,
+    pub(crate) changed_files: Vec<String>,
+}
+
+pub(crate) fn report_from_job(
+    _job: &Value,
+    result: &crate::herding::mailbox::MailboxResult,
+    git: Option<GitFacts>,
+    cell_verify: &str,
+    proof_result: &str,
+    proof_reason: Option<&str>,
+) -> Result<String, String> {
+    let outcome = result.summary.trim();
+    if outcome.is_empty() {
+        return Err("result summary is empty".to_string());
+    }
+    let Some(git_facts) = git else {
+        return Err("cannot build report: git facts missing (git HEAD sha required)".to_string());
+    };
+    let commit = git_facts.head.trim();
+    if commit.is_empty() {
+        return Err("git HEAD sha is empty".to_string());
+    }
+    let files = if !result.files_changed.is_empty() {
+        result.files_changed.clone()
+    } else {
+        git_facts.changed_files
+    };
+    let cell_verify = cell_verify.trim();
+    if cell_verify.is_empty() {
+        return Err("cell verify command is empty".to_string());
+    }
+    let proof_result = proof_result.trim();
+    if proof_result.is_empty() {
+        return Err("proof_result is empty".to_string());
+    }
+    let reason = match proof_reason {
+        Some(r) if !r.trim().is_empty() => r.trim(),
+        _ => result.proof.trim(),
+    };
+    if reason.is_empty() {
+        return Err("worker result proof text is empty (FIX: pass --proof-reason)".to_string());
+    }
+    let tests = format!("{cell_verify}{PROOF_SEPARATOR}{proof_result}{PROOF_SEPARATOR}{reason}");
+    let mut deviations = Vec::new();
+    if let Some(dissent) = &result.dissent {
+        if !dissent.claim.trim().is_empty() {
+            deviations.push(Value::String(dissent.claim.clone()));
+        }
+    }
+    let mut map = serde_json::Map::new();
+    map.insert("outcome".to_string(), Value::String(outcome.to_string()));
+    map.insert("commit".to_string(), Value::String(commit.to_string()));
+    map.insert(
+        "files".to_string(),
+        Value::Array(files.into_iter().map(Value::String).collect()),
+    );
+    map.insert("tests".to_string(), Value::String(tests));
+    map.insert("deviations".to_string(), Value::Array(deviations));
+    serde_json::to_string(&Value::Object(map)).map_err(|e| e.to_string())
+}
+
+pub(crate) fn read_job_git_facts(cwd: &Path, main_root: &Path) -> Option<GitFacts> {
+    use crate::verbs::worktree::run_git;
+
+    let head_out = run_git(cwd, &["rev-parse", "HEAD"]);
+    if head_out.status != Some(0) {
+        return None;
+    }
+    let head = head_out.stdout.as_deref().unwrap_or("").trim().to_string();
+    if head.is_empty() {
+        return None;
+    }
+
+    let mut changed_set = std::collections::BTreeSet::new();
+
+    let main_head_out = run_git(main_root, &["rev-parse", "HEAD"]);
+    if main_head_out.status == Some(0) {
+        let main_sha = main_head_out.stdout.as_deref().unwrap_or("").trim();
+        if !main_sha.is_empty() {
+            let merge_base_out = run_git(cwd, &["merge-base", "HEAD", main_sha]);
+            if merge_base_out.status == Some(0) {
+                let base_sha = merge_base_out.stdout.as_deref().unwrap_or("").trim();
+                if !base_sha.is_empty() {
+                    let range = format!("{base_sha}..HEAD");
+                    let diff_out = run_git(cwd, &["diff", "--name-only", &range]);
+                    if diff_out.status == Some(0) {
+                        if let Some(stdout) = &diff_out.stdout {
+                            for line in stdout.lines() {
+                                let path = line.trim();
+                                if !path.is_empty() {
+                                    changed_set.insert(path.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let porcelain_out = run_git(cwd, &["status", "--porcelain"]);
+    if porcelain_out.status == Some(0) {
+        if let Some(stdout) = &porcelain_out.stdout {
+            for line in stdout.lines() {
+                let line = line.trim_end_matches(['\r', '\n']);
+                if line.len() >= 4 {
+                    let rest = &line[3..];
+                    let path = match rest.split_once(" -> ") {
+                        Some((_, dest)) => dest.trim(),
+                        None => rest.trim(),
+                    };
+                    if !path.is_empty() {
+                        changed_set.insert(path.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    Some(GitFacts {
+        head,
+        changed_files: changed_set.into_iter().collect(),
+    })
 }

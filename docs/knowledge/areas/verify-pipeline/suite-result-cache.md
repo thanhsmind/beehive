@@ -67,10 +67,12 @@ A test suite whose entire dependency closure is byte-identical to the last green
 - Corrupt store: silent cache-miss, then rewritten clean.
 - Mixed run: cached and executed suites coexist in one invocation; counts reported.
 - Introducing the cache broke three pre-existing selection tests that asserted real execution; settled rule above (hermetic tests opt out) rather than weakening assertions.
+- **The cap-time coverage advisory judges path shape, never the commit's content.** Tests written inside the changed source file itself — the ordinary layout for this repo's compiled runtime — touch no separately named test path, so a large cap earns the advisory while its new tests sit in the same diff. It stays a nudge: the exit code and the cap outcome are untouched. Read it as "no test FILE was touched", never as "no tests were added", because the line is recorded on the cap's own warnings where a later reader can mistake it for missing coverage.
 
 ## Open Gaps
 
 - Cache entries are label-keyed; renaming a suite orphans its entry harmlessly (stale entries are never pruned automatically).
+- Nothing reads the changed sources for tests written inside them, so the coverage advisory has a known false-positive class it cannot see.
 
 ## Pointers (implementation)
 

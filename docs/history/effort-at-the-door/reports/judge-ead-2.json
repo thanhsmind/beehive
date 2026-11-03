@@ -1,0 +1,11 @@
+{"schema":"judge-verdict/1","verdict":"PASS","checks":[
+{"id":"c1","name":"a: kind/lane tokens parsed at any position","status":"PASS","evidence":"model_guard.rs parse_anchored_markers is a prefix table of 6 known tokens in any order; parse test asserts kind=cell, lane=tiny from a mixed-order line"},
+{"id":"c2","name":"b: no [bee-kind:] -> legacy allow","status":"PASS","evidence":"door_effort returns None when markers.kind is None; codex leg falls back to cfg_effort; test effort_without_a_kind_token_is_allowed_unchanged"},
+{"id":"c3","name":"c: claude repair/remove, effort-param-repaired, one updatedInput with model repair","status":"PASS","evidence":"evaluate_claude_dispatch wraps evaluate_claude_model and reuses verdict.updated_input; tests effort_wrong_value_is_repaired_to_the_door_value, effort_missing_is_repaired_to_the_door_value, effort_on_a_role_with_no_base_is_removed, wrong_model_and_wrong_effort_land_in_one_repair"},
+{"id":"c4","name":"d: codex expected = ladder value, deny posture unchanged","status":"PASS","evidence":"evaluate_codex_spawn expected = door_effort(...).effort else cfg_effort; deny arms untouched; test codex_spawn_reads_the_laddered_reasoning_effort (xhigh exit 0, high exit 2 codex-spawn-effort-mismatch)"},
+{"id":"c5","name":"e: derive_dispatch_economics four keys in order","status":"PASS","evidence":"twin inserts the four keys after enforcement from verdict.effort; order test asserts the 10-key order and agreement with prepare"},
+{"id":"c6","name":"f: stale doc line deleted","status":"PASS","evidence":"diff line '-/// * Claude's Agent interface has no effort parameter.'"},
+{"id":"c7","name":"g: no new code comments","status":"PASS","evidence":"rg over git show b3e1484b5 -- packages/: only a deletion; comment-baseline --check clean"},
+{"id":"c8","name":"h: the eight tests exist; hooks::model_guard 80 passed","status":"PASS","evidence":"cargo test --release -p bee hooks::model_guard: 80 passed; 0 failed"},
+{"id":"c9","name":"i: kind never derived from role name","status":"PASS","evidence":"door_effort reads kind only from markers.kind; dispatch_kind_for_role used only in fix-text arms"}
+],"fixability":"automatic","confidence":"high"}

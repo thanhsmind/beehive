@@ -883,6 +883,9 @@ use std::time::Instant;
             deviations: vec![json!("dev-file-line")],
             deviation: Some("  dev-flag-line  ".to_string()),
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -892,10 +895,13 @@ use std::time::Instant;
             // the --report contract itself, so it just needs SOME valid
             // proof string.
             report: Some(
-                r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":[]}"#
+                r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[]}"#
                     .to_string(),
             ),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         };
         // decision 13ce1858 (test-cadence-boundary D1): `cap_cell_from_flags`
         // dropped its `test_root` parameter with the per-cap test run.

@@ -22,11 +22,16 @@ is the **orchestrator**. `bee orient` shows where the work stands either way.
 
 You launch workers and tend results; you do not implement. The wave runs
 inside the feature's worktree (rule: agents-worktree-first). Claiming from
-main is control-plane and fine; a Task-tool worker inherits the session's
-OS cwd, so dispatching an execution worker while cwd is main cannot write
-into the worktree and dies on the write guard — enter the worktree first
-(EnterWorktree on Claude Code, or a session/pane opened at the worktree
-path) and dispatch from there. A `tiny` cell may run inline in this
+main is control-plane and fine; execution depends on transport:
+
+- **Native subagents** (Agent tool, Task tool) inherit the session's OS
+  cwd. From main they cannot write into the worktree — the write guard
+  refuses. Enter the worktree first (EnterWorktree, or a session/pane
+  opened at the worktree path) and dispatch from there; use `bee worktree exit`
+  as the way back.
+- **External herding workers** (bee herding run with --cwd) receive an
+  explicit cwd at process start. The leader can stay in main while the
+  worker writes in the worktree — no manual entry required. A `tiny` cell may run inline in this
 session; `small` and up always dispatches — one worker per cell
 (`references/swarming-reference.md` ("Single execution worker in full")),
 parallel by default: disjoint cells fan out concurrently (reservations
@@ -42,23 +47,42 @@ From two cells up, state the one-line concurrency plan before dispatching.
    of aborting the batch (`--feature` omitted only resolves from a bound
    session lane or the default record's own feature; nothing resolving is
    a typed refusal, never an every-feature grab — pass `--limit <n>` to
-   bound how many cells of the wave are claimed). One cell, or a cell
+   bound how many cells of the wave are claimed). Add `--run` to have bee
+   run every herding payload of that wave in parallel and wait: you get one
+   `{ran, native, skipped}` value — one short row per herding cell, full
+   envelopes saved under `.bee/workers/<id>-wave-run.json` — and you launch
+   only the `native` items yourself, then cap each cell. One cell, or a cell
    needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
-   instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. The cell already declares the job that
+   instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. A user-facing cell carries its mapped feature file that way — `.bee/verify/verify-app/features/<feature>.md` with its last-modified date, so the worker can judge a stale map. The cell already declares the job that
    selects its model (`role`, required at `cells add`) — escalate onto the
    session model only where the work earns it
    (`bee cells escalate --id <id>`; rubric:
-   `references/swarming-reference.md`).
+   `references/swarming-reference.md`). Dispatches must follow the cell's
+   recorded role from the approved plan assignment. A re-route requires a
+   logged decision with tag `role-reroute` (`bee decisions log --relation touches:<id> --tag role-reroute`)
+   and `bee cells reroute --id <id> --role <role> --decision <id>`, never an ad hoc
+   role choice mid-run.
 3. Spawn with exactly that payload — a whole wave goes out in ONE message,
    one tool call per cell. Never paste session history; never hand a
    worker two cells.
-4. Tend: read each worker's Result form (the fenced
-   `{outcome, commit, files, tests, deviations}` block its prompt
-   requires), never its prose. Silence is not failure — inspect
-   `bee cells list` and `bee reservations list` before assuming stuck.
-5. On `[DONE]`: the worker's word is never the evidence. Goal-check on
-   smell; `bee cells judge` for undeclared-file hits. At
+4. Tend: read each worker's Result form
+   (`references/swarming-reference.md`, "Result Formats"), never its
+   prose. A `partial` result's `stopped` part becomes a new cell or a
+   dissent verdict before close; your own final report states the four
+   layers (same section). Silence is not failure — inspect `bee cells list` and
+   `bee reservations list` before assuming stuck. What stuck means, the
+   pilot for a same-pattern wave, and the user's stop word:
+   `references/swarming-reference.md` ("Operating Contract in full",
+   steps 3 and 6).
+5. On `[DONE]`: the worker's word is never the evidence. Run the leader
+   completeness check before accepting (`bee cells leader-check`) — the cap
+   is not the end of the cell; the recorded mark is. Compare every approved
+   requirement (the cell's `must_haves`, the plan's acceptance criteria)
+   against the actual artifacts, wiring, and recorded proof; the worker's
+   report only tells you where to look
+   (`bee-hive/references/routing-and-contracts.md`, "Leader completeness check").
+   A test re-run stays on smell; `bee cells judge` for undeclared-file hits. At
    `standard`/`high-risk`, every `behavior_change` cell owes a
    `bee cells judge-record` verdict or `bee close` refuses (`judge-debt`) —
    run the slice judge before you reach for close.
@@ -74,9 +98,14 @@ missing context; (2) `bee cells escalate --id <id>` and re-dispatch — the
 session model is this session, so that rung hands the blocker to you;
 (3) surface it to the user with the worker's diagnosis. If it invalidates the plan, return to bee-planning.
 
+**Other failures** — a handoff, a provider error, a red, a silent death —
+each take one fixed response, and a second failed re-dispatch goes to the
+user: `references/swarming-reference.md` ("Failure responses").
+
 **Completion:** slice done with more approved work remaining → return to
-bee-planning for the next batch (an approved plan stays frozen; planning
-shapes the next batch, never reopens it). Final slice green → the road
+bee-planning for the next batch IN THE SAME TURN — the slice boundary is
+never a user question, never a "say go" (an approved plan stays frozen;
+planning shapes the next batch, never reopens it). Final slice green → the road
 splits on `uat_stop`:
 
 - Default `uat_stop: "close"` (absent means this): merge FIRST, without
@@ -111,41 +140,70 @@ recorded.
 The 65%-context handoff holds mid-wave (rule: agents-context-handoff-65). When a unit finishes and approved work remains, continue
 in-session; finishing a unit is never a reason to stop.
 
+**Reply:** capped cells over total, the proof line per cell, the merge or
+uat state, blockers, and the one next action.
+
 ## Execute (worker)
 
 Your dispatch prompt is the assignment: one cell, claimed for you, its
 listed files reserved under your nickname. Everything else comes from CLI
 outputs — when a verb refuses, its message names the fix.
 
+Two contract guards can refuse the cell before you run it — at the claim
+door and again at `dispatch prepare --kind cell` — both typed, both
+mutating nothing, both naming their own remedy: `CONTRACT_RETIRED` /
+`CONTRACT_UNSETTLED` when a decision the cell cites has left the active set
+or carries a `waiting`/`due` trigger, and `CONTRACT_UNCITED` — the mint
+trap — when a test-writing cell cites no `contract:<name>` decision at all.
+A `cell.decisions` entry that resolves to no store decision (a local `D1`
+pointing into a CONTEXT.md table) is passed over silently, never refused
+(`docs/knowledge/areas/workflow-state/dispatch.md`).
+
+The prompt carries the user's original request VERBATIM under a
+DO-NOT-PARAPHRASE header. No layer may replace or paraphrase it, yours
+included: add guidance beside those words, never over them.
+
 1. Read `AGENTS.md`, then the cell's `CONTEXT.md` and plan (paths in the
    prompt). Conform before you code: scout adjacent patterns, reuse
    existing helpers, match the codebase's idiom. Authoring tests? Judge
    existing coverage first — `.bee/expertise/tests.md`.
 2. Implement exactly the assigned cell. Reserve any additional path before
-   writing (`bee reservations reserve`). Package installs and
-   architectural changes are not yours to make — `[BLOCKED]` with the
-   proposal.
+   writing (`bee reservations reserve`). Package installs, any new
+   dependency (vendored or declared), and architectural changes are not
+   yours to make — `[BLOCKED]` with the proposal. A
+   contract or API change the cell did not name is the orchestrator's
+   call — `[BLOCKED]` with the options. Trading data quality or the
+   user's experience for a technical target (speed, a green test, a
+   smaller diff) is never a worker's trade — `[BLOCKED]` with the
+   options.
 3. When reality disagrees with the cell: a bug in touched code → fix it,
    record the deviation; a missing piece the outcome depends on → add it,
    record; blocking breakage in your path → fix, record; anything
    architectural → `[BLOCKED]`. Never reinterpret a locked decision to
-   make the cell fit. An unexpected red or an unfamiliar mechanism
+   make the cell fit. Disagreeing with the cell is a RECORD, never a
+   silent workaround — `bee cells dissent --id <cell> --reason "<claim>"
+   --alternative "<instead>" --severity blocker|consider`, then
+   `[BLOCKED]`. An unexpected red or an unfamiliar mechanism
    mid-cell is a pull moment: `bee knowledge search --text "<symptom>"`
    surfaces matching patterns and area concepts before you guess.
-4. Commit once: subject describes the change in imperative mood; the last
-   line of the body is the literal trailer `cell: <id>` — a bare id alone
-   fails the cap.
+4. Before the commit, revert any edit the proof did not need. Commit
+   once: subject describes the change in imperative mood; the last line of
+   the body is the literal trailer `cell: <id>` — a bare id alone fails
+   the cap.
 5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>
    --report '<json>'` — cap and release in one verb, `--report` REQUIRED
-   and carrying the same Result form you return (`{outcome, commit,
-   files, tests, deviations}`), which finish validates key-for-key onto
-   the trace. `tests` is a proof line `<command> — <result> — <scope
-   reason>`: pick the proof your change type needs (code → related tests
-   green; docs → parity/pointer checks; behavior → judge verdict), run it
-   yourself, and record it — a `red` result refuses the cap. `bee close`
-   and `bee worktree merge` check that recorded proof at the boundary;
-   they run nothing themselves. CI runs the full declared command on
-   every push — the one deterministic net.
+   and carrying the Result form you return
+   (`references/swarming-reference.md`, "Result Formats"). Its `tests`
+   proof line is yours to pick (code → related tests green; docs →
+   parity/pointer checks; behavior → judge verdict; user-facing surface →
+   drive its mapped feature and inspect the result, the evidence locator
+   named in the scope reason, `green:live`), run and record — a `red`
+   result refuses the cap. For
+   `green:live` on a `behavior_change` cell, the scope reason names the
+   before-state you saw on main. `bee close` and `bee worktree merge`
+   check that recorded proof at the boundary; they run nothing
+   themselves. CI runs the full declared command on every push — the
+   one deterministic net.
 6. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
@@ -160,6 +218,8 @@ outputs — when a verb refuses, its message names the fix.
 - One cell per worker; the claim guard refuses a worker that claims, browses, or self-selects.
 - Conflicts are fixed in scope or reservations, never by being careful.
 - Never build on a red base — a red becomes its own fix-first cell (rule: agents-never-build-on-red).
+- Dispatches must follow the cell's recorded role from the approved plan assignment. A re-route requires a logged decision with tag `role-reroute` (`bee decisions log --relation touches:<id> --tag role-reroute`) and `bee cells reroute --id <id> --role <role> --decision <id>`, never an ad hoc role choice mid-run.
+- Two workers failing on one root cause stop the wave: dispatch nothing new, let in-flight work finish, open a fix-first cell, and resume after it caps.
 
 ## Headless
 

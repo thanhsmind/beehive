@@ -7,6 +7,7 @@ timestamp: 2026-08-14
 bee:
   id: pattern-20260814-probing-a-mutating-verb-against-the-default-record-is-still-a-write
   lifecycle: active
+  areas: [workflow-state]
   sources: ["traceable-runs capture pass, 2026-08-14: .bee/runtime/workflows/wf-4605d9c6/state.json — execution gate actor/at/reason/bypass_level overwritten by a probe call, discovered by comparing against the untouched context/shape sibling entries, repaired by hand-restoring the four fields to null (no CLI flag path can write null to --actor)", "docs/history/learnings/20260814-traceable-runs-capture.md"]
   polarity: pitfall
   critical: true

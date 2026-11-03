@@ -1,0 +1,86 @@
+{
+  "id": "slr-1",
+  "feature": "semantic-role-routing",
+  "role": "docs",
+  "lane": "small",
+  "title": "Add role assignment as a planning step and dispatch-follows-plan rule",
+  "action": "Update planning documentation and dispatch discipline to implement D1 (fc2bb09a): (1) Add role assignment to bee-planning/SKILL.md Shape step — after locked decisions are cited, planner reads team role descriptions via bee team show, assigns each stage/job to the semantically fitting role, and records the assignment in plan.md or the scoping synthesis. (2) Add Role assignments section to planning-reference.md plan.md template. (3) Add dispatch-follows-plan rule to AGENTS.md — dispatches must follow the cell's recorded role; a re-route requires a logged decision with tag role-reroute. (4) Update swarming-reference.md to cite cell role as the plan-approved assignment.",
+  "verify": "grep -q 'role assignment' .agents/skills/bee-planning/SKILL.md && grep -q 're-route' AGENTS.md",
+  "read_first": [],
+  "files": [
+    ".agents/skills/bee-planning/SKILL.md",
+    ".agents/skills/bee-planning/references/planning-reference.md",
+    "AGENTS.md",
+    ".agents/skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "deps": [],
+  "decisions": [
+    "fc2bb09a"
+  ],
+  "must_haves": {
+    "truths": [
+      "Planning SKILL.md names role assignment as a required step after locked decisions are cited.",
+      "planning-reference.md plan.md template includes a Role assignments section.",
+      "AGENTS.md carries a rule that dispatches follow the approved plan role assignment; a re-route needs a logged decision (tag role-reroute).",
+      "swarming-reference.md cites the cell role as the plan-approved assignment."
+    ]
+  },
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [
+    "docs/specs/doctrine-layer.md"
+  ],
+  "acceptance": "bee-planning names role assignment as planning step; AGENTS.md has dispatch-follows-plan rule; swarming-reference cites cell role as plan assignment; re-route format defined.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-slr-1",
+    "outcome": "Planning SKILL.md updated with role assignment step; planning-reference has Role assignments section; AGENTS.md has dispatch-follows-plan rule; swarming-reference cites cell role as plan-approved assignment",
+    "files_changed": [
+      ".agents/skills/bee-planning/SKILL.md",
+      ".agents/skills/bee-planning/references/planning-reference.md",
+      "AGENTS.md",
+      ".agents/skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: cell slr-1 touches rule home AGENTS.md only; applied_at files (bee-capturing, bee-hive, routing-and-contracts) not in scope"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T07:17:35.329Z",
+    "behavior_change": false,
+    "verification_evidence": "parity/pointer checks on 4 doc files",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "01a09eab-3249-745f-aa02-6ca79bf94040",
+    "verify_command": "grep -q 'role assignment' .agents/skills/bee-planning/SKILL.md && grep -q 're-route' AGENTS.md",
+    "claimed_at": "2026-09-14T07:03:10.918Z",
+    "sync_ack": "cell slr-1 touches rule home AGENTS.md only; applied_at files (bee-capturing, bee-hive, routing-and-contracts) not in scope",
+    "mistakes": [
+      {
+        "wrong": "dispatch wave herding run to agy-flash interrupted twice",
+        "better": "worker dispatch failed, executed inline as orchestrator"
+      }
+    ],
+    "report": {
+      "outcome": "Planning SKILL.md updated with role assignment step; planning-reference has Role assignments section; AGENTS.md has dispatch-follows-plan rule; swarming-reference cites cell role as plan-approved assignment",
+      "commit": "37985385a2acf408f21bf94c301c838b3e6e4f47",
+      "files": [
+        ".agents/skills/bee-planning/SKILL.md",
+        ".agents/skills/bee-planning/references/planning-reference.md",
+        "AGENTS.md",
+        ".agents/skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "grep -q 'role assignment' .agents/skills/bee-planning/SKILL.md && grep -q 're-route' AGENTS.md — green:static — parity/pointer checks on 4 doc files",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "dispatch wave herding run to agy-flash interrupted twice — worker dispatch failed, executed inline as orchestrator"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

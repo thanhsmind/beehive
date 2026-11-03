@@ -1,0 +1,159 @@
+{
+  "id": "llg-2",
+  "feature": "learning-loop-gaps",
+  "title": "A promotion lands in a skill the run actually opened",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D8",
+    "D9",
+    "D10"
+  ],
+  "files": [
+    "skills/bee-capturing/references/promotion.md",
+    "skills/bee-capturing/SKILL.md",
+    ".claude/skills/bee-capturing/references/promotion.md",
+    ".claude/skills/bee-capturing/SKILL.md",
+    ".claude-plugin/skills/bee-capturing/references/promotion.md",
+    ".claude-plugin/skills/bee-capturing/SKILL.md",
+    ".codex-plugin/skills/bee-capturing/references/promotion.md",
+    ".codex-plugin/skills/bee-capturing/SKILL.md",
+    ".opencode/skills/bee-capturing/references/promotion.md",
+    ".opencode/skills/bee-capturing/SKILL.md",
+    ".agents/skills/bee-capturing/references/promotion.md",
+    ".agents/skills/bee-capturing/SKILL.md",
+    "docs/history/learning-loop-gaps/reports/red-llg-2.md"
+  ],
+  "read_first": [
+    "docs/history/learning-loop-gaps/CONTEXT.md",
+    "docs/history/learning-loop-gaps/plan.md",
+    "skills/bee-capturing/references/promotion.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-writing-skills/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-capturing/references/promotion.md"
+  ],
+  "affects_specs": [],
+  "action": "SOURCE OF TRUTH is `skills/bee-capturing/`; every `.claude/`, `.claude-plugin/`, `.codex-plugin/`, `.opencode/`, `.agents/` copy is a RENDER — never hand-edit one, `bee dev regen` writes them.\n\nRED FIRST (D10, the Iron Law). Write 3 pressure scenarios into `docs/history/learning-loop-gaps/reports/red-llg-2.md`, run them against the CURRENT text, record verbatim rationalizations: (a) a Compound pass holds a durable finding whose target skill the run never opened — does the agent add a body line anyway; (b) the same finding, but the skill exists and clearly SHOULD have fired — does the agent reach for a description tune or a body edit; (c) an agent is told 'was this skill opened' should be a mechanical check — does it invent one from `affects_skills` or from the dispatch log. Each needs >= 3 combined pressures. Then the minimal edit, then re-run all three.\n\nTHE EDIT — a routing qualifier on Q3, NOT a fourth bar (D8). In `skills/bee-capturing/references/promotion.md`, the Promotion Decision Tree's Q3 reads (rg hits promotion.md:118-119) `3. Not mechanizable (judgment, taste, product intent) → promote as` / `   prose per the format below.` Extend that branch so prose has a routing rule: prose lands in a skill the run ACTUALLY OPENED; a skill that exists and should have fired but was never opened earns `tune description: <skill path>` — a description edit so it triggers next time — never a body edit. State the reason in one clause: text added to a skill nobody opens changes nothing. Say how 'opened' is judged from the run's own record (the skill's SKILL.md read, a dispatch naming it, or a command the skill documents), and that a finding routing to neither is filed as a learning rather than forced into a skill.\n\nDO NOT touch the three bars at Q1 (`promotion.md:110-113`) — they are filters that can reject; this qualifier only decides where a promotion LANDS, and shelving a router among filters mis-teaches all four. For the same reason, `promotion.md:111`'s `all three promotion criteria` and `SKILL.md:123`'s `all three bars` both stay THREE (claim 17) — confirm with `rg -n 'all three' skills/bee-capturing/` before and after.\n\nD9 — Q4 (rg hits promotion.md:124-127) already requires `prose survives only with a one-line recorded reason ... naming why no mechanical owner exists yet`. Write that reason for this rule where Q3's new text lives: nothing in `hooks/` records a Skill invocation, and the cell field `affects_skills` records which skills the work EDITS, a different fact — so no mechanical owner exists today.\n\nSKILL.md BODY (the Regrowth law, `bee-writing-skills/SKILL.md:44`): the body's Compound step 4 (rg hit SKILL.md:123-128) already ends by pointing at the tree. Add at most ONE clause naming the routing rule so a Compound pass sees it exists — a rule the agent never sees is a rule nobody applies — and keep the substance in `promotion.md`. If one clause cannot carry it, leave the body alone and say so as a deviation.\n\nAlso file, with `bee backlog add`, the durable owner Q4 asks for: a hook or session-record field that stamps which skills a run opened, which would turn this prose rule into a mechanical check.\n\nThen `.bee/bin/bee dev regen` and commit what it touched. Proof: the three RED scenarios re-run green, `rg -n 'all three' skills/bee-capturing/` still returns both lines unchanged, `bee dev regen` leaves no diff. Record that as the proof line.",
+  "verify": "rg -q 'tune description' skills/bee-capturing/references/promotion.md && rg -c 'all three' skills/bee-capturing/references/promotion.md skills/bee-capturing/SKILL.md",
+  "regen_obligation_ack": "regen run inside the cell via bee dev regen",
+  "must_haves": {
+    "truths": [
+      "Q3 of the Promotion Decision Tree carries the routing qualifier and the tune-description route",
+      "The three promotion bars are untouched and still counted as three in both places",
+      "Q4's one-line reason for why no mechanical owner exists is written",
+      "A backlog row names the durable owner that would replace the prose rule"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-capturing/references/promotion.md",
+        "substantive": "Q3 routing qualifier plus the recorded no-mechanism reason"
+      },
+      {
+        "path": "docs/history/learning-loop-gaps/reports/red-llg-2.md",
+        "substantive": "3 pressure scenarios with verbatim before-rationalizations and after-results"
+      }
+    ],
+    "key_links": [
+      "SKILL.md's Compound step 4 names the routing rule and points at the tree for its substance"
+    ],
+    "prohibitions": [
+      "No fourth bar — the three bars at Q1 are untouched",
+      "No code change — nothing under packages/",
+      "No hand-edit of a rendered skill copy",
+      "No invented mechanical check for whether a skill was opened"
+    ]
+  },
+  "trace": {
+    "worker": "w-llg-2",
+    "outcome": "A non-mechanizable promotion routes into a skill the run actually opened, or tunes the description of one that should have fired",
+    "files_changed": [
+      "skills/bee-capturing/references/promotion.md",
+      "skills/bee-capturing/SKILL.md",
+      "docs/history/learning-loop-gaps/reports/red-llg-2.md"
+    ],
+    "deviations": [
+      "The durable-owner backlog row the cell asked for was filed by the orchestrator, not the worker — the cell was dispatched to a herding pane, which is bee-ignorant by contract and runs no bee verb, so the obligation was never the worker's to meet — the plan was wrong about a fact",
+      "The worker left the cell claimed rather than capping it, for the same bee-ignorant-by-contract reason — followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T08:27:22.410Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f7f16c07-ef49-4e1b-8ef9-4f1206a75a38",
+    "claimed_at": "2026-09-02T08:22:29.265Z",
+    "mistakes": [
+      {
+        "wrong": "Cell llg-2's action told the worker to run bee backlog add while the cell's docs role resolved to a herding pane, so the row was silently not filed and only a grep over backlog.jsonl caught it",
+        "better": "should have checked the cell's resolved transport before writing a bee-verb obligation into its action"
+      }
+    ],
+    "report": {
+      "outcome": "A non-mechanizable promotion routes into a skill the run actually opened, or tunes the description of one that should have fired",
+      "commit": "see wt/learning-loop-gaps HEAD",
+      "files": [
+        "skills/bee-capturing/references/promotion.md",
+        "skills/bee-capturing/SKILL.md",
+        "docs/history/learning-loop-gaps/reports/red-llg-2.md"
+      ],
+      "tests": "3 RED pressure scenarios re-run with the text present, the three-bars prohibition checked by rg over both statements, and bee dev regen with a render-parity check — green:static — instruction text is the artifact and the scenarios are its only executable proof",
+      "deviations": [
+        "The durable-owner backlog row the cell asked for was filed by the orchestrator, not the worker — the cell was dispatched to a herding pane, which is bee-ignorant by contract and runs no bee verb, so the obligation was never the worker's to meet — the plan was wrong about a fact",
+        "The worker left the cell claimed rather than capping it, for the same bee-ignorant-by-contract reason — followed the plan"
+      ],
+      "mistakes": [
+        "Cell llg-2's action told the worker to run bee backlog add while the cell's docs role resolved to a herding pane, so the row was silently not filed and only a grep over backlog.jsonl caught it — should have checked the cell's resolved transport before writing a bee-verb obligation into its action"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 288 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c8",
+            "status": "PASS",
+            "evidence": "promotion.md:118-129 Q3 'routed to where it will be read: prose lands in a skill the run ACTUALLY OPENED ... earns tune description: <skill path> ... never a body edit'"
+          },
+          {
+            "id": "c9",
+            "status": "PASS",
+            "evidence": "rg -n 'all three' skills/bee-capturing/ -> promotion.md:111 'all three promotion criteria', SKILL.md:123 'all three bars'; no fourth bar anywhere"
+          },
+          {
+            "id": "c10",
+            "status": "PASS",
+            "evidence": "promotion.md:126-129 inside Q3's new text: nothing in hooks/ records a Skill invocation and affects_skills records which skills the work EDITS, a different fact; backlog debt row filed"
+          },
+          {
+            "id": "c11",
+            "status": "PASS",
+            "evidence": "SKILL.md:125 gains exactly one parenthetical clause '(which routes only into a skill the run actually opened or tunes its description)'; the rest of the diff is reflow"
+          },
+          {
+            "id": "c12",
+            "status": "PASS",
+            "evidence": "red-llg-2.md carries 3 scenarios with verbatim before-rationalizations and after-results; all five projections carry the new text for both skills; git status --short empty"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-02T08:39:08.996Z"
+      }
+    ]
+  }
+}

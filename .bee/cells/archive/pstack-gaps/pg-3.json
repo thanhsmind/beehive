@@ -1,0 +1,70 @@
+{
+  "id": "pg-3",
+  "feature": "pstack-gaps",
+  "lane": "standard",
+  "role": "test",
+  "title": "Pin rule markers, index rows and spoken lines with one text-reading test",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+  ],
+  "read_first": [
+    "docs/history/pstack-gaps/CONTEXT.md",
+    "packages/bee-rs/crates/bee/tests/route_class_parity.rs",
+    "packages/bee-rs/crates/bee/tests/specs_fence.rs",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "action": "Add packages/bee-rs/crates/bee/tests/rule_index_parity.rs, per pstack-gaps D6. Copy the shape of tests/route_class_parity.rs and tests/specs_fence.rs: a pure filesystem test that READS the repo's files as text. Import nothing from the bee crate — ROUTE_CLASS_VALUES-style constants are module-private and re-declaring a list in a test reproduces the close.rs duplication trap this feature exists to avoid.\n\nThe test walks up from CARGO_MANIFEST_DIR to the repo root the same way its siblings do, then asserts THREE things:\n\n1. The set of rule ids in `<!-- rule: <id> -->` markers in AGENTS.md equals the set in packages/bee/AGENTS.block.md. A mismatch fails naming every id present in one file and missing from the other, in both directions.\n2. That set equals the set of rule rows in the `## AGENTS.md rule homes` section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md. A row is a line matching ``- `<id>` (``. The failure names the unindexed markers and the indexed-but-unmarked rows separately.\n3. Every row in that section carries a non-empty `spoken:` line before its `applied_at:` line. The failure names each rule id whose spoken line is missing or blank.\n\nParse the section by finding the exact heading `## AGENTS.md rule homes` and stopping at the next `\\n## ` — the same boundary parse_agents_rule_homes uses in packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs — so the test and the parser cannot disagree about where the section ends. Every failure message names the file and the offending id, never just a count.\n\nRED-FIRST PROOF, required: after the test compiles green, delete ONE `spoken:` line from the index file, run `cargo test --test rule_index_parity` and record that it FAILS naming that rule id, then restore the line and record the green run. Both outputs go in the cap's verification evidence. A test that was never seen red proves only that it compiles.\n\nDo not modify any file other than the new test.",
+  "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity` is green, AND the recorded red run (one spoken line removed) failed naming that rule id. Both command outputs are in the cap evidence.",
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "pg-2"
+  ],
+  "decisions": [
+    "pstack-gaps D6"
+  ],
+  "must_haves": {
+    "truths": [
+      "packages/bee-rs/crates/bee/tests/rule_index_parity.rs exists, imports nothing from the bee crate, and reads AGENTS.md, packages/bee/AGENTS.block.md and the index file as text.",
+      "The test asserts marker-set equality between AGENTS.md and AGENTS.block.md, equality of that set with the index rows, and a non-empty spoken line on every row.",
+      "Every failure message names the file and the offending rule id, never only a count.",
+      "The section boundary is found by the exact heading `## AGENTS.md rule homes` and the next `\\n## `, matching parse_agents_rule_homes.",
+      "The test was seen RED: one spoken line removed made it fail naming that rule id, and the restored file made it green; both outputs are in the cap evidence."
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "pg-worker-3",
+    "outcome": "Added tests/rule_index_parity.rs pinning marker, index-row and spoken-line parity; seen red then green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T16:35:40.744Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1",
+    "claimed_at": "2026-09-01T16:31:34.299Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added tests/rule_index_parity.rs pinning AGENTS marker parity, marker-to-index-row parity both directions, and a non-empty spoken line per row; seen red then green.",
+      "commit": "1826ff74ef637826661ea6d38579b53115bef5b6",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity — green:unit — the only test this cell adds; seen red first by deleting one spoken line, which failed naming agents-one-commit-per-cell",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

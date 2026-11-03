@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "stageshow-frame-rehearsal",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"stageshow-frame-rehearsal\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"stageshow-frame-rehearsal\" — feature is closed.",
+  "created_at": "2026-11-02T09:23:47.284Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 12,
+    "rationale": "Additive opt-in rehearsal scripts and two bee-owned additions docs; no existing behavior changes. Named deviation: 12 product files exceed the small cap of 3, but each is new or a one-row SKILL.md link, so the risk is small-lane risk.",
+    "updated_at": "2026-11-02T09:23:47.342Z",
+    "feature": "stageshow-frame-rehearsal"
+  }
+}

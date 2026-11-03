@@ -1,0 +1,184 @@
+{
+  "id": "pfs-1",
+  "feature": "playbook-file-split",
+  "title": "Move class playbooks into one file per class; rewrite the parity fence",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D5",
+    "d03a48b6"
+  ],
+  "files": [
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/refactor.md",
+    "skills/bee-planning/playbooks/research.md",
+    "skills/bee-planning/playbooks/feature.md",
+    "skills/bee-planning/playbooks/docs.md",
+    "skills/bee-planning/playbooks/release.md",
+    "skills/bee-planning/playbooks/spike.md",
+    "skills/bee-planning/playbooks/content.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+  ],
+  "read_first": [
+    "skills/bee-planning/references/planning-reference.md:220-412",
+    "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs:1-175"
+  ],
+  "affects_skills": [
+    "skills/bee-planning"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "Regen deferred to pfs-2 (this cell's dependent): pfs-2 also touches skills/ (AGENTS.block.md, SKILL.md, scout-and-ticks.md) and runs the full bee dev regen + release-manifest --check chain once, after both cells' skills/ edits have landed, per this plan's Discovery section (one regen call covers both cells' writes).",
+  "action": "STEP 1 — create 9 new files under skills/bee-planning/playbooks/, one per route class. Each file's content is: a level-1 heading `# <class>` (the bare class name, e.g. `# perf`), a blank line, then the CURRENT body of that class's `### <class>` subsection in planning-reference.md copied VERBATIM (every numbered step, every bolded sub-paragraph, every proof-line paragraph) with no rewording — only the heading level changes (### becomes #, at the top of the new file; the old ### line itself is not copied, since the new file's own H1 replaces it). The 9 source spans in planning-reference.md are: perf 244-263, bugfix 265-285, refactor 287-301, research 303-325, feature 327-340, docs 342-354, release 356-370, spike 372-391, content 393-411 (each span runs from the line after its own ### heading to the line before the next ### or ## heading; copy through the final Proof line paragraph inclusive). STEP 2 — in planning-reference.md, delete the ENTIRE existing section from line 220 (`## Class playbooks`) through line 412 (the blank line before `## Cell quality rules` at 413), and replace it with the new, shorter '## Playbooks' section: the same route-class-vs-change_class paragraph, an added short list linking each of the 9 new files by class name, the 'How a plan uses one' paragraph updated to cite by file path instead of file+anchor (citing decision 132551fb for the citation rule and this feature's own decision bed1853c for the file location), and the unchanged 'Which principles a class routes' paragraph — full text supplied in this cell's must_haves.artifacts entry for planning-reference.md. Leave everything at and after `## Cell quality rules` untouched. STEP 3 — rewrite packages/bee-rs/crates/bee/tests/class_playbook_parity.rs: replace the two constants `PLAYBOOKS_MD` (line 37) and `PLAYBOOKS_HEADING` (line 40) with one constant `PLAYBOOKS_DIR: &str = \"skills/bee-planning/playbooks\";`. Replace the `playbook_names()` function (lines 96-120) with a function of the same name and return type that: resolves `repo_root().join(PLAYBOOKS_DIR)`, calls `std::fs::read_dir` on it (panicking with a FIX-style message naming PLAYBOOKS_DIR if the directory is missing or unreadable, mirroring the existing panic style in this file), collects every entry whose file name ends in `.md`, strips the `.md` suffix to get the class name, and returns the Vec<String> of names. Update every remaining panic message in the file that mentions `{PLAYBOOKS_HEADING:?}` or the `### <class>`-section wording to instead reference `{PLAYBOOKS_DIR:?}` and a `<class>.md` file, keeping the same FIX-style guidance shape (do not soften or shorten the guidance text, only swap the noun). The duplicate-name check inside `every_route_class_has_exactly_one_playbook` becomes structurally unreachable on a real filesystem (two files cannot share one name) — keep it only if it still typechecks cheaply against the new Vec<String>, otherwise delete exactly that duplicate-check block and its assertion, nothing else. Do not change `WORKFLOWS_RS`, `const_str_array`, or either `#[test]` function's name or its two assertions' structure — only what each assertion iterates over changes (directory entries instead of `### ` lines within one heading's span).",
+  "must_haves": {
+    "truths": [
+      "skills/bee-planning/playbooks/ contains exactly 9 files: perf.md, bugfix.md, refactor.md, research.md, feature.md, docs.md, release.md, spike.md, content.md",
+      "each new file's numbered steps and proof-line paragraph are byte-identical in substance to the old ### <class> section it replaced (only the heading level changed)",
+      "planning-reference.md contains a '## Playbooks' heading and no longer contains a '## Class playbooks' heading anywhere",
+      "class_playbook_parity.rs's two tests (every_route_class_has_exactly_one_playbook, every_playbook_names_a_real_route_class) still exist by name and both pass against the new directory shape"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-planning/playbooks/perf.md",
+        "substantive": "the perf class's full step list and proof-line rule, verbatim"
+      },
+      {
+        "path": "skills/bee-planning/references/planning-reference.md",
+        "substantive": "old '## Class playbooks' section (lines 220-412) replaced by a '## Playbooks' section reading: route-class-vs-change_class paragraph (unchanged) + 'Every route class has one playbook file, at `skills/bee-planning/playbooks/<class>.md`:' + a markdown link list of all 9 classes to their files + 'How a plan uses one (per D1, decision `132551fb`; file location per playbook-file-split, decision `bed1853c`).' paragraph (cites by path, never transcribes steps, names 'named deviation is the system working') + the unchanged 'Which principles a class routes' paragraph"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs",
+        "substantive": "PLAYBOOKS_DIR constant and a directory-reading playbook_names(), the two existing #[test] functions unchanged in name and both green"
+      }
+    ],
+    "key_links": [
+      "class_playbook_parity.rs's playbook_names() reads skills/bee-planning/playbooks/, not planning-reference.md"
+    ],
+    "prohibitions": [
+      "No step, sub-paragraph, or proof-line text dropped or reworded during the move",
+      "No change to ROUTE_CLASS_VALUES or workflows.rs",
+      "No change to any file outside this cell's files list",
+      "class_playbook_parity.rs's two #[test] function names are unchanged"
+    ]
+  },
+  "trace": {
+    "worker": "leader-dispatch",
+    "outcome": "Nine playbooks moved to skills/bee-planning/playbooks/<class>.md; planning-reference.md carries a short ## Playbooks link section; class_playbook_parity reads the directory; spike.md pointer fixed to name planning-reference.md",
+    "files_changed": [
+      "skills/bee-planning/playbooks/perf.md",
+      "skills/bee-planning/playbooks/bugfix.md",
+      "skills/bee-planning/playbooks/refactor.md",
+      "skills/bee-planning/playbooks/research.md",
+      "skills/bee-planning/playbooks/feature.md",
+      "skills/bee-planning/playbooks/docs.md",
+      "skills/bee-planning/playbooks/release.md",
+      "skills/bee-planning/playbooks/spike.md",
+      "skills/bee-planning/playbooks/content.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+    ],
+    "deviations": [
+      "Changed spike.md step 3 from \"named above\" to name skills/bee-planning/references/planning-reference.md — the moved text now lives in its own file, so \"above\" pointed nowhere; leader-approved — the plan was wrong about a fact",
+      "Kept the duplicate-name assertion in every_route_class_has_exactly_one_playbook — it still typechecks against Vec<String>, as the action allows — followed the plan",
+      "Capped with --sync-ack — affects_skills predicted the directory skills/bee-planning and the sync door compares file paths — the plan was wrong about a fact",
+      "sync-ack: affects_skills names the directory skills/bee-planning; every touched skills/ path sits inside it, so the prediction was right at directory level and only the matcher wants file paths"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-24T23:56:18.800Z",
+    "behavior_change": true,
+    "verification_evidence": "the one fence this cell rewrites (2 passed); verify narrowed by the leader post-block to exclude the full suite, which pfs-2 (dep) is responsible for greening",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9250ca52-184b-4f7d-bdb6-12e43371f1a7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity",
+    "claimed_at": "2026-09-24T23:54:52.677Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-24T23:54:03.071Z",
+        "claim_session": "9250ca52-184b-4f7d-bdb6-12e43371f1a7",
+        "claimed_at": "2026-09-24T23:52:05.012Z",
+        "acquired_at": "2026-09-24T23:47:45.196Z",
+        "worker": "leader-dispatch",
+        "verdict": "blocked",
+        "failure_signature": "f7ef14177d0c",
+        "note": "planner error: verify field included the full declared suite, which is red until pfs-2 lands citer/regen fixes; narrowing verify to the scoped fence test before resuming the worker"
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "baseline": "plan.md row 18: class_playbook_parity 2 passed on the unchanged tree",
+    "dropped_reason": null,
+    "reopened_at": "2026-09-24T23:54:17.670Z",
+    "reopened_reason": "planner narrowed verify to the scoped fence test only (class_playbook_parity), removing the erroneous full-suite requirement that made this cell unclosable before pfs-2 lands",
+    "sync_ack": "affects_skills names the directory skills/bee-planning; every touched skills/ path sits inside it, so the prediction was right at directory level and only the matcher wants file paths",
+    "mistakes": [
+      {
+        "wrong": "First split command used a shell loop variable in the output path and the write guard refused it",
+        "better": "a plain script with literal paths would have been the first try",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Nine playbooks moved verbatim to skills/bee-planning/playbooks/<class>.md (H1 + old body, script-asserted against the old ### headings); planning-reference.md ## Class playbooks replaced by ## Playbooks (link list, path-citation paragraph citing 132551fb and bed1853c); class_playbook_parity.rs uses PLAYBOOKS_DIR and a read_dir playbook_names(), both tests green; spike.md step 3 pointer now names planning-reference.md",
+      "commit": "433f6a7ce641c8ca7f0d80d88e9302cddc513d02",
+      "files": [
+        "skills/bee-planning/playbooks/perf.md",
+        "skills/bee-planning/playbooks/bugfix.md",
+        "skills/bee-planning/playbooks/refactor.md",
+        "skills/bee-planning/playbooks/research.md",
+        "skills/bee-planning/playbooks/feature.md",
+        "skills/bee-planning/playbooks/docs.md",
+        "skills/bee-planning/playbooks/release.md",
+        "skills/bee-planning/playbooks/spike.md",
+        "skills/bee-planning/playbooks/content.md",
+        "skills/bee-planning/references/planning-reference.md",
+        "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity — green:unit — the one fence this cell rewrites (2 passed); verify narrowed by the leader post-block to exclude the full suite, which pfs-2 (dep) is responsible for greening",
+      "deviations": [
+        "Changed spike.md step 3 from \"named above\" to name skills/bee-planning/references/planning-reference.md — the moved text now lives in its own file, so \"above\" pointed nowhere; leader-approved — the plan was wrong about a fact",
+        "Kept the duplicate-name assertion in every_route_class_has_exactly_one_playbook — it still typechecks against Vec<String>, as the action allows — followed the plan",
+        "Capped with --sync-ack — affects_skills predicted the directory skills/bee-planning and the sync door compares file paths — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "First split command used a shell loop variable in the output path and the write guard refused it — a plain script with literal paths would have been the first try — none"
+      ],
+      "baseline": "plan.md row 18: class_playbook_parity 2 passed on the unchanged tree"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "frozen-file-scope",
+            "status": "PASS",
+            "evidence": "bee cells judge --id pfs-1 returned zero hits (no test/CI/lockfile file changed outside pfs-1's declared file scope)"
+          },
+          {
+            "id": "must-haves-completeness",
+            "status": "PASS",
+            "evidence": "Leader spot-checked all 4 must_haves.truths against real artifacts post-merge: 9 files present under skills/bee-planning/playbooks/, perf.md's body byte-diffed identical to the original ### perf section, planning-reference.md carries '## Playbooks' with no remaining '## Class playbooks' heading, and class_playbook_parity's two tests (every_route_class_has_exactly_one_playbook, every_playbook_names_a_real_route_class) pass independently via cargo test"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-25T00:22:25.083Z"
+      }
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity"
+}

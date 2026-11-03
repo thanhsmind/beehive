@@ -32,6 +32,11 @@ Logged as **D17 (1660158a)**, replacing D16 (e255fe3a), which rested on
 the wrong premise — that bee and waggledance were one system — and on
 the wrong route.
 
+Extended by **D18 (4d837e6b)**: a visiting bee session runs no
+record-writing or record-regenerating command in the other project's
+tree at all — not a store append, not a view render. It reads, and it
+messages that project's own session.
+
 Delivered: handover message sent to session `waggledance-e1`, carrying
 the full record contract and pointing here for the rest. Accepted and released to
 that session — the handover is delivered. The PBI this

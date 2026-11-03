@@ -1,0 +1,93 @@
+{
+  "id": "rel411-1",
+  "feature": "release-2-41-1",
+  "title": "Publish release 2.41.1 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-41-1/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.41.1` with BEE_DISPATCH_ID set to an authorized deployment dispatch. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.41.1, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.41.1 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.41.1",
+      "tag v2.41.1 exists locally and on the remote",
+      "the GitHub release for v2.41.1 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.41.1"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.41.1"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "w-rel411",
+    "outcome": "Released bee 2.41.1 through scripts/release.sh",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the first deployment dispatch was a cell dispatch and the second was refused on a moved main commit; both refused before any mutation"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-17T11:48:00.927Z",
+    "behavior_change": false,
+    "verification_evidence": "the script ran the full declared suite before tagging; git ls-remote shows v2.41.1 at ebfc0422, gh run 35217169787 success, gh release lists linux, windows and SHA256SUMS",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "56ecea1f-ddd1-440e-919d-9edff0cff7d7",
+    "verify_command": "bash scripts/release.sh 2.41.1 && bee dev release-manifest --check",
+    "claimed_at": "2026-09-17T11:34:00.246Z",
+    "mistakes": [
+      {
+        "wrong": "dispatched the deploy as --kind cell and committed a cell file after preparing the permit",
+        "better": "prepare with --stage deployment --role deploy only after main is clean and committed"
+      }
+    ],
+    "commit_pending": "scripts/release.sh writes the release commit ebfc04220 itself, without a cell trailer",
+    "inline_reason": "the release ran in a deployment-stage dispatch (herding job), not a cell dispatch, as release.sh requires",
+    "report": {
+      "outcome": "Released bee 2.41.1: tag v2.41.1 pushed, release-binaries run 35217169787 green, assets verified",
+      "commit": "ebfc04220",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.41.1 && bee dev release-manifest --check — green:live — the script ran the full declared suite before tagging; git ls-remote shows v2.41.1 at ebfc0422, gh run 35217169787 success, gh release lists linux, windows and SHA256SUMS",
+      "deviations": [
+        "the first deployment dispatch was a cell dispatch and the second was refused on a moved main commit; both refused before any mutation"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

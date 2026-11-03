@@ -290,7 +290,7 @@ pub(crate) fn start_lane(
             && &existing_phase != &json!("compounding-complete")
         {
             return Ok(Err(format!(
-                "startFeature: refused — lane \"{feature}\" is mid-flight at phase \"{}\", not idle or the terminal alias \"compounding-complete\". FIX: finish or explicitly wind down that lane first, then retry.",
+                "startFeature: refused — lane \"{feature}\" is mid-flight at phase \"{}\", not idle or the terminal alias \"compounding-complete\". FIX: bee state session bind --lane {feature} --session-id <session id>.",
                 js_disp_opt(Some(&existing_phase))
             )));
         }

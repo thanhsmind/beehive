@@ -19,6 +19,7 @@ use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use sha2::Digest;
     use super::*;
     use serde_json::json;
 
@@ -1094,3 +1095,1203 @@ so the next session can resume cleanly, or record a capture stub for what settle
             "the failed write must be logged: {crash_log}"
         );
     }
+
+    #[test]
+    fn codex_transcript_resolution_via_stored_path() {
+        let fx = fixture();
+        let root = dunce::canonicalize(fx.path()).unwrap();
+        let transcript_dir = tempfile::tempdir().unwrap();
+        let codex_file = transcript_dir.path().join("rollout-2026-09-12T14-28-28-s-codex-1.jsonl");
+
+        std::fs::write(
+            &codex_file,
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"s-codex-1\",\"cwd\":\"/tmp\"}}\n",
+        )
+        .unwrap();
+
+        let sessions_dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+        write_json_file(
+            &sessions_dir.join("s-codex-1.json"),
+            &json!({
+                "id": "s-codex-1",
+                "transcript_path": codex_file.to_string_lossy()
+            }),
+        );
+
+        let resolved = resolve_transcript_for(&root, Some("s-codex-1"));
+        assert_eq!(resolved, Some(codex_file));
+    }
+
+    #[test]
+    fn codex_transcript_resolution_via_fallback_dir() {
+        let _transcript_guard = lock_transcript_env();
+        let fx = fixture();
+        let root = dunce::canonicalize(fx.path()).unwrap();
+
+        let codex_home_dir = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("CODEX_HOME", codex_home_dir.path()) };
+
+        let rollout_dir = codex_home_dir.path().join("sessions").join("2026").join("09").join("12");
+        std::fs::create_dir_all(&rollout_dir).unwrap();
+        let rollout_file = rollout_dir.join("rollout-2026-09-12T14-28-28-s-codex-fallback.jsonl");
+
+        std::fs::write(
+            &rollout_file,
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"s-codex-fallback\",\"cwd\":\"/tmp\"}}\n",
+        )
+        .unwrap();
+
+        let resolved = resolve_transcript_for(&root, Some("s-codex-fallback"));
+        unsafe { std::env::remove_var("CODEX_HOME") };
+
+        assert_eq!(resolved, Some(rollout_file));
+    }
+
+    #[test]
+    fn refusal_to_pick_another_sessions_newest_file() {
+        let _transcript_guard = lock_transcript_env();
+        let fx = fixture();
+        let root = dunce::canonicalize(fx.path()).unwrap();
+
+        let claude_config = tempfile::tempdir().unwrap();
+        let codex_home = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", claude_config.path()) };
+        unsafe { std::env::set_var("CODEX_HOME", codex_home.path()) };
+
+        // Create transcript for session-alpha in Claude projects dir
+        write_transcript(
+            claude_config.path(),
+            &root,
+            "session-alpha",
+            &[r#"{"type":"session_meta","payload":{"id":"session-alpha"}}"#],
+        );
+
+        // Create transcript for session-alpha in Codex dir
+        let codex_dir = codex_home.path().join("sessions").join("2026").join("09").join("12");
+        std::fs::create_dir_all(&codex_dir).unwrap();
+        std::fs::write(
+            codex_dir.join("rollout-2026-09-12T15-00-00-session-alpha.jsonl"),
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-alpha\"}}\n",
+        )
+        .unwrap();
+
+        // Querying for session-beta (which has no transcript) must return None, NOT borrow session-alpha
+        let resolved_beta = resolve_transcript_for(&root, Some("session-beta"));
+        assert_eq!(resolved_beta, None, "must refuse to borrow another session's file");
+
+        // Querying with None session_id must return None, NOT pick newest file
+        let resolved_none = resolve_transcript_for(&root, None);
+        assert_eq!(resolved_none, None, "must return None when session_id is None");
+
+        // Stored transcript_path pointing to a file with mismatched identity must be refused
+        let sessions_dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+        let alpha_codex_path = codex_dir.join("rollout-2026-09-12T15-00-00-session-alpha.jsonl");
+        write_json_file(
+            &sessions_dir.join("session-gamma.json"),
+            &json!({
+                "id": "session-gamma",
+                "transcript_path": alpha_codex_path.to_string_lossy()
+            }),
+        );
+        let resolved_gamma = resolve_transcript_for(&root, Some("session-gamma"));
+        assert_eq!(resolved_gamma, None, "mismatched identity in stored transcript_path must be refused");
+
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+        unsafe { std::env::remove_var("CODEX_HOME") };
+    }
+
+    #[test]
+    fn token_usage_aggregation_without_double_counting_cumulative_totals() {
+        let events = vec![
+            json!({
+                "type": "turn_context",
+                "payload": {
+                    "model": "o3-mini"
+                }
+            }),
+            // Codex event_msg token_count request 1
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 60,
+                            "cached_input_tokens": 20,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 160
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 60,
+                            "cached_input_tokens": 20,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 160
+                        }
+                    }
+                }
+            }),
+            // Duplicate of request 1
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 60,
+                            "cached_input_tokens": 20,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 160
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 60,
+                            "cached_input_tokens": 20,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 160
+                        }
+                    }
+                }
+            }),
+            // Codex event_msg token_count request 2
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 40,
+                            "output_tokens": 20,
+                            "cached_input_tokens": 5,
+                            "cache_write_input_tokens": 0,
+                            "total_tokens": 60
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 140,
+                            "output_tokens": 80,
+                            "cached_input_tokens": 25,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 220
+                        }
+                    }
+                }
+            }),
+            // Codex event_msg token_count request 3
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 10,
+                            "output_tokens": 5,
+                            "cached_input_tokens": 0,
+                            "cache_write_input_tokens": 0,
+                            "total_tokens": 15
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 150,
+                            "output_tokens": 85,
+                            "cached_input_tokens": 25,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 235
+                        }
+                    }
+                }
+            }),
+        ];
+
+        let agg = aggregate_usage(&events);
+        assert_eq!(agg.models.0.len(), 1);
+        let (model, acc) = &agg.models.0[0];
+        assert_eq!(model, "o3-mini");
+        // Normalized uncached input:
+        // req 1: 100 - 20 - 10 = 70
+        // req 2: 40 - 5 - 0 = 35
+        // req 3: 10 - 0 - 0 = 10
+        // Total uncached input: 70 + 35 + 10 = 115
+        assert_eq!(acc.input, 115.0);
+        // Incremental output: 60 + 20 + 5 = 85
+        assert_eq!(acc.output, 85.0);
+        // Incremental cached: 20 + 5 + 0 = 25
+        assert_eq!(acc.cache_read, 25.0);
+        // Incremental cache_write: 10 + 0 + 0 = 10
+        assert_eq!(acc.cache_write, 10.0);
+        // Total = 115 + 85 + 10 + 25 = 235
+        assert_eq!(acc.total, 235.0);
+    }
+
+    #[test]
+    fn commentary_only_and_tool_only_turn_end_subject() {
+        // Commentary only
+        let commentary_events = vec![
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "commentary",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "Reviewing tests...\nReady to verify changes."
+                        }
+                    ]
+                }
+            }),
+        ];
+        assert_eq!(
+            turn_end_subject(Some(commentary_events)),
+            Some("Ready to verify changes.".to_string())
+        );
+
+        // Commentary and final_answer: final_answer takes priority
+        let both_events = vec![
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "commentary",
+                    "content": [{"type": "output_text", "text": "Commentary here"}]
+                }
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "content": [{"type": "output_text", "text": "Final answer here"}]
+                }
+            }),
+        ];
+        assert_eq!(
+            turn_end_subject(Some(both_events)),
+            Some("Final answer here".to_string())
+        );
+
+        // Tool-only turn
+        let tool_only_events = vec![
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "spawn_agent",
+                    "arguments": "{}"
+                }
+            }),
+        ];
+        assert_eq!(
+            turn_end_subject(Some(tool_only_events)),
+            Some("(turn ended)".to_string())
+        );
+
+        // Whitespace-only turn
+        let ws_events = vec![
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "content": [{"type": "output_text", "text": "   \n\t  \n"}]
+                }
+            }),
+        ];
+        assert_eq!(
+            turn_end_subject(Some(ws_events)),
+            Some("(turn ended)".to_string())
+        );
+    }
+
+    #[test]
+    fn concurrent_session_isolation() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let claude_config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", claude_config.path()) };
+
+        let fx1 = fixture();
+        let root1 = dunce::canonicalize(fx1.path()).unwrap();
+        write_json_file(&root1.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root1.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+
+        let fx2 = fixture();
+        let root2 = dunce::canonicalize(fx2.path()).unwrap();
+        write_json_file(&root2.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root2.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+
+        // Write distinct transcripts for s-1 and s-2 in their respective project roots
+        write_transcript(
+            claude_config.path(),
+            &root1,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"s1 waiting for user"}]}}"#],
+        );
+        write_transcript(
+            claude_config.path(),
+            &root2,
+            "s-2",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"s2 waiting for approval"}]}}"#],
+        );
+
+        // Verify transcript resolution isolation
+        assert_eq!(
+            resolve_transcript_for(&root1, Some("s-1")),
+            Some(claude_config.path().join("projects").join(encode_project_dir(&root1.to_string_lossy())).join("s-1.jsonl"))
+        );
+        assert_eq!(resolve_transcript_for(&root1, Some("s-2")), None);
+        assert_eq!(
+            resolve_transcript_for(&root2, Some("s-2")),
+            Some(claude_config.path().join("projects").join(encode_project_dir(&root2.to_string_lossy())).join("s-2.jsonl"))
+        );
+        assert_eq!(resolve_transcript_for(&root2, Some("s-1")), None);
+
+        // Stop s-1
+        let body1 = json!({
+            "hook_event_name": "Stop",
+            "cwd": root1.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        assert_eq!(run_inner(&[], &serde_json::to_string(&body1).unwrap()), Ok(()));
+
+        let state1: Value = serde_json::from_str(
+            &std::fs::read_to_string(root1.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state1["waiting_on"]["session"], "s-1");
+        assert_eq!(state1["waiting_on"]["subject"], "s1 waiting for user");
+
+        // Stop s-2
+        let body2 = json!({
+            "hook_event_name": "Stop",
+            "cwd": root2.to_string_lossy(),
+            "session_id": "s-2",
+        });
+        assert_eq!(run_inner(&[], &serde_json::to_string(&body2).unwrap()), Ok(()));
+
+        let state2: Value = serde_json::from_str(
+            &std::fs::read_to_string(root2.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state2["waiting_on"]["session"], "s-2");
+        assert_eq!(state2["waiting_on"]["subject"], "s2 waiting for approval");
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+    }
+
+    #[test]
+    fn codex_repeated_token_count_dedup_and_multiple_requests_in_turn() {
+        let events = vec![
+            // Model settings
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "thread_settings_applied",
+                    "thread_settings": { "model": "o3-mini" }
+                }
+            }),
+            // Turn starts
+            json!({
+                "type": "event_msg",
+                "payload": { "type": "task_started", "turn_id": "turn-1" }
+            }),
+            // First LLM request: info has no turn_id/response_id.
+            // Emitted four times identically as observed in live Codex transcripts!
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        }
+                    }
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        }
+                    }
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        }
+                    }
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        }
+                    }
+                }
+            }),
+            // Second LLM request within the same turn: total_token_usage advances
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1500,
+                            "cached_input_tokens": 1200,
+                            "output_tokens": 150,
+                            "total_tokens": 1650
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 2500,
+                            "cached_input_tokens": 2000,
+                            "output_tokens": 250,
+                            "total_tokens": 2750
+                        }
+                    }
+                }
+            }),
+            // Duplicate of second request
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1500,
+                            "cached_input_tokens": 1200,
+                            "output_tokens": 150,
+                            "total_tokens": 1650
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 2500,
+                            "cached_input_tokens": 2000,
+                            "output_tokens": 250,
+                            "total_tokens": 2750
+                        }
+                    }
+                }
+            }),
+        ];
+
+        let agg = aggregate_usage(&events);
+        assert_eq!(agg.models.0.len(), 1);
+        let (model, acc) = &agg.models.0[0];
+        // Dedup must NOT count identical records 4 times:
+        // First request: uncached input = 1000 - 800 = 200, output = 100, cached = 800
+        // Second request: uncached input = 1500 - 1200 = 300, output = 150, cached = 1200
+        // Total uncached input = 500
+        assert_eq!(acc.input, 500.0);
+        assert_eq!(acc.output, 250.0);
+        assert_eq!(acc.cache_read, 2000.0);
+        assert_eq!(acc.total, 2750.0);
+        assert_eq!(model, "o3-mini");
+    }
+
+    #[test]
+    fn codex_input_tokens_includes_cached_normalization() {
+        // Observed live Codex record: input=202967, cached=194560, output=440, total=203407
+        let events = vec![
+            json!({
+                "type": "turn_context",
+                "payload": { "model": "o3-mini" }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 202967,
+                            "cached_input_tokens": 194560,
+                            "cache_write_input_tokens": 0,
+                            "output_tokens": 440,
+                            "total_tokens": 203407
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 202967,
+                            "cached_input_tokens": 194560,
+                            "cache_write_input_tokens": 0,
+                            "output_tokens": 440,
+                            "total_tokens": 203407
+                        }
+                    }
+                }
+            }),
+        ];
+        let agg = aggregate_usage(&events);
+        let (_, acc) = &agg.models.0[0];
+        // Normalized uncached input = 202967 - 194560 = 8407
+        assert_eq!(acc.input, 8407.0);
+        assert_eq!(acc.cache_read, 194560.0);
+        assert_eq!(acc.output, 440.0);
+        // Total must equal raw input + output = 203407, NOT double-counting cached tokens!
+        assert_eq!(acc.total, 203407.0);
+    }
+
+    #[test]
+    fn codex_thread_settings_applied_nested_and_no_past_model_assignment() {
+        let events = vec![
+            // Session starts with model A
+            json!({
+                "type": "turn_context",
+                "payload": { "model": "model-a" }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": { "input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 20, "total_tokens": 120 },
+                        "total_token_usage": { "input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 20, "total_tokens": 120 }
+                    }
+                }
+            }),
+            // Model changes mid-session via nested event_msg thread_settings_applied
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "thread_settings_applied",
+                    "thread_settings": { "model": "model-b" }
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": { "input_tokens": 200, "cached_input_tokens": 0, "output_tokens": 40, "total_tokens": 240 },
+                        "total_token_usage": { "input_tokens": 300, "cached_input_tokens": 0, "output_tokens": 60, "total_tokens": 360 }
+                    }
+                }
+            }),
+        ];
+
+        let agg = aggregate_usage(&events);
+        assert_eq!(agg.models.0.len(), 2);
+        // Past record must remain with model-a, NOT assigned to model-b!
+        assert_eq!(agg.models.0[0].0, "model-a");
+        assert_eq!(agg.models.0[0].1.input, 100.0);
+        assert_eq!(agg.models.0[0].1.output, 20.0);
+        assert_eq!(agg.models.0[1].0, "model-b");
+        assert_eq!(agg.models.0[1].1.input, 200.0);
+        assert_eq!(agg.models.0[1].1.output, 40.0);
+    }
+
+    #[test]
+    fn codex_turn_boundary_latest_tool_only_turn_does_not_reuse_old_final() {
+        // Counterexample:
+        // old task_started; old final_answer OLD; old task_complete;
+        // new task_started; new function_call
+        let events = vec![
+            json!({
+                "type": "event_msg",
+                "payload": { "type": "task_started", "turn_id": "turn-1" }
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "content": [{ "type": "output_text", "text": "OLD answer" }]
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": { "type": "task_complete", "turn_id": "turn-1", "last_agent_message": "OLD answer" }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": { "type": "task_started", "turn_id": "turn-2" }
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "shell",
+                    "arguments": "{}"
+                }
+            }),
+        ];
+
+        // The latest turn (turn-2) is tool-only; it must NOT return "OLD answer"!
+        let subject = turn_end_subject(Some(events));
+        assert_eq!(subject, Some("(turn ended)".to_string()));
+    }
+
+    #[test]
+    fn codex_rollup_preserves_full_uuid_when_session_meta_missing() {
+        let file = PathBuf::from("/path/to/rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71.jsonl");
+        let events = vec![
+            json!({
+                "type": "turn_context",
+                "payload": { "model": "o3-mini" }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": { "input_tokens": 10, "output_tokens": 5 },
+                        "total_token_usage": { "input_tokens": 10, "output_tokens": 5 }
+                    }
+                }
+            }),
+        ];
+
+        let rollup = rollup_from_events(&file, &events).expect("rollup must succeed");
+        // Must preserve the FULL 36-character UUID, NOT truncate to "7a48da530e71"!
+        assert_eq!(rollup.session_id, "01a095e4-8306-70d0-bf1f-7a48da530e71");
+    }
+
+    #[test]
+    fn codex_rollup_does_not_use_response_item_payload_id_as_session_id() {
+        let file = PathBuf::from("/path/to/rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71.jsonl");
+        let events = vec![
+            json!({
+                "type": "turn_context",
+                "payload": { "model": "o3-mini" }
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "id": "msg_123",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Hello"}]
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": { "input_tokens": 10, "output_tokens": 5 },
+                        "total_token_usage": { "input_tokens": 10, "output_tokens": 5 }
+                    }
+                }
+            }),
+        ];
+
+        let rollup = rollup_from_events(&file, &events).expect("rollup must succeed");
+        // Must NOT use "msg_123" from response_item payload.id!
+        assert_eq!(rollup.session_id, "01a095e4-8306-70d0-bf1f-7a48da530e71");
+    }
+
+    #[test]
+    fn claude_turn_end_subject_preserves_assistant_text_across_tool_result() {
+        let events = vec![
+            json!({
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        { "type": "text", "text": "Keep existing subject" }
+                    ]
+                }
+            }),
+            json!({
+                "type": "user",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tool_123",
+                            "content": "some result"
+                        }
+                    ]
+                }
+            }),
+            json!({
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool_456",
+                            "name": "bash",
+                            "input": {}
+                        }
+                    ]
+                }
+            }),
+        ];
+
+        let subject = turn_end_subject(Some(events));
+        assert_eq!(subject, Some("Keep existing subject".to_string()));
+    }
+
+    #[test]
+    fn extract_validated_session_id_from_stem_safety_and_rejection() {
+        // Safe UTF-8 handling: malformed Unicode slicing must not panic
+        let non_boundary_stem = format!("A日{}", "x".repeat(34));
+        assert_eq!(extract_validated_session_id_from_stem(&non_boundary_stem), None);
+
+        let unicode_rollout = "rollout-2026-🎉-something";
+        assert_eq!(extract_validated_session_id_from_stem(unicode_rollout), None);
+
+        // Reject arbitrary rollout suffix without timestamp or uuid
+        assert_eq!(extract_validated_session_id_from_stem("rollout-arbitrary-suffix"), None);
+        assert_eq!(extract_validated_session_id_from_stem("rollout-invalid-uuid-format"), None);
+
+        // Valid timestamped rollout with custom session slug
+        assert_eq!(
+            extract_validated_session_id_from_stem("rollout-2026-09-12T14-28-28-s-codex-1"),
+            Some("s-codex-1".to_string())
+        );
+
+        // Valid timestamped rollout with UUID
+        assert_eq!(
+            extract_validated_session_id_from_stem("rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71"),
+            Some("01a095e4-8306-70d0-bf1f-7a48da530e71".to_string())
+        );
+
+        // Valid direct UUID rollout
+        assert_eq!(
+            extract_validated_session_id_from_stem("rollout-01a095e4-8306-70d0-bf1f-7a48da530e71"),
+            Some("01a095e4-8306-70d0-bf1f-7a48da530e71".to_string())
+        );
+
+        // Non-rollout standard session id
+        assert_eq!(
+            extract_validated_session_id_from_stem("sess-1"),
+            Some("sess-1".to_string())
+        );
+    }
+
+    fn settle_with_worker_env(root: &Path, extra: Value, worker: bool) -> Option<String> {
+        let _guard = crate::hooks::herding_env_lock();
+        let prior = std::env::var_os("BEE_HERDING_WORKER");
+        unsafe {
+            if worker {
+                std::env::set_var("BEE_HERDING_WORKER", "1");
+            } else {
+                std::env::remove_var("BEE_HERDING_WORKER");
+            }
+        };
+        let mut body = json!({"hook_event_name": "Stop", "cwd": root.to_string_lossy()});
+        if let Value::Object(m) = extra {
+            for (k, v) in m {
+                body[k.as_str()] = v;
+            }
+        }
+        let ctx = read_hook_context(HOOK_NAME, &[], &serde_json::to_string(&body).unwrap());
+        let root = ctx.root.clone().expect("fixture root resolves");
+        let res = super::obligations::answer(&root, &ctx);
+        unsafe {
+            match prior {
+                Some(v) => std::env::set_var("BEE_HERDING_WORKER", v),
+                None => std::env::remove_var("BEE_HERDING_WORKER"),
+            }
+        };
+        res
+    }
+
+    fn settle(root: &Path, extra: Value) -> Option<String> {
+        settle_with_worker_env(root, extra, false)
+    }
+
+    fn record_scope_input_with_worker_env(root: &Path, text: &str, worker: bool) {
+        let _guard = crate::hooks::herding_env_lock();
+        let prior = std::env::var_os("BEE_HERDING_WORKER");
+        unsafe {
+            if worker {
+                std::env::set_var("BEE_HERDING_WORKER", "1");
+            } else {
+                std::env::remove_var("BEE_HERDING_WORKER");
+            }
+        };
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "record_scope_input": text,
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        let _ = run_inner(&[], &stdin);
+        unsafe {
+            match prior {
+                Some(v) => std::env::set_var("BEE_HERDING_WORKER", v),
+                None => std::env::remove_var("BEE_HERDING_WORKER"),
+            }
+        };
+    }
+
+    fn record_scope(root: &Path, text: &str) {
+        record_scope_input_with_worker_env(root, text, false);
+    }
+
+    fn owed(root: &Path) -> Vec<Value> {
+        let out = settle(root, json!({"obligations_only": true})).expect("an obligations payload answers");
+        let parsed: Value = serde_json::from_str(&out).unwrap();
+        parsed["obligations"].as_array().unwrap().clone()
+    }
+
+    fn claimed_cell_fixture() -> tempfile::TempDir {
+        let fx = fixture();
+        write_json_file(
+            &fx.path().join(".bee").join("cells").join("demo-1.json"),
+            &json!({"id": "demo-1", "feature": "demo", "status": "claimed"}),
+        );
+        fx
+    }
+
+    fn high_risk_planning_fixture() -> tempfile::TempDir {
+        let fx = fixture();
+        let root = fx.path();
+        let plan = root.join("docs").join("history").join("demo").join("plan.md");
+        std::fs::create_dir_all(plan.parent().unwrap()).unwrap();
+        std::fs::write(&plan, "# plan\n").unwrap();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo", "phase": "planning", "mode": "high-risk", "gate_preview": {"feature": "demo"}}),
+        );
+        fx
+    }
+
+    #[test]
+    fn settle_returns_a_claimed_uncapped_cell_once_as_cap() {
+        let fx = claimed_cell_fixture();
+        let owed = owed(fx.path());
+        assert_eq!(owed.len(), 1, "{owed:?}");
+        assert_eq!(owed[0]["kind"], "cap");
+        assert_eq!(owed[0]["key"], "demo:cap:demo-1");
+        assert_eq!(owed[0]["cell"], "demo-1");
+        assert!(owed[0]["message"].as_str().unwrap().contains("bee cells finish --id demo-1"));
+        assert!(owed[0]["user_notice"].as_str().unwrap().contains("demo-1"));
+    }
+
+    #[test]
+    fn settle_never_returns_the_same_key_twice() {
+        let fx = claimed_cell_fixture();
+        assert_eq!(owed(fx.path()).len(), 1);
+        assert!(owed(fx.path()).is_empty());
+    }
+
+    #[test]
+    fn settle_returns_missing_advisor_debt_once_for_a_gate_ready_high_risk_plan() {
+        let fx = high_risk_planning_fixture();
+        let root = fx.path();
+        let sha = crate::verbs::state_group::advisor_ref_anchors(root, &json!("demo"))["plan_sha256"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let first = owed(root);
+        assert_eq!(first.len(), 1, "{first:?}");
+        assert_eq!(first[0]["kind"], "advisor");
+        assert_eq!(first[0]["key"], format!("demo:advisor:{sha}"));
+        assert!(first[0].get("cell").is_none());
+        assert!(first[0]["message"].as_str().unwrap().contains("5 runs"));
+        assert!(first[0]["message"].as_str().unwrap().contains("hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact"));
+        assert!(first[0]["user_notice"].as_str().unwrap().contains("5 runs"));
+        assert!(first[0]["user_notice"].as_str().unwrap().contains("hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact"));
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn settle_owes_no_advisor_once_a_fresh_advisor_ref_is_recorded() {
+        let fx = high_risk_planning_fixture();
+        let root = fx.path();
+        let anchors = crate::verbs::state_group::advisor_ref_anchors(root, &json!("demo"));
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo", "phase": "planning", "mode": "high-risk", "gate_preview": {"feature": "demo"},
+                    "advisor_ref": {"feature": "demo", "newest_decision_id": anchors["newest_decision_id"], "plan_sha256": anchors["plan_sha256"]}}),
+        );
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn settle_in_a_herding_worker_returns_no_obligations() {
+        let fx = claimed_cell_fixture();
+        let worker_owed = {
+            let out = settle_with_worker_env(fx.path(), json!({"obligations_only": true}), true)
+                .expect("an obligations payload answers");
+            let parsed: Value = serde_json::from_str(&out).unwrap();
+            parsed["obligations"].as_array().unwrap().clone()
+        };
+        let non_worker_owed = owed(fx.path());
+        assert!(worker_owed.is_empty(), "{worker_owed:?}");
+        assert_eq!(non_worker_owed.len(), 1);
+    }
+
+    #[test]
+    fn settle_with_pi_harness_workflow_off_returns_no_obligations() {
+        let fx = claimed_cell_fixture();
+        write_json_file(&fx.path().join(".bee").join("config.json"), &json!({"pi_harness_workflow": false}));
+        assert!(owed(fx.path()).is_empty());
+    }
+
+    #[test]
+    fn settle_with_an_unwritable_served_record_returns_no_obligations() {
+        let fx = claimed_cell_fixture();
+        std::fs::write(fx.path().join(".bee").join("runtime"), "not a directory").unwrap();
+        assert!(owed(fx.path()).is_empty());
+    }
+
+    #[test]
+    fn settle_skip_key_marks_the_key_served() {
+        let fx = claimed_cell_fixture();
+        let out = settle(fx.path(), json!({"skip_key": "demo:cap:demo-1"}));
+        assert_eq!(out.as_deref(), Some(""));
+        assert!(owed(fx.path()).is_empty());
+    }
+
+    #[test]
+    fn a_payload_without_obligations_only_is_not_an_obligations_answer() {
+        let fx = claimed_cell_fixture();
+        assert_eq!(settle(fx.path(), json!({})), None);
+        assert_eq!(settle(fx.path(), json!({"obligations_only": false})), None);
+        assert!(!fx.path().join(".bee").join("runtime").join("settle-obligations.json").exists());
+        assert_eq!(owed(fx.path()).len(), 1);
+    }
+
+    #[test]
+    fn settle_owes_no_cap_while_dispatched_worker_is_running() {
+        let fx = claimed_cell_fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"workers": [{"nickname": "w-demo", "cell": "demo-1", "status": "running"}]}),
+        );
+        let job_dir = root.join(".bee").join("mailbox").join("w-demo");
+        write_json_file(&job_dir.join("job.json"), &json!({"job_id": "w-demo", "cell_id": "demo-1"}));
+        assert!(owed(root).is_empty());
+        write_json_file(&job_dir.join("result-1.json"), &json!({"status": "done"}));
+        let after = owed(root);
+        assert_eq!(after.len(), 1, "{after:?}");
+        assert_eq!(after[0]["kind"], "cap");
+        assert_eq!(after[0]["cell"], "demo-1");
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn settle_owes_cap_when_claim_belongs_to_live_session_without_running_worker() {
+        let fx = claimed_cell_fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("claims").join("demo-1.json"),
+            &json!({"cell": "demo-1", "session": "s-live", "ttl_seconds": 3600, "claimed_at": now_iso()}),
+        );
+        write_json_file(
+            &root.join(".bee").join("sessions").join("s-live.json"),
+            &json!({"id": "s-live", "status": "active", "last_heartbeat": now_iso()}),
+        );
+        let after = owed(root);
+        assert_eq!(after.len(), 1, "{after:?}");
+        assert_eq!(after[0]["kind"], "cap");
+        assert_eq!(after[0]["cell"], "demo-1");
+    }
+
+    #[test]
+    fn a_matching_scope_input_is_recorded_and_non_matching_is_not() {
+        let fx = fixture();
+        let root = fx.path();
+        record_scope(root, "please change the interface");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(runtime_file.exists());
+        let lines = super::read_jsonl(&runtime_file);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["text"], "please change the interface");
+
+        record_scope(root, "just an ordinary greeting");
+        let lines_after = super::read_jsonl(&runtime_file);
+        assert_eq!(lines_after.len(), 1);
+    }
+
+    #[test]
+    fn config_pi_scope_words_replaces_default_list() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("config.json"),
+            &json!({"pi_scope_words": ["custom_trigger"]}),
+        );
+        record_scope(root, "please change the interface");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file.exists());
+
+        record_scope(root, "we have custom_trigger here");
+        let lines = super::read_jsonl(&runtime_file);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["text"], "we have custom_trigger here");
+    }
+
+    #[test]
+    fn default_list_does_not_match_vietnamese_khong_or_bare_change() {
+        let fx = fixture();
+        let root = fx.path();
+        record_scope(root, "Tôi không thích làm thế");
+        record_scope(root, "Please change this now");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file.exists());
+    }
+
+    #[test]
+    fn empty_pi_scope_words_records_nothing() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("config.json"),
+            &json!({"pi_scope_words": []}),
+        );
+        record_scope(root, "please change the interface");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file.exists());
+    }
+
+    #[test]
+    fn kill_switch_and_worker_env_record_nothing() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("config.json"),
+            &json!({"pi_harness_workflow": false}),
+        );
+        record_scope(root, "please change the interface");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file.exists());
+
+        let fx2 = fixture();
+        let root2 = fx2.path();
+        record_scope_input_with_worker_env(root2, "please change the interface", true);
+        let runtime_file2 = root2.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file2.exists());
+    }
+
+    #[test]
+    fn recorded_scope_input_returned_once_with_obligation_message_and_skip() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo"}),
+        );
+        record_scope(root, "change the database schema");
+        let first = owed(root);
+        assert_eq!(first.len(), 1, "{first:?}");
+        assert_eq!(first[0]["kind"], "scope");
+        let sha = sha2::Sha256::digest(b"change the database schema");
+        let sha_hex = format!("{sha:x}");
+        assert_eq!(first[0]["key"], format!("demo:scope:{sha_hex}"));
+        let msg = first[0]["message"].as_str().unwrap();
+        assert!(msg.contains("a change to an approved plan reopens the gate and only the user answers it"));
+        assert!(msg.contains("/bee-obligation-skip"));
+        assert!(first[0]["user_notice"].as_str().unwrap().contains("Esc stops it"));
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn decision_logged_after_input_clears_it() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo"}),
+        );
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        std::fs::create_dir_all(runtime_file.parent().unwrap()).unwrap();
+        std::fs::write(
+            &runtime_file,
+            json!({"text": "change the plan", "time": "2026-10-02T10:00:00.000Z", "feature": "demo"}).to_string() + "\n",
+        ).unwrap();
+        let dec_file = root.join(".bee").join("decisions.jsonl");
+        std::fs::write(
+            &dec_file,
+            json!({"type": "decide", "id": "dec-1", "date": "2026-10-02T11:00:00.000Z"}).to_string() + "\n",
+        ).unwrap();
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn at_most_one_scope_obligation_per_settle_picks_newest_and_pruning_cleans_file() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo"}),
+        );
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        std::fs::create_dir_all(runtime_file.parent().unwrap()).unwrap();
+        std::fs::write(
+            &runtime_file,
+            format!(
+                "{}\n{}\n",
+                json!({"text": "change the first thing", "time": "2026-10-02T10:00:00.000Z", "feature": "demo"}),
+                json!({"text": "change the second thing", "time": "2026-10-02T10:05:00.000Z", "feature": "demo"})
+            ),
+        ).unwrap();
+        let first = owed(root);
+        assert_eq!(first.len(), 1, "{first:?}");
+        assert_eq!(first[0]["kind"], "scope");
+        let sha2 = format!("{:x}", sha2::Sha256::digest(b"change the second thing"));
+        assert_eq!(first[0]["key"], format!("demo:scope:{sha2}"));
+
+        let second = owed(root);
+        assert_eq!(second.len(), 1, "{second:?}");
+        let sha1 = format!("{:x}", sha2::Sha256::digest(b"change the first thing"));
+        assert_eq!(second[0]["key"], format!("demo:scope:{sha1}"));
+
+        assert!(owed(root).is_empty());
+
+        record_scope(root, "change the third thing");
+        let lines = super::read_jsonl(&runtime_file);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["text"], "change the third thing");
+    }
+

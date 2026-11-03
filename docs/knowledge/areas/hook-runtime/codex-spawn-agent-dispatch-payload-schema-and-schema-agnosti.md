@@ -24,43 +24,45 @@ and the guard rule that stays correct even when that shape changes.
 
 | Element | Meaning |
 |---|---|
-| codex spawn_agent schema | Live-probed on codex-cli 0.145.0: required fields `task_name`, `message`; optional fields `fork_turns`, `model`, `reasoning_effort`. There is no `agent_type` field in this schema — a payload or doc that still names one is teaching a retired shape. |
-| everyday dispatch payload | The shape the dispatch helper's ordinary codex-branch emit produces on every routine dispatch: `{task_name, message, fork_turns: "none"}` — the doc-canonical shape, with no override fields attached. |
-| legacy payload shape | The pre-0.145.0 shape, `{agent_type: "worker", message}` — no longer emitted by the helper, but a shape the guard must still judge identically to the doc-canonical one, since an older client build or a stale caller could still send it. |
+| codex spawn_agent schema | Live-probed on Codex 0.154.0: required fields `task_name`, `message`; optional fields `fork_turns` (STRING: "none", "all", or positive integer string, e.g. "1", not integer), `model`, and `reasoning_effort`. There is no `agent_type` field and no `sandbox` field in this callable schema. |
+| everyday dispatch payload | The shape `dispatch prepare` emits for supported cell dispatch: `{task_name, message, fork_turns: "none", model?, reasoning_effort?}`. Native cell dispatch on installed Codex 0.154.0 is refused at preparation time due to opaque hook messages (`native_hook_input_opaque`), directing to configured herding or CLI routes. Configured herding and CLI routes stay explicit; for model-shaped or prompt-budget non-cell roles (gather, reviewer, advisor, including Model, Native and null/budget resolutions), it emits an explicit read-only CLI sandbox command (`codex exec --sandbox read-only --ephemeral -`) because native spawn lacks a sandbox field. |
+| legacy payload shape | The pre-0.145.0 shape, `{agent_type: "worker", message}` — no longer emitted by the helper, but a shape the guard still handles, since an older client build or a stale caller could still send it. |
 
 ## Behaviors & Operations
 
-**The pre-spawn guard evaluates every spawn_agent payload by tool name and the
-anchored marker in `message`, never by which optional or legacy field the
-payload happens to carry.** Both the doc-canonical `{task_name, message,
-fork_turns}` shape and the legacy `{agent_type, message}` shape receive a real
-allow/deny verdict from the identical marker check: an anchored `[bee-tier: ...]`
-marker in `message` allows, an unmarked `message` denies — in both shapes, with
-no difference in outcome. A payload carrying no `message` at all is the only
-shape that produces no verdict (the guard's own no-opinion branch). This closes
-the gap a doc/helper/guard mismatch had left open: before this, the guard matched
-on `agent_type` alone, so a schema shift away from that field would have made
-every future dispatch silently stop being judged at all, rather than being denied
-or allowed on its actual content.
+**On Codex 0.154.0, native cell dispatch is refused due to opaque message delivery before schema examples apply.**
+Native input arrives with an opaque message body hiding the role marker; `evaluate_codex_spawn` in `model-guard` denies unmarked spawns as transport `codex-spawn-unmarked` (exit 2), while `dispatch prepare` classifies the client version as `native_hook_input_opaque` and refuses native cell dispatch with clear diagnostics pointing to configured CLI/herding transports.
 
-**The dispatch helper's ordinary emit is the doc-canonical shape, and the doc
-teaches the same shape the helper emits.** The three-way mismatch this feature
-closes (a doc saying one shape, a helper emitting another, and a guard judging a
-third) is resolved by converging all three on the live-probed schema: the
-helper's codex-branch emit, the swarming reference's documented Spawn row, and
-the guard's judged shape are now the same `{task_name, message, fork_turns}`
-form.
+**The pre-spawn guard evaluates callable spawn_agent payloads by tool name, the
+anchored marker in `message`, and declared model/effort settings.**
+Both the doc-canonical `{task_name, message, fork_turns, model, reasoning_effort}`
+shape and the legacy `{agent_type, message}` shape are judged. An anchored
+`[bee-tier: ...]` marker in `message` selects the configured role. The guard
+verifies that requested `model` and `reasoning_effort` match configured role
+settings, denies overrides on full-history forks and escalated roles, and denies
+read-only native requests as unenforceable.
+
+**The dispatch helper emits configured settings for cell dispatches and CLI
+sandboxes for model-shaped or prompt-budget non-cell roles.**
+For cell execution, `dispatch prepare` resolves the role and attaches configured
+`model` and `reasoning_effort` with `fork_turns: "none"`. Configured herding and CLI
+routes stay explicit. For model-shaped or prompt-budget non-cell roles (gather,
+reviewer, advisor, including Model, Native and null/budget resolutions), `dispatch prepare`
+emits `codex exec --sandbox read-only --ephemeral -` to guarantee filesystem read-only enforcement.
 
 ## Business Rules
 
-- `task_name` is required and `agent_type` does not exist in the probed
-  0.145.0 schema; a helper, guard clause, or doc still emitting or teaching
-  `{agent_type, message}` as the primary shape is stale (i54-closeout D1).
-- `model` and `reasoning_effort` exist in the schema, but the ordinary emit
-  path never attaches them regardless of shape — whether an attached override
-  is itself judged, versus merely passed through unread, is owned by
-  [`native-spawn-and-transport-classification.md`](native-spawn-and-transport-classification.md),
-  never decided here.
+- `task_name` and `message` are required; `agent_type` and `sandbox` do not
+  exist in the callable schema (i54-closeout D1, codex-parity D1).
+- `fork_turns` is a STRING ("none", "all", or positive integer string), not an integer.
+- `model` and `reasoning_effort` are supported in the callable schema; `dispatch
+  prepare` attaches configured values for supported cell dispatches.
+- Configured herding and CLI routes stay explicit.
+- Model-shaped or prompt-budget non-cell roles must use the CLI read-only sandbox transport
+  because native spawn provides no filesystem sandbox boundary. Explicit unknown
+  `--role` is refused, never granted fallback.
+- Full-history forks (`fork_turns: "all"` or omitted) and escalated roles cannot
+  carry model or reasoning_effort overrides.
 
 ## Edge Cases Settled
 
@@ -76,12 +78,14 @@ form.
 
 ## Pointers (implementation)
 
-- Emit: the codex branch of `dispatch prepare`, `packages/bee/lib/dispatch-prepare.mjs`.
-- Judge: `evaluateCodexSpawn` in `packages/bee/lib/dispatch-guard.mjs`
-  (mirrored in `.bee/bin/lib/dispatch-guard.mjs`).
+- Emit: `codex_spawn_payload` and codex branch in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`.
+- Judge: `evaluate_codex_spawn` in
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`.
 - Doc: the Spawn row in `skills/bee-swarming/references/swarming-reference.md`.
-- Suites: `scripts/tests/test_dispatch_prepare.mjs` (doc-canonical/legacy round-trip
-  rows), `hooks/test_model_guard.mjs` (rows 47-49, 58-59).
+- Historical Node implementations (historical evidence):
+  `packages/bee/lib/dispatch-prepare.mjs`, `packages/bee/lib/dispatch-guard.mjs`,
+  `scripts/tests/test_dispatch_prepare.mjs`, and `hooks/test_model_guard.mjs`.
 - Evidence: `.bee/cells/i54-closeout-1.json`,
   `docs/history/i54-closeout/reports/validation-canary.md`,
   `docs/history/i54-closeout/reports/i54-closeout-1.md`.

@@ -1,0 +1,104 @@
+{
+  "id": "pib-5",
+  "feature": "pi-beehive",
+  "title": "State the Pi belt's row set in the config reference and close the regen obligation",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "pib-4"
+  ],
+  "decisions": [
+    "1edd8a90",
+    "ec85c30c",
+    "b1a26071",
+    "663c642e"
+  ],
+  "files": [
+    "docs/config-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-beehive/plan.md",
+    "docs/config-reference.md",
+    ".pi/extensions/bee-guard.ts",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "The config reference's Pi section describes the belt but states no row set, so a reader cannot tell which bee rules fire on Pi and which are deliberately excluded. Write that row set from the belt as it now stands, after the earlier cells landed: one row per wired rule naming the Pi event that carries it, and one line per excluded rule naming the reason. Derive every line by reading the belt, never from this plan or from memory, and resolve every path and command you write by opening or running it. Say plainly which rules exist on the Claude belt and have no Pi carrier, so the absence is documented rather than inferred. Keep bee mechanics out of the user-facing wording where a plain description serves. There is no doc-parity test to write here, so the proof is a recorded read: state in the cap which belt lines you checked each documented row against. Then close this feature's deferred regen obligation, since the belt file sits under a release-manifest root and the earlier cells deferred it to the wave barrier: run the regen chain and the release-manifest check, and carry the manifest record in this cell's changes.",
+  "must_haves": {
+    "truths": [
+      "The Pi section states one row per wired rule with the Pi event that carries it",
+      "Every deliberately excluded rule is named with its reason, including the ones with no Pi analog",
+      "Every documented row was checked against the belt source, and the cap names the lines checked",
+      "The regen chain and the release-manifest check both pass and the manifest record is carried in this change"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "a complete Pi row set with wired rules, their Pi events, and the named exclusions with reasons"
+      },
+      {
+        "path": "docs/history/codex-harness-hardening/release-manifest.json",
+        "substantive": "regenerated record covering the belt change"
+      }
+    ],
+    "key_links": [
+      "every documented row corresponds to a runAdvisoryHook or pi.on literal in the belt"
+    ],
+    "prohibitions": [
+      "No row written from the plan or from memory instead of from the belt",
+      "No unresolved path or command in the prose",
+      "No new user-facing Pi surface documented that D2 forbids building"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "trace": {
+    "worker": "w-pib-5",
+    "outcome": "The config reference now states the Pi belt row set, its excluded rules and the Claude rows with no Pi carrier; the release manifest was regenerated with a binary matching the source",
+    "files_changed": [
+      "docs/config-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The regen ran through /home/thanhsmind/.cache/cargo-target/release/bee instead of the vendored .bee/bin/bee, because the vendored copy is a symlink into the main checkout and is behind the source it would regenerate from; the write guard correctly refuses replacing it from this worktree — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T13:28:57.710Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b59cfe73-6f95-4182-b7f8-f8a2c362922d",
+    "claimed_at": "2026-09-02T13:23:28.891Z",
+    "mistakes": [
+      {
+        "wrong": "The documented line for session-close says it flushes state before compaction, but the PreCompact arm returns the undecidable value and does nothing observable except one stderr line",
+        "better": "the row should have described what the code does, not what the event name suggests"
+      },
+      {
+        "wrong": "The document lists state-sync on Stop under rules with no Pi carrier, which is false: agent_settled is a carrier and the belt simply never wires state-sync there",
+        "better": "this was the orchestrators planning miss surfacing in the docs, not the workers invention"
+      }
+    ],
+    "report": {
+      "outcome": "Pi belt row set documented and release manifest regenerated through a source-matching binary",
+      "commit": "28157765",
+      "files": [
+        "docs/config-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts && /home/thanhsmind/.cache/cargo-target/release/bee dev release-manifest --check — green:unit — the two belt suites plus the manifest check, re-run by the orchestrator rather than taken on the workers word: 32 passed pi, 6 passed opencode, 0 failed, and 337 files match the stored manifest",
+      "deviations": [
+        "The regen ran through /home/thanhsmind/.cache/cargo-target/release/bee instead of the vendored .bee/bin/bee, because the vendored copy is a symlink into the main checkout and is behind the source it would regenerate from; the write guard correctly refuses replacing it from this worktree — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "The documented line for session-close says it flushes state before compaction, but the PreCompact arm returns the undecidable value and does nothing observable except one stderr line — the row should have described what the code does, not what the event name suggests",
+        "The document lists state-sync on Stop under rules with no Pi carrier, which is false: agent_settled is a carrier and the belt simply never wires state-sync there — this was the orchestrators planning miss surfacing in the docs, not the workers invention"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "id": "det-3",
+  "feature": "slp-detector",
+  "title": "Run the tick from the supervisor loop and the Pi heartbeat, count events in status",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "det-2"
+  ],
+  "decisions": [
+    "D4",
+    "D5",
+    "D6",
+    "e3de051a",
+    "03838ea8",
+    "f156d29e-6e94-48de-b21a-69e36737b79c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-detector/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs — `rg -n 'const SUPERVISOR_ALLOWED_TOOLS|Bash\\(.bee/bin/bee supervisor list:\\*\\)|SUPERVISOR_FORBIDDEN_TOOL_TOKENS|pub\\(crate\\) fn resolve_iteration|if role == Role::Supervisor \\{'` — hits today: 325 `const SUPERVISOR_ALLOWED_TOOLS: &str = \"Bash(.bee/bin/bee status:*),\\`, 558 `pub(crate) fn resolve_iteration(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<(Argv, SpawnSpec), String> {`, 578 `if role == Role::Supervisor {`",
+    "packages/bee-rs/crates/bee/src/herding.rs — `rg -n 'insert_usage\\(&mut job_map|fn insert_usage|fn insert_read_only'` — hits today: 1031 `fn insert_usage(`, 1260 and 1349 `+ &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)` — the per-job composer, two call sites",
+    ".pi/extensions/bee-guard/events.ts — `rg -n '\\[\"herding\", \"broker\", \"tick\", \"--json\"\\]|const tick = parseTick|quietHeartbeatTurn ='` — hit today: 384 `[\"herding\", \"broker\", \"tick\", \"--json\"],` inside the heartbeat branch of the input handler",
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts — `rg -n 'export function isHeartbeatPrompt|export function parseTick|export function heartbeatText'` — hits today: 99, 329, 346 — exported helpers the node contract tests import",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs — `rg -n 'fn run_js_test|fn test_is_heartbeat_prompt'` — the node-run test harness to extend",
+    "packages/bee-rs/crates/bee/src/verbs/detector.rs (det-2: tick_quiet, events_for_job)"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D4 with its refinement e3de051a, D5 and D6. (1) control_loop.rs: in `impl ArgvProvider for RealArgvProvider`, inside `fn spec_for`, before the line `resolve_iteration(&self.main_root, self.role, self.turn_ceiling)`, when `self.role == Role::Supervisor` call `crate::verbs::detector::tick_quiet(&self.main_root)` and, when it returns more than zero, print one stderr line `supervisor: detector fired <n> event(s) this tick`; a tick failure never fails the iteration; resolve_iteration itself does not change (tests call it directly). Add the line `Bash(.bee/bin/bee detector events:*),\\` to SUPERVISOR_ALLOWED_TOOLS directly before the `supervisor list` line, and extend the existing allowlist test to assert it while the forbidden-token test stays green. (2) herding.rs status: add `insert_events(job_map, bee_dir, job_id) -> String` beside insert_usage and call it at both composer call sites; it reads `detector::events_for_job` and the judged ids, writes JSON `events` as an object `{<signal>: <count>}` over all events (an empty object when none) and `unjudged` as a number, and returns the text suffix ` events=<signal>:<n>[,<signal>:<n>] unjudged=<k>` sorted by signal name, or an empty string when there are no events. No existing field moves or disappears. (3) paseo-heartbeat.ts: add `export async function runDetectorTick(beeBinary: string, directory: string, env: Record<string,string>, execFileFn): Promise<boolean>` that runs `[\"detector\", \"tick\", \"--json\"]` with a 30000 ms timeout, resolves true on exit 0 and false otherwise, logging `bee detector tick (heartbeat): <message>` on error, never throwing. events.ts heartbeat branch: inside the `finally` block that follows the broker tick, before `setTickRunning(false)`, `await runDetectorTick(beeBinary, directory, beltEnv(), cp.execFile)`; the result is discarded so quietHeartbeatTurn, heartbeatText and the news rule do not change, and a failed broker tick never skips it. (4) Tests: in control_loop.rs a test that RealArgvProvider::spec_for for Role::Supervisor on a tempdir main root with an empty mailbox still resolves and leaves no events file, and that resolve_iteration alone writes nothing under .bee/supervisor; herding.rs status tests for a job with two events of one signal (JSON object, unjudged count and text suffix) and a job with none (empty object, no suffix); in pi_paseo_heartbeat_contracts.rs a run_js_test that runDetectorTick calls execFile with argv `[\"detector\",\"tick\",\"--json\"]` and resolves false without throwing when execFile reports an error, plus a source-level assertion that events.ts calls runDetectorTick inside the heartbeat branch's finally block. (5) The two .pi/extensions files sit under a root the release manifest hashes: after the edits run `.bee/bin/bee dev regen` and commit the manifest with the change.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "a supervisor iteration runs the detector tick in the real argv provider before its argv resolves; resolve_iteration alone never ticks",
+      "the supervisor allowlist carries detector events and no forbidden token",
+      "bee herding status --json carries events as an object and unjudged as a number per job; the text line carries events=<signal>:<n> unjudged=<k> only when events exist",
+      "a Paseo heartbeat runs detector tick in the broker tick's finally block and its outcome never changes the heartbeat turn text"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+        "substantive": "the supervisor-arm pre-step and the widened allowlist with tests"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        "substantive": "runDetectorTick exported and tested"
+      }
+    ],
+    "key_links": [
+      "resolve_iteration calls detector::tick_quiet in the supervisor arm",
+      "events.ts calls runDetectorTick in the heartbeat branch",
+      "status composes insert_events at both call sites"
+    ],
+    "prohibitions": [
+      "No new paseo heartbeat or schedule",
+      "No change to quietHeartbeatTurn, heartbeatText or the news rule",
+      "No status field removed or renamed",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "w-det-3",
+    "outcome": "Supervisor provider ticks the detector before argv resolves, allowlist carries detector events, status shows per-job event counts and unjudged, heartbeat runs the tick in finally; commit 42ee09a20",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The worker (paseo-pi-flash) committed and wrote result-1.json but its cells finish never ran: the paseo transport timed out at the end of the round; the leader capped from the recorded result — hit an unforeseen obstacle",
+      "followed the plan",
+      "sync-ack: det-4 already rewrote the bee-herding supervisor prompt and the area concepts for the Detector and its trigger points; this cell wires the code those docs describe"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-16T01:28:58.484Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell's declared verify legs ran in full from the worktree at 42ee09a20, exit 0 each: control_loop (three new tests confirmed by name), herding (two new status tests confirmed by name), pi_paseo_heartbeat_contracts 28 passed, release-manifest 419 files match (report-1.md)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7504dd00-ad2f-49c6-9913-687bf1b353cc",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-10-16T01:21:06.420Z",
+    "sync_ack": "det-4 already rewrote the bee-herding supervisor prompt and the area concepts for the Detector and its trigger points; this cell wires the code those docs describe",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Supervisor argv provider now ticks the detector before its argv resolves and the allowlist carries the detector events read; bee herding status composes per-job events counts and unjudged at both composer sites; the Pi heartbeat runs the detector tick in the broker tick's finally and discards the outcome; commit 42ee09a20.",
+      "commit": "42ee09a20",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts && .bee/bin/bee dev release-manifest --check — green:unit — the cell's declared verify legs ran in full from the worktree at 42ee09a20, exit 0 each: control_loop (three new tests confirmed by name), herding (two new status tests confirmed by name), pi_paseo_heartbeat_contracts 28 passed, release-manifest 419 files match (report-1.md)",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [],
+      "reaction": "confirm"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a supervisor iteration runs the detector tick in the real argv provider before its argv resolves; resolve_iteration alone never ticks",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "the supervisor allowlist carries detector events and no forbidden token",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "bee herding status --json carries events as an object and unjudged as a number per job; the text line carries events=<signal>:<n> unjudged=<k> only when events exist",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "a Paseo heartbeat runs detector tick in the broker tick's finally block and its outcome never changes the heartbeat turn text",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "resolve_iteration calls detector::tick_quiet in the supervisor arm",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "events.ts calls runDetectorTick in the heartbeat branch",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "status composes insert_events at both call sites",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "the supervisor-arm pre-step and the widened allowlist with tests",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "runDetectorTick exported and tested",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          }
+        ],
+        "recorded_at": "2026-10-16T01:28:58.592Z",
+        "recorded_by": "7504dd00-ad2f-49c6-9913-687bf1b353cc",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "spec_for ticks the detector for the supervisor role only",
+            "status": "PASS",
+            "evidence": "control_loop.rs:891 tick_quiet; tests supervisor_spec_for_ticks_the_detector... and resolve_iteration_alone_never_ticks_the_detector",
+            "id": "det-3-check-1"
+          },
+          {
+            "name": "allowlist carries detector events",
+            "status": "PASS",
+            "evidence": "control_loop.rs:332; supervisor_allowlist_carries_the_detector_events_read; forbidden-token test green",
+            "id": "det-3-check-2"
+          },
+          {
+            "name": "status carries events counts and unjudged at both composer sites",
+            "status": "PASS",
+            "evidence": "herding.rs insert_events at 1283 and 1373; two status tests",
+            "id": "det-3-check-3"
+          },
+          {
+            "name": "heartbeat runs runDetectorTick in finally with a 30 s timeout",
+            "status": "PASS",
+            "evidence": "events.ts:406 inside finally; paseo-heartbeat.ts:329; two node contract tests",
+            "id": "det-3-check-4"
+          },
+          {
+            "name": "proof",
+            "status": "PASS",
+            "evidence": "control_loop, herding, pi_paseo_heartbeat_contracts 28 passed; manifest 419 match (report-1.md)",
+            "id": "det-3-check-5"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-16T01:34:36.770Z"
+      }
+    ]
+  }
+}

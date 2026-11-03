@@ -10,6 +10,7 @@ never a generation timestamp or any other wall-clock value.
 
 ## Concepts
 
+- [Advisor Protocol — blind lanes and the convergence dossier](blind-lanes-and-the-convergence-dossier.md) — Isolated advisor lanes on one hard decision, the leaning guard the brief passes at the dispatch door, and the single dossier a convergence is checked against.
 - [Advisor Protocol — worker consult loop](consult-loop.md) — How a stuck worker consults inside its own turn, the two-per-claim budget, and why advice never approves, overrides, or writes.
 - [Advisor Protocol — purpose, vocabulary, and actors](overview.md) — Why bee configures an adviser, the protocol's shared vocabulary, and who may do what.
 - [Advisor Protocol — slots, transports, and staleness](slots-and-tiers.md) — Configuration is the authority: advice-class slot rules, dispatch transports and economics, and event-based consult staleness.

@@ -31,3 +31,12 @@
 .bee/decisions.jsonl merge=union
 .bee/backlog.jsonl merge=union
 .bee/review-candidates.jsonl merge=union
+
+# BEE:START
+.bee/decisions.jsonl merge=union
+.bee/decisions-archive.jsonl merge=union
+.bee/backlog.jsonl merge=union
+.bee/review-candidates.jsonl merge=union
+.bee/deferred-queue.jsonl merge=union
+.bee/wave-ledger.jsonl merge=union
+# BEE:END

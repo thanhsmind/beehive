@@ -1,0 +1,95 @@
+{
+  "id": "psd-6",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Prove Pi advisor, hat, reviewer, and cell dispatch plus a detached round trip",
+  "action": "Per D8 and D2. Extend tests/pi_plugin_contracts.rs beside injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding, reusing its preamble extraction and the write_marker, inbox_dir, job_mailbox, and await_injections helpers. For kinds advisor, advisor with --role hat-facts-gaps, reviewer, and a claimed cell: take the dispatch command from the injected Pi preamble, run it with --runtime pi, and assert a herding payload; the hat payload carries --seat hat-facts-gaps and a ceiling no higher than 600 and a stdin naming the seat. Round trip: take the session token from the harness session (the same value getSessionId returns), set PI_SESSION_ID to it, build the detached command by appending the flag text found in the payload's note, run it with --dry-run and assert the parsed options carry that token; then, because a dry run writes no marker, write the marker with write_marker plus a seat field and a finished result, and assert the drain injects one message with the seat row and report_path, and that a non-done status still shows its seat row.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "deps": [
+    "psd-3"
+  ],
+  "decisions": [
+    "a20cf301",
+    "15109d96"
+  ],
+  "must_haves": {
+    "truths": [
+      "Pi advisor, hat, reviewer, and cell dispatch each return a herding payload from the injected command",
+      "The detached flag text taken from the note parses with the harness session token",
+      "The drain injects a seat row and report_path for done and non-done results"
+    ],
+    "prohibitions": [
+      "No test writes the flag text itself instead of reading it from the payload note"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-6",
+    "outcome": "Pi advisor, hat, reviewer, and cell dispatch plus a detached drain round trip proven in pi_plugin_contracts.rs",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "Token proof is a shell expansion of the note flag text plus a successful --dry-run, not a read of parsed options — the dry-run JSON and job.json carry no inbox_session field — the plan was wrong about a fact",
+      "The test config sets team.pi hat-facts-gaps — an unconfigured hat seat falls through to advisor (prepare.rs:1964-1965), so Pi emits --seat advisor, no 600 cap, and no seat block; the product fix is in prepare.rs, outside this cell — hit an unforeseen obstacle",
+      "Updated the_injected_header_carries_exactly_the_one_line_rows_the_contract_names to include seat — it was red on the base since psd-2 added the drain seat row — something else had to be fixed first",
+      "The test initializes a repo in its tempdir — herding run resolves the main root through the checkout — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T09:52:52.844Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell verify, the one test binary this cell touched (67 passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+    "claimed_at": "2026-09-15T09:44:06.588Z",
+    "mistakes": [
+      {
+        "wrong": "the round-trip test ran bee herding run --dry-run in a plain tempdir and herding run refused with no checkout to resolve",
+        "better": "read how herding/run.rs resolves the main root before writing the fixture"
+      }
+    ],
+    "report": {
+      "outcome": "New test injected_pi_dispatch_covers_advisor_hat_reviewer_and_cell_with_a_detached_round_trip in pi_plugin_contracts.rs: advisor, reviewer, claimed cell, and hat-facts-gaps dispatch run from the injected Pi preamble and return herding payloads; hat carries --seat, ceiling <= 600, and a Seat: line on stdin; flag text read from detached_delivery expands to the harness token and a --dry-run accepts it; markers with seat drain one message per job with seat, status, and report_path rows for done and blocked",
+      "commit": "604e312f",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts — green:unit — the cell verify, the one test binary this cell touched (67 passed)",
+      "deviations": [
+        "Token proof is a shell expansion of the note flag text plus a successful --dry-run, not a read of parsed options — the dry-run JSON and job.json carry no inbox_session field — the plan was wrong about a fact",
+        "The test config sets team.pi hat-facts-gaps — an unconfigured hat seat falls through to advisor (prepare.rs:1964-1965), so Pi emits --seat advisor, no 600 cap, and no seat block; the product fix is in prepare.rs, outside this cell — hit an unforeseen obstacle",
+        "Updated the_injected_header_carries_exactly_the_one_line_rows_the_contract_names to include seat — it was red on the base since psd-2 added the drain seat row — something else had to be fixed first",
+        "The test initializes a repo in its tempdir — herding run resolves the main root through the checkout — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "the round-trip test ran bee herding run --dry-run in a plain tempdir and herding run refused with no checkout to resolve — read how herding/run.rs resolves the main root before writing the fixture"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role_reroutes": [
+    {
+      "from": "test",
+      "to": "plan",
+      "decision": "99e52fac-82f0-45e9-8461-aa9e3de8e67c",
+      "at": "2026-09-15T09:37:36.238Z",
+      "plan_sha256": "295bd671b0b999e57f1f3cd5cd58927c5aa9c2f58682205c68407c735bc9104c"
+    }
+  ]
+}

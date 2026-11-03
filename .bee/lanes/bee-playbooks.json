@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "bee-playbooks",
+  "mode": "standard",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Bring bee's class-playbook system to first-class vocabulary; add a content route-class for non-code work",
+  "next_action": "bee close finished \"bee-playbooks\" — feature is closed.",
+  "created_at": "2026-09-24T15:42:52.138Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-09-24T23:08:57.452Z",
+    "session": "9250ca52-184b-4f7d-bdb6-12e43371f1a7"
+  }
+}

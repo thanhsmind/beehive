@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "paseo-observe",
+  "closed_at": "2026-10-06T04:37:02.320Z",
+  "sessions": [
+    {
+      "session_id": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 1074,
+          "output": 369276,
+          "cache_write": 1811647,
+          "cache_read": 224865952,
+          "new": 2181997,
+          "cached": 224865952,
+          "total": 227047949
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5-5": {
+          "input": 396,
+          "output": 99290,
+          "cache_write": 743653,
+          "cache_read": 13553929,
+          "new": 843339,
+          "cached": 13553929,
+          "total": 14397268
+        }
+      },
+      "subagent_count": 10,
+      "started_ms": 1791211875091,
+      "ended_ms": 1791261419987,
+      "totals": {
+        "new": 3025336,
+        "cached": 238419881,
+        "total": 241445217
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 2181997,
+      "cached": 224865952,
+      "total": 227047949
+    },
+    "subagents": {
+      "new": 843339,
+      "cached": 13553929,
+      "total": 14397268
+    },
+    "total": {
+      "new": 3025336,
+      "cached": 238419881,
+      "total": 241445217
+    }
+  }
+}

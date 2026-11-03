@@ -890,6 +890,7 @@ struct CollectData {
     skipped: usize,
     scanned: Vec<&'static str>,
     absent: Vec<&'static str>,
+    mistakes: MistakesTally,
 }
 
 struct CountsData {
@@ -898,6 +899,71 @@ struct CountsData {
     skipped: usize,
     scanned: Vec<&'static str>,
     absent: Vec<&'static str>,
+    mistakes: MistakesTally,
+}
+
+/// reflection-becomes-lesson D6: how the caps ANSWERED the mistakes question.
+///
+/// A run that reaches for `--no-mistakes` on every close regresses the whole
+/// chain back to the silence it was built to end, and it does so quietly: every
+/// door stays green, every letter stays empty, and nobody notices for a month.
+/// These two numbers are the witness. They are counted off the cell traces the
+/// cap already writes (`trace.no_mistakes` and `trace.mistakes`), so nothing new
+/// is stored to produce them.
+///
+/// A WITNESS, NEVER A GUARD. Nothing here refuses, drops, or scores anything —
+/// the digest reports the ratio and the human reads it.
+#[derive(Default)]
+struct MistakesTally {
+    /// Caps that answered "nothing went wrong", out loud (D2).
+    clean: usize,
+    /// Caps that wrote down at least one real mistake.
+    recorded: usize,
+}
+
+impl MistakesTally {
+    /// `<clean> clean / <recorded> reflected`, the human-readable half.
+    ///
+    /// The counts lead and the ratio trails, because the counts are the facts
+    /// and the ratio is the reading of them. With no answers at all the ratio
+    /// is left unsaid rather than printed as a division by zero.
+    fn line(&self) -> String {
+        let answered = self.clean + self.recorded;
+        if answered == 0 {
+            return "no mistakes answer yet".to_string();
+        }
+        let pct = (self.clean as f64) * 100.0 / (answered as f64);
+        format!("{} clean / {} reflected ({pct:.0}% clean)", self.clean, self.recorded)
+    }
+
+    /// The tally a built digest carries, read back out of its `counts`.
+    ///
+    /// One rendering for both halves: the digest object and the line printed
+    /// beside it can never state two different ratios, because the line is
+    /// computed FROM the object.
+    fn from_counts(counts: &Value) -> Self {
+        let n = |key: &str| counts["mistakes_answer"][key].as_u64().unwrap_or(0) as usize;
+        Self { clean: n("clean"), recorded: n("recorded") }
+    }
+
+    fn to_value(&self) -> Value {
+        let answered = self.clean + self.recorded;
+        let mut m = Map::new();
+        m.insert("clean".into(), Value::from(self.clean));
+        m.insert("recorded".into(), Value::from(self.recorded));
+        m.insert("answered".into(), Value::from(answered));
+        // `null` rather than 0 when nothing answered: no ratio exists yet, and
+        // a zero would read as "every cap reflected".
+        m.insert(
+            "clean_ratio".into(),
+            if answered == 0 {
+                Value::Null
+            } else {
+                Value::from(((self.clean as f64) * 1000.0 / (answered as f64)).round() / 1000.0)
+            },
+        );
+        Value::Object(m)
+    }
 }
 
 /// scanTitle: secret takes precedence over injection; non-strings scan as ''.
@@ -923,6 +989,8 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
     let mut absent: Vec<&'static str> = Vec::new();
     let mut skipped = 0usize;
     let mut raw: Vec<RawCandidate> = Vec::new();
+    // D6's witness, filled from the same cell walk below.
+    let mut mistakes = MistakesTally::default();
 
     // .bee/backlog.jsonl — friction/proposal rows (kind:'pbi' rows skipped).
     match resolve_in_scope(&real_root, SRC_BACKLOG) {
@@ -1042,6 +1110,17 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
                     Some(Value::String(s)) => Value::String(s.clone()),
                     _ => Value::String(String::new()),
                 };
+                // reflection-becomes-lesson D6 — COUNT ONLY. A written
+                // mistake outranks the clean flag here for the same reason the
+                // cap ranks them that way: the mistake is the fact, and a cap
+                // that wrote one did not have a clean run. A cap that answered
+                // neither is counted in neither column; silence is not an
+                // answer, and this line will not invent one for it.
+                if matches!(field("mistakes"), Some(Value::Array(a)) if !a.is_empty()) {
+                    mistakes.recorded += 1;
+                } else if field("no_mistakes").map(js_truthy).unwrap_or(false) {
+                    mistakes.clean += 1;
+                }
                 if field("blocked_reason").map(js_truthy).unwrap_or(false) {
                     raw.push(RawCandidate {
                         ty: Value::String("blocked".into()),
@@ -1112,7 +1191,7 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
 
     scanned.sort();
     absent.sort();
-    Some(CollectData { raw, skipped, scanned, absent })
+    Some(CollectData { raw, skipped, scanned, absent, mistakes })
 }
 
 // ─── ENTRY_FIELD_SPEC / buildEntry (LOCAL, trusted path only) ─────────────
@@ -1226,18 +1305,19 @@ fn strict_iso_date(s: &str) -> bool {
 /// after pushing the dropped[] record. Both objects are built in
 /// ENTRY_FIELDS order (kind, layer, source, title, first_seen, pain), with
 /// dropped[] carrying only the `inDropped` fields plus `reason`.
+fn dropped_record(c: &RawCandidate, kind: Value, reason: &str) -> Value {
+    let mut m = Map::new();
+    m.insert("kind".into(), kind);
+    m.insert("layer".into(), raw_layer_str(c));
+    m.insert("source".into(), Value::String(c.source.clone()));
+    m.insert("first_seen".into(), valid_first_seen(&c.first_seen));
+    m.insert("reason".into(), Value::String(reason.to_string()));
+    Value::Object(m)
+}
+
 fn build_entry(c: &RawCandidate, dropped: &mut Vec<Value>) -> Option<Value> {
     let kind = normalize_kind(&c.ty);
-    let source = Value::String(c.source.clone());
-    let make_dropped = |kind_val: Value, reason: &str| -> Value {
-        let mut m = Map::new();
-        m.insert("kind".into(), kind_val);
-        m.insert("layer".into(), raw_layer_str(c));
-        m.insert("source".into(), source.clone());
-        m.insert("first_seen".into(), valid_first_seen(&c.first_seen));
-        m.insert("reason".into(), Value::String(reason.to_string()));
-        Value::Object(m)
-    };
+    let make_dropped = |kind_val: Value, reason: &str| dropped_record(c, kind_val, reason);
     let Some(kind) = kind else {
         // unknown_type: the dropped record carries the raw type when it is a
         // string, else null.
@@ -1256,7 +1336,7 @@ fn build_entry(c: &RawCandidate, dropped: &mut Vec<Value>) -> Option<Value> {
     let mut m = Map::new();
     m.insert("kind".into(), Value::String(kind.to_string()));
     m.insert("layer".into(), raw_layer_str(c));
-    m.insert("source".into(), source);
+    m.insert("source".into(), Value::String(c.source.clone()));
     m.insert("title".into(), Value::String(cap_title(raw_title_str(c))));
     m.insert("first_seen".into(), valid_first_seen(&c.first_seen));
     // validPain(raw.pain) ?? 1 — collectFeedback only ever supplies 1/2/3.
@@ -1282,6 +1362,7 @@ fn collect_counts(root: &Path) -> Option<CountsData> {
         skipped: data.skipped,
         scanned: data.scanned,
         absent: data.absent,
+        mistakes: data.mistakes,
     })
 }
 
@@ -1315,6 +1396,10 @@ fn counts_value(data: &CountsData) -> Value {
         "sources_absent".into(),
         Value::Array(data.absent.iter().map(|s| Value::String(s.to_string())).collect()),
     );
+    // D6, LAST: the digest's key order is frozen up to here, so a consumer
+    // written against the six keys above reads a digest carrying this one
+    // unchanged. It grows the object and moves nothing.
+    counts.insert("mistakes_answer".into(), data.mistakes.to_value());
     Value::Object(counts)
 }
 
@@ -1615,7 +1700,12 @@ fn digest_summary_line(digest: &Value) -> String {
             .join(", ")
     };
     let word = if entries == 1 { "entry" } else { "entries" };
-    format!("{entries} {word}, {dropped_n} dropped ({summary})")
+    // D6 rides the line the human already reads. Trailing, so the counts that
+    // were here first still lead, and stated in words rather than a bare
+    // fraction — "12 clean / 0 reflected" is the sentence that makes a
+    // reflexive clean answer impossible to miss.
+    let mistakes = MistakesTally::from_counts(&digest["counts"]).line();
+    format!("{entries} {word}, {dropped_n} dropped ({summary}); mistakes: {mistakes}")
 }
 
 fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -1677,6 +1767,11 @@ fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
 // — none of which is ported. Any non-empty dogfood_repos delegates.
 
 fn merge_digests(root: &Path) -> Option<Value> {
+    let gh = std::env::var_os("BEE_GH_BIN").unwrap_or_else(|| "gh".into());
+    merge_digests_with(root, &gh)
+}
+
+fn merge_digests_with(root: &Path, gh: &std::ffi::OsStr) -> Option<Value> {
     let config = crate::state::read_config_raw(root);
     match config.get("dogfood_repos") {
         None | Some(Value::Null) => {}
@@ -1689,8 +1784,127 @@ fn merge_digests(root: &Path) -> Option<Value> {
     counts.insert("repos_configured".into(), Value::from(0u64));
     counts.insert("repos_merged".into(), Value::from(0u64));
     counts.insert("repos_skipped".into(), Value::from(0u64));
+    let report = config.get("bee_report");
+    if report.and_then(|r| r.get("ingest")) == Some(&Value::Bool(true)) {
+        let mut entries = take_array(&mut m, "entries");
+        let mut dropped = take_array(&mut m, "dropped");
+        let issues = ingest_issues(report, gh, &mut entries, &mut dropped);
+        m.insert("dropped".into(), Value::Array(dropped));
+        m.insert("entries".into(), Value::Array(entries));
+        counts.insert("issues".into(), issues);
+    }
     m.insert("merged_counts".into(), Value::Object(counts));
     Some(Value::Object(m))
+}
+
+fn take_array(m: &mut Map<String, Value>, key: &str) -> Vec<Value> {
+    match m.get_mut(key).map(Value::take) {
+        Some(Value::Array(a)) => a,
+        _ => Vec::new(),
+    }
+}
+
+const DEFAULT_REPORT_REPO: &str = "thanhsmind/beehive";
+
+fn valid_repo(repo: &str) -> bool {
+    let part = |p: &str| {
+        !p.is_empty() && p.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+    };
+    matches!(repo.split_once('/'), Some((owner, name)) if part(owner) && part(name))
+}
+
+fn issue_counts(fetched: usize, merged: usize, dropped: usize, skipped: Option<&str>) -> Value {
+    let mut m = Map::new();
+    m.insert("fetched".into(), Value::from(fetched as u64));
+    m.insert("merged".into(), Value::from(merged as u64));
+    m.insert("dropped".into(), Value::from(dropped as u64));
+    m.insert("skipped_reason".into(), skipped.map_or(Value::Null, |s| Value::String(s.into())));
+    Value::Object(m)
+}
+
+struct GhIssue<'a> {
+    number: u64,
+    title: &'a str,
+    created_at: &'a str,
+    url: &'a str,
+    login: &'a str,
+    comments: usize,
+}
+
+fn gh_issue_fields(item: &Value) -> Option<GhIssue<'_>> {
+    Some(GhIssue {
+        number: item.get("number")?.as_u64()?,
+        title: item.get("title")?.as_str()?,
+        created_at: item.get("createdAt")?.as_str()?,
+        url: item.get("url")?.as_str()?,
+        login: item.get("author")?.as_object()?.get("login")?.as_str()?,
+        comments: item.get("comments")?.as_array()?.len(),
+    })
+}
+
+fn ingest_issues(
+    report: Option<&Value>,
+    gh: &std::ffi::OsStr,
+    entries: &mut Vec<Value>,
+    dropped: &mut Vec<Value>,
+) -> Value {
+    let setting = |key: &str| report.and_then(|r| r.get(key));
+    let repo = setting("repo").and_then(Value::as_str).unwrap_or(DEFAULT_REPORT_REPO);
+    if !valid_repo(repo) {
+        return issue_counts(0, 0, 0, Some("invalid repo"));
+    }
+    let output = crate::fsutil::retry_executable_busy(|| {
+        std::process::Command::new(gh)
+            .args(["issue", "list", "-R", repo, "--label", "bee-report", "--state", "open"])
+            .args(["--limit", "100", "--json", "number,title,createdAt,url,author,comments"])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+    });
+    let stdout = match output {
+        Err(_) => return issue_counts(0, 0, 0, Some("gh not found")),
+        Ok(o) if !o.status.success() => return issue_counts(0, 0, 0, Some("gh exited non-zero")),
+        Ok(o) => o.stdout,
+    };
+    let json_start = stdout
+        .split_inclusive(|b| *b == b'\n')
+        .take_while(|line| !line.starts_with(b"["))
+        .map(<[u8]>::len)
+        .sum::<usize>();
+    let Ok(Value::Array(items)) = serde_json::from_slice::<Value>(&stdout[json_start..]) else {
+        return issue_counts(0, 0, 0, Some("gh output unparseable"));
+    };
+    let owner = repo.split_once('/').map_or(repo, |(o, _)| o);
+    let trusted: Vec<&str> = match setting("trusted_authors") {
+        Some(Value::Array(a)) => a.iter().filter_map(Value::as_str).collect(),
+        _ => vec![owner],
+    };
+    let ref_prefix = format!("https://github.com/{repo}/issues/");
+    let mut merged = 0;
+    for issue in items.iter().filter_map(gh_issue_fields) {
+        let date = issue.created_at.get(..10).filter(|d| strict_iso_date(d));
+        let c = RawCandidate {
+            ty: Value::String("harness-issue".into()),
+            title: Value::String(issue.title.into()),
+            layer: Value::String("harness".into()),
+            first_seen: date.map_or(Value::Null, |d| Value::String(d.into())),
+            pain: 1.0,
+            source: format!("issue#{}", issue.number),
+        };
+        if !trusted.contains(&issue.login) {
+            dropped.push(dropped_record(&c, c.ty.clone(), "untrusted_author"));
+            continue;
+        }
+        if let Some(Value::Object(mut e)) = build_entry(&c, dropped) {
+            if issue.url.starts_with(&ref_prefix) {
+                e.insert("ref".into(), Value::String(issue.url.into()));
+            }
+            e.insert("count".into(), Value::from(1 + issue.comments as u64));
+            entries.push(Value::Object(e));
+            merged += 1;
+        }
+    }
+    issue_counts(items.len(), merged, items.len() - merged, None)
 }
 
 fn run_collect(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -1716,7 +1930,7 @@ fn run_collect(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
 /// normalizeTitle (lib/feedback.mjs): strip the «…» datamark wrapper to fixed
 /// point, re-apply datamark's own cleaning transforms, then casefold and
 /// collapse whitespace.
-fn normalize_title(title: &Value) -> String {
+pub(crate) fn normalize_title(title: &Value) -> String {
     // String(title ?? '')
     let mut text = match title {
         Value::Null => String::new(),
@@ -1939,7 +2153,10 @@ fn latest_closed_timestamp(c: &Cluster) -> Option<String> {
 /// so a filtered set (a recurrence's non-closed entries) stays honest.
 fn build_ranked_map(key: &str, entries: Vec<Value>, repos_len: usize) -> (Value, f64, String) {
     let pain = entries.iter().map(entry_pain).fold(0.0_f64, f64::max);
-    let frequency = entries.len() as f64;
+    let frequency: f64 = entries
+        .iter()
+        .map(|e| e.get("count").and_then(Value::as_u64).map_or(1.0, |n| n as f64))
+        .sum();
     let corroboration = repos_len as f64;
     let rank = pain * frequency * corroboration;
     let mut earliest: Option<String> = None;
@@ -2182,7 +2399,88 @@ mod tests {
         assert_eq!(summary_line(&data), "0 entries, 0 dropped (none)");
         assert_eq!(
             jsjson::stringify(&counts_value(&data)),
-            r#"{"entries":0,"dropped":0,"skipped":0,"by_kind":{},"sources_scanned":[],"sources_absent":[".bee/backlog.jsonl",".bee/cells",".bee/decisions.jsonl","docs/history/learnings"]}"#
+            concat!(
+                r#"{"entries":0,"dropped":0,"skipped":0,"by_kind":{},"sources_scanned":[],"#,
+                r#""sources_absent":[".bee/backlog.jsonl",".bee/cells",".bee/decisions.jsonl","docs/history/learnings"],"#,
+                // D6's counter grows the object at the END; every key Node
+                // froze is still in its old place, so a consumer reading the
+                // six above parses this digest unchanged.
+                r#""mistakes_answer":{"clean":0,"recorded":0,"answered":0,"clean_ratio":null}}"#
+            )
+        );
+    }
+
+    /// reflection-becomes-lesson D6: the collapse is a NUMBER, not a hope.
+    ///
+    /// Four caps that answered clean against two that wrote a mistake is
+    /// exactly the shape D6 exists to make visible, and the digest says so in
+    /// its object and in the line printed beside it.
+    #[test]
+    fn the_digest_counts_clean_run_answers_against_real_reflections() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        for n in 1..=4 {
+            std::fs::write(
+                cells.join(format!("clean-{n}.json")),
+                format!(r#"{{"id":"c-{n}","title":"t","trace":{{"no_mistakes":true}}}}"#),
+            )
+            .unwrap();
+        }
+        std::fs::write(
+            cells.join("reflected.json"),
+            r#"{"id":"r-1","title":"t","trace":{"mistakes":["the binary was stale"]}}"#,
+        )
+        .unwrap();
+        // A cap that wrote a mistake AND reached for the clean flag counts as
+        // the mistake: the written fact outranks the flag, exactly as it does
+        // at the cap that read both.
+        std::fs::write(
+            cells.join("both.json"),
+            r#"{"id":"b-1","title":"t","trace":{"no_mistakes":true,"mistakes":["it broke"]}}"#,
+        )
+        .unwrap();
+        // A cap nobody ever asked answers NEITHER column. Silence is not clean.
+        std::fs::write(
+            cells.join("silent.json"),
+            r#"{"id":"s-1","title":"t","trace":{"capped_at":"2026-01-01T00:00:00Z"}}"#,
+        )
+        .unwrap();
+
+        let data = collect_counts(tmp.path()).unwrap();
+        assert_eq!(data.mistakes.clean, 4);
+        assert_eq!(data.mistakes.recorded, 2);
+        assert_eq!(data.mistakes.line(), "4 clean / 2 reflected (67% clean)");
+
+        let digest = build_digest(tmp.path()).unwrap();
+        assert_eq!(digest["counts"]["mistakes_answer"]["clean"], json!(4));
+        assert_eq!(digest["counts"]["mistakes_answer"]["recorded"], json!(2));
+        assert_eq!(digest["counts"]["mistakes_answer"]["answered"], json!(6));
+        assert_eq!(digest["counts"]["mistakes_answer"]["clean_ratio"], json!(0.667));
+        // The human-readable line carries it too — a number in a JSON file
+        // nobody opens is the silence this counter exists to break.
+        assert!(
+            digest_summary_line(&digest).ends_with("mistakes: 4 clean / 2 reflected (67% clean)"),
+            "{}",
+            digest_summary_line(&digest)
+        );
+
+        // A WITNESS, NEVER A GUARD: it refuses nothing and drops nothing. The
+        // cells still scan, and the digest is still built.
+        assert_eq!(data.dropped.len(), 0);
+        assert_eq!(data.skipped, 0, "the counter skipped a cell it only had to count");
+        assert!(digest["entries"].is_array());
+    }
+
+    #[test]
+    fn a_repo_with_no_mistakes_answer_yet_states_that_instead_of_a_ratio() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = collect_counts(tmp.path()).unwrap();
+        assert_eq!(data.mistakes.line(), "no mistakes answer yet");
+        assert_eq!(
+            build_digest(tmp.path()).unwrap()["counts"]["mistakes_answer"]["clean_ratio"],
+            json!(null),
+            "a ratio was invented out of no answers"
         );
     }
 
@@ -2691,5 +2989,182 @@ mod tests {
         assert_eq!(retired.len(), 1);
         assert_eq!(retired[0]["title"], "widget breaks");
         assert_eq!(retired[0]["count"], 3);
+    }
+
+    #[cfg(unix)]
+    fn issue_repo(config: &str, stdout: &str, exit: i32) -> (tempfile::TempDir, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee/config.json"), config).unwrap();
+        let out = tmp.path().join("gh-out.json");
+        std::fs::write(&out, stdout).unwrap();
+        let gh = tmp.path().join("gh");
+        let staged = gh.with_extension("staging");
+        std::fs::write(&staged, format!("#!/bin/sh\ncat '{}'\nexit {exit}\n", out.display())).unwrap();
+        let mut perms = std::fs::metadata(&staged).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&staged, perms).unwrap();
+        std::fs::rename(&staged, &gh).unwrap();
+        (tmp, gh)
+    }
+
+    #[cfg(unix)]
+    fn gh_issue(n: u64, title: &str, created: &str, login: &str, comments: usize) -> Value {
+        json!({
+            "number": n,
+            "title": title,
+            "createdAt": created,
+            "url": format!("https://github.com/thanhsmind/beehive/issues/{n}"),
+            "author": {"login": login},
+            "comments": vec![json!({"body": "hidden"}); comments],
+        })
+    }
+
+    #[cfg(unix)]
+    const INGEST_ON: &str = r#"{"bee_report":{"ingest":true}}"#;
+
+    #[cfg(unix)]
+    fn without_clock(mut digest: Value) -> String {
+        digest.as_object_mut().unwrap().shift_remove("generated_at");
+        jsjson::stringify(&digest)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn issue_ingest_off_changes_no_output_byte() {
+        let issues = json!([gh_issue(1, "gate hangs", "2026-01-01T00:00:00Z", "thanhsmind", 0)]).to_string();
+        let (tmp, gh) = issue_repo("{}", &issues, 0);
+        let bare = without_clock(merge_digests_with(tmp.path(), gh.as_os_str()).unwrap());
+        assert!(!bare.contains("issues"));
+        for config in [r#"{"bee_report":{"ingest":false}}"#, r#"{"bee_report":{"ingest":"true"}}"#] {
+            std::fs::write(tmp.path().join(".bee/config.json"), config).unwrap();
+            assert_eq!(without_clock(merge_digests_with(tmp.path(), gh.as_os_str()).unwrap()), bare);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn issue_ingest_ranks_each_trusted_issue_with_its_link() {
+        let issues = json!([
+            gh_issue(4, "gate hangs", "2026-01-01T00:00:00Z", "thanhsmind", 0),
+            gh_issue(7, "merge refuses green work", "2026-02-01T00:00:00Z", "thanhsmind", 0),
+        ])
+        .to_string();
+        let (tmp, gh) = issue_repo(INGEST_ON, &issues, 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert_eq!(
+            digest["merged_counts"]["issues"],
+            json!({"fetched": 2, "merged": 2, "dropped": 0, "skipped_reason": null})
+        );
+        let entry = &digest["entries"][0];
+        assert_eq!(entry["kind"], "harness-issue");
+        assert_eq!(entry["layer"], "harness");
+        assert_eq!(entry["source"], "issue#4");
+        assert_eq!(entry["first_seen"], "2026-01-01");
+        assert_eq!(entry["count"], 1);
+        assert!(!jsjson::stringify(&digest).contains("hidden"));
+        let (ranked, _) = rank_clusters(cluster_entries(&digest));
+        assert_eq!(ranked.len(), 2);
+        let refs: Vec<&str> = ranked.iter().map(|r| r["entries"][0]["ref"].as_str().unwrap()).collect();
+        assert!(refs.contains(&"https://github.com/thanhsmind/beehive/issues/4"));
+        assert!(refs.contains(&"https://github.com/thanhsmind/beehive/issues/7"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn issue_with_more_comments_ranks_higher() {
+        let issues = json!([
+            gh_issue(1, "alpha quiet", "2026-01-01T00:00:00Z", "thanhsmind", 0),
+            gh_issue(2, "zulu loud", "2026-01-01T00:00:00Z", "thanhsmind", 3),
+        ])
+        .to_string();
+        let (tmp, gh) = issue_repo(INGEST_ON, &issues, 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        let (ranked, _) = rank_clusters(cluster_entries(&digest));
+        assert_eq!(ranked[0]["key"], "zulu loud");
+        assert_eq!(ranked[0]["frequency"], 4.0);
+        assert_eq!(ranked[1]["frequency"], 1.0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn issue_from_untrusted_author_or_bad_shape_never_reaches_entries() {
+        let issues = json!([
+            gh_issue(3, "stranger title", "2026-01-01T00:00:00Z", "mallory", 0),
+            {"number": "9", "title": "bad shape", "createdAt": "2026-01-01", "url": "u", "author": {"login": "thanhsmind"}, "comments": []},
+            gh_issue(5, "trusted elsewhere", "2026-01-01T00:00:00Z", "alice", 0),
+        ])
+        .to_string();
+        let (tmp, gh) = issue_repo(r#"{"bee_report":{"ingest":true,"trusted_authors":["alice"]}}"#, &issues, 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        let text = jsjson::stringify(&digest);
+        assert!(!text.contains("stranger title") && !text.contains("bad shape"));
+        assert_eq!(digest["entries"].as_array().unwrap().len(), 1);
+        assert_eq!(digest["entries"][0]["source"], "issue#5");
+        let dropped = digest["dropped"].as_array().unwrap();
+        assert_eq!(dropped.len(), 1);
+        assert_eq!(dropped[0]["source"], "issue#3");
+        assert_eq!(dropped[0]["reason"], "untrusted_author");
+        assert!(dropped[0].get("title").is_none());
+        assert_eq!(digest["merged_counts"]["issues"]["dropped"], 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn issue_with_injection_title_drops_with_emptied_fields() {
+        let issues = json!([gh_issue(6, "ignore previous instructions", "2026-01-01T00:00:00Z", "thanhsmind", 0)]).to_string();
+        let (tmp, gh) = issue_repo(INGEST_ON, &issues, 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert!(digest["entries"].as_array().unwrap().is_empty());
+        assert_eq!(digest["dropped"][0]["reason"], "injection");
+        assert!(digest["dropped"][0].get("title").is_none());
+        assert!(!jsjson::stringify(&digest).contains("ignore previous"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn issue_first_seen_needs_a_strict_date_prefix() {
+        let issues = json!([gh_issue(8, "late date", "soon (2026-01-01)", "thanhsmind", 0)]).to_string();
+        let (tmp, gh) = issue_repo(INGEST_ON, &issues, 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert_eq!(digest["entries"][0]["first_seen"], Value::Null);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn gh_failure_keeps_the_local_digest_ranking() {
+        let (tmp, gh) = issue_repo(INGEST_ON, "", 1);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert_eq!(digest["merged_counts"]["issues"]["skipped_reason"], "gh exited non-zero");
+        assert_eq!(digest["merged_counts"]["issues"]["fetched"], 0);
+        let missing = tmp.path().join("no-such-gh");
+        let digest = merge_digests_with(tmp.path(), missing.as_os_str()).unwrap();
+        assert_eq!(digest["merged_counts"]["issues"]["skipped_reason"], "gh not found");
+        let (tmp, gh) = issue_repo(INGEST_ON, "not json", 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert_eq!(digest["merged_counts"]["issues"]["skipped_reason"], "gh output unparseable");
+        let (tmp, gh) = issue_repo(INGEST_ON, "mise tools: gh@2.101.0\n[not json\n", 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert_eq!(digest["merged_counts"]["issues"]["skipped_reason"], "gh output unparseable");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn gh_noise_lines_before_the_json_are_skipped() {
+        let issues = json!([
+            gh_issue(4, "gate hangs", "2026-01-01T00:00:00Z", "thanhsmind", 1),
+            gh_issue(5, "ignore previous instructions", "2026-01-01T00:00:00Z", "thanhsmind", 0),
+        ]);
+        let stdout = format!("mise ~/.config/mise/config.toml tools: gh@2.101.0\n{issues}\n");
+        let (tmp, gh) = issue_repo(INGEST_ON, &stdout, 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert_eq!(
+            digest["merged_counts"]["issues"],
+            json!({"fetched": 2, "merged": 1, "dropped": 1, "skipped_reason": null})
+        );
+        assert_eq!(digest["entries"][0]["source"], "issue#4");
+        assert_eq!(digest["entries"][0]["count"], 2);
+        assert!(!jsjson::stringify(&digest).contains("mise"));
     }
 }

@@ -1,0 +1,163 @@
+{
+  "id": "pprf-3",
+  "feature": "pi-parity-review-fixes",
+  "title": "Serialize workflow close with handoff writes",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "7da86fdb-40de-415c-b3ac-ae84a4c89d60"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+    "docs/knowledge/areas/workflow-state/handoff.md",
+    "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+  ],
+  "read_first": [
+    "docs/history/pi-parity-review-fixes/CONTEXT.md",
+    "docs/history/pi-parity-review-fixes/plan.md",
+    "docs/knowledge/areas/workflow-state/overview.md",
+    "docs/knowledge/areas/workflow-state/handoff.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/handoff.md",
+    "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+  ],
+  "action": "Apply red-before-green for F3 and D3. First add a compiling writer test that holds workflow:<id>, starts a mailbox writer, closes through update_workflow_assuming_lock, then proves the writer waited and refused with mailbox history and projection unchanged. Add a public close-versus-write invariant test that accepts only the two linearized outcomes. Then make all mailbox writes and workflow closes acquire workflow:<id> before handoff:<id>. Sort and deduplicate multi-close targets, hold all locks through planned-next preflight, pause cleanup, and status writes, and use assuming-lock helpers to avoid reacquisition. Under the writer locks, fail closed on missing, unreadable, or closed workflow records with a message that names the id and says no handoff was written. Preserve active pause/planned-next writes, all-or-none close, audit history, projection rebuild, and C1 fallback.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test workflow_verbs",
+  "must_haves": {
+    "truths": [
+      "Workflow close and mailbox writes for one workflow linearize under workflow then handoff locks.",
+      "A planned-next handoff either remains visible on an active workflow or is refused after closure.",
+      "Missing, unreadable, and closed workflow targets reject mailbox writes without mutation.",
+      "Multi-target close remains all-or-none and deadlock-safe through stable lock ordering.",
+      "Pause cleanup, mailbox audit history, projection rebuild, and C1 fallback remain intact."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "substantive": "stable multi-record lock transaction for close"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+        "substantive": "workflow-first mailbox lock and post-lock state validation"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "substantive": "deterministic lock and closed-state behavior tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+        "substantive": "public close-versus-write linearization proof"
+      }
+    ],
+    "key_links": [
+      "close and writer share workflow:<id> then handoff:<id>",
+      "close uses assuming-lock mailbox cleanup and workflow update helpers",
+      "writer validates workflow state after both locks are held",
+      "projection rebuild runs only after the locked mutations settle"
+    ],
+    "prohibitions": [
+      "Do not clear, hide, or overwrite planned-next authority.",
+      "Do not acquire handoff before workflow for the same operation.",
+      "Do not add timing sleeps as the race oracle.",
+      "Do not delete mailbox audit files."
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pprf-3",
+    "outcome": "Linearize workflow close and mailbox writes under workflow then handoff locks",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+      "docs/knowledge/areas/workflow-state/handoff.md",
+      "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: Internal lock linearization does not alter skill workflows"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T17:32:40.468Z",
+    "behavior_change": true,
+    "verification_evidence": "verified handoff and workflow_verbs suites",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09b73-3f97-7737-b6f6-765cf6382c55",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test workflow_verbs",
+    "claimed_at": "2026-09-13T16:34:43.804Z",
+    "sync_ack": "Internal lock linearization does not alter skill workflows",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Linearize workflow close and mailbox writes under workflow then handoff locks",
+      "commit": "5868fb480ee9beeb9b5471b94468e360c4335b85",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+        "docs/knowledge/areas/workflow-state/handoff.md",
+        "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test workflow_verbs — green:unit — verified handoff and workflow_verbs suites",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "stable-lock-order-and-transaction",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:108-166` sorts and deduplicates targets, holds `workflow:<id>` then `handoff:<id>` through preflight, pause cleanup, and close, then rebuilds after release; `packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs:272-325` uses the same order and re-reads workflow state under lock."
+          },
+          {
+            "id": "closed-missing-corrupt-refusal",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs:275-294` refuses missing, unreadable, and closed workflow records before mailbox mutation and names the workflow plus \"No handoff was written.\" `packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs:1804` covers these cases."
+          },
+          {
+            "id": "linearization-and-preserved-effects",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/tests/workflow_verbs.rs:756-923` verifies planned-next protection, pause clearing, projection exclusion, and the two close/write outcomes; `workflows_close_versus_handoff_write_linearizes_cleanly` passed."
+          },
+          {
+            "id": "full-workflow-regression",
+            "status": "PASS",
+            "evidence": "The focused handoff/workflow tests passed, and the full Rust suite passed with 3566 passed and 0 failed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-14T02:49:19.510Z"
+      }
+    ]
+  }
+}

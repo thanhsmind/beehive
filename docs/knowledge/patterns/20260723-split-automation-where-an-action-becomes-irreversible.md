@@ -7,6 +7,7 @@ timestamp: 2026-07-23
 bee:
   id: pattern-20260723-split-automation-where-an-action-becomes-irreversible
   lifecycle: active
+  areas: [bee-herding]
   sources: ["herding-adopt cells h-2, h-3 (an unattended dispatch+merge loop adopted with merge demoted to a gesture; traces in `.bee/cells/`, 2026-07-23)", docs/history/learnings/20260723-adopting-a-contribution-means-reviewing-what-it-does-not-what-it-says.md]
   polarity: practice
   critical: false

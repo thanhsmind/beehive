@@ -61,7 +61,7 @@ The merge law, applied by `merge_config_overlay`:
 - **Scalars replace.** Last file wins.
 - **A present key with a `null` value still wins the merge.** For most keys `null` then reads as "unset" — that is deliberate for `close_commit_bookkeeping`, whose comment records the reason: a tool that only knows JSON `null` and never "delete the key" must land on the same default as an absent key.
 
-One key is removed after the merge and never reaches a reader: a top-level `advisor` is stripped, because the advisor role is configured under `models.<runtime>.advisor` and a stray top-level spelling would silently do nothing.
+One key is removed after the merge and never reaches a reader: a top-level `advisor` is stripped, because the advisor role is configured under `team.<runtime>.advisor` and a stray top-level spelling would silently do nothing.
 
 Then each consumer normalizes its own key, in one of three postures:
 
@@ -71,7 +71,9 @@ Then each consumer normalizes its own key, in one of three postures:
 
 ### Finish
 
+<!-- bee:not-a-deferral: “Later” states the read order; it makes no future-work promise. -->
 The value is used and forgotten. The next invocation, one millisecond later, reads both files again.
+<!-- /bee:not-a-deferral -->
 
 ## The keys an agent meets
 
@@ -79,7 +81,7 @@ The value is used and forgotten. The next invocation, one millisecond later, rea
 | --- | --- | --- | --- |
 | `hooks.<name>` | enabled | `false` turns that one hook off. Names: `session-init`, `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`, `session-close`, `tools-logger`, `activity`, `codex-subagent-audit`. Only an explicit `false` disables; any other value, and any unknown name, reads as enabled. | reads as enabled |
 | `gate_bypass` | `false` (off) | The bypass level `bee state gate` may self-approve at: `"total"`→total, `"full"`→full, `true`/`"on"`/`"normal"`→normal, anything else→off. [gates](../foundations/gates.md) owns what each level opens. | reads as off |
-| `models.claude.<role>`, `models.codex.<role>` | seeded: claude `code`=sonnet, `read`=haiku, `extraction`=haiku, `generation`=sonnet; codex all `null` | Which model each dispatched role runs on, and therefore what `bee dispatch prepare` returns and what the model guard repairs a mismatched dispatch to. Slot shapes: a plain string, `{model, effort}`, `{kind:"cli", …}`, `{kind:"herding", …}`, or `null`. [workers](../delegation/workers.md) owns roles and repair. | an unconfigured role name falls through and warns; it never refuses |
+| `team.claude.<role>`, `team.codex.<role>` | seeded: claude `code`=sonnet, `read`=haiku, `extraction`=haiku, `generation`=sonnet; codex all `null` | Which model each dispatched role runs on, and therefore what `bee dispatch prepare` returns and what the model guard repairs a mismatched dispatch to. Slot shapes: a plain string, `{model, effort}`, `{kind:"cli", …}`, `{kind:"herding", …}`, or `null`. [workers](../delegation/workers.md) owns roles and repair. Under `bee-plan/v2`, role assignments are planned and enforced at dispatch and native guard doors. | an unconfigured role name falls through and warns during ad hoc dispatches; under v2 plans, unconfigured or mismatched roles refuse |
 | `guards.idle_gate` | `true` | `false` lets source writes through at `idle` and `compounding-complete` without routing work first. Named as the last-resort opt-out in the intake gate's own deny. | anything but `false` reads as on |
 | `guards.auto_isolate` | `false` | `true` makes a second write-capable session create its own feature worktree instead of being refused by the write-policy guard. Same effect as passing `--isolate` per command. | anything but `true` reads as off |
 | `guards.max_read_lines` | `800` | The line count past which a Read with no `offset`/`limit` is redirected toward a scoped read. A non-number, zero, or a negative reads as 800. | reads as 800 |
@@ -131,7 +133,7 @@ A config read has no first side effect, so the usual two-column split collapses:
 | The store unavailable (corrupt JSON, hook binary missing) | Each file fails open independently: warn once, read as absent, keep the other file. A missing hook binary means no hook reads config at all and the action passes with `bee: hook binary missing (.bee/bin/bee)` — visible, never silent. No lock is involved, so lock contention cannot reach a config read. |
 | The session going away (heartbeat, lease expiry, release) | No effect. Config holds no lease and no session-scoped value. |
 | A sibling changing the target | A sibling editing `config.json` mid-flow changes the *next* invocation in every live session, with no notification and no store event. Two sessions editing the same config file race like any two editors on one file — there is no lock and no merge. This is the one store surface with no concurrency protection at all. |
-| The channel changing (piped, `--json`, Codex, from a hook) | Same merge everywhere. Codex reads the same two files; only `models.codex` versus `models.claude` differs. Warnings ride stderr in every channel. |
+| The channel changing (piped, `--json`, Codex, from a hook) | Same merge everywhere. Codex reads the same two files; only `team.codex` versus `team.claude` differs. Warnings ride stderr in every channel. |
 
 ## Interactions with other systems
 
@@ -159,7 +161,7 @@ A config read has no first side effect, so the usual two-column split collapses:
 - **A corrupt `config.json` is a quiet, repo-wide reset.** Every guard returns to its default (all safe-side: hooks on, intake gate on, bypass off), but `commands.test` also vanishes, so `bee test` reports "No commands.test declared — nothing ran" and exits as if the project had never declared one. The only signal is one stderr warning per invocation.
 - **`worktree_first` is checked against the exact string `"off"`.** `false`, `"false"`, `"OFF"`, and `0` all leave the guard on. The deny text names the exact spelling for that reason.
 - **`ship_visibility` is advice, not machinery.** Nothing in the binary opens a draft PR. The value only reaches a preamble line and a status field.
-- **`bee status --json` is the only derived-config read surface.** There is no `bee config show`, and `bee doctor` never reads config — it checks the runtime installation. To see what a key resolves to, read the file and apply the merge law, or read the matching field on `bee status --json`.
+- **`bee status --json` is the primary derived-config read surface.** There is no `bee config show`. `bee doctor` checks runtime installation health, but inspects `.bee/config.json` for `herding.transport` settings (graded by `herding_transport` on Pi) and advisory hat slot descriptions. To see what a key resolves to, read the file and apply the merge law, or read the matching field on `bee status --json`.
 - **The command tree still advertises `bee config`.** It appears in `bee --help --all` and in the registry payload with full parameter schemas, so an agent reading the help can reasonably try it and get a refusal. The refusal names the remedy, which is the file.
 
 ## Open questions and verification

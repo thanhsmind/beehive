@@ -1,0 +1,91 @@
+{
+  "id": "wtp-1",
+  "feature": "windows-test-portability",
+  "title": "Make the onboard statusline tests hold on a PowerShell host",
+  "lane": "small",
+  "role": "test",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-test-portability/plan.md",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/merge.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Tests only; never change product code (the PowerShell statusline skip at onboard/mod.rs:396 is correct and stays). On Windows, host_shell_is_powershell (onboard/merge.rs:48) defaults to true when .bee/config.json has no host_shell, so onboarding skips the statusline and 11 tests in onboard/tests.rs fail: plan_on_an_empty_repo_lists_the_whole_install, apply_on_an_empty_repo_then_reapply_is_a_no_op, and the statusline section from the comment `the default status display (4cac0774)` (a_project_level_entry_plans_the_copy_and_apply_lands_the_canonical_bytes, a_drifted_vendored_script_is_replanned_and_healed, a_deleted_vendored_script_with_the_entry_present_is_replanned, the_managed_ledger_carries_the_statusline_hash_only_when_bee_owns_the_entry, an_absent_settings_file_is_created_with_the_canonical_entry_and_the_script, the_entry_bee_writes_reads_back_as_a_project_level_entry, a_settings_file_without_the_key_gains_exactly_one_key_and_keeps_the_rest, an_existing_project_level_entry_is_left_byte_for_byte, repo_hooks_and_the_statusline_default_share_one_backup_holding_the_original). Fix: (1) In the statusline section, pin every fixture repo to a POSIX host with a small helper that writes `.bee/config.json` = {\"host_shell\":\"posix\"} before the first plan/apply; a test that writes its own .bee/config.json (e.g. the_project_config_opt_out_behaves_exactly_like_the_flag) keeps \"host_shell\":\"posix\" in it. (2) The two empty-repo tests must not write config.json (it would change the plan head); instead branch on `super::merge::host_shell_is_powershell(&fx.repo)`: on a PowerShell host expect NO merge_statusline_settings/copy_statusline items and NO `statusline` managed key; otherwise keep today's expectations. RED FIRST on Linux: temporarily make the helper write {\"host_shell\":\"powershell\"} and run the section — the section tests fail the same way as on Windows; record that output; then set it to posix and go green. Also prove the empty-repo branch by temporarily writing a powershell config in those two tests? No — the branch reads the same function; a Linux green is enough there. Run `cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard::` and it must be green. One commit, subject in imperative mood, trailer `cell: wtp-1`.",
+  "verify": "cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard::",
+  "must_haves": {
+    "truths": [
+      "The 11 listed onboard tests pass on Linux, and they no longer depend on the host's default shell",
+      "A PowerShell pin on Linux reproduces the Windows failure (red-first evidence on the cap)"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "substantive": "POSIX pin helper in the statusline section; host-aware expectations in the two empty-repo tests"
+      }
+    ],
+    "key_links": [
+      "host_shell_is_powershell stays the one source of the host-shell rule"
+    ],
+    "prohibitions": [
+      "No change to any non-test source file",
+      "No deleted or ignored test",
+      "No #[cfg(not(windows))] on a test to hide it"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "wtp-worker-1",
+    "outcome": "Onboard statusline tests pinned to a POSIX host via posix_fixture() in onboard/tests.rs; the two empty-repo tests branch on merge::host_shell_is_powershell",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [
+      "posix_fixture() also covers the 8 other section tests that were not failing (user-level entry, unparseable file, --no-statusline, etc.) — the cell said pin every fixture repo in the section, and without the pin those tests assert the PowerShell skip on Windows instead of the display — found a better route",
+      "the_project_config_opt_out_behaves_exactly_like_the_flag keeps fixture() and writes host_shell posix plus statusline false in its own config, as the cell asked — followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T07:36:40.236Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f895b642-a3e1-4c5c-bbae-0e2ebbd9b352",
+    "escalation_reason": "agy-flash workers stall 50+ min on onboard/tests.rs (recorded memory, 2026-09-04); this cell edits that file",
+    "claimed_at": "2026-09-11T07:32:21.338Z",
+    "mistakes": [
+      {
+        "wrong": "my first Bash call piped an inline python script and used an unquoted $f variable, so the worktree guard refused the whole command",
+        "better": "put the script in a scratchpad file and pass literal paths from the start"
+      },
+      {
+        "wrong": "I ran plain git add, and the concurrent-worker guard refused it because the index is shared",
+        "better": "use a path-scoped git commit -F <file> -- <path> from the start"
+      }
+    ],
+    "report": {
+      "outcome": "Onboard statusline tests pinned to a POSIX host via posix_fixture() in onboard/tests.rs; the two empty-repo tests branch on merge::host_shell_is_powershell",
+      "commit": "ef02a2d9d3b69ffd9f0933676e4848798015a107",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard:: — green:unit — cell verify over the touched test module; 181 passed 0 failed, all 11 named tests present in --list; red-first: same run with the helper pinned to {\"host_shell\":\"powershell\"} gave 9 failed (every section test of the 11, at the statusline asserts), the two empty-repo tests passed because they read the same host rule",
+      "deviations": [
+        "posix_fixture() also covers the 8 other section tests that were not failing (user-level entry, unparseable file, --no-statusline, etc.) — the cell said pin every fixture repo in the section, and without the pin those tests assert the PowerShell skip on Windows instead of the display — found a better route",
+        "the_project_config_opt_out_behaves_exactly_like_the_flag keeps fixture() and writes host_shell posix plus statusline false in its own config, as the cell asked — followed the plan"
+      ],
+      "mistakes": [
+        "my first Bash call piped an inline python script and used an unquoted $f variable, so the worktree guard refused the whole command — put the script in a scratchpad file and pass literal paths from the start",
+        "I ran plain git add, and the concurrent-worker guard refused it because the index is shared — use a path-scoped git commit -F <file> -- <path> from the start"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "escalate": true
+}

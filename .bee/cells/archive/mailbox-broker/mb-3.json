@@ -1,0 +1,170 @@
+{
+  "id": "mb-3",
+  "feature": "mailbox-broker",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "api",
+  "title": "Add the broker tick and the answer verb that route a worker question and start the next round",
+  "deps": [
+    "mb-1"
+  ],
+  "decisions": [
+    "D1",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "91608561-4012-4e55-a7cc-272ce2ab22ad"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/broker.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/mailbox-broker/CONTEXT.md",
+    "docs/history/mailbox-broker/plan.md",
+    "docs/history/mailbox-broker/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "Red first, then implement contract broker-tick (store 91608561) in a new module herding/broker.rs, routed from herding.rs as `broker tick` and `answer`, and declared in catalog.rs and registry_payload.json the way `herding steer` is. tick: find jobs under the control root .bee/mailbox whose highest result has status question and no answer-N.json; claim one per tick by atomic rename of a claim file (job_id + round is the dedupe key); route by the plan's truth table. The advisor consult calls the dispatch-prepare internals for --kind advisor on the job's runtime with a brief holding the question; only a herding payload is run (its command, synchronously, ceiling below 600 s); done = answer from its summary and report_path, anything else = human. A human route calls record_intervention_into with target leader_session, signal big-decision for gate or product and worker-question for technical; add the mailbox kinds the broker needs (broker-notice) to MAILBOX_KINDS and delivery_line; a consented technical question takes the worker's leaning as its answer, or stays waiting when there is none. answer --job <id> --text <t> writes answer-N.json (refuses an unknown job or a round with no question). An answered question starts a new bee herding run job with the parent job's agent, cwd, seat, cell_id, no_pane and inbox_session, --question-of and --question-round set, --no-question above broker.max_question_rounds (config, default 2), and a task holding the original task, the question, the answer and the parent round's files_changed. A finished child job with no inbox_session gets one broker-notice row to leader_session. Every tick writes .bee/supervisor/broker-heartbeat.json {ts}. Inject the spawner and the advisor runner behind traits so tests run with no herdr and no model. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a gate or product question becomes one intervention to leader_session with signal big-decision and no advisor call",
+      "a technical question with a herding advisor that returns done writes answer-N.json from the advisor",
+      "a technical question whose advisor is native, unconfigured, blocked or failed becomes one intervention with signal worker-question",
+      "bee herding answer writes answer-N.json and refuses an unknown job",
+      "an answered question starts one child job with question_of set and the parent's agent, cwd, seat and inbox_session",
+      "the child brief carries the original task, the question, the answer and the parent round's files_changed",
+      "above broker.max_question_rounds the child job runs with --no-question",
+      "a second tick never routes the same job and round twice",
+      "every tick writes the broker heartbeat",
+      "bee herding broker tick --help and bee herding answer --help print their flags"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/broker.rs",
+        "substantive": "the tick, the routing table, the answer verb and the re-dispatch"
+      }
+    ],
+    "key_links": [
+      "herding.rs routes broker and answer to herding/broker.rs",
+      "broker.rs writes human questions through supervisor::record_intervention_into"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No LLM call in the broker itself",
+      "No keys typed into a live pane",
+      "No new store beside the job mailbox and the supervisor store",
+      "consent-sweep code unchanged"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- herding catalog supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mb3-rework",
+    "outcome": "Broker tick and answer verbs route a worker question and start the next round; the herding broker group is declared",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/broker.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "round 2 fixed the registry_dispatch red: herding.broker.tick became one herding.broker group entry, the pane precedent; the child round is a new job id with its own Pi inbox marker, so the parent marker stays pending (backlog finding filed); registry_payload.json was restored to one line in 3e229f963",
+      "sync-ack: the bee-herding skill text for the broker landed with mb-5 (85fcdf42f)"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T12:52:35.090Z",
+    "behavior_change": false,
+    "verification_evidence": "covered by the full declared suite run after rework cf7aff65c (cargo test --release --no-fail-fast, 37 binaries ok, 0 failed, registry_dispatch included)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- herding catalog supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-10-03T12:38:07.071Z",
+    "sync_ack": "the bee-herding skill text for the broker landed with mb-5 (85fcdf42f)",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Broker tick and answer verbs route a worker question and start the next round; the herding broker group is declared",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/broker.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "commit": "cf7aff65c",
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- herding catalog supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — covered by the full declared suite run after rework cf7aff65c (cargo test --release --no-fail-fast, 37 binaries ok, 0 failed, registry_dispatch included)",
+      "deviations": [
+        "round 2 fixed the registry_dispatch red: herding.broker.tick became one herding.broker group entry, the pane precedent; the child round is a new job id with its own Pi inbox marker, so the parent marker stays pending (backlog finding filed); registry_payload.json was restored to one line in 3e229f963"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-03T12:37:58.959Z",
+    "reopened_reason": "Full suite red: tests/registry_dispatch.rs every_namespace_the_dispatcher_serves_is_declared_in_the_registry fails, 'bee herding broker' is served but the registry declares only 'bee herding broker tick'. Fix: follow the 'bee herding pane' precedent - replace the herding.broker.tick entry with one herding.broker entry (invoke 'bee herding broker', description names subverb tick and keeps the tick text, same json and main-root parameters, example 'bee herding broker tick --json'), and update catalog.rs herding_broker_tick_resolves to expect the herding.broker entry with rest [tick]. registry_payload.json is ONE minified line: edit it only with a script that loads it and writes json.dumps(obj, ensure_ascii=True, separators=(',', ':')) with no trailing newline. Also run --test registry_dispatch before finishing.",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a gate or product question becomes one intervention to leader_session with signal big-decision and no advisor call",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "a technical question with a herding advisor that returns done writes answer-N.json from the advisor",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "a technical question whose advisor is native, unconfigured, blocked or failed becomes one intervention with signal worker-question",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "bee herding answer writes answer-N.json and refuses an unknown job",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "an answered question starts one child job with question_of set and the parent's agent, cwd, seat and inbox_session",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "the child brief carries the original task, the question, the answer and the parent round's files_changed",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "above broker.max_question_rounds the child job runs with --no-question",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "a second tick never routes the same job and round twice",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "every tick writes the broker heartbeat",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/broker.rs"
+          },
+          {
+            "requirement": "bee herding broker tick --help and bee herding answer --help print their flags",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T13:07:52.107Z",
+        "recorded_by": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

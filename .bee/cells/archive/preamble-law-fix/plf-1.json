@@ -1,0 +1,107 @@
+{
+  "id": "plf-1",
+  "feature": "preamble-law-fix",
+  "title": "Keep the preamble budget doc outside the instruction-law scan window",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "read_first": [
+    "docs/history/preamble-law-fix/CONTEXT.md",
+    "packages/bee-rs/crates/bee/tests/instruction_laws.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In budget.rs, move the 8-line `/// NOT the law decision 8f63adb4 ...` paragraph above the 5-line `/// Every section switched on at once ...` paragraph, keeping one `///` separator line between them, so the line right above PREAMBLE_BUDGET_BYTES is the generated-payload paragraph. Add or remove no comment line.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee comment_baseline",
+  "must_haves": {
+    "truths": [
+      "instruction_laws is green",
+      "the comment count of budget.rs is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "substantive": "reordered doc paragraphs"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No change to PREAMBLE_BUDGET_BYTES",
+      "No new comment lines"
+    ]
+  },
+  "behavior_change": false,
+  "judge_obligation_ack": "doc-paragraph reorder only, no code or guard behavior changes; the independent instruction_laws test is the proof",
+  "status": "capped",
+  "trace": {
+    "worker": "w-plf",
+    "outcome": "instruction_laws green again: the budget doc paragraphs swap so the not-instruction-text paragraph sits outside the 6-line scan window",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-21T07:42:15.608Z",
+    "behavior_change": false,
+    "verification_evidence": "9 and 9 passed; the law test was red before this change on the same tree",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "48772102-7614-4853-aa3b-034ee7a935a1",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee comment_baseline",
+    "claimed_at": "2026-10-21T07:39:03.061Z",
+    "mistakes": [
+      {
+        "wrong": "token-thrift tt-1 removed the cfg_attr line above PREAMBLE_BUDGET_BYTES and the leader called the resulting instruction_laws red pre-existing",
+        "better": "read every red test's failure text before calling it pre-existing",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "token-thrift tt-1 removed the cfg_attr line above PREAMBLE_BUDGET_BYTES and the leader called the resulting instruction_laws red pre-existing",
+        "better": "read every red test failure text before calling it pre-existing",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "instruction_laws green again: the budget doc paragraphs swap so the not-instruction-text paragraph sits outside the 6-line scan window",
+      "commit": "5ddf1b0a7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee comment_baseline — green:unit — 9 and 9 passed; the law test was red before this change on the same tree",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "token-thrift tt-1 removed the cfg_attr line above PREAMBLE_BUDGET_BYTES and the leader called the resulting instruction_laws red pre-existing — read every red test failure text before calling it pre-existing — doctrine"
+      ],
+      "baseline": "instruction_laws: 8 passed, 1 failed (budget.rs:66 PREAMBLE_BUDGET_BYTES)"
+    },
+    "baseline": "instruction_laws: 8 passed, 1 failed (budget.rs:66 PREAMBLE_BUDGET_BYTES)",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "instruction_laws is green",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "the comment count of budget.rs is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          }
+        ],
+        "recorded_at": "2026-10-21T07:42:19.643Z",
+        "recorded_by": "48772102-7614-4853-aa3b-034ee7a935a1",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

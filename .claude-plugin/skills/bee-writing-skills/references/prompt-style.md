@@ -19,8 +19,10 @@ conversation. Seven laws; apply them to every SKILL.md and reference.
 4. **One word, one meaning.** One fixed term per concept, repeated
    verbatim everywhere it renders. Never rotate synonyms; a second name
    for the same thing is a second thing to misread.
-5. **Constraint first.** The rule leads; rationale follows only when
-   its absence would cause misapplication. Decorative "why" dies.
+5. **Constraint first, reason attached.** The rule leads; its reason
+   follows in the same sentence or the next. A reason is what lets a
+   reader apply the rule to a case the text never named — cut only a
+   reason that restates the rule, never the reason itself.
 6. **Progressive disclosure.** SKILL.md is the routing/rule layer;
    depth lives one level down in `references/` with a "when to load"
    table. Exception (already law in the checklist): per-turn rules

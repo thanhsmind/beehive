@@ -1,0 +1,21 @@
+--- a/packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs
++++ b/packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs
+@@ -454,12 +454,10 @@
+-        if !is_tool_result_record(event) {
+-            if ev_type == "user" {
+-                break;
+-            }
+-            if let Some(payload) = event.get("payload") {
+-                if payload.get("role").and_then(Value::as_str) == Some("user") {
+-                    break;
+-                }
+-            }
+-        }
++        if ev_type == "user" {
++            break;
++        }
++        if let Some(payload) = event.get("payload") {
++            if payload.get("role").and_then(Value::as_str) == Some("user") {
++                break;
++            }
++        }

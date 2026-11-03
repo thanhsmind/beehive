@@ -7,6 +7,7 @@ timestamp: 2026-07-21
 bee:
   id: pattern-20260721-race-tests-assert-structure-never-scheduler-luck
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT1", "original feature: release-1-7-10-rc"]
   polarity: pitfall
   critical: false

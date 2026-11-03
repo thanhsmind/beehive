@@ -36,13 +36,14 @@ CREATION-LOG.md template: `references/creation-log-template.md`.
 
 - [ ] YAML frontmatter starts on line 1 (`---`); `name` hyphen-case with the `bee-` prefix, matches the directory exactly
 - [ ] `description`: one purpose clause, then "Use when..." triggers — NEVER a workflow/step summary (agents follow the description and skip the body); third person, ≤1024 chars
+- [ ] Trigger cases: a new or renamed skill adds at least 3 briefs that open it and 2 near misses that must not, to `packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json` (`brief`/`expect`/`near`; a brief never names its skill) — the suite's `skill_triggers` test refuses a skill with none; `BEE_SKILL_TRIGGER_EVAL="claude -p" cargo test --test skill_triggers -- --ignored` asks a real agent (per skill-trigger-cases D7)
 - [ ] `metadata.version: '0.1'`, `metadata.ecosystem: bee`, `metadata.dependencies` mapping or `[]` (never a YAML array of objects — `references/checklist-examples.md` ("Dependency metadata style"))
 - [ ] Information density, not length: overflow to exactly one level of `references/`; a body line earns its place only by changing agent behavior — a line that doesn't belongs in `references/`
 - [ ] Prose follows the instruction-spec standard — imperative rules, trigger framing, constraint first, one word one meaning, token economy: `references/prompt-style.md` ("The seven laws"); edits to existing skills also honor its frozen-heading and protocol-vocabulary guardrails
 - [ ] **Regrowth law:** a new learning lands in the knowledge bundle or `references/` by default; edit the body itself only for a load-bearing invariant
 - [ ] **Per-turn rules (chat shape, communication) are never exiled to references** — they live in the always-loaded layer; a reference nothing forces open is a rule nothing follows
 - [ ] Commands quoted in the body match the `.bee/bin` CLI surface in `bee/docs/07-contracts.md` verbatim
-- [ ] Short `Headless` section; Red Flags list; persuasion principles applied (`references/checklist-examples.md` ("Persuasion principles")); HARD-GATE markers on critical stops
+- [ ] Short `Headless` section; every irreversible stop stated once, at normal volume, with its reason in the same sentence (`references/checklist-examples.md` ("Stating a rule"))
 - [ ] Ends with the handoff sentence: `[Outcome]. Invoke bee-<next-skill> skill.`
 - [ ] Cross-references other skills by name (`Invoke bee-planning`), never inlines their content
 

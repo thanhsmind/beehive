@@ -287,6 +287,35 @@ bee herding pane send-text <chat_pane_id> "dispatch: refusing <PBI-ID> — <what
 A silent refusal repeated every 60 seconds looks identical to nothing happening
 at all — that is why it is announced.
 
+**Key 2 asks a second question of the same text: is the CoS *checkable*?** You
+already hold the candidate's `title+cos` from the read above — this is one more
+question over those words, not a new pass over the backlog and not a third key.
+A Condition of Satisfaction is checkable when it points at something an agent
+can evaluate: a command it can run, a `file:line` it can open, or a repository
+state it can inspect. Point at none of those and nothing can ever tell the
+working agent it is finished — bee has no run-until-X loop, so the CoS *is* the
+finish condition. Skip such a candidate, and make the skip line name why. Judge
+this by reading, the way you judge danger: there is no word list here, and none
+should be added — a list of vague-sounding words would miss the vague CoS
+written in words nobody listed.
+
+- **Not checkable** — `cos: "make the parser better"`. Nothing to run, nothing
+  to open, no state to compare. Announce the skip on the chat pane, the same
+  way a danger refusal is announced:
+
+  ```
+  SKIPPED p-xxxxxxxx — cos is not checkable: it names no command, path, or state an agent can evaluate.
+  ```
+
+- **Checkable** — `cos: "zero old callers remain and every parser fixture
+  passes"`. Two evaluable facts: a repository state to inspect, and a command
+  to run.
+
+This fires at DISPATCH time only — nothing checks a CoS when it is written, so a
+vague item is accepted at filing and refused much later with its author out of
+the loop; that authoring-time gap is filed as backlog `p-0b2812f8` and is
+deliberately not closed by this rule.
+
 Only candidates where both keys say safe move to §7. **Passing this filter is
 never a synonym for "dispatchable"**: it answers only "does this text look safe
 to pick up unsupervised," and says nothing about §5's conditions. Both are

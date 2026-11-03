@@ -134,6 +134,51 @@ use crate::version::BEE_VERSION;
             .contains("- Route: class=feature | lane=small | flags=2 [x,y] | files=4"));
     }
 
+    /// expertise-principles D2: the routed principles ride BESIDE the Route
+    /// line, through the same shared reader `bee orient` calls. Three silences
+    /// are pinned here because each one is a real repo: no recorded route, no
+    /// vendored index (every host repo today), and a class no row claims.
+    #[test]
+    fn routed_principles_ride_beside_the_route_line() {
+        let tmp = minimal_repo();
+        write(tmp.path(), crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        // No recorded route: the index is on disk and still nothing renders.
+        assert!(!render(tmp.path()).contains("Principles"));
+
+        let route = |class: &str| {
+            format!(r#"{{"phase":"planning","route":{{"class":"{class}","lane":"small","flags":[],"product_files":0}}}}"#)
+        };
+        write(tmp.path(), ".bee/state.json", &route("feature"));
+        let text = render(tmp.path());
+        assert!(text.contains("- Route: class=feature"), "{text}");
+        assert!(
+            text.contains(
+                "- Principles (class=feature) — name each one you apply and the decision it changed:"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it"
+            ),
+            "{text}"
+        );
+        // The Route line is untouched by any of it — the block is added beside
+        // it, never in place of it.
+        assert!(text.contains("- Route: class=feature | lane=small | flags=0 [] | files=0"));
+
+        // A class no row claims keeps the Route line and drops the block.
+        write(tmp.path(), ".bee/state.json", &route("docs"));
+        let text = render(tmp.path());
+        assert!(text.contains("- Route: class=docs"), "{text}");
+        assert!(!text.contains("Principles"), "{text}");
+
+        // No index on disk: a matching class still renders nothing.
+        std::fs::remove_file(tmp.path().join(crate::principles::PRINCIPLE_INDEX)).unwrap();
+        write(tmp.path(), ".bee/state.json", &route("feature"));
+        assert!(!render(tmp.path()).contains("Principles"));
+    }
+
     #[test]
     fn the_standard_commands_block_is_omitted_with_no_recorded_commands() {
         let tmp = minimal_repo();
@@ -161,7 +206,7 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(
             text.contains(
-                "- Test gates disabled by repo declaration (commands.test: none) — every cap still records a proof line (command segment `none`, reason naming the parity/docs proof used, e.g. `none — green — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
+                "- Test gates disabled by repo declaration (commands.test: none) — every cap still records a proof line (command segment `none`, reason naming the parity/docs proof used, e.g. `none — green:static — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
             ),
             "{text}"
         );
@@ -656,10 +701,31 @@ use crate::version::BEE_VERSION;
             .unwrap_or_default();
         assert_eq!(
             line,
-            "### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — review the proposal, then apply what belongs to docs/knowledge/ or record why not."
+            "### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — review the proposal, then apply what belongs to docs/knowledge/ or record why not. After you apply or decide to skip the proposals: bee deferred-queue complete --kind promote --feature f1; bee deferred-queue complete --kind promote --feature f2"
         );
         // ONE line total — no per-feature enumeration trails it.
         assert!(!text.contains("f1 (1 capped"), "{text}");
+    }
+
+    #[test]
+    fn five_unapplied_promote_proposals_name_three_clear_commands_and_the_rest_as_a_count() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        for f in ["f1", "f2", "f3", "f4", "f5"] {
+            write(
+                root,
+                &format!("docs/history/{f}/promote-proposals.md"),
+                &format!("promote proposal for work item \"{f}\" (docs/history/{f}/CONTEXT.md) — 1 capped cell(s): a-1\nanchor: history — docs/history/{f}/CONTEXT.md\n"),
+            );
+        }
+        let text = render(root);
+        let line = text
+            .lines()
+            .find(|l| l.contains("Unapplied promote proposal"))
+            .unwrap_or_default();
+        assert!(line.starts_with("### Unapplied promote proposal(s): 5 — newest: "), "{line}");
+        assert_eq!(line.matches("bee deferred-queue complete").count(), 3, "{line}");
+        assert!(line.ends_with("; +2 more"), "{line}");
     }
 
     /// D4/D4a: a granted worktree `bee worktree merge` never reached and
@@ -732,20 +798,49 @@ use crate::version::BEE_VERSION;
     ///
     /// This builds a store far worse than the real one — 400 orphaned cells
     /// across 200 features, 60 capped cells owed capture, 40 patterns, three
-    /// paragraph-length decisions, a 2 KB handoff — and asserts the rendered
-    /// block still fits. A cap that only holds for today's data is not a cap.
-    #[test]
-    fn the_preamble_stays_inside_its_budget_however_big_the_store_gets() {
-        let tmp = minimal_repo();
-        let root = tmp.path();
-        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f0"}"#);
+    /// paragraph-length decisions, a 2 KB handoff — for the budget tests to
+    /// share. A cap that only holds for today's data is not a cap.
+    fn pathological_store(root: &Path) {
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f0","mode":"standard","route":{"class":"feature","lane":"standard","flags":["a","b"],"product_files":12}}"#,
+        );
+        let mut lanes = String::new();
+        for i in 0..6 {
+            write(
+                root,
+                &format!(".bee/lanes/other-lane-{i}.json"),
+                &format!(r#"{{"feature":"other-feature-{i}","phase":"swarming","mode":"standard"}}"#),
+            );
+            lanes.push_str(&format!("other-feature-{i}"));
+        }
+        let _ = lanes;
+        for i in 0..9 {
+            write(
+                root,
+                &format!("docs/discovery/effort-{i}/MAP.md"),
+                "# effort\n\n## Destination\n\nA spec for the new flow.\n",
+            );
+            write(
+                root,
+                &format!("docs/discovery/effort-{i}/tickets/001-a.md"),
+                "status: open\nclaimed-by: session-1\n",
+            );
+        }
         // Every optional section ON at once, with the longest real shapes:
         // the two-paragraph bypass banner and this repo's own PATH-prefixed
         // command strings. A budget proved only on a quiet repo is not one.
+        let team = (0..40)
+            .map(|i| format!("\"role-{i}\":{{\"kind\":\"native\",\"model\":\"opus\"}}"))
+            .collect::<Vec<_>>()
+            .join(",");
         write(
             root,
             ".bee/config.json",
-            r#"{"gate_bypass":"total","ship_visibility":"draft-pr","commands":{"test":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml","verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"},"doc_viewer":{"base_url":"http://10.255.255.254:7700","project":"beedashboard"}}"#,
+            &format!(
+                r#"{{"gate_bypass":"total","ship_visibility":"draft-pr","commands":{{"test":"PATH=\"${{CARGO_HOME:-$HOME/.cargo}}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml","verify":"PATH=\"${{CARGO_HOME:-$HOME/.cargo}}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"}},"doc_viewer":{{"base_url":"http://10.255.255.254:7700","project":"beedashboard"}},"team":{{"claude":{{{team}}}}}}}"#
+            ),
         );
         write(
             root,
@@ -788,6 +883,18 @@ use crate::version::BEE_VERSION;
             &format!("{CRITICAL_PATTERNS_HEADING}\n{patterns}\n## Next\n"),
         );
         write(root, "docs/knowledge/areas/a/c.md", "---\ntype: bee.area\n---\nx\n");
+        write(root, "docs/history/f0/CONTEXT.md", "# f0\n\nThe active feature's own context document.\n");
+        let mut principles = String::from("# Doctrine\n\n## Principle homes\n\n");
+        for i in 0..8 {
+            principles.push_str(&format!(
+                "- `bee-principle-row-{i}` (expertise/tests.md § Row {i}):\n  spoken: the spoken line a reader can say out loud to redirect the work, row {i}\n  classes: feature, bugfix, refactor\n  - applied_at:\n    - `skills/bee-principle-row-{i}/SKILL.md`\n\n"
+            ));
+        }
+        write(
+            root,
+            "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            &principles,
+        );
         let decisions: String = (0..3)
             .map(|i| {
                 format!(
@@ -803,6 +910,14 @@ use crate::version::BEE_VERSION;
             ".bee/capture-queue.jsonl",
             "{\"kind\":\"stub\",\"id\":\"s1\",\"at\":\"2026-01-01T00:00:00.000Z\"}\n",
         );
+
+    }
+
+    #[test]
+    fn the_preamble_stays_inside_its_budget_however_big_the_store_gets() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
 
         let text = render(root);
         assert!(
@@ -825,6 +940,170 @@ use crate::version::BEE_VERSION;
             text.contains("### Doc links\n- Doc viewer: http://10.255.255.254:7700/p/beedashboard"),
             "{text}"
         );
+        assert!(text.contains("### Omitted to fit the host limit:"), "{text}");
+        assert!(
+            PREAMBLE_BUDGET_BYTES < HOST_INLINE_LIMIT_CHARS,
+            "a budget at or above the host limit measures text the agent never reads"
+        );
+    }
+
+    #[test]
+    fn the_preamble_budget_sits_below_the_host_inline_limit() {
+        assert!(
+            PREAMBLE_BUDGET_BYTES < HOST_INLINE_LIMIT_CHARS,
+            "the budget ({PREAMBLE_BUDGET_BYTES}) must stay under the host's \
+             {HOST_INLINE_LIMIT_CHARS}-character inline limit"
+        );
+        assert_eq!(PREAMBLE_BUDGET_BYTES, 9500);
+    }
+
+    #[test]
+    fn an_over_budget_render_drops_recent_decisions_first_and_names_where_to_fetch_it() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
+
+        let text = build_session_preamble_within(root, None, None, "claude", PREAMBLE_BUDGET_BYTES);
+        assert!(text.len() <= PREAMBLE_BUDGET_BYTES, "{} bytes", text.len());
+        assert!(!text.contains("### Recent decisions"), "{text}");
+        assert!(text.contains("### Critical patterns (digest)"), "{text}");
+        assert!(text.contains("### Command surface"), "{text}");
+        assert!(text.contains("### Project map"), "{text}");
+        assert!(
+            text.contains(
+                "### Omitted to fit the host limit: Recent decisions → .bee/bin/bee status --json"
+            ),
+            "{text}"
+        );
+        assert!(!text.contains("Critical patterns (digest) → "), "{text}");
+    }
+
+    #[test]
+    fn a_tighter_budget_drops_the_digest_next_and_keeps_the_command_surface() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
+
+        let text = build_session_preamble_within(root, None, None, "claude", 8700);
+        assert!(text.len() <= 8700, "{} bytes", text.len());
+        assert!(!text.contains("### Recent decisions"), "{text}");
+        assert!(!text.contains("### Critical patterns (digest)"), "{text}");
+        assert!(text.contains("### Command surface"), "{text}");
+        assert!(
+            text.contains(
+                "### Omitted to fit the host limit: Recent decisions → .bee/bin/bee status --json; \
+                 Critical patterns (digest) → docs/knowledge/index.md"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_forced_full_drop_keeps_the_sections_that_are_never_optional() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
+
+        let text = build_session_preamble_within(root, None, None, "claude", 0);
+        for kept in [
+            "### Orphaned scribing debt: 460 cell(s)",
+            "### Scribing debt: 60 behavior_change cell(s)",
+            "### HANDOFF present",
+            "### Doc links",
+            "### Knowledge context",
+            "### Open discovery map(s): 9 with no frontier ticket — bee discovery list",
+        ] {
+            assert!(text.contains(kept), "{kept} is never optional:\n{text}");
+        }
+        assert!(text.contains("### Omitted to fit the host limit:"), "{text}");
+        assert!(
+            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive."),
+            "the closing trailer is never dropped:\n{text}"
+        );
+        assert!(text.find("### Omitted").unwrap() < text.find("Everything above is already read").unwrap());
+        for dropped in ["### Recent decisions", "### Critical patterns (digest)"] {
+            assert!(!text.contains(dropped), "{dropped} survived a zero budget:\n{text}");
+        }
+    }
+
+    #[test]
+    fn a_quiet_repo_renders_no_omitted_line() {
+        let tmp = minimal_repo();
+        let text = render(tmp.path());
+        assert!(!text.contains("Omitted to fit the host limit"), "{text}");
+        assert!(text.contains("### Project map"), "{text}");
+    }
+
+    #[test]
+    fn a_resume_with_a_long_anchor_keeps_the_whole_session_init_output_inside_the_budget() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
+        let request: String = "port the hook to Rust and keep every byte it prints under the host limit ".repeat(21);
+        assert!((1400..1700).contains(&request.len()), "{} bytes", request.len());
+        write(
+            root,
+            ".bee/intent/default.json",
+            &json!({ "request": request, "acceptance": "done" }).to_string(),
+        );
+        let belt = "bee belt contract: claude 3 reports a stale belt version. Fix: run `.bee/bin/bee doctor`.";
+        let prefix = belt.len() + 2;
+        let anchor = crate::hooks::session_init::intent_lead_block(root, "resume", Some("s1"));
+        assert!(anchor.starts_with("## INTENT ANCHOR"), "{anchor}");
+        let body = crate::hooks::session_init::compose_output_budgeted(
+            root,
+            "resume",
+            Some("s1"),
+            None,
+            "claude",
+            prefix,
+        );
+        let stdout = format!("{belt}\n\n{body}");
+        assert!(
+            stdout.len() <= PREAMBLE_BUDGET_BYTES,
+            "the whole session-start stdout is {} bytes, over the {PREAMBLE_BUDGET_BYTES}-byte \n\
+             budget. The anchor alone is {} bytes.",
+            stdout.len(),
+            anchor.len()
+        );
+        assert!(stdout.starts_with(belt), "{stdout}");
+        assert!(stdout.contains("## INTENT ANCHOR"), "{stdout}");
+        assert!(stdout.contains("### Omitted to fit the host limit:"), "{stdout}");
+    }
+
+    #[test]
+    fn zero_frontier_discovery_maps_fold_into_one_count_line() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        for i in 0..3 {
+            write(
+                root,
+                &format!("docs/discovery/idle-{i}/MAP.md"),
+                "# idle\n\n## Destination\n\nNothing left to resume.\n",
+            );
+            write(
+                root,
+                &format!("docs/discovery/idle-{i}/tickets/001-a.md"),
+                "status: open\nclaimed-by: session-1\n",
+            );
+        }
+        write(
+            root,
+            "docs/discovery/live/MAP.md",
+            "# live\n\n## Destination\n\nTwo questions open.\n",
+        );
+        for id in ["001-a", "002-b"] {
+            write(root, &format!("docs/discovery/live/tickets/{id}.md"), "status: open\n");
+        }
+        let text = render(root);
+        assert!(
+            text.contains("### Open discovery map(s): 3 with no frontier ticket — bee discovery list"),
+            "{text}"
+        );
+        assert!(text.contains("### Open discovery map(s): live — 2 frontier ticket(s)"), "{text}");
+        for i in 0..3 {
+            assert!(!text.contains(&format!("idle-{i}")), "idle-{i} kept its own line:\n{text}");
+        }
     }
 
     #[test]
@@ -1413,8 +1692,14 @@ use crate::version::BEE_VERSION;
             "{text}"
         );
         assert!(
+            text.contains("- model chosen by the agent (herding: agy-flash): generation"),
+            "{text}"
+        );
+        assert!(text.contains("- opus (native): review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
+        assert!(
             text.contains(
-                "- Roles (claude): generation=herding (agy-flash) | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+                "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
@@ -1431,9 +1716,9 @@ use crate::version::BEE_VERSION;
                 fallback: None,
             }
         );
-        let slots = crate::hooks::model_guard::role_slot_display(Some(&models_obj), "claude");
+        let slots = crate::hooks::model_guard::role_slot_display(models_obj.as_object(), "claude");
         let gen_str = slots.iter().find(|(k, _)| k == "generation").map(|(_, v)| v.as_str());
-        assert_eq!(gen_str, Some("herding (agy-flash)"));
+        assert_eq!(gen_str, Some("model chosen by the agent (herding: agy-flash)"));
     }
 
     #[test]
@@ -1446,17 +1731,24 @@ use crate::version::BEE_VERSION;
         );
         let text = render(tmp.path());
         assert!(
-            text.contains(
-                "- Roles (claude): generation=claude-3-5-sonnet-20241022 | review=claude-3-opus-20240229 | advisor=claude-3-7-sonnet-20250219 | extraction=claude-3-5-haiku-20241022"
-            ),
+            text.contains("- claude-3-5-sonnet-20241022 (native): generation"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- claude-3-opus-20240229 (native): review"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- claude-3-7-sonnet-20250219 (native): advisor"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- claude-3-5-haiku-20241022 (native): extraction"),
             "{text}"
         );
     }
 
-    /// The preamble is where a role's own purpose actually reaches a reader,
-    /// so the described line is asserted THROUGH `render`, not just through
-    /// the helper — an operator who writes `description` on a slot must see
-    /// that sentence in the block their session opens with.
+    /// leader-sees-team D4: descriptions are omitted from the door and appear in team show.
     #[test]
     fn dispatch_door_renders_a_role_description_when_the_slot_declares_one() {
         let tmp = minimal_repo();
@@ -1466,17 +1758,14 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":{"model":"sonnet","description":"build and edit code"},"review":"opus","design":{"model":"opus","description":"shape the thing before it is built"}}}}"#,
         );
         let text = render(tmp.path());
-        assert!(
-            text.contains(
-                "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=opus (\"shape the thing before it is built\")"
-            ),
-            "{text}"
-        );
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review, design"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
+        assert!(!text.contains("build and edit code"), "{text}");
+        assert!(!text.contains("shape the thing before it is built"), "{text}");
     }
 
-    /// The same config with the descriptions removed renders the line bee
-    /// rendered before this field existed — byte for byte. This is the guard
-    /// against the additive change quietly becoming a re-render.
+    /// The same config with the descriptions removed renders identically.
     #[test]
     fn dispatch_door_line_is_unchanged_when_no_slot_declares_a_description() {
         let tmp = minimal_repo();
@@ -1486,9 +1775,12 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":{"model":"sonnet"},"review":"opus","design":{"model":"opus"}}}}"#,
         );
         let text = render(tmp.path());
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review, design"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(
             text.contains(
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=opus — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+                "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
@@ -1504,10 +1796,9 @@ use crate::version::BEE_VERSION;
         let tmp = minimal_repo();
         let text = render(tmp.path());
         assert!(text.contains("### Dispatch door"), "{text}");
-        assert!(
-            text.contains("- Roles (claude): generation=sonnet | review=opus | extraction=haiku —"),
-            "{text}"
-        );
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(!text.contains("advisor=none"), "an unconfigured role is dropped:\n{text}");
         assert!(!text.contains("Tier slots"), "the retired tier list is gone:\n{text}");
     }
@@ -1525,18 +1816,11 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":"opus","test":"haiku"}}}"#,
         );
         let text = render(tmp.path());
-        assert!(
-            text.contains(
-                "- Roles (claude): generation=opus | review=opus | extraction=haiku | test=haiku —"
-            ),
-            "{text}"
-        );
+        assert!(text.contains("- opus (native): generation, review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction, test"), "{text}");
     }
 
-    /// The block is injected into EVERY session, so its length is a real,
-    /// repeated cost. Past the cap the line counts instead of listing; the
-    /// truncation is safe because a name nothing configures refuses BY NAME
-    /// with a FIX at both doors rather than resolving silently.
+    /// leader-sees-team D4: every configured role is listed; DOOR_ROLES_SHOWN cap is retired.
     #[test]
     fn dispatch_door_counts_roles_past_the_cap_instead_of_listing_them() {
         let tmp = minimal_repo();
@@ -1546,10 +1830,12 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":"opus","test":"haiku","docs":"haiku","design":"opus","migrate":"haiku","triage":"haiku"}}}"#,
         );
         let text = render(tmp.path());
-        // 3 seeded + 6 configured, one of which (generation) overlays a
-        // seeded slot: 8 roles, 6 shown.
-        assert!(text.contains(" +2 more —"), "{text}");
-        assert!(!text.contains("triage="), "the 8th role is counted, not listed:\n{text}");
+        assert!(!text.contains("more —"), "{text}");
+        assert!(
+            text.contains("- haiku (native): extraction, test, docs, migrate, triage"),
+            "the 8th role is listed:\n{text}"
+        );
+        assert!(text.contains("- opus (native): generation, review, design"), "{text}");
     }
 
     /// model-role-split records `effort` as a known NON-delivery, so the door
@@ -1582,7 +1868,99 @@ use crate::version::BEE_VERSION;
         );
 
         let text = render(tmp.path());
-        assert!(text.contains("- Roles (claude): generation=opus |"), "{text}");
+        assert!(text.contains("- opus (native): generation"), "{text}");
         assert!(!text.contains("opus:high"), "the door published a dropped effort:\n{text}");
         assert!(!text.contains(":high"), "the door published a dropped effort:\n{text}");
+    }
+
+
+    /// team-config-rename D2: Dispatch door emits one terse warning line on models-only config, and never when team is present.
+    #[test]
+    fn dispatch_door_emits_legacy_models_warning_only_when_models_key_used() {
+        let warning_line = "- config: .bee/config.json uses the legacy models key — rename to team.";
+
+        // 1. models-only config: exactly one warning line emitted in Dispatch door
+        let tmp_models = minimal_repo();
+        write(
+            tmp_models.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"code":"opus"}}}"#,
+        );
+        let text_models = render(tmp_models.path());
+        assert!(text_models.contains("### Dispatch door"), "{text_models}");
+        assert!(text_models.contains(warning_line), "{text_models}");
+        assert_eq!(
+            text_models.lines().filter(|l| *l == warning_line).count(),
+            1,
+            "exactly one warning line"
+        );
+
+        // 2. team-only config: no warning line emitted
+        let tmp_team = minimal_repo();
+        write(
+            tmp_team.path(),
+            ".bee/config.json",
+            r#"{"team":{"claude":{"code":"opus"}}}"#,
+        );
+        let text_team = render(tmp_team.path());
+        assert!(!text_team.contains(warning_line), "{text_team}");
+
+        // 3. both keys present: never emitted when config already says team
+        let tmp_both = minimal_repo();
+        write(
+            tmp_both.path(),
+            ".bee/config.json",
+            r#"{"team":{"claude":{"code":"opus"}},"models":{"claude":{"code":"sonnet"}}}"#,
+        );
+        let text_both = render(tmp_both.path());
+        assert!(!text_both.contains(warning_line), "{text_both}");
+
+        // 4. no config: no warning line emitted
+        let tmp_none = minimal_repo();
+        let text_none = render(tmp_none.path());
+        assert!(!text_none.contains(warning_line), "{text_none}");
+    }
+
+    #[test]
+    fn dispatch_door_renders_selected_runtime_and_falls_back_for_unknown() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            &json!({
+                "team": {
+                    "claude": {"generation": {"model": "opus"}},
+                    "codex": {"generation": {"model": "gpt-5.6"}},
+                    "pi": {"generation": {"kind": "herding", "agent": "pi-agent"}}
+                }
+            }).to_string(),
+        );
+
+        // 1. Explicit "pi" runtime renders --runtime pi and team.pi
+        let text_pi = build_session_preamble_with_runtime(tmp.path(), None, None, "pi");
+        assert!(text_pi.contains("--runtime pi"), "{text_pi}");
+        assert!(text_pi.contains("team.pi"), "{text_pi}");
+        assert!(!text_pi.contains("--runtime claude"), "{text_pi}");
+
+        // 2. Explicit "codex" runtime renders --runtime codex and team.codex
+        let text_codex = build_session_preamble_with_runtime(tmp.path(), None, None, "codex");
+        assert!(text_codex.contains("--runtime codex"), "{text_codex}");
+        assert!(text_codex.contains("team.codex"), "{text_codex}");
+        assert!(!text_codex.contains("--runtime claude"), "{text_codex}");
+
+        // 3. Explicit "claude" runtime renders --runtime claude and team.claude
+        let text_claude = build_session_preamble_with_runtime(tmp.path(), None, None, "claude");
+        assert!(text_claude.contains("--runtime claude"), "{text_claude}");
+        assert!(text_claude.contains("team.claude"), "{text_claude}");
+
+        // 4. Unknown/malformed runtime falls back to claude
+        let text_unknown = build_session_preamble_with_runtime(tmp.path(), None, None, "unknown-runtime");
+        assert!(text_unknown.contains("--runtime claude"), "{text_unknown}");
+        assert!(text_unknown.contains("team.claude"), "{text_unknown}");
+        assert!(!text_unknown.contains("--runtime unknown-runtime"), "{text_unknown}");
+
+        // 5. Default 3-arg builder renders claude
+        let text_default = build_session_preamble(tmp.path(), None, None);
+        assert!(text_default.contains("--runtime claude"), "{text_default}");
+        assert!(text_default.contains("team.claude"), "{text_default}");
     }

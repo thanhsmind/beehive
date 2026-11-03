@@ -1,0 +1,139 @@
+{
+  "id": "pca-4",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Record a bug fix as red then green, and label live proof with its feature and evidence",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "expertise/tests.md",
+    "skills/bee-verifying/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "expertise/tests.md",
+    "skills/bee-verifying/SKILL.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L6-digest.md"
+  ],
+  "affects_skills": [
+    "skills/bee-verifying/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Adopt the L6 proof practices (per D2 and D4). Edit expertise/tests.md, the SOURCE that onboarding copies into .bee/expertise/ — never edit .bee/expertise/ by hand; the regen in pca-10 copies it. Do NOT run bee dev regen (wave-barrier). expertise/tests.md § 'Red before green': a bug-fix cap carries two proof lines — `<cmd> — red: <observed failure> — reproduces <bug>` then `<cmd> — green — same test after fix`; when no test can reach the bug, record the reason before the fix and pick the closest check that can run, whose output is the red line; this applies to any bug fix whose failure can be run, and a one-line fix with a known cause still records both lines. skills/bee-verifying/SKILL.md § 5 (the fast-drive proof): the proof line becomes `bash .bee/verify/verify-app/control-<app> drive --fast <feature> — green:live <feature-id>@<entry-point> — <evidence path>`; a mutation proof adds a second read-only view; an entry point that was not driven is named as skipped, never covered by another. Keep every heading.",
+  "verify": "rg -q 'red: <observed failure>' expertise/tests.md && rg -q 'green:live <feature-id>@<entry-point>' skills/bee-verifying/SKILL.md",
+  "must_haves": {
+    "truths": [
+      "A bug-fix cap records a red line and a green line",
+      "A live proof names its feature, entry point and evidence path"
+    ],
+    "artifacts": [
+      {
+        "path": "expertise/tests.md",
+        "substantive": "the two-line bug-fix proof rule in Red before green"
+      },
+      {
+        "path": "skills/bee-verifying/SKILL.md",
+        "substantive": "the labelled green:live proof line"
+      }
+    ],
+    "key_links": [
+      "expertise/tests.md is the source copied to .bee/expertise/tests.md by regen"
+    ],
+    "prohibitions": [
+      "No hand edit of .bee/expertise/",
+      "No bee dev regen",
+      "No write outside the two listed files"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-4",
+    "outcome": "Bug-fix caps carry red then green lines (expertise/tests.md § Red before green); fast-drive proof line labelled green:live <feature-id>@<entry-point> — <evidence path> (skills/bee-verifying/SKILL.md § 5)",
+    "files_changed": [
+      "expertise/tests.md",
+      "skills/bee-verifying/SKILL.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:48:06.604Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:46:21.289Z",
+    "mistakes": [
+      {
+        "wrong": "staging into the shared index was refused by the concurrent-worker guard",
+        "better": "a path-scoped commit from the start would have skipped the refused call"
+      }
+    ],
+    "report": {
+      "outcome": "Bug-fix caps carry red then green lines (expertise/tests.md § Red before green: two-line block, one-line-fix clause, no-test-reaches-it fallback); fast-drive proof line labelled green:live <feature-id>@<entry-point> — <evidence path>, mutation second read-only view, skipped entry points named (skills/bee-verifying/SKILL.md § 5)",
+      "commit": "66bdb988",
+      "files": [
+        "expertise/tests.md",
+        "skills/bee-verifying/SKILL.md"
+      ],
+      "tests": "cargo test -p bee --test principle_index_parity plus the cell verify rg pair — green:static — docs edit; parity test checks expertise heading anchors (5 passed), verify rg found both new lines",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "staging into the shared index was refused by the concurrent-worker guard — a path-scoped commit from the start would have skipped the refused call"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "verify line printed OK"
+          },
+          {
+            "id": "red-green-lines",
+            "status": "PASS",
+            "evidence": "66bdb988 expertise/tests.md Red before green (:326) adds the two-line block, the no-test-reaches fallback and the one-line-fix rule"
+          },
+          {
+            "id": "green-live-label",
+            "status": "PASS",
+            "evidence": "66bdb988 skills/bee-verifying/SKILL.md step 5: drive --fast <feature> — green:live <feature-id>@<entry-point> — <evidence path>; second read-only view for a mutation; skipped entry points named"
+          },
+          {
+            "id": "expertise-source-copied",
+            "status": "PASS",
+            "evidence": "cmp -s expertise/tests.md .bee/expertise/tests.md exit 0 after pca-10 regen"
+          },
+          {
+            "id": "scope-no-hand-edit",
+            "status": "PASS",
+            "evidence": "66bdb988 --stat: only expertise/tests.md and skills/bee-verifying/SKILL.md; nothing under .bee/"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.938Z"
+      }
+    ]
+  },
+  "escalate": true
+}

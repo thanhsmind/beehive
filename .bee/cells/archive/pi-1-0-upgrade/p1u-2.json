@@ -1,0 +1,135 @@
+{
+  "id": "p1u-2",
+  "feature": "pi-1-0-upgrade",
+  "title": "Drive a bee workflow end to end on Pi 1.0.0 and record the evidence",
+  "lane": "high-risk",
+  "role": "test",
+  "change_class": "test",
+  "deps": [
+    "p1u-1"
+  ],
+  "decisions": [
+    "D1",
+    "D3",
+    "4d884180-e2d5-413d-a0d5-2d081d7fbd6f",
+    "bfc7e34e-2722-4af4-baab-6869b2b0c96f"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/pi-hat-wave.md"
+  ],
+  "read_first": [
+    ".bee/verify/verify-app/features/pi-hat-wave.md",
+    "docs/history/pi-1-0-upgrade/plan.md"
+  ],
+  "action": "Use the verify-app skill on a throwaway sandbox with Pi 1.0.0: run the pi-hat-wave flow; run one codemode script that reads and one that writes before the gate; count system entries per turn in the session JSONL over five turns; narrow tools by stage, then /reload, and read the active tools; run /bee-worktree-new and confirm relocation after the deferred agent_settled.",
+  "must_haves": {
+    "truths": [
+      "a Pi 1.0.0 run id in pi-hat-wave.md",
+      "system entries per turn, as a number",
+      "a yes or no for /reload keeping stage narrowing",
+      "relocation lands in the worktree",
+      "the codemode write is denied with a message naming the nested tool"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/features/pi-hat-wave.md",
+        "substantive": "a Pi 1.0.0 run id and its findings"
+      }
+    ],
+    "key_links": [
+      "p1u-3 cites this run id as the D1 evidence"
+    ],
+    "prohibitions": [
+      "No product source edits"
+    ]
+  },
+  "verify": "bash .bee/verify/verify-app/control-bee doctor",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "trace": {
+    "worker": "leader",
+    "outcome": "Drove bee on Pi 1.0.0: narrowing, codemode read passes and pre-gate write denied, 0 feed system messages per turn, /reload undoes narrowing until next turn, relocation into worktree, no-pane Pi worker done",
+    "files_changed": [
+      ".bee/verify/verify-app/features/pi-hat-wave.md"
+    ],
+    "deviations": [
+      "the leader ran the cell instead of a worker — the worker-outward guard refuses any worker that starts pi — hit an unforeseen obstacle",
+      "drove Pi over RPC plus one tmux TUI pass instead of the full verify-app hat-wave leader flow; ran one no-pane Pi worker, not the five-seat wave — /reload is TUI-only and the five-seat wave on 0.85.1 evidence stands; named in the map as not run on 1.0 — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T07:01:21.942Z",
+    "behavior_change": false,
+    "verification_evidence": "sandbox doctor healthy; evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261002-135348-2965648/ (rpc-events.jsonl, drive-summary.txt, tui-*.txt, pi-worker.json); before-state on main: outer codemode call always denied",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "bash .bee/verify/verify-app/control-bee doctor",
+    "claimed_at": "2026-10-02T07:01:16.442Z",
+    "escalation_reason": "live Pi drive must run in the leader session; worker-outward guard refuses a worker that starts pi",
+    "verified_at": null,
+    "baseline": null,
+    "mistakes": [
+      {
+        "wrong": "the first RPC drive ran with no .bee/bin/bee vendored in the sandbox, so every tool call failed closed",
+        "better": "vendor the candidate before the first drive",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "plan.md cell p1u-2 gave a live interactive Pi run to a dispatched worker that the worker-outward guard refuses",
+        "better": "plan live agent-driving proof as a leader-run step",
+        "fix_at": "check"
+      }
+    ],
+    "inline_reason": "live Pi drive runs in the leader session: the worker-outward guard refuses any dispatched worker that starts pi (the p1u-2-tester dispatch returned BLOCKED on exactly that)",
+    "report": {
+      "outcome": "Drove bee on Pi 1.0.0: narrowing, codemode read passes and pre-gate write denied, 0 feed system messages per turn, /reload undoes narrowing until next turn, relocation into worktree, no-pane Pi worker done",
+      "commit": "6b0b46516",
+      "files": [
+        ".bee/verify/verify-app/features/pi-hat-wave.md"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee doctor — green:live — sandbox doctor healthy; evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261002-135348-2965648/ (rpc-events.jsonl, drive-summary.txt, tui-*.txt, pi-worker.json); before-state on main: outer codemode call always denied",
+      "deviations": [
+        "the leader ran the cell instead of a worker — the worker-outward guard refuses any worker that starts pi — hit an unforeseen obstacle",
+        "drove Pi over RPC plus one tmux TUI pass instead of the full verify-app hat-wave leader flow; ran one no-pane Pi worker, not the five-seat wave — /reload is TUI-only and the five-seat wave on 0.85.1 evidence stands; named in the map as not run on 1.0 — found a better route"
+      ],
+      "mistakes": [
+        "the first RPC drive ran with no .bee/bin/bee vendored in the sandbox, so every tool call failed closed — vendor the candidate before the first drive — doctrine",
+        "plan.md cell p1u-2 gave a live interactive Pi run to a dispatched worker that the worker-outward guard refuses — plan live agent-driving proof as a leader-run step — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a Pi 1.0.0 run id in pi-hat-wave.md",
+            "artifact": ".bee/verify/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": "system entries per turn, as a number",
+            "artifact": ".bee/verify/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": "a yes or no for /reload keeping stage narrowing",
+            "artifact": ".bee/verify/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": "relocation lands in the worktree",
+            "artifact": ".bee/verify/verify-app/features/pi-hat-wave.md"
+          },
+          {
+            "requirement": "the codemode write is denied with a message naming the nested tool",
+            "artifact": ".bee/verify/verify-app/features/pi-hat-wave.md"
+          }
+        ],
+        "recorded_at": "2026-10-02T07:09:39.141Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

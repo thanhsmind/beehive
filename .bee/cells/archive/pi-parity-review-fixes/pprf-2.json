@@ -1,0 +1,157 @@
+{
+  "id": "pprf-2",
+  "feature": "pi-parity-review-fixes",
+  "title": "Carry Pi pre-tool and user-wait activity",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "pprf-1"
+  ],
+  "decisions": [
+    "7da86fdb-40de-415c-b3ac-ae84a4c89d60"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    "docs/config-reference.md",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-parity-review-fixes/CONTEXT.md",
+    "docs/history/pi-parity-review-fixes/plan.md",
+    "docs/knowledge/areas/hook-runtime/overview.md",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+    "/home/thanhsmind/.local/share/mise/installs/pi/0.84.4/pi/docs/extensions.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+  ],
+  "action": "Apply red-before-green for F2 and D4. Add real-extension harness tests for tool_execution_start, ui_prompt_start, and ui_prompt_end before editing the belt. Map tool start to advisory PreToolUse with identifier and mapped tool name but no input content. Track nested UI-prompt depth: only outer start enters waiting_input, only matching outer end emits a prompt boundary without prompt text and returns to working, unmatched end is ignored, and an unended start remains waiting until Stop. Prove advisory failure is fail-open and tool_call stays fail-closed. Remove only the false PreToolUse and Notification exclusions. Keep typed PermissionRequest and SubagentStop exclusions. Update the existing config section and activity knowledge home. Run the full bee dev regen chain after the final extension edit and check the release manifest.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts activity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts pi_belt && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "Pi tool_execution_start records working PreToolUse activity before the blocking tool_call path.",
+      "Pi UI prompt start and matching outer end form a waiting_input to working span.",
+      "Nested, missing-field, duplicate, unmatched, and unended event cases keep honest state.",
+      "Every new activity handler fails open while the existing write guard still fails closed.",
+      "Documentation names only capability gaps that remain true."
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "Pi 0.84.x activity carriers and prompt-depth state"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "event-order, state, payload, and fail-open contract proof"
+      },
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "correct Pi lifecycle carrier table"
+      },
+      {
+        "path": "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+        "substantive": "durable Pi carrier behavior"
+      }
+    ],
+    "key_links": [
+      "Pi tool_execution_start calls Bee activity separately from tool_call write-guard",
+      "ui_prompt_start and ui_prompt_end drive the existing Bee activity state machine",
+      "contract tests invoke the checked-in extension through HARNESS_JS",
+      "config and knowledge text match registered Pi events"
+    ],
+    "prohibitions": [
+      "Do not route write-guard through an advisory event.",
+      "Do not store tool input or UI response content in activity records.",
+      "Do not call generic UI prompts PermissionRequest.",
+      "Do not weaken advisory fail-open behavior."
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pprf-2",
+    "outcome": "Pi now records pre-tool and nested user-wait activity without weakening write protection.",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/config-reference.md",
+      "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: Pi lifecycle behavior and its existing hook-runtime knowledge home changed together; no skill workflow changed."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T02:41:11.024Z",
+    "behavior_change": true,
+    "verification_evidence": "four Pi activity tests, full six-test OpenCode parity suite, and 376 release-manifest entries passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09b73-3f97-7737-b6f6-765cf6382c55",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts activity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts pi_belt && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-14T02:30:34.648Z",
+    "sync_ack": "Pi lifecycle behavior and its existing hook-runtime knowledge home changed together; no skill workflow changed.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pi tool starts and nested UI prompt spans now drive fail-open activity while tool_call stays fail closed.",
+      "commit": "ba4af26536562101331eec67ad61307f948677c5",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "docs/config-reference.md",
+        "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts activity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts pi_belt && .bee/bin/bee dev release-manifest --check — green:unit — four Pi activity tests, full six-test OpenCode parity suite, and 376 release-manifest entries passed",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "documented-pre-tool-carrier",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1704-1720` registers advisory `tool_execution_start` and sends `PreToolUse` with mapped tool name and optional identifier, without tool input; `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:3169-3280` verifies the observable activity record."
+          },
+          {
+            "id": "nested-ui-prompt-span",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1722-1765` tracks per-session prompt depth, emits outer `Notification:agent_needs_input`, ignores unmatched ends, and emits outer `UserPromptSubmit` without prompt text; the contract test at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:3169` passed."
+          },
+          {
+            "id": "fail-open-advisory-and-fail-closed-guard",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:3455-3545` verifies new advisory events never throw or block while `tool_call` still blocks on Bee failure; the focused activity tests passed."
+          },
+          {
+            "id": "documentation-and-manifest-parity",
+            "status": "PASS",
+            "evidence": "`docs/config-reference.md:253-272` removes only false Pi carrier exclusions and keeps PermissionRequest; `docs/knowledge/areas/hook-runtime/agent-activity-record.md:244-254` records the carriers and privacy boundary. The manifest hash at `docs/history/codex-harness-hardening/release-manifest.json:1650-1654` matches `sha256sum .pi/extensions/bee-guard.ts`."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-14T02:49:19.508Z"
+      }
+    ]
+  }
+}

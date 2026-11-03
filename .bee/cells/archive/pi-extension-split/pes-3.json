@@ -1,0 +1,200 @@
+{
+  "id": "pes-3",
+  "feature": "pi-extension-split",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Install the guard folder and remove the old single file on onboard",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D6",
+    "0c06dba7-d2e6-4674-8843-72383467e385",
+    "8cdd7725-c059-4b92-aaef-b548c427ae36",
+    "f1f35cd4-c9fa-440d-9991-b094a5b0f74b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-extension-split/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "action": "Red first in onboard/tests.rs, then per D3 and D6, copying the shape of the expertise vendor-and-prune code (plan.rs list_source_expertise, walk_md_tree, the remove_expertise item near plan.rs:804, and the remove_expertise arm in apply.rs): list_pi_extension_files returns every .ts file directly in the source .pi/extensions/bee-guard/ as bee-guard/<name>, sorted, never following symlinks. In the plan step, when that list is not empty: first plan remove_pi_extension for .pi/extensions/bee-guard.ts if it exists, then create .pi/extensions/bee-guard if missing, then plan copy_pi_extension for each missing or drifted file at .pi/extensions/bee-guard/<name>, then plan remove_pi_extension for each .ts file directly in the host .pi/extensions/bee-guard/ that the source does not ship. When the list is empty, plan no Pi removal. apply.rs copies copy_pi_extension by its path relative to .pi/extensions (not the base name). The new remove_pi_extension arm accepts only .pi/extensions/bee-guard.ts or .pi/extensions/bee-guard/<name>.ts with no .. and no further slash, refuses anything else, and reports a failed remove instead of ignoring it. Update the existing Pi onboard tests to the folder shape. No new code comments.",
+  "must_haves": {
+    "truths": [
+      "onboard plans one copy_pi_extension item per drifted module file",
+      "onboard apply writes every module file under .pi/extensions/bee-guard/",
+      "the legacy remove_pi_extension item comes before every copy_pi_extension item",
+      "onboard removes a legacy .pi/extensions/bee-guard.ts on apply",
+      "onboard plans no Pi removal when the source folder ships no files",
+      "onboard removes a host .ts file in bee-guard/ that bee does not ship",
+      "a non-.ts file in the host bee-guard/ folder survives onboard",
+      "the remove_pi_extension arm refuses a path outside its scope",
+      "a second onboard on an up-to-date host plans no Pi item"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "substantive": "folder listing, ordered legacy removal and prune items"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "substantive": "relative-path copy and a scoped remove_pi_extension arm"
+      }
+    ],
+    "key_links": [
+      "apply.rs copies copy_pi_extension by relative path"
+    ],
+    "prohibitions": [
+      "No change to the OpenCode plugin vendoring",
+      "No removal outside .pi/extensions/bee-guard.ts and .pi/extensions/bee-guard/*.ts",
+      "No new code comments"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard::",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "pes-3-w",
+    "outcome": "bee onboard vendors every .ts file of .pi/extensions/bee-guard/, plans remove_pi_extension for the legacy single file before any copy, prunes unshipped .ts files, and the remove arm refuses paths outside its scope.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [
+      "apply_plan split into apply_plan plus apply_computed_plan so a test can apply a hand-built plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T16:41:04.520Z",
+    "behavior_change": true,
+    "verification_evidence": "193 passed, 1 ignored, onboard:: filter covers the plan and apply tests for the Pi folder; the Pi contract suite still has one red owned by pes-1 (its installed-path check)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard::",
+    "claimed_at": "2026-10-02T16:23:41.223Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+        "owner_bypassed": null,
+        "at": "2026-10-02T16:41:04.519Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee onboard vendors every .ts file of .pi/extensions/bee-guard/, plans remove_pi_extension for the legacy single file before any copy, prunes unshipped .ts files, and the remove arm refuses paths outside its scope.",
+      "commit": "50de918e2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard:: — green:unit — 193 passed, 1 ignored, onboard:: filter covers the plan and apply tests for the Pi folder; the Pi contract suite still has one red owned by pes-1 (its installed-path check)",
+      "deviations": [
+        "apply_plan split into apply_plan plus apply_computed_plan so a test can apply a hand-built plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "the legacy remove_pi_extension item comes before every copy_pi_extension item",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/onboard/plan.rs pushes remove_pi_extension for .pi/extensions/bee-guard.ts inside `if !pi_extension_files.is_empty()` before the create_dir and copy loop; onboard/tests.rs asserts legacy_remove_idx is lower than every copy index."
+          },
+          {
+            "id": "onboard plans no Pi removal when the source folder ships no files",
+            "status": "PASS",
+            "evidence": "every Pi plan item sits inside `if !pi_extension_files.is_empty()`, and list_pi_extension_files returns empty when the source bee-guard folder is absent."
+          },
+          {
+            "id": "prune removes only unshipped .ts files and never follows symlinks",
+            "status": "PASS",
+            "evidence": "the stale filter is `e.is_file && !e.is_symlink && e.name.ends_with(\".ts\") && !pi_extension_files.contains(..)`; the source listing uses the same is_file, !is_symlink and .ts filter."
+          },
+          {
+            "id": "the remove_pi_extension arm refuses a path outside its scope and reports a failed remove",
+            "status": "PASS",
+            "evidence": "apply.rs remove_pi_extension_admissible accepts only the exact legacy path or .pi/extensions/bee-guard/<name>.ts with no .. and no further slash; its unit test covers ../, a subfolder, another file, a .md file and an empty name. A remove error other than NotFound is printed to stderr instead of being dropped."
+          },
+          {
+            "id": "copy_pi_extension copies by relative path",
+            "status": "PASS",
+            "evidence": "apply.rs strips .pi/extensions/ and joins the rest onto engine.pi_extension_dir, replacing the old posix_basename copy."
+          },
+          {
+            "id": "proof",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee --bin bee onboard:: — 193 passed, 1 ignored; pi_lifecycle_end_to_end_onboarded_repo_parity, which onboards a real repo with the built binary, passes on 51504365e; the full declared suite is green on 16e5836e8."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-02T17:10:04.097Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "onboard plans one copy_pi_extension item per drifted module file",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "onboard apply writes every module file under .pi/extensions/bee-guard/",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "the legacy remove_pi_extension item comes before every copy_pi_extension item",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "onboard removes a legacy .pi/extensions/bee-guard.ts on apply",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "onboard plans no Pi removal when the source folder ships no files",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "onboard removes a host .ts file in bee-guard/ that bee does not ship",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "a non-.ts file in the host bee-guard/ folder survives onboard",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "the remove_pi_extension arm refuses a path outside its scope",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "a second onboard on an up-to-date host plans no Pi item",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          }
+        ],
+        "recorded_at": "2026-10-02T17:13:51.937Z",
+        "recorded_by": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

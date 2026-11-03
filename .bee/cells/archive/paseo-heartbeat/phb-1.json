@@ -1,0 +1,145 @@
+{
+  "id": "phb-1",
+  "feature": "paseo-heartbeat",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "api",
+  "title": "Add the Paseo heartbeat helpers",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "67f07142-1300-472b-95ba-0e0e5b218ef2"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-heartbeat/CONTEXT.md",
+    "docs/history/paseo-heartbeat/plan.md",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    ".pi/extensions/bee-guard/bee-cli.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "action": "Red first. Create .pi/extensions/bee-guard/paseo-heartbeat.ts, plain TypeScript in the style of result-inbox.ts (node: imports, exported functions, no default export, no code comments). Export: (1) isPaseoLeader(env = process.env): true when PASEO_AGENT_ID is a non-empty string and BEE_HERDING_WORKER is unset or empty. (2) isHeartbeatPrompt(text): true when text, trimmed at the start, begins with <paseo-system> and contains Schedule \"bee-leader\" fired. (3) HEARTBEAT_NAME = \"bee-leader\", DEFAULT_CRON = \"*/5 * * * *\". (4) readPaseoSettings(mainRoot): reads <mainRoot>/.bee/config.json and returns {command, cron}: command from herding.paseo.command else \"paseo\", cron from herding.paseo.heartbeat_cron else DEFAULT_CRON; a missing or bad file gives the defaults. (5) heartbeatMarkerPath(mainRoot, agentId) = <mainRoot>/.bee/runtime/paseo-heartbeat/<agentId>.json. (6) ensureHeartbeat(mainRoot, agentId, settings, run): creates the marker directory, then writeFileSync(marker, '{}', {flag: 'wx'}); on EEXIST returns {created: false, reason: 'exists'}; otherwise calls run(settings.command, ['heartbeat','create','--cron', settings.cron, '--name', HEARTBEAT_NAME, '--json', 'bee heartbeat']) which returns a Promise of stdout; parses the first JSON object in stdout and reads its id from key id, Id or ID; writes {agent_id, schedule_id, cron, created_at} into the marker and returns {created: true, id}; on any error removes the marker and returns {created: false, reason: <message>}; never throws. (7) parseTick(stdout): reads claimed and notices_sent numbers from the first JSON object (missing means 0); returns {claimed, notices_sent, news: claimed > 0 || notices_sent > 0}, or null for an unparseable body. (8) heartbeatText(tick): news gives `bee heartbeat: the broker routed ${claimed} question(s) and sent ${notices_sent} notice(s). Read them with bee orient and act.`; null or no news gives `bee heartbeat: no news. Reply with the single word ok and do nothing else.`. Create packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs modeled on pi_plugin_contracts.rs: it runs node (named skip when node is missing or too old, same rule as that file) on a small script that imports paseo-heartbeat.ts and prints JSON results; cover every export above, including two concurrent ensureHeartbeat calls on one temp mainRoot with a stub run that counts calls (exactly one call, one created true, one exists), a failed run that removes the marker, and the leader test with a worker env.",
+  "must_haves": {
+    "truths": [
+      "isPaseoLeader is true with PASEO_AGENT_ID set and false when BEE_HERDING_WORKER is set or PASEO_AGENT_ID is empty",
+      "isHeartbeatPrompt matches only a paseo-system envelope naming the bee-leader schedule",
+      "readPaseoSettings returns paseo and */5 * * * * by default and the config values when set",
+      "two concurrent ensureHeartbeat calls for one agent run paseo heartbeat create exactly once",
+      "a failed heartbeat create removes the marker and returns created false without throwing",
+      "parseTick reports news only when claimed or notices_sent is above 0 and returns null for a bad body",
+      "heartbeatText gives the news text or the one-word ok text"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        "substantive": "the heartbeat helpers"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+        "substantive": "node-run contract tests for the helpers"
+      }
+    ],
+    "key_links": [
+      "ensureHeartbeat uses an exclusive wx create of the marker before any paseo call"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to events.ts in this cell",
+      "Never return or suggest action handled"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts",
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-phb-1",
+    "outcome": "Paseo heartbeat helpers with node contract tests",
+    "files_changed": [
+      ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-05T23:30:31.119Z",
+    "behavior_change": false,
+    "verification_evidence": "7 passed 0 failed under node, run by the leader",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts",
+    "claimed_at": "2026-10-05T23:27:01.077Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:30:31.119Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:57:48.693Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Paseo heartbeat helpers with node contract tests",
+      "commit": "e19bf31b6",
+      "files": [
+        ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts — green:unit — 7 passed 0 failed under node, run by the leader",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "isPaseoLeader is true with PASEO_AGENT_ID set and false when BEE_HERDING_WORKER is set or PASEO_AGENT_ID is empty",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "isHeartbeatPrompt matches only a paseo-system envelope naming the bee-leader schedule",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "readPaseoSettings returns paseo and */5 * * * * by default and the config values when set",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "two concurrent ensureHeartbeat calls for one agent run paseo heartbeat create exactly once",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "a failed heartbeat create removes the marker and returns created false without throwing",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "parseTick reports news only when claimed or notices_sent is above 0 and returns null for a bad body",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "heartbeatText gives the news text or the one-word ok text",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          }
+        ],
+        "recorded_at": "2026-10-05T23:57:48.693Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -333,7 +333,10 @@ pub(crate) fn validate(entry: &Entry, args: &ParsedArgs) -> Option<Vec<Problem>>
     let mut problems: Vec<Problem> = Vec::new();
 
     for field in &required {
-        if !is_present(args.get(field)) {
+        let alternative = format!("{field}-file");
+        let satisfied = is_present(args.get(field))
+            || (props.contains_key(&alternative) && is_present(args.get(&alternative)));
+        if !satisfied {
             problems.push(Problem {
                 field: Some((*field).to_string()),
                 reason: "required, missing".to_string(),
@@ -869,11 +872,50 @@ parameters (see `bee cells show --help --json`)."
 
     #[test]
     fn a_well_formed_binary_call_is_allowed() {
-        allow(".bee/bin/bee cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green — touched close.rs\"");
+        allow(".bee/bin/bee cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green:unit — touched close.rs\"");
         allow("bee status --json");
         allow("bee cells ready --json");
         allow("bee state worker add --nickname w1 --cell c1 --json");
         allow("bee decisions log --decision d --rationale r --relation none");
+    }
+
+    #[test]
+    fn report_file_passes_cells_cap_and_cells_finish_alike() {
+        let both = [
+            "bee cells cap --id demo-1 --files a,b --report-file docs/history/x/.report.json",
+            "bee cells finish --id demo-1 --files a,b --report-file docs/history/x/.report.json",
+        ];
+        for command in both {
+            allow(command);
+        }
+    }
+
+    #[test]
+    fn report_file_does_not_excuse_a_cap_with_no_report_at_all() {
+        let reason = deny("bee cells cap --id demo-1 --files a,b");
+        assert!(reason.contains("cells.cap"), "{reason}");
+        assert!(reason.contains("(--report)"), "{reason}");
+        assert!(reason.contains("field: report"), "{reason}");
+        allow("bee cells finish --id demo-1 --files a,b");
+    }
+
+    #[test]
+    fn report_file_is_an_alternative_to_report_not_a_second_requirement() {
+        for command in [
+            "bee cells cap --id demo-1 --report \"cargo test -p bee — green:unit — ok\"",
+            "bee cells finish --id demo-1 --report \"cargo test -p bee — green:unit — ok\"",
+        ] {
+            allow(command);
+        }
+    }
+
+    #[test]
+    fn report_file_leaves_every_other_required_field_still_required() {
+        let reason = deny("bee cells cap --report-file ./.report.json");
+        assert!(reason.contains("cells.cap"), "{reason}");
+        assert!(reason.contains("(--id)"), "{reason}");
+        assert!(reason.contains("field: id"), "{reason}");
+        assert!(!reason.contains("(--report)"), "{reason}");
     }
 
     #[test]
@@ -1149,7 +1191,21 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 2] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 19] = [
+        // prd-1 (pi-relocation-delivery): the fenced cells JSON of that closed
+        // plan carries this span as a cell TITLE naming the verb the cell adds
+        // ("Add bee cells rebind-session --from --to") — a name for the flag
+        // pair, not a transcript anyone ran or should copy. The plan's shape
+        // gate is approved, so the file is frozen; the line is pinned here
+        // instead of rewritten.
+        r#"bee cells rebind-session --from --to""#,
+        // dis-1 (deploy-issuer-session): the fenced cells JSON of that closed
+        // plan quotes this span inside a cell ACTION to name the bug under
+        // repair ("`bee dispatch prepare --stage deployment` writes
+        // issuer_session only from the flag") — a prose mention of a verb
+        // shape, not a transcript anyone ran or should copy; the plan is
+        // immutable history, so the line is pinned here instead of rewritten.
+        r#"bee dispatch prepare --stage deployment"#,
         // kdt-3 (knowledge-distill-trigger): `decisions log` gained a
         // required `--relation` after this codex-native-runtime-v2 advisor
         // session ran; the report is a raw shell-transcript line, not a
@@ -1162,6 +1218,31 @@ mod documented_invocations {
         // shows BEING REJECTED ("# rejected, exit 1") — refusing it is the
         // documented behavior, not a stale spelling to repair.
         r#"node .bee/bin/bee_backlog.mjs add --type kind --title x   # rejected, exit 1"#,
+        // psd-1 (pi-stage-dispatch): the fenced cells JSON of that plan quotes
+        // this span inside a cell ACTION to name the verbs to serve from a
+        // granted worktree — a prose mention of a verb shape, not a transcript
+        // anyone ran or should copy; the plan is immutable history, so the
+        // line is pinned here instead of rewritten.
+        r#"bee state advisor-ref record and show: find where they reach emit_unsupported_root (rg -n emit_unsupported_root packages/bee-rs/crates/bee/src/verbs/state_group) and serve those two from main_root only. Every other verb keeps its refusal. For a non-cell dispatch with no --feature, resolve the feature in this order: the session's bound lane (today, prepare.rs session_binding), then the granted worktree the command runs in (new), then main's default .bee/state.json feature (today, unchanged). Write the tests first: prepare run from a granted worktree returns the same payload as the same call from main; a non-cell dispatch from that worktree with no --feature and no bound lane carries --cwd of that worktree even when main's state.json names another feature; advisor-ref show from the worktree returns the same result as from main; another state verb still refuses there.""#,
+        r#"bee dispatch prepare --runtime"#,
+        r#"bee dispatch prepare --runtime command with held values filled and placeholders for the rest""#,
+        r#"bee worktree enter --id, bee state handoff show --json, bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null""#,
+        r#"bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null""#,
+        r#"bee worktree enter --id"#,
+        r#"bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text""#,
+        r#"bee cells judge-record --from-text"#,
+        r#"bee cells finish --from-job""#,
+        r#"bee dispatch prepare runs the same checks when the role resolves to Resolved::Herding (prepare.rs:228) and refuses with the role_not_configured shape (prepare.rs:2129). Add --explain: print each check (role, claim, limits) with pass or refuse, plain and --json, and return before any claim, reservation or record write. Document herding.limits in docs/config-reference.md. Red first: unit tests for each reason, the no-limits byte-identical case, the Paseo-without-panes count, and --explain writing nothing.""#,
+        // rig-1 (slp-role-gaps): the fenced cells JSON of that gate-approved
+        // plan carries this span as a key_link string naming where the flag
+        // is wired — a prose mention of a verb shape, not a transcript anyone
+        // ran or should copy; the plan is frozen, so the line is pinned here
+        // instead of rewritten.
+        r#"bee cells dissent passes --new-evidence to the sibling", "registry_payload.json declares --new-evidence on cells dissent""#,
+        r#"bee backlog pbi add --brief-file"#,
+        r#"bee backlog propose --brief-file"#,
+        r#"bee backlog briefs --id""#,
+        r#"bee backlog pbi add --brief-file with the reason and cost in the cost paragraph""#,
     ];
 
     /// The same joining the docs scan does: strip a trailing `\`, join with
@@ -1249,7 +1330,11 @@ mod documented_invocations {
         }
         let mut checked = 0usize;
         let mut denied: Vec<String> = Vec::new();
-        let mut known_hits = 0usize;
+        // The DISTINCT exceptions still refused, not a count of matching lines:
+        // a later plan quoting a pinned span again (release-red-fixes quotes
+        // the dis-1 span) must not read as a dead exception, while an entry
+        // that no line refuses any more still fails the equality below.
+        let mut known_hits: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
         for f in &files {
             let Ok(text) = std::fs::read_to_string(f) else { continue };
             let mut fenced = false;
@@ -1294,8 +1379,10 @@ mod documented_invocations {
                 for command in invocations(line) {
                     checked += 1;
                     if let Some(reason) = check_cli_shape(&command) {
-                        if KNOWN_HISTORICAL_EXCEPTIONS.contains(&command.as_str()) {
-                            known_hits += 1;
+                        if let Some(pinned) =
+                            KNOWN_HISTORICAL_EXCEPTIONS.iter().find(|e| **e == command.as_str())
+                        {
+                            known_hits.insert(pinned);
                             continue;
                         }
                         denied.push(format!("{}\n    {command}\n    {reason}", f.display()));
@@ -1304,7 +1391,7 @@ mod documented_invocations {
             }
         }
         assert_eq!(
-            known_hits,
+            known_hits.len(),
             KNOWN_HISTORICAL_EXCEPTIONS.len(),
             "a pinned historical-transcript exception stopped being refused — delete it from \
 KNOWN_HISTORICAL_EXCEPTIONS instead of leaving a dead exception"

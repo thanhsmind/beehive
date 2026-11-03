@@ -87,6 +87,28 @@ pub(crate) fn direct_edit_verb(normalized: &str) -> Option<&'static str> {
     }
 }
 
+pub(crate) fn stage_only_target(rel: &str) -> bool {
+    let normalized = normalize_rel(rel);
+    direct_edit_verb(&normalized).is_some() || normalized == ".bee/config.json"
+}
+
+pub(crate) fn git_content_pathspecs(verb: &str, rest: &[String]) -> Vec<String> {
+    let positionals = |tokens: &[String]| -> Vec<String> {
+        tokens
+            .iter()
+            .filter(|t| !t.starts_with('-') && !is_separator(t))
+            .cloned()
+            .collect()
+    };
+    let positional = positionals(rest);
+    match rest.iter().position(|t| t == "--") {
+        Some(idx) => positionals(&rest[idx + 1..]),
+        None if verb == "restore" => positional,
+        None if positional.len() >= 2 => positional[1..].to_vec(),
+        None => positional.into_iter().filter(|p| stage_only_target(p)).collect(),
+    }
+}
+
 /// provenance: guards.mjs HISTORY_CODE_EXTENSIONS — also the "is this a code
 /// file" test for the credentials-prefix secret arm and the scratch
 /// verdict-/probe-/digest- prefix rule, both of which must not fire on a
@@ -571,6 +593,144 @@ pub(crate) fn fence_heredocs(command: &str) -> String {
     out
 }
 
+pub(crate) struct HeredocWrite {
+    pub(crate) target: String,
+    pub(crate) append: bool,
+    pub(crate) body: String,
+}
+
+pub(crate) fn heredoc_writes(command: &str) -> Vec<HeredocWrite> {
+    let chars: Vec<char> = command.chars().collect();
+    let n = chars.len();
+    let mut out: Vec<HeredocWrite> = Vec::new();
+    let mut redirects: Vec<(usize, String, bool)> = Vec::new();
+    let mut pending: Vec<(String, bool, usize)> = Vec::new();
+    let mut segment: usize = 0;
+    let mut i = 0usize;
+
+    while i < n {
+        let ch = chars[i];
+        if ch == '"' || ch == '\'' {
+            let close = chars[i + 1..].iter().position(|&c| c == ch).map(|p| p + i + 1);
+            i = close.map(|e| e + 1).unwrap_or(n);
+            continue;
+        }
+        if ch == '\\' && i + 1 < n {
+            i += 2;
+            continue;
+        }
+        if matches!(ch, ';' | '&' | '|') {
+            segment += 1;
+            i += 1;
+            continue;
+        }
+        if ch == '>' {
+            let mut j = i;
+            while j < n && chars[j] == '>' {
+                j += 1;
+            }
+            let append = j - i > 1;
+            while j < n && (chars[j] == ' ' || chars[j] == '\t') {
+                j += 1;
+            }
+            let start = j;
+            while j < n
+                && !chars[j].is_whitespace()
+                && !matches!(chars[j], ';' | '&' | '|' | '<' | '>')
+            {
+                j += 1;
+            }
+            if j > start {
+                let word: String = chars[start..j].iter().collect();
+                redirects.push((segment, word.trim_matches(['"', '\'']).to_string(), append));
+            }
+            i = j;
+            continue;
+        }
+        if ch == '<' {
+            let mut run_end = i;
+            while run_end < n && chars[run_end] == '<' {
+                run_end += 1;
+            }
+            if run_end - i != 2 {
+                i = run_end;
+                continue;
+            }
+            let mut j = i + 2;
+            let strip_tabs = chars.get(j) == Some(&'-');
+            if strip_tabs {
+                j += 1;
+            }
+            while j < n && (chars[j] == ' ' || chars[j] == '\t') {
+                j += 1;
+            }
+            let mut term = String::new();
+            let mut has_term = false;
+            if j < n && (chars[j] == '\'' || chars[j] == '"') {
+                let q = chars[j];
+                let close = chars[j + 1..].iter().position(|&c| c == q).map(|p| p + j + 1);
+                let end = close.unwrap_or(n);
+                term = chars[j + 1..end.min(n)].iter().collect();
+                j = if end < n { end + 1 } else { n };
+                has_term = true;
+            } else {
+                let start = j;
+                while j < n && !chars[j].is_whitespace() && !matches!(chars[j], ';' | '&' | '|') {
+                    j += 1;
+                }
+                if j > start {
+                    term = chars[start..j].iter().collect();
+                    has_term = true;
+                }
+            }
+            i = j;
+            if has_term {
+                pending.push((term, strip_tabs, segment));
+            }
+            continue;
+        }
+        if ch == '\n' {
+            i += 1;
+            for (term, strip_tabs, seg) in std::mem::take(&mut pending) {
+                let mut body = String::new();
+                while i < n {
+                    let line_start = i;
+                    let mut k = i;
+                    while k < n && chars[k] != '\n' {
+                        k += 1;
+                    }
+                    let line: String = chars[line_start..k].iter().collect();
+                    let compare: &str =
+                        if strip_tabs { line.trim_start_matches('\t') } else { &line };
+                    let is_term_line = compare == term;
+                    let ran_out = k >= n;
+                    i = if ran_out { k } else { k + 1 };
+                    if is_term_line {
+                        break;
+                    }
+                    body.push_str(compare);
+                    body.push('\n');
+                    if ran_out {
+                        break;
+                    }
+                }
+                if let Some((_, target, append)) = redirects.iter().rev().find(|(s, _, _)| *s == seg)
+                {
+                    out.push(HeredocWrite {
+                        target: target.clone(),
+                        append: *append,
+                        body,
+                    });
+                }
+            }
+            segment += 1;
+            continue;
+        }
+        i += 1;
+    }
+    out
+}
+
 // ─── bash target extraction (provenance: guards.mjs extractBashTargets) ────
 
 pub(crate) struct BashTargets {
@@ -717,14 +877,29 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
             }
             for t in &segment {
                 if !is_flag(t) {
-                    // D8: staging a CLI-owned file with `git add` is not a
-                    // direct-edit target.
-                    let cli_owned_stage_only =
-                        git_verb == "add" && direct_edit_verb(&normalize_rel(t)).is_some();
-                    if !cli_owned_stage_only {
+                    let stage_only = git_verb == "add" && stage_only_target(t);
+                    if !stage_only {
                         add_target(t, &mut broad_write, &mut paths);
                     }
                 }
+            }
+            i = end;
+            continue;
+        }
+        if cmd == "git"
+            && matches!(
+                tokens.get(i + 1).map(String::as_str),
+                Some("checkout") | Some("restore")
+            )
+        {
+            let git_verb = tokens[i + 1].clone();
+            let mut end = i + 2;
+            while end < tokens.len() && !is_separator(&tokens[end]) {
+                end += 1;
+            }
+            let segment: Vec<String> = tokens[i + 2..end].to_vec();
+            for t in git_content_pathspecs(&git_verb, &segment) {
+                add_target(&t, &mut broad_write, &mut paths);
             }
             i = end;
             continue;
@@ -903,3 +1078,412 @@ pub(crate) fn match_redirect(token: &str) -> Option<String> {
     }
     Some(chars[idx..].iter().collect())
 }
+
+// ─── config-role-key-guard (crkg-1) ──────────────────────────────────────────
+
+/// Builds the governed view of a config file:
+/// 1. The role table (normalized models with null slots dropped).
+/// 2. `herding.agents` and `herding.agent_command` verbatim.
+/// 3. The `hooks` subtree verbatim.
+pub(crate) fn config_governed_view(text: &str) -> Option<Value> {
+    let parsed: Value = serde_json::from_str(text).ok()?;
+    let root_obj = parsed.as_object()?;
+
+    let mut view = Map::new();
+
+    // 1. The role table: fold_team_key on a clone, normalize_models on team,
+    // and drop every slot whose normalized value is Value::Null.
+    //
+    // The fallback when neither `team` nor `models` is present is NOT an empty
+    // table: model_guard.rs:532-539 reads the WHOLE config object as the table
+    // in that shape (`Some(&cfg_val)`), so a host config that never wrote a
+    // `team` wrapper still resolves `claude`/`codex`/`opencode`/`pi` from its
+    // top level. Projecting an empty table here instead would leave exactly
+    // that config shape unguarded — the arm must see what the dispatcher sees.
+    let mut folded = root_obj.clone();
+    crate::verbs::drivers::fold_team_key(&mut folded);
+    let whole = Value::Object(root_obj.clone());
+    let team_val = match folded.get("team") {
+        Some(v) => Some(v),
+        None => Some(&whole),
+    };
+    let mut team_map = crate::verbs::drivers::normalize_models(team_val);
+    for (_rt, rt_val) in team_map.iter_mut() {
+        if let Value::Object(slots) = rt_val {
+            slots.retain(|_slot, val| !val.is_null());
+        }
+    }
+    view.insert("team".to_string(), Value::Object(team_map));
+
+    // 2. herding.agents and herding.agent_command verbatim:
+    if let Some(Value::Object(herding_obj)) = root_obj.get("herding") {
+        let mut herding_view = Map::new();
+        if let Some(agents) = herding_obj.get("agents") {
+            herding_view.insert("agents".to_string(), agents.clone());
+        }
+        if let Some(agent_cmd) = herding_obj.get("agent_command") {
+            herding_view.insert("agent_command".to_string(), agent_cmd.clone());
+        }
+        view.insert("herding".to_string(), Value::Object(herding_view));
+    }
+
+    // 3. hooks subtree verbatim:
+    if let Some(hooks_val) = root_obj.get("hooks") {
+        view.insert("hooks".to_string(), hooks_val.clone());
+    }
+
+    Some(Value::Object(view))
+}
+
+/// The merged config text `state.rs`'s `read_config_raw` produces from a tracked
+/// `.bee/config.json` and its `.bee/config.local.json` overlay.
+///
+/// Neither file can be judged on its own. The overlay DEEP-merges
+/// (state.rs:176-184), so a `config.local.json` that names only unrelated keys
+/// does not remove the tracked team table — and a `config.json` change can be
+/// masked by an overlay that already overrides the same slot. Both directions
+/// are visible only in the merged result, which is what the dispatcher reads.
+///
+/// `None` when `tracked` is present but is not a JSON object: the caller reads
+/// that as "no comparable state", which is how a corrupt-config repair passes.
+pub(crate) fn config_merged_text(tracked: Option<&str>, overlay: Option<&str>) -> Option<String> {
+    let base = match tracked {
+        None => Value::Object(Map::new()),
+        Some(t) => {
+            let v: Value = serde_json::from_str(t).ok()?;
+            if !v.is_object() {
+                return None;
+            }
+            v
+        }
+    };
+    // An unparseable overlay is what read_config_raw already treats as absent
+    // (its ReadJson::Corrupt arm warns and merges on without it).
+    let merged = match overlay.and_then(|o| serde_json::from_str::<Value>(o).ok()) {
+        Some(o) if o.is_object() => crate::state::merge_config_overlay(&base, &o),
+        _ => base,
+    };
+    serde_json::to_string(&merged).ok()
+}
+
+fn format_diff_val(val: Option<&Value>) -> String {
+    match val {
+        Some(Value::String(s)) => format!("\"{}\"", s),
+        Some(Value::Bool(b)) => b.to_string(),
+        Some(Value::Number(n)) => n.to_string(),
+        Some(Value::Null) => "null".to_string(),
+        Some(other) => other.to_string(),
+        None => "(removed)".to_string(),
+    }
+}
+
+fn format_diff_old(val: Option<&Value>) -> String {
+    match val {
+        Some(v) => format_diff_val(Some(v)),
+        None => "(absent)".to_string(),
+    }
+}
+
+fn build_config_denial(rel: &str, address: &str, old_str: &str, new_str: &str) -> String {
+    format!(
+        "bee config guard: \"{}\" changes governed config key {}: {} -> {}. \
+FIX: ask the user to edit this mapping directly in {}; agents may not alter resolved role models or guard configuration.",
+        rel, address, old_str, new_str, rel
+    )
+}
+
+fn diff_slot_values(prefix: &str, old_val: &Value, new_val: &Value) -> (String, String, String) {
+    if let (Some(o_map), Some(n_map)) = (old_val.as_object(), new_val.as_object()) {
+        let mut keys: Vec<&String> = o_map.keys().chain(n_map.keys()).collect();
+        keys.sort();
+        keys.dedup();
+        for k in keys {
+            match (o_map.get(k), n_map.get(k)) {
+                (Some(ov), None) => {
+                    return (
+                        format!("{}.{}", prefix, k),
+                        format_diff_val(Some(ov)),
+                        "(removed)".to_string(),
+                    );
+                }
+                (None, Some(nv)) => {
+                    return (
+                        format!("{}.{}", prefix, k),
+                        "(absent)".to_string(),
+                        format_diff_val(Some(nv)),
+                    );
+                }
+                (Some(ov), Some(nv)) if ov != nv => {
+                    if ov.is_object() && nv.is_object() {
+                        return diff_slot_values(&format!("{}.{}", prefix, k), ov, nv);
+                    }
+                    return (
+                        format!("{}.{}", prefix, k),
+                        format_diff_val(Some(ov)),
+                        format_diff_val(Some(nv)),
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+    (
+        prefix.to_string(),
+        format_diff_val(Some(old_val)),
+        format_diff_val(Some(new_val)),
+    )
+}
+
+fn diff_governed_views(rel: &str, old_view: &Value, new_view: &Value) -> Option<String> {
+    // Section 1: Role table (team)
+    let old_team = old_view.get("team").and_then(Value::as_object);
+    let new_team = new_view.get("team").and_then(Value::as_object);
+
+    for rt in crate::verbs::drivers::RUNTIMES {
+        let empty_map = Map::new();
+        let old_slots = old_team
+            .and_then(|t| t.get(rt))
+            .and_then(Value::as_object)
+            .unwrap_or(&empty_map);
+        let new_slots = new_team
+            .and_then(|t| t.get(rt))
+            .and_then(Value::as_object)
+            .unwrap_or(&empty_map);
+
+        let mut slot_keys: Vec<&String> = old_slots.keys().chain(new_slots.keys()).collect();
+        slot_keys.sort();
+        slot_keys.dedup();
+
+        for slot in slot_keys {
+            match (old_slots.get(slot), new_slots.get(slot)) {
+                (None, Some(_)) => {
+                    // ADD inside role table passes
+                }
+                (Some(ov), None) => {
+                    // REMOVAL inside role table refuses
+                    let address = format!("team.{}.{}", rt, slot);
+                    return Some(build_config_denial(
+                        rel,
+                        &address,
+                        &format_diff_val(Some(ov)),
+                        "(removed)",
+                    ));
+                }
+                (Some(ov), Some(nv)) if ov != nv => {
+                    // CHANGE inside role table refuses
+                    let (addr, old_str, new_str) =
+                        diff_slot_values(&format!("team.{}.{}", rt, slot), ov, nv);
+                    return Some(build_config_denial(rel, &addr, &old_str, &new_str));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Section 2: herding.agents and herding.agent_command
+    let old_herding = old_view.get("herding").and_then(Value::as_object);
+    let new_herding = new_view.get("herding").and_then(Value::as_object);
+
+    let empty_map = Map::new();
+    let old_agents = old_herding
+        .and_then(|h| h.get("agents"))
+        .and_then(Value::as_object)
+        .unwrap_or(&empty_map);
+    let new_agents = new_herding
+        .and_then(|h| h.get("agents"))
+        .and_then(Value::as_object)
+        .unwrap_or(&empty_map);
+
+    let mut agent_names: Vec<&String> = old_agents.keys().chain(new_agents.keys()).collect();
+    agent_names.sort();
+    agent_names.dedup();
+    for name in agent_names {
+        match (old_agents.get(name), new_agents.get(name)) {
+            (None, Some(_)) => {
+                // ADD inside herding.agents passes
+            }
+            (Some(oa), None) => {
+                // REMOVAL inside herding.agents refuses
+                let address = format!("herding.agents.{}", name);
+                return Some(build_config_denial(
+                    rel,
+                    &address,
+                    &format_diff_val(Some(oa)),
+                    "(removed)",
+                ));
+            }
+            (Some(oa), Some(na)) if oa != na => {
+                // CHANGE inside herding.agents refuses
+                let address = format!("herding.agents.{}", name);
+                return Some(build_config_denial(
+                    rel,
+                    &address,
+                    &format_diff_val(Some(oa)),
+                    &format_diff_val(Some(na)),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    let old_cmd = old_herding.and_then(|h| h.get("agent_command"));
+    let new_cmd = new_herding.and_then(|h| h.get("agent_command"));
+    if old_cmd != new_cmd {
+        let address = "herding.agent_command";
+        return Some(build_config_denial(
+            rel,
+            address,
+            &format_diff_old(old_cmd),
+            &format_diff_val(new_cmd),
+        ));
+    }
+
+    // Section 3: hooks subtree
+    let old_hooks = old_view.get("hooks");
+    let new_hooks = new_view.get("hooks");
+    if old_hooks != new_hooks {
+        if let (Some(o_map), Some(n_map)) = (
+            old_hooks.and_then(Value::as_object),
+            new_hooks.and_then(Value::as_object),
+        ) {
+            let mut keys: Vec<&String> = o_map.keys().chain(n_map.keys()).collect();
+            keys.sort();
+            keys.dedup();
+            for k in keys {
+                match (o_map.get(k), n_map.get(k)) {
+                    (Some(ov), None) => {
+                        let address = format!("hooks.{}", k);
+                        return Some(build_config_denial(
+                            rel,
+                            &address,
+                            &format_diff_val(Some(ov)),
+                            "(removed)",
+                        ));
+                    }
+                    (None, Some(nv)) => {
+                        let address = format!("hooks.{}", k);
+                        return Some(build_config_denial(
+                            rel,
+                            &address,
+                            "(absent)",
+                            &format_diff_val(Some(nv)),
+                        ));
+                    }
+                    (Some(ov), Some(nv)) if ov != nv => {
+                        let address = format!("hooks.{}", k);
+                        return Some(build_config_denial(
+                            rel,
+                            &address,
+                            &format_diff_val(Some(ov)),
+                            &format_diff_val(Some(nv)),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let address = "hooks";
+        return Some(build_config_denial(
+            rel,
+            address,
+            &format_diff_old(old_hooks),
+            &format_diff_val(new_hooks),
+        ));
+    }
+
+    None
+}
+
+/// Refuses a config write that changes the resolved model table or disables the guard.
+pub(crate) fn config_governed_change_deny(
+    rel: &str,
+    old_text: Option<&str>,
+    new_text: &str,
+) -> Option<String> {
+    let normalized = normalize_rel(rel);
+    if normalized != ".bee/config.json" && normalized != ".bee/config.local.json" {
+        return None;
+    }
+
+    let Some(old_raw) = old_text else {
+        // Old text absent (first write) passes
+        return None;
+    };
+
+    let new_view = config_governed_view(new_text)?;
+    let old_view = match config_governed_view(old_raw) {
+        Some(v) => v,
+        None => {
+            // Old unparseable while new parses passes (repair)
+            return None;
+        }
+    };
+
+    diff_governed_views(&normalized, &old_view, &new_view)
+}
+
+#[cfg(test)]
+mod heredoc_write_tests {
+    use super::heredoc_writes;
+
+    fn pairs(command: &str) -> Vec<(String, bool, String)> {
+        heredoc_writes(command)
+            .into_iter()
+            .map(|w| (w.target, w.append, w.body))
+            .collect()
+    }
+
+    #[test]
+    fn a_heredoc_with_a_redirect_target_yields_the_target_and_the_body() {
+        let command = "cat > scripts/x.sh <<'EOF'\n#!/usr/bin/env bash\necho hi\nEOF\n";
+        assert_eq!(
+            pairs(command),
+            vec![(
+                "scripts/x.sh".to_string(),
+                false,
+                "#!/usr/bin/env bash\necho hi\n".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn the_operator_order_does_not_matter_and_append_is_reported() {
+        let command = "cat <<EOF >> scripts/x.sh\necho hi\nEOF\n";
+        assert_eq!(
+            pairs(command),
+            vec![("scripts/x.sh".to_string(), true, "echo hi\n".to_string())]
+        );
+    }
+
+    #[test]
+    fn a_heredoc_without_a_target_and_a_target_without_a_heredoc_yield_nothing() {
+        assert_eq!(pairs("git commit -F - <<'EOF'\nsubject\nEOF\n"), Vec::new());
+        assert_eq!(pairs("echo '# x' > scripts/x.sh\n"), Vec::new());
+    }
+
+    #[test]
+    fn two_heredocs_keep_their_own_targets_and_bodies() {
+        let command = "cat > a.sh <<'A'\nfirst\nA\ncat >> b.sh <<'B'\nsecond\nB\n";
+        assert_eq!(
+            pairs(command),
+            vec![
+                ("a.sh".to_string(), false, "first\n".to_string()),
+                ("b.sh".to_string(), true, "second\n".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unterminated_heredoc_still_reports_what_it_carried() {
+        let command = "cat > scripts/x.sh <<'EOF'\n# note\necho hi\n";
+        assert_eq!(
+            pairs(command),
+            vec![(
+                "scripts/x.sh".to_string(),
+                false,
+                "# note\necho hi\n".to_string()
+            )]
+        );
+    }
+}
+

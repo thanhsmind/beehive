@@ -1,0 +1,178 @@
+{
+  "id": "p15-2",
+  "feature": "pstack-0-15-port",
+  "title": "State the reason on every spoken line and every playbook step",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "61b52e96-e2e2-48e6-be0b-274b6bdb72b9",
+    "6f0bc77d-c4e3-480e-a234-9abc3370cbc5"
+  ],
+  "files": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/content.md",
+    "skills/bee-planning/playbooks/docs.md",
+    "skills/bee-planning/playbooks/feature.md",
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-planning/playbooks/refactor.md",
+    "skills/bee-planning/playbooks/release.md",
+    "skills/bee-planning/playbooks/research.md",
+    "skills/bee-planning/playbooks/spike.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-0-15-port/CONTEXT.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "skills/bee-planning/playbooks/bugfix.md",
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/playbooks/bugfix.md",
+    "skills/bee-planning/playbooks/content.md",
+    "skills/bee-planning/playbooks/docs.md",
+    "skills/bee-planning/playbooks/feature.md",
+    "skills/bee-planning/playbooks/perf.md",
+    "skills/bee-planning/playbooks/refactor.md",
+    "skills/bee-planning/playbooks/release.md",
+    "skills/bee-planning/playbooks/research.md",
+    "skills/bee-planning/playbooks/spike.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "behavior_change": false,
+  "action": "Two edits, per pstack-0-15-port D1 and D5. EDIT 1 — spoken lines. In docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, these seven `  spoken:` lines carry no reason (found with `rg -n '^  spoken:' <file> | rg -v '—'`): 186 `run the proof your change type needs, then record it on the cap as command, result, and why that scope`; 211 `write it down the moment it settles, and close every task with a capture line or a plain 'nothing settled'`; 239 `when bee itself breaks, file it upstream with bee report issue, tell the human the link, and never patch bee here`; 261 `start code-touching feature work in its own worktree; main takes integration, release and a solo tiny fix`; 307 `reproduce the bug as a failing test and watch it fail for the reported reason before you fix it`; 355 `reproduce or trace a suspected defect before you file it, and record the suspicions that failed verification instead of dropping them silently`; 367 `read what the base already holds before writing, then extend the existing entry instead of filing a near-duplicate beside it`. Line numbers may drift; match on the text. Append to each ` — <reason>` LAST on the line, in the shape the other twenty lines use (see `never build on a red base — the red is the work now: fix it first, then carry on`). `bee orient` prints these lines verbatim, so keep each reason under 12 words; the seven touched lines stay under 140 characters after the edit (a planning bound, nothing enforces it; untouched lines are not yours). Derive each reason from that rule's own AGENTS.md section or principle skill, never from the id. Do NOT add a new field, a new row, or touch any `applied_at:` line: `parse_agents_rule_homes` in packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs treats `if line.starts_with(\"- \")` at column 0 as a new row. EDIT 2 — playbooks. In each of the nine files skills/bee-planning/playbooks/<class>.md, every numbered step states why it holds, in one short clause (`because …`, or an em-dash clause), unless the step already carries one or points at a home that carries it (bugfix step 2 points at worker-details.md and stays as is). Find the reason-less steps first with `rg -n '^[0-9]+\\.' skills/bee-planning/playbooks/*.md | rg -v '—|because|so that'` and work that list (about 37 of 48 steps today) as a checklist. Keep each file's voice: add a clause, never a paragraph; total growth per file under 6 lines. In skills/bee-planning/playbooks/bugfix.md also add, per D5, ONE sentence at the end of the `**When the cause is not known.**` paragraph: `If the deciding fact took a deep dig to find, propose the cheap, always-on signal that would have shown it at first look.` Never copy a pstack sentence beyond that one; write bee's reasons from bee's own rules. Nothing lands in packages/bee/AGENTS.block.md or AGENTS.md. REGEN, inside this cell: `.bee/bin/bee dev regen` (it ends with `release-manifest --write` itself); commit the regenerated copies with the change.",
+  "verify": "`rg -n '^  spoken:' docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md | rg -v '—' | wc -l` prints 0. `rg -n '^[0-9]+\\.' skills/bee-planning/playbooks/*.md | rg -v '—|because|so that' | wc -l` prints 0 or names only steps that point at a home (list them on the cap). `PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity` is green. `.bee/bin/bee knowledge check --json` reports no new duplicate_rule_home or unknown_rule_ref finding. `rg -c 'always-on signal' skills/bee-planning/playbooks/bugfix.md` prints 1. `.bee/bin/bee dev regen` runs clean and `.bee/bin/bee dev release-manifest --check` is clean.",
+  "must_haves": {
+    "truths": [
+      "Every spoken line in the rule index carries a reason after an em dash, placed last",
+      "Every numbered playbook step states why it holds or points at the home that does",
+      "The bugfix playbook names the cheap always-on signal"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "substantive": "27 spoken lines, each with a reason"
+      },
+      {
+        "path": "skills/bee-planning/playbooks/bugfix.md",
+        "substantive": "reason clauses on its steps and the D5 sentence"
+      }
+    ],
+    "key_links": [
+      "rendered copies under .claude/skills and the plugin trees match skills/ after regen"
+    ],
+    "prohibitions": [
+      "No new field or row in the rule index",
+      "No edit to packages/bee/AGENTS.block.md or AGENTS.md",
+      "No pstack sentence copied beyond the D5 one"
+    ]
+  },
+  "trace": {
+    "worker": "w-p15-2",
+    "outcome": "Seven reason-less spoken lines in the rule index got an em-dash reason placed last; 36 reason-less playbook steps got a because/so that/em-dash clause; bugfix.md got the D5 always-on-signal sentence; regen copies and release manifest committed",
+    "files_changed": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "skills/bee-planning/playbooks/bugfix.md",
+      "skills/bee-planning/playbooks/content.md",
+      "skills/bee-planning/playbooks/docs.md",
+      "skills/bee-planning/playbooks/feature.md",
+      "skills/bee-planning/playbooks/perf.md",
+      "skills/bee-planning/playbooks/refactor.md",
+      "skills/bee-planning/playbooks/release.md",
+      "skills/bee-planning/playbooks/research.md",
+      "skills/bee-planning/playbooks/spike.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Six of the seven touched spoken lines stay over 140 characters (139 to 185) — the base text of most is already 115 to 148 characters, so appending alone cannot meet the bound; I shortened the reasons and left the rule text as is — the plan was wrong about a fact",
+      "Steps whose reason sat on a continuation line (docs 2, release 2 and 4, refactor 7, research 5, spike 5, content 1 and 3) were reworded so the reason clause starts on the numbered line the verify rg reads — found a better route",
+      "Left .bee/onboarding.json (regen timestamp only) and packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs (a sibling worker diff) out of the path-scoped commit — they are not this cell's files — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-16T15:05:08.716Z",
+    "behavior_change": false,
+    "verification_evidence": "rule index and playbooks edited: spoken rg prints 0; playbook rg lists only bugfix.md step 2 (points at worker-details.md); rule_index_parity 3 passed; knowledge check has no duplicate_rule_home or unknown_rule_ref; always-on signal count 1; dev regen 3/3 green; release-manifest --check 419 files match",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+    "verify_command": "`rg -n '^  spoken:' docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md | rg -v '—' | wc -l` prints 0. `rg -n '^[0-9]+\\.' skills/bee-planning/playbooks/*.md | rg -v '—|because|so that' | wc -l` prints 0 or names only steps that point at a home (list them on the cap). `PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity` is green. `.bee/bin/bee knowledge check --json` reports no new duplicate_rule_home or unknown_rule_ref finding. `rg -c 'always-on signal' skills/bee-planning/playbooks/bugfix.md` prints 1. `.bee/bin/bee dev regen` runs clean and `.bee/bin/bee dev release-manifest --check` is clean.",
+    "claimed_at": "2026-10-16T14:59:08.070Z",
+    "mistakes": [
+      {
+        "wrong": "Wrote a helper script to /tmp and ran sed with dollar-anchored patterns; the write guard refused both",
+        "better": "use the Edit tool for exact line edits in a guarded worktree",
+        "fix_at": "none"
+      },
+      {
+        "wrong": "Passed only the cargo command as the proof segment to cells finish; it was refused because the proof must match the cell verify text",
+        "better": "copy the verify string verbatim into the proof command segment",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Seven reason-less spoken lines in the rule index got an em-dash reason placed last; 36 reason-less playbook steps got a because/so that/em-dash clause; bugfix.md got the D5 always-on-signal sentence; regen copies and release manifest committed",
+      "commit": "b4b9cbfaa",
+      "files": [
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "skills/bee-planning/playbooks/bugfix.md",
+        "skills/bee-planning/playbooks/content.md",
+        "skills/bee-planning/playbooks/docs.md",
+        "skills/bee-planning/playbooks/feature.md",
+        "skills/bee-planning/playbooks/perf.md",
+        "skills/bee-planning/playbooks/refactor.md",
+        "skills/bee-planning/playbooks/release.md",
+        "skills/bee-planning/playbooks/research.md",
+        "skills/bee-planning/playbooks/spike.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "`rg -n '^  spoken:' docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md | rg -v '—' | wc -l` prints 0. `rg -n '^[0-9]+\\.' skills/bee-planning/playbooks/*.md | rg -v '—|because|so that' | wc -l` prints 0 or names only steps that point at a home (list them on the cap). `PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity` is green. `.bee/bin/bee knowledge check --json` reports no new duplicate_rule_home or unknown_rule_ref finding. `rg -c 'always-on signal' skills/bee-planning/playbooks/bugfix.md` prints 1. `.bee/bin/bee dev regen` runs clean and `.bee/bin/bee dev release-manifest --check` is clean. — green:unit — rule index and playbooks edited: spoken rg prints 0; playbook rg lists only bugfix.md step 2 (points at worker-details.md); rule_index_parity 3 passed; knowledge check has no duplicate_rule_home or unknown_rule_ref; always-on signal count 1; dev regen 3/3 green; release-manifest --check 419 files match",
+      "deviations": [
+        "Six of the seven touched spoken lines stay over 140 characters (139 to 185) — the base text of most is already 115 to 148 characters, so appending alone cannot meet the bound; I shortened the reasons and left the rule text as is — the plan was wrong about a fact",
+        "Steps whose reason sat on a continuation line (docs 2, release 2 and 4, refactor 7, research 5, spike 5, content 1 and 3) were reworded so the reason clause starts on the numbered line the verify rg reads — found a better route",
+        "Left .bee/onboarding.json (regen timestamp only) and packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs (a sibling worker diff) out of the path-scoped commit — they are not this cell's files — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "Wrote a helper script to /tmp and ran sed with dollar-anchored patterns; the write guard refused both — use the Edit tool for exact line edits in a guarded worktree — none",
+        "Passed only the cargo command as the proof segment to cells finish; it was refused because the proof must match the cell verify text — copy the verify string verbatim into the proof command segment — doctrine"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 796 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Every spoken line in the rule index carries a reason after an em dash, placed last",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "Every numbered playbook step states why it holds or points at the home that does",
+            "artifact": "skills/bee-planning/playbooks/feature.md"
+          },
+          {
+            "requirement": "The bugfix playbook names the cheap always-on signal",
+            "artifact": "skills/bee-planning/playbooks/bugfix.md"
+          },
+          {
+            "requirement": "rendered copies under .claude/skills and the plugin trees match skills/ after regen",
+            "artifact": ".claude/skills/bee-planning/playbooks/feature.md"
+          },
+          {
+            "requirement": "No edit to packages/bee/AGENTS.block.md or AGENTS.md",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-10-16T15:05:59.051Z",
+        "recorded_by": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

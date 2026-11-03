@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Doctrine Layer — lane classification and working discipline
-description: "The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, evidence-based re-lane demotion, diff-scaled review-wave ceremony, the shape-time survivors of the retired predictive-validation stage, the one canonical scratch home and its narrowed disposable-proof exemptions, the never-author-as-evidence rule, and the verify ladder."
+description: "The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, evidence-based re-lane demotion, diff-scaled plan-check ceremony, the shape-time survivors of the retired predictive-validation stage, the one canonical scratch home and its narrowed disposable-proof exemptions, the never-author-as-evidence rule, and the verify ladder."
 timestamp: 2026-07-28
 bee:
   id: doctrine-layer-lane-and-working-discipline
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)"]
-  sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)", "validation-diet cells vd-9/vd-12 (traces in .bee/cells/, reports docs/history/validation-diet/reports/, 2026-07-28 — the predictive-validation stage's two survivors folded into the shape step, the feasibility matrix and its delta rule retired with no replacement, the never-author-as-evidence rule added, and the disposable-proof area narrowed to two uses)"]
+  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)", "pstack-adoption D1/D2/D3/D4/D5 (docs/history/pstack-adoption/CONTEXT.md, 2026-09-01 — the route class gets a procedure: four cited playbooks, the perf class, the checkable-CoS refusal, and the dismissed-findings duty)", "code-shape-doctrine D1/D2/D3/D4/D5 (docs/history/code-shape-doctrine/CONTEXT.md, 2026-09-01 — four code-shape rules placed in the worker brief rather than the always-loaded contract)", "pstack-gaps D1/D2/D3 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — the research class gains named Trace and Provenance sweep procedures, homed once in bee-researching)", "bee-playbooks D1/D2/D3/D4/D5/D6 (docs/history/bee-playbooks/CONTEXT.md, 2026-09-24 — the playbook word becomes first-class vocabulary in AGENTS.md, a fresh craft comparison against pstack's 23-playbook catalog is recorded, and content ships as the ninth, first non-code, route class)", "playbook-file-split D1/D2/D3/D4/D5/D6 (docs/history/playbook-file-split/CONTEXT.md, 2026-09-25 — supersedes bee-playbooks D1/D2/D4 (c2aa0417/fe8ff6a5/ac42cc07): each class's playbook body moves from a shared file's `### <class>` section to its own file under `bee-planning/playbooks/`, and citation shifts from heading-anchor to file path)"]
+  sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)", "validation-diet cells vd-9/vd-12 (traces in .bee/cells/, reports docs/history/validation-diet/reports/, 2026-07-28 — the predictive-validation stage's two survivors folded into the shape step, the feasibility matrix and its delta rule retired with no replacement, the never-author-as-evidence rule added, and the disposable-proof area narrowed to two uses)", "bee-playbooks cells bpb-1..bpb-3 (traces in .bee/cells/, 2026-09-24 — AGENTS.md vocabulary pointer, the content class end to end, and the pstack-playbooks-gap-check research artifact plus its two backlogged deferred gaps)", "playbook-file-split cells pfs-1..pfs-2 (traces in .bee/cells/, 2026-09-25 — the 9-file split plus the rewritten class_playbook_parity fence, then the citer/regen sweep)"]
   authoritative_for: "doctrine-layer: lane classification and working discipline"
 ---
 
@@ -21,6 +21,117 @@ stage is invoked. The unnumbered verify-ladder rule travels with R17: both
 govern the working residue of a cell rather than its content.
 
 ## Business Rules
+
+- **R40** — Three playbook rules live in their skill homes, one home each
+  (pstack-playbook-rules, decisions `e313792a`, `11984334`, `480ed73a`; cell
+  ppr-1, 2026-10-17): a worker-failure response table in bee-swarming (probe
+  read-only first, retry by failure mode, two retries then abandon and replan,
+  reconcile a late return); a CI-red classification in bee-herding's merge
+  role; and the PR shape in bee-technical-writing.
+- **R41** — A MEDIUM or HIGH row of a plan's risk map names the ONE fact it is
+  safe because of plus the run that proved it, and the live-drive map defines
+  "ready" as usable from an empty data directory with the evidence attached
+  (pstack-verify-trust, decisions `b2ded703`, `fcc20192`, `05a27950`; cell
+  pvt-1, 2026-10-17).
+- **R18** — A route class carries a PLAYBOOK, and a plan CITES it rather than
+  copying it (pstack-adoption D1 as superseded by `132551fb`, D2, D3; cells
+  psa-1..psa-6, 2026-09-01). `bee route --set --class` was a validated enum that
+  no procedure read: nothing branched on the value, so `bugfix` and `refactor`
+  scaled ceremony identically. Four classes now carry a named step list, one
+  file per class under `bee-planning/playbooks/<class>.md` (moved out of a
+  shared `bee-planning/references/planning-reference.md` section per
+  `playbook-file-split` D1, decision `bed1853c`, 2026-09-25 — the file's own
+  "Playbooks" section stays the citation home and index) —
+  `perf` (baseline, change, re-measure; "it feels faster" is not a result),
+  `bugfix` (reproduce, watch it fail, find the mechanism, fix, re-run the same
+  reproduction), `refactor` (record existing behavior first and keep that record
+  green at every step; a behavior change is a separate cell), and `research`
+  (read-only, trace the runtime path, name the sources that came up empty).
+  `perf` is the eighth enum value; it is safe beside the `mode`-carries-a-class
+  leak (`close.rs`, `uat.rs`) only because it is absent from
+  `ROUTE_LANE_VALUES`, and `tests/route_class_parity.rs` now pins the vocabulary
+  across all four documents that name it, reading both lists out of
+  `workflows.rs` as text rather than re-declaring them. The plan cites the
+  playbook by name and anchor and never transcribes it: a copied step list goes
+  stale and can be satisfied by transcription (`docs/history/research/pstack-xia.md`
+  lists verbatim playbook todo-lists under *What must not be ported*). A step
+  that does not apply stays VISIBLE with its recorded reason — the existing
+  named-deviation rule — and is never a refusal. The playbook binds the ROUTE
+  class only; the cell-level `change_class` enum is a different taxonomy.
+  All 8 classes now carry a playbook body (`class-playbooks` cell cp-1 filled
+  in `feature`, `docs`, `release`, `spike`), and `bee-playbooks` D1-D6
+  (docs/history/bee-playbooks/CONTEXT.md, 2026-09-24) made the word "playbook"
+  first-class vocabulary in `AGENTS.md` itself (previously it lived only in
+  `bee-planning` and this concept), ran a fresh craft comparison against
+  pstack's actual 23-playbook catalog at its pinned commit
+  (`docs/history/research/pstack-playbooks-gap-check.md` — 7 covered-stronger,
+  10 covered-adequately, 3 deliberate-non-match, 2 genuine-gap-deferred, 1
+  genuine-gap-closed), and added `content` as the NINTH class and the first
+  whose steps and proof-line rule assume no source code, no git worktree, and
+  no test suite — proof that the class-playbook shape generalizes past
+  software work. `content`'s playbook names no specific skill (host-agnostic
+  per D6), since `planning-reference.md` is vendored into every bee host repo.
+- **R20** — The worker brief carries four code-shape rules, and they refuse
+  nothing (code-shape-doctrine D1-D5, cell csdoc-1, 2026-09-01). Every other
+  bee rule governs PROCESS; none governed what a change leaves behind, so a
+  worker threading a flag through five layers, keeping a compatibility shim and
+  adding a fourth boolean passed every gate on green tests and an honest cap.
+  Measured, not assumed: `AGENTS.md` plus `CLAUDE.md` returned ONE hit across
+  `delet|smallest|simpler|duplicat|shim|dead code`, and it was about evidence,
+  not shape. The rules — prefer deletion to addition, the smallest diff that
+  solves it, leave the base simpler than found, and a signal threaded through
+  several layers means stop and find the direct path — live in the DISPATCH
+  BRIEF (`packages/bee/prompts/worker-cell.md`, mirrored in
+  `packages/bee/agents/bee-build.md.tmpl`, which duplicates the brief's
+  contract rather than pointing at it), never in the always-loaded contract.
+  That placement is the point: `docs/history/research/pstack-xia.md` proposed
+  `AGENTS.md` but its own ranking puts context-proximal placement above the
+  contract middle, which decays over a long session, and a contract line is a
+  tax on every session including those that dispatch no worker. They carry no
+  teeth, matching the existing red-before-green rule's posture — craft, applied
+  by judgment and surfaced at review, "not by flags". Types, domain modelling
+  and reader load were deliberately left out as too large for a brief, and no
+  `expertise/rust.md` was created behind a four-line change.
+- **R19** — Two duties keep an agent's own judgment auditable (pstack-adoption
+  D4, D5; cells psa-5, psa-6, 2026-09-01). The herding dispatch role refuses a
+  candidate whose Condition of Satisfaction names no command, path, or state it
+  can evaluate, and its skip line says so — a reading rule, never a keyword
+  list; it fires at dispatch time only, and the authoring-time gap is filed,
+  not closed. And a review report carries the findings it DISMISSED, each with
+  the reason it went. That one lands in two places or it is decorative: the
+  reviewer's instrument records the drop, and the report renders it. An
+  invisible filter asks the human to trust the lead's judgment; a shown one
+  lets them reverse it.
+- **R21** — The `research` class's two questions have named procedures, homed
+  once in `bee-researching/references/trace-and-provenance.md` (pstack-gaps D1,
+  D2, D3; cells pg-1, pg-4, pg-5, 2026-09-01). R18 gave `research` a four-step playbook whose
+  steps 2 and 3 — trace the runtime, name the empty sources — were duties with
+  no method behind them. **Trace** answers "how does this run?": the outcome is
+  an ordered runtime path anchored `path:line`, never a file list; the leader
+  fans read-only workers at 2 to 4 DISJOINT entry points through the dispatch
+  door, folds every return into ONE account, and names each step it could not
+  follow as unfollowed with its reason. One honest entry point means no fan-out
+  and the account says so — splitting one path to reach the floor is theater.
+  **Provenance sweep** answers "why is it this way?" over seven evidence
+  categories (decision log, git history, `docs/history/`, the knowledge bundle,
+  code comments, tests, external tracker), and the report rule is the whole
+  point: a category that returned nothing is named as EMPTY and one not swept is
+  named as UNSWEPT. Seven rows go in, seven come out — an omitted row is the
+  defect the procedure exists to stop, the same honesty rule R19's dismissed
+  bucket applies to review. The playbook and the skill CITE this home; neither
+  transcribes it. The user shortcut skills `/bee-how` and `/bee-why` are doors
+  into these two procedures, never copies: each scopes the question, runs Trace
+  or the Provenance sweep from that one home, and answers in the reply with no
+  brief file. The procedure owns every step, the vague-target reading line
+  included, so a door restates none of them.
+- **R22** — A saved document with no bee template (a README, a guide, a
+  handbook page) is written through `bee-technical-writing`: the document type
+  comes first, one type per file, split and linked where types meet. Two places
+  say so and no more: the docs-only route in the bee-hive router names it, and
+  one always-loaded AGENTS sentence names it for plain turns, where no skill is
+  running. A templated document (a plan, a cell action, an area spec, a
+  CONTEXT.md, a research brief) already keeps one type through its own template
+  rules and gets no extra line (f951a31f).
 
 - **R13** — Small work starts from an executable work packet, never a shrunken
   feature plan (lane-ceremony-v3 D3/D4/D5). The tiny lane's complete work shape
@@ -67,20 +178,27 @@ govern the working residue of a cell rather than its content.
   discovered risk stays available always. A demoted lane carries its full target
   contract (a demoted tiny is a real tiny: one direct task, merged gate, one
   dispatched worker).
-- **R16b — The review wave's ceremony scales with the measured diff (lane-lean
-  D3, 2026-07-27).** The wave lives in `bee-planning` (validation-diet D1/D5
-  folded the deleted standalone validating stage's reality gate and review wave in; there
-  is no standalone `validating` stage or phase). A standard-lane feature whose
+- **R16b — The plan check's ceremony scales with the measured diff (lane-lean
+  D3, 2026-07-27), and the check itself is the plan-step hat wave
+  (proactive-leader-intake D3/D4, `423e1664` / `b34fdea9`, 2026-08-30).** The
+  check lives in `bee-planning` (validation-diet D1/D5 folded the deleted
+  standalone validating stage's reality gate and review wave in; there is no
+  standalone `validating` stage or phase). A standard-lane feature whose
   counted touch set is at most 5 product files with zero hard-gate flags runs
-  the review wave inline on the session model — the same two mandates
-  (structural adversarial check,
-  cold-pickup cell review), the same finding vocabularies, the same
-  one-shot-then-one-blocker-pass cap — without dispatching a separate reviewer.
+  the check inline on the session model — the same two mandates (structural
+  adversarial check, cold-pickup cell review), the same finding vocabularies,
+  the same one-shot-then-one-blocker-pass cap — without dispatching anything.
   A hard-gate flag, a sixth product file, or genuine doubt about self-review
-  independence restores the dispatched merged reviewer; high-risk always runs
-  the dispatched persona panel. Rationale on record: the dispatched wave on a
-  4-5-file diff costs more than it catches, and ceremony must never displace
-  the main task (standing user feedback 5794a92a).
+  independence dispatches the hat wave instead: `hat-*` seats dispatched
+  `--kind advisor`, three by default and all five on high-risk, whose
+  synthesis carries the structure mandate back to the leader. The cold-pickup
+  mandate never dispatches — it stays with the leader at cell drafting on both
+  paths. The procedure itself — seats, instruments, budget, quorum, the
+  advisor-ref absorption and its timing law — has exactly one home,
+  `skills/bee-hive/references/gates-and-delegation.md` ("Hat wave"); this rule
+  points there and never restates it. Rationale on record: dispatched ceremony
+  on a 4-5-file diff costs more than it catches, and ceremony must never
+  displace the main task (standing user feedback 5794a92a).
 - **R16d — There is no longer a separate stage that judges a plan before code
   exists; its two worthwhile checks now run inside the shape step itself
   (validation-diet D1/D5/D6, 2026-07-28).** The predictive stage's matrix of
@@ -112,6 +230,79 @@ govern the working residue of a cell rather than its content.
   economics retired (412e9b3a, 2026-07-31, docs/specs/test-simple.md); the
   cap-time suite run retired in turn (decisions 58ec9664 and 1f534837,
   2026-08-18).
+
+  **R16c-a — the proof line's result segment is a closed vocabulary, on the
+  write path only (proof-strength-and-expiry D1/D2/D3/D5/D6, decision
+  `cb7b14b7`, 2026-09-01; cells pse-1 and pse-3, commits 9ad04c73 and
+  d6119e49).** The recorded proof is `<command> — <result> — <scope reason>`,
+  and the middle segment used to be free text that refused only the literal
+  word `red` — so a live product run and a type-check recorded the same
+  string, which is the gap the whole rule exists to close. The segment is now
+  exactly three values, and a bare `green` is refused by name (D1):
+
+  - `green:live` — the real product or command was driven and its observable
+    result inspected. The scope reason must name an evidence locator — a run
+    URL, an absolute path, or a path containing `evidence/` — checked on the
+    write path only (live-proof-evidence D1, decision `d56826ef`, 2026-09-22).
+  - `green:unit` — automated tests passed.
+  - `green:static` — it compiled, type-checked, linted, or a parity/pointer
+    check passed; nothing was executed. Deliberately the weakest and
+    deliberately legal: a docs cell has nothing stronger to offer honestly
+    (D3).
+
+  **A baseline rides the cap report, not the proof line (proof-honesty D4,
+  decision `f4261145`, 2026-09-20; cell ph-2).** The cap report (`--report`)
+  gains `"baseline"` as a second optional key beside `"mistakes"`. It names
+  what the same proof command produced on the base commit, before this change —
+  the floor a result is read against. It is validated as a non-empty string
+  when present, and stored on the cell trace beside `verify_command`,
+  `verify_output`, `verify_passed`, and `verification_evidence` so `bee cells
+  show` returns it. An absent baseline is legal and caps cleanly, distinguishing
+  absent from empty. `REPORT_KEYS` keeps its five required keys, and the proof
+  line keeps its three segments untouched (respecting proof-strength-and-expiry
+  D6).
+
+  **A user-facing surface is DRIVEN, not merely compiled
+  (verification-in-the-flow D4/D5, decisions `c93a6948` and `036e8a79`,
+  2026-09-02).** The proof-by-change-type list carries one more row: a change to
+  a surface a user reaches is proven by driving that surface's mapped feature
+  with the evidence attached, and the cap records it as `green:live`. The map is
+  read-first and loads in two tiers — the feature index at shaping, to tell a new
+  ask from a mapped one, then the ONE matching feature file at planning. The
+  drive rides the existing cap proof line, so this adds no door and no fourth
+  proof value; an absent or empty map is an environment fact, and the ask
+  proceeds as new.
+
+  **The write path closes; the read path stays tolerant (D2).** `bee cells
+  finish` refuses a bare `green` on a NEW cap. `feature_proof_check` — the
+  same reader `bee close` and `bee worktree merge` use — still accepts a
+  historical bare `green` on an already-capped cell, and roughly 200 archived
+  caps carry one. That split is not engineered: the check sits in
+  `parse_report_flag`, beside the existing `red` arm, over the tuple the
+  shared parser returns, and the parser itself is untouched. Closing the
+  parser instead would have closed both paths in one edit and made every past
+  feature uncloseable — a migration wearing a validation's clothes.
+<!-- bee:not-a-deferral: describes the markers that protect an already-shipped decision's fixtures from a comment sweep — shipped state, not a promise to act later -->
+  The untouched parser carries a comment saying so, and two read-path
+  fixtures carry a comment marking them as that decision's own evidence, so a
+  later sweep cannot quietly kill the proof.
+<!-- /bee:not-a-deferral -->
+  **An example that shows the refused form teaches the refused form (D5).**
+  Every prompt, skill, product-description page, guide page and display string
+  that showed `— green —` moved to a qualified value, the worker brief states
+  the three meanings where a worker writes the line, and an allowlist fence in
+  `tests/proof_gate.rs` reads the vocabulary constant out of the source and
+  fails when a listed site loses its qualified value or drops its anchor.
+  Untouched by design (D6): the line's three-segment shape, `commands.test`,
+  what any door RUNS, and the `red` rule.
+  **Editing `packages/bee/prompts/*.md` is a binary change.** The prompt is
+  embedded in the compiled engine and compared against disk at dispatch time;
+  a skew makes `bee dispatch prepare --kind cell` refuse EVERY worker with a
+  misleading `unsupported argument shape`, because the skew arm delegates to a
+  Node fallback that no longer exists. Rebuild and reinstall the vendored
+  binary in the same breath as the prompt edit — the same reinstall discipline
+  `docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md`
+  already names, reaching one file further than anyone had noticed.
 - **R17** — There is one canonical scratch home (`f21efe6e`): every ephemeral
   file bee writes for its own working purposes — judge payloads, evidence/
   deviation files, batch inputs, digests, verify logs, probe/debug scripts,

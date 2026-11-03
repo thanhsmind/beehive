@@ -8,21 +8,23 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-hook-state-parity D1-D3, D8-D13", "codex-runtime-parity D1, D2", d91a8398-2d63-426b-a133-341568453200, "opencode-support D1, D2, D5, D6"]
-  sources: ["codex-hook-state-parity cells 2, 3, 5 (paired Codex subagent audit, package authority, exclusive hook-source arbitration, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "codex-native-runtime-v2 cnr2-2 (state-sync trigger extended at the generator sources to both runtimes' plan tools)", "opencode-support cells oc-2, oc-3, oc-6, oc-8, oc-9, oc-10 (OpenCode's own guard belt: live-proved throw-blocking, the apply_patch/lsp/list coverage-gate closures, and exit-0 repair/ask verdict honoring; capped traces in .bee/cells/, evidence in docs/history/opencode-support/discovery.md, 2026-08-11)", "opencode-support cell oc-12 (live nested-dispatch proof: the belt engaged correctly on a real cross-session hold and a real concurrent-worker git guard, and surfaced the session-identity gap named below; trace .bee/cells/oc-12.json)", "opencode-support cell oc-13 (bee onboard --apply installs the belt; this concept's own Pointers correction landed in passing; trace .bee/cells/oc-13.json)", "docs/specs/hook-runtime.md#B5", "docs/specs/hook-runtime.md#B6", "docs/specs/hook-runtime.md#R1", "docs/specs/hook-runtime.md#R6", "docs/specs/hook-runtime.md#E4", "docs/specs/hook-runtime.md#E5", "docs/specs/hook-runtime.md#E7", "docs/specs/hook-runtime.md#P3"]
+  decisions: ["codex-hook-state-parity D1-D3, D8-D13", "codex-runtime-parity D1, D2", d91a8398-2d63-426b-a133-341568453200, "opencode-support D1, D2, D5, D6", "pi-support D1, D2, D3, D4 (named deviation), D5", "pi-beehive D1, D2, D6, D7", 1edd8a90, b1a26071, 663c642e, 8d8ac85f, "c47fa930 (pi-worktree-session-relocation D1 — active-session replacement, no cwd mutation)", "1f947417 (pi-worktree-session-relocation D2 — forkFrom and switchSession)", "85d85ede (pi-worktree-session-relocation D3 — CLI transition intent and Pi harness action)", "0b4ff55b (pi-worktree-session-relocation D4 — enter after creation, exit before merge, no exit deletion)", "538c723d (pi-worktree-session-relocation D5 — zero-mutation worktree enter command for existing grant)", "113e9f2c (pi-worktree-session-relocation D6 — Pi queues relocation until agent_settled)"]
+  sources: ["codex-hook-state-parity cells 2, 3, 5 (paired Codex subagent audit, package authority, exclusive hook-source arbitration, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "codex-native-runtime-v2 cnr2-2 (state-sync trigger extended at the generator sources to both runtimes' plan tools)", "opencode-support cells oc-2, oc-3, oc-6, oc-8, oc-9, oc-10 (OpenCode's own guard belt: live-proved throw-blocking, the apply_patch/lsp/list coverage-gate closures, and exit-0 repair/ask verdict honoring; capped traces in .bee/cells/, evidence in docs/history/opencode-support/discovery.md, 2026-08-11)", "opencode-support cell oc-12 (live nested-dispatch proof: the belt engaged correctly on a real cross-session hold and a real concurrent-worker git guard, and surfaced the session-identity gap named below; trace .bee/cells/archive/opencode-support/oc-12.json)", "opencode-support cell oc-13 (bee onboard --apply installs the belt; this concept's own Pointers correction landed in passing; trace .bee/cells/archive/opencode-support/oc-13.json)", "docs/specs/hook-runtime.md#B5", "docs/specs/hook-runtime.md#B6", "docs/specs/hook-runtime.md#R1", "docs/specs/hook-runtime.md#R6", "docs/specs/hook-runtime.md#E4", "docs/specs/hook-runtime.md#E5", "docs/specs/hook-runtime.md#E7", "docs/specs/hook-runtime.md#P3", "pi-support cell pis-1 (the Pi belt itself: .pi/extensions/bee-guard/, entry index.ts, enumerated tool map with fail-safe unknown-tool routing, per-call passivity, model-guard named exclusion; commit 9a36fe28, 2026-08-29)", "pi-support cell pis-2 (the pi dispatch door: DISPATCH_RUNTIMES/RUNTIMES widened, the pi_requires_herding refusal helper, the \"pi\" => None label arm, the hook_manifests.rs named exclusion extended to Pi, onboard copy_pi_extension; commit 954e6d3c, 2026-08-29)", "pi-beehive cells pib-1..pib-4, pib-6 (the Pi belt reaches per-event parity: the two passive measurement checkpoints wired, session-close fired at turn end, compaction boundary and shutdown with a reason filter, the continuation verdict enforced behind a shape gate, and the advisory-gap coverage gate generalised over both hand-authored belts with comment-stripped derivations; commits 5bb29c38, fe1b670d, 860f07a5, 7e831404, 8276f6cb, cd940171, 2026-09-02)", "docs/history/pi-worktree-session-relocation/CONTEXT.md and plan.md"]
   authoritative_for: "hook-runtime: the catalog of record, projection parity, and checkpoint activation"
 ---
 
 # Hook Runtime — the catalog of record, its rendered projections, the third runtime's own belt, and checkpoint activation
 
 Which checkpoints exist is one question; whether they fire in a given project is
-another. The first is answered by a single catalog of record. Two of bee's three
+another. The first is answered by a single catalog of record. Two of bee's four
 runtimes each consume a projection rendered from that catalog, where every
 difference between the two rendered projections is a named export rather than
-drift. The third runtime's own before-tool checkpoint surface cannot consume a
-rendered projection at all, so it carries its own hand-authored belt instead —
-itself one more named difference under the same rule, held to the identical
-parity guarantee by proof rather than by shared generation. The second question
+drift. The other two runtimes cannot consume a rendered projection at all — one
+because its before-tool checkpoint surface carries no deny return value, one
+because it ships no checkpoint-configuration surface whatsoever — so each
+carries its own hand-authored belt instead, itself one more named difference
+under the same rule, held to the identical parity guarantee by proof rather
+than by shared generation. The second question
 — whether a project's checkpoints are enabled at all — is answered by the
 project's own configuration and by the human owner's trust in each command
 definition.
@@ -33,10 +35,10 @@ definition.
   into projections. Claude Code and Codex each consume only their own
   rendered projection; the projections differ only by an explicitly named
   allowed list. The directional differences: both carry a pre-spawn dispatch
-  guard — Claude on its dispatch tools, Codex on its native spawn call,
-  judging only the envelope shape actually observed on the probed runtime
-  version and passing every unobserved shape through open — while Codex
-  alone has child-start and child-stop lifecycle audits
+  guard — Claude on its dispatch tools, Codex on its native spawn call
+  (`spawn_agent` and observed `collaborationspawn_agent`), enforcing configured
+  model and reasoning effort while refusing unverifiable or opaque native
+  dispatch — while Codex alone has child-start and child-stop lifecycle audits
   (codex-native-runtime-v2, cnr2-8).
 - OpenCode's own before-tool checkpoint surface has no abort or deny return
   value at all — the surface can only proceed normally or raise an error —
@@ -46,6 +48,18 @@ definition.
   raises the same checkpoints through the same helper commands every other
   runtime calls. This is a named per-runtime difference the catalog's own
   parity rule already anticipates, never drift (opencode-support D1, D2).
+- The fourth runtime — Pi — has no checkpoint-configuration surface of any
+  kind, so it cannot even be given a rendered file to load. It carries the
+  same kind of belt OpenCode does, by the same named-exclusion precedent: a
+  repository-local extension the runtime auto-discovers from the workspace
+  working directory, shipped out of bee's own checkout by the onboarding copy
+  step, translating that runtime's events onto the identical helper commands
+  (pi-support D1/D2). Its blocking checkpoints fail closed and its advisory
+  ones fail open, exactly as the sibling belt's do (pi-support D3). Context
+  rides the belt on Pi's own cadence: the full session preamble injects once
+  per `session_start` (cached, reload-idempotent) and each turn appends only
+  the existing `prompt-context` output as the slim delta (pi-support D8).
+  This belt carries one exclusion of its own, described in B9.
 
 ## Data Dictionary
 
@@ -53,10 +67,9 @@ definition.
 |---|---|
 | catalog of record | The single logical definition of every checkpoint: event, matcher, handler. Claude Code's and Codex's rendered projections are both derived from it deterministically — rendering again must reproduce both byte-for-byte. |
 | projection | The runtime-specific checkpoint list Claude Code or Codex actually loads. One per runtime, checked in, never hand-divergent. |
-| runtime's own belt | OpenCode's hand-authored equivalent of a projection: one project file translating OpenCode's own before-tool events into the same helper calls every projection makes, held to the catalog's coverage guarantee by a derived registry check rather than by shared generation. |
-| allowed difference | A named, exported exception explaining why one projection — or OpenCode's own belt — carries or omits a checkpoint the others do not. Any un-named difference is a defect. |
-| reviewed definition | The exact command definition the owner has inspected and trusted. A new or changed non-managed definition does not run until it is reviewed again. |
-| activity checkpoint set | The Claude-only group of lifecycle checkpoints that record what a session is doing rather than judging it: prompt, before-tool, after-tool and after-tool-failure, permission request, stop, notification, session end — one handler behind all of them. It carries no equivalent on the other runtimes today, so its absence there is a named difference under R1, not drift. What it writes and what readers make of it is `agent-activity-record.md`'s subject (decision b17bfa89). |
+| runtime's own belt | A runtime's hand-authored equivalent of a projection: one project file translating that runtime's own events into the same helper calls every projection makes, held to the catalog's coverage guarantee by a derived registry check rather than by shared generation. Two runtimes carry one — OpenCode and Pi. |
+| allowed difference | A named, exported exception explaining why one projection — or one runtime's own belt — carries or omits a checkpoint the others do not. Any un-named difference is a defect. |
+| activity checkpoint set | The lifecycle checkpoints that record what a session is doing rather than judging it. Claude carries prompt, before-tool, after-tool, after-tool-failure, permission request, stop, notification, and session end. Codex carries activity on its supported shipped events: prompt, before-tool, after-tool, and stop (`SessionStart` runs `session-init`, and `SessionEnd` is observer-only in canary test harnesses, not in the shipped manifest). One handler serves all activity events. No runtime records activity on `SubagentStart` or `SubagentStop` (`SubagentStart` runs audit only; `SubagentStop` runs audit, state sync, and chain nudge). What the handler writes is in `agent-activity-record.md` (decision b17bfa89). |
 
 ## Behaviors & Operations
 
@@ -109,6 +122,131 @@ the deny value while silently allowing at "ask" would make that stopping
 mechanism inert on OpenCode alone while it keeps working on every other
 runtime (opencode-support D6, oc-8).
 
+**B9 — Pi's belt takes the same named exclusion, and carries one exclusion of
+its own.** Pi joins the catalog exactly the way OpenCode does and for a
+stronger reason: OpenCode's before-tool surface merely lacks a deny value,
+while Pi has no checkpoint-configuration surface at all, so no rendered
+projection could be pointed at anything. The belt file itself is the
+projection; adding a fourth runtime to the catalog's enum would make the
+projections-match-disk proof demand a generated file that cannot exist. The
+belt's own exclusion is the **dispatch guard**: Pi ships no subagent or
+agent-spawn tool for a worker dispatch to travel through, so a dispatch-guard
+checkpoint wired into this belt could never fire on anything — a vacuous
+name-match reading green forever. It is therefore excluded BY NAME, and the
+belt's coverage proof asserts that exclusion by name rather than letting the
+absence pass unread. Two consequences follow for how work reaches a Pi
+session: every worker dispatch leaves it as an ordinary shell command, which
+the write-capable routing already covers, and the dispatch door itself opens
+for that one transport only (pi-support D5 — every model slot for this
+runtime must resolve to the pane-based worker transport, and every other
+resolution is refused by name with its own fix, an escalated unit of work
+being told to run inline in the session instead). The worker-result transport
+that door was waiting on has since shipped as its own feature (pi-support D7 →
+pi-result-mailbox): a Pi worker's result comes back through `bee herding run`'s
+own output — the synchronous path every runtime shares, and the one to plan on
+— and the belt additionally drains an OPT-IN async inbox for jobs nothing is
+waiting on. That async half carries named limits rather than a caveat:
+at-least-once delivery with `job_id` as the dedupe key, a drain that runs only
+inside a live Pi session (pi-result-mailbox D4 — pi-peer's claim discipline:
+`.processing` rename held through the turn, requeue on failed injection,
+orphan reclaim at session start), and header-only injection whose fenced
+envelope is DATA, never instructions — job id, cell id, status, summary,
+proof and the report PATH, with the report body itself never riding the
+injection (pi-result-mailbox D5). The lift of the old not-production caveat
+and this replacement text are themselves the recorded act
+(pi-result-mailbox D7). The inbox token is `$PI_SESSION_ID`, the variable
+Pi's bash tool exports; the payload note names it, and an empty value means
+run in the foreground with no flag (pi-stage-dispatch D2). A job run with
+`--seat <name>` carries `seat` in its marker, and the drain adds a `seat:`
+row right after `job_id`, for done and non-done results alike, so a hat
+wave matches each result to its seat (pi-stage-dispatch D3). The injected
+summary is one line; on every Pi dispatch kind the leader reads the worker's
+full answer from the file at `report_path`, and the stage skills tell it to
+(pi-stage-dispatch D4). A session that MOVES — into a feature worktree, or back
+to the main checkout before a merge — is replaced by a new session with a new
+token, so the drain now carries the old token instead of losing what was
+addressed to it: the moving session records the pair, and the arriving session
+drains its own inbox folder plus every carried one (pi-relocation-delivery D1).
+Three limits keep that carry honest. Every folder resolves under the MAIN
+checkout's `.bee`, the one root the dispatch side always writes to, so a job
+dispatched after the move is still found and worktree cleanup cannot delete a
+pending marker. A carried folder is read for unclaimed markers only — orphan
+reclaim runs on the arriving session's own folder alone, so a result already
+injected before the move is not injected a second time into the transcript that
+already carries it. And the carry outlives the session-shutdown that fires
+mid-move, because it is exempt from the clears that retire the other relocation
+state and is mirrored in one small pointer file for a host restart.
+
+**B10 — A belt reaches parity per checkpoint AND per lifecycle moment, not per
+checkpoint alone.** Pi's belt shipped firing four checkpoints while the catalog
+fires seven, and the gap stayed invisible because the coverage proof asked only
+whether each checkpoint was wired somewhere. It now fires the two passive
+measurement checkpoints — the one that records what a session is doing, and the
+one that appends a line per tool call — and the session-close checkpoint at
+three moments rather than one: turn end, the compaction boundary, and session
+shutdown. The compaction row does nothing observable today, because the
+checkpoint's own compaction arm reports itself undecidable; the row exists so
+the belt is already in step when that arm becomes real, and its handler returns
+nothing, since this runtime reads any returned value there as a request to
+cancel or replace the user's compaction.
+
+Shutdown is filtered by reason: every reason closes the session record except a
+reload, which keeps the same session running. That filter matters beyond
+tidiness — an unclosed record keeps holding its worktree against the reclaim
+sweep for the whole liveness window, so a session that quits and is never
+marked closed blocks reuse of the tree it left behind.
+
+**B11 — One word, two runtimes, opposite meanings.** The passive
+session-state checkpoint decides what a shutdown means by reading its reason,
+and deliberately ignores the reasons that end a transcript rather than a
+session. One reason word — a resume — appears in both vocabularies with
+opposite meanings: for the rendered runtimes it means the same session
+continuing, and for this runtime it means leaving this session for another one,
+which genuinely ends it. A belt that forwards its runtime's own reason word
+unchanged therefore skips the very transition it was wired to record, silently
+and while looking correct. The belt normalises instead: every reason it treats
+as terminating is reported in the catalog's own vocabulary, and the two
+checkpoints firing at that moment partition the reason space identically, so one
+of them can never close a record the other leaves alive.
+
+**B12 — An unwired checkpoint is named on its own line, and a gate enforces
+it.** Both hand-authored belts are now held to the same coverage gate: it
+derives the catalog from the checked-in projections, derives what each belt
+actually calls from the belt itself, and fails when a checkpoint is neither
+called nor named as an exclusion on a single line of that belt. The gate reads
+one line at a time on purpose — a name and the exclusion marker on neighbouring
+lines do not count — so an exclusion is granted deliberately or not at all.
+Because the derivations read the belt as text, they first strip its comments:
+without that, commenting a call out would leave the gate green while the
+behavior disappeared.
+
+**B13 — Pi session relocation bridges CLI transition intent to active session
+replacement (c47fa930, 1f947417, 85d85ede, 113e9f2c).** Pi binds tools,
+resources, trust, and persistence to session cwd. Mutating process cwd would
+corrupt these bindings. Pi instead replaces the active session using
+`SessionManager.forkFrom(sourceSessionFile, targetCwd)` and
+`ctx.switchSession(forkFile, { withSession })`.
+
+Because Pi event handlers receive `ExtensionContext` (which cannot switch
+sessions), the belt cannot relocate during tool execution. When a bee CLI
+process (`worktree new`, `worktree enter`, or linked `worktree merge`) exits 0
+under `PI_SESSION_ID`, it emits `@@BEE_SESSION_TRANSITION@@ <json>` on stderr.
+The belt captures this marker in `tool_result` for shell tools (`bash`,
+`powershell`), strips the marker from visible tool results, and holds the intent.
+After `agent_settled`, the belt dispatches private command
+`/bee-worktree-relocate <token>` via `pi.sendUserMessage(..., { expandPromptTemplates: true })`.
+That command handler receives `ExtensionCommandContext` when idle, validates the
+intent against current cwd, forks the session, and switches. For exit
+transitions, the reconstructed merge runs within the post-switch `withSession`
+callback on main. Failure handling operates across three phases: (1) before
+fork, pre-switch validation failures fail closed with no fork created or
+deleted; (2) fork exists plus cancellation or pre-teardown switch failure, where
+a created fork file is deleted via rmSync to preserve the source session cleanly;
+and (3) post-teardown failure, where once ctx.switchSession begins teardown of
+the old context, failures during target service reconstruction cannot promise
+rollback and are logged honestly without deleting the fork or claiming false
+recovery.
+
 ## Business Rules
 
 - R1 — One catalog of record; Claude Code's and Codex's projections are
@@ -118,7 +256,11 @@ runtime (opencode-support D6, oc-8).
   projection at all and carries its own hand-authored belt instead — one
   more named difference under this same rule, never drift, and held to the
   identical coverage guarantee by the proofs in B7 rather than by shared
-  generation (opencode-support D1, D2).
+  generation (opencode-support D1, D2). Pi takes that same named exclusion,
+  on the same precedent and by explicit reference to it — no enum variant, no
+  fourth generated projection, the belt file being the projection — plus the
+  named dispatch-guard exclusion of its own (B9, pi-support D4's recorded
+  deviation and D5).
 
 - R6 — Project checkpoints are enabled by default, resolve project-local
   handlers from the project root even when a session starts below it, and any
@@ -175,6 +317,10 @@ runtime (opencode-support D6, oc-8).
   session — but, under OpenCode's current dispatch mechanism, one dispatch
   runs at a time; concurrent dispatch is expected once OpenCode's own
   upstream limitation closes (opencode-support D5, oc-12).
+- Source wiring and actual observed events remain distinct on Codex: while
+  `apply_patch`, `Bash`, and unmarked `spawn_agent` denials (`codex-spawn-unmarked`, exit 2) are live-verified in the
+  canary runner, Windows live execution, PreCompact compaction flushes, and
+  native privacy/reservation blocking remain untested live in canary.
 
 ## Pointers (implementation)
 
@@ -192,6 +338,89 @@ runtime (opencode-support D6, oc-8).
   `.opencode/plugins/bee-guard.ts`, not a rendered JSON manifest sharing this
   catalog's `Entry`/`Group` rows — see `hook_manifests.rs`'s own `Runtime`
   doc comment for why `Runtime::Opencode` would be the wrong shape.
+<!-- bee:not-a-deferral: "deferring relocation until `agent_settled`" names the shipped Pi belt mechanism, not work put off -->
+- Pi is a NAMED EXCLUSION from the same catalog, on the OpenCode precedent
+  and written into the same `Runtime` doc comment (pi-support D4's recorded
+  deviation, B9, R1): no `Runtime::Pi`, no fourth projection — the belt folder
+  `.pi/extensions/bee-guard/` (entry `index.ts`) IS the projection, and
+  `devtools/mod.rs`'s `render_projection_text_for` carries `"pi" => None` as
+  a RECOGNIZED runtime with no rendered file, never an unmatched name.
+  Pi has no skill root of its own either: it reads the shared `.agents/skills`
+  root that onboarding renders for Codex, and that one root keeps
+  `bee:only pi` blocks beside the Codex blocks, while the Claude, OpenCode and
+  plugin skill roots strip them. Every dispatch and result-collection step a
+  Pi leader reads is therefore one Pi can run (pi-stage-dispatch D1). Belt
+  internals mirror the OpenCode belt's shape (tool→hook routing map with
+  fail-safe unknown-tool routing, throw-on-deny blocking runner, never-throw
+  advisory wrappers) plus per-call passivity: each handler re-checks for the
+  `.bee` directory at call time, so onboarding mid-session starts guarding
+  without a reload. The Pi version those enumerated tool and event names were
+  read against, and the disposition of every Pi extension-API change since,
+  live in [the Pi version pin and capability audit](pi-version-pin-and-capability-audit.md). The model-guard exclusion is commented at the top of
+  `index.ts` and asserted by name in the belt parity test that already covers
+  Claude, Codex and OpenCode — the test keeps its name; the Pi rows are
+  derived from the TS source and join its row set. The belt folder grew a
+  SECOND job with pi-result-mailbox: beside the guard routing it runs the
+  result-inbox drain (`result-inbox.ts`, registered from `session_start` in
+  `events.ts`, never at load time), so the same projection-shaped folder now
+  also carries an advisory delivery path — at-least-once, `job_id` as the
+  dedupe key, live session required, and header-only injection. Dispatch door
+  (D5, no longer preview — the result transport landed):
+  `pi_requires_herding_refusal` and the `PI_HERDING_ONLY_REASON` reason word
+  `pi_requires_herding` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, fired from both
+  the prepare and wave paths, beside `DISPATCH_RUNTIMES` there and `RUNTIMES`
+  in `verbs/drivers/models.rs`; operator-facing contract:
+  `docs/config-reference.md` (§ Pi) and the `team.pi` block in
+  `.bee/config-sample.json`. The belt folder grew a THIRD capability with
+  pi-worktree-session-relocation (c47fa930, 85d85ede): registering public
+  commands `/bee-worktree-new`, `/bee-worktree-enter`, `/bee-worktree-merge`
+  (in `commands.ts`), and private `/bee-worktree-relocate`, capturing `@@BEE_SESSION_TRANSITION@@`
+  markers from shell tool results, deferring relocation until `agent_settled`, and
+  executing session replacement via `SessionManager.forkFrom` and
+  `ctx.switchSession` (contracts proven in
+  `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`, including end-to-end
+  lifecycle parity test `pi_lifecycle_end_to_end_onboarded_repo_parity` covering session
+  identity, early write denial, gate packet preview, intent anchor and purpose retention,
+  replayable proof, and concurrent herding allocations). Onboarding ships the
+  belt from this checkout's own tree via the `copy_pi_extension` step
+  (`onboard/apply.rs`, `onboard/plan.rs`).
+  The belt file grew a FOURTH capability with pi-worker-surface (`6b7e8f49`,
+  `7dfd593d`, contract `172cb2af` as amended by `73141b63`), and it is two
+  surfaces plus one rule that binds every future one:
+  a terminating **`verdict` tool** the worker calls to end its run — its
+  parameter schema MIRRORS `MailboxResult`
+  (`packages/bee-rs/crates/bee/src/herding/mailbox.rs:490`, parsed at
+  `:655-690`) rather than defining a second one, it writes the same
+  `result-N.json` the mailbox already reads, and it returns `terminate: true`
+  so the worker pays no follow-up assistant turn; Pi validates the fields
+  before `execute()` runs, so the `malformed_result` case a worker used to
+  produce by omitting a field is refused at the host instead. A worker that
+  never calls it is unchanged — the leader still reads `report-N.md`.
+  And an **in-flight worker widget** below the editor
+  (`ui.setWidget(..., { placement: "belowEditor" })`), sourced from the pending
+  markers the result-inbox drain already polls and re-rendered on that existing
+  timer, never a second one. A row names its seat, or `<seat> · <cell_id>`,
+  falling back to the job id's short suffix only when the marker carries
+  neither — the raw job id is never a row label. A row is removed when its
+  marker clears and the widget is not drawn at all when none remain, because
+  the drain already delivers each finished worker's outcome into the
+  conversation. Only DETACHED workers appear: `write_inbox_marker`
+  (`herding/run.rs:2271`) returns early without `--inbox-session`, so a
+  foreground run writes no marker — and it blocks the leader anyway.
+  **The rule: any NEW tool registered on this belt needs its own explicit
+  `mapToolCall` row, or every call to it is DENIED.** The fail-safe default arm
+  (`.pi/extensions/bee-guard/` module `tool-map.ts`, entry `index.ts`) routes an unknown tool whose
+  arguments carry no `command`, no path field and no `url` to `tool_name`
+  `Write` with an empty `file_path`, and write-guard refuses that shape with
+  exit 2 ("could not be canonically contained inside the physical worktree") —
+  proven by running the real hook with that payload from both a worktree cwd
+  and the main cwd, and again after the row landed, where the same route
+  returns exit 0. The row's hook must stay `write-guard`: the belt parity test
+  (`pi_plugin_contracts.rs:1879-1884`) fails any routed pair whose blocking
+  destination is anything else, which is also what keeps model-guard a named
+  exclusion here.
+<!-- /bee:not-a-deferral -->
 - OpenCode belt internals (B7, B8): `mapToolCall` (tool→hook routing),
   `runBlockingHook` (throw-on-deny, exit-0 `updatedInput`/`ask`/unparseable
   handling), `runAdvisoryHook` (swallow + log), all in
@@ -203,7 +432,7 @@ runtime (opencode-support D6, oc-8).
   `three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode`;
   the fail-not-skip opt-out (R28) is `BEE_OPENCODE_SUITE_ALLOW_SKIP`.
   Model-parameter allowlist gap (Open Gaps): `evaluate_claude_dispatch` in
-  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (no `models.opencode`
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (no `team.opencode`
   branch yet). Nested-dispatch session-identity gap (Open Gaps): reservation
   identity is the acting CLI session (`verbs/reservations/reserve.rs`);
   the belt forwards OpenCode's own `input.sessionID` as `session_id`

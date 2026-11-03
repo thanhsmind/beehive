@@ -1,0 +1,161 @@
+{
+  "id": "pca-7",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Grade review evidence on a ladder, filter at synthesis, and add the structural smells",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "expertise/review.md",
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-reviewing/references/reviewing-reference.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "expertise/review.md",
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-reviewing/references/reviewing-reference.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L5-digest.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L6-digest.md"
+  ],
+  "affects_skills": [
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-reviewing/references/reviewing-reference.md"
+  ],
+  "affects_specs": [],
+  "action": "Adopt the L5 and L6 review practices (per D2 and D4). Review stays user-invoked: nothing here starts a review. Edit expertise/review.md, the SOURCE copied into .bee/expertise/ by regen — never edit .bee/expertise/ by hand. Never rename a cited heading. Do NOT run bee dev regen (wave-barrier). expertise/review.md: extend 'Label uncertainty exactly' in place — the confidence word becomes a rung on a five-step ladder (said, pointed at the line, walked the failure, ran it, reproduced live) plus where the check stopped, and every finding that shows a rung also names its meaning in words so a user never reads a bare number; a claims-table anchor row counts as the second rung and a ran row as the fourth. Add two labelled heuristics to the smell list: Swelling File (a diff that pushes a file toward a size a reader cannot hold) and Dual Path (an old API kept alive with no external consumer). reviewing-reference.md: method step 3 names the one fact the change's safety rests on and its rung, and a P1 fact below the fourth rung is labelled unproven; method step 2 follows the value past symbol search into wire shapes, columns, flags and readers in other languages; the architecture purpose gains the bolted-on test (known on day one, would it look like this) and a named deletion of a branch or mode as a P2 standards finding. bee-reviewing/SKILL.md § The wave: before severity promotion, a lead filter checks each finding against context the reviewers were denied (locked decisions, earlier rejects, planned cells, repo convention) and drops an unreachable finding, a preference with no named failure, or a missing-context finding into Dismissed with what was checked; a reviewer whose findings are all nits is reported as lens clean; a return that breaks the finding schema or cites a path that does not resolve gets one re-dispatch with the failure named, and a second failure is listed as an uncovered lens; the report names each reviewer's dispatched tier above Dismissed and may add one line on which reviewers corroborated which finding; corroboration counts as independent only across different models or disjoint lenses; a bug-fix cell with no red-before proof line is P2 under Verify the artifacts. Cite qualified pointers without the skills/ prefix.",
+  "verify": "rg -q 'reproduced live' expertise/review.md && rg -q 'Dual Path' expertise/review.md && rg -q 'lens clean' skills/bee-reviewing/SKILL.md",
+  "must_haves": {
+    "truths": [
+      "Review claims carry a rung with its meaning in words",
+      "The lead filters findings against withheld context before severity",
+      "Review stays user-invoked"
+    ],
+    "artifacts": [
+      {
+        "path": "expertise/review.md",
+        "substantive": "the evidence ladder and two new smells"
+      },
+      {
+        "path": "skills/bee-reviewing/SKILL.md",
+        "substantive": "lead filter, bounded retry, provenance and corroboration lines, red-before P2 check"
+      }
+    ],
+    "key_links": [
+      "expertise/review.md is the source copied to .bee/expertise/review.md by regen"
+    ],
+    "prohibitions": [
+      "No automatic review trigger",
+      "No hand edit of .bee/expertise/",
+      "No bee dev regen",
+      "No write outside the three listed files"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-7",
+    "outcome": "Review evidence ladder (expertise/review.md 'Label uncertainty exactly'), Swelling File and Dual Path smells (smell list), method steps 2-3 and the architecture bolted-on test plus P2 deletion (reviewing-reference.md), lead filter, bounded retry, lens clean, tier and corroboration lines (bee-reviewing SKILL.md The wave), red-before P2 (Verify the artifacts)",
+    "files_changed": [
+      "expertise/review.md",
+      "skills/bee-reviewing/SKILL.md",
+      "skills/bee-reviewing/references/reviewing-reference.md"
+    ],
+    "deviations": [
+      "put the named-deletion P2 in the architecture Method line, not its Purpose line — Purpose is a one-line lens and the security card already places its severity rule in Method — found a better route",
+      "capped with --sync-ack — the sync door read sibling pca-8 principle files in the shared tree as touched by this cell — hit an unforeseen obstacle",
+      "sync-ack: the principle SKILL.md paths belong to sibling pca-8 in the shared worktree; pca-7 commit f9cbdeb7 touches only its three listed files"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:52:37.605Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:48:23.803Z",
+    "sync_ack": "the principle SKILL.md paths belong to sibling pca-8 in the shared worktree; pca-7 commit f9cbdeb7 touches only its three listed files",
+    "mistakes": [
+      {
+        "wrong": "the cell verify failed once because expertise/review.md ladder labels were capitalised (Reproduced live) while the verify greps lowercase",
+        "better": "match the exact casing of the cell action words when writing labels a verify greps"
+      }
+    ],
+    "report": {
+      "outcome": "Review claims name a rung in words; lead filters findings against withheld context before severity; two structural smells added; review stays user-invoked",
+      "commit": "f9cbdeb7",
+      "files": [
+        "expertise/review.md",
+        "skills/bee-reviewing/SKILL.md",
+        "skills/bee-reviewing/references/reviewing-reference.md"
+      ],
+      "tests": "cargo test --release --test pointer_integrity — green:static — docs-only skill and expertise edits; pointer check plus cell verify rg (VERIFY-PASS)",
+      "deviations": [
+        "put the named-deletion P2 in the architecture Method line, not its Purpose line — Purpose is a one-line lens and the security card already places its severity rule in Method — found a better route",
+        "capped with --sync-ack — the sync door read sibling pca-8 principle files in the shared tree as touched by this cell — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "the cell verify failed once because expertise/review.md ladder labels were capitalised (Reproduced live) while the verify greps lowercase — match the exact casing of the cell action words when writing labels a verify greps"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "verify line printed OK"
+          },
+          {
+            "id": "rung-in-words",
+            "status": "PASS",
+            "evidence": "expertise/review.md Label uncertainty exactly (:255) five-rung ladder, never a bare rung number, where the check stopped, anchor row = rung 2 and ran row = rung 4"
+          },
+          {
+            "id": "lead-filter-before-severity",
+            "status": "PASS",
+            "evidence": "f9cbdeb7 bee-reviewing/SKILL.md The wave: one re-dispatch, lead filter into Dismissed, lens clean before Then severity; corroboration independent only across models or disjoint lenses; tier line above Dismissed"
+          },
+          {
+            "id": "red-before-p2",
+            "status": "PASS",
+            "evidence": "bee-reviewing/SKILL.md:123 under Verify the artifacts (:115) cites .bee/expertise/tests.md (Red before green)"
+          },
+          {
+            "id": "reference-and-smells",
+            "status": "PASS",
+            "evidence": "reviewing-reference step 2 wire-shape reach, step 3 rung and unproven, architecture bolted-on test and P2 deletion; review.md Swelling File and Dual Path"
+          },
+          {
+            "id": "user-invoked-no-trigger",
+            "status": "PASS",
+            "evidence": "diff adds no text that starts a review"
+          },
+          {
+            "id": "scope-no-hand-edit",
+            "status": "PASS",
+            "evidence": "f9cbdeb7 --stat: 3 listed files; cmp expertise/review.md .bee/expertise/review.md exit 0 after pca-10 regen"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.946Z"
+      }
+    ]
+  },
+  "escalate": true
+}

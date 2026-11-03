@@ -1,0 +1,12 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "the new test fails first for its own reason", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"},
+    {"requirement": "a gather dispatch with role design pins bee-gather", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"},
+    {"requirement": "a reviewer dispatch with role design pins bee-review", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"},
+    {"requirement": "a cell dispatch with role design still pins bee-design", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"},
+    {"requirement": "the model guard accepts each payload", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"},
+    {"requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"},
+    {"requirement": "the cell pin and the non-cell pin read the same role token", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"}
+  ]
+}

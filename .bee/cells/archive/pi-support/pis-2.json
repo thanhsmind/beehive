@@ -1,0 +1,118 @@
+{
+  "id": "pis-2",
+  "feature": "pi-support",
+  "title": "Legalize runtime pi at the dispatch door with herding-only enforcement and ship the belt",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+    "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/source.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-support/CONTEXT.md",
+    "docs/history/pi-support/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee && .bee/bin/bee dev release-manifest --check",
+  "regen_obligation_ack": "wave-barrier",
+  "action": "(1) DISPATCH_RUNTIMES (prepare.rs:29) and the hand-maintained generated/registry_payload.json enums on dispatch.prepare AND dispatch.wave gain pi; RUNTIMES (models.rs:34) widens to 4. (2) One refusal helper for runtime pi: every slot resolution that is not Resolved::Herding — Model (plain string), Native, Cli, Budget, and Inherit (escalation / --role ceiling) — refuses naming the slot, the herding requirement, and for escalation the remedy: Pi has no subagent surface, run the escalated cell inline in the session. Wire it in prepare AND wave. (3) devtools/mod.rs render_projection_text_for gains the pi => None label arm; hook_manifests.rs named-exclusion comment (lines ~44-52) extends to Pi — NO Runtime::Pi, NO fourth projection. (4) onboard copy_pi_extension across apply.rs/plan.rs/source.rs/tests.rs mirroring copy_opencode_plugin five-site shape, shipping .pi/extensions/bee-guard.ts from the checkout tree. (5) release_manifest.rs INVENTORY_ROOTS gains .pi/extensions + regenerate docs/history/codex-harness-hardening/release-manifest.json via bee dev release-manifest --write. Unit tests per the plan Config/Registry matrix rows (plain-string, cli, native, ceiling, wave, herding-payload, unconfigured-role, D6 table values).",
+  "must_haves": {
+    "truths": [
+      "dispatch prepare --runtime pi --kind cell on a herding slot returns the herding-exec payload",
+      "a plain-string models.pi slot refuses (never an Agent payload)",
+      "an escalated cell on pi refuses with the inline-session remedy",
+      "dispatch wave --runtime pi takes the same refusals",
+      "release-manifest --check green with .pi/extensions rooted"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "non-herding refusal helper wired in prepare and wave"
+      }
+    ],
+    "key_links": [
+      "registry_payload.json and DISPATCH_RUNTIMES agree on the runtime set"
+    ],
+    "prohibitions": [
+      "No Runtime::Pi enum variant",
+      "No fourth generated projection",
+      "No .pi/extensions/bee-guard.ts edits (pis-1 owns it)"
+    ]
+  },
+  "trace": {
+    "worker": "pis-w2",
+    "outcome": "runtime pi is legal at the dispatch door, herding-only with typed refusals on every other resolution, and the belt ships through onboard plus the release inventory",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+      "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+      "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/source.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Reserved and edited two files the cell did not name — verbs/drivers/tests.rs and verbs/models_group.rs — because widening DISPATCH_RUNTIMES and RUNTIMES turned 12 existing tests red (walks over both constants); the driver walks now configure a herding models.pi table instead of skipping pi, so pi stays inside the derived matrix — something else had to be fixed first",
+      "Ran the release-manifest proof with the binary built from this cell (/home/thanhsmind/.cache/cargo-target/release/bee) instead of the cell verify line's .bee/bin/bee, which is a symlink to the main checkout's binary built before this change and cannot know the new .pi/extensions root — the plan was wrong about a fact",
+      "Wired the wave door to unwind its own claim on a pi refusal rather than pushing an ok:false payload carrying claimed:true, so a refused pi wave leaks no claims — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T16:42:31.512Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T16:23:17.198Z",
+    "report": {
+      "outcome": "runtime pi is legal at the dispatch door, herding-only with typed refusals on every other resolution, and the belt ships through onboard plus the release inventory",
+      "commit": "954e6d3c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+        "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+        "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/source.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml + /home/thanhsmind/.cache/cargo-target/release/bee dev release-manifest --check — green — the cell widens a constant every dispatch/models/onboard/devtools suite walks, so the whole declared suite ran (3156 bin + every integration target, 0 failed) plus the manifest check the new inventory root owns",
+      "deviations": [
+        "Reserved and edited two files the cell did not name — verbs/drivers/tests.rs and verbs/models_group.rs — because widening DISPATCH_RUNTIMES and RUNTIMES turned 12 existing tests red (walks over both constants); the driver walks now configure a herding models.pi table instead of skipping pi, so pi stays inside the derived matrix — something else had to be fixed first",
+        "Ran the release-manifest proof with the binary built from this cell (/home/thanhsmind/.cache/cargo-target/release/bee) instead of the cell verify line's .bee/bin/bee, which is a symlink to the main checkout's binary built before this change and cannot know the new .pi/extensions root — the plan was wrong about a fact",
+        "Wired the wave door to unwind its own claim on a pi refusal rather than pushing an ok:false payload carrying claimed:true, so a refused pi wave leaks no claims — found a better route"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

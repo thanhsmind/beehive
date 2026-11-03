@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [a83a3613 (shared isolated runner for nested Node entrypoints; real Git/Bash/Codex integration remains external), "codex-runtime-parity D1, D2"]
+  decisions: [a83a3613 (shared isolated runner for nested Node entrypoints; real Git/Bash/Codex integration remains external), "codex-runtime-parity D1, D2", "pi-parity-review-fixes D5, D6"]
   sources: ["codex-sandbox-baseline cells codex-sandbox-baseline-2/codex-sandbox-baseline-4 (nested test entrypoints use the shared isolated runner; external integration keeps real status/output grading, 2026-07-16)", "codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", codex-native-runtime-v2 cnr2-13/cnr2-14 (read-only doctor rows; conformance suite over real binaries with negative-state assertions), gh22-completion g22-3/g22-4/g22-6 (three-state doctor verdict and static attestation; deep skill-inventory audit; scripted real-CLI canary), pre-162-fixes p162-1 (doctor resolves hook handlers at host topology), "docs/specs/hook-runtime.md#E2", "docs/specs/hook-runtime.md#E3", "docs/specs/hook-runtime.md#E9", "docs/specs/hook-runtime.md#E10", "docs/specs/hook-runtime.md#E11", "docs/specs/hook-runtime.md#E12", "docs/specs/hook-runtime.md#E13", "docs/specs/hook-runtime.md#E14", "docs/specs/hook-runtime.md#P1", "docs/specs/hook-runtime.md#P2", "docs/specs/hook-runtime.md#P9"]
   authoritative_for: "hook-runtime: health reporting and the proof surfaces behind the guardrails"
 ---
@@ -91,19 +91,39 @@ against isolated fixtures, asserting that a denied action changed nothing.
   missing/drifted); `degraded` = mechanical green but trust surfaces the
   runtime cannot expose are structurally unknown (the user is pointed at
   /hooks); `ready` = mechanical green plus, on the second runtime, a VALID
-  static attestation. **`bee doctor` and `bee doctor attest` are NOT BUILT
-  INTO THE CURRENT BINARY** — the R6 Node deletion removed the only
-  implementation and no Rust port replaced it, so no install can reach
-  `ready` on the second runtime today; treat it as degraded. The rest of this
-  section is the design as specified, not a surface you can call.
+  static attestation. Both `bee doctor` and `bee doctor attest` are fully
+  implemented in the Rust binary (`packages/bee-rs/crates/bee/src/doctor.rs`).
   `bee doctor attest --runtime codex` records
   {hooks-file sha256, CLI version, repo identity} into gitignored runtime
-  state; validity = all three match live state (no liveness leg — the runtime
-  exposes no hook-fire event surface, and the reason text says so honestly);
-  any drift names its reason (hash_changed/version_changed/identity_changed/
-  no_attestation) and the verdict falls back to degraded. Trust wording is
-  probe-version-scoped: a CLI version other than the probed one reads
-  `unprobed_version` (re-probe suggested), never a blanket "unsupported".
+  state (`.bee/doctor-attest.json`). Validity requires that all three match
+  live state (no liveness leg — the runtime exposes no hook-fire event surface,
+  and the reason text says so honestly); any drift names its reason
+  (hash_changed/version_changed/identity_changed/no_attestation) and the
+  verdict falls back to degraded. Doctor attestation provides static
+  verification of files and hashes, never live proof of execution. Live proof
+  requires the isolated canary suite. Trust wording is probe-version-scoped:
+  a CLI version other than the probed one reads `unprobed_version` (re-probe
+  suggested), never a blanket "unsupported".
+
+- `bee doctor --runtime pi` returns a fail-closed health report across mechanical
+  rows (`hooks_file`, `hook_handler`, `skills_installed`,
+  `wiring_matches_binary`, `binary_freshness`, `herding_transport`). Pi has no
+  structurally unprovable trust rows; `doctor attest --runtime pi` is refused.
+  Module-file equality verifies `.pi/extensions/bee-guard/` (entry `index.ts`) against the
+  embedded extension bytes (failing if legacy `.pi/extensions/bee-guard.ts` is present). Binary freshness checks the release version against
+  `.claude-plugin/plugin.json` in the source checkout; in a host it reads
+  `.bee/onboarding.json` `bee_version` first (null or absent is missing),
+  falls back to the plugin manifest, and reports unknown with neither. Every
+  host remedy names the bee installer, never cargo (host-packaging-gaps D1).
+  Reading the installed binary's version retries a short while when the
+  executable is reported busy — a freshly spawned worker may still be loading
+  it — so a transient busy file never reads as a stale or missing binary
+  (spawn-busy-retry, cell sbr-1, 2026-10-07).
+  Herding transport validates configured agent pane transport readiness (tmux
+  or direct) — except when every `team.pi` slot is a herding slot whose agent
+  is a Pi process: those dispatch with `--no-pane`, so the row is ok with no
+  multiplexer (host-packaging-gaps D5). Any required row that is not ok or unknown results in a `blocked`
+  verdict (exit 1) (pi-parity-review-fixes D5, D6).
 
 - Doctor resolves hook handlers at HOST topology: each handler filename is
   checked at both `.bee/bin/hooks/` and `hooks/` (dual-location, evidence
@@ -139,6 +159,23 @@ against isolated fixtures, asserting that a denied action changed nothing.
   checklist with named metrics and are never auto-asserted
   (codex-native-runtime-v2, cnr2-14).
 
+### Runtime rows and the belt contract (piggery-borrow D4 and D7, 2026-10-07)
+
+`bee doctor` prints one advisory row per runtime: claude, codex, opencode, pi and paseo (decision `da84d0f0`).
+The rows sit in the advisory channel, so they never change the verdict.
+Each row says whether the tool is on PATH (located, never run, so a wrapper script never runs) and whether the repo's bee wiring for that runtime is present and current.
+Every not-ok row carries a `fix:` line: `bee onboard --apply` for stale or missing wiring, or an install line for a missing tool.
+Paseo counts as wired when a `herding.agents` entry has a `paseo` block or `herding.paseo` is set; its fix tells the user to add such an agent, because `bee onboard --apply` never writes paseo config.
+The opencode plugin counts as current when the file exists.
+
+The pi and opencode belts send `belt_contract: {belt, version}` in the session-init payload (decision `d79958fd`).
+session-init compares it with `doctor::BELT_CONTRACT`; on a mismatch it puts one line at the top of its output naming the side to update, and the belt shows that line to the human (`ctx.ui.notify` on pi, a toast on opencode).
+A payload with no contract is accepted silently.
+The pi and opencode runtime rows carry the same check.
+Bump rule: any change to a `bee hook` stdin shape or a belt-visible verdict shape bumps `BELT_CONTRACT_VERSION` in both belts and `BELT_CONTRACT` in the binary.
+
+Pointers: `packages/bee-rs/crates/bee/src/doctor.rs` (`runtime_checks_with_env`, `locate_on_path`, `BELT_CONTRACT`, `belt_contract_check`), `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (`belt_contract_line`), `.pi/extensions/bee-guard/events.ts`, `.opencode/plugins/bee-guard.ts`.
+
 ## Pointers (implementation)
 
 - The freshness row and its two arms are `binary_freshness_row`,
@@ -166,6 +203,28 @@ against isolated fixtures, asserting that a denied action changed nothing.
 
 ## Open Gaps
 
-- Fixture and installed-package proofs are green. Live proof that Codex loads
-  the package-delivered projection in a real trusted session remains
-  outstanding because this environment cannot write the user Codex home.
+- Static attestation and live execution remain separate evidence levels. The
+  installed probe requires an explicit direct executable and a private runtime
+  home. It isolates process home and user-data locations, replaces inherited
+  probe selection, and rejects sensitive aliases before execution. Executable
+  helper links to the selected binary remain valid. Positive controls prove
+  that fixture processes ran and wrote into the isolated locations.
+- Process environment isolation prevents accidental user-setting changes. It
+  does not restrict arbitrary executable code at the operating-system level.
+  Restoration of prior global-setting changes remains unverified. Temporary
+  sign-in cleanup remains blocked by the physical-worktree guard.
+- Repair evidence: `docs/history/codex-reliability-closeout/live-canary.json`
+  records installed write denial and allowance on Codex 0.154.0. The current isolated probe did not observe native spawn. Earlier raw
+  hook records show a native spawn denial and child start/stop events; they
+  do not prove successful role-verified native dispatch. `reservation-proof.log` in that directory proves creation
+  and truncation refusal through the real command boundary in a fixture.
+
+- Windows CI run 34709805168 failed three activity mailbox tests because the
+  test fixture changed the job ID before the ambient cache first read it.
+  `HerdedEnv::set` now initializes that cache before changing the environment.
+  A fresh child forces the non-Linux fallback on Linux and checks all three
+  mailbox tests plus an inherited-job control. This change affects tests only.
+  `docs/history/codex-reliability-closeout/windows-activity.md` records the
+  failing reproduction and repair. `followup-suite.log` in that directory
+  records 3,930 passed, zero failed, and 20 ignored across 36 targets. A Windows
+  run of the repaired commit is still required.

@@ -22,40 +22,18 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-// ─── the decisions family's own prelude (WIDE door) ────────────────────────
-//
-// `decisions *` (log, active, search, redact, render, supersede, tag,
-// archive) addresses only `.bee/decisions.jsonl` + its archive under the
-// store root — no sessions, claims, workers, workflows, handoff mailboxes or
-// cross-worktree holds. Every decisions verb used to share
-// `crate::verbs::reservations::prelude`, the NARROW door, only because
-// verbs/cells.rs, verbs/state_group.rs and verbs/drivers.rs do too — not
-// because decisions itself needed the control-plane refusal (roots.rs's door
-// audit, "WIDE"). This is the dedicated replacement: same shape as
-// `reservations::prelude`, resolved through `resolve_store_root_any` so a
-// GRANTED worktree operates on its own workspace-local store instead of
-// refusing. An ordinary checkout and an ungranted worktree see the identical
-// root either door would have resolved.
 pub(crate) fn decisions_prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Pre> {
     let cwd = std::env::current_dir().ok()?;
     decisions_prelude_at(&cwd, cmd, use_json, t0)
 }
 
-/// `decisions_prelude`, parameterized on the start directory instead of
-/// reading `std::env::current_dir()` itself — the seam `tests.rs` uses to
-/// exercise a granted-worktree fixture without mutating the test runner's
-/// own process-wide cwd across parallel tests (the hazard
-/// `tests/workflow_verbs.rs` documents for this exact family of `prelude`
-/// functions). `emit_unsupported_root` / `emit_no_root_error` only use
-/// `start` for the `.bee/timings.jsonl` append, so this is the real
-/// production path, not a parallel copy of it.
 pub(crate) fn decisions_prelude_at(
     start: &Path,
     cmd: &'static str,
     use_json: bool,
     t0: Instant,
 ) -> Option<Pre> {
-    let root = match crate::roots::resolve_store_root_any(start) {
+    let root = match crate::verbs::drivers::resolve_root_serving_granted(start).0 {
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => {
             return Some(Pre::Emitted(crate::verbs::emit_unsupported_root(

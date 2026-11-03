@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/worktree-parallelism/control-plane-topology.md]
   decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "worker-conformance D11/D12 (R82's feature-boundary door arms on two markers — proof relocated and proof never recorded — with the freshness clock running over the union of both; cells wc-1/wc-2, docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "132362c7 (route-identity: a route carries the feature it was triaged for, a feature start drops the previous one's route, and the never-demote rule is scoped to one feature's own history — cell rti-1, 2026-08-06)", "hook-teeth D5/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — re-lane transitions are validated where the route is recorded, and each refusal names the rule it broke)", "counter-teeth D4 with refinement 64ad772d (docs/history/counter-teeth/CONTEXT.md, 2026-08-04 — the route-less claim warning escalates to a refusal from a session's second claim; the counter is scoped per feature and session, and the contention refusal outranks it)"]
-  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "route-identity cell rti-1 (start_default drops the carried route, route --set stamps its feature, run_route gates the demote check by it; commit 68beab21, capped 2026-08-06)", "hook-teeth cell bh-5 (re-lane validation: downward once, highest-risk never, mandatory-ceremony flags block, promotion free; trace .bee/cells/bh-5.json, commit 95fe412d, 2026-08-04 — state_group 56 passed)", "counter-teeth cell ct-5 (per-(feature, session) no-route claim counter; warn once then refuse, contention refusal outranks it; trace .bee/cells/ct-5.json, commits 4a0d1b82 and 95ec0639, 2026-08-04 — cells 75 passed, concurrency 13 passed, full suite green)"]
+  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "route-identity cell rti-1 (start_default drops the carried route, route --set stamps its feature, run_route gates the demote check by it; commit 68beab21, capped 2026-08-06)", "hook-teeth cell bh-5 (re-lane validation: downward once, highest-risk never, mandatory-ceremony flags block, promotion free; trace .bee/cells/archive/hook-teeth/bh-5.json, commit 95fe412d, 2026-08-04 — state_group 56 passed)", "counter-teeth cell ct-5 (per-(feature, session) no-route claim counter; warn once then refuse, contention refusal outranks it; trace .bee/cells/archive/counter-teeth/ct-5.json, commits 4a0d1b82 and 95ec0639, 2026-08-04 — cells 75 passed, concurrency 13 passed, full suite green)"]
   authoritative_for: "workflow-state: session identity, per-feature lanes, and heartbeat/lease renewal"
 ---
 
@@ -102,6 +102,18 @@ blocks a new feature from starting; a live *other* session holding a claim
 still blocks exactly as before; a solo starter's own heartbeat never
 self-blocks.
 
+**Pruning a worker's transient files protects a cell only while that cell is
+not known-capped.** The keep-set the prune consults asks one question per
+cell — does `.bee/cells/<id>.json` parse and carry status `capped`? — and both
+of its passes, the `workers[]` receipt pass and the cell-file pass, consult
+that same predicate, so the two cannot drift into disagreeing about the same
+cell. Unknown state protects: a missing or unparseable cell file keeps the
+cell, because the prune falls open rather than deleting on a file it could not
+read. Before this, the receipt pass protected unconditionally every cell it
+named, and since nothing retires a receipt row on an ordinary cap, every cell
+ever dispatched stayed protected forever — the prune could never clean a
+finished cell's transient files, which is the whole reason it exists.
+
 **A quiet heartbeat is not a dead session, and a reader must not treat it as
 one.** The renewal fires while a session works, so a session inside one long
 operation emits nothing for as long as that operation runs — the same fact R97
@@ -157,6 +169,26 @@ it always could; every other operation is now attributed to the real acting
 session by default rather than only when a caller opted in, so cross-session
 holds and claims become visible without any special handling (D3;
 durable-fallback tier: hardening-1-7-10).
+
+**A claim follows its conversation when the session identity changes under it.**
+Trigger: a runtime replaces the acting session — the Pi worktree move is the
+first one — so the work continues in a session whose identity differs from the
+one that claimed the cell. What happens: the moving runtime asks for the claims
+of the old identity to be reassigned to the new one, scoped to ACTIVE claims
+whose owner is exactly the named session; claims of any other session, and
+expired claims, are untouched, and no match is a clean, silent no-op. Each
+reassignment goes through the same in-place rewriter adoption already uses, so
+the fence epoch advances by one and any other holder still presenting the older
+epoch is refused afterwards rather than racing. What each actor observes: the
+capping step after the move succeeds as ordinary ownership — the audited
+override that a stale owner used to require is no longer part of the normal
+path — and a reassignment that fails leaves the move intact and says so, naming
+the one command that repairs it (pi-relocation-delivery D2). The reassignment
+itself runs from the MAIN checkout, never from the worktree the session is
+moving into: it reads the shared control plane, which refuses inside a granted
+feature worktree, so a runtime that asks from the destination gets a refusal and
+the claims stay behind — the failure a live run surfaced after the first
+implementation shipped.
 
 **A session's own record now carries its workspace, stamped once and reused
 by its claims (multisession-native D2/D3, msn-19).** Trigger: session
@@ -562,6 +594,11 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   is a refusal plus one forcing flag, never a second lane-naming flag, because
   the verb already spends that flag name on the triage classification
   (store-reach-gaps D1, 2026-08-21).
+- R135 — **An unbound session may name the lane record a route write targets.**
+  `route --set --lane-record <feature>` goes through the shared lane selector, so
+  a session with no lane binding can record a named lane's route without forcing
+  the default record; `--lane` stays the triage lane classification and never
+  selects a record (open-issues-sweep, decision `32712b8e`, issue #124).
 
 ## Edge Cases Settled
 
@@ -629,7 +666,7 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   bumped only after a successful claim (`handlers_write.rs:990`); the refusal is
   code `NO_ROUTE_RECORD` at `handlers_write.rs:1107-1113`, ordered after the
   already-claimed refusal (`handlers_write.rs:1059-1064`) so a race loser sees
-  the contention refusal instead. Evidence: trace `.bee/cells/ct-5.json`,
+  the contention refusal instead. Evidence: trace `.bee/cells/archive/counter-teeth/ct-5.json`,
   commits 4a0d1b82 and 95ec0639 (cells 75 passed, concurrency 13 passed, full
   suite green, 2026-08-04).
 - Re-lane transition validation (B48/R99): `validate_route_lane_transition`
@@ -641,5 +678,5 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   once-ever bound is carried by the route record's `demoted_at` stamp, minted
   on an allowed demotion and preserved otherwise (`workflows.rs:405-412`).
   Red-first per hook-teeth D7: the classification tests landed against a stub
-  before the refusals wired in. Evidence: trace `.bee/cells/bh-5.json`, commit
+  before the refusals wired in. Evidence: trace `.bee/cells/archive/hook-teeth/bh-5.json`, commit
   95fe412d (state_group 56 passed, 2026-08-04).

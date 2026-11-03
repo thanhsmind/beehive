@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md, areas/verify-pipeline/skill-reference-pointer-integrity.md]
-  decisions: [router-cost D5, router-cost D6, router-cost D7]
+  decisions: [router-cost D5, router-cost D6, router-cost D7, "pstack-gaps D4/D5 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — every rule id gains a spoken line here and a spoken rule obliges the reply to name what it changed)", "pstack-gaps D6 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — tests/rule_index_parity.rs pins the markers, the index rows and the spoken lines against each other)"]
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cells rc-3, rc-4, capped)"]
   authoritative_for: "doctrine-layer: router triage and the duplication boundary"
 ---
@@ -104,6 +104,25 @@ rule never disappears — only its elaboration moves.
   sanctioned path. Semantic every-turn rules (where no enforcement is possible), and any sentence
   that is the canonical home other documents cite, keep their full text (block-lean L1a-L1d,
   `docs/history/block-lean/CONTEXT.md`).
+- **R10.** **Every rule id is speakable, and a spoken rule owes an answer** (pstack-gaps D4, D5, D6;
+  cells pg-2, pg-3, 2026-09-01). The § AGENTS.md rule homes section below is the rule index, and each row now
+  carries an indented `spoken:` line — the sentence a person would actually say. A user may invoke a
+  rule mid-run by name ("apply never-build-on-red"); the agent resolves the id here, applies the rule
+  to the work in hand, and names in the reply the decision or step it changed — or says plainly that
+  it changed nothing. A bare acknowledgement is not an answer. The leverage is the obligation on the
+  reply, not the list: without it an invoked id is a no-op an agent can acknowledge and ignore, and
+  without the changed-nothing branch the law invites a fabricated change. No second index and no CLI
+  verb were added — this registry already existed and `bee knowledge check` already validated it;
+  what was missing was one sentence per rule. The spoken line MUST stay indented: `parse_agents_rule_homes`
+  reads any line opening with a dash as a new rule row, so a sibling bullet would report one rule
+  as two. `tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
+  the markers in `packages/bee/AGENTS.block.md`, and the rows here — plus the spoken line's presence.
+  Every spoken line also carries its reason, placed last after an em dash, and every numbered step in
+  the nine class playbooks (`skills/bee-planning/playbooks/<class>.md`) states why it holds or points
+  at the home that does (pstack-0-15-port D1, cell p15-2, 2026-10-16): a rule with its reason lets an
+  agent derive the call in a case the text never names, and the reason lives here and in the
+  playbooks, never in the always-loaded contract. The bugfix playbook's cause-not-known paragraph ends
+  with the cheap always-on-signal sentence (pstack-0-15-port D5, same cell).
 
 ## Edge Cases Settled
 
@@ -170,6 +189,7 @@ rule never disappears — only its elaboration moves.
 Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_at` records are tracked here:
 
 - `agents-proof-at-cap` (AGENTS.md § Prove, then say so):
+  spoken: run the proof your change type needs, then record it on the cap as command, result, and why that scope — bee close runs no tests
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
     - `docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md`
@@ -180,6 +200,7 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-shaping/references/implement-plan-template.md`
     - `skills/bee-swarming/references/swarming-reference.md`
 - `agents-never-build-on-red` (AGENTS.md § Prove, then say so):
+  spoken: never build on a red base — the red is the work now: fix it first, then carry on
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
     - `docs/knowledge/areas/doctrine-layer/unenforced-obedience.md`
@@ -188,15 +209,18 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-swarming/SKILL.md`
     - `skills/bee-swarming/references/swarming-reference.md`
 - `agents-never-zero-execution-workers` (AGENTS.md § Work in parallel, coordinate through the store):
+  spoken: from a small lane up, hand every cell to a dispatched worker — only a tiny cell may run inline
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/helper-classes-and-transports.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
 - `agents-capture-line-at-close` (AGENTS.md § Capture what settles):
+  spoken: write it down the moment it settles, and close every task with a capture line or a plain 'nothing settled' — lanes scale ceremony, never memory
   - applied_at:
     - `skills/bee-capturing/SKILL.md`
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
 - `agents-context-handoff-65` (AGENTS.md § Care for the session):
+  spoken: at about 65% context, write the handoff and stop cleanly — this holds mid-wave too
   - applied_at:
     - `docs/knowledge/areas/onboarding/status-display-vendoring.md`
     - `skills/bee-hive/SKILL.md`
@@ -206,15 +230,28 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-swarming/references/swarming-reference.md`
     - `skills/bee-swarming/references/worker-details.md`
 - `agents-gates-never-self-approved` (AGENTS.md § Bee workflow):
+  spoken: never approve your own gate — gates, decision answers and privacy calls belong to the user
   - applied_at:
     - `skills/bee-herding/README.md`
     - `skills/bee-herding/references/role-dispatch.md`
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
+- `agents-no-code-comments` (AGENTS.md § Care for the session):
+  spoken: write no comment in code — the why goes to a docs/knowledge concept or the decision log
+  - applied_at:
+    - `docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md`
+    - `packages/bee/prompts/worker-cell.md`
+- `agents-bee-defect-report` (AGENTS.md § Care for the session):
+  spoken: when bee itself breaks, file it upstream with bee report issue, tell the human the link, and never patch bee here — a local patch hides the defect
+  - applied_at:
+    - `docs/knowledge/areas/feedback-digest/bee-report-issues.md`
+    - `skills/bee-evolving/SKILL.md`
 - `agents-one-commit-per-cell` (AGENTS.md § Care for the session):
+  spoken: one commit per cell — imperative subject, and the cell id on the last line of the body
   - applied_at:
     - `skills/bee-swarming/references/worker-details.md`
 - `agents-review-user-invoked` (AGENTS.md § Bee workflow):
+  spoken: ask for a review when you want one — it never runs by itself as a step of the flow
   - applied_at:
     - `docs/knowledge/areas/workflow-state/review-sessions.md`
     - `skills/bee-hive/SKILL.md`
@@ -222,10 +259,12 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-hive/references/go-mode.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
 - `agents-one-next-action` (AGENTS.md § Communication):
+  spoken: close on exactly one next action — your own next move or the one call only the user can make
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/the-communication-contract.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
 - `agents-worktree-first` (AGENTS.md § Bee workflow):
+  spoken: start code-touching feature work in its own worktree; main takes integration, release and a solo tiny fix — sessions never write over each other
   - applied_at:
     - `docs/knowledge/areas/workflow-state/worktree-isolation.md`
     - `docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md`
@@ -234,11 +273,137 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-hive/references/scout-and-ticks.md`
     - `skills/bee-planning/SKILL.md`
     - `skills/bee-swarming/SKILL.md`
+- `agents-name-applied-principles` (AGENTS.md § Judgment and deviation):
+  spoken: name each principle you applied and the decision it changed — or say plainly it changed nothing
+  - applied_at:
 
 The list is kept by hand because `AGENTS.md` carries no frontmatter. A
 `bee.applied_at` key on this concept would not serve: `applied_at_unlinked`
 resolves a target against the rules this concept's own body homes, and these
-ten are homed in `AGENTS.md`, not here.
+rules are homed in `AGENTS.md`, not here.
+
+## Principle homes
+
+Craft principles stay homed in the `expertise/` guides and ship as thin
+`bee-principle-<slug>` skills on top (expertise-principles D1). `bee orient`
+names the candidates for a task from its route class, so this index is read on
+the way in, never always-loaded (expertise-principles D2). Rows use the same
+grammar as the section above: `spoken:` and `classes:` both sit ABOVE
+`applied_at:`, because the indented block after `applied_at:` is read as paths.
+
+Two rules complete the layer. The reply must name each principle it applied
+and the decision that principle changed, or say plainly that it changed
+nothing — the `agents-name-applied-principles` rule above, widening the
+invocation law to router-selected principles (expertise-principles D3). And
+the set is the CRAFT half only: `thinking`, `planning`, `architecture`,
+`decisions`, `tests`, `review`, `documentation`, `knowledge`, `debugging`,
+`merges`. The six domain guides — `data`, `apis`, `security`, `operations`,
+`performance`, `frontend` — carry no principles yet
+(expertise-principles D4).
+
+The skills are named `bee-principle-*`, not `principle-*`, and the prefix is
+load-bearing: both distribution pipes discover skill directories by that
+literal prefix (`devtools/skill_trees.rs`, `onboard/render.rs`), and the same
+prefix is the host-repo skill DELETION domain (`onboard/skills.rs`). A
+principle outside the namespace passes every source-side check and ships to no
+host repo at all — which is why the parity fence also reads the rendered
+plugin trees, not just `skills/`.
+
+- `bee-principle-red-before-green` (expertise/tests.md § Red before green):
+  spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it — a never-red test proves nothing
+  classes: feature, bugfix, refactor
+  - applied_at:
+    - `skills/bee-principle-red-before-green/SKILL.md`
+
+- `bee-principle-chestertons-fence` (expertise/thinking.md § Chesterton's Fence):
+  spoken: find out why it was put there before you take it down — "I don't see why this is here" is the argument for investigating, never for removing
+  classes: refactor, bugfix, feature
+  - applied_at:
+    - `skills/bee-principle-chestertons-fence/SKILL.md`
+
+- `bee-principle-smallest-honest-shape` (expertise/planning.md § The smallest honest shape):
+  spoken: size the work from what it endangers, not from how the request sounds — the smallest shape that is still honest, then escalate on evidence
+  classes: feature, refactor, research, spike
+  - applied_at:
+    - `skills/bee-principle-smallest-honest-shape/SKILL.md`
+
+- `bee-principle-split-never-shrink` (expertise/planning.md § Scope integrity: split, never shrink):
+  spoken: work that will not fit gets split into slices or renegotiated with its owner — never quietly delivered smaller than what was agreed
+  classes: feature, refactor, release
+  - applied_at:
+    - `skills/bee-principle-split-never-shrink/SKILL.md`
+
+- `bee-principle-the-deletion-test` (expertise/architecture.md § The Deletion Test):
+  spoken: delete the module in your head and inline it at every call site — if the complexity vanishes it was a pass-through, if it reappears N times it earned its keep
+  classes: refactor, feature
+  - applied_at:
+    - `skills/bee-principle-the-deletion-test/SKILL.md`
+
+- `bee-principle-single-source-of-truth` (expertise/architecture.md § Single Source of Truth):
+  spoken: every fact gets one authoritative home and everything else derives from it — when copies already disagree, elect the owner instead of syncing them
+  classes: feature, refactor, docs
+  - applied_at:
+    - `skills/bee-principle-single-source-of-truth/SKILL.md`
+
+- `bee-principle-record-at-the-moment-of-settlement` (expertise/decisions.md § Record at the moment of settlement):
+  spoken: write the record when the decision lands — "okay, so we'll do X" is the trigger, and a cleanup pass at the end reconstructs from memory and loses the boundaries
+  classes: feature, research, docs
+  - applied_at:
+    - `skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md`
+
+- `bee-principle-test-behavior-not-structure` (expertise/tests.md § Test behavior, not structure):
+  spoken: assert what the code observably does, never its choreography — a refactor that preserves behavior must not turn the suite red
+  classes: feature, bugfix, refactor
+  - applied_at:
+    - `skills/bee-principle-test-behavior-not-structure/SKILL.md`
+
+- `bee-principle-verify-before-reporting` (expertise/review.md § Verify before reporting):
+  spoken: reproduce or trace a suspected defect before you file it, and record the suspicions that failed verification instead of dropping them silently — a wrong finding buries real ones
+  classes: feature, bugfix, refactor, docs, release, perf
+  - applied_at:
+    - `skills/bee-principle-verify-before-reporting/SKILL.md`
+
+- `bee-principle-the-rebuild-test` (expertise/documentation.md § The rebuild test):
+  spoken: a spec is good when a stranger could rebuild the behavior on a different stack from it alone — every question they would have to ask you is a hole
+  classes: docs
+  - applied_at:
+    - `skills/bee-principle-the-rebuild-test/SKILL.md`
+
+- `bee-principle-one-fact-one-home` (expertise/knowledge.md § One fact, one home):
+  spoken: read what the base already holds before writing, then extend the existing entry instead of filing a near-duplicate beside it — each copy must be kept true
+  classes: docs, feature, refactor
+  - applied_at:
+    - `skills/bee-principle-one-fact-one-home/SKILL.md`
+
+- `bee-principle-reproduce-first` (expertise/debugging.md § Reproduce first):
+  spoken: get the failure happening on demand — exact command, exact input, exact wrong output — before you read the implementation, and let that repro be the finish line too
+  classes: bugfix
+  - applied_at:
+    - `skills/bee-principle-reproduce-first/SKILL.md`
+
+- `bee-principle-crash-site-versus-fault-site` (expertise/debugging.md § Crash site versus fault site):
+  spoken: the crash is where the bad state was detected, not where it was created — trace the value back to its origin and fix it there, never with a check at the crash site
+  classes: bugfix
+  - applied_at:
+    - `skills/bee-principle-crash-site-versus-fault-site/SKILL.md`
+
+- `bee-principle-never-invent-behavior-neither-side-has` (expertise/merges.md § Never invent behavior neither side has):
+  spoken: a conflict with no clean answer is not yours to design — never ship a compromise neither side contains; pick one and record it as a named guess, or escalate to whoever owns the tradeoff
+  classes: refactor, feature, release
+  - applied_at:
+    - `skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md`
+
+- `bee-principle-attack-the-premise` (expertise/debugging.md § Attack the premise):
+  spoken: when a second fix fails the same check, stop patching — write the premise both fixes share in one sentence, remove the wrong assignment, then fix
+  classes: bugfix, feature, refactor
+  - applied_at:
+    - `skills/bee-principle-attack-the-premise/SKILL.md`
+
+- `bee-principle-build-the-lever` (expertise/planning.md § Build the lever):
+  spoken: repeated work that is not obvious at a glance gets a tool — do one unit by hand, make the tool match it, then run it on the rest
+  classes: feature, refactor
+  - applied_at:
+    - `skills/bee-principle-build-the-lever/SKILL.md`
 
 ## Open Gaps
 

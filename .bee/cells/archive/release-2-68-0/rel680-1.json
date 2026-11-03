@@ -1,0 +1,95 @@
+{
+  "id": "rel680-1",
+  "feature": "release-2-68-0",
+  "title": "Publish release 2.68.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-68-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.68.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and BEE_OPENCODE_SUITE_ALLOW_SKIP=1 (the local opencode install is a wrapper the opencode contract test cannot read; CI runs that suite). The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.68.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.68.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.68.0",
+      "tag v2.68.0 exists locally and on the remote",
+      "the GitHub release for v2.68.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.68.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.68.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader-release",
+    "outcome": "bee 2.68.0 is live",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "First run under permit 4cf8335d went red only on opencode_plugin_contracts because this machine has opencode 2.0.32 (backlog p-624e2d7d); the re-run put the CI-pinned 1.18.16 first on PATH instead of skipping the suite — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-31T00:15:52.512Z",
+    "behavior_change": false,
+    "verification_evidence": "script printed release OK bee 2.68.0 is live after the full declared cargo suite (5016 passed, 0 failed, CI-pinned opencode 1.18.16 first on PATH per the logged decision), tag v2.68.0 pushed, green release-binaries run https://github.com/thanhsmind/beehive/actions/runs/41092516646, 6 assets with SHA256SUMS verified; report /mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1793378355690-1832435-1/report-1.md",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "c42c0036-26ef-4cbb-8902-4306b6016e5d",
+    "verify_command": "bash scripts/release.sh 2.68.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-10-30T16:14:20.493Z",
+    "mistakes": [
+      {
+        "wrong": "Ran scripts/release.sh bare before any release lane existed and it refused on BEE_DISPATCH_ID",
+        "better": "start the release-<ver> lane with its role plan first",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "DONE",
+      "commit": "cb12ecd8",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.68.0 && bee dev release-manifest --check — green:live — script printed release OK bee 2.68.0 is live after the full declared cargo suite (5016 passed, 0 failed, CI-pinned opencode 1.18.16 first on PATH per the logged decision), tag v2.68.0 pushed, green release-binaries run https://github.com/thanhsmind/beehive/actions/runs/41092516646, 6 assets with SHA256SUMS verified; report /mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1793378355690-1832435-1/report-1.md",
+      "deviations": [
+        "First run under permit 4cf8335d went red only on opencode_plugin_contracts because this machine has opencode 2.0.32 (backlog p-624e2d7d); the re-run put the CI-pinned 1.18.16 first on PATH instead of skipping the suite — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "Ran scripts/release.sh bare before any release lane existed and it refused on BEE_DISPATCH_ID — start the release-<ver> lane with its role plan first — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

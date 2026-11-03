@@ -100,6 +100,7 @@ fn run_example(bin: &Path, cwd: &Path, example: &str) -> Verdict {
     assert_eq!(argv.first().map(String::as_str), Some("bee"), "example must start with bee");
     let out = Command::new(bin)
         .args(&argv[1..])
+        .env_remove("PI_SESSION_ID")
         .current_dir(cwd)
         .output()
         .unwrap_or_else(|e| panic!("spawning {}: {e}", bin.display()));
@@ -195,7 +196,12 @@ fn the_json_refusal_carries_a_machine_readable_kind() {
         (vec!["status", "wat", "--json"], "unexpected_argument"),
     ];
     for (argv, kind) in cases {
-        let out = Command::new(&bin).args(&argv).current_dir(&cwd).output().unwrap();
+        let out = Command::new(&bin)
+            .args(&argv)
+            .env_remove("PI_SESSION_ID")
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
         assert_eq!(out.status.code(), Some(1), "{argv:?} must exit non-zero");
         let stdout = String::from_utf8_lossy(&out.stdout);
         let v: serde_json::Value = serde_json::from_str(stdout.trim())
@@ -220,7 +226,12 @@ fn the_flow_surface_and_the_internal_namespace_are_both_callable() {
 
     // 1. The flow surface is exactly what `bee --help` lists, and every entry
     //    on it dispatches.
-    let out = Command::new(&bin).args(["--help", "--json"]).current_dir(&cwd).output().unwrap();
+    let out = Command::new(&bin)
+        .args(["--help", "--json"])
+        .env_remove("PI_SESSION_ID")
+        .current_dir(&cwd)
+        .output()
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).expect("--help --json is JSON");
     let listed: Vec<String> = v["commands"]
         .as_array()
@@ -230,16 +241,27 @@ fn the_flow_surface_and_the_internal_namespace_are_both_callable() {
         .collect();
     for flow in ["route", "shape", "gate", "finish"] {
         assert!(listed.contains(&flow.to_string()), "`{flow}` is missing from the flow surface: {listed:?}");
-        let out = Command::new(&bin).args([flow, "--help"]).current_dir(&cwd).output().unwrap();
+        let out = Command::new(&bin)
+            .args([flow, "--help"])
+            .env_remove("PI_SESSION_ID")
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
         assert!(out.status.success(), "`bee {flow} --help` failed");
         let text = String::from_utf8_lossy(&out.stdout);
         assert!(text.contains(&format!("bee {flow}")), "`bee {flow} --help` names something else: {text}");
     }
 
     // 2. `bee internal …` dispatches the plumbing verb it wraps.
-    let bare = Command::new(&bin).args(["state", "lanes", "--json"]).current_dir(&cwd).output().unwrap();
+    let bare = Command::new(&bin)
+        .args(["state", "lanes", "--json"])
+        .env_remove("PI_SESSION_ID")
+        .current_dir(&cwd)
+        .output()
+        .unwrap();
     let wrapped = Command::new(&bin)
         .args(["internal", "state", "lanes", "--json"])
+        .env_remove("PI_SESSION_ID")
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -247,7 +269,12 @@ fn the_flow_surface_and_the_internal_namespace_are_both_callable() {
     assert_eq!(bare.status.code(), wrapped.status.code());
 
     // 3. …and REFUSES a flow verb, so the boundary is not decoration.
-    let out = Command::new(&bin).args(["internal", "gate"]).current_dir(&cwd).output().unwrap();
+    let out = Command::new(&bin)
+        .args(["internal", "gate"])
+        .env_remove("PI_SESSION_ID")
+        .current_dir(&cwd)
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("is a flow command, not plumbing"), "{stderr}");
@@ -255,6 +282,7 @@ fn the_flow_surface_and_the_internal_namespace_are_both_callable() {
     // 4. The namespace has its own help surface, and it holds no flow verb.
     let out = Command::new(&bin)
         .args(["internal", "--help", "--json"])
+        .env_remove("PI_SESSION_ID")
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -356,16 +384,49 @@ fn match_arm_verbs(src: &str, marker: &str, floor: usize) -> BTreeSet<String> {
     found
 }
 
-#[test]
-fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
-    let p = payload();
-    let invocations: BTreeSet<String> = p["commands"]
+/// Every invocation the registry declares, as the exact string an agent would
+/// type. The served set is compared against this and nothing else.
+fn declared_invocations() -> BTreeSet<String> {
+    payload()["commands"]
         .as_array()
         .unwrap()
         .iter()
         .filter_map(|c| c["invoke"].as_str())
         .map(str::to_string)
-        .collect();
+        .collect()
+}
+
+/// The law itself, as a function of its two inputs: which served shapes have
+/// no declaration behind them. Extracted so the assertion can be shown to BITE
+/// against the real registry — `the_served_but_undeclared_law_names_the_verb_
+/// whose_declaration_is_missing` feeds it the real cells dispatch table with
+/// one real declaration taken away, which is the failure this whole section
+/// exists to catch and the one a green run can never demonstrate on its own.
+fn undeclared(served: &[String], invocations: &BTreeSet<String>) -> Vec<String> {
+    let excluded: BTreeSet<&str> = NOT_A_COMMAND_SURFACE.iter().map(|(ns, _)| *ns).collect();
+    served
+        .iter()
+        .filter(|inv| {
+            let ns = inv.split_whitespace().nth(1).unwrap_or("");
+            !excluded.contains(ns) && !invocations.contains(*inv)
+        })
+        .cloned()
+        .collect()
+}
+
+/// `bee cells <verb>`, read out of the dispatch table in `verbs/cells/util.rs`
+/// rather than listed here. The floor is the vacuity guard: the table holds 19
+/// arms today, so a scan that finds fewer than 15 has lost its subject.
+fn served_cells_verbs() -> Vec<String> {
+    match_arm_verbs(&crate_src("verbs/cells/util.rs"), "pub(crate) fn try_mutating", 15)
+        .into_iter()
+        .map(|verb| format!("bee cells {verb}"))
+        .collect()
+}
+
+#[test]
+fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
+    let invocations = declared_invocations();
 
     let mut served: Vec<String> = Vec::new();
     for verb in match_arm_verbs(&crate_src("devtools/mod.rs"), "pub fn try_native", 5) {
@@ -374,21 +435,27 @@ fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
     for verb in match_arm_verbs(&crate_src("herding.rs"), "pub fn try_native", 5) {
         served.push(format!("bee herding {verb}"));
     }
+    // `bee blind …` — a whole TOP-LEVEL namespace, which is invisible to more
+    // of this file's checks than a new sub-verb is: without an arm here the
+    // scan would not look at `verbs/blind/mod.rs` at all, and a served,
+    // undeclared `blind` sub-verb would ship reading as an unknown command to
+    // `bee --help --all`. The floor is 1: the namespace serves one verb today,
+    // and a scan that finds none has lost its subject.
+    for verb in match_arm_verbs(&crate_src("verbs/blind/mod.rs"), "pub fn try_native", 1) {
+        served.push(format!("bee blind {verb}"));
+    }
+    // `bee cells …` — the namespace the swarm runs on, and the one this sweep
+    // used to skip. A cells sub-verb served here and never declared ships a
+    // verb no agent can find: `bee --help --all` calls it unknown.
+    served.extend(served_cells_verbs());
     // Two single-word probes the router answers before the verb tree; both are
     // spelled in `router::dispatch` and have no match arm to scan.
     for bare in ["bee onboard", "bee rs-info"] {
         served.push(bare.to_string());
     }
-    assert!(served.len() >= 12, "the served set collapsed to {served:?}");
+    assert!(served.len() >= 30, "the served set collapsed to {served:?}");
 
-    let excluded: BTreeSet<&str> = NOT_A_COMMAND_SURFACE.iter().map(|(ns, _)| *ns).collect();
-    let missing: Vec<&String> = served
-        .iter()
-        .filter(|inv| {
-            let ns = inv.split_whitespace().nth(1).unwrap_or("");
-            !excluded.contains(ns) && !invocations.contains(*inv)
-        })
-        .collect();
+    let missing = undeclared(&served, &invocations);
 
     assert!(
         missing.is_empty(),
@@ -432,6 +499,45 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     assert!(panicked.is_err(), "a scan that finds nothing must fail, not pass vacuously");
 }
 
+/// The law bites, against the REAL cells dispatch table and the REAL registry.
+///
+/// The sweep above is green, and a green sweep proves only that the two sides
+/// currently agree — it cannot show that the assertion would notice if they
+/// stopped. So take one real declaration away and check the law reports THAT
+/// verb, by name. `dissent` is the newest arm and therefore the one whose
+/// declaration is most likely to be forgotten by the next change; any served
+/// arm would do.
+#[test]
+fn the_served_but_undeclared_law_names_the_verb_whose_declaration_is_missing() {
+    let served = served_cells_verbs();
+    assert!(
+        served.contains(&"bee cells dissent".to_string()),
+        "`verbs/cells/util.rs` no longer serves `dissent` — this fixture is stale: {served:?}"
+    );
+
+    // Whole tree as it stands: nothing served is undeclared.
+    let full = declared_invocations();
+    assert_eq!(
+        undeclared(&served, &full),
+        Vec::<String>::new(),
+        "a cells sub-verb is served by `verbs/cells/util.rs` and missing from the registry payload"
+    );
+
+    // Same tree with one declaration removed: the law must fail, and must say
+    // which verb — a count would leave the next reader diffing 187 entries.
+    let mut gapped = full.clone();
+    assert!(gapped.remove("bee cells dissent"), "the registry stopped declaring `bee cells dissent`");
+    assert_eq!(
+        undeclared(&served, &gapped),
+        vec!["bee cells dissent".to_string()],
+        "a served cells verb with no registry declaration slipped past the law"
+    );
+
+    // …and the report an author reads names the verb, not just a number.
+    let message = undeclared(&served, &gapped).join("\n  ");
+    assert!(message.contains("bee cells dissent"), "the failure text hides the offender: {message}");
+}
+
 /// The registry payload is the agent-facing map. After the Node runtime was
 /// deleted it still named `lib/feedback.mjs`, `lib/compaction.mjs`,
 /// `lib/prompt-renderer.mjs`, `claims.mjs`, `cells.mjs`, `lease-store.mjs`,
@@ -471,7 +577,12 @@ fn the_names_index_covers_the_full_surface_at_a_fraction_of_the_size() {
     let cwd = scratch_repo(tmp.path(), 0);
 
     let run = |args: &[&str]| -> (serde_json::Value, usize) {
-        let out = Command::new(&bin).args(args).current_dir(&cwd).output().unwrap();
+        let out = Command::new(&bin)
+            .args(args)
+            .env_remove("PI_SESSION_ID")
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
         assert!(out.status.success(), "`bee {}` failed", args.join(" "));
         let v = serde_json::from_slice(&out.stdout)
             .unwrap_or_else(|e| panic!("`bee {}` did not print JSON: {e}", args.join(" ")));

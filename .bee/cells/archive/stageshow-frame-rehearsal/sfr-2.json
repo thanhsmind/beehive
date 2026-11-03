@@ -1,0 +1,142 @@
+{
+  "id": "sfr-2",
+  "feature": "stageshow-frame-rehearsal",
+  "title": "Add the frame-only gold-beside review rule to bee-design",
+  "lane": "small",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "48a24e05-6e75-4546-a09b-1ab363a3d94b",
+    "e37c2be9-86e8-4cf3-8bfc-e09f73087045"
+  ],
+  "files": [
+    "packages/bee/design/bee-design/additions/frame-review.md",
+    "packages/bee/design/bee-design/SKILL.md"
+  ],
+  "read_first": [
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/review.md",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/verify.md",
+    "packages/bee/design/bee-design/SKILL.md",
+    "packages/bee/design/bee-design/references/design-review.md",
+    "packages/bee/design/bee-design/additions/wcag-2-2.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Write packages/bee/design/bee-design/additions/frame-review.md, the brief for the fresh-context critic in the Check step, adapted from stageshow references/review.md (MIT, credit it at the end). It must say: the critic gets the frames or screenshots, the page URL, the taste rubric and the closest gold example, and never the builder's plan or reasons; the first question is whether the screen answers this product or could be any product in its category; put the work beside the closest gold example and name the one difference; the bar for a finding is a frame the critic can quote, and a predicted pass or failure is not a finding; rank findings by how much of the screen they spoil, framing first, then hierarchy and density, then motion, then polish; each finding names the frame, what is wrong and a one-line fix; say what could not be checked. Name the five failure shapes as quick tells: too much, too little, boxed in a card like a screenshot, flat with no focal point, bland with no brand. Do not repeat what references/design-review.md or taste-rubric.md already say; link them. Write in plain global English. Then in packages/bee/design/bee-design/SKILL.md add one reference-table row pointing at additions/frame-review.md, and in the Check step's critic line say the critic uses that brief.",
+  "verify": "rg -n \"additions/frame-review.md\" packages/bee/design/bee-design/SKILL.md",
+  "must_haves": {
+    "truths": [
+      "frame-review.md states the critic never sees the builder plan",
+      "frame-review.md states a finding needs a frame and names the closest gold example comparison",
+      "bee-design SKILL.md links additions/frame-review.md from the table and the Check step"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/design/bee-design/additions/frame-review.md",
+        "substantive": "critic brief with ranking order and five failure shapes"
+      }
+    ],
+    "key_links": [
+      "SKILL.md Check step names additions/frame-review.md"
+    ],
+    "prohibitions": [
+      "No edit under packages/bee/design/bee-design/references/"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "sfr-2-worker",
+    "outcome": "Added additions/frame-review.md critic brief and linked it from bee-design SKILL.md table and Check step",
+    "files_changed": [
+      "packages/bee/design/bee-design/additions/frame-review.md",
+      "packages/bee/design/bee-design/SKILL.md"
+    ],
+    "deviations": [
+      "Credited Stageshow as MIT with its file name but no upstream URL or copyright holder — the local source copy carries neither and I did not invent one — hit an unforeseen obstacle",
+      "Defined the closest gold example as the brief-named product or the nearest benchmark from the taste-rubric reference duel — bee-design has no examples folder like Stageshow — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-02T09:27:38.698Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell; verify hits lines 102 and 172; a separate loop also confirmed all three relative links in frame-review.md resolve",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "dab040c2-2713-4466-9404-80365ecb2aae",
+    "verify_command": "rg -n \"additions/frame-review.md\" packages/bee/design/bee-design/SKILL.md",
+    "claimed_at": "2026-11-02T09:25:26.311Z",
+    "mistakes": [
+      {
+        "wrong": "Staging into the shared index in this worktree was refused by the concurrent-worker guard",
+        "better": "use a path-scoped commit with intent-to-add for new files from the start",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "Cap proof string appended the link loop to the verify command and was refused as not matching the approved verify",
+        "better": "quote the cell verify command verbatim and put extra checks in the reason",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "frame-review.md: What the critic gets (no builder plan), First question (this product or any product), Beside the gold (one difference), The bar for a finding (quote a frame; predicted pass/fail is not a finding), Quick tells (five shapes), The list you return (ranking framing>hierarchy+density>motion>polish; frame/what/one-line fix; what could not be checked), Source (Stageshow MIT). SKILL.md lines 101-102 Check step critic line and line 172 More taste row link it.",
+      "commit": "1a869b90d83aef7a7a65553aa13aa562634246b3",
+      "files": [
+        "packages/bee/design/bee-design/additions/frame-review.md",
+        "packages/bee/design/bee-design/SKILL.md"
+      ],
+      "tests": "rg -n \"additions/frame-review.md\" packages/bee/design/bee-design/SKILL.md — green:static — docs-only cell; verify hits lines 102 and 172; a separate loop also confirmed all three relative links in frame-review.md resolve",
+      "deviations": [
+        "Credited Stageshow as MIT with its file name but no upstream URL or copyright holder — the local source copy carries neither and I did not invent one — hit an unforeseen obstacle",
+        "Defined the closest gold example as the brief-named product or the nearest benchmark from the taste-rubric reference duel — bee-design has no examples folder like Stageshow — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Staging into the shared index in this worktree was refused by the concurrent-worker guard — use a path-scoped commit with intent-to-add for new files from the start — doctrine",
+        "Cap proof string appended the link loop to the verify command and was refused as not matching the approved verify — quote the cell verify command verbatim and put extra checks in the reason — doctrine"
+      ],
+      "skipped": [
+        "docs/history/stageshow-frame-rehearsal/CONTEXT.md and plan.md: not present in either checkout; worked from the cell JSON and the two cited decisions",
+        "regen: regen_obligation_ack is wave-barrier, left to the leader"
+      ]
+    },
+    "skipped": [
+      "docs/history/stageshow-frame-rehearsal/CONTEXT.md and plan.md: not present in either checkout; worked from the cell JSON and the two cited decisions",
+      "regen: regen_obligation_ack is wave-barrier, left to the leader"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "frame-review.md states the critic never sees the builder plan",
+            "artifact": "packages/bee/design/bee-design/additions/frame-review.md"
+          },
+          {
+            "requirement": "frame-review.md states a finding needs a frame and names the closest gold example comparison",
+            "artifact": "packages/bee/design/bee-design/additions/frame-review.md"
+          },
+          {
+            "requirement": "bee-design SKILL.md links additions/frame-review.md from the table and the Check step",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "SKILL.md Check step names additions/frame-review.md",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/additions/frame-review.md",
+            "artifact": "packages/bee/design/bee-design/additions/frame-review.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/SKILL.md",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-02T09:42:47.955Z",
+        "recorded_by": "dab040c2-2713-4466-9404-80365ecb2aae",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -7,6 +7,7 @@ timestamp: 2026-07-14
 bee:
   id: pattern-20260714-non-ascii-in-a-ps1-without-bom-is
   lifecycle: active
+  areas: [onboarding]
   sources: ["docs/history/learnings/critical-patterns.md#PAT33", "original feature: installer-hardening"]
   polarity: pitfall
   critical: false

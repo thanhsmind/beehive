@@ -1,0 +1,158 @@
+{
+  "id": "hcc-4",
+  "feature": "herding-cockpit-completeness",
+  "title": "Add bee herding interrupt and cancel verbs with registry entries",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "hcc-1",
+    "hcc-2"
+  ],
+  "decisions": [
+    "c943feb9",
+    "7172010b",
+    "afec9446",
+    "9615be76"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::job_verbs && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/CONTEXT.md",
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/lock.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Create `herding/job_verbs.rs` (declare `mod job_verbs;` in herding.rs beside the other modules ~:72-112 and add `interrupt` and `cancel` rows to the dispatch table at herding.rs:118-140). Both verbs take `<job-id>` positional plus `--main-root` and `--json`, resolve the mailbox with the existing helpers, read pane_id from job.json, and build the transport with `run::transport_for_run(main_root)` (run.rs:2774; make it pub(super) if needed). interrupt (D1 c943feb9): refuse typed with a FIX line (pattern herding.rs:618) when the job dir, pane_id, or the pane is missing, or the mark is cancelled/cancel_pending; else `pane_send_key(pane, key)` with key `esc` for herdr and `Escape` for tmux (pick by the transport kind the config names), `mailbox::write_mark(.., Mark::Interrupted, \"user\")`, print `herding: interrupted job <id> (pane kept open)` (JSON: job_id, outcome interrupted, pane_id, closed_pane false). Never close the pane. cancel (D4 7172010b, fail-closed): `process_info(pane)` -> pid (Liveness::Alive{pid}); write mark cancel_pending; pane_close; poll `crate::lock::is_pid_alive(Some(pid as f64))` every 100 ms up to 5 s; gone -> write mark cancelled, print `herding: cancelled job <id> (pane closed, pid <pid> exited)`, exit 0; still alive -> exit non-zero with JSON `error: cancel_termination_failed` and text `FIX: kill pid <pid> by hand, then run bee herding cancel <id> again`, mark stays cancel_pending. A second cancel on a cancel_pending job skips the pane step and only re-confirms the pid. When process_info is Absent (no foreground pid) close the pane and record cancelled at once; Unknown refuses typed (never report cancelled unconfirmed). Registry: the CLI registry is hand-maintained (decisions d515c1d7, 3358743e): add `herding interrupt` and `herding cancel` entries to generated/registry_payload.json in the shape of the existing `herding status` entry (it is one long line; edit surgically, never reformat), and extend the flag-count ledger comment in catalog.rs (~:390-430, style `Net +N: a -> b`). If the write guard denies the generated path, follow the remedy the deny names. Tests in job_verbs.rs with the FakeCockpit/FakeHerdr fakes from hcc-2: interrupt sends the key and writes the mark; interrupt refuses on a cancelled mark; cancel confirms exit and marks cancelled (fake whose process_info returns Absent after close); cancel on a fake pid that stays alive reports cancel_termination_failed and keeps cancel_pending (use the current process pid as the always-alive pid); unknown job refuses with a FIX line. Then run `cargo test -p bee --test registry_contracts --test registry_dispatch` green.",
+  "must_haves": {
+    "truths": [
+      "bee herding interrupt <id> sends Escape, keeps the pane, marks interrupted",
+      "bee herding cancel <id> never prints cancelled before the pid is confirmed gone",
+      "registry_contracts and registry_dispatch tests pass with the two new verbs"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+        "substantive": "interrupt and cancel with tests, no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "entries for herding interrupt and herding cancel"
+      }
+    ],
+    "key_links": [
+      "herding.rs dispatch table routes interrupt and cancel to job_verbs",
+      "job_verbs uses mailbox::write_mark (hcc-1) and PaneTransport::pane_send_key (hcc-2)"
+    ],
+    "prohibitions": [
+      "No relaunch, retry, or fallback (D7 9615be76)",
+      "No cancelled outcome on an unconfirmed exit",
+      "No change to the whole-loop stop file",
+      "No reformat of registry_payload.json"
+    ]
+  },
+  "trace": {
+    "worker": "w-hcc-4",
+    "outcome": "bee herding interrupt and cancel verbs with registry entries",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "sync-ack: new herding verbs; the bee-herding skill and knowledge sync is hcc-10's docs cell after hcc-3..9 land"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T10:26:46.544Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T10:00:05.720Z",
+    "sync_ack": "new herding verbs; the bee-herding skill and knowledge sync is hcc-10's docs cell after hcc-3..9 land",
+    "plan_followed": true,
+    "mistakes": [
+      {
+        "wrong": "worker hcc-4-w1 committed fc7c3433 and wrote report-1.md but never ran bee cells finish, then wandered into probing shell paths",
+        "better": "the leader capped from the commit; the brief needs the cap spelled with the main-checkout bee path"
+      }
+    ],
+    "report": {
+      "outcome": "interrupt sends the escape key, keeps the pane and marks interrupted; cancel marks cancel_pending, closes the pane, confirms the pid exit within 5 s before marking cancelled, else cancel_termination_failed with a FIX line; both routed from herding.rs and registered",
+      "commit": "fc7c3433",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: plus --test registry_contracts and --test registry_dispatch — green:unit — 432 + 12 + 9 passed with the seven new job_verbs tests listed by name",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "worker hcc-4-w1 committed fc7c3433 and wrote report-1.md but never ran bee cells finish, then wandered into probing shell paths — the leader capped from the commit; the brief needs the cap spelled with the main-checkout bee path"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 706 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "h4-interrupt",
+            "status": "PASS",
+            "evidence": "job_verbs.rs:136 pane_send_key; job_verbs.rs:144 mailbox::write_mark(Interrupted); no pane_close"
+          },
+          {
+            "id": "h4-cancel-confirm",
+            "status": "PASS",
+            "evidence": "job_verbs.rs:190-196 Unknown refuses; job_verbs.rs:240-262 polls the pid, cancel_termination_failed with FIX line while alive; Cancelled written only after the pid is gone"
+          },
+          {
+            "id": "h4-registry",
+            "status": "PASS",
+            "evidence": "registry_payload.json changed 2 lines in fc7c3433; herding interrupt and herding cancel entries present; herding.rs:143-144 routes both to job_verbs"
+          },
+          {
+            "id": "h4-marks",
+            "status": "PASS",
+            "evidence": "job_verbs.rs:144,206,219,249,252,287,299 all use mailbox::write_mark"
+          },
+          {
+            "id": "h4-prohibitions",
+            "status": "PASS",
+            "evidence": "no retry/relaunch, no stop-file change, no TODO stubs"
+          },
+          {
+            "id": "h4-tests-real",
+            "status": "PASS",
+            "evidence": "seven job_verbs tests pass and exercise interrupt, cancel confirm, cancel_termination_failed, unknown job, second cancel"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-06T10:39:32.367Z"
+      }
+    ]
+  }
+}

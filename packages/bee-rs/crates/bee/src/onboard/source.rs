@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 pub struct Engine {
     pub plugin_root: PathBuf,
     pub skills_root: PathBuf,
+    pub design_root: PathBuf,
     pub plugin_hooks_dir: PathBuf,
     pub templates_dir: PathBuf,
     pub templates_lib_dir: PathBuf,
@@ -43,6 +44,14 @@ pub struct Engine {
     /// onboard copies it from here rather than from a `packages/bee/`
     /// template directory.
     pub opencode_plugin_dir: PathBuf,
+    /// pi-support D1: the Pi guard belt is a checked-in TypeScript EXTENSION
+    /// (Pi has no hook-config surface at all), auto-discovered from the
+    /// workspace cwd at `<cwd>/.pi/extensions/`. Exactly like
+    /// `opencode_plugin_dir` above, this checkout's OWN installed
+    /// `.pi/extensions/` tree IS the vendoring source, so a host project's
+    /// onboard copies it from here rather than from a `packages/bee/`
+    /// template directory. No global install, no user config.
+    pub pi_extension_dir: PathBuf,
 }
 
 impl Engine {
@@ -50,6 +59,7 @@ impl Engine {
         let templates_dir = plugin_root.join("packages").join("bee");
         Self {
             skills_root: plugin_root.join("skills"),
+            design_root: templates_dir.join("design"),
             plugin_hooks_dir: templates_dir.join("hooks"),
             templates_lib_dir: templates_dir.join("lib"),
             templates_prompts_dir: templates_dir.join("prompts"),
@@ -59,6 +69,7 @@ impl Engine {
             agents_block_template: templates_dir.join("AGENTS.block.md"),
             agents_windows_template: templates_dir.join("AGENTS.windows.md"),
             opencode_plugin_dir: plugin_root.join(".opencode").join("plugins"),
+            pi_extension_dir: plugin_root.join(".pi").join("extensions"),
             templates_dir,
             plugin_root,
         }

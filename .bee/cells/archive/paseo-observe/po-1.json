@@ -1,0 +1,282 @@
+{
+  "id": "po-1",
+  "feature": "paseo-observe",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Show Paseo worker state in status and sweep Paseo orphans",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-observe/CONTEXT.md",
+    "docs/history/paseo-observe/plan.md",
+    "docs/history/paseo-observe/reports/advisor.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "action": "Red first. paseo.rs: add stop_argv(id) = [stop, id]; ls_label_argv(key) = [ls, --label, key, --json] (the label filter with a key only, plus the all-directories flag if the CLI needs it, checked against paseo ls --help); logs_tail_argv(id, n, filter: Option<&str>) = [logs, id, --tail, n] plus [--filter, f] when given; permit_argv(agent, allow: bool, request: Option<&str>, all: bool) = [permit, allow|deny, agent] plus the request id or --all; parse_ls_agents(stdout) -> Vec<(id, label bee_job value, archived)> reading the first JSON value (array or object with an array), tolerant of capitalized keys like inspect; parse_pending_permissions(stdout) -> Vec<(request id, tool name)> from inspect's PendingPermissions (keys id or Id, and tool, name or toolName; keep unknown shapes as id only). herding.rs status: for a job whose job.json transport is paseo, take paseo_agent_id, run inspect through RealPaseoCli on the configured command, and add to its row transport, paseo_agent_id, paseo_state (working, idle, blocked, dead or unknown, from parse_inspect; a failed inspect is unknown) and, when blocked, permissions. A Paseo job is never stalled while paseo_state is working or blocked. mailbox.rs: give mark_orphans a Paseo arm that marks a Paseo job interrupted only when its state is dead or its agent is missing from the labelled list, it has no result for its round and no mark; an unknown state never marks. Status JSON gains untracked_paseo_agents: labelled, non-archived agents whose bee_job has no mailbox, or whose job has a final result or a mark; report only, never archive. Put the Paseo calls behind the PaseoCli trait so tests use a fake. Herdr and tmux rows stay byte-identical. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a Paseo job's status row shows transport, paseo_agent_id and paseo_state working, idle, blocked, dead or unknown",
+      "a blocked Paseo job's row lists each pending permission's request id and tool",
+      "a failed inspect shows unknown and never marks the job interrupted",
+      "the orphan sweep marks a Paseo job interrupted only when its agent is dead or missing and it has no result and no mark",
+      "status lists untracked labelled Paseo agents and archives nothing",
+      "herdr and tmux status rows and sweeps are unchanged and the existing herding tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "substantive": "stop, ls, logs-tail and permit argv and the ls and permission parsers"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding.rs",
+        "substantive": "the Paseo arm of status"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "substantive": "the Paseo arm of the orphan sweep"
+      }
+    ],
+    "key_links": [
+      "status branches on job.json transport before reading pane_id"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No archive call anywhere in status or the sweep",
+      "No change to herdr or tmux output"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": "bee herding status shows Paseo worker state and permissions; untracked agents found by job agent id; unreadable ls is unknown",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+    ],
+    "deviations": [
+      "Leader fixed the judge findings (untracked by job agent id, unreadable ls as unknown, occupancy keeps an unknown pane list unknown, log tail on ceiling and died)",
+      "sync-ack: skills/bee-herding covers the cockpit roles, not these herding verbs; the Paseo channel concept is the owning doc"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T04:21:31.663Z",
+    "behavior_change": true,
+    "verification_evidence": "712 passed 0 failed; full suite 4030 passed 0 failed; live: Claude worker in Paseo default mode was blocked on Bash, status showed blocked with the tool, the broker filed a permission intervention, bee herding permit allow let the same run finish done; evidence /home/thanhsmind/Projects/goglbe/beehive--wt--paseo-observe/docs/history/paseo-observe/evidence/status-blocked.json",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+    "claimed_at": null,
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T01:59:49.249Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:17:22.715Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:21:21.942Z"
+      },
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:21:31.663Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:22:15.743Z"
+      }
+    ],
+    "sync_ack": "skills/bee-herding covers the cockpit roles, not these herding verbs; the Paseo channel concept is the owning doc",
+    "mistakes": [
+      {
+        "wrong": "the first version trusted a key-only paseo ls --label filter and a labels field that real Paseo 0.10.3 does not emit",
+        "better": "check the real CLI output shape before writing a parser",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "bee herding status shows Paseo worker state and permissions; untracked agents found by job agent id; unreadable ls is unknown",
+      "commit": "fd6b69693 306b51f5a 87825bad1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding — green:live — 712 passed 0 failed; full suite 4030 passed 0 failed; live: Claude worker in Paseo default mode was blocked on Bash, status showed blocked with the tool, the broker filed a permission intervention, bee herding permit allow let the same run finish done; evidence /home/thanhsmind/Projects/goglbe/beehive--wt--paseo-observe/docs/history/paseo-observe/evidence/status-blocked.json",
+      "deviations": [
+        "Leader fixed the judge findings (untracked by job agent id, unreadable ls as unknown, occupancy keeps an unknown pane list unknown, log tail on ceiling and died)"
+      ],
+      "mistakes": [
+        "the first version trusted a key-only paseo ls --label filter and a labels field that real Paseo 0.10.3 does not emit — check the real CLI output shape before writing a parser — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "po1-t1",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po1-t2",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po1-t3",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po1-t4",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po1-t6",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po1-p",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06; truths checked against code and 711 herding tests"
+          },
+          {
+            "id": "po1-t5",
+            "status": "FAIL",
+            "evidence": "real paseo 0.10.3 ls JSON has no labels and ignores a key-only --label, so untracked_paseo_agents is always empty; an unparseable ls output also reads as an empty list and could mark every unfinished Paseo job missing"
+          }
+        ],
+        "failure_signature": "untracked_paseo_agents always empty against real paseo 0.10.3; unparseable ls treated as empty",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T04:17:22.715Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "po1-t1",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po1-t2",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po1-t3",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po1-t4",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po1-t5",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po1-t6",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          },
+          {
+            "id": "po1-p",
+            "status": "PASS",
+            "evidence": "re-judge 2026-10-06 after 87825bad1 and e61c4e918; 712 herding tests green"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T04:21:21.942Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-10-06T04:17:22.715Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "inline_reason": "the leader applied the judge fixes inline after the reopen; the original work ran through a dispatched worker",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a Paseo job's status row shows transport, paseo_agent_id and paseo_state working, idle, blocked, dead or unknown",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "a blocked Paseo job's row lists each pending permission's request id and tool",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "a failed inspect shows unknown and never marks the job interrupted",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "the orphan sweep marks a Paseo job interrupted only when its agent is dead or missing and it has no result and no mark",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "status lists untracked labelled Paseo agents and archives nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "herdr and tmux status rows and sweeps are unchanged and the existing herding tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T04:22:15.743Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

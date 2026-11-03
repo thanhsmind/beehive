@@ -7,6 +7,7 @@ timestamp: 2026-08-23
 bee:
   id: pattern-20260823-moving-a-shared-type-down-a-crate-keeps-sibling-call-sites-byte-identical
   lifecycle: active
+  areas: [rust-runtime]
   sources: ["tmux-herding-cockpit cell thc-2 (the shared screen classifier moved from the bee crate into fleet; the sibling cell's call sites broke on an alias until the old path was kept as a re-export)"]
   polarity: pitfall
   critical: false

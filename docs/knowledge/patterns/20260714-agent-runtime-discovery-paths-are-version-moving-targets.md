@@ -7,6 +7,7 @@ timestamp: 2026-07-14
 bee:
   id: pattern-20260714-agent-runtime-discovery-paths-are-version-moving-targets
   lifecycle: active
+  areas: [onboarding]
   sources: ["docs/history/learnings/critical-patterns.md#PAT34", "original feature: installer-hardening"]
   polarity: practice
   critical: false

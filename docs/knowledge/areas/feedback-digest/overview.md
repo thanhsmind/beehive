@@ -31,6 +31,7 @@ proprietary source code or sensitive details across repository boundaries.
 - How a repository generates and refreshes its digest: `generation-and-refresh.md`.
 - Safe cross-repository consumption and trust rules: `cross-repo-trust-boundary.md`.
 - Pain scoring, ranking, and self-improvement: `ranking-and-self-improvement.md`.
+- Bee defects filed upstream from host repos and read back as issues: [`bee-report-issues.md`](bee-report-issues.md).
 
 ## Entry Points & Triggers
 
@@ -62,3 +63,7 @@ proprietary source code or sensitive details across repository boundaries.
 
 - CLI verb and intake validation: `packages/bee-rs/crates/bee/src/verbs/feedback.rs`.
 - Evolving workflow skill: `skills/bee-evolving/SKILL.md`.
+
+## Concepts in this area
+
+- [Feedback Digest — Ranking and the Self-Improvement Process](ranking-and-self-improvement.md) — Grouping the collected view by what a title means, scoring each group deterministically, and the gated process that turns the ranked result into a shipped, human-approved improvement of the workflow itself.

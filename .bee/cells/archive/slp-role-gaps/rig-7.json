@@ -1,0 +1,198 @@
+{
+  "id": "rig-7",
+  "feature": "slp-role-gaps",
+  "title": "Require falsifiers from advisors, blind synthesis and an exact-commit reviewer",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "2fb9b028-3ef9-4e91-bbba-b20e30155cae",
+    "121947c8-f163-41e0-a151-a9bdfaeb7186",
+    "1fa910ba-ec15-4382-bf91-6fe5a9724027"
+  ],
+  "files": [
+    "packages/bee/prompts/advisor.md",
+    "packages/bee/prompts/reviewer.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-reviewing/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/slp-role-gaps/CONTEXT.md",
+    "docs/history/slp-role-gaps/plan.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "packages/bee/prompts/advisor.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-reviewing/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Per D4 (store 2fb9b028): after `Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.` in advisor.md, add that the answer ends with a recommendation, a confidence 0-100 (anchors: 90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess), and a falsifier: one concrete check that would prove the recommendation wrong, marked not run. In gates-and-delegation.md say the same once for hat seats (Hat wave, The moves) and blind lanes (move 1 Fan out), by pointer to the advisor prompt rule. Per D5 (store 121947c8): in Blind lanes Converge, Base step (`Read every proposal whole, never as a pile of parts.`), and in the hat-wave synthesis line, add: before scoring, relabel the proposals A, B, C in a shuffled order with lane and model names hidden; reveal names only after every proposal is scored; with one proposal, score it alone. Per D6 (store 1fa910ba): in reviewer.md and in bee-reviewing SKILL.md where the reviewer inputs are named (`gets the cumulative diff`), add: the review brief never carries the orchestrator's own verdict, leaning or expected findings; the reviewer first checks that HEAD equals the frozen review head and that the in-scope paths are clean, and on a mismatch stops and reports `REVIEW_HEAD_MISMATCH` with the fix line `re-freeze the review head, or commit or drop the stray paths`. Do not run bee dev regen: the leader runs it once at the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws",
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "The advisor prompt asks for recommendation, confidence and a falsifier",
+      "Convergence hides lane and model names until scoring is done",
+      "The reviewer checks the exact head and clean paths first"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/advisor.md",
+        "substantive": "falsifier and confidence rule"
+      },
+      {
+        "path": "skills/bee-hive/references/gates-and-delegation.md",
+        "substantive": "anonymized shuffled scoring, falsifier pointer"
+      }
+    ],
+    "key_links": [
+      "gates-and-delegation points at the advisor prompt rule instead of copying it",
+      "bee-reviewing SKILL.md and reviewer.md say the same head check"
+    ],
+    "prohibitions": [
+      "No neutrality-lint breakage in lane briefs",
+      "No new seat role",
+      "No size budget language"
+    ]
+  },
+  "trace": {
+    "worker": "rig7-fix",
+    "outcome": "Re-cut advisor and reviewer dispatch goldens and pinned the rig-1 key_link span",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+    ],
+    "deviations": [
+      "the REVIEWER golden in no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical also failed on the two new reviewer.md lines, which the rework list did not name — updated the REVIEWER literal too — reviewer.md is this cell own change, same red cause",
+      "sync-ack: both predicted skill files were touched by this cell first cap commit 4ebbc2edd; this reopen only re-cuts test goldens and a cli_shape pin"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T12:48:36.528Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify 9/9 green; also ran cargo test --release -p bee drivers:: (441 passed, 0 failed) and -p bee no_shipped_command_spelling (1 passed); full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws",
+    "claimed_at": "2026-10-15T12:43:30.336Z",
+    "mistakes": [
+      {
+        "wrong": "wrote a helper script under /tmp and the write guard refused it",
+        "better": "use the Edit tool or in-worktree paths from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Advisor and reviewer goldens carry the new prompt lines; rig-1 key_link span pinned in KNOWN_HISTORICAL_EXCEPTIONS (14 to 15)",
+      "commit": "bd933d3f0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws — green:unit — cell verify 9/9 green; also ran cargo test --release -p bee drivers:: (441 passed, 0 failed) and -p bee no_shipped_command_spelling (1 passed); full suite not run",
+      "deviations": [
+        "the REVIEWER golden in no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical also failed on the two new reviewer.md lines, which the rework list did not name — updated the REVIEWER literal too — reviewer.md is this cell own change, same red cause"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The advisor prompt asks for recommendation, confidence and a falsifier",
+            "artifact": "packages/bee/prompts/advisor.md"
+          },
+          {
+            "requirement": "Convergence hides lane and model names until scoring is done",
+            "artifact": "skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": "The reviewer checks the exact head and clean paths first",
+            "artifact": "packages/bee/prompts/reviewer.md"
+          }
+        ],
+        "recorded_at": "2026-10-15T12:29:40.915Z",
+        "recorded_by": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The advisor prompt asks for recommendation, confidence and a falsifier",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "Convergence hides lane and model names until scoring is done",
+            "artifact": "skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": "The reviewer checks the exact head and clean paths first",
+            "artifact": "packages/bee/prompts/reviewer.md"
+          }
+        ],
+        "recorded_at": "2026-10-15T12:50:33.973Z",
+        "recorded_by": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-15T12:43:25.525Z",
+    "reopened_reason": "Six advisor dispatch goldens in verbs/drivers/tests.rs went red on the new falsifier line, and the CLI-shape documented-invocation scan reads a rig-1 key_link span in the frozen plan.md as a command; both are this feature's own reds",
+    "sync_ack": "both predicted skill files were touched by this cell first cap commit 4ebbc2edd; this reopen only re-cuts test goldens and a cli_shape pin",
+    "no_mistakes": true,
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-advisor-falsifier",
+            "status": "PASS",
+            "evidence": "packages/bee/prompts/advisor.md:17"
+          },
+          {
+            "id": "truth-blind-shuffled-scoring",
+            "status": "PASS",
+            "evidence": "gates-and-delegation.md Converge Base step and hat-wave synthesis"
+          },
+          {
+            "id": "truth-reviewer-head-check",
+            "status": "PASS",
+            "evidence": "packages/bee/prompts/reviewer.md:3-4 and skills/bee-reviewing/SKILL.md:51-55"
+          },
+          {
+            "id": "rework-goldens-bytes-only",
+            "status": "PASS",
+            "evidence": "bd933d3f0 changes only expected bytes in drivers/tests.rs; no assert changed"
+          },
+          {
+            "id": "rework-pinned-row-exact",
+            "status": "PASS",
+            "evidence": "cli_shape.rs KNOWN_HISTORICAL_EXCEPTIONS 14 to 15; row is an exact substring of plan.md:177; no_shipped_command_spelling 1 passed"
+          },
+          {
+            "id": "tests-green",
+            "status": "PASS",
+            "evidence": "drivers:: 441 passed; instruction_laws 9 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-15T12:50:18.893Z"
+      }
+    ]
+  },
+  "status": "capped"
+}

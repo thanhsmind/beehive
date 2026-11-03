@@ -16,30 +16,43 @@ use super::hooks_wiring as hw;
 use super::merge::{
     agents_block_present, claude_md_imports_agents, extract_agents_block,
     extract_gitignore_block, gitignore_block_present, host_shell_is_powershell,
-    normalize_gitignore_for_compare, render_agents_block, render_gitignore_block,
+    normalize_gitignore_for_compare, render_agents_block, render_gitattributes_block,
+    render_gitignore_block,
 };
 use super::migration::{detect_worktree_migration, WorktreeMigration};
 use super::notices::has_prose_outside_block;
-use super::skills::{blocked_source_identity_skill_sync, compute_skill_sync, SkillSync};
+use super::render::{
+    render_skill_bytes, runtime_for_target_kind, validate_skill_markers, walk_skill_tree, Walk,
+};
+use super::skills::{
+    blocked_source_identity_skill_sync, compute_design_sync, compute_skill_sync, SkillSync,
+};
 use super::source::{read_source_release_identity, Engine};
 use super::templates as T;
 use super::util::{
-    exists, hash_file, join_rel, read_dir_sorted, read_json_if_exists, read_text_if_exists,
-    sha256_str,
+    exists, hash_file, is_under, join_rel, lstat_if_exists, read_dir_sorted,
+    read_dir_sorted_checked, read_json_if_exists, read_text_if_exists, realpath, sha256_str,
 };
 use crate::jsjson;
 use serde_json::{json, Map, Value};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct Options {
     pub repo_hooks: bool,
     pub claude_md: bool,
     pub global_skills: bool,
+    pub skillstation: bool,
     pub sync_skills: bool,
     pub force_downgrade: bool,
     pub plugin_source: bool,
+    /// 4cac0774: install the status display unless this run or the project
+    /// opted out. Never gated on `repo_hooks` or `plugin_source` — a Claude
+    /// plugin cannot supply a `statusLine`, so a plugin-first host gets the
+    /// display only if onboarding writes it.
+    pub statusline: bool,
     pub runtime: String,
+    pub design_packs: Option<Vec<String>>,
 }
 
 pub struct ComputedPlan {
@@ -47,10 +60,36 @@ pub struct ComputedPlan {
     pub bee_version: Option<String>,
     pub rendered_block: String,
     pub rendered_gitignore_block: String,
+    pub rendered_gitattributes_block: String,
     pub desired_managed: Value,
     pub skill_sync: SkillSync,
     pub codex_hybrid: bool,
     pub worktree_migration: WorktreeMigration,
+}
+
+pub const HUB_SKILLS: [&str; 1] = ["bee-deploying"];
+
+fn repo_claude_root() -> String {
+    T::REPO_SKILL_TARGETS
+        .iter()
+        .find(|(kind, _)| *kind == "repo-claude")
+        .map(|(_, segments)| segments.join("/"))
+        .unwrap_or_default()
+}
+
+fn publish_skillstation_items() -> Vec<Value> {
+    let root = repo_claude_root();
+    HUB_SKILLS
+        .iter()
+        .map(|skill| {
+            json!({
+                "action": "publish_skillstation",
+                "skill": skill,
+                "path": format!("{root}/{skill}"),
+                "target": "skillstation",
+            })
+        })
+        .collect()
 }
 
 fn plan_item(action: &str, path: &str) -> Value {
@@ -104,6 +143,25 @@ pub fn list_opencode_plugin_files(engine: &Engine) -> Vec<String> {
         .filter(|e| e.is_file && e.name.ends_with(".ts"))
         .map(|e| e.name)
         .collect()
+}
+
+/// pi-support D1: the Pi guard extension file(s) this checkout ships at
+/// `.pi/extensions/` — every plain `.ts` file, sorted. The exact shape of
+/// `list_opencode_plugin_files` above, for the exact same reason: a
+/// hand-written TypeScript belt is vendored "copy when missing or drifted",
+/// never rendered by the skill-tree pipeline (which has no pi target).
+pub fn list_pi_extension_files(engine: &Engine) -> Vec<String> {
+    let guard_dir = engine.pi_extension_dir.join("bee-guard");
+    if !exists(&guard_dir) {
+        return Vec::new();
+    }
+    let mut out: Vec<String> = read_dir_sorted(&guard_dir)
+        .into_iter()
+        .filter(|e| e.is_file && !e.is_symlink && e.name.ends_with(".ts"))
+        .map(|e| format!("bee-guard/{}", e.name))
+        .collect();
+    out.sort();
+    out
 }
 
 fn list_files_by_suffix(dir: &Path, suffix: &str) -> Vec<String> {
@@ -186,11 +244,11 @@ fn build_hook_versions(engine: &Engine) -> Value {
 
 /// Every managed-ledger group, paired with the HOST directory whose contents
 /// it fingerprints — i.e. every tree whose hand-edit makes `.bee/onboarding.json`
-/// a lie until onboarding re-runs. The two hash-a-string groups
-/// (`agents_block`, `gitignore_block`) carry `None`: they cover rendered blocks
-/// inside AGENTS.md / .gitignore, not a directory, and a hand-edit of those is
-/// caught by onboarding's own block comparison rather than by a path-scoped
-/// obligation.
+/// a lie until onboarding re-runs. The hash-a-string groups (`agents_block`,
+/// `gitignore_block`, `gitattributes_block`) carry `None`: they cover rendered
+/// blocks inside AGENTS.md / .gitignore / .gitattributes, not a directory, and a
+/// hand-edit of those is caught by onboarding's own block comparison rather
+/// than by a path-scoped obligation.
 ///
 /// `ledger_covered_roots()` projects this to the directory set that
 /// `verbs/cells.rs`'s regen obligation guards.
@@ -211,6 +269,7 @@ fn build_hook_versions(engine: &Engine) -> Value {
 const LEDGER_GROUPS: &[(&str, Option<&str>)] = &[
     ("agents_block", None),
     ("gitignore_block", None),
+    ("gitattributes_block", None),
     ("helpers", Some(".bee/bin")),
     ("lib", Some(".bee/bin/lib")),
     ("expertise", Some(".bee/expertise")),
@@ -237,6 +296,7 @@ pub fn build_managed_versions(
     engine: &Engine,
     rendered_block: &str,
     rendered_gitignore_block: &str,
+    rendered_gitattributes_block: &str,
     repo_hooks: bool,
     statusline: bool,
     codex_hybrid: bool,
@@ -251,6 +311,8 @@ pub fn build_managed_versions(
     let mut managed = Map::new();
     managed.insert("agents_block".into(), json!(sha256_str(rendered_block)));
     managed.insert("gitignore_block".into(), json!(sha256_str(rendered_gitignore_block)));
+    managed
+        .insert("gitattributes_block".into(), json!(sha256_str(rendered_gitattributes_block)));
     managed.insert(
         "helpers".into(),
         hash_map(&engine.templates_dir, list_template_helpers(engine)),
@@ -306,6 +368,10 @@ pub fn subset_managed(
     let mut out = Map::new();
     out.insert("agents_block".into(), js_or(get("agents_block"), Value::Null));
     out.insert("gitignore_block".into(), js_or(get("gitignore_block"), Value::Null));
+    out.insert(
+        "gitattributes_block".into(),
+        js_or(get("gitattributes_block"), Value::Null),
+    );
     out.insert("helpers".into(), js_or(get("helpers"), json!({})));
     out.insert("lib".into(), js_or(get("lib"), json!({})));
     out.insert("expertise".into(), js_or(get("expertise"), json!({})));
@@ -324,14 +390,388 @@ pub fn subset_managed(
 /// coreChangesNeeded (l. 3389): the legacy-global refresh never drives
 /// up_to_date/changes_needed.
 pub fn core_changes_needed(plan: &[Value]) -> bool {
-    plan.iter().any(|i| i["action"] != "refresh_legacy_global_skill")
+    plan.iter().any(|i| {
+        i["action"] != "refresh_legacy_global_skill" && i["action"] != "blocked_verify_skill"
+    })
+}
+
+// ── .bee/verify/ → every runtime skill home (verification-ships-to-hosts D3) ──
+//
+// `.bee/verify/<name>/` is SOURCE, and it belongs to the HOST repo: it is a
+// `verify-<app>` skill an agent generated with `bee-verifying`, driving that
+// repo's real product. Every runtime skill home gets a rendered copy, so ONE
+// generation reaches Claude, Codex and OpenCode alike instead of the agent
+// hand-writing three duplicates that drift on a teammate's fresh clone.
+//
+// This path CREATES and it UPDATES. It never removes anything, ever — there is
+// no removal item, no removal verb and no removal code path anywhere in it,
+// and that is the whole design (plan.md, "Render, never prune"). The `bee-*`
+// sync may prune a target directory absent from source because bee MINTS those
+// names and nobody else does; `verify-` is a generic English word whose source
+// lives in the mutable host repo. Inheriting the mechanism without that
+// ownership axiom would inherit only the deletions: a host-authored
+// `verify-payments/` would vanish during a routine `bee onboard --apply`, with
+// no trash and no journal. Staleness is owned instead by `bee-verify-upkeep`
+// (D1), an agent pass running in a git working tree, where a removal is
+// visible, reviewable and committable.
+//
+// It is also strictly ADDITIVE to bee's own skill sync (section 7): a missing,
+// empty, unreadable or refused `.bee/verify/` yields zero items and blocks
+// nothing, and a malformed host-authored SKILL.md reports only its own item —
+// never the whole-tree `blocked_render` refusal `compute_skill_sync` raises
+// for the engine's own tree. Host bytes must not be able to stop bee
+// installing itself.
+
+/// The `(kind, target root, POSIX relative root)` triple for every runtime
+/// skill home, resolved from `REPO_SKILL_TARGETS` — never a hand-written list,
+/// so a fourth runtime joins that table and this path follows for free.
+pub fn verify_render_targets(repo_root: &Path) -> Vec<(&'static str, PathBuf, String)> {
+    T::REPO_SKILL_TARGETS
+        .iter()
+        .map(|(kind, segments)| {
+            let mut p = repo_root.to_path_buf();
+            for s in *segments {
+                p.push(s);
+            }
+            (*kind, p, segments.join("/"))
+        })
+        .collect()
+}
+
+/// `<repo>/.bee/verify` — the one source root this path reads.
+pub fn verify_source_root(repo_root: &Path) -> PathBuf {
+    repo_root.join(".bee").join("verify")
+}
+
+/// Root preflight, shared by the planner and the apply arm so the two can
+/// never disagree: `Some(reason)` refuses the WHOLE root with zero items and
+/// zero writes.
+///
+/// Absent is not an error — it is the common case, every repo that never
+/// generated a verification skill. A symlinked root is refused because
+/// rendering through it would write into a tree bee never resolved, and a root
+/// resolving onto (or containing, or contained by) a runtime skill home is
+/// refused because source and target would be the same tree.
+pub fn verify_root_refusal(repo_root: &Path) -> Option<String> {
+    let source_root = verify_source_root(repo_root);
+    let Some(st) = lstat_if_exists(&source_root) else {
+        return Some(".bee/verify is absent - nothing to render".into());
+    };
+    if st.is_symlink {
+        return Some(".bee/verify is a symlink - refused, never followed or written through".into());
+    }
+    if !st.is_dir {
+        return Some(".bee/verify is not a directory - refused, nothing rendered".into());
+    }
+    let real_source = realpath(&source_root).unwrap_or_else(|| source_root.clone());
+    for (_, target_root, rel_root) in verify_render_targets(repo_root) {
+        let real_target = realpath(&target_root).unwrap_or(target_root);
+        if real_source == real_target
+            || is_under(&real_source, &real_target)
+            || is_under(&real_target, &real_source)
+        {
+            return Some(format!(
+                ".bee/verify resolves onto {rel_root} - refused, a skill home is never its own source"
+            ));
+        }
+    }
+    None
+}
+
+/// Per-skill marker grammar, checked against the HOST's bytes. Errors are
+/// reported for this entry alone; they never reach the tree-wide refusal.
+pub fn verify_marker_errors(source_dir: &Path) -> Vec<String> {
+    let mut errors = Vec::new();
+    let walk = walk_skill_tree(source_dir, None);
+    if walk.blocked.is_some() {
+        return errors; // the symlink policy answers this one, not the grammar
+    }
+    for (rel, _) in &walk.files {
+        let Ok(buf) = std::fs::read(join_rel(source_dir, rel)) else { continue };
+        if !super::render::buf_has_marker_bytes(&buf) {
+            continue;
+        }
+        for e in validate_skill_markers(&String::from_utf8_lossy(&buf)) {
+            errors.push(format!("{rel}: {e}"));
+        }
+    }
+    errors
+}
+
+/// Drift, measured the copy-only way: every SOURCE file must be present in the
+/// target with the rendered bytes, and every source directory must exist. A
+/// file the target carries and the source does not is NOT drift — nothing
+/// prunes it, so reporting it would plan a write that changes nothing and
+/// break idempotence.
+fn verify_skill_drifted(source_walk: &Walk, target_walk: &Walk) -> bool {
+    source_walk.files.iter().any(|(rel, hash)| target_walk.file_hash(rel) != Some(hash.as_str()))
+        || source_walk.dirs.iter().any(|d| !target_walk.dirs.contains(d))
+}
+
+fn verify_record(repo_root: &Path) -> Option<Map<String, Value>> {
+    read_json_if_exists(&repo_root.join(".bee").join("onboarding.json"))?
+        .get("managed")?
+        .get("verify_skills")?
+        .as_object()
+        .cloned()
+}
+
+fn mtime_of(p: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(p).ok()?.modified().ok()
+}
+
+fn verify_host_edit(
+    source_dir: &Path,
+    target_dir: &Path,
+    source_walk: &Walk,
+    target_walk: &Walk,
+    record: Option<&Value>,
+) -> Option<String> {
+    let record = record.and_then(Value::as_object);
+    for (rel, source_hash) in &source_walk.files {
+        let Some(installed_hash) = target_walk.file_hash(rel) else {
+            continue;
+        };
+        if installed_hash == source_hash {
+            continue;
+        }
+        match record.and_then(|r| r.get(rel)).and_then(Value::as_str) {
+            Some(written) => {
+                if written != installed_hash {
+                    return Some(rel.clone());
+                }
+            }
+            None => {
+                let (Some(installed), Some(source)) =
+                    (mtime_of(&join_rel(target_dir, rel)), mtime_of(&join_rel(source_dir, rel)))
+                else {
+                    continue;
+                };
+                let Some(gap) = installed.duration_since(source).ok() else {
+                    continue;
+                };
+                if gap > std::time::Duration::from_secs(2) {
+                    return Some(rel.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn verify_item(action: &str, skill: &str, path: &str, scope: &str, target: &str) -> Value {
+    let mut m = Map::new();
+    m.insert("action".into(), json!(action));
+    m.insert("skill".into(), json!(skill));
+    m.insert("path".into(), json!(path));
+    m.insert("scope".into(), json!(scope));
+    m.insert("target".into(), json!(target));
+    Value::Object(m)
+}
+
+fn verify_blocked_item(skill: &str, path: &str, scope: &str, target: &str, reason: String) -> Value {
+    let mut v = verify_item("blocked_verify_skill", skill, path, scope, target);
+    v.as_object_mut().unwrap().insert("reason".into(), json!(reason));
+    v
+}
+
+/// The copy-only planner: one `copy_verify_skill` item per (source entry,
+/// runtime home) pair that is missing or drifted, and never a removal of any
+/// kind.
+pub fn compute_verify_skill_items(repo_root: &Path) -> Vec<Value> {
+    let mut items: Vec<Value> = Vec::new();
+    if verify_root_refusal(repo_root).is_some() {
+        return items; // silent by design: bee's own sync is untouched
+    }
+    let source_root = verify_source_root(repo_root);
+    // An UNREADABLE root reads as zero entries, not as an error that stops
+    // onboarding: `read_dir_sorted_checked` separates "cannot open" from
+    // "opened and empty" so a permission-denied directory cannot be mistaken
+    // for a directory whose skills were all deleted.
+    let Ok(entries) = read_dir_sorted_checked(&source_root) else {
+        return items;
+    };
+    let targets = verify_render_targets(repo_root);
+    let recorded = verify_record(repo_root);
+    for entry in entries {
+        // Enumeration is the WHOLE root, deliberately not
+        // `list_bee_skill_entries` — that helper filters on the `bee-` prefix,
+        // which is bee's own deletion domain and says nothing about a host's
+        // generated skill. Here the containing directory IS the namespace.
+        if entry.is_symlink || !entry.is_dir {
+            continue; // never followed; a stray file is not a skill directory
+        }
+        let name = &entry.name;
+        let source_dir = source_root.join(name);
+        let source_rel = format!(".bee/verify/{name}");
+        if let Some(b) = walk_skill_tree(&source_dir, None).blocked {
+            items.push(verify_blocked_item(
+                name,
+                &format!("{source_rel}/{}", b.path),
+                "source",
+                "source",
+                format!("source {source_rel} contains a {} at {} - skipped", b.reason, b.path),
+            ));
+            continue;
+        }
+        let marker_errors = verify_marker_errors(&source_dir);
+        if !marker_errors.is_empty() {
+            items.push(verify_blocked_item(
+                name,
+                &source_rel,
+                "source",
+                "source",
+                format!(
+                    "source {source_rel} has malformed bee:only markers - skipped, nothing rendered: {}",
+                    marker_errors.join("; ")
+                ),
+            ));
+            continue;
+        }
+        for (kind, target_root, rel_root) in &targets {
+            let runtime = runtime_for_target_kind(kind);
+            let render = |buf: &[u8]| render_skill_bytes(buf, runtime);
+            let source_walk = walk_skill_tree(&source_dir, Some(&render));
+            let target_dir = target_root.join(name);
+            let rel = format!("{rel_root}/{name}");
+            match lstat_if_exists(&target_dir) {
+                None => items.push(verify_item("copy_verify_skill", name, &rel, "installed", kind)),
+                Some(st) if st.is_symlink => items.push(verify_blocked_item(
+                    name,
+                    &rel,
+                    "installed",
+                    kind,
+                    format!("installed {rel} is a symlink (plausibly a live checkout) - skipped, never written through"),
+                )),
+                Some(st) if !st.is_dir => items.push(verify_blocked_item(
+                    name,
+                    &rel,
+                    "installed",
+                    kind,
+                    format!("installed {rel} is not a directory - skipped, never removed"),
+                )),
+                Some(_) => {
+                    let target_walk = walk_skill_tree(&target_dir, None);
+                    if let Some(b) = &target_walk.blocked {
+                        items.push(verify_blocked_item(
+                            name,
+                            &format!("{rel}/{}", b.path),
+                            "installed",
+                            kind,
+                            format!(
+                                "installed {rel} contains a {} at {} - skipped, nothing inside it written",
+                                b.reason, b.path
+                            ),
+                        ));
+                        continue;
+                    }
+                    if !verify_skill_drifted(&source_walk, &target_walk) {
+                        continue;
+                    }
+                    let host_edit = verify_host_edit(
+                        &source_dir,
+                        &target_dir,
+                        &source_walk,
+                        &target_walk,
+                        recorded.as_ref().and_then(|r| r.get(&rel)),
+                    );
+                    match host_edit {
+                        None => {
+                            items.push(verify_item("copy_verify_skill", name, &rel, "installed", kind))
+                        }
+                        Some(file) => items.push(verify_blocked_item(
+                            name,
+                            &rel,
+                            "installed",
+                            kind,
+                            format!(
+                                "installed {rel} has edits bee did not write ({file}) - skipped, never overwritten. FIX: copy the edits into .bee/verify/{name}, then re-run bee onboard --apply"
+                            ),
+                        )),
+                    }
+                }
+            }
+        }
+    }
+    items
 }
 
 // ── computePlan ────────────────────────────────────────────────────────────
 
+/// host-packaging-gaps D2: the roster key (`team`, or the legacy `models`)
+/// that should gain the default Pi table, or None. None when: the offer is
+/// already recorded (a deleted table stays deleted); the tracked config is
+/// absent, unparseable or not an object; it has neither a `team` nor a
+/// `models` object (named narrowing: nothing to extend); or the MERGED view
+/// (config.local.json overlay included) already has `team.pi`. `team` wins
+/// over `models`, as fold_team_key does.
+fn pi_team_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<&'static str> {
+    if onboarding.and_then(|o| o.get(T::PI_TEAM_OFFERED_KEY)) == Some(&Value::Bool(true)) {
+        return None;
+    }
+    let tracked = read_json_if_exists(&repo_root.join(".bee").join("config.json"))?;
+    let table = roster_table(tracked.as_object()?)?;
+    let merged = crate::state::read_config_raw(repo_root);
+    if merged.get("team").and_then(|t| t.get("pi")).is_some() {
+        return None;
+    }
+    Some(table)
+}
+
+fn roster_table(tracked: &Map<String, Value>) -> Option<&'static str> {
+    match tracked.get("team") {
+        Some(team) => team.is_object().then_some("team"),
+        None => tracked.get("models").filter(|m| m.is_object()).map(|_| "models"),
+    }
+}
+
+fn design_role_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<(&'static str, Vec<String>)> {
+    if onboarding.and_then(|o| o.get(T::DESIGN_ROLE_OFFERED_KEY)) == Some(&Value::Bool(true)) {
+        return None;
+    }
+    let tracked = read_json_if_exists(&repo_root.join(".bee").join("config.json"))?;
+    let tracked = tracked.as_object()?;
+    let table = roster_table(tracked)?;
+    let merged = crate::state::read_config_raw(repo_root);
+    let runtimes: Vec<String> = T::default_config()["team"]
+        .as_object()?
+        .iter()
+        .filter(|(runtime, roles)| {
+            roles.get("design").is_some()
+                && tracked.get(table).and_then(|t| t.get(runtime.as_str())).is_some_and(Value::is_object)
+                && merged
+                    .get("team")
+                    .and_then(|t| t.get(runtime.as_str()))
+                    .and_then(|r| r.get("design"))
+                    .is_none()
+        })
+        .map(|(runtime, _)| runtime.clone())
+        .collect();
+    (!runtimes.is_empty()).then_some((table, runtimes))
+}
+
+fn known_design_packs(recorded: Option<&Value>) -> Vec<String> {
+    let named = recorded.and_then(Value::as_array);
+    T::DESIGN_PACKS
+        .iter()
+        .filter(|p| named.is_some_and(|a| a.iter().any(|v| v == **p)))
+        .map(|p| p.to_string())
+        .collect()
+}
+
 pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ComputedPlan {
     let mut plan: Vec<Value> = Vec::new();
     let codex_hybrid = opts.plugin_source && hw::runtime_covers_codex(&opts.runtime);
+
+    // 4cac0774: ONE value per run, meaning "bee owns this host's status entry".
+    // It gates stage 3b, the settings write in stage 5c, AND the managed
+    // manifest — computed once, on purpose. Feeding the manifest the PRE-apply
+    // `statusline_opt_in` instead would leave a freshly written host with an
+    // entry but no recorded hashes, so the post-apply recheck would report
+    // `changes_needed` for ever and `scripts/install.sh` would fail the install.
+    let statusline_settings_absent = hw::statusline_settings_absent(repo_root);
+    let statusline =
+        opts.statusline && (hw::statusline_opt_in(repo_root) || statusline_settings_absent);
 
     // 0. worktree-local coordination migration (msn-18d).
     let worktree_migration = detect_worktree_migration(repo_root);
@@ -353,6 +793,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             bee_version: None,
             rendered_block: String::new(),
             rendered_gitignore_block: String::new(),
+            rendered_gitattributes_block: String::new(),
             desired_managed: json!({}),
             skill_sync: blocked_source_identity_skill_sync(
                 engine,
@@ -371,6 +812,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         host_shell_is_powershell(repo_root).then_some(engine.agents_windows_template.as_path()),
     );
     let rendered_gitignore_block = render_gitignore_block();
+    let rendered_gitattributes_block = render_gitattributes_block();
 
     // 1. AGENTS.md BEE block
     let agents_path = repo_root.join("AGENTS.md");
@@ -410,8 +852,41 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
-    // 3. vendored helpers + lib (copy when missing or drifted)
     let onboarding = read_json_if_exists(&repo_root.join(".bee").join("onboarding.json"));
+    let recorded_packs = read_json_if_exists(&repo_root.join(".bee").join("config.json"))
+        .and_then(|c| c.get("design")?.get("packs").cloned());
+    let design_packs =
+        opts.design_packs.clone().unwrap_or_else(|| known_design_packs(recorded_packs.as_ref()));
+
+    // 2b. host-packaging-gaps D2: offer the Pi role table ONCE to an existing
+    // config that lacks it — the only step that edits a present config.json.
+    if let Some(table) = pi_team_target(repo_root, onboarding.as_ref()) {
+        let mut m = Map::new();
+        m.insert("action".into(), json!("add_pi_team"));
+        m.insert("path".into(), json!(".bee/config.json"));
+        m.insert("table".into(), json!(table));
+        plan.push(Value::Object(m));
+    }
+    if let Some((table, runtimes)) = design_role_target(repo_root, onboarding.as_ref()) {
+        let mut m = Map::new();
+        m.insert("action".into(), json!("add_design_role"));
+        m.insert("path".into(), json!(".bee/config.json"));
+        m.insert("table".into(), json!(table));
+        m.insert("runtimes".into(), json!(runtimes));
+        plan.push(Value::Object(m));
+    }
+    if let Some(packs) = &opts.design_packs {
+        let wanted = if packs.is_empty() { json!("none") } else { json!(packs) };
+        if recorded_packs.as_ref() != Some(&wanted) {
+            let mut m = Map::new();
+            m.insert("action".into(), json!("set_design_packs"));
+            m.insert("path".into(), json!(".bee/config.json"));
+            m.insert("packs".into(), wanted);
+            plan.push(Value::Object(m));
+        }
+    }
+
+    // 3. vendored helpers + lib (copy when missing or drifted)
     for name in list_template_helpers(engine) {
         let source = read_text_if_exists(&engine.templates_dir.join(&name));
         let target = repo_root.join(".bee").join("bin").join(&name);
@@ -534,8 +1009,8 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
-    // 3b. statusline pair (opt-in sync)
-    if hw::statusline_opt_in(repo_root) {
+    // 3b. statusline script (default sync — 4cac0774)
+    if statusline {
         for name in list_template_statusline(engine) {
             let source = read_text_if_exists(&engine.templates_statusline_dir.join(&name));
             let target = repo_root.join(".claude").join(&name);
@@ -565,6 +1040,42 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
+    // 3g. Pi guard extension (pi-support D1): the fourth belt, vendored the
+    // same "copy when missing or drifted" way 3f vendors the OpenCode plugin
+    // — this checkout's OWN `.pi/extensions/` tree is the source (see
+    // Engine::pi_extension_dir). Pi auto-discovers `<cwd>/.pi/extensions/`,
+    // so copying the file into the host project IS the whole install: no
+    // global directory, no user config, no hook JSON.
+    let pi_extension_files = list_pi_extension_files(engine);
+    if !pi_extension_files.is_empty() {
+        let legacy_file = repo_root.join(".pi").join("extensions").join("bee-guard.ts");
+        if exists(&legacy_file) || lstat_if_exists(&legacy_file).is_some() {
+            plan.push(plan_item("remove_pi_extension", ".pi/extensions/bee-guard.ts"));
+        }
+        let guard_dir = repo_root.join(".pi").join("extensions").join("bee-guard");
+        if !exists(&guard_dir) {
+            plan.push(plan_item("create_dir", ".pi/extensions/bee-guard"));
+        }
+        for rel in &pi_extension_files {
+            let source = read_text_if_exists(&engine.pi_extension_dir.join(rel));
+            let target = repo_root.join(".pi").join("extensions").join(rel);
+            if read_text_if_exists(&target) != source {
+                plan.push(plan_item("copy_pi_extension", &format!(".pi/extensions/{rel}")));
+            }
+        }
+        if exists(&guard_dir) {
+            let mut stale: Vec<String> = read_dir_sorted(&guard_dir)
+                .into_iter()
+                .filter(|e| e.is_file && !e.is_symlink && e.name.ends_with(".ts") && !pi_extension_files.contains(&format!("bee-guard/{}", e.name)))
+                .map(|e| e.name)
+                .collect();
+            stale.sort();
+            for name in stale {
+                plan.push(plan_item("remove_pi_extension", &format!(".pi/extensions/bee-guard/{name}")));
+            }
+        }
+    }
+
     // 4. learnings stub
     if !exists(&join_rel(repo_root, "docs/history/learnings/critical-patterns.md")) {
         plan.push(plan_item("create_stub", "docs/history/learnings/critical-patterns.md"));
@@ -587,6 +1098,18 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     ) != rendered_gitignore_block
     {
         plan.push(plan_item("update_gitignore_block", ".gitignore"));
+    }
+
+    let gitattributes_text = read_text_if_exists(&repo_root.join(".gitattributes"));
+    if gitattributes_text.trim().is_empty() {
+        plan.push(plan_item("create_gitattributes_block", ".gitattributes"));
+    } else if !gitignore_block_present(&gitattributes_text) {
+        plan.push(plan_item("append_gitattributes_block", ".gitattributes"));
+    } else if normalize_gitignore_for_compare(
+        extract_gitignore_block(&gitattributes_text).as_deref().unwrap_or(""),
+    ) != rendered_gitattributes_block
+    {
+        plan.push(plan_item("update_gitattributes_block", ".gitattributes"));
     }
 
     // 5-pre. STALE VENDORED HOOKS (R6 cutover — new action).
@@ -675,6 +1198,20 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
+    // 5b-statusline. The host's own status entry (4cac0774), add-only.
+    //
+    // Ordered AFTER stage 5's `merge_repo_hook_settings` on purpose: both write
+    // `.claude/settings.json`, each re-reads it fresh at apply time, and the
+    // apply loop backs the file up exactly once — whichever writer reaches it
+    // first. Nothing here is gated on `repo_hooks` or `plugin_source`.
+    if statusline && statusline_settings_absent {
+        plan.push(plan_item("merge_statusline_settings", ".claude/settings.json"));
+    }
+
+    if hw::worktree_tool_allow_missing(repo_root) {
+        plan.push(plan_item("merge_worktree_tool_allow", ".claude/settings.json"));
+    }
+
     // 5c. Codex user-config status line (machine-level, add-only)
     if hw::codex_statusline_missing() {
         plan.push(plan_item("ensure_codex_statusline", "~/.codex/config.toml"));
@@ -697,12 +1234,15 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     // shape (opencode-support oc-14, D4).
     plan.extend(compute_opencode_agent_file_plan(engine, repo_root));
 
-    // 6. onboarding.json drift (managed versions)
-    let statusline = hw::statusline_opt_in(repo_root);
+    // 6. onboarding.json drift (managed versions) — `statusline` is the single
+    // post-plan value computed at the top of this function, never a fresh
+    // `statusline_opt_in` read (see its comment: that is the one-pass
+    // convergence the installer's recheck depends on).
     let desired_managed = build_managed_versions(
         engine,
         &rendered_block,
         &rendered_gitignore_block,
+        &rendered_gitattributes_block,
         opts.repo_hooks,
         statusline,
         codex_hybrid,
@@ -728,7 +1268,9 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
 
     // 7. skill sync (D1-D5, per target)
     let skill_sync = if opts.sync_skills {
-        compute_skill_sync(engine, repo_root, opts.global_skills)
+        compute_skill_sync(engine, repo_root, opts.global_skills, &design_packs)
+    } else if opts.design_packs.is_some() || recorded_packs.is_some() {
+        compute_design_sync(engine, repo_root, &design_packs)
     } else {
         SkillSync {
             source_root: engine.skills_root.join("bee-hive"),
@@ -746,11 +1288,26 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
+    if opts.skillstation && opts.sync_skills && skill_sync.blocked.is_none() {
+        plan.extend(publish_skillstation_items());
+    }
+
+    // 8. host-generated verification skills (verification-ships-to-hosts D3).
+    //
+    // Appended AFTER section 7 and computed independently of it: these items
+    // read the HOST's `.bee/verify/`, never the engine's skill tree, so
+    // nothing a host wrote there can withhold, block or reorder bee's own
+    // install.
+    if opts.sync_skills {
+        plan.extend(compute_verify_skill_items(repo_root));
+    }
+
     ComputedPlan {
         plan,
         bee_version,
         rendered_block,
         rendered_gitignore_block,
+        rendered_gitattributes_block,
         desired_managed,
         skill_sync,
         codex_hybrid,
@@ -769,7 +1326,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let engine = super::Engine::from_plugin_root(dir.path().to_path_buf());
         // Every optional group ON, so the builder emits its widest key set.
-        let managed = super::build_managed_versions(&engine, "block", "gitignore", true, true, true);
+        let managed =
+            super::build_managed_versions(&engine, "block", "gitignore", "attrs", true, true, true);
         let built: Vec<&String> = managed.as_object().unwrap().keys().collect();
         let classified: Vec<&str> = super::LEDGER_GROUPS.iter().map(|(k, _)| *k).collect();
 
@@ -796,13 +1354,16 @@ mod tests {
     #[test]
     fn subset_managed_ignores_prompts_and_optional_maps() {
         let managed = json!({
-            "agents_block": "a", "gitignore_block": "g",
+            "agents_block": "a", "gitignore_block": "g", "gitattributes_block": "ga",
             "helpers": {"x":"1"}, "lib": {}, "expertise": {}, "prompts": {"p":"9"},
             "repo_hooks": {"h":"1"}, "statusline": {"s":"1"}, "codex_hooks": {"c":"1"}
         });
         let bare = subset_managed(Some(&managed), false, false, false);
         let keys: Vec<&str> = bare.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-        assert_eq!(keys, vec!["agents_block", "gitignore_block", "helpers", "lib", "expertise"]);
+        assert_eq!(
+            keys,
+            vec!["agents_block", "gitignore_block", "gitattributes_block", "helpers", "lib", "expertise"]
+        );
         let full = subset_managed(Some(&managed), true, true, true);
         let keys: Vec<&str> = full.as_object().unwrap().keys().map(|k| k.as_str()).collect();
         assert_eq!(
@@ -810,6 +1371,7 @@ mod tests {
             vec![
                 "agents_block",
                 "gitignore_block",
+                "gitattributes_block",
                 "helpers",
                 "lib",
                 "expertise",

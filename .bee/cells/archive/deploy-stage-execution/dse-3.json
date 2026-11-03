@@ -1,0 +1,73 @@
+{
+  "id": "dse-3",
+  "feature": "deploy-stage-execution",
+  "role": "test",
+  "lane": "high-risk",
+  "title": "Prove deployment payload and authorization live without publication",
+  "action": "Update the semantic-routing verification map, including the positional release command. Build and install the candidate into a fresh disposable repository. Execute the exact prepared herding payload through agy-flash against a harmless release.sh stub that records cwd, argv, dispatch ID, and audit version. Prove ordinary gather isolation, successful authorization, and replay refusal. Do not tag, push, publish, or invoke the real release script. Refresh and check the release manifest.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/deploy-stage-execution/CONTEXT.md",
+    ".bee/verify/verify-app/features/semantic-role-routing.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/semantic-role-routing.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [
+    "dse-2"
+  ],
+  "decisions": [
+    "38edea83",
+    "c0a4d406"
+  ],
+  "must_haves": {
+    "truths": [
+      "A fresh installed exact payload executes the harmless stub with the authorized argv, environment, and main cwd.",
+      "An ordinary gather payload remains byte-identical, read-only, and worktree rooted.",
+      "The valid permit authorizes once and replay refuses.",
+      "Feature proof performs no real release mutation or publication."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/specs/doctrine-layer.md"
+  ],
+  "acceptance": "Retained green:live evidence proves the repaired user-facing deployment path before merge.",
+  "status": "capped",
+  "trace": {
+    "worker": "dse-live-proof",
+    "outcome": "Updated semantic routing verification map to positional release command and proved deployment payload execution live in a disposable sandbox without publication",
+    "files_changed": [
+      ".bee/verify/verify-app/features/semantic-role-routing.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T15:54:17.153Z",
+    "behavior_change": false,
+    "verification_evidence": "drivers::tests passed and live sandbox proved deploy payload execution with main cwd, positional argv, single-use permit authorization, and replay refusal",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "01a09fa4-9ac5-747b-a74c-ed78ef782f86",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-14T15:40:47.091Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Updated semantic routing verification map to positional release command and proved deployment payload execution live in a disposable sandbox without publication",
+      "commit": "a26ebbe0",
+      "files": [
+        ".bee/verify/verify-app/features/semantic-role-routing.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check — green:live — drivers::tests passed and live sandbox proved deploy payload execution with main cwd, positional argv, single-use permit authorization, and replay refusal",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

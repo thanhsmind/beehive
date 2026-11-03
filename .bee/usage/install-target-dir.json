@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "install-target-dir",
+  "closed_at": "2026-08-31T01:12:20.887Z",
+  "sessions": [
+    {
+      "session_id": "b5e31bf7-2545-46a3-a36e-1b508c43cdf4",
+      "models": {
+        "claude-fable-5": {
+          "input": 264,
+          "output": 61428,
+          "cache_write": 667612,
+          "cache_read": 18402201,
+          "new": 729304,
+          "cached": 18402201,
+          "total": 19131505
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1788136846807,
+      "ended_ms": 1788138737306,
+      "totals": {
+        "new": 729304,
+        "cached": 18402201,
+        "total": 19131505
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 729304,
+      "cached": 18402201,
+      "total": 19131505
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 729304,
+      "cached": 18402201,
+      "total": 19131505
+    }
+  }
+}

@@ -443,8 +443,16 @@ pub(crate) enum AreasSource {
     None,
 }
 
-/// buildPromotion(root, {work}). None => delegate.
 pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Promo> {
+    build_promotion_split(root, root, dir, work)
+}
+
+pub(crate) fn build_promotion_split(
+    store_root: &Path,
+    docs_root: &Path,
+    dir: &Path,
+    work: &str,
+) -> Option<Promo> {
     let work_id = work.trim_matches(js_is_space);
     if work_id.is_empty() {
         return Some(Promo::Thrown(
@@ -452,11 +460,9 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
         ));
     }
     let concepts = collect_concepts(dir)?;
-    // D5 then D1/D6: a bee.work-item concept whose bee.id matches always
-    // wins; otherwise docs/history/<work_id>/CONTEXT.md and/or plan.md,
-    // whichever exist; otherwise no anchor at all — unknown_work, unchanged
-    // byte for byte (D38), the same shared resolver context.rs uses.
-    let Some(anchor) = resolve_anchor(&concepts, root, work_id) else {
+    let Some(anchor) = resolve_anchor(&concepts, docs_root, work_id)
+        .or_else(|| resolve_anchor(&concepts, store_root, work_id))
+    else {
         return Some(Promo::Thrown(format!(
             "knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"{work_id}\" (D38)."
         )));
@@ -473,17 +479,12 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
         .collect();
     let work_decisions = str_array(&work_bee, "decisions");
     let work_tags = work_concept.map(|c| str_array(&c.data, "tags")).unwrap_or_default();
-    let cells = read_capped_cell_traces(root, work_id)?;
+    let cells = read_capped_cell_traces(store_root, work_id)?;
 
-    // Reach two: an empty bee.areas — every feature reached through the
-    // history anchor, since a history anchor carries no bee: block at all —
-    // falls to the feature's own most recent scribing-ledger stamp before
-    // giving up. `area_list` replaces `work_areas` at every downstream use;
-    // `areas_source` is what names the choice, in both the JSON and the text.
     let (area_list, areas_source): (Vec<String>, AreasSource) = if !work_areas.is_empty() {
         (work_areas.clone(), AreasSource::WorkItem)
     } else {
-        match latest_scribing_areas(root, work_id) {
+        match latest_scribing_areas(store_root, work_id) {
             Some((areas, ts)) => (areas, AreasSource::Scribing(ts)),
             None => (Vec::new(), AreasSource::None),
         }

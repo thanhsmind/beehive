@@ -10,6 +10,7 @@
 // `unsupported command shape` with a non-zero exit instead of a delegation.
 
 mod catalog;
+mod comments;
 mod devtools;
 mod fsutil;
 mod doctor;
@@ -22,10 +23,13 @@ mod link_invalid;
 mod lock;
 mod nested_checkout;
 mod onboard;
+mod output_spill;
 mod path_identity;
+mod principles;
 mod registry;
 mod roots;
 mod router;
+mod session_identity;
 mod shell;
 mod state;
 mod textutil;
@@ -41,8 +45,8 @@ fn main() -> ExitCode {
     let t0 = Instant::now();
     let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
 
-    match router::try_native(&args, t0) {
+    output_spill::run(&args, || match router::try_native(&args, t0) {
         Some(code) => code,
         None => router::emit_unsupported_shape(&args),
-    }
+    })
 }

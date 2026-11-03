@@ -1,0 +1,782 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-1-0-upgrade",
+  "mode": "standard",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"pi-1-0-upgrade\" started at phase \"planning\".",
+  "next_action": "bee close finished \"pi-1-0-upgrade\" — feature is closed.",
+  "created_at": "2026-10-02T05:39:29.330Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "mailbox broker: option A (thin router) or B (resident supervisor answers)",
+    "asked_at": "2026-10-03T10:59:14.493Z",
+    "session": "51e108b6-3bcc-4072-a86f-7a61ade666e7"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-02T12:23:28.410Z",
+    "feature": "pi-1-0-upgrade",
+    "newest_decision_id": "bf3483c6-76f9-4da3-a63d-788356d3fbc7",
+    "plan_sha256": "df997b9e1bb2dc44cc63dfac755841c322555ac50293c7edd5d22c01061d53fc",
+    "advisor": "hat-wave five seats + slice-4 risks/user-impact check",
+    "digest_head": "# Hat wave synthesis — pi-1-0-upgrade\n\nFive seats critiqued the first harness-native draft of `plan.md` on\n2026-10-02. All five returned inside the ceiling; none was dropped. The\nleader synthesized; each finding below names where it landed.\n\n## Blockers\n\n| Seat | Finding | Landed |\n|---|---|---|\n| risks | Codemode scripts call tools whatever the active set is (Pi `docs/mcp.md:204`), so hiding `edit`/`write` cannot stop a leader write. | D8 amended: the rule is enforced in write-guard; the loadou"
+  },
+  "gate_preview": {
+    "feature": "pi-1-0-upgrade",
+    "plan_sha256": "df997b9e1bb2dc44cc63dfac755841c322555ac50293c7edd5d22c01061d53fc",
+    "previewed_at": "2026-10-02T12:23:26.307Z",
+    "cells": [
+      {
+        "id": "p1u-11",
+        "feature": "pi-1-0-upgrade",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "api",
+        "title": "Add bee herding steer so the leader can hand a running worker more context",
+        "deps": [],
+        "decisions": [
+          "D13",
+          "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+          "01fd5793-c366-4379-ac74-fe5fca4d270f"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "packages/bee-rs/crates/bee/src/herding/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          "packages/bee-rs/crates/bee/src/registry.rs"
+        ],
+        "action": "Red first, then add the verb `bee herding steer <job-id> --text <text> [--json]` per contract herding-steer, beside `herding interrupt` in job_verbs.rs, routed from herding.rs and declared in the command registry and catalog the way interrupt is. Reserve and update any registry contract test the new verb needs. No code comments. Write the steer file to a temp name and rename it into place; print one line naming the job and the steer number (JSON with --json), per amendment 01fd5793-c366-4379-ac74-fe5fca4d270f.",
+        "must_haves": {
+          "truths": [
+            "steer writes the text verbatim as steer-1.json, then steer-2.json, in the job mailbox",
+            "steer refuses a missing job dir",
+            "steer refuses a job that already has a result for its current round",
+            "steer refuses a job whose cell is capped",
+            "bee herding steer --help prints its flags",
+            "the registry contract tests stay green",
+            "steer writes through a temp file and a rename",
+            "steer prints the job id and steer number"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+              "substantive": "the steer verb"
+            }
+          ],
+          "key_links": [
+            "herding.rs routes steer to job_verbs::steer"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No pane key sends",
+            "herding interrupt unchanged"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "p1u-12",
+        "feature": "pi-1-0-upgrade",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Record typed scope changes and owe one log-or-ask turn for each",
+        "deps": [],
+        "decisions": [
+          "D12",
+          "D14",
+          "47677410-2447-4239-b596-f33a69eb87be",
+          "bf3483c6-76f9-4da3-a63d-788356d3fbc7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/plan.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+        ],
+        "action": "Red first, then in session_close implement contract pi-scope-input: a record_scope_input payload matches config pi_scope_words (with the default list) and appends a match to .bee/runtime/scope-inputs.jsonl; obligations_only returns a kind scope obligation for each recorded input with no decision logged after it, once per key. No code comments. Apply amendment bf3483c6-76f9-4da3-a63d-788356d3fbc7: phrase list without 'không' or bare 'change', word-edge matching, empty list records nothing, kill switch and worker env record nothing, at most one scope obligation per settle, the message names /bee-obligation-skip <key>, prune served or answered inputs.",
+        "must_haves": {
+          "truths": [
+            "a matching input is recorded",
+            "a non-matching input is not recorded",
+            "config pi_scope_words replaces the default list",
+            "a recorded input with no later decision is returned once as kind scope",
+            "a decision logged after the input clears it",
+            "the scope message says a change to an approved plan reopens the gate and only the user answers it",
+            "the default list does not match an ordinary Vietnamese sentence with 'không' or the bare word 'change'",
+            "an empty pi_scope_words records nothing",
+            "pi_harness_workflow false or BEE_HERDING_WORKER=1 records nothing",
+            "at most one scope obligation is returned per settle",
+            "the scope message names /bee-obligation-skip"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+              "substantive": "scope recording and the scope obligation"
+            }
+          ],
+          "key_links": [
+            "mod.rs routes record_scope_input"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No new hook name"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "p1u-13",
+        "feature": "pi-1-0-upgrade",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Carry typed context into running Pi workers and tag scope changes in the belt",
+        "deps": [
+          "p1u-11",
+          "p1u-12"
+        ],
+        "decisions": [
+          "D12",
+          "D13",
+          "8972e270-a4b6-43b7-a1e3-e8ace1d19a48",
+          "47677410-2447-4239-b596-f33a69eb87be",
+          "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+          "8b0387f5-833a-4d2e-a655-67639141ac60"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/plan.md",
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "action": "Red first in pi_plugin_contracts.rs, then in the belt: an input handler that sends steer and follow-up text to session-close as record_scope_input and returns the text unchanged; a worker-side steer drain per contract pi-worker-steer-drain using the main-checkout mailbox, and the same resolution in the verdict tool; a bee_steer leader tool. Add bee_steer to LEADER_TOOL_SET and FULL_TOOL_SET in stage_tools.rs and to BEE_STAGE_TOOLS in the belt. Rebuild .bee/bin/bee, run bee dev regen and bee doctor --runtime pi. No code comments. Apply amendment 8b0387f5-833a-4d2e-a655-67639141ac60 in full; its point (1) — no newest-dir verdict fallback when BEE_HERDING_JOB_ID is set — comes first.",
+        "must_haves": {
+          "truths": [
+            "a steered input is sent to session-close and passes through unchanged",
+            "a worker session delivers each steer file once as a steer message",
+            "a worker whose cwd is a feature worktree records its verdict",
+            "bee_steer runs bee herding steer and refuses when zero or several jobs run with job_id omitted",
+            "bee doctor --runtime pi is READY after rebuild",
+            "with BEE_HERDING_JOB_ID set and its mailbox dir missing, verdict refuses naming the job",
+            "the drain skips a malformed or oversized steer file and reports it",
+            "the delivered steer starts with the fixed prefix line",
+            "an undelivered steer is named in the leader's result header",
+            "bee_steer is in the leader tool set",
+            "bee_steer with job_id omitted lists the running job ids when it refuses",
+            "the input handler never delays or changes the typed text"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "input handler, worker steer drain, bee_steer tool"
+            }
+          ],
+          "key_links": [
+            "doctor.rs:47 embeds the belt, so .bee/bin/bee is rebuilt in this cell"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "The belt never edits or drops typed text",
+            "No scope word list in TypeScript"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+        "affects_skills": [],
+        "affects_specs": [],
+        "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)"
+      },
+      {
+        "id": "p1u-14",
+        "feature": "pi-1-0-upgrade",
+        "lane": "high-risk",
+        "role": "test",
+        "change_class": "test",
+        "title": "Prove on Pi 1.0 that typed context reaches a running worker and scope changes get one log-or-ask turn",
+        "deps": [
+          "p1u-13"
+        ],
+        "decisions": [
+          "D12",
+          "D13",
+          "D14",
+          "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+          "8972e270-a4b6-43b7-a1e3-e8ace1d19a48",
+          "47677410-2447-4239-b596-f33a69eb87be",
+          "01fd5793-c366-4379-ac74-fe5fca4d270f",
+          "8b0387f5-833a-4d2e-a655-67639141ac60",
+          "bf3483c6-76f9-4da3-a63d-788356d3fbc7"
+        ],
+        "files": [
+          ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/plan.md",
+          ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+        ],
+        "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored: (a) dispatch a no-pane Pi worker on a small cell, run bee herding steer on its job while it runs, and show the text in the worker's session; (b) type a scope-change follow-up to a Pi leader and show one forced turn asking to log it or ask the user; (c) show a worktree worker recording its verdict. Record the evidence in the feature file and the audit page.",
+        "must_haves": {
+          "truths": [
+            "steered text appears in the running worker's session once",
+            "a typed scope change gets one forced log-or-ask turn and no gate approval",
+            "a worktree worker records its verdict",
+            "the feature file names the run id and evidence path"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+              "substantive": "mid-run input evidence section"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "No product source edits"
+          ]
+        },
+        "verify": "bash .bee/verify/verify-app/control-bee doctor",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+        ]
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "p1u-1 changes the guard mapping and its contract test."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "p1u-2 drives a real bee workflow on Pi 1.0.0 and records evidence."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "p1u-3 moves the ceiling and writes the 0.85.1 to 1.0.0 audit table."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "The changelog digest already ran."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk gate: the hat-wave synthesis is recorded as the advisor ref."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "pi-1-0-upgrade",
+    "plan_sha256": "df997b9e1bb2dc44cc63dfac755841c322555ac50293c7edd5d22c01061d53fc",
+    "previewed_at": "2026-10-02T12:23:26.307Z",
+    "cells": [
+      {
+        "id": "p1u-11",
+        "feature": "pi-1-0-upgrade",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "api",
+        "title": "Add bee herding steer so the leader can hand a running worker more context",
+        "deps": [],
+        "decisions": [
+          "D13",
+          "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+          "01fd5793-c366-4379-ac74-fe5fca4d270f"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "packages/bee-rs/crates/bee/src/herding/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          "packages/bee-rs/crates/bee/src/registry.rs"
+        ],
+        "action": "Red first, then add the verb `bee herding steer <job-id> --text <text> [--json]` per contract herding-steer, beside `herding interrupt` in job_verbs.rs, routed from herding.rs and declared in the command registry and catalog the way interrupt is. Reserve and update any registry contract test the new verb needs. No code comments. Write the steer file to a temp name and rename it into place; print one line naming the job and the steer number (JSON with --json), per amendment 01fd5793-c366-4379-ac74-fe5fca4d270f.",
+        "must_haves": {
+          "truths": [
+            "steer writes the text verbatim as steer-1.json, then steer-2.json, in the job mailbox",
+            "steer refuses a missing job dir",
+            "steer refuses a job that already has a result for its current round",
+            "steer refuses a job whose cell is capped",
+            "bee herding steer --help prints its flags",
+            "the registry contract tests stay green",
+            "steer writes through a temp file and a rename",
+            "steer prints the job id and steer number"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+              "substantive": "the steer verb"
+            }
+          ],
+          "key_links": [
+            "herding.rs routes steer to job_verbs::steer"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No pane key sends",
+            "herding interrupt unchanged"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "p1u-12",
+        "feature": "pi-1-0-upgrade",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Record typed scope changes and owe one log-or-ask turn for each",
+        "deps": [],
+        "decisions": [
+          "D12",
+          "D14",
+          "47677410-2447-4239-b596-f33a69eb87be",
+          "bf3483c6-76f9-4da3-a63d-788356d3fbc7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/plan.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+        ],
+        "action": "Red first, then in session_close implement contract pi-scope-input: a record_scope_input payload matches config pi_scope_words (with the default list) and appends a match to .bee/runtime/scope-inputs.jsonl; obligations_only returns a kind scope obligation for each recorded input with no decision logged after it, once per key. No code comments. Apply amendment bf3483c6-76f9-4da3-a63d-788356d3fbc7: phrase list without 'không' or bare 'change', word-edge matching, empty list records nothing, kill switch and worker env record nothing, at most one scope obligation per settle, the message names /bee-obligation-skip <key>, prune served or answered inputs.",
+        "must_haves": {
+          "truths": [
+            "a matching input is recorded",
+            "a non-matching input is not recorded",
+            "config pi_scope_words replaces the default list",
+            "a recorded input with no later decision is returned once as kind scope",
+            "a decision logged after the input clears it",
+            "the scope message says a change to an approved plan reopens the gate and only the user answers it",
+            "the default list does not match an ordinary Vietnamese sentence with 'không' or the bare word 'change'",
+            "an empty pi_scope_words records nothing",
+            "pi_harness_workflow false or BEE_HERDING_WORKER=1 records nothing",
+            "at most one scope obligation is returned per settle",
+            "the scope message names /bee-obligation-skip"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+              "substantive": "scope recording and the scope obligation"
+            }
+          ],
+          "key_links": [
+            "mod.rs routes record_scope_input"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No new hook name"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "p1u-13",
+        "feature": "pi-1-0-upgrade",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Carry typed context into running Pi workers and tag scope changes in the belt",
+        "deps": [
+          "p1u-11",
+          "p1u-12"
+        ],
+        "decisions": [
+          "D12",
+          "D13",
+          "8972e270-a4b6-43b7-a1e3-e8ace1d19a48",
+          "47677410-2447-4239-b596-f33a69eb87be",
+          "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+          "8b0387f5-833a-4d2e-a655-67639141ac60"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/plan.md",
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "action": "Red first in pi_plugin_contracts.rs, then in the belt: an input handler that sends steer and follow-up text to session-close as record_scope_input and returns the text unchanged; a worker-side steer drain per contract pi-worker-steer-drain using the main-checkout mailbox, and the same resolution in the verdict tool; a bee_steer leader tool. Add bee_steer to LEADER_TOOL_SET and FULL_TOOL_SET in stage_tools.rs and to BEE_STAGE_TOOLS in the belt. Rebuild .bee/bin/bee, run bee dev regen and bee doctor --runtime pi. No code comments. Apply amendment 8b0387f5-833a-4d2e-a655-67639141ac60 in full; its point (1) — no newest-dir verdict fallback when BEE_HERDING_JOB_ID is set — comes first.",
+        "must_haves": {
+          "truths": [
+            "a steered input is sent to session-close and passes through unchanged",
+            "a worker session delivers each steer file once as a steer message",
+            "a worker whose cwd is a feature worktree records its verdict",
+            "bee_steer runs bee herding steer and refuses when zero or several jobs run with job_id omitted",
+            "bee doctor --runtime pi is READY after rebuild",
+            "with BEE_HERDING_JOB_ID set and its mailbox dir missing, verdict refuses naming the job",
+            "the drain skips a malformed or oversized steer file and reports it",
+            "the delivered steer starts with the fixed prefix line",
+            "an undelivered steer is named in the leader's result header",
+            "bee_steer is in the leader tool set",
+            "bee_steer with job_id omitted lists the running job ids when it refuses",
+            "the input handler never delays or changes the typed text"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "input handler, worker steer drain, bee_steer tool"
+            }
+          ],
+          "key_links": [
+            "doctor.rs:47 embeds the belt, so .bee/bin/bee is rebuilt in this cell"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "The belt never edits or drops typed text",
+            "No scope word list in TypeScript"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+        "affects_skills": [],
+        "affects_specs": [],
+        "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)"
+      },
+      {
+        "id": "p1u-14",
+        "feature": "pi-1-0-upgrade",
+        "lane": "high-risk",
+        "role": "test",
+        "change_class": "test",
+        "title": "Prove on Pi 1.0 that typed context reaches a running worker and scope changes get one log-or-ask turn",
+        "deps": [
+          "p1u-13"
+        ],
+        "decisions": [
+          "D12",
+          "D13",
+          "D14",
+          "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+          "8972e270-a4b6-43b7-a1e3-e8ace1d19a48",
+          "47677410-2447-4239-b596-f33a69eb87be",
+          "01fd5793-c366-4379-ac74-fe5fca4d270f",
+          "8b0387f5-833a-4d2e-a655-67639141ac60",
+          "bf3483c6-76f9-4da3-a63d-788356d3fbc7"
+        ],
+        "files": [
+          ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/plan.md",
+          ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+        ],
+        "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored: (a) dispatch a no-pane Pi worker on a small cell, run bee herding steer on its job while it runs, and show the text in the worker's session; (b) type a scope-change follow-up to a Pi leader and show one forced turn asking to log it or ask the user; (c) show a worktree worker recording its verdict. Record the evidence in the feature file and the audit page.",
+        "must_haves": {
+          "truths": [
+            "steered text appears in the running worker's session once",
+            "a typed scope change gets one forced log-or-ask turn and no gate approval",
+            "a worktree worker records its verdict",
+            "the feature file names the run id and evidence path"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+              "substantive": "mid-run input evidence section"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "No product source edits"
+          ]
+        },
+        "verify": "bash .bee/verify/verify-app/control-bee doctor",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+        ]
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "p1u-1 changes the guard mapping and its contract test."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "p1u-2 drives a real bee workflow on Pi 1.0.0 and records evidence."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "p1u-3 moves the ceiling and writes the 0.85.1 to 1.0.0 audit table."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "The changelog digest already ran."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk gate: the hat-wave synthesis is recorded as the advisor ref."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave."
+        }
+      ]
+    }
+  },
+  "route": {
+    "class": "refactor",
+    "lane": "high-risk",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 8,
+    "rationale": "Harness-native workflow on Pi across belt, binary hooks and doctrine; supersedes two locked Pi decisions",
+    "updated_at": "2026-10-02T06:52:07.104Z",
+    "feature": "pi-1-0-upgrade"
+  },
+  "last_scribing_run": {
+    "feature": "pi-1-0-upgrade",
+    "date": "2026-10-02",
+    "at": "2026-10-02T14:49:37.185Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "bee close --feature pi-1-0-upgrade, then release"
+  }
+}

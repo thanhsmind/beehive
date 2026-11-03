@@ -100,6 +100,39 @@ pub(crate) fn run_git(cwd: &Path, args: &[&str]) -> GitOut {
     }
 }
 
+pub(crate) fn run_git_stdin(cwd: &Path, args: &[&str], input: &[u8]) -> GitOut {
+    use std::io::Write;
+    let spawned = std::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn();
+    let Ok(mut child) = spawned else {
+        return GitOut { status: None, stdout: None, stderr: None };
+    };
+    let writer = child.stdin.take().map(|mut stdin| {
+        let input = input.to_vec();
+        std::thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+            drop(stdin);
+        })
+    });
+    let waited = child.wait_with_output();
+    if let Some(handle) = writer {
+        let _ = handle.join();
+    }
+    match waited {
+        Ok(out) => GitOut {
+            status: out.status.code(),
+            stdout: Some(String::from_utf8_lossy(&out.stdout).into_owned()),
+            stderr: Some(String::from_utf8_lossy(&out.stderr).into_owned()),
+        },
+        Err(_) => GitOut { status: None, stdout: None, stderr: None },
+    }
+}
+
 /// B-P2-1: the ONE shared unsigned-commit mechanism — `git commit
 /// --no-gpg-sign` through `run_git` (stdin already `Stdio::null()` there,
 /// so the two defenses always travel together). Three worktree-merge call

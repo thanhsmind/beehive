@@ -1,0 +1,146 @@
+{
+  "id": "p1u-4",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "security",
+  "title": "Refuse source writes from a Pi leader in the execute phase so it dispatches instead",
+  "deps": [],
+  "decisions": [
+    "D8",
+    "D11",
+    "eba50fb9-8c3c-49c9-899c-9ffe202b77f0"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+  ],
+  "action": "Red first, then add one check to write-guard that implements contract pi-leader-write-lock exactly: refuse a source write, and a bash call that runs `bee herding run`, from a Pi leader (payload bee_runtime == \"pi\", env BEE_HERDING_WORKER not \"1\") when phase is swarming, the execution gate is approved and the route lane is small, standard or high-risk. Allow lanes tiny, docs and spike, worker sessions, non-Pi payloads, payload tools_reopened true, and config pi_harness_workflow false. The refusal text names bee_dispatch and /bee-tools-reopen. Reuse the record and config readers check_worktree_first already uses. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a Pi leader source write on a small lane in an approved swarming phase is refused, naming bee_dispatch and /bee-tools-reopen",
+      "the same leader's bash `bee herding run` is refused",
+      "a worker session (BEE_HERDING_WORKER=1) on the same record may write",
+      "lane tiny may write",
+      "a non-Pi payload is unchanged",
+      "tools_reopened true may write",
+      "pi_harness_workflow false restores today's behavior"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+        "substantive": "the leader write-lock check"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "one test per truth"
+      }
+    ],
+    "key_links": [
+      "write_guard/main.rs calls the new check on the PreToolUse path"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Claude and Codex payloads unchanged",
+      "No change to the docs or tiny exemptions"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee write_guard",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "trace": {
+    "worker": "p1u-4-coder",
+    "outcome": "write-guard refuses Pi leader source writes and hand-run bee herding run in approved swarming on small/standard/high-risk lanes",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "source write means a path outside the gated allow-list (.bee/, docs/history/, plans/, AGENTS.md) — the contract does not define source, and this is the list check_write already uses for pre-approval writes — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T08:04:59.269Z",
+    "behavior_change": false,
+    "verification_evidence": "281 write_guard tests incl. 8 new, run as ~/.cargo/bin/cargo because the sandbox refused the PATH-expansion form; touched only write_guard; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee write_guard",
+    "claimed_at": "2026-10-02T07:58:47.511Z",
+    "mistakes": [
+      {
+        "wrong": "tests.rs first used docs/history/demo/plan.md as the non-source path and the plan-freeze guard refused it",
+        "better": "pick a path no other guard owns, like notes.md",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Leader lock in hook_local.rs is_pi_leader + check_pi_leader_write_lock (+ runs_herding_run); main.rs calls it on the PreToolUse write path beside check_worktree_first, sharing one resolve_write_record; truths pinned by tests.rs pi_leader_source_write_on_a_small_lane_is_refused_naming_the_dispatch_and_reopen_paths, pi_leader_bash_herding_run_is_refused, pi_worker_session_on_the_same_record_may_write, pi_leader_on_lanes_tiny_docs_and_spike_may_write, non_pi_payload_is_unchanged_by_the_pi_leader_lock, pi_leader_with_tools_reopened_may_write, pi_harness_workflow_false_restores_the_leader_write, pi_leader_lock_holds_only_in_an_approved_swarming_phase_and_for_source_paths",
+      "commit": "1aa9ca93a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee write_guard — green:unit — 281 write_guard tests incl. 8 new, run as ~/.cargo/bin/cargo because the sandbox refused the PATH-expansion form; touched only write_guard; full suite not run",
+      "deviations": [
+        "source write means a path outside the gated allow-list (.bee/, docs/history/, plans/, AGENTS.md) — the contract does not define source, and this is the list check_write already uses for pre-approval writes — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "tests.rs first used docs/history/demo/plan.md as the non-source path and the plan-freeze guard refused it — pick a path no other guard owns, like notes.md — none"
+      ],
+      "baseline": "the 3 refusal tests were red on base (code 0, expected 2); the 4 allow tests passed"
+    },
+    "baseline": "the 3 refusal tests were red on base (code 0, expected 2); the 4 allow tests passed",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a Pi leader source write on a small lane in an approved swarming phase is refused, naming bee_dispatch and /bee-tools-reopen",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "the same leader's bash `bee herding run` is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "a worker session (BEE_HERDING_WORKER=1) on the same record may write",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "lane tiny may write",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "a non-Pi payload is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "tools_reopened true may write",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "pi_harness_workflow false restores today's behavior",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs"
+          }
+        ],
+        "recorded_at": "2026-10-02T10:32:51.069Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -86,6 +86,10 @@ against the pre-change catalog until the worker pointed it at the new build.
   for a linked-valid worktree.
 - CLI: the `worktree` command group.
 - Merge safety: `.gitattributes` (log tier) + the onboarding gitignore block (runtime/cache tiers).
+  Onboarding writes the log-tier attributes itself as a `BEE:START`/`BEE:END` block — six
+  append-only `.bee` logs marked `merge=union` — planned and applied exactly like the gitignore
+  block; a host gains it on its next onboarding and must commit it (open-issues-sweep, decision
+  `5e66f40a`, issue #120).
 - Shared ledger: `templates/lib/worktree-holds.mjs` (mirror/release/foreign-lookup/sweep,
   corrupt-check); seam wiring in `templates/bee` reservations handlers +
   `performCleanup`; claim-next tap in `templates/lib/cells.mjs`; guard tap in

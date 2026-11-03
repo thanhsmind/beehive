@@ -1,0 +1,160 @@
+{
+  "id": "codex-claude-harness-parity-20260911",
+  "requested_by": "user",
+  "requested_at": "2026-09-11T11:32:22.408Z",
+  "scope_description": "Read-only current-snapshot parity review at f44d6010d923f3e90bba7e1e16bb6a0d4f86875d. Compare bee's Codex and Claude Code harness paths for equivalent workflow information and steps: onboarding and injected instructions, lifecycle hooks, routing and gate state, dispatch and role/model selection, worker brief construction, spawn/tending/wait behavior, write and secret guards, result and evidence return, and close/recovery behavior. This is a behavior audit, not a release diff. Exclude model quality, provider availability, and all uncommitted local state.",
+  "included": [
+    {
+      "type": "commit",
+      "id": "f44d6010d923f3e90bba7e1e16bb6a0d4f86875d",
+      "reason": "current committed source snapshot"
+    }
+  ],
+  "excluded": [],
+  "baseline": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "head": "f44d6010d923f3e90bba7e1e16bb6a0d4f86875d",
+  "reviewer_manifest": {
+    "mode": "current-snapshot-parity-audit",
+    "status": "independent-wave-blocked",
+    "reviewers": [
+      {
+        "role": "code-quality",
+        "dispatch_id": "2d3c5d1d-ecff-4bc5-b0bd-80a0351d5496",
+        "status": "spawn_refused",
+        "reason": "prepared Codex task_name violates live API charset"
+      },
+      {
+        "role": "architecture",
+        "dispatch_id": "2c469987-d2ae-46d0-80cb-e731f3c96b59",
+        "status": "not_started",
+        "reason": "same deterministic invalid task_name generator"
+      },
+      {
+        "role": "security",
+        "dispatch_id": "cd124c32-a2c9-44ba-902e-cbf72b3b0d80",
+        "status": "not_started",
+        "reason": "same deterministic invalid task_name generator"
+      },
+      {
+        "role": "test-coverage",
+        "dispatch_id": "8db19059-e733-4f52-a6e6-09b35e32700b",
+        "status": "not_started",
+        "reason": "same deterministic invalid task_name generator"
+      },
+      {
+        "role": "reliability",
+        "dispatch_id": "6781da8d-7f12-48c8-af9f-16cade0462f9",
+        "status": "not_started",
+        "reason": "same deterministic invalid task_name generator"
+      }
+    ],
+    "local_inspection": "source trace plus live dispatch, live tool validation, doctor, and targeted Rust tests",
+    "dismissed": [
+      {
+        "suspicion": "Bee skill trees differ",
+        "reason": "bee-* SKILL.md path comparison returned no differences; Claude has three unrelated product skills"
+      },
+      {
+        "suspicion": "Codex lacks the core safety hooks",
+        "reason": "manifest contains session-init, prompt-context, write-guard, model-guard, state-sync, tools-logger, chain-nudge, session-close, and subagent audit"
+      },
+      {
+        "suspicion": "active role maps are incomplete",
+        "reason": "working config carries matching role names for Claude and Codex; model and transport values differ by provider"
+      }
+    ]
+  },
+  "verification_preflight": {
+    "checked_at": "2026-09-11T11:32:22.408Z",
+    "cells_checked": [],
+    "passed": true
+  },
+  "findings": [
+    {
+      "id": "parity-1",
+      "severity": "P1",
+      "axis": "spec",
+      "autofix_class": "gated_auto",
+      "status": "open",
+      "title": "Codex native dispatch emits an invalid task_name",
+      "file": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "line": 1900,
+      "scenario": "A Codex gather, reviewer, advisor, or titled cell uses a subject such as reviewer: Compare ... as task_name. The current spawn_agent API rejects the call because task_name accepts only lowercase letters, digits, and underscores. No worker starts.",
+      "evidence": "Live prepare emitted task_name with colon, spaces, and uppercase text. The exact spawn_agent call was rejected: agent_name must use only lowercase letters, digits, and underscores. Source lines 1900-1903 copy subject directly. Test drivers/tests.rs:1087-1104 pins the invalid c-1: title form and passes.",
+      "recommendation": "Create a stable slug for task_name. Put the full subject and assignment in message. Add a live-schema conformance test."
+    },
+    {
+      "id": "parity-2",
+      "severity": "P1",
+      "axis": "spec",
+      "autofix_class": "gated_auto",
+      "status": "open",
+      "title": "Non-cell dispatch drops the requested assignment from worker input",
+      "file": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "line": 1676,
+      "scenario": "The orchestrator passes --purpose with the concrete review or gather task. Bee keeps it only in task_name or description. The message, prompt, or stdin contains only the generic role template. A worker starts without the requested scope or question.",
+      "evidence": "Live Codex and Claude prepare outputs both had generic review or gather bodies. CLI branches write pane_prompt at lines 1748-1755 and 1775-1782; the herding branch repeats this at 1796-1822. The purpose becomes subject only at lines 1676-1684.",
+      "recommendation": "Append the full purpose to prompt_body or pane_prompt for every non-cell transport. Keep task_name and description as short labels only."
+    },
+    {
+      "id": "parity-3",
+      "severity": "P1",
+      "axis": "standards",
+      "autofix_class": "gated_auto",
+      "status": "open",
+      "title": "Concurrent herding runs can reuse one millisecond job id",
+      "file": "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "line": 364,
+      "scenario": "Parallel dispatch starts two or more herding jobs in one millisecond. Each derives the same job-<timestamp_millis> id and writes the same mailbox. One run can remove or overwrite state used by another.",
+      "evidence": "Three live parallel runs all produced job-1789125757006. One failed because its job.json path vanished while another used the same mailbox. Source line 364 uses only timestamp_millis; no uniqueness suffix or exclusive retry exists.",
+      "recommendation": "Use a collision-resistant id or atomically reserve the mailbox and retry on AlreadyExists. Add a concurrent start test."
+    },
+    {
+      "id": "parity-4",
+      "severity": "P1",
+      "axis": "standards",
+      "autofix_class": "gated_auto",
+      "status": "open",
+      "title": "The installed Bee binary is one release behind the source",
+      "file": ".claude-plugin/plugin.json",
+      "line": 3,
+      "scenario": "Both runtimes call .bee/bin/bee from their hook manifests. That binary reports release 2.34.0 while the source and plugin report 2.35.0, so new source behavior is not active in hooks.",
+      "evidence": "bee doctor --runtime codex and --runtime claude both returned overall_status blocked. Their binary_freshness row reports installed 2.34.0 versus source 2.35.0. Plugin line 3 declares 2.35.0.",
+      "recommendation": "Rebuild and install the current binary, then rerun both doctor checks."
+    },
+    {
+      "id": "parity-5",
+      "severity": "P2",
+      "axis": "spec",
+      "autofix_class": "manual",
+      "status": "open",
+      "title": "Codex does not provide the same lifecycle activity and trust evidence",
+      "file": "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "line": 73,
+      "scenario": "A Codex session works through tool failures, permission waits, notifications, or session end. Bee receives no activity checkpoint for these events. Supervisors can see no_signal where Claude records working, waiting, or exited. Hook discovery and trust also remain unknown without attestation.",
+      "evidence": "The Codex manifest has 8 events; Claude has 11. Claude-only events are Notification, PermissionRequest, PostToolUseFailure, and SessionEnd; Claude also emits activity on prompt/tool/stop events. The knowledge rule at line 73 names this as an allowed difference. doctor reports four Codex trust rows unknown and doctor::tests::codex_stops_at_degraded_where_claude_reaches_ready passes.",
+      "recommendation": "Treat this as a declared capability gap. Add Codex events when the host exposes them, and require a valid attestation before claiming runtime readiness."
+    },
+    {
+      "id": "parity-6",
+      "severity": "P1",
+      "axis": "standards",
+      "autofix_class": "manual",
+      "status": "open",
+      "title": "The declared full test command is red on the current snapshot",
+      "file": "packages/bee-rs/Cargo.toml",
+      "line": 1,
+      "scenario": "A release or parity claim uses the repository's declared cargo test command. The bee binary test target reports 64 failures, and the concurrency integration target reports 2 failures. Later hook tests then run longer than 150 seconds and the audit stops them after red is already established.",
+      "evidence": "Fresh command: PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" CARGO_TARGET_DIR=/tmp/bee-harness-parity-target cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml. Output: 3405 passed, 64 failed, 20 ignored in bee unit tests; concurrency: 17 passed, 2 failed. Exit was 130 after interrupting two integration tests that stayed active beyond 150 seconds.",
+      "recommendation": "Make the declared suite green in the same Codex session environment. Separate environment-sensitive failures from product failures, then rerun the exact command."
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "blocked",
+    "review": null,
+    "summary": "Current Codex harness is not fully equivalent to Claude Code. Five P1 findings block a parity claim; one P2 is a documented host-capability gap. Independent reviewer dispatch itself was blocked by parity-1. The lead source-traced and live-reproduced the findings; the declared full suite is red."
+  },
+  "created_at": "2026-09-11T11:32:22.408Z",
+  "updated_at": "2026-09-11T11:37:41.389Z"
+}

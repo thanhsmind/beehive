@@ -30,9 +30,9 @@
 # Anything that aborts between step 2 and step 5 puts the tree back the way it
 # found it, so a failed release leaves nothing half-bumped behind.
 #
-# Usage: scripts/release.sh                  (no bump — version from plugin.json)
-#        scripts/release.sh 2.23.0           (bump → regen → test → commit → tail)
-#        scripts/release.sh 2.23.0 --no-test (skips step 4, loudly; own the risk)
+# Usage: scripts/release.sh                            (no bump — version from plugin.json)
+#        scripts/release.sh 2.23.0                     (bump → regen → test → commit → tail)
+#        scripts/release.sh 2.23.0 --no-test --confirm (skips step 4, checklist confirmed; own the risk)
 #        scripts/release.sh 2.23.0 -m "Release 2.23.0: one-command release"
 #
 # Re-running with a version that is ALREADY committed is safe and idempotent:
@@ -42,6 +42,12 @@
 # The last line of a finished release is the `OK` line. Nothing else exits 0.
 
 set -euo pipefail
+
+# A mise shim writes its activation banner ("mise <config> tools: gh@X.Y.Z") to
+# STDOUT before the real tool's own output, so it lands INSIDE the `gh` captures
+# below — step 8 read it as the CI run id and 404'd, and step 9 read it as an
+# asset name. Silencing it once here beats wrapping every call site.
+export MISE_QUIET=1
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -60,22 +66,37 @@ BEE_BIN=".bee/bin/bee"
 # block above is the documentation.
 ARG_VERSION=""
 RUN_TESTS=1
+CONFIRM=0
 COMMIT_SUBJECT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-test)
       RUN_TESTS=0; shift ;;
+    --confirm)
+      CONFIRM=1; shift ;;
     -m|--message)
       [ $# -ge 2 ] || fail "$1 needs a commit subject — e.g. -m \"Release 2.23.0\""
       COMMIT_SUBJECT="$2"; shift 2 ;;
     -*)
-      fail "unknown option $1 — usage: scripts/release.sh [VERSION] [--no-test] [-m SUBJECT]" ;;
+      fail "unknown option $1 — usage: scripts/release.sh [VERSION] [--no-test] [--confirm] [-m SUBJECT]" ;;
     *)
       [ -z "$ARG_VERSION" ] \
         || fail "two versions given ($ARG_VERSION and $1) — one release at a time"
       ARG_VERSION="$1"; shift ;;
   esac
 done
+
+if [ "$RUN_TESTS" -eq 0 ] && [ "$CONFIRM" -eq 0 ]; then
+  log "release checklist (--no-test):"
+  log "  1. The declared test suite was run and passed on the base commit."
+  log "  2. No unverified code changes exist in the release commit or working tree."
+  log "  3. The published release tag and GitHub binaries cannot be retracted once pushed."
+  log "  4. The operator accepts full responsibility for releasing unverified code."
+  if [ -t 2 ]; then
+    fail "--no-test requires --confirm on interactive runs; confirm each item and re-run with --confirm"
+  fi
+  log "warn: non-interactive run (no TTY) — proceeding unconfirmed"
+fi
 
 command -v gh >/dev/null 2>&1 || fail "gh CLI not found — install it, then \`gh auth login\`"
 gh auth status >/dev/null 2>&1 || fail "gh not authenticated — run \`gh auth login\`"
@@ -87,6 +108,22 @@ VERSION="$(read_version "$PLUGIN_JSON")"
 [ -n "$VERSION" ] || fail "cannot read version from $PLUGIN_JSON"
 
 # ---------- 2. preconditions ----------
+AUTH_VERSION="${ARG_VERSION:-$VERSION}"
+[ -n "${BEE_DISPATCH_ID:-}" ] \
+  || fail "release authorization required — BEE_DISPATCH_ID is unset (dispatch with deployment stage under deploy role required); nothing was changed"
+[ -x "$BEE_BIN" ] \
+  || fail "$BEE_BIN not found or not executable — cannot verify release authorization; nothing was changed"
+
+AUTHORIZED=0
+authorize_release() {
+  if [ "$AUTHORIZED" -eq 1 ]; then
+    return 0
+  fi
+  "$BEE_BIN" dispatch authorize --id "$BEE_DISPATCH_ID" --release-version "$AUTH_VERSION" \
+    || fail "release authorization denied for version $AUTH_VERSION; nothing was changed"
+  AUTHORIZED=1
+}
+
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 [ "$BRANCH" = "main" ] || fail "on branch $BRANCH — releases cut from main only"
 
@@ -97,6 +134,7 @@ if [ -n "$ARG_VERSION" ] && [ "$ARG_VERSION" = "$HEAD_VERSION" ]; then
   # Idempotent re-run: the release commit already exists. Never re-bump, never
   # re-commit — just resume the tail (this is the path a failed CI wait takes).
   log "version  $ARG_VERSION is already committed at HEAD — skipping bump, resuming the release tail"
+  authorize_release
 elif [ -n "$ARG_VERSION" ]; then
   # Every check below refuses with zero mutations. Nothing is written until
   # all of them have passed.
@@ -138,14 +176,19 @@ elif [ -n "$ARG_VERSION" ]; then
 
   # The commit this script makes must carry the bump and the regen output and
   # NOTHING else, so any dirt at all refuses — named path by path.
-  DIRT="$(git status --porcelain)"
-  if [ -n "$DIRT" ]; then
-    printf '%s\n' "$DIRT" >&2
+  DIRT=()
+  while IFS= read -r -d '' entry || [ -n "$entry" ]; do
+    DIRT+=("$entry")
+  done < <("$ROOT/scripts/release-dirt.sh")
+  if [ ${#DIRT[@]} -gt 0 ]; then
+    printf '%s\n' "${DIRT[@]}" >&2
     fail "working tree is not clean (paths above) — the release commit must carry only the bump and the regen output; commit or stash first. Nothing was changed"
   fi
 
   [ -f "$BEE_CONFIG" ] || fail "$BEE_CONFIG not found — cannot read the declared test command; nothing was changed"
   [ -x "$BEE_BIN" ] || fail "$BEE_BIN not found or not executable — cannot run the regen chain; nothing was changed"
+
+  authorize_release
 
   # ----- from here on the tree gets written; put it back on any abort -----
   BACKUP_DIR="$(mktemp -d)"
@@ -157,7 +200,22 @@ elif [ -n "$ARG_VERSION" ]; then
     cp "$BACKUP_DIR/codex-plugin.json" "$CODEX_JSON" 2>/dev/null || true
     # The tree was verified clean above, so every tracked change since then is
     # this script's own — undoing them restores exactly what we found.
-    git checkout -- . 2>/dev/null || true
+    local -a to_restore=()
+    while IFS= read -r -d '' entry; do
+      case "${entry:0:2}" in
+        R*|C*)
+          local src
+          IFS= read -r -d '' src
+          to_restore+=("$src")
+          ;;
+      esac
+      if [ "${entry:0:2}" != "??" ]; then
+        to_restore+=("${entry:3}")
+      fi
+    done < <("$ROOT/scripts/release-dirt.sh")
+    if [ ${#to_restore[@]} -gt 0 ]; then
+      git checkout -- "${to_restore[@]}" 2>/dev/null || true
+    fi
     rm -rf "$BACKUP_DIR"
     # Untracked leftovers (a brand-new file the regen chain rendered) are
     # NAMED, never deleted: a sibling worker's untracked file can appear in
@@ -213,7 +271,7 @@ elif [ -n "$ARG_VERSION" ]; then
       R*|C*) IFS= read -r -d '' src && CHANGED+=("$src") ;;
     esac
     CHANGED+=("${entry:3}")
-  done < <(git status --porcelain -z)
+  done < <("$ROOT/scripts/release-dirt.sh")
   [ ${#CHANGED[@]} -gt 0 ] \
     || fail "the bump and the regen chain changed no files — nothing to release"
 
@@ -226,15 +284,15 @@ elif [ -n "$ARG_VERSION" ]; then
     elif command -v python3 >/dev/null 2>&1; then
       TEST_CMD="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commands",{}).get("test",""))' "$BEE_CONFIG")"
     else
-      fail "need jq or python3 to read \`commands.test\` from $BEE_CONFIG — install one, or re-run with --no-test"
+      fail "need jq or python3 to read \`commands.test\` from $BEE_CONFIG — install one, or re-run with --no-test --confirm"
     fi
     [ -n "$TEST_CMD" ] \
-      || fail "no \`commands.test\` in $BEE_CONFIG — record it there, or re-run with --no-test"
+      || fail "no \`commands.test\` in $BEE_CONFIG — record it there, or re-run with --no-test --confirm"
     log "test     $TEST_CMD"
     bash -c "$TEST_CMD" >&2 \
       || fail "the declared test suite went RED — nothing tagged, nothing pushed; a published tag is the one thing a release can never take back"
   else
-    log "warn: --no-test — the declared suite did NOT run; you are about to tag code that nothing proved"
+    log "test     skipped per release checklist (--no-test)"
   fi
 
   # ----- the release commit, path-scoped -----
@@ -260,6 +318,8 @@ git show "HEAD:$PLUGIN_JSON" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$V
 if [ -n "$(git status --porcelain)" ]; then
   log "warn: working tree has uncommitted changes — they are NOT part of $TAG (tag points at HEAD)"
 fi
+
+authorize_release
 
 # ---------- 4. tag (idempotent) ----------
 HEAD_SHA="$(git rev-parse HEAD)"
@@ -295,7 +355,7 @@ gh run watch "$RUN_ID" --exit-status >/dev/null \
 ASSETS="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
 printf '%s\n' "$ASSETS" | grep -q "SHA256SUMS" || fail "$TAG release has no SHA256SUMS — assets: $ASSETS"
 BIN_COUNT="$(printf '%s\n' "$ASSETS" | grep -c '^bee-' || true)"
-[ "$BIN_COUNT" -ge 2 ] || fail "$TAG release has $BIN_COUNT bee-* binaries (expected >= 2) — assets: $ASSETS"
+[ "$BIN_COUNT" -ge 5 ] || fail "$TAG release has $BIN_COUNT bee-* binaries (expected >= 5) — assets: $ASSETS"
 
 log "assets   $(printf '%s' "$ASSETS" | tr '\n' ' ')"
 log "OK       bee $VERSION is live — installers now serve $TAG"

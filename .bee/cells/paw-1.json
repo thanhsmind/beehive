@@ -1,0 +1,108 @@
+{
+  "id": "paw-1",
+  "feature": "pstack-skills-autowire",
+  "title": "Make the nine ported skills fire on their own",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "files": [
+    ".claude/skills/unslop/SKILL.md",
+    ".claude/skills/technical-writing/SKILL.md",
+    ".claude/skills/teach/SKILL.md",
+    ".claude/skills/how/SKILL.md",
+    ".claude/skills/why/SKILL.md",
+    ".claude/skills/recall/SKILL.md",
+    ".claude/skills/arena/SKILL.md",
+    ".claude/skills/architect/SKILL.md",
+    ".claude/skills/prototype/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-skills-autowire/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Edit ONLY the YAML frontmatter of the nine listed SKILL.md files. Change nothing below the closing --- line: every body is already verified and must stay byte-identical. In each file do exactly two things (per D1 and D2). First, delete the whole `disable-model-invocation: true` line so the model can invoke the skill itself. Second, replace the existing `description:` value with the exact replacement below for that file, keeping the surrounding quoting valid YAML. Keep the `name:` line as it is. The replacements, one per file:\n\n.claude/skills/unslop/SKILL.md -> Cut AI tells from writing. Fires on every user-facing reply and on every document, plan, spec, README, PR body or commit message before it is sent or saved. Also use for 'unslop this', 'make this read like a human', 'this sounds like AI'.\n\n.claude/skills/technical-writing/SKILL.md -> Layered technical-writing standard: Diataxis structure, Google developer style sentences, STE instruction rules, Global English syntax. Fires before saving any document, RFC, readme, spec, plan, PR description or commit message, and when reviewing one. Also use for 'technical-writing', 'rewrite these docs', 'is this doc clear'.\n\n.claude/skills/teach/SKILL.md -> Explain a body of work plainly so a person actually understands it. Runs the `how` and `why` skills and weaves what they find into one clear explanation. Fires when the user asks to understand rather than to change something - 'teach me', 'explain this to me', 'help me really understand X', 'why did you build it this way' - and when a decision or gate has to be put in plain words before the user can answer it.\n\n.claude/skills/how/SKILL.md -> Answers 'how does X work'. Fires before changing a subsystem nobody in this session has read, and on placement, ownership and layering questions ('where should this live', 'which package owns this', 'is this the right layer'). Explains subsystem architecture, runtime flow and onboarding mental models. Use `why` for motivation instead.\n\n.claude/skills/why/SKILL.md -> Answers 'why does X work this way' and 'why we picked Y' - design rationale, regressions, postmortems, data-backed thresholds. Fires during planning research when the existing shape is a constraint the plan must honour, and before locking a decision that touches code someone already shaped. Reads source control and the bee store (decisions, CONTEXT.md, knowledge areas, learnings) in parallel and returns a cited, confidence-tiered read. Use `how` for runtime behavior instead.\n\n.claude/skills/recall/SKILL.md -> Rebuild recent working context from bee state, your own chat history and the shared record, then hand back a tight current-state brief. Fires when a session resumes a topic whose history is not already in bee state - 'catch me up', 'recall my work on X', 'where did I leave off' - and before starting work that continues something older than this session.\n\n.claude/skills/arena/SKILL.md -> Run N parallel attempts at one task, cross-judge them, pick a base, graft the best of the losers into it. Fires only when several structurally different answers are viable and no precedent settles the choice - a design, an API shape, a hard naming or structure call. Not for work with an obvious shape, a pattern already in the repo to follow, or a fix whose answer is known: it spawns parallel model runs and is the wrong tool for cheap work.\n\n.claude/skills/architect/SKILL.md -> Sketch types, signatures and module boundaries before code, synthesize across competing designs, then fill in against the chosen sketch and scrap it if implementation proves it wrong. Fires on non-trivial NEW code whose shape is still open, where jumping straight to code would lock in the wrong structure. Not for a change that has an existing pattern to follow, a bug fix, a rename, or anything a single obvious implementation already answers.\n\n.claude/skills/prototype/SKILL.md -> Plan by code: build throwaway variants in the scratchpad to settle a design, layout, interaction or behavior question with evidence instead of argument. Fires when an open question is cheaper to answer by building than by discussing - which layout, which interaction, which of two approaches is faster. Not for work whose answer is already known, and not a route to shippable code: the decision is the deliverable and the code is thrown away.",
+  "verify": "! rg -l disable-model-invocation .claude/skills/unslop .claude/skills/technical-writing .claude/skills/teach .claude/skills/how .claude/skills/why .claude/skills/recall .claude/skills/arena .claude/skills/architect .claude/skills/prototype && rg -c 'Not for' .claude/skills/arena/SKILL.md .claude/skills/architect/SKILL.md .claude/skills/prototype/SKILL.md",
+  "must_haves": {
+    "truths": [
+      "No ported skill still carries disable-model-invocation",
+      "arena, architect and prototype each carry a 'Not for' negative guard in the description",
+      "Every body below the frontmatter is byte-identical to before"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude/skills/why/SKILL.md",
+        "substantive": "frontmatter with the new trigger description and no invocation flag; body untouched"
+      },
+      {
+        "path": ".claude/skills/architect/SKILL.md",
+        "substantive": "frontmatter with the guarded trigger description and no invocation flag; body untouched"
+      }
+    ],
+    "key_links": [
+      "how and why still name each other; teach still names both"
+    ],
+    "prohibitions": [
+      "No edit below the closing --- of any file",
+      "No write outside the nine listed files",
+      "No change to the name: field"
+    ]
+  },
+  "trace": {
+    "worker": "leader-paw-1",
+    "outcome": "The nine ported skills are model-invocable, each with an auto-fire trigger description",
+    "files_changed": [
+      ".claude/skills/unslop/SKILL.md",
+      ".claude/skills/technical-writing/SKILL.md",
+      ".claude/skills/teach/SKILL.md",
+      ".claude/skills/how/SKILL.md",
+      ".claude/skills/why/SKILL.md",
+      ".claude/skills/recall/SKILL.md",
+      ".claude/skills/arena/SKILL.md",
+      ".claude/skills/architect/SKILL.md",
+      ".claude/skills/prototype/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-10T16:18:28.657Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "claimed_at": "2026-09-10T16:16:06.094Z",
+    "mistakes": [
+      {
+        "wrong": "the parity check script asserted disable-model-invocation was PRESENT, so it went red on the very change the plan asked for",
+        "better": "a check that pins a value the next feature is meant to flip should assert the contract, not the current byte, and the plan should have named the check update as part of the cell"
+      }
+    ],
+    "report": {
+      "outcome": "The nine ported skills are model-invocable, each with an auto-fire trigger description",
+      "commit": "2f9f9751",
+      "files": [
+        ".claude/skills/unslop/SKILL.md",
+        ".claude/skills/technical-writing/SKILL.md",
+        ".claude/skills/teach/SKILL.md",
+        ".claude/skills/how/SKILL.md",
+        ".claude/skills/why/SKILL.md",
+        ".claude/skills/recall/SKILL.md",
+        ".claude/skills/arena/SKILL.md",
+        ".claude/skills/architect/SKILL.md",
+        ".claude/skills/prototype/SKILL.md"
+      ],
+      "tests": "python3 check_port.py plus git diff main --stat — green:static — printed OK 9 skills: frontmatter parses, model-invocable, expensive three guarded, links resolve, no pstack token; the diff shows 9 files 9 insertions 18 deletions, so only frontmatter moved and every verified body is untouched",
+      "deviations": [],
+      "mistakes": [
+        "the parity check script asserted disable-model-invocation was PRESENT, so it went red on the very change the plan asked for — a check that pins a value the next feature is meant to flip should assert the contract, not the current byte, and the plan should have named the check update as part of the cell"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

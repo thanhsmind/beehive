@@ -32,7 +32,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 13] = [
+pub(crate) const CAP_FLAGS: [&str; 17] = [
     "id",
     "outcome",
     "files",
@@ -45,7 +45,34 @@ pub(crate) const CAP_FLAGS: [&str; 13] = [
     "commit-pending",
     "inline-reason",
     "report",
+    "report-file",
     "sync-ack",
+    "mistake",
+    "no-mistakes",
+    "fix-at",
+];
+
+pub(crate) const FINISH_FLAGS: [&str; 20] = [
+    "id",
+    "outcome",
+    "files",
+    "deviations-file",
+    "deviation",
+    "friction",
+    "override-judge",
+    "session-id",
+    "force-ownership",
+    "commit-pending",
+    "inline-reason",
+    "report",
+    "report-file",
+    "sync-ack",
+    "mistake",
+    "no-mistakes",
+    "fix-at",
+    "from-job",
+    "proof-result",
+    "proof-reason",
 ];
 
 /// resolveDeclaredBehaviorChange (E6).
@@ -81,6 +108,7 @@ pub(crate) fn parse_deviations_file(file: &str) -> MR<Vec<Value>> {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct CapFlags {
     pub(crate) id: String,
     pub(crate) outcome: Option<String>,       // flags.outcome ? String : undefined
@@ -113,6 +141,23 @@ pub(crate) struct CapFlags {
     /// worker check below for a small+ cell and is recorded on the capped
     /// cell's own `trace.inline_reason`.
     pub(crate) inline_reason: Option<String>,
+    /// reflection-becomes-lesson D5: `--mistake "<what went wrong> — <what
+    /// would have been better>"`, RAW — `None` = not passed. One line per
+    /// cap/finish call, the same single-value discipline `--deviation` keeps.
+    /// Read through `mailbox::read_mistake`, so the two-part rule has exactly
+    /// one home.
+    pub(crate) mistake: Option<String>,
+    /// mistake-fix-at D1: `--fix-at <layer>`, the third required part of the
+    /// mistake `--mistake` carries — one of `mailbox::FIX_AT_VALUES`, trimmed;
+    /// `None` = not passed, which the door refuses by name. It is a FLAG of
+    /// its own rather than a third segment of `--mistake` so the report's own
+    /// `mistakes` objects get a key of the same name; a report item that
+    /// spells all three on one line is read by the same door.
+    pub(crate) fix_at: Option<String>,
+    /// reflection-becomes-lesson D2: `--no-mistakes`, the explicit statement
+    /// that this cell hit none. It is the OTHER half of the answer, and the
+    /// reason silence and a clean run do not read alike.
+    pub(crate) no_mistakes: bool,
     /// wfl-1/D8: `--report <json-string>`, RAW — validated against the
     /// worker Result-form shape (finish_support.rs's `parse_report_flag`)
     /// before any write, then stored verbatim as `trace.report`. `None`
@@ -124,6 +169,9 @@ pub(crate) struct CapFlags {
     /// applied_at, prediction) when non-empty. Stored on trace.sync_ack and
     /// appended to trace.deviations.
     pub(crate) sync_ack: Option<String>,
+    pub(crate) from_job: Option<String>,
+    pub(crate) proof_result: Option<String>,
+    pub(crate) proof_reason: Option<String>,
 }
 
 /// wp-1: is `worker` (the cap's own `trace.worker`) a REGISTERED worker for
@@ -147,6 +195,22 @@ pub(crate) fn registered_worker_for_cell(root: &Path, id: &str, worker: Option<&
             && matches!(w.get("nickname"), Some(Value::String(n)) if n == worker)
             && matches!(w.get("cell"), Some(Value::String(c)) if c == id)
     }))
+}
+
+pub(crate) fn cap_flags_with_report_file(
+    mut cap_flags: CapFlags,
+    file: Option<&str>,
+    finish: bool,
+) -> MR<CapFlags> {
+    let Some(file) = file else { return Ok(cap_flags) };
+    if cap_flags.report.is_some() {
+        return Err(Fail::Thrown(format!(
+            "{}: --report and --report-file are exclusive (FIX: pass one of them)",
+            if finish { "cells finish" } else { "cells cap" }
+        )));
+    }
+    cap_flags.report = Some(read_file_text(file, "report")?);
+    Ok(cap_flags)
 }
 
 /// capCellFromFlags — the ONE cap door cap and finish share.
@@ -215,11 +279,62 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         Some(raw) => parse_report_flag(raw)?,
         None => {
             return Err(Fail::Thrown(format!(
-                "capCell: cell \"{id}\" refused — --report is required: a JSON object with keys {} (tests as a D8 proof string \"<command> — <result> — <scope reason>\", e.g. \"cargo test -p bee — green — touched close.rs\").",
+                "capCell: cell \"{id}\" refused — --report is required: a JSON object with keys {} (tests as a D8 proof string \"<command> — <result> — <scope reason>\", e.g. \"cargo test -p bee — green:unit — touched close.rs\").",
                 REPORT_KEYS.join(", ")
             )))
         }
     };
+
+    // D4 (docs/history/pi-harness-workflow-parity/CONTEXT.md): compare the
+    // parsed proof command with the approved cell verify command using exact
+    // trimmed bytes. Descriptive proof text cannot replace the approved
+    // verify command. Reject mismatches before any writes.
+    let (proof_command, proof_result, proof_reason) = match report_value
+        .get("tests")
+        .and_then(|v| v.as_str())
+        .and_then(parse_tests_proof)
+    {
+        Some(tuple) => tuple,
+        None => {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\"."
+            )));
+        }
+    };
+    let cell_verify = match existing_map.get("verify") {
+        Some(Value::String(s)) => js_trim(s),
+        _ => "",
+    };
+    if js_trim(&proof_command) != cell_verify {
+        return Err(Fail::Thrown(format!(
+            "capCell: cell \"{id}\" refused — proof command \"{proof_command}\" does not match approved cell verify command \"{cell_verify}\"."
+        )));
+    }
+    if let Some(refusal) = design_cap_refusal(root, id, existing_map, &proof_reason) {
+        return Err(Fail::Thrown(refusal));
+    }
+
+    // slp-advisor-nudge an-3 (9e5eda5b): the advisor-nudge response debt, at
+    // the CAP. `bee close` and `bee worktree merge` carry the same arm, but
+    // this one is the cell-level tooth — the obligation bites when the work
+    // it is about tries to finish, not days later at the boundary.
+    //
+    // Every lane, exactly like the dissent door and unlike the judge one: the
+    // nudge only exists because a supervisor wrote a record about this work,
+    // so its existence is the gate. `cells cap` and `cells finish` share this
+    // one function, so both refuse — a debt one of them could walk past would
+    // be no debt at all.
+    //
+    // Placed with the cheap pre-checks, BEFORE the per-cell lock and before
+    // any write: a refused cap leaves the cell exactly as it found it, the
+    // same posture `--report` and `--deviation` above already keep.
+    let cap_feature = match existing_map.get("feature") {
+        Some(Value::String(s)) => s.clone(),
+        _ => String::new(),
+    };
+    if let Some(refusal) = advisor_nudge_cap_refusal(root, id, &cap_feature)? {
+        return Err(Fail::Thrown(refusal));
+    }
 
     // D5 + D10 (docs/history/human-mailbox/CONTEXT.md): the departure door.
     // ARMED-ONLY, and read ONCE here so every branch below agrees about it —
@@ -229,6 +344,12 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     if armed {
         departure_door(id, f, &report_value)?;
     }
+
+    // reflection-becomes-lesson D5: read the mistakes answer ONCE, before any
+    // write, and fill both sinks from it below. NOT armed-gated, unlike the
+    // departure door above: `bee close` files its letter unconditionally, so
+    // the answer it will ask for must be recorded unconditionally too.
+    let mistakes_answer = read_mistakes_answer(id, f, &report_value)?;
 
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
     // to run the declared command HERE and refuse a red cap — that run and
@@ -489,6 +610,36 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         if plan_followed {
             trace.insert("plan_followed".into(), Value::Bool(true));
         }
+        // reflection-becomes-lesson D5: SINK ONE — the answer on the cell's
+        // own trace, beside `plan_followed` above and for the same reason. It
+        // survives a resumed, compacted or handed-over session, which a
+        // run-scoped record cannot, and it is what `bee close` reads when it
+        // asks whether this feature's work ever said what went wrong.
+        // `Silent` writes NOTHING: an absent key is the unanswered case, and
+        // writing a false "clean" for it would be the silence D1 exists to
+        // end, spelled as an answer.
+        match &mistakes_answer {
+            MistakesAnswer::Recorded(list) => {
+                trace.insert(
+                    "mistakes".into(),
+                    Value::Array(
+                        list.iter()
+                            .map(|m| {
+                                json!({
+                                    "wrong": m.wrong,
+                                    "better": m.better,
+                                    "fix_at": m.fix_at,
+                                })
+                            })
+                            .collect(),
+                    ),
+                );
+            }
+            MistakesAnswer::Clean => {
+                trace.insert("no_mistakes".into(), Value::Bool(true));
+            }
+            MistakesAnswer::Silent => {}
+        }
         trace.insert(
             "friction".into(),
             f.friction.clone().map(Value::String).unwrap_or(Value::Null),
@@ -516,6 +667,29 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         };
         trace.insert("outcome".into(), outcome_value);
         trace.insert("capped_at".into(), Value::String(utc_now()));
+        // D4 (docs/history/pi-harness-workflow-parity/CONTEXT.md): store
+        // replayable proof in four non-null structured trace fields so another
+        // session can re-run the exact verify command.
+        trace.insert("verify_command".into(), Value::String(proof_command.clone()));
+        trace.insert("verify_output".into(), Value::String(proof_result.clone()));
+        trace.insert("verify_passed".into(), Value::Bool(true));
+        trace.insert("verification_evidence".into(), Value::String(proof_reason.clone()));
+        // proof-honesty D4 (decision f4261145): store the optional baseline
+        // on the cell trace beside the structured proof fields.
+        if let Some(Value::String(b)) = report_value.get("baseline") {
+            trace.insert("baseline".into(), Value::String(js_trim(b).to_string()));
+        }
+        if let Some(reaction) = report_value.get("reaction") {
+            trace.insert("reaction".into(), reaction.clone());
+        }
+        for key in ["skipped", "unknowns", "found"] {
+            if let Some(items) = report_value.get(key) {
+                trace.insert(key.into(), items.clone());
+            }
+        }
+        if let Some(Value::String(stopped)) = report_value.get("stopped") {
+            trace.insert("stopped".into(), Value::String(js_trim(stopped).to_string()));
+        }
         // fa-1: diff-vs-test advisory — the ONLY producer for this slot
         // since the E1 impact-registry check retired. Scoped to `cells
         // finish` alone (D6's own "finish only" posture): `cells cap`
@@ -610,7 +784,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     // this stop has HAPPENED, so its entry is appended now, not gathered
     // at the end of the run. Never refuses (D10), never conditional on
     // arming (D9). See `record_cap_in_mailbox`.
-    record_cap_in_mailbox(root, f, &saved, &report_value);
+    record_cap_in_mailbox(root, f, &saved, &report_value, &mistakes_answer);
     // merge-ready-fact D1: the cap that leaves NOTHING outstanding for this
     // feature is the one moment bee can know the feature is finished in its
     // worktree, so this is where the stored fact is written. Everything about
@@ -660,10 +834,15 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
 //      have passed. (D14's feature-close LETTER is phase 4; the feature-close
 //      ENTRY is what `mailbox::KIND_FEATURE_CLOSE` is for.)
 //   3. blocker — `bee cells block --id <id> --reason <why>`: `run_block`
-//      (this file) -> `mutate_cell(root, id, "blockCell", …)`, which writes
-//      `status: "blocked"` and `trace.blocked_reason` under the per-cell
-//      lock. The stop is complete when `mutate_cell` returns the cell, and
-//      the reason it just stored is the sentence's raw material.
+//      (this file) -> `block_cell` -> `mutate_cell(root, id, "blockCell", …)`,
+//      which writes `status: "blocked"` and `trace.blocked_reason` under the
+//      per-cell lock. The stop is complete when `mutate_cell` returns the
+//      cell, and the reason it just stored is the sentence's raw material.
+//      WIRED, by `record_block_in_mailbox` below — and it is the only stop
+//      that carries a D13 Needs-your-call item, because it is the only one
+//      with something to ask. `cells dissent` at blocker severity shares the
+//      mutation, not this hook: a dissent is a recorded disagreement the
+//      orchestrator answers, not a run reaching the human.
 //
 // Deliberately NOT stops: `cells drop` (work abandoned, not done), `cells
 // unclaim` and `cells reopen` (a claim moved; nothing finished), and
@@ -749,6 +928,101 @@ fn departure_door(id: &str, f: &CapFlags, report: &Value) -> MR<()> {
     Ok(())
 }
 
+/// reflection-becomes-lesson D1/D2/D5: what this cap says about mistakes.
+///
+/// ONE reading, for TWO sinks. The cap is the only writer of both the cell's
+/// `trace` and the run's mailbox entry, so reading the flags and the report
+/// once — here — is what makes it impossible for the two records to disagree
+/// about whether this cell hit anything.
+/// ONE recorded mistake, already through `mailbox::read_reflection`: what went
+/// wrong, what would have been better, and mistake-fix-at D1's layer that
+/// stops it coming back.
+///
+/// Named fields rather than a tuple because the third part made the tuple
+/// unreadable at the two sinks — `(String, String, String)` says nothing about
+/// which of the three is the layer, and both sinks write it by name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Mistake {
+    pub wrong: String,
+    pub better: String,
+    pub fix_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum MistakesAnswer {
+    /// The cap was never asked and never said: no flag, and no `mistakes` key
+    /// in the report. This is the case `bee close` refuses on — silence and a
+    /// clean run must not read alike (D1).
+    Silent,
+    /// One or more mistakes, each already through `mailbox::read_reflection`.
+    Recorded(Vec<Mistake>),
+    /// The explicit clean-run statement (D2).
+    Clean,
+}
+
+/// Read the mistakes answer out of the cap's flags and the worker's report.
+///
+/// Sources, in order: `--mistake`, then the report's `mistakes` array. A
+/// PRESENT-but-empty `mistakes` array is an answer — the worker was asked and
+/// said none — while an absent key is silence; that difference is the whole
+/// point of D1's door, and it is why the key is optional at the report gate
+/// and never defaulted here.
+///
+/// The three-part rule is NOT re-implemented: every line goes through
+/// `mailbox::read_mistake`, which ends at the same `read_reflection` door
+/// `bee mailbox reflect` uses. A line that misses a part is refused by the
+/// words that door hands back — the only refusal this feature adds at the
+/// cap, and it is unreachable from any caller that worked before it, because
+/// all three spellings (`--mistake`, `--fix-at`, `"mistakes"`) were refused
+/// outright as unknown until now.
+///
+/// `--mistake` and `--fix-at` are folded into ONE object here rather than
+/// concatenated into a line, so a `--mistake` passed without `--fix-at`
+/// reaches the door with an empty layer and is refused BY NAME (mistake-fix-at
+/// D1) instead of being read as a two-part record the door never sees.
+pub(crate) fn read_mistakes_answer(id: &str, f: &CapFlags, report: &Value) -> MR<MistakesAnswer> {
+    let mut recorded: Vec<Mistake> = Vec::new();
+    let mut asked = f.no_mistakes;
+    let mut lines: Vec<Value> = Vec::new();
+    if let Some(raw) = &f.mistake {
+        let (wrong, better) = match raw.split_once(mailbox::MISTAKE_SEPARATOR) {
+            Some((wrong, better)) => (wrong, better),
+            None => (raw.as_str(), ""),
+        };
+        lines.push(json!({
+            "wrong": wrong.trim(),
+            "better": better.trim(),
+            "fix_at": f.fix_at.as_deref().unwrap_or("").trim(),
+        }));
+    }
+    if let Some(Value::Array(reported)) = report.get("mistakes") {
+        asked = true;
+        lines.extend(reported.iter().cloned());
+    }
+    for line in &lines {
+        let (wrong, better, fix_at) = mailbox::read_mistake(line).map_err(|why| {
+            Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — a recorded mistake is incomplete: {why}"
+            ))
+        })?;
+        let mistake = Mistake { wrong, better, fix_at };
+        if !recorded.contains(&mistake) {
+            recorded.push(mistake);
+        }
+    }
+    if !recorded.is_empty() {
+        // A written mistake outranks the clean-run flag: the mistake is a fact
+        // somebody wrote down, and the flag is a claim about the absence of
+        // one. Nothing is refused over the contradiction — the cap's blast
+        // radius stays at zero — and the record keeps the fact.
+        return Ok(MistakesAnswer::Recorded(recorded));
+    }
+    if asked {
+        return Ok(MistakesAnswer::Clean);
+    }
+    Ok(MistakesAnswer::Silent)
+}
+
 /// D4/D8/D9 (docs/history/human-mailbox/CONTEXT.md): record this cap as one
 /// human-mailbox entry, THE MOMENT the cap lands.
 ///
@@ -767,7 +1041,13 @@ fn departure_door(id: &str, f: &CapFlags, report: &Value) -> MR<()> {
 /// FAIL-OPEN, by D10: `mailbox::record_stop` warns and returns. A cap in a
 /// run that files no letter keeps the byte-identical behaviour it had before
 /// this feature — nothing here refuses a cap, and no cap flag changes shape.
-fn record_cap_in_mailbox(root: &Path, f: &CapFlags, capped: &Value, report: &Value) {
+fn record_cap_in_mailbox(
+    root: &Path,
+    f: &CapFlags,
+    capped: &Value,
+    report: &Value,
+    mistakes: &MistakesAnswer,
+) {
     // The run is the SESSION's span (D9, D12 — see `mailbox::run_id`): the
     // caller's own session, resolved through the ordinary chain, and the
     // claim's recorded session when this process has no session of its own
@@ -830,8 +1110,39 @@ fn record_cap_in_mailbox(root: &Path, f: &CapFlags, capped: &Value, report: &Val
         // finished work, and a question that blocks something is a blocker
         // (stop kind 2 above) or a gate. Empty rather than guessed.
         needs_you: Vec::new(),
+        // letter-reflection: a mistake is written down by the agent through
+        // `bee mailbox reflect`, at the moment it is noticed. A cap must not
+        // guess one out of the work it just recorded — nor the layer that
+        // would have fixed it (mistake-fix-at D1).
+        better: None,
+        fix_at: None,
     };
     mailbox::record_stop(root, &run, &entry);
+
+    // reflection-becomes-lesson D5: SINK TWO — the same answer, in the run's
+    // mailbox, appended from the SAME values the trace above was written
+    // from. A reflection renders in the letter's own section; the clean-run
+    // statement renders in no section at all (D2) and is stored only so the
+    // record can tell a clean run from a run nobody asked.
+    //
+    // Fail-open like every other append (D10): `record_stop` warns and
+    // returns, and a mailbox that cannot be written never turns a landed cap
+    // into a refusal.
+    match mistakes {
+        MistakesAnswer::Recorded(list) => {
+            for m in list {
+                mailbox::record_stop(
+                    root,
+                    &run,
+                    &mailbox::Entry::reflection(&utc_now(), &m.wrong, &m.better, &m.fix_at),
+                );
+            }
+        }
+        MistakesAnswer::Clean => {
+            mailbox::record_stop(root, &run, &mailbox::Entry::no_mistakes(&utc_now()));
+        }
+        MistakesAnswer::Silent => {}
+    }
 }
 
 pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
@@ -857,6 +1168,14 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     // whitespace-only value by name instead of this probe silently treating
     // it as absent.
     let deviation = opt_string_flag(flags, "deviation")?;
+    // reflection-becomes-lesson: raw (untrimmed), same posture as
+    // `--deviation` above — `cap_cell_from_flags` names the problem itself
+    // rather than this probe reading a blank line as "not passed".
+    let mistake = opt_string_flag(flags, "mistake")?;
+    // mistake-fix-at: raw, same posture as `--mistake` above — the door names
+    // a blank layer rather than this probe reading it as "not passed".
+    let fix_at = opt_string_flag(flags, "fix-at")?;
+    let no_mistakes = bool_flag(flags, "no-mistakes")?;
     let force_ownership = bool_flag(flags, "force-ownership")?;
     // D2's --fix-first convention: trimmed; empty/absent = None.
     let commit_pending = match opt_string_flag(flags, "commit-pending")? {
@@ -873,6 +1192,9 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     // `--deviation`'s own probe takes above.
     let report = opt_string_flag(flags, "report")?;
     let sync_ack = opt_string_flag(flags, "sync-ack")?;
+    let from_job = opt_string_flag(flags, "from-job")?;
+    let proof_result = opt_string_flag(flags, "proof-result")?;
+    let proof_reason = opt_string_flag(flags, "proof-reason")?;
     Some(CapFlags {
         id,
         outcome,
@@ -881,12 +1203,18 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         deviations: Vec::new(), // filled inside dispatch (file read may throw)
         deviation,
         override_reason,
+        mistake,
+        fix_at,
+        no_mistakes,
         session_flag,
         force_ownership,
         commit_pending,
         inline_reason,
         report,
         sync_ack,
+        from_job,
+        proof_result,
+        proof_reason,
     })
 }
 
@@ -910,19 +1238,29 @@ pub(crate) fn cap_text(cell: &Value) -> String {
 /// `cells finish` is the one mutating verb ported onto the FULL door —
 /// `run_finish` below — per wf-1's logged decision.
 pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !rsv::keys_known(&flags, &CAP_FLAGS) {
+    let allowed: &[&str] = if finish { &FINISH_FLAGS } else { &CAP_FLAGS };
+    if !rsv::keys_known(&flags, allowed) {
         return None;
     }
     let cap_flags = cap_flags_from(&flags)?;
     let deviations_file = opt_string_flag(&flags, "deviations-file")?;
+    let report_file = opt_string_flag(&flags, "report-file")?;
     let cap_flags_owned = cap_flags;
 
     if finish {
-        return run_finish("cells finish", use_json, t0, cap_flags_owned, deviations_file);
+        return run_finish(
+            "cells finish",
+            use_json,
+            t0,
+            cap_flags_owned,
+            deviations_file,
+            report_file,
+        );
     }
 
     dispatch("cells cap", use_json, t0, move |ctx| {
-        let mut cap_flags = cap_flags_owned;
+        let mut cap_flags =
+            cap_flags_with_report_file(cap_flags_owned, report_file.as_deref(), false)?;
         let root = ctx.root.clone();
         if let Some(file) = &deviations_file {
             if !file.is_empty() {
@@ -963,6 +1301,7 @@ fn run_finish(
     t0: Instant,
     cap_flags_owned: CapFlags,
     deviations_file: Option<String>,
+    report_file: Option<String>,
 ) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let roots = match resolve_store_root_worktree(&cwd) {
@@ -983,7 +1322,10 @@ fn run_finish(
         drift_hint: drift.hint,
     };
     let topo_ref = topo.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
-    let out = finish_cap_and_release(&ctx.root, topo_ref, cap_flags_owned, deviations_file.as_deref());
+    let out = cap_flags_with_report_file(cap_flags_owned, report_file.as_deref(), true)
+        .and_then(|cap_flags| {
+            finish_cap_and_release(&ctx.root, topo_ref, cap_flags, deviations_file.as_deref())
+        });
     rsv::finish(&ctx, to_r2(out))
 }
 
@@ -1004,6 +1346,153 @@ pub(crate) fn finish_cap_and_release(
             // `flags['deviations-file'] ? parse : []` — truthy only.
             cap_flags.deviations = parse_deviations_file(file)?;
         }
+    }
+    let mut files_source: Option<&'static str> = None;
+    if let Some(job_id) = &cap_flags.from_job {
+        if cap_flags.report.is_some() {
+            return Err(Fail::Thrown(
+                "cells finish: --from-job cannot be combined with --report (FIX: omit --report when capping from a job)".to_string(),
+            ));
+        }
+        let proof_result = match &cap_flags.proof_result {
+            Some(s) if !js_trim(s).is_empty() => js_trim(s),
+            _ => {
+                return Err(Fail::Thrown(
+                    "cells finish: --from-job requires --proof-result <green:unit|green:static|green:live> (FIX: pass --proof-result)".to_string(),
+                ));
+            }
+        };
+        if !PROOF_RESULT_VALUES.contains(&proof_result) {
+            return Err(Fail::Thrown(format!(
+                "cells finish: --proof-result \"{proof_result}\" is invalid — must be one of: green:unit, green:static, green:live (FIX: pass a valid --proof-result)"
+            )));
+        }
+        if !cap_flags.no_mistakes && cap_flags.mistake.is_none() {
+            return Err(Fail::Thrown(
+                "cells finish: --from-job requires a mistakes answer: pass --no-mistakes or --mistake \"<what went wrong> — <what would have been better>\" --fix-at <architecture|check|doctrine|none> (FIX: pass --no-mistakes or --mistake with --fix-at)".to_string(),
+            ));
+        }
+
+        let bee_dir = root.join(".bee");
+        let job_file = crate::herding::mailbox::job_path(&bee_dir, job_id);
+        let job_raw = match std::fs::read_to_string(&job_file) {
+            Ok(raw) => raw,
+            Err(_) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: job \"{job_id}\" not found (no job.json at {})",
+                    job_file.display()
+                )));
+            }
+        };
+        let job_val: Value = serde_json::from_str(&job_raw).map_err(|e| {
+            Fail::Thrown(format!(
+                "cells finish: failed to parse {}: {e}",
+                job_file.display()
+            ))
+        })?;
+
+        if let Some(job_cell) = job_val.get("cell_id").and_then(Value::as_str) {
+            if job_cell != cap_flags.id {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: job \"{job_id}\" is for cell \"{job_cell}\", but --id is \"{}\" (FIX: verify the job id or cell id)",
+                    cap_flags.id
+                )));
+            }
+        }
+
+        let job_cwd_str = job_val.get("cwd").and_then(Value::as_str).unwrap_or("");
+        let job_cwd = Path::new(job_cwd_str);
+        if job_cwd_str.is_empty() || !job_cwd.exists() || !job_cwd.is_dir() {
+            return Err(Fail::Thrown(format!(
+                "cells finish: job \"{job_id}\" working directory \"{job_cwd_str}\" does not exist (FIX: pass --report)"
+            )));
+        }
+
+        let mbox_dir = crate::herding::mailbox::mailbox_dir(&bee_dir, job_id);
+        let mut entries = Vec::new();
+        if let Ok(dir_entries) = std::fs::read_dir(&mbox_dir) {
+            for entry in dir_entries.flatten() {
+                if let Ok(name) = entry.file_name().into_string() {
+                    entries.push(name);
+                }
+            }
+        }
+        let round = match crate::herding::mailbox::select_latest_round(&entries) {
+            Ok(r) => r,
+            Err(_) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: no result file found for job \"{job_id}\" in {} (FIX: wait for the job or inspect the worker)",
+                    mbox_dir.display()
+                )));
+            }
+        };
+        let res_path = crate::herding::mailbox::result_path(&bee_dir, job_id, round);
+        let res_text = match std::fs::read_to_string(&res_path) {
+            Ok(t) => t,
+            Err(_) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: could not read result file at {}",
+                    res_path.display()
+                )));
+            }
+        };
+        let mailbox_result = match crate::herding::mailbox::parse_result_text(round, &res_text) {
+            Ok(res) => res,
+            Err(e) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: failed to parse result file {}: {e}",
+                    res_path.display()
+                )));
+            }
+        };
+        if mailbox_result.status != crate::herding::mailbox::MailboxStatus::Done {
+            return Err(Fail::Thrown(format!(
+                "cells finish: job \"{job_id}\" result status is not done (was {:?}) (FIX: wait for the job to complete or pass --report)",
+                mailbox_result.status
+            )));
+        }
+
+        let worker_proof = mailbox_result.proof.trim();
+        let leader_reason = cap_flags.proof_reason.as_deref().unwrap_or("").trim();
+        if worker_proof.is_empty() && leader_reason.is_empty() {
+            return Err(Fail::Thrown(
+                "cells finish: worker result proof text is empty (FIX: pass --proof-reason)".to_string(),
+            ));
+        }
+
+        let git_facts = read_job_git_facts(job_cwd, root);
+
+        let cell_opt = read_cell_norm(root, &cap_flags.id)?;
+        let cell_val = cell_opt.ok_or_else(|| {
+            Fail::Thrown(format!("capCell: cell \"{}\" not found.", cap_flags.id))
+        })?;
+        let cell_verify = cell_val.get("verify").and_then(Value::as_str).unwrap_or("").trim();
+
+        let report_json = report_from_job(
+            &job_val,
+            &mailbox_result,
+            git_facts,
+            cell_verify,
+            &proof_result,
+            cap_flags.proof_reason.as_deref(),
+        )
+        .map_err(Fail::Thrown)?;
+
+        files_source = Some(if mailbox_result.files_changed.is_empty() {
+            "git fallback"
+        } else {
+            "worker files_changed"
+        });
+        let parsed_report: Value = serde_json::from_str(&report_json).unwrap_or(Value::Null);
+        if let Some(files_arr) = parsed_report.get("files").and_then(Value::as_array) {
+            cap_flags.files_changed = files_arr.clone();
+        }
+        if cap_flags.outcome.is_none() {
+            if let Some(o) = parsed_report.get("outcome").and_then(Value::as_str) {
+                cap_flags.outcome = Some(o.to_string());
+            }
+        }
+        cap_flags.report = Some(report_json);
     }
     let cell = cap_cell_from_flags(root, &cap_flags, true)?;
 
@@ -1047,7 +1536,13 @@ pub(crate) fn finish_cap_and_release(
         rf.insert("fix".into(), Value::String(fix.clone()));
         result.insert("release_failed".into(), Value::Object(rf));
     }
+    if let Some(source) = files_source {
+        result.insert("files_source".into(), Value::String(source.to_string()));
+    }
     let mut lines = vec![cap_text(&cell)];
+    if let Some(source) = files_source {
+        lines.push(format!("Files source: {source}."));
+    }
     lines.push(match (&release_failure, released.len()) {
         (Some((error, fix)), _) => {
             format!("Cap stands, but releasing reservations FAILED ({error}) — run: {fix}")
@@ -1108,38 +1603,113 @@ pub(crate) fn run_block(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
     let (session_flag, force) = ownership_args(&flags)?;
     dispatch("cells block", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        if js_trim(&reason).is_empty() {
-            return Err(Fail::Thrown("blockCell: a reason is required.".into()));
-        }
-        let root2 = root.clone();
-        let id2 = id.clone();
-        let reason2 = reason.clone();
-        let cell = mutate_cell(&root, &id, "blockCell", Some("blockCell"), true, move |cell_map| {
-            let trace = merge_trace(cell_map.get("trace"))?;
-            let trace = guard_claim_ownership(
-                &root2,
-                &id2,
-                trace,
-                "blockCell",
-                session_flag.as_deref(),
-                force,
-            )?;
-            let mut trace = append_attempt(
-                &root2,
-                &id2,
-                trace,
-                "blocked",
-                Some(normalize_failure_signature(&reason2)),
-                Some(&reason2),
-            )?;
-            cell_map.insert("status".into(), Value::String("blocked".into()));
-            trace.insert("blocked_reason".into(), Value::String(reason2.clone()));
-            cell_map.insert("trace".into(), Value::Object(trace));
-            Ok(())
-        })?;
+        let cell = block_cell(&root, &id, &reason, session_flag.as_deref(), force)?;
         let text = format!("Blocked {}.", js_string_or_undefined(cell.get("id")));
         Ok(Out::Emit(cell, text, 0))
     })
+}
+
+/// `bee cells block`'s whole stop: the guarded mutation, then D4's mailbox
+/// append. Extracted from `run_block` so the stop is reachable without a
+/// dispatch context — the same shape `cap_cell_from_flags` already has, and
+/// the reason the blocker letter can be proved end to end.
+pub(crate) fn block_cell(
+    root: &Path,
+    id: &str,
+    reason: &str,
+    session_flag: Option<&str>,
+    force: bool,
+) -> MR<Value> {
+    if js_trim(reason).is_empty() {
+        return Err(Fail::Thrown("blockCell: a reason is required.".into()));
+    }
+    let root2 = root.to_path_buf();
+    let id2 = id.to_string();
+    let reason2 = reason.to_string();
+    let session_owned = session_flag.map(str::to_string);
+    let cell = mutate_cell(root, id, "blockCell", Some("blockCell"), true, move |cell_map| {
+        let trace = merge_trace(cell_map.get("trace"))?;
+        let trace = guard_claim_ownership(
+            &root2,
+            &id2,
+            trace,
+            "blockCell",
+            session_owned.as_deref(),
+            force,
+        )?;
+        // The blocked-status write itself lives in `apply_block_mutation`
+        // (util.rs) — `cells dissent` at blocker severity arms the same
+        // tooth, and one mutation with two callers is the only way the
+        // status, the attempts row and the reason field cannot drift apart.
+        apply_block_mutation(&root2, &id2, cell_map, trace, &reason2)
+    })?;
+    // D4 (human-mailbox): the stop is COMPLETE the moment `mutate_cell`
+    // returns — `status: "blocked"` and the reason are on disk — so the
+    // entry is appended now. Fail-open (`record_stop` warns and returns):
+    // nothing about a letter may turn a recorded block into a refusal.
+    record_block_in_mailbox(root, &cell, reason, session_flag);
+    Ok(cell)
+}
+
+/// D4/D8/D9/D13 (docs/history/human-mailbox/CONTEXT.md): record this block as
+/// one human-mailbox entry, THE MOMENT the block lands — and, unlike every
+/// producer before it, with a Needs-your-call item.
+///
+/// It is the FIRST producer `mailbox::KIND_BLOCKER` has ever had. A cap
+/// records finished work and a green feature close left nothing outstanding,
+/// so both hard-code an empty item list and the letter's `Needs your call`
+/// section has been dropped from every letter this repo has written. A block
+/// is the opposite stop: the run stopped and something has to be answered
+/// before it can go on, which is exactly what D13's item is for (D2(e) of
+/// docs/history/slp-blind-lanes/CONTEXT.md — an unattended run's deadlock
+/// channel).
+///
+/// EVERY PART IS ALREADY STORED. The sentence is the reason `cells block`
+/// just wrote to `trace.blocked_reason`, verbatim; the item's id is the
+/// cell's own id and what it blocks is the cell's own title. Nothing here
+/// composes a second reason, and nothing states a fact the cell file does not
+/// carry — D8's authorship ban reaches a producer exactly as hard as it
+/// reaches the composing pass.
+///
+/// UNCONDITIONAL, by D9, and FAIL-OPEN, by D10 — the same posture as
+/// `record_cap_in_mailbox` above, for the same reasons.
+fn record_block_in_mailbox(root: &Path, blocked: &Value, reason: &str, session_flag: Option<&str>) {
+    // The same run resolution the cap uses (D9, D12): the caller's own
+    // session, then the claim's recorded session for a block typed in a plain
+    // shell against a cell some session claimed.
+    let session = resolve_session_flag_env(session_flag).or_else(|| {
+        match blocked.get("trace").and_then(|t| t.get("claim_session")) {
+            Some(Value::String(s)) if !js_trim(s).is_empty() => Some(js_trim(s).to_string()),
+            _ => None,
+        }
+    });
+    let run = mailbox::run_id(session.as_deref());
+    let id = blocked.get("id").and_then(Value::as_str).unwrap_or_default();
+    let entry = mailbox::Entry {
+        at: utc_now(),
+        kind: mailbox::KIND_BLOCKER.to_string(),
+        // D8: the plain-language sentence is written HERE, at the moment of
+        // the event, never at composition.
+        what: mailbox::block_sentence(reason),
+        // A block edited nothing and proved nothing — it is where the work
+        // stopped. Empty rather than guessed.
+        files: Vec::new(),
+        commit: None,
+        proof: None,
+        // A block is not a departure from a plan (D5); it is the plan running
+        // out of road.
+        departure: None,
+        needs_you: vec![mailbox::block_needs_you(
+            id,
+            blocked.get("title").and_then(Value::as_str),
+            reason,
+        )],
+        // Only a reflection entry carries letter-reflection's second part
+        // or mistake-fix-at's layer.
+        better: None,
+        fix_at: None,
+    };
+    mailbox::record_stop(root, &run, &entry);
 }
 
 pub(crate) fn run_drop(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -1452,6 +2022,13 @@ pub(crate) fn set_escalation(
     })
 }
 
+pub(crate) fn escalate_off(flags: &rsv::Flags) -> Option<bool> {
+    match flags.get("off") {
+        Some(rsv::FlagV::S(s)) if s == "true" => Some(true),
+        _ => bool_flag(flags, "off"),
+    }
+}
+
 /// `bee cells escalate --id <id> [--reason <text>] [--off]` — the door
 /// `bee cells tier --tier ceiling` used to be.
 pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -1459,7 +2036,7 @@ pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Op
         return None;
     }
     let id = flags.req_str("id")?.to_string();
-    let off = bool_flag(&flags, "off")?;
+    let off = escalate_off(&flags)?;
     // --reason <text> (D3): overrides the escalation-share budget refusal
     // below. A flag-alone `--reason` (no value) is unprovable here — same
     // as every other optional value-flag this verb group parses through
@@ -1487,14 +2064,14 @@ pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Op
 mod tests {
     use super::*;
 
-    const PROOF: &str = "cargo test -p bee — green — the cap hook only";
+    const PROOF: &str = "cargo test -p bee — green:unit — the cap hook only";
 
     fn mailbox_cell(root: &Path, id: &str) {
         let dir = root.join(".bee").join("cells");
         std::fs::create_dir_all(&dir).unwrap();
         let body = json!({
             "id": id, "feature": "human-mailbox", "title": "the store that holds a letter",
-            "action": "a", "verify": "cargo test", "lane": "tiny", "status": "claimed",
+            "action": "a", "verify": "cargo test -p bee", "lane": "tiny", "status": "claimed",
             "deps": [], "files": [], "trace": {},
         });
         std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(&body)).unwrap();
@@ -1509,6 +2086,9 @@ mod tests {
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: false,
             // Pinned so the run this test reads back can never depend on a
             // BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID the test process inherited.
             session_flag: Some("mb-run".to_string()),
@@ -1533,6 +2113,9 @@ mod tests {
                 .to_string(),
             ),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -1577,6 +2160,228 @@ mod tests {
         assert_eq!(entries[1].what, "Wired the second stop");
     }
 
+    // ── reflection-becomes-lesson D5: the cap collects the answer ────────
+
+    /// A cap whose report carries `mistakes`, with `<mistakes>` spliced into
+    /// the report JSON. Everything else is `mailbox_cap_flags`' own shape.
+    fn cap_flags_with_mistakes(id: &str, mistakes: &str) -> CapFlags {
+        let mut flags = mailbox_cap_flags(id, "Landed the work");
+        flags.report = Some(format!(
+            "{{\"outcome\":\"o\",\"commit\":\"abc1234\",\"files\":[],\"tests\":\"{PROOF}\",\"deviations\":[\"followed the plan\"],\"mistakes\":{mistakes}}}"
+        ));
+        flags
+    }
+
+    /// TRUTH: the cap is the ONE writer and it fills BOTH sinks from ONE
+    /// reading — the cell's own trace and the run's mailbox — so the two can
+    /// never disagree about what this cell hit.
+    #[test]
+    fn a_cap_that_reports_mistakes_fills_both_sinks_from_one_reading() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m1");
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_with_mistakes(
+                "mb-m1",
+                "[\"Guessed the folder name — Read the path back first — architecture\"]",
+            ),
+            false,
+        )
+        .unwrap();
+
+        // SINK ONE: the cell's own trace, in the three parts the door read.
+        assert_eq!(
+            capped["trace"]["mistakes"],
+            json!([{
+                "wrong": "Guessed the folder name",
+                "better": "Read the path back first",
+                "fix_at": "architecture",
+            }])
+        );
+        assert!(capped["trace"].get("no_mistakes").is_none(), "a mistake is not a clean run");
+
+        // SINK TWO: the run's mailbox, where the letter reads it.
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 2, "the cap stop, then the mistake");
+        assert_eq!(entries[0].kind, crate::verbs::mailbox::KIND_CAP);
+        assert!(entries[1].is_reflection());
+        assert_eq!(entries[1].what, "Guessed the folder name");
+        assert_eq!(entries[1].better.as_deref(), Some("Read the path back first"));
+        assert_eq!(entries[1].fix_at.as_deref(), Some("architecture"));
+    }
+
+    /// TRUTH (mistake-fix-at D1): the OBJECT shape of a report item carries
+    /// the layer under its own key, and it lands in both sinks exactly as the
+    /// one-line shape does — two spellings, one record.
+    #[test]
+    fn a_report_mistake_object_carries_the_layer_under_its_own_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m6");
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_with_mistakes(
+                "mb-m6",
+                "[{\"wrong\":\"Guessed the folder name\",\"better\":\"Read it first\",\"fix_at\":\"architecture\"}]",
+            ),
+            false,
+        )
+        .unwrap();
+        assert_eq!(capped["trace"]["mistakes"][0]["fix_at"], json!("architecture"));
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries[1].fix_at.as_deref(), Some("architecture"));
+    }
+
+    /// TRUTH (mistake-fix-at D1): `--mistake` and `--fix-at` are ONE record,
+    /// read through the same door — the flag pair lands the layer in both
+    /// sinks, and the trace object spells it as its third key.
+    #[test]
+    fn the_cap_flag_pair_records_the_layer_in_both_sinks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m7");
+        let mut flags = mailbox_cap_flags("mb-m7", "Landed the work");
+        flags.mistake = Some("Guessed the folder name — Read the path back first".to_string());
+        flags.fix_at = Some("check".to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(
+            capped["trace"]["mistakes"],
+            json!([{
+                "wrong": "Guessed the folder name",
+                "better": "Read the path back first",
+                "fix_at": "check",
+            }])
+        );
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert!(entries[1].is_reflection());
+        assert_eq!(entries[1].fix_at.as_deref(), Some("check"));
+    }
+
+    /// TRUTH: a cap that was ASKED and hit none says so — in both sinks — and
+    /// that stored answer is what keeps silence and a clean run apart.
+    #[test]
+    fn a_cap_that_reports_an_empty_mistakes_array_states_the_clean_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m2");
+        let capped =
+            cap_cell_from_flags(root, &cap_flags_with_mistakes("mb-m2", "[]"), false).unwrap();
+
+        assert_eq!(capped["trace"]["no_mistakes"], json!(true));
+        assert!(capped["trace"].get("mistakes").is_none());
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 2);
+        assert!(entries[1].is_no_mistakes());
+        assert!(entries[1].is_mistakes_answer());
+    }
+
+    /// TRUTH: the `--no-mistakes` FLAG says the same thing as an empty array —
+    /// one answer, one recorded shape, whichever door the caller came through.
+    #[test]
+    fn the_clean_run_flag_records_the_same_answer_as_an_empty_array() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m3");
+        let mut flags = mailbox_cap_flags("mb-m3", "Landed the work");
+        flags.no_mistakes = true;
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["no_mistakes"], json!(true));
+        assert!(crate::verbs::mailbox::read_entries(root, "mb-run")[1].is_no_mistakes());
+    }
+
+    /// TRUTH: SILENCE IS NOT AN ANSWER. A cap that says nothing about
+    /// mistakes records nothing — no trace key, no mailbox entry — which is
+    /// exactly what `bee close` refuses on. Writing a "clean" here would be
+    /// the silence D1 exists to end, spelled as an answer.
+    #[test]
+    fn a_cap_that_says_nothing_about_mistakes_records_no_answer_at_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m4");
+        // The pre-existing fixture: a report with no `mistakes` key, and no
+        // flag — byte-identical to every cap that shipped before this
+        // feature.
+        let capped =
+            cap_cell_from_flags(root, &mailbox_cap_flags("mb-m4", "Landed the work"), false)
+                .unwrap();
+        assert!(capped["trace"].get("mistakes").is_none());
+        assert!(capped["trace"].get("no_mistakes").is_none());
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 1, "the cap stop, and nothing else");
+    }
+
+    /// TRUTH: half a mistake is refused by the SAME three-part door
+    /// `bee mailbox reflect` uses, and the refusal names the missing part.
+    /// It refuses nothing that worked before: `--mistake` did not exist.
+    #[test]
+    fn a_half_written_mistake_is_refused_by_the_two_part_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m5");
+        let mut flags = mailbox_cap_flags("mb-m5", "Landed the work");
+        flags.mistake = Some("Guessed the folder name".to_string());
+        flags.fix_at = Some("check".to_string());
+        let err = match cap_cell_from_flags(root, &flags, false) {
+            Err(Fail::Thrown(why)) => why,
+            other => panic!("expected a refusal, got {other:?}"),
+        };
+        assert!(err.contains("--better"), "{err}");
+        assert!(err.contains("mb-m5"), "the refusal names the cell: {err}");
+        // Refused BEFORE any write: the cell is untouched and the run
+        // recorded no stop.
+        assert!(!crate::verbs::mailbox::entries_dir(root).exists());
+    }
+
+    /// TRUTH (mistake-fix-at D1): a `--mistake` with no `--fix-at` is refused
+    /// BY NAME, at the same door, before any write. The layer is the third
+    /// required part of the record, never a field the cap fills in for the
+    /// worker — an empty layer is the silence D1 exists to end.
+    #[test]
+    fn a_cap_mistake_without_a_layer_is_refused_naming_the_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m8");
+        let mut flags = mailbox_cap_flags("mb-m8", "Landed the work");
+        flags.mistake = Some("Guessed the folder name — Read the path back first".to_string());
+        let err = match cap_cell_from_flags(root, &flags, false) {
+            Err(Fail::Thrown(why)) => why,
+            other => panic!("expected a refusal, got {other:?}"),
+        };
+        assert!(err.contains("--fix-at"), "{err}");
+        for layer in crate::verbs::mailbox::FIX_AT_VALUES {
+            assert!(err.contains(layer), "the refusal does not list {layer}: {err}");
+        }
+        assert!(err.contains("mb-m8"), "the refusal names the cell: {err}");
+        assert!(!crate::verbs::mailbox::entries_dir(root).exists());
+    }
+
+    /// TRUTH (mistake-fix-at D1): a report item written in the OLD two-part
+    /// shape is refused naming the third part — the door is one, so a worker
+    /// on an old habit gets the same words at the cap it would get at
+    /// `bee mailbox reflect`.
+    #[test]
+    fn a_two_part_report_mistake_is_refused_naming_the_third_part() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m9");
+        let err = match cap_cell_from_flags(
+            root,
+            &cap_flags_with_mistakes(
+                "mb-m9",
+                "[\"Guessed the folder name — Read the path back first\"]",
+            ),
+            false,
+        ) {
+            Err(Fail::Thrown(why)) => why,
+            other => panic!("expected a refusal, got {other:?}"),
+        };
+        assert!(err.contains("--fix-at"), "{err}");
+        assert!(err.contains("mb-m9"), "the refusal names the cell: {err}");
+        assert!(!crate::verbs::mailbox::entries_dir(root).exists());
+    }
+
     #[test]
     fn a_cap_whose_mailbox_cannot_be_written_still_caps() {
         // D10: a cap in a run that files no letter behaves exactly as it did
@@ -1605,6 +2410,88 @@ mod tests {
         let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
         assert_eq!(entries[0].what, "Finished the store that holds a letter.");
     }
+
+    // ── D4/D13 + slp D2(e): the blocker stop, the first producer of an
+    //    item for the letter's `Needs your call` section ──────────────────
+
+    const BLOCK_REASON: &str = "Which name do you want for the folder?";
+
+    #[test]
+    fn a_block_files_the_item_the_needs_your_call_section_never_had() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+        // D9: unarmed, and it still records — arming decides only whether a
+        // letter is composed at the end of the run.
+        assert!(!crate::verbs::mailbox::armed(root));
+        mailbox_cell(root, "mb-5");
+
+        let blocked = block_cell(root, "mb-5", BLOCK_REASON, Some("mb-run"), false).unwrap();
+        assert_eq!(blocked["status"], json!("blocked"));
+        assert_eq!(blocked["trace"]["blocked_reason"], json!(BLOCK_REASON));
+
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 1, "the block appended exactly one entry");
+        let entry = &entries[0];
+        assert_eq!(entry.kind, crate::verbs::mailbox::KIND_BLOCKER);
+        // D8: the reason it just stored IS the sentence, verbatim — never
+        // re-worded, and never composed out of the cell's title.
+        assert_eq!(entry.what, BLOCK_REASON);
+        assert!(!entry.at.is_empty(), "the moment is recorded");
+        // D13: the blocked cell and the recorded reason, and nothing else.
+        assert_eq!(entry.needs_you.len(), 1);
+        let item = &entry.needs_you[0];
+        assert_eq!(item.id, "mb-5");
+        assert_eq!(item.what, BLOCK_REASON);
+        assert_eq!(item.blocks, "the store that holds a letter");
+
+        // The section every letter so far has dropped now has something to
+        // report, and the blocker's own sentence lands under D7's
+        // "Broken or unfinished" rather than under "Done".
+        let body = crate::verbs::mailbox::compose_body(&entries);
+        assert!(body.contains("## Needs your call"), "body was:\n{body}");
+        assert!(
+            body.contains(
+                "- [mb-5] Which name do you want for the folder? — blocks: the store that holds a letter"
+            ),
+            "body was:\n{body}"
+        );
+        let broken_at = body.find("## Broken or unfinished").unwrap();
+        assert!(body.find(&format!("- {BLOCK_REASON}")).unwrap() > broken_at, "body was:\n{body}");
+    }
+
+    #[test]
+    fn a_block_whose_mailbox_cannot_be_written_is_still_a_recorded_block() {
+        // D10: the block is the operation, the letter is the notification. A
+        // letter that cannot be written must never turn a recorded block into
+        // a different error.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(crate::verbs::mailbox::mailbox_dir(root)).unwrap();
+        std::fs::write(crate::verbs::mailbox::entries_dir(root), "not a directory").unwrap();
+
+        mailbox_cell(root, "mb-6");
+        let blocked =
+            block_cell(root, "mb-6", "The two doors disagree", Some("mb-run"), false).unwrap();
+        assert_eq!(blocked["status"], json!("blocked"));
+        assert_eq!(blocked["trace"]["blocked_reason"], json!("The two doors disagree"));
+        assert!(crate::verbs::mailbox::read_entries(root, "mb-run").is_empty());
+    }
+
+    #[test]
+    fn a_cap_still_asks_the_human_for_nothing() {
+        // The other half of the same rule: a cap records finished work, so
+        // its entry carries no item and its letter drops the section.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-7");
+        cap_cell_from_flags(root, &mailbox_cap_flags("mb-7", "Did the work"), false).unwrap();
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert!(entries[0].needs_you.is_empty());
+        assert!(!crate::verbs::mailbox::compose_body(&entries).contains("## Needs your call"));
+    }
+
     // ── D5 + D10: the departure contract, enforced only while armed ─────
 
     const DEPARTURE: &str =
@@ -1823,5 +2710,47 @@ mod tests {
         let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(trace_deviations(&capped), vec!["followed the plan".to_string()]);
         assert_eq!(capped["trace"].get("plan_followed"), None);
+    }
+}
+
+#[cfg(test)]
+mod escalate_v2_off_tests {
+    use super::*;
+
+    fn off_of(tokens: &[&str]) -> Option<bool> {
+        let (flags, _) = rsv::parse_flags(tokens)?;
+        escalate_off(&flags)
+    }
+
+    #[test]
+    fn escalate_v2_bare_off_parses_as_true() {
+        assert_eq!(off_of(&["--id", "c-1", "--off"]), Some(true));
+        assert_eq!(off_of(&["--off", "--id", "c-1"]), Some(true));
+    }
+
+    #[test]
+    fn escalate_v2_off_equals_true_clears_and_false_escalates() {
+        assert_eq!(off_of(&["--id", "c-1", "--off=true"]), Some(true));
+        assert_eq!(off_of(&["--id", "c-1", "--off=false"]), Some(false));
+        assert_eq!(off_of(&["--id", "c-1"]), Some(false));
+    }
+
+    #[test]
+    fn escalate_v2_off_clears_an_escalated_cell_without_the_budget_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..4 {
+            let cell = json!({
+                "id": format!("c-{i}"), "feature": "f", "title": "t", "action": "a", "verify": "v",
+                "lane": "standard", "role": "code", "status": "open", "deps": [], "files": [],
+                "escalate": true, "trace": {},
+            });
+            std::fs::write(dir.join(format!("c-{i}.json")), jsjson::stringify_pretty(&cell)).unwrap();
+        }
+        let cleared = set_escalation(root, "c-0", false, None).unwrap();
+        assert!(cleared.get(ESCALATE_FIELD).is_none(), "{cleared}");
+        assert!(!crate::verbs::cells::cell_is_escalated(&cleared));
     }
 }

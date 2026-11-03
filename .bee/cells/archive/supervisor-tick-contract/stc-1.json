@@ -1,0 +1,65 @@
+{
+  "id": "stc-1",
+  "feature": "supervisor-tick-contract",
+  "role": "docs",
+  "title": "Document the external-trigger contract for a cold supervisor tick",
+  "action": "PBI sup-20260831-7f3a (bee-side half of making bee supervisor actually run) named four gaps. Investigation found gaps 1 and 2 already shipped (mailbox delivery at the UserPromptSubmit turn boundary, and --role dispatch|merge|supervisor parsing) with no code change needed. Gap 3 (a documented contract for a tick triggered from outside, waggledance being the caller) and gap 4 (the notebook's causal shape) both resolve without new code: gap 3 by documenting the existing `--role supervisor --once --main-root PATH` subprocess-spawn primitive, gap 4 by deferring a heavier notebook shape to a parked PBI rather than adding validation that would fight the locked terse-note decision (c80debd7). Add an 'External trigger (cross-repo callers)' section to docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md documenting the contract, its exit-code semantics, and its concurrency safety.",
+  "verify": ".bee/bin/bee knowledge check --json",
+  "slice": 1,
+  "lane": "tiny",
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "The knowledge-area doc names the exact --once --main-root invocation as the external-trigger primitive.",
+      "The doc states the invocation needs no tmux/herdr pane, citing the subprocess spawn path.",
+      "The doc states the exit-code contract (0 on completed/timed-out, 1 only on spawn failure).",
+      "The doc states repeated/concurrent invocation is safe because stores are append-only and the point-key frequency cap absorbs duplicates.",
+      "bee knowledge check reports zero OKF/profile errors after the edit."
+    ]
+  },
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+  ],
+  "acceptance": "The knowledge-area doc documents the external-trigger contract in full (primitive, transport, exit codes, concurrency safety, no verb-surface change), and bee knowledge check is green.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "50d29046",
+    "80aa9db1",
+    "051b87ba",
+    "17e9c1f6"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+    "docs/discovery/slp-human-up/tickets/004-waggledance-supervisor-feasibility.md"
+  ],
+  "trace": {
+    "worker": "supervisor-tick-contract-w1",
+    "outcome": "Documented the --once --main-root external-trigger contract in the bee-herding supervisor knowledge area",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-31T08:41:42.653Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a91b2f53-3ba5-4d92-911f-02771534fea4",
+    "claimed_at": "2026-08-31T08:41:31.487Z",
+    "report": {
+      "outcome": "Added an External trigger (cross-repo callers) section documenting the --role supervisor --once --main-root PATH primitive: no pane needed, exit-code contract, and concurrency safety via append-only stores + the point-key frequency cap.",
+      "commit": "eda75638",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --json — green (errors: 0, profile_errors: 0) — docs-only change, parity/pointer check is the proof this change type needs",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

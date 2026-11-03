@@ -1,0 +1,100 @@
+{
+  "id": "tt-3",
+  "feature": "token-thrift",
+  "title": "Cap the promote-proposal blocker in orient",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D5",
+    "a48a300c-75d8-47b8-9a02-dc32b94eb053"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/token-thrift/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "action": "In orient.rs, the promote-proposal blocker (near line 506): add `const PROMOTE_PROPOSALS_SHOWN: usize = 3;`. Name only the first PROMOTE_PROPOSALS_SHOWN proposals (same order as today) in the `{named}` part and in the clear-command part; when more exist, append `; +N more` to the named part (N = total - shown). The count `{} feature(s)` stays the total. With 3 or fewer proposals the line is byte-identical to today, so the existing test near tests.rs:1246 stays green. Add a test with 5 proposals: the line starts with `promote proposal unapplied: 5 feature(s) — `, names exactly 3 features, contains `+2 more`, and carries exactly 3 clear commands. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee status_full",
+  "must_haves": {
+    "truths": [
+      "orient names at most 3 promote proposals and states +N more",
+      "the feature count stays the total",
+      "3 or fewer proposals render exactly as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "substantive": "capped promote blocker"
+      }
+    ],
+    "key_links": [
+      "the blocker reads unapplied_promote_proposals once"
+    ],
+    "prohibitions": [
+      "No change to other blocker lines",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-tt-3",
+    "outcome": "Orient's promote-proposal blocker names at most 3 features then `; +N more`, keeping the total count and byte-identical output for 3 or fewer; new 5-proposal test added — commit 81f81b039",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-21T05:04:23.797Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee status_full — green:unit — all 119 status_full tests pass, including the new orient_caps_the_promote_proposal_blocker_at_three_features; the declared full-suite command also ran: 4363 passed, 1 failed in devtools::comment_baseline on hooks/session_init.rs and hooks/session_preamble/budget.rs (files this cell did not touch), plus unrelated plugin/session_release contract suites",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "48772102-7614-4853-aa3b-034ee7a935a1",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee status_full",
+    "claimed_at": "2026-10-21T04:51:25.018Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Orient's promote-proposal blocker names at most 3 features then `; +N more`, keeping the total count and byte-identical output for 3 or fewer; new 5-proposal test added — commit 81f81b039",
+      "commit": "81f81b039b704125b5b5301d1a63cb19c8e9e019",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee status_full — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee status_full — green:unit — all 119 status_full tests pass, including the new orient_caps_the_promote_proposal_blocker_at_three_features; the declared full-suite command also ran: 4363 passed, 1 failed in devtools::comment_baseline on hooks/session_init.rs and hooks/session_preamble/budget.rs (files this cell did not touch), plus unrelated plugin/session_release contract suites",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "orient names at most 3 promote proposals and states +N more",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          },
+          {
+            "requirement": "the feature count stays the total",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          },
+          {
+            "requirement": "3 or fewer proposals render exactly as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+          }
+        ],
+        "recorded_at": "2026-10-21T05:04:50.524Z",
+        "recorded_by": "48772102-7614-4853-aa3b-034ee7a935a1",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

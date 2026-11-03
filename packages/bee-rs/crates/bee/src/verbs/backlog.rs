@@ -51,9 +51,11 @@ use crate::fsutil::append_jsonl;
 use crate::jsjson;
 use crate::lock::{acquire_store_lock_once, AcquireOnce};
 use crate::registry::{check_manifest_drift, Drift};
-use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
+use crate::roots::Roots;
 use crate::state::read_config_raw;
 use crate::textutil::char_len;
+use crate::verbs::brief;
+use crate::verbs::drivers::resolve_root_serving_granted;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -65,12 +67,12 @@ use std::time::Instant;
 const PBI_STATUSES: [&str; 5] = ["proposed", "in-flight", "parked", "done", "declined"];
 const BACKLOG_STATUSES: [&str; 3] = ["proposed", "in-flight", "done"];
 const BACKLOG_SEVERITIES: [&str; 3] = ["P1", "P2", "P3"];
-const BACKLOG_MAX_TITLE: usize = 200;
+pub(crate) const BACKLOG_MAX_TITLE: usize = 200;
 const BACKLOG_MAX_LAYER: usize = 40;
 const BACKLOG_MAX_STORY: usize = 200;
 const BACKLOG_MAX_COS: usize = 2000;
 
-fn backlog_jsonl_path(root: &Path) -> PathBuf {
+pub(crate) fn backlog_jsonl_path(root: &Path) -> PathBuf {
     root.join(".bee").join("backlog.jsonl")
 }
 
@@ -396,6 +398,51 @@ fn is_finding_row(row: &Value) -> bool {
     hit("kind") || hit("type")
 }
 
+/// The finding row `bee backlog add` appends — the ONE shape any writer uses.
+///
+/// Lifted out of [`run_add`] by mistake-fix-at D2 so `bee close` can file a
+/// fix-at row through the same builder. The key order below is a contract:
+/// the feedback digest and `bee backlog findings` read these rows, and two
+/// builders would be two places for that order to drift. Validation stays
+/// with the VERB (`add_refusal`) — a row built here is already trusted.
+pub(crate) fn backlog_finding_row(
+    ty: &str,
+    title: &str,
+    detail: &str,
+    severity: &str,
+    layer: &str,
+    feature: &str,
+) -> Map<String, Value> {
+    // Row key order: ts, type, title, detail, severity, layer, feature.
+    let mut line = Map::new();
+    line.insert("ts".into(), Value::String(now_iso()));
+    line.insert("type".into(), Value::String(ty.to_string()));
+    line.insert("title".into(), Value::String(title.to_string()));
+    line.insert("detail".into(), Value::String(detail.to_string()));
+    line.insert("severity".into(), Value::String(severity.to_string()));
+    line.insert("layer".into(), Value::String(layer.to_string()));
+    line.insert("feature".into(), Value::String(feature.to_string()));
+    line
+}
+
+/// Is a finding row with exactly this feature, layer and title already on
+/// disk?
+///
+/// mistake-fix-at D2's "the same entry is never filed twice", and the reason
+/// a second `bee close` of the same feature files nothing. A finding row
+/// carries no id, so the three fields ARE its identity; equality is exact on
+/// all three, never fuzzy — a near-match is a different mistake, and the
+/// digest reads `title` verbatim.
+pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool {
+    read_jsonl(&backlog_jsonl_path(root)).rows.iter().any(|row| {
+        if !is_finding_row(row) {
+            return false;
+        }
+        let field = |name: &str| row.get(name).and_then(Value::as_str).unwrap_or("");
+        field("feature") == feature && field("layer") == layer && field("title") == title
+    })
+}
+
 /// matchesBacklogFeature: String(row.feature) whole-token match.
 fn matches_feature(row: &Value, feature: &str) -> bool {
     let value = match row.get("feature") {
@@ -573,6 +620,7 @@ fn lock_busy_message(holder: &Option<Value>) -> String {
 
 struct Ctx {
     root: PathBuf,
+    docs: PathBuf,
     drift: Drift,
 }
 
@@ -580,15 +628,24 @@ struct Ctx {
 /// delegates.
 fn preamble(cmd: &str, pre_json: bool, t0: Instant) -> Result<Option<Ctx>, ExitCode> {
     let Ok(cwd) = std::env::current_dir() else { return Ok(None) };
-    let root = match resolve_store_root(&cwd) {
+    preamble_at(&cwd, cmd, pre_json, t0)
+}
+
+fn preamble_at(
+    cwd: &Path,
+    cmd: &str,
+    pre_json: bool,
+    t0: Instant,
+) -> Result<Option<Ctx>, ExitCode> {
+    let (resolved, here) = resolve_root_serving_granted(cwd);
+    let root = match resolved {
         Roots::Ordinary(r) => r,
-        Roots::Unsupported(why) => {
-            return Err(emit_unsupported_root(&cwd, cmd, pre_json, t0, &why))
-        }
-        Roots::None => return Err(emit_no_root_error(&cwd, cmd, pre_json, t0)),
+        Roots::Unsupported(why) => return Err(emit_unsupported_root(cwd, cmd, pre_json, t0, &why)),
+        Roots::None => return Err(emit_no_root_error(cwd, cmd, pre_json, t0)),
     };
     let drift = check_manifest_drift(&root);
-    Ok(Some(Ctx { root, drift }))
+    let docs = here.unwrap_or_else(|| root.clone());
+    Ok(Some(Ctx { root, docs, drift }))
 }
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
@@ -615,13 +672,14 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
                 t0,
             )
         }
-        "propose" => run_propose(parse_shape(&args[2..], &["story", "cos", "feature"])?, t0),
+        "propose" => run_propose(parse_shape(&args[2..], &["story", "cos", "feature", "brief-file"])?, t0),
+        "briefs" => run_briefs(parse_shape(&args[2..], &["id"])?, t0),
         "pbi" => {
             let sub = args.get(2)?.to_str()?;
             let rest = &args[3..];
             match sub {
                 "add" => run_pbi_add(
-                    parse_shape(rest, &["title", "cos", "status", "feature", "id"])?,
+                    parse_shape(rest, &["title", "cos", "status", "feature", "id", "brief-file"])?,
                     t0,
                 ),
                 "status" => run_pbi_status(parse_shape(rest, &["id", "to", "feature"])?, t0),
@@ -830,15 +888,7 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
     // `flags.detail !== undefined && !== true ? String(flags.detail) : ''`.
     let detail = parsed.flags.get("detail").cloned().unwrap_or_default();
     let feature = parsed.flags.get("feature").cloned().unwrap_or_default();
-    // Row key order: ts, type, title, detail, severity, layer, feature.
-    let mut line = Map::new();
-    line.insert("ts".into(), Value::String(now_iso()));
-    line.insert("type".into(), Value::String(ty.to_string()));
-    line.insert("title".into(), Value::String(title.to_string()));
-    line.insert("detail".into(), Value::String(detail));
-    line.insert("severity".into(), Value::String(severity.to_string()));
-    line.insert("layer".into(), Value::String(layer.to_string()));
-    line.insert("feature".into(), Value::String(feature));
+    let line = backlog_finding_row(ty, title, &detail, severity, layer, &feature);
     let path = backlog_jsonl_path(&ctx.root);
     if append_jsonl(&path, &Value::Object(line.clone())).is_err() {
         // The one refusal that cannot promise "nothing was written": the write
@@ -882,6 +932,10 @@ fn run_propose(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
+    let draft = match read_brief_draft(&ctx.root, "backlog propose", &parsed, t0) {
+        Ok(d) => d,
+        Err(code) => return Some(code),
+    };
     let item = match add_pbi(&ctx.root, None, &story, &cos, "proposed", Some(&feature)) {
         PbiAdd::Ok(item) => item,
         PbiAdd::Delegate => return None,
@@ -903,7 +957,8 @@ fn run_propose(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     row.insert("story".into(), Value::String(item.title.clone()));
     row.insert("cos".into(), Value::String(item.cos.clone()));
     row.insert("feature".into(), Value::String(feature_out.clone()));
-    let text = format!("Proposed {}: \"{}\" (feature: {feature_out})", item.id, item.title);
+    let warning = store_brief(&ctx.docs, &item.id, draft.as_deref(), &mut row);
+    let text = format!("Proposed {}: \"{}\" (feature: {feature_out}){warning}", item.id, item.title);
     Some(emit_success(
         &ctx.root,
         "backlog propose",
@@ -926,6 +981,10 @@ fn run_pbi_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
+    let draft = match read_brief_draft(&ctx.root, "backlog pbi add", &parsed, t0) {
+        Ok(d) => d,
+        Err(code) => return Some(code),
+    };
     let item = match add_pbi(&ctx.root, id.as_deref(), &title, &cos, &status, feature.as_deref()) {
         PbiAdd::Ok(item) => item,
         PbiAdd::Delegate => return None,
@@ -939,16 +998,114 @@ fn run_pbi_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
             ))
         }
     };
-    let text = format!("Added PBI {}: \"{}\"", item.id, item.title);
-    Some(emit_success(
-        &ctx.root,
-        "backlog pbi add",
-        parsed.json,
-        &ctx.drift,
-        &pbi_value(&item),
-        &text,
-        t0,
-    ))
+    let mut value = pbi_value(&item);
+    let warning = match value.as_object_mut() {
+        Some(m) => store_brief(&ctx.docs, &item.id, draft.as_deref(), m),
+        None => String::new(),
+    };
+    let text = format!("Added PBI {}: \"{}\"{warning}", item.id, item.title);
+    Some(emit_success(&ctx.root, "backlog pbi add", parsed.json, &ctx.drift, &value, &text, t0))
+}
+
+fn read_brief_draft(
+    root: &Path,
+    cmd: &str,
+    parsed: &ParsedArgs,
+    t0: Instant,
+) -> Result<Option<Vec<u8>>, ExitCode> {
+    let Some(path) = parsed.flags.get("brief-file") else { return Ok(None) };
+    let refuse = |msg: String| emit_error(root, cmd, parsed.json, &msg, t0);
+    let Ok(bytes) = std::fs::read(path) else {
+        return Err(refuse(format!("{cmd}: cannot read the owner brief {path} — nothing was added")));
+    };
+    let defects = match std::str::from_utf8(&bytes) {
+        Ok(text) => brief::validate_brief(text, &brief::brief_language(root).0),
+        Err(_) => vec!["the brief is not UTF-8 text".to_string()],
+    };
+    if !defects.is_empty() {
+        return Err(refuse(format!(
+            "{cmd}: the owner brief {path} is malformed — nothing was added:\n  {}",
+            defects.join("\n  ")
+        )));
+    }
+    Ok(Some(bytes))
+}
+
+fn store_brief(root: &Path, id: &str, draft: Option<&[u8]>, out: &mut Map<String, Value>) -> String {
+    let rel = brief::brief_rel(id);
+    if let Some(bytes) = draft {
+        let path = root.join(&rel);
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(&path, bytes);
+    }
+    let status = brief::brief_status(root, id);
+    out.insert("brief".into(), Value::String(status.word().into()));
+    out.insert("brief_path".into(), Value::String(rel.clone()));
+    match status {
+        brief::BriefStatus::Ok => String::new(),
+        _ => format!(
+            "\nwarning: no owner brief — write {rel} and check it with: bee backlog briefs --id {id}"
+        ),
+    }
+}
+
+fn brief_lines(status: &brief::BriefStatus, head: String) -> Vec<String> {
+    std::iter::once(head).chain(status.defects().iter().map(|d| format!("    {d}"))).collect()
+}
+
+fn run_briefs(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let ctx = match preamble("backlog briefs", parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let (result, text, ok) = match parsed.flags.get("id") {
+        Some(id) => {
+            let status = brief::brief_status(&ctx.docs, id);
+            let rel = brief::brief_rel(id);
+            let lines = brief_lines(&status, format!("{} {rel}", status.mark()));
+            let value = serde_json::json!({
+                "id": id,
+                "status": status.word(),
+                "path": rel,
+                "defects": status.defects(),
+            });
+            (value, lines.join("\n"), matches!(status, brief::BriefStatus::Ok))
+        }
+        None => {
+            let view = brief::owner_view(&ctx.root, &ctx.docs);
+            let mut lines = Vec::new();
+            if let Some(unknown) = view["unknown_language"].as_str() {
+                lines.push(format!("warning: brief.language \"{unknown}\" is unknown — checked with the vi labels"));
+            }
+            let items = view["items"].as_array().cloned().unwrap_or_default();
+            for item in &items {
+                let s = |k: &str| item[k].as_str().unwrap_or("").to_string();
+                let mark = match item["brief"]["status"].as_str() {
+                    Some("ok") => "ok",
+                    Some("missing") => "MISSING",
+                    _ => "MALFORMED",
+                };
+                lines.push(format!("{mark} {} {} — {}", s("kind"), s("id"), s("title")));
+                for d in item["brief"]["defects"].as_array().into_iter().flatten() {
+                    lines.push(format!("    {}", d.as_str().unwrap_or("")));
+                }
+                for f in item["folded"].as_array().into_iter().flatten() {
+                    lines.push(format!(
+                        "  folded {} — {}",
+                        f["id"].as_str().unwrap_or(""),
+                        f["title"].as_str().unwrap_or("")
+                    ));
+                }
+            }
+            let problems = view["problems"].as_u64().unwrap_or(0);
+            lines.push(format!("{} item(s), {problems} without a valid owner brief", items.len()));
+            (view, lines.join("\n"), problems == 0)
+        }
+    };
+    let code = emit_success(&ctx.root, "backlog briefs", parsed.json, &ctx.drift, &result, &text, t0);
+    Some(if ok { code } else { ExitCode::FAILURE })
 }
 
 fn run_pbi_status(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -1770,6 +1927,127 @@ mod tests {
         std::fs::write(backlog_jsonl_path(root), lines).unwrap();
     }
 
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixtures");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    fn granted_worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf) {
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let wt = tmp.join("wt-a");
+        git(&main, &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "wt/a"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-a\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(wt.join(".bee")).unwrap();
+        std::fs::write(wt.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        (main, wt)
+    }
+
+    #[test]
+    fn backlog_resolves_the_main_checkouts_store_from_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = granted_worktree_fixture(tmp.path());
+
+        let ctx = match preamble_at(&wt, "backlog pbi add", false, Instant::now()) {
+            Ok(Some(c)) => c,
+            _ => panic!("backlog must resolve a store root from a granted worktree"),
+        };
+        assert_eq!(
+            dunce::canonicalize(&ctx.root).unwrap(),
+            dunce::canonicalize(&main).unwrap(),
+            "a granted worktree uses the control root's backlog store"
+        );
+        assert_eq!(backlog_jsonl_path(&ctx.root), main.join(".bee").join("backlog.jsonl"));
+
+        let ordinary = match preamble_at(&main, "backlog pbi add", false, Instant::now()) {
+            Ok(Some(c)) => c,
+            _ => panic!("an ordinary checkout must resolve a store root"),
+        };
+        assert_eq!(
+            dunce::canonicalize(&ordinary.root).unwrap(),
+            dunce::canonicalize(&main).unwrap()
+        );
+    }
+
+    // ── the shared finding-row surface (mistake-fix-at D2) ────────────────
+
+    /// TRUTH: the lifted builder writes the SAME seven keys in the same
+    /// order `bee backlog add` always wrote — the order the feedback digest
+    /// and `bee backlog findings` read.
+    #[test]
+    fn backlog_finding_row_keeps_the_seven_keys_in_order() {
+        let row = backlog_finding_row("finding", "t", "d", "P3", "fix-at:check", "demo");
+        let keys: Vec<&str> = row.keys().map(String::as_str).collect();
+        assert_eq!(keys, vec!["ts", "type", "title", "detail", "severity", "layer", "feature"]);
+        assert_eq!(row["type"].as_str(), Some("finding"));
+        assert_eq!(row["title"].as_str(), Some("t"));
+        assert_eq!(row["detail"].as_str(), Some("d"));
+        assert_eq!(row["severity"].as_str(), Some("P3"));
+        assert_eq!(row["layer"].as_str(), Some("fix-at:check"));
+        assert_eq!(row["feature"].as_str(), Some("demo"));
+        assert!(row["ts"].as_str().is_some_and(|t| !t.is_empty()));
+    }
+
+    /// TRUTH: the dedupe answers on feature, layer and title — all three,
+    /// exactly, and nothing else. A row differing in any one of them is a
+    /// different mistake; a row differing only in `detail`, `severity` or
+    /// `ts` is the same one and is never filed twice.
+    #[test]
+    fn backlog_finding_exists_matches_exactly_and_only_on_the_three_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_backlog(
+            root,
+            r#"{"ts":"2026-01-01T00:00:00.000Z","type":"finding","title":"wrote before reserving","detail":"reserve first","severity":"P1","layer":"fix-at:check","feature":"demo"}"#,
+        );
+
+        // The three fields match, and neither the different severity nor the
+        // different detail nor the ts makes it another row.
+        assert!(backlog_finding_exists(root, "demo", "fix-at:check", "wrote before reserving"));
+        // Each of the three alone is enough to make it a different row.
+        assert!(!backlog_finding_exists(root, "other", "fix-at:check", "wrote before reserving"));
+        assert!(!backlog_finding_exists(
+            root,
+            "demo",
+            "fix-at:architecture",
+            "wrote before reserving"
+        ));
+        assert!(!backlog_finding_exists(root, "demo", "fix-at:check", "wrote before reserving."));
+
+        // A pbi row carrying the same three fields is never a finding row.
+        write_backlog(
+            root,
+            r#"{"ts":"t","kind":"pbi","event":"add","id":"p-1","title":"wrote before reserving","feature":"demo","layer":"fix-at:check"}"#,
+        );
+        assert!(!backlog_finding_exists(root, "demo", "fix-at:check", "wrote before reserving"));
+
+        // A store with no backlog file at all answers no, never panics.
+        let empty = tempfile::tempdir().unwrap();
+        assert!(!backlog_finding_exists(empty.path(), "demo", "fix-at:check", "x"));
+    }
+
     // ── rank / badges / render ─────────────────────────────────────────────
 
     /// Same calibrated V8/ICU probe vectors verbs/cells.rs and
@@ -2440,5 +2718,153 @@ mod tests {
         assert_eq!(row["title"], "smoketitle");
         assert_eq!(row["severity"], "P3");
         assert_eq!(row["layer"], "probe");
+    }
+
+    const BRIEF_CHILD: &str = "verbs::backlog::tests::backlog_brief_child";
+
+    #[test]
+    #[ignore = "spawned by the owner-brief door tests"]
+    fn backlog_brief_child() {
+        let raw = std::env::var("BEE_TEST_BRIEF_ARGV").expect("BEE_TEST_BRIEF_ARGV");
+        let args: Vec<OsString> = raw.split('\u{1f}').map(OsString::from).collect();
+        let code = try_native(&args, Instant::now()).expect("served natively");
+        println!("child-exit-failure: {}", format!("{code:?}") == format!("{:?}", ExitCode::FAILURE));
+    }
+
+    fn brief_run(root: &Path, args: &[&str]) -> (bool, String) {
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(&exe)
+            .args(["--exact", BRIEF_CHILD, "--ignored", "--test-threads", "1", "--nocapture"])
+            .current_dir(root)
+            .env("BEE_TEST_BRIEF_ARGV", args.join("\u{1f}"))
+            .output()
+            .expect("spawn the test binary");
+        let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        assert!(text.contains("child-exit-failure: "), "{text}");
+        (!text.contains("child-exit-failure: true"), text)
+    }
+
+    fn brief_repo() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(tmp.path()).unwrap().join("repo");
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee/onboarding.json"), r#"{"version":1,"completed":true}"#).unwrap();
+        let drafts = dunce::canonicalize(tmp.path()).unwrap().join("drafts");
+        std::fs::create_dir_all(&drafts).unwrap();
+        (tmp, root, drafts)
+    }
+
+    fn valid_brief() -> String {
+        format!(
+            "---\ntitle: Một việc rõ ràng\naudience: owner\nsize: S\nask: build\n---\n**Là gì:** {}\n**Vì sao:** Một.\n**Nguồn gốc:** Hai.\n**Chi phí và rủi ro:** Ba.\n**Anh cần làm:** Bốn.\n**Chuẩn xong:**\n- Năm.\n- Sáu.\n",
+            "chữ ".repeat(130)
+        )
+    }
+
+    fn json_out(text: &str) -> Value {
+        let start = text.find('{').expect("a JSON object");
+        let end = text.rfind('}').expect("a JSON object");
+        serde_json::from_str(&text[start..=end]).expect("JSON")
+    }
+
+    #[test]
+    fn pbi_add_with_a_valid_brief_stores_it_byte_identical() {
+        let (_tmp, root, drafts) = brief_repo();
+        let draft = drafts.join("b.md");
+        std::fs::write(&draft, valid_brief().replace('\n', "\r\n")).unwrap();
+        let (ok, out) = brief_run(
+            &root,
+            &["backlog", "pbi", "add", "--title", "t", "--id", "p-0000abcd", "--brief-file", draft.to_str().unwrap(), "--json"],
+        );
+        assert!(ok, "{out}");
+        let v = json_out(&out);
+        assert_eq!(v["brief"], "ok", "{out}");
+        assert_eq!(v["brief_path"], "docs/briefs/p-0000abcd.md");
+        assert_eq!(
+            std::fs::read(root.join("docs/briefs/p-0000abcd.md")).unwrap(),
+            std::fs::read(&draft).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_malformed_brief_refuses_the_add_and_writes_nothing() {
+        let (_tmp, root, drafts) = brief_repo();
+        let draft = drafts.join("bad.md");
+        std::fs::write(&draft, valid_brief().replace("ask: build", "ask: maybe").replace("Một.", "brief.rs")).unwrap();
+        for argv in [
+            vec!["backlog", "pbi", "add", "--title", "t"],
+            vec!["backlog", "propose", "--story", "s", "--cos", "c"],
+        ] {
+            let mut argv = argv.clone();
+            argv.extend(["--brief-file", draft.to_str().unwrap()]);
+            let (ok, out) = brief_run(&root, &argv);
+            assert!(!ok, "{out}");
+            assert!(out.contains("is malformed — nothing was added"), "{out}");
+            assert!(out.contains("ask is \"maybe\""), "{out}");
+            assert!(out.contains("names a file: brief.rs"), "{out}");
+            assert!(!backlog_jsonl_path(&root).exists(), "{out}");
+            assert!(!root.join("docs/briefs").exists(), "{out}");
+        }
+    }
+
+    #[test]
+    fn an_add_without_a_brief_is_kept_and_flagged() {
+        let (_tmp, root, drafts) = brief_repo();
+        let (ok, out) = brief_run(&root, &["backlog", "pbi", "add", "--title", "t", "--id", "p-0000beef"]);
+        assert!(ok, "{out}");
+        assert!(
+            out.contains("warning: no owner brief — write docs/briefs/p-0000beef.md and check it with: bee backlog briefs --id p-0000beef"),
+            "{out}"
+        );
+        let (_, out) = brief_run(&root, &["backlog", "pbi", "add", "--title", "u", "--id", "p-0000feed", "--json"]);
+        assert_eq!(json_out(&out)["brief"], "missing", "{out}");
+        assert_eq!(fold_pbis(&root).order.len(), 2);
+
+        let (ok, out) = brief_run(&root, &["backlog", "propose", "--story", "s", "--cos", "c", "--json"]);
+        assert!(ok, "{out}");
+        assert_eq!(json_out(&out)["brief"], "missing", "{out}");
+        let draft = drafts.join("p.md");
+        std::fs::write(&draft, valid_brief()).unwrap();
+        let (ok, out) = brief_run(
+            &root,
+            &["backlog", "propose", "--story", "s", "--cos", "c", "--brief-file", draft.to_str().unwrap(), "--json"],
+        );
+        assert!(ok, "{out}");
+        let v = json_out(&out);
+        assert_eq!(v["brief"], "ok", "{out}");
+        let stored = root.join(v["brief_path"].as_str().unwrap());
+        assert_eq!(std::fs::read(stored).unwrap(), valid_brief().into_bytes());
+    }
+
+    #[test]
+    fn briefs_exits_one_while_any_brief_is_missing_or_malformed() {
+        let (_tmp, root, _drafts) = brief_repo();
+        let (ok, out) = brief_run(&root, &["backlog", "briefs"]);
+        assert!(ok, "{out}");
+        assert!(out.contains("0 item(s), 0 without a valid owner brief"), "{out}");
+
+        brief_run(&root, &["backlog", "pbi", "add", "--title", "t", "--id", "p-00000abc"]);
+        let (ok, out) = brief_run(&root, &["backlog", "briefs", "--id", "p-00000abc"]);
+        assert!(!ok, "{out}");
+        assert!(out.contains("MISSING docs/briefs/p-00000abc.md"), "{out}");
+        let (ok, out) = brief_run(&root, &["backlog", "briefs"]);
+        assert!(!ok, "{out}");
+        assert!(out.contains("MISSING pbi p-00000abc — t"), "{out}");
+        assert!(out.contains("1 item(s), 1 without a valid owner brief"), "{out}");
+
+        std::fs::create_dir_all(root.join("docs/briefs")).unwrap();
+        std::fs::write(root.join("docs/briefs/p-00000abc.md"), "no frontmatter\n").unwrap();
+        let (ok, out) = brief_run(&root, &["backlog", "briefs", "--id", "p-00000abc"]);
+        assert!(!ok, "{out}");
+        assert!(out.contains("MALFORMED docs/briefs/p-00000abc.md"), "{out}");
+        assert!(out.contains("    the brief does not start with a --- frontmatter line"), "{out}");
+
+        std::fs::write(root.join("docs/briefs/p-00000abc.md"), valid_brief()).unwrap();
+        let (ok, out) = brief_run(&root, &["backlog", "briefs", "--id", "p-00000abc"]);
+        assert!(ok, "{out}");
+        assert!(out.contains("ok docs/briefs/p-00000abc.md"), "{out}");
+        let (ok, out) = brief_run(&root, &["backlog", "briefs", "--json"]);
+        assert!(ok, "{out}");
+        assert_eq!(json_out(&out)["problems"], 0, "{out}");
     }
 }

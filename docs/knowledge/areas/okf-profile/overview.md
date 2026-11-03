@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [okf-profile]
   decisions: [D2, D10, D13, D15, D20, D21, D23, D24, D27, D29, D30, D34, D37, D38]
-  sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", "okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "okf-switchover-f3 cell f3-5 (G6 — this spec migrated into the bundle it describes; trace in `.bee/cells/`, 2026-07-22)", "docs/specs/okf-profile.md#P4", "docs/specs/okf-profile.md#P6", "docs/specs/okf-profile.md#P7"]
+  sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", "okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "okf-switchover-f3 cell f3-5 (G6 — this spec migrated into the bundle it describes; trace in `.bee/cells/`, 2026-07-22)", "docs/specs/okf-profile.md#P4", "docs/specs/okf-profile.md#P6", "docs/specs/okf-profile.md#P7", "knowledge-show-new cell ksn-1 (`bee knowledge show` and `bee knowledge new` verbs; trace .bee/cells/archive/knowledge-show-new/ksn-1.json, capped 2026-09-06)"]
   authoritative_for: "okf-profile: purpose, entry points, and actors"
   owns.code: ["packages/bee-rs/crates/bee/src/verbs/knowledge/*"]
   owns.skills: []
@@ -65,7 +65,7 @@ under:
   concept, the preamble names the `context` command and instructs the session to load its manifest
   before touching code (B7, in `context-and-promote.md`). This is the trigger that makes the bundle
   load-bearing rather than optional.
-- `node scripts/run_verify.mjs` — the verify chain `knowledge check` and `knowledge index --check`
+- `.bee/bin/bee test` (the declared `commands.test`) — the test chain `knowledge check` and `knowledge index --check`
   both join (D34); a profile violation fails the chain the same way any other suite does. The
   per-migration coverage gates (`scripts/okf_migrate.mjs --check <area>` and `--check-patterns`,
   D35) join the same chain, one entry per migrated source.
@@ -83,6 +83,14 @@ under:
   feature from `.bee/cells/*.json` (a read of the runtime store — D2 permits reads and forbids
   writes) and prints three proposals: a delivery draft, candidate area spec-sync bullets, and
   candidate pitfall patterns. It writes nothing (B5, in `context-and-promote.md`).
+- `bee knowledge show --id <bee.id> [--json]` — reads ONE concept whole: metadata, every `bee.*`
+  field, its outbound links, its inbound referrers, then the body. The read companion to `list`,
+  which returns rows and never content (behavior: `concept-model-and-authoring.md`).
+- `bee knowledge new --type pattern|area --title <t> --summary <s> --area <a> [--tags]
+  [--lifecycle] [--file <body.md>] [--json]` — the ONE authoring verb: it derives the id and the
+  path from the title, emits canonical frontmatter, and re-renders the indexes. The second write
+  path into the bundle after `index`; the checker still writes nothing (B4, D2)
+  (behavior and refusals: `concept-model-and-authoring.md`).
 - Migration authoring (the D20 loop: read a legacy source, split it into concepts, carry its
   frontmatter across per D33, replace it with a pointer stub per D37) is the human/agent trigger
   that populates the bundle the checker then grades. The checker itself performs no writes (D2).
@@ -98,7 +106,7 @@ under:
   draft, the area bullets and the pitfall candidates a finished work item earned; writes nothing.
   The **human or agent who accepts a proposal** is the actor that turns it into a concept — the
   profile deliberately keeps that step outside the tool (D38).
-- **`node scripts/run_verify.mjs`** — the CI-equivalent chain `check` (and later `index --check`)
+- **`.bee/bin/bee test`** (the declared `commands.test`) — the CI-equivalent chain `check` (and later `index --check`)
   joins; a profile violation fails the same way any other suite failure does.
 - **The human owner** — configures nothing here; the profile has no runtime knobs. Owner-level
   input landed once, at exploring, as the locked decisions this document cites.
@@ -130,3 +138,14 @@ under:
   `docs/history/okf-foundation/CONTEXT.md`.
 - Normative OKF v0.1 spec: `https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md`.
   Profile-as-open-proposal: `https://github.com/GoogleCloudPlatform/knowledge-catalog/issues/212`.
+
+## Concepts in this area
+
+- [Bee OKF Profile — the bee.critical bar and the selective pool it grades](critical-bar.md) — The three-leg bar a pattern must clear to carry bee.critical (recurrence-prone, cross-feature, costly-when-missed — failing any leg disqualifies it), why the label needed a bar at all, and how the pool is kept selective as new patterns are authored.
+- [Bee OKF Profile — the instruction-layer fence](the-instruction-layer-fence.md) — Content guards protect where truth is written; nothing tested the prose that TELLS an agent where truth lives. This fence grades every instruction line, on the line, so a migration cannot leave its own instructions teaching the retired model.
+
+## Patterns in this area
+
+- [A derived field that is empty for a whole class of inputs makes its whole output section silently blank](../../patterns/20260805-a-derived-field-empty-for-a-whole-class-of-inputs-makes-its-output-section-silently-blank.md) — A section whose content is keyed on a derived field renders silently empty for every input the field never gets set for, and two independent empty-derivations can stack behind the very same always-empty render.
+- [A golden test that byte-compares only one of several copies makes drift invisible](../../patterns/20260805-a-golden-test-that-byte-compares-only-one-of-several-copies-makes-drift-invisible.md) — A golden test that byte-compares only one of several duplicated copies of a function lets the other copies drift underneath it while every run stays green — proven when `build_context_manifest` existed in three places and the only byte golden read one of them.
+- [An invitation keyed on the old precondition survives the machinery that removed it](../../patterns/20260805-an-invitation-keyed-on-the-old-precondition-survives-the-machinery-that-removed-it.md) — Widening what a resolver accepts does not widen the invitation built on the resolver's old precondition unless every caller of that precondition is re-checked — the session preamble kept gating its knowledge-context invitation on has_work_item after the resolver stopped requiring one.

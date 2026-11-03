@@ -1,0 +1,124 @@
+{
+  "id": "psdr-1",
+  "feature": "pi-slp-dispatch-return",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "bugfix",
+  "title": "Give a herded cell worker one order",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "4029e89b-67d7-4599-812d-6bef59a39dac",
+    "acd254e3-3b03-4900-a34c-072935fe8af6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-slp-dispatch-return/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D1. In prepare_dispatch, the pane prompt is built at `let pane_prompt = if is_deployment {` (prepare.rs:2351); its else arm is `Some(body) => format!(\"{body}\\n\\n{prompt_body}\"),` (prepare.rs:2359). When the kind is cell and the resolved transport is `Resolved::Herding { .. }`, do not prepend the bee-build body. prompt_body_for (prepare.rs:1071, `pub(crate) fn prompt_body_for(`) renders worker-cell at `let Some(template) = load_prompt(\"worker-cell\")` (prepare.rs:1125). Templates support only `{{#if NAME}}` blocks: no else, no not, no nesting, and the block eats the newline before its marker (prompt.rs:149). A var the template declares must be supplied on every render (see the note near prepare.rs:1105). So add TWO vars to the worker-cell render: `native_bookkeeping` (non-empty for every non-herding cell render) and `herding` (non-empty only for a herding cell render); pass the transport fact into prompt_body_for to choose. In packages/bee/prompts/worker-cell.md wrap ONLY the bee bookkeeping lines in `{{#if native_bookkeeping}}`: the `Load the bee-swarming skill` bullet, the `reserve any ADDITIONAL path` bullet, the `Your report is a navigation aid` bullet, the `Return exactly one final status token` bullet, the whole `Result form:` paragraph with its json block, and the `Finish with:` paragraph. The `{{#if worktree_root}}` block holds a cwd self-check that ends in a `[BLOCKED: ...]` text token; a herded worker must not get that token (the herding run already sets --cwd and waits for a result file). Nesting is refused, so split that block: keep the Location lines under `{{#if worktree_root}}`, and move the self-check paragraph into its own `{{#if native_worktree_check}}` block, a third var that is non-empty only when worktree_root is non-empty AND the render is native. The native render must stay byte-identical (the golden test proves it). Keep the shared bullets shared (execute only the assigned cell, never reinterpret a decision, shape and no comments, commit once with the `cell: {{cell_id}}` trailer). Add one `{{#if herding}}` block that says: run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell. The herding block must not repeat the commit-trailer rule and must not contain `bee cells`, `.bee/bin/bee`, `reservations reserve` or `mailbox reflect`. Tests red first in drivers/tests.rs: (a) GOLDEN — before you edit the template, render a native cell prompt for a fixed fixture, store those exact bytes in the test, and assert_eq! the post-change render against them; (b) a herding cell dispatch stdin contains no `cells finish`, no `.bee/bin/bee`, no `You are a bee execution worker`, and does contain the `cell: <id>` trailer rule and the three-part proof instruction. Existing herding fixtures: `rg -n \"herding\" packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs`. tests.rs:126 checks the template has no trailing newline; keep that true. Do not touch herding/run.rs (per D5). Write no code comments.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "A cell dispatched on a herding role carries a stdin with no bee command and no bee-build agent body",
+      "The herding cell stdin tells the worker to commit with the cell trailer and return a three-part proof line",
+      "A native cell dispatch prompt is byte-identical to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "native-only and herding-only blocks; herding block has no bee command"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "herding cell path skips the bee-build body and sets the herding flag"
+      }
+    ],
+    "key_links": [
+      "prepare_dispatch passes the transport fact into prompt_body_for, which sets native_bookkeeping or herding for kind cell"
+    ],
+    "prohibitions": [
+      "No change to the herding wrapper in mailbox.rs",
+      "No change to herding/run.rs",
+      "No byte change to native, Agent-tool or CLI cell prompts",
+      "No new prompt file"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-psdr-1",
+    "outcome": "A herded cell brief carries no bee command and no bee-build body; native brief byte-identical",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "the worker narrowed the prompt_skew test for worker-cell instead of leaving the stale .bee/bin/prompts copy to the wave-barrier regen; the leader ran bee dev regen and restored the original assertion in eb71124e1 — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T02:01:42.913Z",
+    "behavior_change": false,
+    "verification_evidence": "429 passed; golden native render test and herding stdin test added in drivers/tests.rs",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers",
+    "claimed_at": "2026-10-03T01:44:07.436Z",
+    "mistakes": [
+      {
+        "wrong": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs prompt skew assertion was narrowed by the worker to make a stale vendored prompt pass",
+        "better": "keep the assertion and let the wave-barrier regen refresh .bee/bin/prompts",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "A herded cell brief carries no bee command and no bee-build body; native brief byte-identical",
+      "commit": "3e2815a60",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers — green:unit — 429 passed; golden native render test and herding stdin test added in drivers/tests.rs",
+      "deviations": [
+        "the worker narrowed the prompt_skew test for worker-cell instead of leaving the stale .bee/bin/prompts copy to the wave-barrier regen; the leader ran bee dev regen and restored the original assertion in eb71124e1 — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs prompt skew assertion was narrowed by the worker to make a stale vendored prompt pass — keep the assertion and let the wave-barrier regen refresh .bee/bin/prompts — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A cell dispatched on a herding role carries a stdin with no bee command and no bee-build agent body",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "The herding cell stdin tells the worker to commit with the cell trailer and return a three-part proof line",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "A native cell dispatch prompt is byte-identical to before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T02:02:55.244Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

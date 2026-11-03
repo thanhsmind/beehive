@@ -1,0 +1,105 @@
+{
+  "id": "tt-2",
+  "feature": "token-thrift",
+  "title": "Group dispatch door roles by target",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "tt-1"
+  ],
+  "decisions": [
+    "D4",
+    "077bace5-b8cb-4eab-b1ee-4f54e9604319"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/token-thrift/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "action": "In model_guard.rs `dispatch_door_lines` (near line 542): keep the first line and the last `- open set:` line unchanged. Replace the per-role lines with one line per distinct rendered target from `role_slot_display`, in the order each target first appears, shaped `- {rendered}: {role1}, {role2}, ...` with roles in their existing order, and remove the 60-character truncation. `- none configured` stays when there are no roles. Update every test that pins the old shape: model_guard.rs `assert_eq!` pins near 3692-3695 and 3745 and the list near 3730; rewrite `dispatch_door_renders_all_18_roles_under_60_chars` (near 4122; it checks `- {expected} → ` at 4169 and the 60-char cap at 4175) so it asserts every one of the 18 roles appears in exactly one grouped line and no line carries `…`, and rename it to match; compaction.rs pins near 1762-1764; session_preamble/tests.rs pins near 1460 (the cut text `(herding: agy-flas…`), 1461, 1497-1509, 1524-1527, 1542-1545, 1564-1566, 1584, 1585, 1599 and 1632. Run `rg -n ' → ' packages/bee-rs/crates/bee/src/hooks` after the change and fix any remaining pin of the old door shape. Assert the new grouped line, for example `- opus (native): review` or a line that starts with `- opus (native): ` and contains `design`. Add one test where two roles share a target and one long herding target renders in full on one line with both role names and no `…`. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee compaction && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble",
+  "must_haves": {
+    "truths": [
+      "the dispatch door prints one line per distinct target listing all its roles",
+      "no dispatch door line is cut with an ellipsis",
+      "the compaction re-inject prints the same grouped lines"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "substantive": "grouped dispatch_door_lines and its tests"
+      }
+    ],
+    "key_links": [
+      "compaction and the session preamble both call dispatch_door_lines"
+    ],
+    "prohibitions": [
+      "No change to the prepare command line or the open set line",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-tt-2",
+    "outcome": "Dispatch door now prints one full uncut line per distinct rendered target listing its roles; new grouped test plus an all-18-role grouping test; compaction and preamble pins updated — 646c14cff",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-21T05:48:42.448Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && ... compaction && ... session_preamble — green:unit — 81 + 14 + 66 passed, 0 failed; these three suites own dispatch_door_lines and every pin of its output shape",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "48772102-7614-4853-aa3b-034ee7a935a1",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee compaction && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble",
+    "claimed_at": "2026-10-21T05:26:02.116Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Dispatch door now prints one full uncut line per distinct rendered target listing its roles; new grouped test plus an all-18-role grouping test; compaction and preamble pins updated — 646c14cff",
+      "commit": "646c14cff1d8f8c2e3c6ec8f156fa7b11cc2b61f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee compaction && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && ... compaction && ... session_preamble — green:unit — 81 + 14 + 66 passed, 0 failed; these three suites own dispatch_door_lines and every pin of its output shape",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the dispatch door prints one line per distinct target listing all its roles",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "no dispatch door line is cut with an ellipsis",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "the compaction re-inject prints the same grouped lines",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/compaction.rs"
+          }
+        ],
+        "recorded_at": "2026-10-21T05:50:11.690Z",
+        "recorded_by": "48772102-7614-4853-aa3b-034ee7a935a1",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

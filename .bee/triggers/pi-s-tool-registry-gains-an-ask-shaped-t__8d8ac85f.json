@@ -1,0 +1,11 @@
+{
+  "id": "pi-s-tool-registry-gains-an-ask-shaped-t__8d8ac85f",
+  "decision": "8d8ac85f",
+  "condition": "Pi's tool registry gains an ask-shaped tool (a built-in AskUserQuestion, or a sibling extension registering a tool by that exact name), OR bee routes model-guard on Pi. Either makes the ask/updatedInput verdicts reachable on the Pi belt, and pi-beehive Epic E becomes real work: turn the block at .pi/extensions/bee-guard.ts:205 into a ctx.ui.confirm dialog with a !ctx.hasUI fail-closed fallback, and apply the repair by mutating event.input in place.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-02T12:26:30.355Z",
+  "updated_at": "2026-09-02T12:26:30.355Z",
+  "outcome": null
+}

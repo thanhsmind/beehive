@@ -1,0 +1,11 @@
+{
+  "id": "another-sleep-step-50-fixture-in-tests-p__4792a92e",
+  "decision": "4792a92e",
+  "condition": "another sleep_step(50) fixture in tests/pi_plugin_contracts.rs fails in CI on its deferred-command switch or fork count: sweep the fixtures onto await_switches_step",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-22T11:04:31.941Z",
+  "updated_at": "2026-09-22T11:04:31.941Z",
+  "outcome": null
+}

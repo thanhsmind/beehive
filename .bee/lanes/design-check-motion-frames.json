@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "design-check-motion-frames",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"design-check-motion-frames\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"design-check-motion-frames\" — feature is closed.",
+  "created_at": "2026-11-02T09:53:38.249Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "One SKILL.md paragraph plus a hand-over field; the regen manifest is bookkeeping.",
+    "updated_at": "2026-11-02T09:53:38.299Z",
+    "feature": "design-check-motion-frames"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "id": "itd-1",
+  "feature": "install-target-dir",
+  "lane": "tiny",
+  "role": "code",
+  "title": "Pin CARGO_TARGET_DIR in both installers",
+  "action": "Set CARGO_TARGET_DIR to the checkout-local packages/bee-rs/target on the cargo build invocation in scripts/install.sh and scripts/install.ps1 so the binary lands where the scripts already look, even when the host overrides the cargo target dir. Run bee dev regen inside this cell (release manifest hashes the installers).",
+  "files": [
+    "scripts/install.sh",
+    "scripts/install.ps1",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "verify": "bash -n scripts/install.sh; bee dev release-manifest --check; reproduce the failing install with CARGO_TARGET_DIR set",
+  "acceptance": "install.sh completes on a host with CARGO_TARGET_DIR set; ps1 mirrors the same pin; release-manifest --check green",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "install-fix-lead",
+    "outcome": "CARGO_TARGET_DIR pinned on both installer build lines; release manifest re-hashed; failing install reproduced green",
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-31T01:12:11.087Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b5e31bf7-2545-46a3-a36e-1b508c43cdf4",
+    "claimed_at": "2026-08-31T01:10:28.774Z",
+    "report": {
+      "outcome": "installers build into the exact path their binary check reads on every host; ps1 restores the callers CARGO_TARGET_DIR after the build",
+      "commit": "ba1fe413",
+      "files": [
+        "scripts/install.sh",
+        "scripts/install.ps1",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "bash -n scripts/install.sh; bee dev release-manifest --check; CARGO_TARGET_DIR=~/.cache/cargo-target bash scripts/install.sh -y — green (bash -n ok; 277 files match manifest; installer completed: bee installed) — shell-script change, the proof is the exact failing invocation now completing",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

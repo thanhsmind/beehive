@@ -1,0 +1,181 @@
+{
+  "id": "grrs-1",
+  "feature": "gather-reads-the-read-slot",
+  "title": "A default gather resolves the read job and travels under the winning name",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D7",
+    "D8",
+    "295f3d03-b9b2-48ff-9f85-83ce2e54f6d6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/gather-reads-the-read-slot/CONTEXT.md",
+    "docs/history/gather-reads-the-read-slot/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/product-description/delegation/dispatch.md"
+  ],
+  "action": "RED FIRST (bugfix playbook). In prepare.rs's test module add a test that a host configured `{\"models\":{\"claude\":{\"read\":\"haiku\",\"generation\":\"sonnet\",\"review\":\"opus\"}}}` gets, for `envelope(&root, \"gather\", None)`, `payload.model == \"haiku\"`, `payload.subagent_type == \"bee-gather\"`, the prompt opening `[bee-tier: read]` and `economics.logical_tier == \"read\"`; run `cargo test ... prepare` and watch it fail because the envelope says sonnet/generation. Then make it green, per D1-D3:\n\n(1) `slot_for_kind` in prepare.rs — the arm reading `\"cell\" | \"gather\" => Some(\"generation\"),` (rg hit prepare.rs:57) splits: `\"cell\" => Some(\"generation\")`, `\"gather\" => Some(\"read\")`. Update the pinned test `assert_eq!(slot_for_kind(\"gather\"), Some(\"generation\"));` (rg hit prepare.rs:2923) to `Some(\"read\")`.\n\n(2) `tier_role_list` in models.rs — the body `if slot == \"review\" { return vec![slot, \"generation\"]; }` (rg hit models.rs:655) gains a second rule: `read` walks `[read, generation]`. NOT through `extraction`: extraction was the tier-era cheapest slot and never the gather slot, so a legacy host that configures `extraction` + `generation` (the THREE_SLOTS fixture at prepare.rs:2996 is exactly that host) must keep its gathers on `generation` byte-for-byte — say so in the doc comment, citing 561e1bda's tail rule. Leave `cell_role_list(\"read\")` (`if role == \"read\" { &[\"extraction\", \"generation\"] }`, rg hit prepare.rs:362) untouched: a read-shaped CELL is a backfilled `tier: extraction` cell (doctrine B8) and its tail is honest as it stands; add one sentence to its doc comment naming why the two read lists differ.\n\n(3) The winner travels on the default-gather path (D2). At the resolve block — rg hits prepare.rs:1452 `if from_role { cell_role_list(tier_token) } else { tier_role_list(tier_token) };` and prepare.rs:1454 `if from_role {` — widen the winner record to `from_role || (kind == \"gather\" && role.is_none())` (use whatever local already says an explicit --role was passed), and extend the comment above `let mut resolved_role` (\"Set only on the cell-role path…\") with the reason: `read` is not in `default_models(\"claude\")`, so a marker saying `read` on a host with no `read` key names nothing the guard knows. Every OTHER path keeps today's marker bytes — assert in a test that `--kind reviewer` on a host with no `review` key is byte-identical to today (`[bee-tier: review]`, `subagent_type: bee-review`). Keep `tier_source` as it is (`default`).\n\n(3b) D7 — the bare-dispatch FIX. In model_guard.rs `bare_dispatch_denied`, both format strings (rg hits model_guard.rs:1120 and :1132, `\"FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \\`) lead with `run \".bee/bin/bee dispatch prepare --runtime claude --kind <cell|gather|reviewer|advisor> --json\" — it reads .bee/config.json and returns the tool and exact payload` as the FIRST remedy; the rendered-agent sentence that follows is built from `crate::verbs::drivers::ROLE_AGENTS` (agent name + the one-clause purpose the guard already keys on agent), never retyped as `bee-gather = generation`. Drop the hard-coded `--kind gather` literal in the second branch in favour of the generic `<kind>` form. Update the test at model_guard.rs:1794 `assert!(stderr.contains(\"bee-gather = generation\"), \"the FIX teaches the new route\");` to assert the FIX opens with `dispatch prepare` and names `bee-gather` without the `= generation` pairing. Deny codes and verdicts are byte-identical.\n\n(4) The agent comes from the ASKED name and the kind, never the winner (D3). At `let pinned_type = if kind == \"cell\" { \"bee-build\" } else { pinned_agent_type(marker_role) };` (rg hit prepare.rs:1533) add the middle arm: a `--kind gather` dispatch with NO `--role` pins `bee-gather` whichever spelling won (without the pin, a `read` winner would answer `bee-extract` through the read→extraction alias); every other dispatch keeps `pinned_agent_type(marker_role)` exactly as today — on those paths marker_role is still the asked token, so `--role extraction` stays `bee-extract` (doctrine B11; the test `every_rendered_agent_is_reachable_through_the_one_door` at prepare.rs:3038 pins it) and `--kind reviewer` stays `bee-review`. Write the condition with the same explicit-role local as step (3).\n\n(4b) D8 — the fallback contract keys on the winner, both halves. Prepare: at the herding arm `if let Some(model) = CONFIGURABLE_SLOTS` / `.contains(&marker_role)` / `.then(|| default_models(runtime).get(marker_role).cloned())` (rg hits prepare.rs:1741-1743) nothing changes in code — marker_role is now the winner on the gather path — but ADD the test: `read: {kind:\"herding\", agent:\"x\", fallback:\"default\"}` publishes NO `payload.fallback` (read has no built-in default, same as advisor; say so in the comment above), and no-`read` + `generation: {kind:\"herding\", fallback:\"default\"}` still publishes `sonnet`. Guard: in `configured_model_set` (model_guard.rs, the loop opening `for kind in crate::verbs::drivers::DISPATCH_KINDS {` / `let Some(slot) = crate::verbs::drivers::slot_for_kind(kind) else { continue };`, rg hit model_guard.rs:608-609) replace the head-slot resolve with `resolve_role_named(models, &tier_role_list(slot), \"claude\", GUARD_PURPOSE)` and look the default up by the name that WON, so a host with no `read` key and a herding-with-default `generation` keeps admitting `sonnet`; add that test (an Agent dispatch with `model: \"sonnet\"` and no marker on such a host is allowed, not `param-not-configured`). Rewrite the comment above the loop (\"the day slot_for_kind can reach the extraction role…\") to describe the walk.\n\n(5) The guard's FIX keeps its kind and names the role. `dispatch_kind_for_role` in model_guard.rs (rg hit model_guard.rs:778-783, `.find(|kind| crate::verbs::drivers::slot_for_kind(kind) == Some(role))`) must answer `gather` for BOTH `read` and `generation`: match a role against `tier_role_list(slot_for_kind(kind))` rather than the head alone. `generation` sits in both the gather and reviewer lists; `DISPATCH_KINDS` order (`cell` filtered, then `gather` before `reviewer`) is what makes it answer `gather` — pin that order in the test at model_guard.rs:2684 `assert_eq!(dispatch_kind_for_role(\"generation\"), Some(\"gather\"));` and add `read` → `gather`; keep `extraction` → `None` (the test `a_herding_shaped_extraction_slot_denies_bee_extract_without_a_wrong_kind` at model_guard.rs:1848 pins that). Every FIX string that renders the kind (the `match dispatch_kind_for_role(t)` sites — rg hits model_guard.rs:937, :997, :1022, :1060, :1085) appends `--role {t}` after `--kind {kind}`, so on a split host (`read: sonnet`, `generation: {kind:herding}`) a `[bee-tier: generation]` refusal names a door that resolves generation, not the read head. Update the tests that pin those FIX bytes to expect the `--role` form.\n\n(6) Fix every test the move turns red honestly — `absent_role_every_dispatch_is_byte_identical` (prepare.rs:3088, `(\"gather\", \"bee-gather\", \"sonnet\")`) stays green unchanged because THREE_SLOTS has no `read` key; if it goes red, the walk is wrong, not the test. Add tests for: `read: {kind:\"herding\", agent:\"x\"}` → `tool == \"Bash\"`, command contains `--agent \"x\"`, `logical_tier == \"read\"`; `read: null` + `generation: sonnet` → `generation` wins and `subagent_type == \"bee-gather\"`; `--kind gather --role extraction` still returns `bee-extract`.\n\n(7) Live proof at cap (plan.md test matrix, last row): from the MAIN checkout (/home/thanhsmind/Projects/goglbe/beehive — `dispatch prepare` refuses inside a worktree) drive the freshly built binary against a scratch onboarded host whose `.bee/config.json` sets `models.claude.read: \"haiku\", generation: \"sonnet\"` — the verify-app skill's sandbox recipe shows how to make one — and record on the cap: `dispatch prepare --runtime claude --kind gather --json` → `bee-gather`/`haiku`/`[bee-tier: read]`; `--kind reviewer --json` → `bee-review`; then with `read: {kind:\"herding\", agent:\"x\"}` → `tool: Bash`. Record the three envelopes' key lines as the `green:live` proof segment. Cell role is `code`; keep the tests inline in the files you touch and cite decision 295f3d03 for the contract they pin.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml prepare model_guard drivers",
+  "must_haves": {
+    "truths": [
+      "On a host with read: haiku, generation: sonnet, `dispatch prepare --kind gather` returns bee-gather on haiku with marker [bee-tier: read] and logical_tier read",
+      "On a host with no read key (extraction+generation+review), the gather envelope is byte-identical to before the change",
+      "On a host with read: {kind: herding}, a default gather returns the Bash herding command",
+      "--kind gather --role extraction still returns bee-extract",
+      "dispatch_kind_for_role answers gather for both read and generation, None for extraction",
+      "On a host with no review key, --kind reviewer is byte-identical to today (bee-review, [bee-tier: review])",
+      "read: {kind: herding, fallback: default} publishes no payload.fallback; no-read + generation herding-with-default still publishes and admits sonnet on both doors",
+      "A bare Agent dispatch's FIX opens with bee dispatch prepare and never says bee-gather = generation"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "gather slot = read; kind-pinned bee-gather for the default gather; winner recorded on the non-cell path; red-then-green tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "substantive": "tier_role_list(read) = [read, generation] with the doc comment naming why extraction is not in the tail"
+      }
+    ],
+    "key_links": [
+      "model_guard::dispatch_kind_for_role reads tier_role_list(slot_for_kind(kind)) so the FIX text still names --kind gather for generation"
+    ],
+    "prohibitions": [
+      "No change to cell_role_list",
+      "No change to ROLE_AGENTS, ROLE_ALIASES, role_for_agent, agents_for_role (D4)",
+      "No change to any deny code or verdict in model_guard.rs",
+      "No change to the advisor, reviewer, or cell resolution paths"
+    ]
+  },
+  "trace": {
+    "worker": "w-grrs-1",
+    "outcome": "A default gather resolves the read slot, travels under the winning name, and keeps bee-gather; the guard mirrors the walk on both halves of the fallback contract",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [
+      "The guard's fallback default is keyed on the name PREPARE travels under (the winner on the gather kind, the asked head elsewhere) instead of the winner on every kind — a winner-on-every-kind lookup makes the guard NARROWER than prepare on a null-review + herding-generation host, where prepare publishes opus off marker_role and the existing test an_explicitly_null_review_slot_inherits_the_generation_herding_fallback pins that opus stays admitted — the plan was wrong about a fact",
+      "The cell's verify command `cargo test ... prepare model_guard drivers` is rejected by cargo (`unexpected argument 'model_guard'`); ran it as `cargo test ... -- prepare model_guard drivers` so libtest takes all three filters, and then ran the whole crate suite as well — hit an unforeseen obstacle",
+      "Renamed the pinned test every_dispatch_kind_keeps_its_slot to every_dispatch_kind_names_its_slot_explicitly — 'keeps its slot' became a lie for gather the moment the arm split, and a test name that misdescribes its own assertion is the next reader's wrong turn — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T04:37:43.997Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f7f16c07-ef49-4e1b-8ef9-4f1206a75a38",
+    "claimed_at": "2026-09-02T04:18:57.154Z",
+    "mistakes": [
+      {
+        "wrong": "Asserted model == \"sonnet\" in a_review_less_host_keeps_its_reviewer_envelope_byte_for_byte after reading resolve_role_named's walk alone",
+        "better": "should have read normalize_models first: it overlays claude's built-in review: opus, so a review-less host never reaches the generation tail and the honest golden is opus"
+      }
+    ],
+    "report": {
+      "outcome": "A default gather resolves the read slot, travels under the winning name, and keeps bee-gather; guard mirrors the walk on both halves of the fallback contract",
+      "commit": "1d01378f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- prepare model_guard drivers (395 pass, plus the whole crate at 3319 pass) and the built binary driven against a scratch read:haiku/generation:sonnet host — green:live — red-first on a_default_gather_resolves_the_read_slot (sonnet where haiku was owed), then the resolver+guard tests for every file touched, then the plan's live row: --kind gather -> Agent/bee-gather/haiku/[bee-tier: read]/logical_tier read; --kind reviewer -> Agent/bee-review/opus/[bee-tier: review]; --kind gather --role extraction -> bee-extract; read:{kind:herding,agent:x} -> Bash '.bee/bin/bee herding run --task-file - --json --agent \"x\"'/logical_tier read",
+      "deviations": [
+        "The guard's fallback default is keyed on the name PREPARE travels under (the winner on the gather kind, the asked head elsewhere) instead of the winner on every kind — a winner-on-every-kind lookup makes the guard NARROWER than prepare on a null-review + herding-generation host, where prepare publishes opus off marker_role and the existing test an_explicitly_null_review_slot_inherits_the_generation_herding_fallback pins that opus stays admitted — the plan was wrong about a fact",
+        "The cell's verify command `cargo test ... prepare model_guard drivers` is rejected by cargo (`unexpected argument 'model_guard'`); ran it as `cargo test ... -- prepare model_guard drivers` so libtest takes all three filters, and then ran the whole crate suite as well — hit an unforeseen obstacle",
+        "Renamed the pinned test every_dispatch_kind_keeps_its_slot to every_dispatch_kind_names_its_slot_explicitly — 'keeps its slot' became a lie for gather the moment the arm split, and a test name that misdescribes its own assertion is the next reader's wrong turn — found a better route"
+      ],
+      "mistakes": [
+        "Asserted model == \"sonnet\" in a_review_less_host_keeps_its_reviewer_envelope_byte_for_byte after reading resolve_role_named's walk alone — should have read normalize_models first: it overlays claude's built-in review: opus, so a review-less host never reaches the generation tail and the honest golden is opus"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "ran release bee in scratch host {read:haiku,generation:sonnet,review:opus}: `bee dispatch prepare --runtime claude --kind gather --json` → subagent_type bee-gather, model haiku, prompt starts `[bee-tier: read]`, economics.logical_tier read; unit test prepare.rs:3163 a_default_gather_resolves_the_read_slot ... ok"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "prepare.rs:3120 absent_role_every_dispatch_is_byte_identical uses THREE_SLOTS (prepare.rs:3033 extraction/generation/review, no read) asserting gather→bee-gather/sonnet; `git show 1d01378f | rg absent_role` → NOT IN DIFF; test ... ok"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "scratch host {read:{kind:herding,agent:x}} → tool Bash, command `.bee/bin/bee herding run --task-file - --json --agent \"x\"`, logical_tier read; test a_herding_shaped_read_slot_makes_a_default_gather_a_pane ... ok"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "same host, `--kind gather --role extraction --json` → subagent_type bee-extract, `[bee-tier: extraction]`; prepare.rs:3054 a_read_shaped_role_returns_the_bee_extract_worker ... ok"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "model_guard.rs:2785/2791/2797 assert generation→Some(\"gather\"), read→Some(\"gather\"), extraction→None; generation is also in tier_role_list(\"review\")=[review,generation], so the generation→gather assert is the DISPATCH_KINDS order pin; test ... ok"
+          },
+          {
+            "id": "c6",
+            "status": "PASS",
+            "evidence": "scratch host with no review key → subagent_type bee-review, `[bee-tier: review]`, model opus; prepare.rs:3216 a_review_less_host_keeps_its_reviewer_envelope_byte_for_byte ... ok"
+          },
+          {
+            "id": "c7",
+            "status": "PASS",
+            "evidence": "a_read_winner_publishes_no_herding_fallback (payload.fallback == None) + a_generation_winner_still_publishes_the_herding_fallback (sonnet) + model_guard a_read_less_host_still_admits_the_generation_herding_fallback (configured_model_set contains sonnet, Agent model:sonnet exit 0) — all ... ok"
+          },
+          {
+            "id": "c8",
+            "status": "PASS",
+            "evidence": "live `bee hook model-guard` on bare Agent → `FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind <cell|gather|reviewer|advisor> --json\" …` then agents listed from ROLE_AGENTS loop at model_guard.rs:1182; no `bee-gather = generation` in emitted text"
+          },
+          {
+            "id": "c9",
+            "status": "PASS",
+            "evidence": "cell_role_list body diff before/after → CELL_ROLE_LIST BODY IDENTICAL (doc-comment only); guard.rs (ROLE_AGENTS:179, ROLE_ALIASES:239, agents_for_role:284, role_for_agent:297) not in `git show --name-only`; deny code literal sets before vs after → DENY CODES IDENTICAL; slot_for_kind keeps cell→generation, advisor→advisor"
+          },
+          {
+            "id": "c10",
+            "status": "PASS",
+            "evidence": "`git show 1d01378f^:…/prepare.rs` line 57 `\"cell\" | \"gather\" => Some(\"generation\"),` — with that, envelope(gather,None) on READ_SPLIT gives sonnet/[bee-tier: generation], so the new a_default_gather_resolves_the_read_slot asserts (haiku, read) would fail; the old pin at slot_map_tests was flipped in the same commit"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-02T04:50:43.012Z"
+      }
+    ]
+  }
+}

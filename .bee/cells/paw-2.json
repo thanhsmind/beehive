@@ -1,0 +1,78 @@
+{
+  "id": "paw-2",
+  "feature": "pstack-skills-autowire",
+  "title": "Add the lifecycle routing block to CLAUDE.md",
+  "lane": "tiny",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "paw-1"
+  ],
+  "decisions": [
+    "D3",
+    "D4",
+    "D5"
+  ],
+  "files": [
+    "CLAUDE.md"
+  ],
+  "read_first": [
+    "CLAUDE.md",
+    "docs/history/pstack-skills-autowire/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add one section to this repo's CLAUDE.md carrying the lifecycle routing table from the plan's Approach section (per D3): which bee step reaches for which of the nine skills, and on what condition. Write it in ASD-STE100 Simplified Technical English, matching the file's existing voice. Name the guard on arena, architect and prototype so a cheap task never pays for them, and say plainly that the hat wave stays the plan-step consult (per D5). Do not touch AGENTS.md, packages/bee/AGENTS.block.md or skills/ (per D4). Run inline by the leader - tiny lane.",
+  "verify": "rg -q 'unslop' CLAUDE.md && rg -q 'hat wave' CLAUDE.md",
+  "must_haves": {
+    "truths": [
+      "CLAUDE.md names when each of the nine skills fires",
+      "The routing block says the hat wave is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "CLAUDE.md",
+        "substantive": "a routing section mapping bee lifecycle steps to the nine skills with their conditions"
+      }
+    ],
+    "key_links": [
+      "the block names skills that exist under .claude/skills/"
+    ],
+    "prohibitions": [
+      "No edit to AGENTS.md, packages/bee/AGENTS.block.md, or anything under skills/"
+    ]
+  },
+  "trace": {
+    "worker": "leader-paw-2",
+    "outcome": "CLAUDE.md routes each bee lifecycle step to the skill that fires there",
+    "files_changed": [
+      "CLAUDE.md"
+    ],
+    "deviations": [
+      "ran inline by the leader rather than through a dispatched worker: tiny lane, one file, this repo own voice and ASD-STE100 rules"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-10T16:18:43.147Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "claimed_at": "2026-09-10T16:18:38.791Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "CLAUDE.md routes each bee lifecycle step to the skill that fires there",
+      "commit": "0df23831",
+      "files": [
+        "CLAUDE.md"
+      ],
+      "tests": "rg -q unslop CLAUDE.md and rg -q hat-wave CLAUDE.md — green:static — the cell verify command; the routing block is prose an agent reads, so presence of the routing terms is the check",
+      "deviations": [
+        "ran inline by the leader rather than through a dispatched worker: tiny lane, one file, this repo own voice and ASD-STE100 rules"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

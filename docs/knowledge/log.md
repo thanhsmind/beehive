@@ -595,3 +595,31 @@
   that limit is stated rather than papered over. And UI visual snapshots still have no home in the
   bundle — recorded as an Open Gap in `concept-model-and-authoring.md`, not a home invented to close
   a red.
+
+## 2026-08-26
+
+- **A product description of the whole bee product now exists at `docs/product-description/`.**
+  34 documents on one eight-section skeleton written from the agent's point of view, a glossary, a
+  goal statement, four verification checklists (715 rows), and `bug-triage.md` with 24 deduplicated
+  defects — six of them high, including a secret-guard Bash walk-around, an `=true` boolean
+  inversion, commands advertised but not built, and a review preflight reporting `passed: true`.
+  It lives inside the beehive repo because the write guard blocks external paths. It is an
+  outside-in behavior description, not part of this bundle's authority: where it and an area spec
+  disagree, the spec and the code win, and the disagreement is a defect to file.
+
+## 2026-08-31
+
+- **Compounded `dispatch-one-door`.** Three prose surfaces (`gates-and-delegation.md`,
+  `swarming-reference.md`, and the model-guard's own FIX strings) each told an agent a different
+  preferred dispatch shape for the same operation, and all three disagreed with `bee dispatch
+  prepare`, the resolver that already computed the right answer. The fix touched no dispatch
+  logic — it pointed every reader and every refusal at the resolver verb instead of letting each
+  one describe the resolver's current output in prose. Knowledge sync (hook-runtime
+  `dispatch-guard.md` B16a/B18) had already landed at cap time; this pass added the decision log
+  entry for D2 (direct `subagent_type: bee-*` naming stays legal where the slot is model-shaped)
+  and promoted the generalizable half as
+  `patterns/20260831-prose-that-recommends-a-shape-drifts-from-the-resolver-that-computes-it.md`.
+- **Flushed the capture queue's touches-sweep and promote-proposal backlog** (245 pending stubs:
+  197 touches-sweep citation reconciliations across 40 decision pairs, 28 promote-proposal
+  reviews, 20 direct settlement merges) — dispatched to parallel workers partitioned by disjoint
+  target file so no two workers touched the same doc.

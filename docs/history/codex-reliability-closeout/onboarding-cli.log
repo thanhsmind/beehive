@@ -1,0 +1,1993 @@
+010-python3-c-import-json-from-pathlib-import-Path-print-json-lo.cmd
+$ python3 -c import json; from pathlib import Path; print(json.loads(Path(".bee/onboarding.json").read_text())["agents_sync"]["codex"]["note"])
+
+010-python3-c-import-json-from-pathlib-import-Path-print-json-lo.err
+
+010-python3-c-import-json-from-pathlib-import-Path-print-json-lo.exit
+0
+
+010-python3-c-import-json-from-pathlib-import-Path-print-json-lo.out
+Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11).
+
+011-host-home-thanhsmind-cache-cargo-target-release-bee-onboard-.cmd
+$ /home/thanhsmind/.cache/cargo-target/release/bee onboard --repo-root /var/tmp/bee-crc-verify/run/20260913-140407-3937321/repo --apply --runtime codex --no-statusline --json
+
+011-host-home-thanhsmind-cache-cargo-target-release-bee-onboard-.err
+
+011-host-home-thanhsmind-cache-cargo-target-release-bee-onboard-.exit
+0
+
+011-host-home-thanhsmind-cache-cargo-target-release-bee-onboard-.out
+{
+  "repo_root": "/var/tmp/bee-crc-verify/run/20260913-140407-3937321/repo",
+  "status": "applied",
+  "bee_version": "2.35.0",
+  "applied": [],
+  "recheck": "up_to_date",
+  "recheck_plan": [],
+  "recheck_skills": null,
+  "skills": {
+    "source_root": "/home/thanhsmind/Projects/goglbe/beehive--wt--codex-reliability-closeout/skills",
+    "targets": [
+      {
+        "kind": "repo-claude",
+        "target_root": "/var/tmp/bee-crc-verify/run/20260913-140407-3937321/repo/.claude/skills",
+        "mode": "sync",
+        "versions": {
+          "source": "2.35.0",
+          "host_helpers": "2.35.0",
+          "installed_skills": "2.35.0"
+        },
+        "blocked": null,
+        "items": []
+      },
+      {
+        "kind": "repo-agents",
+        "target_root": "/var/tmp/bee-crc-verify/run/20260913-140407-3937321/repo/.agents/skills",
+        "mode": "sync",
+        "versions": {
+          "source": "2.35.0",
+          "host_helpers": "2.35.0",
+          "installed_skills": "2.35.0"
+        },
+        "blocked": null,
+        "items": []
+      },
+      {
+        "kind": "repo-opencode",
+        "target_root": "/var/tmp/bee-crc-verify/run/20260913-140407-3937321/repo/.opencode/skills",
+        "mode": "sync",
+        "versions": {
+          "source": "2.35.0",
+          "host_helpers": "2.35.0",
+          "installed_skills": "2.35.0"
+        },
+        "blocked": null,
+        "items": []
+      }
+    ],
+    "skipped": []
+  },
+  "onboarding": {
+    "schema_version": "1.0",
+    "bee_version": "2.35.0",
+    "managed": {
+      "agents_block": "1080c45750cb1aa84dd1725120214742abd7e14c1170eb893628be3bd91de353",
+      "gitignore_block": "be2b7a05d1cf097556c357429ff583df300c20bb3fdbd91cba7ba93a205d870a",
+      "helpers": {},
+      "lib": {},
+      "expertise": {
+        "INDEX.md": "35b7797f402b1928553d8d43f6a82727b330ba53a8beb80ebe3d2806a3ac0026",
+        "README.md": "3f9ad922145df53981bce91ae306dd96b7e48283918e7cd2da0074b2ce930e7d",
+        "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
+        "architecture.md": "a5cf1eddea09eed19e44b18841e58d91780070cf3cf9ebf13c6cd1c61aeb44c0",
+        "data.md": "799000e64e6c274447e94571ec8b78dfeba8df015a3d566e7b9afc7ea7ef7785",
+        "debugging.md": "3fb9b82b2d1739393189956ad50be5b446f921c2a2b6846b7277d8f258e79dd5",
+        "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
+        "documentation.md": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
+        "frontend.md": "1abcec2e73165a5c2c1b4537a377a30d0da9608de64d1cacab97434e77a78439",
+        "knowledge.md": "958da265dd957b2fa80647f331862e9aec374086890fce858fa332d05a2c5717",
+        "knowledge/patterns/attribution-that-survives-rewrites.md": "5d1e08dc87500c610d4e954986d0356328224fd2221d3d52b6d2957410b1aaff",
+        "knowledge/patterns/rules-that-ship-as-a-check.md": "73100f56893c0f2c78c58604878d06949acdd3b0d2ba5a4166a2dbe7561d188e",
+        "merges.md": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
+        "operations.md": "464a6e355d640422c617e9f9e6c09a63f495d69c95ef0d0163bbf95d1ed88dba",
+        "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
+        "planning.md": "e46c1d07d3d91aa81cf01748d94ee87f115bfd40a5d31508d70fe49c8b9932a7",
+        "review.md": "1f052a9e34464259467ad5c5cee91a5c51a5f5aad964caf48f120ffd7a5f6969",
+        "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
+        "tests.md": "f98ac132b9562658caa93cb50448cf96ac6d956002d804d556e833cc0c77ab25",
+        "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
+        "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
+        "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
+        "tests/patterns/environment-limited-tests.md": "b55575b8822948848f355abe62508388c3a3f2d50ba59a6d06bfedf8aafcc72e",
+        "tests/patterns/pinning-against-a-live-oracle.md": "c6251f5fd518cdc1ef7d323ddc7e2b5b6ae9a6cda810cb15cc76d2c43e3a2928",
+        "tests/patterns/proving-the-code-under-test-ran.md": "6e9e895c3c83a726dd6f5f3c86bc686513db460491cbf51804c4a990d747c9da",
+        "thinking.md": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617"
+      },
+      "prompts": {
+        "advisor.md": "77ca1659b33dc4879ea708202582985d0b95bc9ef7556c37dd7f0c09def825a9",
+        "gather.md": "4430b983d3985a2e298622088857defb305261f122f9bc95490e3edf60aea4b5",
+        "reviewer.md": "e6375deeb0e771829ce599cd3969846ddd8ec9915c5c3682a94a8979911b1e13",
+        "worker-cell.md": "8de76182920befc11bc2daab4b0454d61b3e8b6775c951044122aa8ee09cbf57"
+      }
+    },
+    "agents_sync": {
+      "bee_version": "2.35.0",
+      "files": [
+        ".claude/agents/bee-build.md",
+        ".claude/agents/bee-extract.md",
+        ".claude/agents/bee-gather.md",
+        ".claude/agents/bee-review.md"
+      ],
+      "rendered_from": {
+        "generation": "sonnet",
+        "extraction": "haiku",
+        "read": "haiku",
+        "review": "opus"
+      },
+      "codex": {
+        "agents": [],
+        "note": "Codex defaults unconfigured roles to null (enforced as prompt read-and-output budget), but supports configurable roles and transports (team.codex / models.codex), read-only CLI fallback for non-cell execution, and capability-dependent native dispatch without effective-model proof. No agent files are rendered under .agents/ (AO11)."
+      },
+      "opencode": {
+        "files": [
+          ".opencode/agent/bee-build.md",
+          ".opencode/agent/bee-extract.md",
+          ".opencode/agent/bee-gather.md",
+          ".opencode/agent/bee-review.md"
+        ],
+        "rendered_from": {
+          "generation": "opencode/big-pickle",
+          "extraction": "opencode/ling-3.0-tiny-free",
+          "read": "opencode/big-pickle",
+          "review": "opencode/nemotron-3-ultra-free"
+        }
+      }
+    },
+    "created_at": "2026-09-13T07:04:07.443Z",
+    "updated_at": "2026-09-13T07:13:19.153Z"
+  },
+  "notices": [
+    "No standard commands recorded. Ask the user for the host project's setup/start/test commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.",
+    "This project has no command that proves it works. The bee-verifying skill can build one together with the user: it studies the project, writes a check that drives the real product, and leaves a single command anyone can run. Offer it — say what it does, then ask, but first look through the project's recorded decisions for an earlier refusal: if the user already said no to this, say nothing. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer."
+  ]
+}
+
+012-python3-c-import-json-from-pathlib-import-Path-note-json-loa.cmd
+$ python3 -c import json; from pathlib import Path; note=json.loads(Path(".bee/onboarding.json").read_text())["agents_sync"]["codex"]["note"]; assert "configurable roles and transports" in note; assert "Codex has no per-agent model selection" not in note; print(note)
+
+012-python3-c-import-json-from-pathlib-import-Path-note-json-loa.err
+
+012-python3-c-import-json-from-pathlib-import-Path-note-json-loa.exit
+0
+
+012-python3-c-import-json-from-pathlib-import-Path-note-json-loa.out
+Codex defaults unconfigured roles to null (enforced as prompt read-and-output budget), but supports configurable roles and transports (team.codex / models.codex), read-only CLI fallback for non-cell execution, and capability-dependent native dispatch without effective-model proof. No agent files are rendered under .agents/ (AO11).
+
+013-host-home-thanhsmind-cache-cargo-target-release-bee-onboard-.cmd
+$ /home/thanhsmind/.cache/cargo-target/release/bee onboard --repo-root /var/tmp/bee-crc-verify/run/20260913-140407-3937321/fresh-onboard --apply --runtime codex --no-statusline --json
+
+013-host-home-thanhsmind-cache-cargo-target-release-bee-onboard-.err
+
+013-host-home-thanhsmind-cache-cargo-target-release-bee-onboard-.exit
+0
+
+013-host-home-thanhsmind-cache-cargo-target-release-bee-onboard-.out
+{
+  "repo_root": "/var/tmp/bee-crc-verify/run/20260913-140407-3937321/fresh-onboard",
+  "status": "applied",
+  "bee_version": "2.35.0",
+  "applied": [
+    {
+      "action": "create_agents_block",
+      "path": "AGENTS.md"
+    },
+    {
+      "action": "propose_agents_header",
+      "path": "AGENTS.md"
+    },
+    {
+      "action": "create_runtime_file",
+      "path": ".bee/state.json"
+    },
+    {
+      "action": "create_runtime_file",
+      "path": ".bee/config.json"
+    },
+    {
+      "action": "create_runtime_file",
+      "path": ".bee/reservations.json"
+    },
+    {
+      "action": "create_runtime_file",
+      "path": ".bee/decisions.jsonl"
+    },
+    {
+      "action": "create_runtime_file",
+      "path": ".bee/backlog.jsonl"
+    },
+    {
+      "action": "create_runtime_file",
+      "path": ".bee/config-sample.json"
+    },
+    {
+      "action": "create_dir",
+      "path": ".bee/cells"
+    },
+    {
+      "action": "create_dir",
+      "path": ".bee/logs"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/INDEX.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/README.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/apis.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/architecture.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/data.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/debugging.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/decisions.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/documentation.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/frontend.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/knowledge.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/knowledge/patterns/attribution-that-survives-rewrites.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/knowledge/patterns/rules-that-ship-as-a-check.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/merges.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/operations.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/performance.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/planning.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/review.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/security.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/tests.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/tests/patterns/asserting-on-generated-output.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/tests/patterns/comparing-structured-data.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/tests/patterns/differential-testing.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/tests/patterns/environment-limited-tests.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/tests/patterns/pinning-against-a-live-oracle.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/tests/patterns/proving-the-code-under-test-ran.md"
+    },
+    {
+      "action": "copy_expertise",
+      "path": ".bee/expertise/thinking.md"
+    },
+    {
+      "action": "copy_prompt",
+      "path": ".bee/bin/prompts/advisor.md"
+    },
+    {
+      "action": "copy_prompt",
+      "path": ".bee/bin/prompts/gather.md"
+    },
+    {
+      "action": "copy_prompt",
+      "path": ".bee/bin/prompts/reviewer.md"
+    },
+    {
+      "action": "copy_prompt",
+      "path": ".bee/bin/prompts/worker-cell.md"
+    },
+    {
+      "action": "create_dir",
+      "path": ".opencode/plugins"
+    },
+    {
+      "action": "copy_opencode_plugin",
+      "path": ".opencode/plugins/bee-guard.ts"
+    },
+    {
+      "action": "create_dir",
+      "path": ".pi/extensions"
+    },
+    {
+      "action": "copy_pi_extension",
+      "path": ".pi/extensions/bee-guard.ts"
+    },
+    {
+      "action": "create_stub",
+      "path": "docs/history/learnings/critical-patterns.md"
+    },
+    {
+      "action": "create_specs_stub",
+      "path": "docs/specs/reading-map.md"
+    },
+    {
+      "action": "create_specs_stub",
+      "path": "docs/specs/system-overview.md"
+    },
+    {
+      "action": "create_gitignore_block",
+      "path": ".gitignore"
+    },
+    {
+      "action": "create_claude_md",
+      "path": "CLAUDE.md"
+    },
+    {
+      "action": "sync_agent_file",
+      "path": ".claude/agents/bee-build.md",
+      "agent": "bee-build"
+    },
+    {
+      "action": "sync_agent_file",
+      "path": ".claude/agents/bee-extract.md",
+      "agent": "bee-extract"
+    },
+    {
+      "action": "sync_agent_file",
+      "path": ".claude/agents/bee-gather.md",
+      "agent": "bee-gather"
+    },
+    {
+      "action": "sync_agent_file",
+      "path": ".claude/agents/bee-review.md",
+      "agent": "bee-review"
+    },
+    {
+      "action": "sync_opencode_agent_file",
+      "path": ".opencode/agent/bee-build.md",
+      "agent": "bee-build"
+    },
+    {
+      "action": "sync_opencode_agent_file",
+      "path": ".opencode/agent/bee-extract.md",
+      "agent": "bee-extract"
+    },
+    {
+      "action": "sync_opencode_agent_file",
+      "path": ".opencode/agent/bee-gather.md",
+      "agent": "bee-gather"
+    },
+    {
+      "action": "sync_opencode_agent_file",
+      "path": ".opencode/agent/bee-review.md",
+      "agent": "bee-review"
+    },
+    {
+      "action": "write_onboarding",
+      "path": ".bee/onboarding.json"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-capturing",
+      "path": "bee-capturing",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-evolving",
+      "path": "bee-evolving",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-grooming",
+      "path": "bee-grooming",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-herding",
+      "path": "bee-herding",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-herdr",
+      "path": "bee-herdr",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-hive",
+      "path": "bee-hive",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-how",
+      "path": "bee-how",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-planning",
+      "path": "bee-planning",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-chestertons-fence",
+      "path": "bee-principle-chestertons-fence",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-crash-site-versus-fault-site",
+      "path": "bee-principle-crash-site-versus-fault-site",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-never-invent-behavior-neither-side-has",
+      "path": "bee-principle-never-invent-behavior-neither-side-has",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-one-fact-one-home",
+      "path": "bee-principle-one-fact-one-home",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-record-at-the-moment-of-settlement",
+      "path": "bee-principle-record-at-the-moment-of-settlement",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-red-before-green",
+      "path": "bee-principle-red-before-green",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-reproduce-first",
+      "path": "bee-principle-reproduce-first",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-single-source-of-truth",
+      "path": "bee-principle-single-source-of-truth",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-smallest-honest-shape",
+      "path": "bee-principle-smallest-honest-shape",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-split-never-shrink",
+      "path": "bee-principle-split-never-shrink",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-test-behavior-not-structure",
+      "path": "bee-principle-test-behavior-not-structure",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-the-deletion-test",
+      "path": "bee-principle-the-deletion-test",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-the-rebuild-test",
+      "path": "bee-principle-the-rebuild-test",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-verify-before-reporting",
+      "path": "bee-principle-verify-before-reporting",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-researching",
+      "path": "bee-researching",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-reviewing",
+      "path": "bee-reviewing",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-shaping",
+      "path": "bee-shaping",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-swarming",
+      "path": "bee-swarming",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-teach",
+      "path": "bee-teach",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-technical-writing",
+      "path": "bee-technical-writing",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-unslop",
+      "path": "bee-unslop",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-verify-upkeep",
+      "path": "bee-verify-upkeep",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-verifying",
+      "path": "bee-verifying",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-wayfinding",
+      "path": "bee-wayfinding",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-why",
+      "path": "bee-why",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-writing-skills",
+      "path": "bee-writing-skills",
+      "scope": "installed",
+      "target": "repo-claude"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-capturing",
+      "path": "bee-capturing",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-evolving",
+      "path": "bee-evolving",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-grooming",
+      "path": "bee-grooming",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-herding",
+      "path": "bee-herding",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-herdr",
+      "path": "bee-herdr",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-hive",
+      "path": "bee-hive",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-how",
+      "path": "bee-how",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-planning",
+      "path": "bee-planning",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-chestertons-fence",
+      "path": "bee-principle-chestertons-fence",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-crash-site-versus-fault-site",
+      "path": "bee-principle-crash-site-versus-fault-site",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-never-invent-behavior-neither-side-has",
+      "path": "bee-principle-never-invent-behavior-neither-side-has",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-one-fact-one-home",
+      "path": "bee-principle-one-fact-one-home",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-record-at-the-moment-of-settlement",
+      "path": "bee-principle-record-at-the-moment-of-settlement",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-red-before-green",
+      "path": "bee-principle-red-before-green",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-reproduce-first",
+      "path": "bee-principle-reproduce-first",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-single-source-of-truth",
+      "path": "bee-principle-single-source-of-truth",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-smallest-honest-shape",
+      "path": "bee-principle-smallest-honest-shape",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-split-never-shrink",
+      "path": "bee-principle-split-never-shrink",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-test-behavior-not-structure",
+      "path": "bee-principle-test-behavior-not-structure",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-the-deletion-test",
+      "path": "bee-principle-the-deletion-test",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-the-rebuild-test",
+      "path": "bee-principle-the-rebuild-test",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-verify-before-reporting",
+      "path": "bee-principle-verify-before-reporting",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-researching",
+      "path": "bee-researching",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-reviewing",
+      "path": "bee-reviewing",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-shaping",
+      "path": "bee-shaping",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-swarming",
+      "path": "bee-swarming",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-teach",
+      "path": "bee-teach",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-technical-writing",
+      "path": "bee-technical-writing",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-unslop",
+      "path": "bee-unslop",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-verify-upkeep",
+      "path": "bee-verify-upkeep",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-verifying",
+      "path": "bee-verifying",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-wayfinding",
+      "path": "bee-wayfinding",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-why",
+      "path": "bee-why",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-writing-skills",
+      "path": "bee-writing-skills",
+      "scope": "installed",
+      "target": "repo-agents"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-capturing",
+      "path": "bee-capturing",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-evolving",
+      "path": "bee-evolving",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-grooming",
+      "path": "bee-grooming",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-herding",
+      "path": "bee-herding",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-herdr",
+      "path": "bee-herdr",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-hive",
+      "path": "bee-hive",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-how",
+      "path": "bee-how",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-planning",
+      "path": "bee-planning",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-chestertons-fence",
+      "path": "bee-principle-chestertons-fence",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-crash-site-versus-fault-site",
+      "path": "bee-principle-crash-site-versus-fault-site",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-never-invent-behavior-neither-side-has",
+      "path": "bee-principle-never-invent-behavior-neither-side-has",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-one-fact-one-home",
+      "path": "bee-principle-one-fact-one-home",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-record-at-the-moment-of-settlement",
+      "path": "bee-principle-record-at-the-moment-of-settlement",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-red-before-green",
+      "path": "bee-principle-red-before-green",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-reproduce-first",
+      "path": "bee-principle-reproduce-first",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-single-source-of-truth",
+      "path": "bee-principle-single-source-of-truth",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-smallest-honest-shape",
+      "path": "bee-principle-smallest-honest-shape",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-split-never-shrink",
+      "path": "bee-principle-split-never-shrink",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-test-behavior-not-structure",
+      "path": "bee-principle-test-behavior-not-structure",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-the-deletion-test",
+      "path": "bee-principle-the-deletion-test",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-the-rebuild-test",
+      "path": "bee-principle-the-rebuild-test",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-principle-verify-before-reporting",
+      "path": "bee-principle-verify-before-reporting",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-researching",
+      "path": "bee-researching",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-reviewing",
+      "path": "bee-reviewing",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-shaping",
+      "path": "bee-shaping",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-swarming",
+      "path": "bee-swarming",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-teach",
+      "path": "bee-teach",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-technical-writing",
+      "path": "bee-technical-writing",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-unslop",
+      "path": "bee-unslop",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-verify-upkeep",
+      "path": "bee-verify-upkeep",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-verifying",
+      "path": "bee-verifying",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-wayfinding",
+      "path": "bee-wayfinding",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-why",
+      "path": "bee-why",
+      "scope": "installed",
+      "target": "repo-opencode"
+    },
+    {
+      "action": "sync_skill",
+      "skill": "bee-writing-skills",
+      "path": "bee-writing-skills",
+      "scope": "installed",
+      "target": "repo-opencode"
+    }
+  ],
+  "recheck": "up_to_date",
+  "recheck_plan": [],
+  "recheck_skills": null,
+  "skills": {
+    "source_root": "/home/thanhsmind/Projects/goglbe/beehive--wt--codex-reliability-closeout/skills",
+    "targets": [
+      {
+        "kind": "repo-claude",
+        "target_root": "/var/tmp/bee-crc-verify/run/20260913-140407-3937321/fresh-onboard/.claude/skills",
+        "mode": "fresh",
+        "versions": {
+          "source": "2.35.0",
+          "host_helpers": "absent",
+          "installed_skills": "absent"
+        },
+        "blocked": null,
+        "items": [
+          {
+            "action": "sync_skill",
+            "skill": "bee-capturing",
+            "path": "bee-capturing",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-evolving",
+            "path": "bee-evolving",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-grooming",
+            "path": "bee-grooming",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-herding",
+            "path": "bee-herding",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-herdr",
+            "path": "bee-herdr",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-hive",
+            "path": "bee-hive",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-how",
+            "path": "bee-how",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-planning",
+            "path": "bee-planning",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-chestertons-fence",
+            "path": "bee-principle-chestertons-fence",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-crash-site-versus-fault-site",
+            "path": "bee-principle-crash-site-versus-fault-site",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-never-invent-behavior-neither-side-has",
+            "path": "bee-principle-never-invent-behavior-neither-side-has",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-one-fact-one-home",
+            "path": "bee-principle-one-fact-one-home",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-record-at-the-moment-of-settlement",
+            "path": "bee-principle-record-at-the-moment-of-settlement",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-red-before-green",
+            "path": "bee-principle-red-before-green",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-reproduce-first",
+            "path": "bee-principle-reproduce-first",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-single-source-of-truth",
+            "path": "bee-principle-single-source-of-truth",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-smallest-honest-shape",
+            "path": "bee-principle-smallest-honest-shape",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-split-never-shrink",
+            "path": "bee-principle-split-never-shrink",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-test-behavior-not-structure",
+            "path": "bee-principle-test-behavior-not-structure",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-the-deletion-test",
+            "path": "bee-principle-the-deletion-test",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-the-rebuild-test",
+            "path": "bee-principle-the-rebuild-test",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-verify-before-reporting",
+            "path": "bee-principle-verify-before-reporting",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-researching",
+            "path": "bee-researching",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-reviewing",
+            "path": "bee-reviewing",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-shaping",
+            "path": "bee-shaping",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-swarming",
+            "path": "bee-swarming",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-teach",
+            "path": "bee-teach",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-technical-writing",
+            "path": "bee-technical-writing",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-unslop",
+            "path": "bee-unslop",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-verify-upkeep",
+            "path": "bee-verify-upkeep",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-verifying",
+            "path": "bee-verifying",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-wayfinding",
+            "path": "bee-wayfinding",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-why",
+            "path": "bee-why",
+            "scope": "installed",
+            "target": "repo-claude"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-writing-skills",
+            "path": "bee-writing-skills",
+            "scope": "installed",
+            "target": "repo-claude"
+          }
+        ]
+      },
+      {
+        "kind": "repo-agents",
+        "target_root": "/var/tmp/bee-crc-verify/run/20260913-140407-3937321/fresh-onboard/.agents/skills",
+        "mode": "fresh",
+        "versions": {
+          "source": "2.35.0",
+          "host_helpers": "absent",
+          "installed_skills": "absent"
+        },
+        "blocked": null,
+        "items": [
+          {
+            "action": "sync_skill",
+            "skill": "bee-capturing",
+            "path": "bee-capturing",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-evolving",
+            "path": "bee-evolving",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-grooming",
+            "path": "bee-grooming",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-herding",
+            "path": "bee-herding",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-herdr",
+            "path": "bee-herdr",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-hive",
+            "path": "bee-hive",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-how",
+            "path": "bee-how",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-planning",
+            "path": "bee-planning",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-chestertons-fence",
+            "path": "bee-principle-chestertons-fence",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-crash-site-versus-fault-site",
+            "path": "bee-principle-crash-site-versus-fault-site",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-never-invent-behavior-neither-side-has",
+            "path": "bee-principle-never-invent-behavior-neither-side-has",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-one-fact-one-home",
+            "path": "bee-principle-one-fact-one-home",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-record-at-the-moment-of-settlement",
+            "path": "bee-principle-record-at-the-moment-of-settlement",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-red-before-green",
+            "path": "bee-principle-red-before-green",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-reproduce-first",
+            "path": "bee-principle-reproduce-first",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-single-source-of-truth",
+            "path": "bee-principle-single-source-of-truth",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-smallest-honest-shape",
+            "path": "bee-principle-smallest-honest-shape",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-split-never-shrink",
+            "path": "bee-principle-split-never-shrink",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-test-behavior-not-structure",
+            "path": "bee-principle-test-behavior-not-structure",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-the-deletion-test",
+            "path": "bee-principle-the-deletion-test",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-the-rebuild-test",
+            "path": "bee-principle-the-rebuild-test",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-verify-before-reporting",
+            "path": "bee-principle-verify-before-reporting",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-researching",
+            "path": "bee-researching",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-reviewing",
+            "path": "bee-reviewing",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-shaping",
+            "path": "bee-shaping",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-swarming",
+            "path": "bee-swarming",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-teach",
+            "path": "bee-teach",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-technical-writing",
+            "path": "bee-technical-writing",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-unslop",
+            "path": "bee-unslop",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-verify-upkeep",
+            "path": "bee-verify-upkeep",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-verifying",
+            "path": "bee-verifying",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-wayfinding",
+            "path": "bee-wayfinding",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-why",
+            "path": "bee-why",
+            "scope": "installed",
+            "target": "repo-agents"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-writing-skills",
+            "path": "bee-writing-skills",
+            "scope": "installed",
+            "target": "repo-agents"
+          }
+        ]
+      },
+      {
+        "kind": "repo-opencode",
+        "target_root": "/var/tmp/bee-crc-verify/run/20260913-140407-3937321/fresh-onboard/.opencode/skills",
+        "mode": "fresh",
+        "versions": {
+          "source": "2.35.0",
+          "host_helpers": "absent",
+          "installed_skills": "absent"
+        },
+        "blocked": null,
+        "items": [
+          {
+            "action": "sync_skill",
+            "skill": "bee-capturing",
+            "path": "bee-capturing",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-evolving",
+            "path": "bee-evolving",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-grooming",
+            "path": "bee-grooming",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-herding",
+            "path": "bee-herding",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-herdr",
+            "path": "bee-herdr",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-hive",
+            "path": "bee-hive",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-how",
+            "path": "bee-how",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-planning",
+            "path": "bee-planning",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-chestertons-fence",
+            "path": "bee-principle-chestertons-fence",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-crash-site-versus-fault-site",
+            "path": "bee-principle-crash-site-versus-fault-site",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-never-invent-behavior-neither-side-has",
+            "path": "bee-principle-never-invent-behavior-neither-side-has",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-one-fact-one-home",
+            "path": "bee-principle-one-fact-one-home",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-record-at-the-moment-of-settlement",
+            "path": "bee-principle-record-at-the-moment-of-settlement",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-red-before-green",
+            "path": "bee-principle-red-before-green",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-reproduce-first",
+            "path": "bee-principle-reproduce-first",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-single-source-of-truth",
+            "path": "bee-principle-single-source-of-truth",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-smallest-honest-shape",
+            "path": "bee-principle-smallest-honest-shape",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-split-never-shrink",
+            "path": "bee-principle-split-never-shrink",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-test-behavior-not-structure",
+            "path": "bee-principle-test-behavior-not-structure",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-the-deletion-test",
+            "path": "bee-principle-the-deletion-test",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-the-rebuild-test",
+            "path": "bee-principle-the-rebuild-test",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-principle-verify-before-reporting",
+            "path": "bee-principle-verify-before-reporting",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-researching",
+            "path": "bee-researching",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-reviewing",
+            "path": "bee-reviewing",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-shaping",
+            "path": "bee-shaping",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-swarming",
+            "path": "bee-swarming",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-teach",
+            "path": "bee-teach",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-technical-writing",
+            "path": "bee-technical-writing",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-unslop",
+            "path": "bee-unslop",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-verify-upkeep",
+            "path": "bee-verify-upkeep",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-verifying",
+            "path": "bee-verifying",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-wayfinding",
+            "path": "bee-wayfinding",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-why",
+            "path": "bee-why",
+            "scope": "installed",
+            "target": "repo-opencode"
+          },
+          {
+            "action": "sync_skill",
+            "skill": "bee-writing-skills",
+            "path": "bee-writing-skills",
+            "scope": "installed",
+            "target": "repo-opencode"
+          }
+        ]
+      }
+    ],
+    "skipped": []
+  },
+  "onboarding": {
+    "schema_version": "1.0",
+    "bee_version": "2.35.0",
+    "managed": {
+      "agents_block": "1080c45750cb1aa84dd1725120214742abd7e14c1170eb893628be3bd91de353",
+      "gitignore_block": "be2b7a05d1cf097556c357429ff583df300c20bb3fdbd91cba7ba93a205d870a",
+      "helpers": {},
+      "lib": {},
+      "expertise": {
+        "INDEX.md": "35b7797f402b1928553d8d43f6a82727b330ba53a8beb80ebe3d2806a3ac0026",
+        "README.md": "3f9ad922145df53981bce91ae306dd96b7e48283918e7cd2da0074b2ce930e7d",
+        "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
+        "architecture.md": "a5cf1eddea09eed19e44b18841e58d91780070cf3cf9ebf13c6cd1c61aeb44c0",
+        "data.md": "799000e64e6c274447e94571ec8b78dfeba8df015a3d566e7b9afc7ea7ef7785",
+        "debugging.md": "3fb9b82b2d1739393189956ad50be5b446f921c2a2b6846b7277d8f258e79dd5",
+        "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
+        "documentation.md": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
+        "frontend.md": "1abcec2e73165a5c2c1b4537a377a30d0da9608de64d1cacab97434e77a78439",
+        "knowledge.md": "958da265dd957b2fa80647f331862e9aec374086890fce858fa332d05a2c5717",
+        "knowledge/patterns/attribution-that-survives-rewrites.md": "5d1e08dc87500c610d4e954986d0356328224fd2221d3d52b6d2957410b1aaff",
+        "knowledge/patterns/rules-that-ship-as-a-check.md": "73100f56893c0f2c78c58604878d06949acdd3b0d2ba5a4166a2dbe7561d188e",
+        "merges.md": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
+        "operations.md": "464a6e355d640422c617e9f9e6c09a63f495d69c95ef0d0163bbf95d1ed88dba",
+        "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
+        "planning.md": "e46c1d07d3d91aa81cf01748d94ee87f115bfd40a5d31508d70fe49c8b9932a7",
+        "review.md": "1f052a9e34464259467ad5c5cee91a5c51a5f5aad964caf48f120ffd7a5f6969",
+        "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
+        "tests.md": "f98ac132b9562658caa93cb50448cf96ac6d956002d804d556e833cc0c77ab25",
+        "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
+        "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
+        "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
+        "tests/patterns/environment-limited-tests.md": "b55575b8822948848f355abe62508388c3a3f2d50ba59a6d06bfedf8aafcc72e",
+        "tests/patterns/pinning-against-a-live-oracle.md": "c6251f5fd518cdc1ef7d323ddc7e2b5b6ae9a6cda810cb15cc76d2c43e3a2928",
+        "tests/patterns/proving-the-code-under-test-ran.md": "6e9e895c3c83a726dd6f5f3c86bc686513db460491cbf51804c4a990d747c9da",
+        "thinking.md": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617"
+      },
+      "prompts": {
+        "advisor.md": "77ca1659b33dc4879ea708202582985d0b95bc9ef7556c37dd7f0c09def825a9",
+        "gather.md": "4430b983d3985a2e298622088857defb305261f122f9bc95490e3edf60aea4b5",
+        "reviewer.md": "e6375deeb0e771829ce599cd3969846ddd8ec9915c5c3682a94a8979911b1e13",
+        "worker-cell.md": "8de76182920befc11bc2daab4b0454d61b3e8b6775c951044122aa8ee09cbf57"
+      }
+    },
+    "agents_sync": {
+      "bee_version": "2.35.0",
+      "files": [
+        ".claude/agents/bee-build.md",
+        ".claude/agents/bee-extract.md",
+        ".claude/agents/bee-gather.md",
+        ".claude/agents/bee-review.md"
+      ],
+      "rendered_from": {
+        "generation": "sonnet",
+        "extraction": "haiku",
+        "read": "haiku",
+        "review": "opus"
+      },
+      "codex": {
+        "agents": [],
+        "note": "Codex defaults unconfigured roles to null (enforced as prompt read-and-output budget), but supports configurable roles and transports (team.codex / models.codex), read-only CLI fallback for non-cell execution, and capability-dependent native dispatch without effective-model proof. No agent files are rendered under .agents/ (AO11)."
+      },
+      "opencode": {
+        "files": [
+          ".opencode/agent/bee-build.md",
+          ".opencode/agent/bee-extract.md",
+          ".opencode/agent/bee-gather.md",
+          ".opencode/agent/bee-review.md"
+        ],
+        "rendered_from": {
+          "generation": "opencode/big-pickle",
+          "extraction": "opencode/ling-3.0-tiny-free",
+          "read": "opencode/big-pickle",
+          "review": "opencode/nemotron-3-ultra-free"
+        }
+      }
+    },
+    "created_at": "2026-09-13T07:16:45.119Z",
+    "updated_at": "2026-09-13T07:16:45.119Z"
+  },
+  "notices": [
+    "No standard commands recorded. Ask the user for the host project's setup/start/test commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.",
+    "Greenfield init lane (docs/09 item 6): this is the first onboard and no build was detected. Offer the init lane before any feature work — the first planning slice is one init cell whose must_haves are exactly: setup succeeds from scratch, one passing test exists, standard commands are recorded in .bee/config.json, and the repo has a clean first commit.",
+    "This project has no command that proves it works. The bee-verifying skill can build one together with the user: it studies the project, writes a check that drives the real product, and leaves a single command anyone can run. Offer it — say what it does, then ask, but first look through the project's recorded decisions for an earlier refusal: if the user already said no to this, say nothing. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer."
+  ]
+}
+
+014-python3-c-import-json-from-pathlib-import-Path-r-json-loads-.cmd
+$ python3 -c import json; from pathlib import Path; r=json.loads(Path(".bee/onboarding.json").read_text()); note=r["agents_sync"]["codex"]["note"]; assert "configurable roles and transports" in note; assert "Codex has no per-agent model selection" not in note; assert r["agents_sync"]["codex"]["agents"] == []; print(note)
+
+014-python3-c-import-json-from-pathlib-import-Path-r-json-loads-.err
+
+014-python3-c-import-json-from-pathlib-import-Path-r-json-loads-.exit
+0
+
+014-python3-c-import-json-from-pathlib-import-Path-r-json-loads-.out
+Codex defaults unconfigured roles to null (enforced as prompt read-and-output budget), but supports configurable roles and transports (team.codex / models.codex), read-only CLI fallback for non-cell execution, and capability-dependent native dispatch without effective-model proof. No agent files are rendered under .agents/ (AO11).

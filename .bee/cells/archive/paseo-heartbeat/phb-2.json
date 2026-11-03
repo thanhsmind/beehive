@@ -1,0 +1,199 @@
+{
+  "id": "phb-2",
+  "feature": "paseo-heartbeat",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Make the Pi leader create and answer its Paseo heartbeat",
+  "deps": [
+    "phb-1"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "67f07142-1300-472b-95ba-0e0e5b218ef2",
+    "7f0788a0-642a-4dc5-9d38-a7ac762c2799"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/events.ts",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-heartbeat/plan.md",
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+    ".pi/extensions/bee-guard/events.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+  ],
+  "action": "Red first. In events.ts import the phb-1 helpers. session_start (events.ts:64): after the result drain starts, when isPaseoLeader(), fire and forget ensureHeartbeat(mainCheckoutRoot(directory), process.env.PASEO_AGENT_ID, readPaseoSettings(mainRoot), run) where run spawns the command with execFile (timeout 30 s, stdin closed) and resolves stdout; errors only console.error. input (events.ts:213): keep the existing steer/followUp branch unchanged; before returning, when isPaseoLeader() and isHeartbeatPrompt(text): if a tick is already running, use the no-news text; else run `<bee binary> herding broker tick --json` (resolveBeeBinary, cwd the directory, timeout 120 s), parse with parseTick, and build heartbeatText; set a module flag quietHeartbeatTurn = !news; return {action: 'transform', text}. Never return handled. agent_settled (events.ts:358): when quietHeartbeatTurn is set, clear it and skip the continuation nudge injection for this settle (the same effect hadForcedContinuation has); everything else in agent_settled runs unchanged. Add tests to pi_paseo_heartbeat_contracts.rs with the stub-pi harness: a leader session_start calls the stub paseo once with heartbeat create; a worker env (BEE_HERDING_WORKER=1) makes no call; a heartbeat input with a stub bee printing {\"claimed\":0,\"notices_sent\":0} returns transform with the ok text; with claimed 1 returns the news text; a normal input returns continue; a quiet heartbeat settle with a block verdict injects no nudge. The existing pi_plugin_contracts tests must stay green. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a leader session start creates the bee-leader heartbeat through ensureHeartbeat",
+      "a herded worker session start creates no heartbeat",
+      "a bee-leader heartbeat input returns transform with the news text or the ok text, never handled",
+      "a normal user input still returns continue",
+      "a no-news heartbeat turn skips the continuation nudge at settle",
+      "the existing pi_plugin_contracts tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/events.ts",
+        "substantive": "session_start, input and agent_settled heartbeat wiring"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+        "substantive": "event-level heartbeat tests"
+      }
+    ],
+    "key_links": [
+      "events.ts input returns transform for a bee-leader heartbeat"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No action handled anywhere",
+      "The steer/followUp branch of input stays byte-identical"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts --test pi_plugin_contracts",
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-phb-2",
+    "outcome": "A Pi leader in Paseo creates one bee-leader heartbeat and turns each firing into a short turn",
+    "files_changed": [
+      ".pi/extensions/bee-guard/events.ts",
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-05T23:50:59.450Z",
+    "behavior_change": true,
+    "verification_evidence": "13 and 114 passed 0 failed; live Pi leader cb19f50e in Paseo 0.10.3 got schedule dd831d12, two firings at 23:45 and 23:50 became the ok turn and the leader was idle after each; evidence /home/thanhsmind/Projects/goglbe/beehive--wt--paseo-heartbeat/docs/history/paseo-heartbeat/evidence/timeline.log",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts --test pi_plugin_contracts",
+    "claimed_at": "2026-10-05T23:30:35.015Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:50:59.449Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:57:16.194Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:57:48.701Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "A Pi leader in Paseo creates one bee-leader heartbeat and turns each firing into a short turn",
+      "commit": "1c8778394",
+      "files": [
+        ".pi/extensions/bee-guard/events.ts",
+        "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts --test pi_plugin_contracts — green:live — 13 and 114 passed 0 failed; live Pi leader cb19f50e in Paseo 0.10.3 got schedule dd831d12, two firings at 23:45 and 23:50 became the ok turn and the leader was idle after each; evidence /home/thanhsmind/Projects/goglbe/beehive--wt--paseo-heartbeat/docs/history/paseo-heartbeat/evidence/timeline.log",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "events.ts:96-128 leader session_start calls ensureHeartbeat; live timeline.log shows two heartbeats"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "paseo-heartbeat.ts:80-83 isPaseoLeader false for a worker; events.ts:96 and :284 gate on it"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "events.ts:284-324 every heartbeat path returns transform with heartbeatText; no handled"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "steer/followUp block events.ts:258-281 unchanged; other input returns continue at :325"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "events.ts:451-452 and :513 skip the nudge for a quiet heartbeat turn; a news tick keeps it"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "pi_plugin_contracts 114 passed, pi_paseo_heartbeat_contracts 17 passed"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "no comments added; no handled action in the change"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-05T23:57:16.194Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a leader session start creates the bee-leader heartbeat through ensureHeartbeat",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "a herded worker session start creates no heartbeat",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "a bee-leader heartbeat input returns transform with the news text or the ok text, never handled",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "a normal user input still returns continue",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "a no-news heartbeat turn skips the continuation nudge at settle",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "the existing pi_plugin_contracts tests stay green",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          }
+        ],
+        "recorded_at": "2026-10-05T23:57:48.701Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

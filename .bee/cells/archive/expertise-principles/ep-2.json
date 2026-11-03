@@ -1,0 +1,82 @@
+{
+  "id": "ep-2",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "code",
+  "title": "Render the routed principles in bee orient and the session preamble",
+  "action": "Write ONE shared renderer that parses the '## Principle homes' section added by ep-1 and returns the rows whose `classes:` list contains the recorded route class. Call it from both surfaces, never duplicating the logic: the session preamble beside its Route line (packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs:545) and bee orient's line block (packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs:623-660). Output is a short block naming each matching principle and its spoken line. Emit nothing at all when no route is recorded, when the class matches zero rows, or when the section is absent — an empty header is worse than silence. Add unit tests for: a class with matches, a class with zero matches, no route recorded, a row listing several classes, and the section missing.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "One renderer, two callers — the class filter is written once (CONTEXT.md D2).",
+      "The principle index is read on demand from the concept file, never inlined as a constant in Rust.",
+      "Absent route, zero matches, and a missing section each produce NO block, not an empty one.",
+      "The existing session_preamble tests still pass — the block is added beside the Route line, not in place of anything."
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "ep-1"
+  ],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-3",
+    "outcome": "One shared reader renders the routed principles in both bee orient and the session preamble; nothing renders without a matching route",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "packages/bee-rs/crates/bee/src/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Homed the shared reader in a new crate-root module packages/bee-rs/crates/bee/src/principles.rs and registered it in main.rs — the cell named no files and the two callers live in different module trees, so a crate-root module is the only place both can call without threading a signal through a layer — found a better route",
+      "Regenerated docs/history/codex-harness-hardening/release-manifest.json — ep-1 added skills/principle-red-before-green/SKILL.md without the manifest row, so devtools::release_manifest::tests::rebuild_reproduces_the_committed_manifest was already red on this base (295 vs 296 records) — something else had to be fixed first",
+      "Added two caller-side tests beyond the five the cell named, one per surface — the five unit tests prove the parser only, and a guard and its tests are one model unless a test drives the real call site — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T18:13:12.223Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T17:59:27.431Z",
+    "mistakes": [
+      {
+        "wrong": "In packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs I wrote let lines: Vec<&str> = render_orient_text(&packet).split(...).collect() and hit E0716, a temporary dropped while borrowed",
+        "better": "should have bound the returned String to a name first, the way every other render test in that file already does"
+      }
+    ],
+    "report": {
+      "outcome": "One shared reader renders the routed principles in both bee orient and the session preamble; nothing renders without a matching route",
+      "commit": "d998efbf",
+      "files": [
+        "packages/bee-rs/crates/bee/src/principles.rs",
+        "packages/bee-rs/crates/bee/src/main.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the cell own verify: whole crate suite, exit 0, 3309 unit + 30 integration binaries, 0 failed",
+      "deviations": [
+        "Homed the shared reader in a new crate-root module packages/bee-rs/crates/bee/src/principles.rs and registered it in main.rs — the cell named no files and the two callers live in different module trees, so a crate-root module is the only place both can call without threading a signal through a layer — found a better route",
+        "Regenerated docs/history/codex-harness-hardening/release-manifest.json — ep-1 added skills/principle-red-before-green/SKILL.md without the manifest row, so devtools::release_manifest::tests::rebuild_reproduces_the_committed_manifest was already red on this base (295 vs 296 records) — something else had to be fixed first",
+        "Added two caller-side tests beyond the five the cell named, one per surface — the five unit tests prove the parser only, and a guard and its tests are one model unless a test drives the real call site — found a better route"
+      ],
+      "mistakes": [
+        "In packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs I wrote let lines: Vec<&str> = render_orient_text(&packet).split(...).collect() and hit E0716, a temporary dropped while borrowed — should have bound the returned String to a name first, the way every other render test in that file already does"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

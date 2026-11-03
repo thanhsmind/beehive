@@ -76,9 +76,10 @@ use crate::roots::{resolve_store_root_worktree, RootsWt};
 use crate::verbs::cells::{read_session, sessions_dir, HEARTBEAT_STALE_SECONDS};
 use crate::verbs::knowledge::deviation_text;
 use crate::verbs::reservations::{date_parse_val, now_iso, now_ms};
+use crate::verbs::supervisor::{needs_human_decision, WAITING_ON_QUESTION};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{json, Map, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -181,9 +182,30 @@ pub(crate) fn letter_path(root: &Path, filed_at: &str, run: &str) -> PathBuf {
     mailbox_dir(root).join(letter_filename(filed_at, run))
 }
 
+/// The name every digest file starts with (letter-digest D1, D3): a digest is
+/// `digest-YYYY-MM-DD.md` or `digest-YYYY-Www.md`, filed in the SAME directory
+/// as the letters because the mailbox is one directory of files a human reads
+/// in place.
+///
+/// It lives here, beside the letter's own filename rule, because it is the ONE
+/// thing every letter surface must know about digests: a digest is not a
+/// letter. Its name carries no run slug, nothing composed it from a run's
+/// entries, and D11's one-letter-per-run arithmetic does not reach it — so a
+/// digest that leaked into the lettered set would make D12's recovery pass see
+/// a run that never existed, and the run-end fold would try to re-compose a
+/// digest as if it were that phantom run's letter. Every reader that means
+/// "letters" filters this prefix out, and [`list_letter_files`] is where that
+/// filter is applied once for all of them.
+pub(crate) const DIGEST_PREFIX: &str = "digest-";
+
 /// Every filed letter, name-sorted — which is time-sorted, by D11's own
 /// construction. Names only: nothing is opened, so a caller asking "what is in
 /// the mailbox" pays one directory read.
+///
+/// Digests are NOT letters and never appear here (see [`DIGEST_PREFIX`]). The
+/// filter sits in this one function on purpose: [`letter_files_for_run`] and
+/// [`letter_paths_by_run_slug`] both read the mailbox THROUGH it, so there is
+/// one place where the difference between a letter and a digest is decided.
 pub(crate) fn list_letter_files(root: &Path) -> Vec<PathBuf> {
     let dir = mailbox_dir(root);
     let mut names: Vec<String> = match std::fs::read_dir(&dir) {
@@ -191,7 +213,7 @@ pub(crate) fn list_letter_files(root: &Path) -> Vec<PathBuf> {
             .flatten()
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().into_owned();
-                name.ends_with(".md").then_some(name)
+                (name.ends_with(".md") && !name.starts_with(DIGEST_PREFIX)).then_some(name)
             })
             .collect(),
         Err(_) => Vec::new(),
@@ -445,11 +467,31 @@ pub(crate) struct NeedsYou {
     pub id: String,
     pub what: String,
     pub blocks: String,
+    /// WHICH kind of ask this is — the one field a7e6f237's flag derives from.
+    /// Optional because it is the younger field: every item filed before it
+    /// existed, and every caller that cannot honestly name a kind, carries
+    /// `None` and flags NO. A missing kind is never a parse failure.
+    pub kind: Option<String>,
 }
 
 impl NeedsYou {
+    /// a7e6f237's needs-human-decision flag for this item. DERIVED on read,
+    /// never stored: the same [`needs_human_decision`] the WakeReport uses, so
+    /// a letter and a report can never disagree about the same ask, and a
+    /// hand-edited `needs_human_decision:` line in a filed letter cannot claim
+    /// a flag the kind does not give it.
+    pub(crate) fn needs_human_decision(&self) -> bool {
+        self.kind.as_deref().is_some_and(needs_human_decision)
+    }
+
     fn to_value(&self) -> Value {
-        json!({ "id": self.id, "what": self.what, "blocks": self.blocks })
+        json!({
+            "id": self.id,
+            "what": self.what,
+            "blocks": self.blocks,
+            "kind": self.kind,
+            "needs_human_decision": self.needs_human_decision(),
+        })
     }
 
     fn from_value(v: &Value) -> Option<Self> {
@@ -458,11 +500,26 @@ impl NeedsYou {
             id: m.get("id")?.as_str()?.to_string(),
             what: m.get("what")?.as_str()?.to_string(),
             blocks: m.get("blocks")?.as_str()?.to_string(),
+            // Anything that is not a string — absent, null, a number a hand
+            // edit left behind — reads as no kind, which flags NO and still
+            // renders. `needs_human_decision` is not read back at all.
+            kind: opt_string(m, "kind"),
         })
     }
 }
 
-/// D3's `items[]` element: `{what, files[], commit, proof, departure}`.
+/// a7e6f237's order for a list of asks: the ones only the human can decide
+/// FIRST, everything else after, and the store's own order kept inside each
+/// group. One helper for every surface that lists these items, so the letter's
+/// machine contract and its prose can never print two different orders.
+pub(crate) fn needs_human_first(items: &mut [NeedsYou]) {
+    // Stable by contract: `sort_by_key` keeps equal keys in their input order,
+    // which is what "stable within each group" means here.
+    items.sort_by_key(|n| !n.needs_human_decision());
+}
+
+/// D3's `items[]` element: `{what, files[], commit, proof, departure}`, plus
+/// letter-reflection's `better`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LetterItem {
     pub what: String,
@@ -470,6 +527,24 @@ pub(crate) struct LetterItem {
     pub commit: Option<String>,
     pub proof: Option<String>,
     pub departure: Option<Departure>,
+    /// letter-reflection D3's second part: what would have been better.
+    ///
+    /// ADDITIVE, and that is the constraint it was built under — the
+    /// frontmatter contract only GROWS, so a consumer written against the
+    /// five-field item parses a letter carrying this one unchanged, and a
+    /// letter filed before this field existed reads back with `None` rather
+    /// than failing. Only a [`KIND_REFLECTION`] entry ever carries it; every
+    /// other stop leaves it `None` and the key emits as `null`, exactly like
+    /// `commit` and `proof` already do.
+    pub better: Option<String>,
+    /// mistake-fix-at D1's third part: the strongest layer that can stop this
+    /// mistake from recurring, one of [`FIX_AT_VALUES`].
+    ///
+    /// ADDITIVE on the same terms `better` was (D4): a letter filed before
+    /// this key existed reads back `None`, which every reader treats as
+    /// `none` — the vocabulary's own word for "no layer worth naming" — so
+    /// nothing is backfilled and no consumer of the older item shape breaks.
+    pub fix_at: Option<String>,
 }
 
 impl LetterItem {
@@ -480,6 +555,8 @@ impl LetterItem {
             "commit": self.commit,
             "proof": self.proof,
             "departure": self.departure.as_ref().map(Departure::to_value),
+            "better": self.better,
+            "fix_at": self.fix_at,
         })
     }
 
@@ -491,6 +568,10 @@ impl LetterItem {
             commit: opt_string(m, "commit"),
             proof: opt_string(m, "proof"),
             departure: m.get("departure").and_then(Departure::from_value),
+            // Absent on every letter filed before this field existed, and that
+            // is a `None`, never a parse failure.
+            better: opt_string(m, "better"),
+            fix_at: opt_string(m, "fix_at"),
         })
     }
 }
@@ -505,11 +586,74 @@ impl LetterItem {
 /// by hm-2 and [`KIND_FEATURE_CLOSE`] by hm-10 (`verbs/drivers/close.rs`
 /// `record_feature_close_in_mailbox`, on close's non-dry-run tail — a
 /// `--dry-run` close stops nothing, so it appends nothing). [`KIND_BLOCKER`]
-/// is wired by the cell that owns it.
+/// is wired by `verbs/cells/handlers_close.rs` `record_block_in_mailbox`, on
+/// `bee cells block`'s tail — the one stop that also carries a D13
+/// Needs-your-call item, because it is the one stop with something to ask.
 pub(crate) const KIND_CAP: &str = "cap";
 pub(crate) const KIND_FEATURE_CLOSE: &str = "feature-close";
 pub(crate) const KIND_BLOCKER: &str = "blocker";
-pub(crate) const ENTRY_KINDS: [&str; 3] = [KIND_CAP, KIND_FEATURE_CLOSE, KIND_BLOCKER];
+
+/// letter-reflection D2's kind: a mistake the acting agent noticed, written
+/// down by the agent through `bee mailbox reflect`.
+///
+/// It is NOT a fourth clean stop. The three above are appended by a stop that
+/// already happened (a cap, a block, a feature close); this one is appended by
+/// the agent at the moment it notices a mistake, or at the run-end look-back —
+/// so nothing in the codebase reaches it except the verb the human's own words
+/// asked for.
+///
+/// Two required parts (D3): `what` is what went wrong, [`Entry::better`] is
+/// what would have been better. The door that refuses a missing part is
+/// [`read_reflection`], and the verb calls it — the store and the door can
+/// never disagree, because there is one of them.
+pub(crate) const KIND_REFLECTION: &str = "reflection";
+
+/// mistake-fix-at D1's closed vocabulary: the layer that can stop a recorded
+/// mistake from happening again, named by the agent at the moment it records
+/// the mistake.
+///
+/// The order is the pstack ladder, strongest first — a correction is only
+/// worth what the layer it lands on can enforce:
+///
+///   * `architecture` — a code or data-structure change makes it impossible.
+///   * `check` — a test, hook, guard, lint line or `bee doctor` row catches it.
+///   * `doctrine` — only prose can carry it; it is judgement or product intent.
+///   * `none` — a one-off with no layer worth naming, recorded so the answer
+///     exists.
+///
+/// It is CLOSED, and [`read_reflection`] refuses anything outside it, for the
+/// reason D1 gives: a free-text layer is a layer no reader can filter on, and
+/// `bee close` has to be able to ask "is this one mechanizable?" of a stored
+/// word rather than of a sentence.
+pub(crate) const FIX_AT_VALUES: [&str; 4] = ["architecture", "check", "doctrine", "none"];
+
+/// reflection-becomes-lesson D2's kind: the run was ASKED whether anything
+/// went wrong and answered "nothing" — out loud, on the record.
+///
+/// It is the other half of [`KIND_REFLECTION`], and it exists for one reason:
+/// silence and a clean run must not read alike. An absent reflection could
+/// mean the work went cleanly or that nobody ever looked; this entry is the
+/// stored difference between those two.
+///
+/// It renders in NO letter section — not Done, not Mistakes & reflection —
+/// because it is not a thing the run DID. Done and the subject chooser both
+/// exclude it through [`Entry::is_mistakes_answer`], the same predicate family
+/// [`Entry::is_reflection`] already gave them, never by matching the string.
+/// Its `what` is [`NO_MISTAKES_WHAT`], which deliberately FAILS
+/// [`check_subject`], so an older or reverted binary re-composing a letter
+/// still cannot elect it as that letter's subject.
+pub(crate) const KIND_NO_MISTAKES: &str = "no-mistakes";
+pub(crate) const ENTRY_KINDS: [&str; 5] =
+    [KIND_CAP, KIND_FEATURE_CLOSE, KIND_BLOCKER, KIND_REFLECTION, KIND_NO_MISTAKES];
+
+/// The stored sentence of the clean-run answer (D2).
+///
+/// Two jobs at once. It reads as a plain sentence to anyone who opens the
+/// JSONL, and it FAILS [`check_subject`] — "cell" is in [`BEE_VOCABULARY`] —
+/// so the belt-and-braces promise holds: a build that has never heard of
+/// [`KIND_NO_MISTAKES`] and re-composes an old run's letter still cannot make
+/// this line the subject a human reads in their inbox.
+pub(crate) const NO_MISTAKES_WHAT: &str = "The cell was asked about mistakes and reported none.";
 
 /// One raw append written at a clean stop, before any letter exists.
 ///
@@ -532,6 +676,15 @@ pub(crate) struct Entry {
     pub proof: Option<String>,
     pub departure: Option<Departure>,
     pub needs_you: Vec<NeedsYou>,
+    /// letter-reflection D3's second part — what would have been better. It
+    /// mirrors [`LetterItem::better`], because the entry must be able to hold
+    /// every fact the letter prints (D8): a `better` the entry could not carry
+    /// would be one the composing pass had to author.
+    pub better: Option<String>,
+    /// mistake-fix-at D1's third part, mirroring [`LetterItem::fix_at`] for the
+    /// same D8 reason `better` mirrors its own: the letter may print no fact
+    /// the entry cannot hold.
+    pub fix_at: Option<String>,
 }
 
 impl Entry {
@@ -545,7 +698,61 @@ impl Entry {
             "proof": self.proof,
             "departure": self.departure.as_ref().map(Departure::to_value),
             "needs_you": self.needs_you.iter().map(NeedsYou::to_value).collect::<Vec<_>>(),
+            "better": self.better,
+            "fix_at": self.fix_at,
         })
+    }
+
+    /// letter-reflection D3's two parts, as ONE stored entry — the shape the
+    /// verb appends and the shape the section renders, built in one place so
+    /// the door and the composer can never disagree about what a reflection is.
+    ///
+    /// The three parts arrive already checked by [`read_reflection`] —
+    /// mistake-fix-at D1 added `fix_at`, one of [`FIX_AT_VALUES`] — and this
+    /// only normalises them onto one line each, the same edit every other
+    /// stored sentence gets.
+    pub(crate) fn reflection(at: &str, wrong: &str, better: &str, fix_at: &str) -> Self {
+        Self {
+            at: at.to_string(),
+            kind: KIND_REFLECTION.to_string(),
+            // D8: the plain-language sentence is the agent's own, written at
+            // the moment it noticed the mistake. Taken verbatim.
+            what: one_line(wrong),
+            files: Vec::new(),
+            commit: None,
+            proof: None,
+            departure: None,
+            needs_you: Vec::new(),
+            better: Some(one_line(better)),
+            fix_at: Some(fix_at.trim().to_string()),
+        }
+    }
+
+    /// reflection-becomes-lesson D2's clean-run answer, built the ONE way this
+    /// store builds an entry — through a constructor, beside
+    /// [`Entry::reflection`], so the two halves of the mistakes answer can
+    /// never be shaped differently by two callers.
+    ///
+    /// It carries no `better`: there is nothing to have done better. Its
+    /// sentence is fixed ([`NO_MISTAKES_WHAT`]) rather than taken from the
+    /// caller, because this entry states one fact and only one, and a caller's
+    /// wording of it is a wording the letter would have to render.
+    pub(crate) fn no_mistakes(at: &str) -> Self {
+        Self {
+            at: at.to_string(),
+            kind: KIND_NO_MISTAKES.to_string(),
+            what: NO_MISTAKES_WHAT.to_string(),
+            files: Vec::new(),
+            commit: None,
+            proof: None,
+            departure: None,
+            needs_you: Vec::new(),
+            better: None,
+            // No mistake was made, so there is no layer that would have fixed
+            // one. D1's vocabulary answers a mistake; this entry answers the
+            // question instead of being one.
+            fix_at: None,
+        }
     }
 
     /// `None` for anything JSON-shaped but missing a required field — treated
@@ -566,7 +773,43 @@ impl Entry {
                 .and_then(Value::as_array)
                 .map(|a| a.iter().filter_map(NeedsYou::from_value).collect())
                 .unwrap_or_default(),
+            // Absent on every line appended before this field existed, and
+            // that is a `None`, never a parse failure — the whole entry layer
+            // is append-only, so old lines outlive every shape change.
+            better: opt_string(m, "better"),
+            // Absent on every reflection row written before D1, and D4 forbids
+            // backfilling them: a `None` here IS the answer `none`, read that
+            // way by close and by the lesson miner.
+            fix_at: opt_string(m, "fix_at"),
         })
+    }
+
+    /// Is this a reflection entry (letter-reflection D2)?
+    ///
+    /// Asked by KIND rather than by "does it carry a `better`", because the
+    /// kind is what the verb stored and a field test would make a hand-edited
+    /// line able to move an entry between sections.
+    pub(crate) fn is_reflection(&self) -> bool {
+        self.kind == KIND_REFLECTION
+    }
+
+    /// Is this the explicit clean-run answer (reflection-becomes-lesson D2)?
+    ///
+    /// By KIND, for the same reason [`Entry::is_reflection`] is: the kind is
+    /// what the writer stored, and a field test would let a hand-edited line
+    /// move an entry between sections.
+    pub(crate) fn is_no_mistakes(&self) -> bool {
+        self.kind == KIND_NO_MISTAKES
+    }
+
+    /// Either half of the mistakes answer: a written reflection, or the
+    /// explicit statement that there was none.
+    ///
+    /// This is the ONE predicate the Done section and the subject chooser
+    /// exclude by, so the two can never drift apart and neither ever matches a
+    /// kind string of its own.
+    pub(crate) fn is_mistakes_answer(&self) -> bool {
+        self.is_reflection() || self.is_no_mistakes()
     }
 
     /// The letter item this entry becomes. The composing pass groups and
@@ -578,8 +821,116 @@ impl Entry {
             commit: self.commit.clone(),
             proof: self.proof.clone(),
             departure: self.departure.clone(),
+            better: self.better.clone(),
+            fix_at: self.fix_at.clone(),
         }
     }
+}
+
+/// The four layers, each with its gloss, spelled ONCE and quoted by both
+/// refusals [`read_reflection`] can hand back.
+///
+/// It is written out rather than built from [`FIX_AT_VALUES`] because the
+/// gloss is the half that makes the refusal usable: a caller who is told only
+/// the four words still has to go and read what they mean, and a refusal a
+/// cold worker cannot act on in one retry is the refusal it works around.
+const FIX_AT_GLOSS: &str = "architecture (a code change makes it impossible) | check (a test, hook, guard or doctor row catches it) | doctrine (only prose can carry it) | none (a one-off nobody would guard)";
+
+/// The remedy line both refusals end on, naming all THREE flags.
+const FIX_AT_REMEDY: &str = "remedy: pass --wrong (what went wrong), --better (what would have been better) and --fix-at (which layer stops it coming back).";
+
+/// letter-reflection D3 + mistake-fix-at D1's door: the three parts a
+/// reflection entry must carry.
+///
+/// `Err` names the MISSING part in the words the refusal hands back, because a
+/// refusal that does not say what to fix is a refusal the caller works around.
+/// All three parts are checked in one pass so a caller that left two out
+/// learns both at once instead of fixing one and being refused again.
+///
+/// The refusal is SELF-SUFFICIENT on purpose (D1): it states how many parts a
+/// reflection has, names the missing flags, lists the four layers with what
+/// each one means, and ends on a remedy naming all three flags. A worker on a
+/// new binary whose doctrine still says "two parts" recovers from the refusal
+/// alone, in one retry, without reading a file.
+///
+/// It lives HERE, with the store, for the same reason [`read_departure`] does:
+/// the verb is argv plumbing, and the rule about what a reflection IS must have
+/// exactly one home.
+pub(crate) fn read_reflection<'a>(
+    wrong: Option<&'a str>,
+    better: Option<&'a str>,
+    fix_at: Option<&'a str>,
+) -> Result<(&'a str, &'a str, &'a str), String> {
+    let missing: Vec<&str> = [("--wrong", wrong), ("--better", better), ("--fix-at", fix_at)]
+        .into_iter()
+        .filter(|(_, v)| v.map(str::trim).unwrap_or("").is_empty())
+        .map(|(name, _)| name)
+        .collect();
+    if !missing.is_empty() {
+        return Err(format!(
+            "a reflection has three required parts, and it is missing {} (D3, mistake-fix-at D1). The layer is one of: {FIX_AT_GLOSS} — {FIX_AT_REMEDY}",
+            missing.join(" and ")
+        ));
+    }
+    let layer = fix_at.unwrap_or("").trim();
+    if !FIX_AT_VALUES.contains(&layer) {
+        return Err(format!(
+            "\"{layer}\" is not a fix-at layer (mistake-fix-at D1). It is one of: {FIX_AT_GLOSS} — {FIX_AT_REMEDY}"
+        ));
+    }
+    Ok((wrong.unwrap_or("").trim(), better.unwrap_or("").trim(), layer))
+}
+
+/// The SEPARATOR between a mistake's two parts, on the one-line spelling.
+///
+/// The same `" — "` a departure and a D8 proof string already ask a worker to
+/// type ([`DEPARTURE_SEPARATOR`]), borrowed rather than re-declared: one
+/// separator to learn, and no way for two of them to drift.
+pub(crate) const MISTAKE_SEPARATOR: &str = DEPARTURE_SEPARATOR;
+
+/// ONE recorded mistake, in whichever of the two shapes it was written, read
+/// through the SAME door `bee mailbox reflect` uses ([`read_reflection`]).
+///
+/// Two shapes, because two writers already exist: a cap flag hands one LINE
+/// (`<what went wrong> — <what would have been better> — <fix-at>`), and a
+/// worker's `--report` may hand a structured `{wrong, better, fix_at}` object.
+/// Both end at `read_reflection`, so the three-part rule keeps exactly one
+/// home and a mistake recorded at a cap is the same thing as one written by
+/// the verb.
+///
+/// The line form splits on the FIRST TWO separators only: what follows the
+/// second one is the layer, whole. So neither the `wrong` nor the `better`
+/// part may itself carry a `" — "`, and the refusal SAYS that — a writer whose
+/// `better` swallowed the layer would otherwise read "add a third part" and
+/// have no way to see which of their own parts was eaten. The object form has
+/// no such limit, and is the shape to reach for when a part needs the dash.
+///
+/// `Err` carries the words the refusal hands back, naming the missing part.
+pub(crate) fn read_mistake(v: &Value) -> Result<(String, String, String), String> {
+    let (wrong, better, fix_at) = match v {
+        Value::String(line) => {
+            let mut parts = line.splitn(3, MISTAKE_SEPARATOR).map(str::trim);
+            // Missing segments are offered as empty so the refusal below names
+            // the part that is actually missing, rather than a generic
+            // "unparseable" a writer cannot act on.
+            let wrong = parts.next().unwrap_or("").to_string();
+            let better = parts.next().unwrap_or("").to_string();
+            let fix_at = parts.next().unwrap_or("").to_string();
+            (wrong, better, fix_at)
+        }
+        Value::Object(m) => {
+            let part = |key: &str| {
+                m.get(key).and_then(Value::as_str).unwrap_or("").trim().to_string()
+            };
+            (part("wrong"), part("better"), part("fix_at"))
+        }
+        _ => (String::new(), String::new(), String::new()),
+    };
+    let (wrong, better, fix_at) = read_reflection(Some(&wrong), Some(&better), Some(&fix_at))
+        .map_err(|why| {
+            format!("{why} On one line the three parts are separated by \"{MISTAKE_SEPARATOR}\", split at the first two, so the what-would-have-been-better part may not itself contain that separator.")
+        })?;
+    Ok((wrong.to_string(), better.to_string(), fix_at.to_string()))
 }
 
 /// Append one entry to this run's JSONL. One O_APPEND write, parents created
@@ -792,6 +1143,52 @@ fn first_line(s: Option<&str>) -> Option<String> {
     s.lines().map(str::trim).find(|l| !l.is_empty()).map(str::to_string)
 }
 
+/// D8's plain-language sentence for a cell that stopped on a blocker, written
+/// HERE — at the moment of the stop, exactly like [`cap_sentence`] and
+/// [`close_sentence`], and for the same reason.
+///
+/// The reason `bee cells block` just stored IS the sentence, taken verbatim.
+/// It is not wrapped in a frame of this module's own words and it is not
+/// composed out of the cell's title: the reason is the one line a human wrote
+/// about why the work stopped, and this is the one moment those words may be
+/// chosen (D8).
+///
+/// The door refuses an empty reason, so the last resort is only ever reached
+/// by a caller that is not that door. It says nothing but what the stop
+/// itself makes true.
+pub(crate) fn block_sentence(reason: &str) -> String {
+    first_line(Some(reason)).unwrap_or_else(|| "Stopped on a blocker.".to_string())
+}
+
+/// D13's Needs-your-call item for a blocked cell — the first real material
+/// the [`SECTION_NEEDS_YOU`] section has ever had.
+///
+/// Every part is a fact the block itself stored, and nothing else:
+///
+///   * `id` — the blocked cell's own id. D13 asks for a STABLE id so a reply
+///     surface stays reachable later without rewriting an already-filed
+///     letter, and a cell id is already exactly that.
+///   * `what` — the reason the blocker recorded, in its own words.
+///   * `blocks` — the cell's title: the work that stops until the human
+///     answers. A cell carrying no title falls back to its id rather than to
+///     a sentence composed here, because a composed one would be a fact no
+///     record carries (D8).
+///   * `kind` — [`WAITING_ON_QUESTION`], which is what a blocker IS: the work
+///     stopped and only the human can say what happens next. That is a
+///     classification of the record, not an invented fact (D8 bans authored
+///     prose, not the kind field), and it is what makes a7e6f237's flag say
+///     YES for this item instead of falling to the `None` default.
+pub(crate) fn block_needs_you(cell_id: &str, title: Option<&str>, reason: &str) -> NeedsYou {
+    let id = one_line(cell_id);
+    let blocks = title.map(one_line).filter(|t| !t.is_empty()).unwrap_or_else(|| id.clone());
+    NeedsYou {
+        id,
+        what: one_line(reason),
+        blocks,
+        kind: Some(WAITING_ON_QUESTION.to_string()),
+    }
+}
+
 /// Append at a clean stop, FAIL-OPEN.
 ///
 /// The stop being recorded has ALREADY happened — the cap is on disk, the
@@ -978,7 +1375,7 @@ fn yq(s: &str) -> String {
     Value::String(s.to_string()).to_string()
 }
 
-fn emit_scalar(out: &mut String, indent: usize, key: &str, value: &str) {
+pub(crate) fn emit_scalar(out: &mut String, indent: usize, key: &str, value: &str) {
     out.push_str(&" ".repeat(indent));
     out.push_str(key);
     out.push_str(": ");
@@ -997,7 +1394,13 @@ fn emit_opt(out: &mut String, indent: usize, key: &str, value: Option<&str>) {
     }
 }
 
-fn emit_string_list(out: &mut String, indent: usize, key: &str, values: &[String]) {
+fn emit_bool(out: &mut String, indent: usize, key: &str, value: bool) {
+    out.push_str(&" ".repeat(indent));
+    out.push_str(key);
+    out.push_str(if value { ": true\n" } else { ": false\n" });
+}
+
+pub(crate) fn emit_string_list(out: &mut String, indent: usize, key: &str, values: &[String]) {
     let pad = " ".repeat(indent);
     if values.is_empty() {
         out.push_str(&format!("{pad}{key}: []\n"));
@@ -1040,6 +1443,14 @@ pub(crate) fn render_letter(letter: &Letter) -> String {
                     emit_scalar(&mut out, 6, "kind", &d.kind);
                 }
             }
+            // letter-reflection: ADDITIVE. It emits LAST, after every key the
+            // contract already had, and as `null` when there is nothing — the
+            // frontmatter only grows, so a consumer that reads the five older
+            // keys sees exactly what it saw before.
+            emit_opt(&mut out, 4, "better", item.better.as_deref());
+            // mistake-fix-at, on the same additive terms: it emits after
+            // `better` and as `null` when there is nothing.
+            emit_opt(&mut out, 4, "fix_at", item.fix_at.as_deref());
         }
     }
 
@@ -1047,10 +1458,19 @@ pub(crate) fn render_letter(letter: &Letter) -> String {
         out.push_str("needs_you: []\n");
     } else {
         out.push_str("needs_you:\n");
-        for n in &letter.needs_you {
+        // a7e6f237, at the machine contract: the asks only the human can
+        // decide are listed FIRST. Sorted HERE as well as at composition, so a
+        // letter built by hand or read back and re-rendered files in the same
+        // order as one this run composed — the order is a property of the
+        // renderer, never of who assembled the value.
+        let mut asks = letter.needs_you.clone();
+        needs_human_first(&mut asks);
+        for n in &asks {
             emit_scalar(&mut out, 2, "- id", &n.id);
             emit_scalar(&mut out, 4, "what", &n.what);
             emit_scalar(&mut out, 4, "blocks", &n.blocks);
+            emit_opt(&mut out, 4, "kind", n.kind.as_deref());
+            emit_bool(&mut out, 4, "needs_human_decision", n.needs_human_decision());
         }
     }
 
@@ -1422,10 +1842,23 @@ pub(crate) fn mark_letter(root: &Path, id: &str, status: &str) -> Result<Marked,
 pub(crate) const SECTION_DONE: &str = "Done";
 pub(crate) const SECTION_DEPARTED: &str = "Where I departed from the plan and why";
 pub(crate) const SECTION_BROKEN: &str = "Broken or unfinished";
+/// letter-reflection D1's section, in D1's own words and D1's own place —
+/// after [`SECTION_BROKEN`], before [`SECTION_NEEDS_YOU`], in the nightly
+/// letter and the feature-close letter alike. It amends D7's section list and
+/// changes no other D7 rule: the drop rule reaches it exactly like the five it
+/// joins, so a run with no mistake to report files a letter with no such
+/// heading.
+pub(crate) const SECTION_REFLECTION: &str = "Mistakes & reflection";
 pub(crate) const SECTION_NEEDS_YOU: &str = "Needs your call";
 pub(crate) const SECTION_NEXT: &str = "Next";
-pub(crate) const SECTIONS: [&str; 5] =
-    [SECTION_DONE, SECTION_DEPARTED, SECTION_BROKEN, SECTION_NEEDS_YOU, SECTION_NEXT];
+pub(crate) const SECTIONS: [&str; 6] = [
+    SECTION_DONE,
+    SECTION_DEPARTED,
+    SECTION_BROKEN,
+    SECTION_REFLECTION,
+    SECTION_NEEDS_YOU,
+    SECTION_NEXT,
+];
 
 /// The subject of a letter whose every stored sentence is unusable as one.
 ///
@@ -1487,12 +1920,22 @@ fn push_section(out: &mut String, heading: &str, lines: &[String]) {
 ///
 /// Where each entry goes, and why nothing is invented on the way:
 ///
-///   * `Done` — every entry that is not a blocker, by its own sentence. Not a
-///     whitelist of kinds: an entry of some kind this build does not know is
-///     still a thing the run did, and dropping it would lose a stored fact.
+///   * `Done` — every entry that is neither a blocker nor a reflection, by its
+///     own sentence. Not a whitelist of kinds: an entry of some kind this build
+///     does not know is still a thing the run did, and dropping it would lose a
+///     stored fact. The two exclusions are the two kinds that are NOT things the
+///     run did — a blocker is work that stopped, and a mistake is not an
+///     achievement (letter-reflection D1).
 ///   * `Where I departed from the plan and why` — every entry carrying D5's
 ///     three parts, through `departure_line`.
 ///   * `Broken or unfinished` — every `KIND_BLOCKER` entry, by its sentence.
+///   * `Mistakes & reflection` — every `KIND_REFLECTION` entry, as
+///     `<what> — better: <better>`. "better:" is the second connective this
+///     pass adds of its own, spelled after the Needs-your-call bullet's own
+///     "blocks:" so a human learns ONE shape for "this stored part, labelled".
+///     D3 makes both parts required at the append, so a bullet here always has
+///     both halves; a stored line that somehow lost its second half prints its
+///     first half alone rather than an invented one.
 ///   * `Needs your call` — every stored `NeedsYou`, with its stable id and
 ///     what it blocks (D13). This feature ships no path to answer one; the id
 ///     is what keeps that surface reachable later.
@@ -1507,29 +1950,54 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
     let mut done: Vec<String> = Vec::new();
     let mut departed: Vec<String> = Vec::new();
     let mut broken: Vec<String> = Vec::new();
-    let mut needs_you: Vec<String> = Vec::new();
+    let mut reflection: Vec<String> = Vec::new();
+    let mut asks: Vec<NeedsYou> = Vec::new();
 
     for entry in entries {
         if entry.kind == KIND_BLOCKER {
             broken.push(bullet(&entry.what));
+        } else if entry.is_no_mistakes() {
+            // NO section (reflection-becomes-lesson D2). It is the record that
+            // the run was asked and answered clean — not a thing the run did,
+            // and not a mistake either. The letter says nothing about it; the
+            // close door and the ratio that watches for a reflexive clean
+            // answer are the readers it exists for.
+        } else if entry.is_reflection() {
+            // Its OWN section, and never Done — a mistake is not a thing the
+            // run did (letter-reflection D1). The two stored parts are joined
+            // by the one connective; nothing else is added.
+            reflection.push(bullet(&match entry.better.as_deref().map(one_line) {
+                Some(better) if !better.is_empty() => {
+                    format!("{} — better: {better}", one_line(&entry.what))
+                }
+                _ => one_line(&entry.what),
+            }));
         } else {
             done.push(bullet(&entry.what));
         }
         if let Some(departure) = &entry.departure {
             departed.push(bullet(&departure_line(departure)));
         }
-        for n in &entry.needs_you {
+        asks.extend(entry.needs_you.iter().cloned());
+    }
+    // a7e6f237 in the prose, through the SAME helper the frontmatter uses:
+    // the human reads the asks only they can decide first, and the section
+    // and the frontmatter above it can never print two different orders.
+    needs_human_first(&mut asks);
+    let needs_you: Vec<String> = asks
+        .iter()
+        .map(|n| {
             // "blocks" is the ONE connective this pass adds of its own; D13
             // requires the item to name what it blocks, and the id leads so a
             // human can quote it back.
-            needs_you.push(bullet(&format!(
+            bullet(&format!(
                 "[{}] {} — blocks: {}",
                 n.id.trim(),
                 one_line(&n.what),
                 one_line(&n.blocks)
-            )));
-        }
-    }
+            ))
+        })
+        .collect();
     let next: Vec<String> = Vec::new();
 
     let mut out = String::new();
@@ -1537,6 +2005,7 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
         (SECTION_DONE, &done),
         (SECTION_DEPARTED, &departed),
         (SECTION_BROKEN, &broken),
+        (SECTION_REFLECTION, &reflection),
         (SECTION_NEEDS_YOU, &needs_you),
         (SECTION_NEXT, &next),
     ] {
@@ -1551,9 +2020,17 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
 /// verbatim — never re-worded, because the words belong to whoever wrote them
 /// at the moment of the stop (D8). Append order, so the choice is stable: a
 /// run re-composed after two more stops keeps the subject it already had.
+///
+/// A REFLECTION entry is never a candidate (letter-reflection D1). The subject
+/// is the inbox row — the one line that answers "what happened" — and a run
+/// titled by its own mistake would tell the human the night went wrong when it
+/// did not. The mistake is still in the letter, in the section written for it;
+/// it just does not get to name the run. A run whose ONLY entries are
+/// reflections falls to [`FALLBACK_SUBJECT`], which is the honest row for it.
 fn choose_subject(entries: &[Entry]) -> String {
     entries
         .iter()
+        .filter(|e| !e.is_mistakes_answer())
         .map(|e| e.what.trim())
         .find(|s| check_subject(s).is_ok())
         .map(str::to_string)
@@ -1588,7 +2065,15 @@ pub(crate) fn compose_letter(
         // D8 again, at the machine contract: an item is exactly what one entry
         // already held (`Entry::to_item`), reordered and grouped at most.
         items: entries.iter().map(Entry::to_item).collect(),
-        needs_you: entries.iter().flat_map(|e| e.needs_you.iter().cloned()).collect(),
+        needs_you: {
+            // Reordering is exactly what D8 leaves this pass free to do, and
+            // a7e6f237 is the order: the asks only the human can decide first,
+            // append order kept inside each group.
+            let mut asks: Vec<NeedsYou> =
+                entries.iter().flat_map(|e| e.needs_you.iter().cloned()).collect();
+            needs_human_first(&mut asks);
+            asks
+        },
         body: compose_body(entries),
     })
 }
@@ -1636,10 +2121,48 @@ fn project_of(root: &Path) -> String {
 ///
 /// An existing letter that cannot be READ stops the write instead of routing
 /// around it — writing beside it is how one run ends up with two letters.
+///
+/// ONE EXCEPTION TO THE ARMED GATE, and it is not a relaxation of D9: a run
+/// that ALREADY HAS a letter re-composes it whatever the arming says. D2
+/// (aedb5be9) files a letter at the moment of a feature close, attended
+/// sessions included, so an attended run can reach its end holding a letter
+/// filed hours before. Asking `armed()` first would freeze that letter at the
+/// close and silently drop everything the run did afterwards — the very loss
+/// D11's re-compose-in-place rule exists to prevent. The existence check is
+/// ONE directory listing of names, nothing opened, so an unarmed checkout with
+/// no letter still stops for about the cost it stopped for before.
 pub(crate) fn file_run_letter(root: &Path, run: &str) -> RunEnd {
-    if !armed(root) {
+    let existing = letter_files_for_run(root, run).into_iter().next();
+    if existing.is_none() && !armed(root) {
         return RunEnd::NotArmed;
     }
+    compose_and_file_letter(root, run, existing)
+}
+
+/// D2 (aedb5be9): file this run's letter at the moment of a FEATURE CLOSE —
+/// the same compose-and-file core [`file_run_letter`] runs, WITHOUT the armed
+/// gate.
+///
+/// D9 is untouched by this. That rule is about the letter a run gets for
+/// ENDING, and an attended run still gets none; this is the letter a run gets
+/// for CLOSING A FEATURE, which the human asked to read the moment it happens
+/// rather than whenever the session eventually stops. The entry data is
+/// already appended at close either way (`record_close_stop`) — filing is the
+/// step that was missing.
+///
+/// Still ONE letter per run (D11): a close-time letter is the run's own
+/// letter, so a later run end RE-COMPOSES this same file in place, keeping its
+/// `filed_at`, its name, and the human's read state.
+pub(crate) fn file_close_letter(root: &Path, run: &str) -> RunEnd {
+    compose_and_file_letter(root, run, letter_files_for_run(root, run).into_iter().next())
+}
+
+/// Compose this run's ONE letter and write it — the core both filing doors
+/// share, with the arming question already answered by the caller.
+///
+/// `existing` is the letter this run already has, if any, already resolved by
+/// the caller so the store is listed once rather than twice.
+fn compose_and_file_letter(root: &Path, run: &str, existing: Option<PathBuf>) -> RunEnd {
     // D14: the notes come off the very lines the entries do, so a run that
     // closed a feature carries its three extra sections into the ONE letter
     // it already gets — never into a second file beside it.
@@ -1650,7 +2173,7 @@ pub(crate) fn file_run_letter(root: &Path, run: &str) -> RunEnd {
 
     let mut filed_at = now_iso();
     let mut status = STATUS_UNREAD.to_string();
-    if let Some(existing) = letter_files_for_run(root, run).into_iter().next() {
+    if let Some(existing) = existing {
         match read_letter(&existing) {
             Ok(old) => {
                 filed_at = old.filed_at;
@@ -1716,11 +2239,16 @@ pub(crate) fn record_run_end(root: &Path, run: &str) -> RunEnd {
 //      checkout stops HERE and pays no directory read at all, so a repo that
 //      never runs unattended never pays for this feature (D9).
 //   1. `runs_with_entries` — ONE directory listing of `entries/`, names only.
-//   2. `letter_run_slugs` — ONE directory listing of the mailbox, names only.
+//   2. `letter_paths_by_run_slug` — ONE directory listing of the mailbox,
+//      names only.
 //   3. `session_ids` — ONE directory listing of `.bee/sessions/`, names only.
-//   4. For each CANDIDATE only — a run that has entries, has no letter, and is
-//      not this session — one session record read, and one entry-file read if
-//      it is filed. Candidates are normally ZERO.
+//   4. For a run that ALREADY HAS a letter — TWO stats (its entries file and
+//      its letter), still nothing opened. See "A lettered run can still go
+//      silent" below for why that question is asked at all.
+//   5. For each CANDIDATE only — a run that has entries, has no letter or a
+//      letter its entries have outrun, and is not this session — one session
+//      record read, and one entry-file read if it is filed. Candidates are
+//      normally ZERO.
 //
 // Three directory listings and no file opened is the whole steady-state cost.
 // It is O(runs + letters + sessions) in DIRECTORY ENTRIES and O(candidates) in
@@ -1759,6 +2287,25 @@ pub(crate) fn record_run_end(root: &Path, run: &str) -> RunEnd {
 // It is also why `UNATTRIBUTED_RUN` never gets an unfinished letter: nothing
 // ever wrote a session record named "unattributed", so there is no witness
 // that its run is over.
+//
+// ── A lettered run can still go silent (D2, aedb5be9) ───────────────────
+//
+// "Has a letter" USED TO MEAN "reached its end", because only a run end filed
+// one. D2 broke that equivalence: a feature close now files the run's letter
+// the moment it lands, so a run can hold a letter and then work on for hours
+// and die. Under the old rule that run was never a candidate again, and the
+// human would read a letter that stops at the close with no mark saying the
+// rest of the run never finished.
+//
+// So the question is no longer "does this run have a letter?" but "does this
+// run have a letter that is still the whole run?" — and the store already
+// answers it without opening anything: the entries file's mtime against the
+// letter's. Entries newer than the letter means the run recorded work the
+// letter does not carry. Two stats per lettered run, no opens.
+//
+// FAIL CLOSED again, the same posture as everything else here: a stat that
+// will not read answers "not newer", so an unreadable store leaves the letter
+// exactly as the human last saw it.
 //
 // ── The authorship ban still holds (D8) ─────────────────────────────────
 //
@@ -1872,19 +2419,37 @@ fn run_went_silent(control: &Path, run: &str, now: f64) -> bool {
     }
 }
 
-/// The `<short-run-slug>` of every filed letter. ONE directory listing, names
+/// Every filed letter by its `<short-run-slug>`. ONE directory listing, names
 /// only — the letter name is `<stamp>-<short-run-slug>.md` and the stamp
 /// carries no `-` (see [`compact_utc_stamp`]), so the first `-` is the split.
-fn letter_run_slugs(root: &Path) -> HashSet<String> {
-    let mut out = HashSet::new();
+///
+/// The PATH rides along with the slug because the candidate filter now asks a
+/// second question of a lettered run ("is its letter still the whole run?"),
+/// and answering that from the one listing it already did keeps the pass at
+/// three directory reads.
+fn letter_paths_by_run_slug(root: &Path) -> HashMap<String, PathBuf> {
+    let mut out = HashMap::new();
     for path in list_letter_files(root) {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
         let Some(stem) = name.strip_suffix(".md") else { continue };
         if let Some((_, slug)) = stem.split_once('-') {
-            out.insert(slug.to_string());
+            out.insert(slug.to_string(), path.clone());
         }
     }
     out
+}
+
+/// Has `run` recorded entries SINCE the letter at `letter` was written?
+///
+/// Two stats, nothing opened. Fail closed: a stat that will not read answers
+/// `false`, so a store bee cannot measure never gets a letter rewritten under
+/// the human's reading of it (see this section's header).
+fn entries_outran_letter(root: &Path, run: &str, letter: &Path) -> bool {
+    let modified = |path: &Path| std::fs::metadata(path).and_then(|m| m.modified()).ok();
+    match (modified(&entries_path(root, run)), modified(letter)) {
+        (Some(entries), Some(filed)) => entries > filed,
+        _ => false,
+    }
 }
 
 /// Every session id this checkout has a record for, name-sorted. ONE directory
@@ -1906,8 +2471,9 @@ fn session_ids(control: &Path) -> Vec<String> {
 }
 
 /// The runs that MIGHT have gone silent: they stored entries, they have no
-/// letter, and they are not this session. Three directory listings and not one
-/// file opened — see this section's header for the full cost.
+/// letter their entries have not outrun, and they are not this session. Three
+/// directory listings, two stats per lettered run, and not one file opened —
+/// see this section's header for the full cost.
 ///
 /// `root` is the CONTROL root: entries, letters and session records all live
 /// under it, and a linked worktree's cap already resolved its store there.
@@ -1921,7 +2487,7 @@ pub(crate) fn silent_run_candidates(root: &Path, current_run: &str) -> Vec<Strin
     if entry_slugs.is_empty() {
         return Vec::new();
     }
-    let lettered = letter_run_slugs(root);
+    let lettered = letter_paths_by_run_slug(root);
     let mut out = Vec::new();
     for id in session_ids(root) {
         if id == current_run {
@@ -1930,8 +2496,13 @@ pub(crate) fn silent_run_candidates(root: &Path, current_run: &str) -> Vec<Strin
         if !entry_slugs.contains(&slug_capped(&id, 64)) {
             continue;
         }
-        if lettered.contains(&short_run_slug(&id)) {
-            continue;
+        // D2: a letter no longer proves the run reached its end — only that it
+        // reached a feature close. A run whose entries outran its letter is a
+        // candidate again.
+        if let Some(letter) = lettered.get(&short_run_slug(&id)) {
+            if !entries_outran_letter(root, &id, letter) {
+                continue;
+            }
         }
         out.push(id);
     }
@@ -1943,26 +2514,49 @@ pub(crate) fn silent_run_candidates(root: &Path, current_run: &str) -> Vec<Strin
 /// D11 is re-checked at the door to the disk even though the candidate filter
 /// already applied it: a second letter for one run is the loss that rule
 /// exists to prevent, and the last check before a write is the one that has to
-/// hold. An existing letter is [`RunEnd::AlreadyFiled`] — a refusal, not a
-/// failure, and nothing is rewritten. Unlike an ordinary run end, this pass
-/// never re-composes a letter in place: the run is gone, so there is nothing
-/// new to fold in, and the human's own reading of that letter stands.
+/// hold. A letter that is still the whole run is [`RunEnd::AlreadyFiled`] — a
+/// refusal, not a failure, and nothing is rewritten: there is nothing new to
+/// fold in, and the human's own reading of that letter stands.
+///
+/// The ONE case that does rewrite is D2's: a run whose entries OUTRAN the
+/// letter it filed at a feature close recorded work that letter never carried,
+/// and it then went silent. That letter is re-composed IN PLACE — same file,
+/// same `filed_at`, same read state, one letter per run (D11) — now carrying
+/// the unfinished mark and the entries the close-time letter missed.
 pub(crate) fn file_unfinished_letter(root: &Path, run: &str) -> RunEnd {
     if !armed(root) {
         return RunEnd::NotArmed;
     }
+    let mut filed_at = now_iso();
+    let mut status = STATUS_UNREAD.to_string();
     if let Some(existing) = letter_files_for_run(root, run).into_iter().next() {
-        return RunEnd::AlreadyFiled(existing);
+        if !entries_outran_letter(root, run, &existing) {
+            return RunEnd::AlreadyFiled(existing);
+        }
+        match read_letter(&existing) {
+            Ok(old) => {
+                filed_at = old.filed_at;
+                status = old.status;
+            }
+            Err(why) => {
+                return RunEnd::Failed(format!(
+                    "this run already has a letter at {} that cannot be read ({}) — remedy: fix or delete that file; writing a second letter for one run is refused (D11)",
+                    existing.display(),
+                    why.message()
+                ))
+            }
+        }
     }
     // D14: a run that closed a feature and THEN went silent keeps the three
     // extra sections its close recorded — the recovery pass reads the same
     // lines the ordinary run end does.
     let (entries, notes) = read_run(root, run);
-    let Some(letter) =
-        compose_unfinished_letter_with(&project_of(root), run, &now_iso(), &entries, &notes)
+    let Some(mut letter) =
+        compose_unfinished_letter_with(&project_of(root), run, &filed_at, &entries, &notes)
     else {
         return RunEnd::NoEntries;
     };
+    letter.status = status;
     match write_letter(root, &letter) {
         Ok(path) => RunEnd::Filed(path),
         Err(why) => RunEnd::Failed(why.message()),
@@ -2042,10 +2636,11 @@ pub(crate) fn record_silent_runs(root: &Path, current_run: &str) -> Vec<(String,
 //
 // ── The authorship ban is NOT relaxed here (D8) ─────────────────────────
 //
-// Architecture, behaviour and usage may state no fact no stored entry
-// carries, exactly like the five sections above them. So nothing in this
-// module writes a word of them: the feature close reads three lists of
-// already-recorded facts out of the feature's own capped cells and STORES
+// Architecture, behaviour, usage and token usage may state no fact no stored
+// entry carries, exactly like the five sections above them. So nothing in this
+// module writes a word of them: the feature close reads its lists of
+// already-recorded facts out of the feature's own capped cells (and, for the
+// token-usage line, out of the transcripts it just rolled up) and STORES
 // them at the moment of the stop (`verbs/drivers/close.rs`
 // `record_feature_close_in_mailbox`), and the composing pass only sorts,
 // dedupes and drops. If a feature recorded no material for a section, that
@@ -2067,12 +2662,17 @@ pub(crate) fn record_silent_runs(root: &Path, current_run: &str) -> Vec<(String,
 pub(crate) const SECTION_ARCHITECTURE: &str = "Architecture";
 pub(crate) const SECTION_BEHAVIOUR: &str = "Behaviour";
 pub(crate) const SECTION_USAGE: &str = "Usage";
-pub(crate) const CLOSE_SECTIONS: [&str; 3] =
-    [SECTION_ARCHITECTURE, SECTION_BEHAVIOUR, SECTION_USAGE];
+/// Decision e97cc9d4: what the feature COST, beside what it is and how it is
+/// used. Its own heading rather than a bullet under [`SECTION_USAGE`] — that
+/// section lists the instructions a human opens to USE the thing, and a token
+/// count is a different question with a different answer.
+pub(crate) const SECTION_TOKEN_USAGE: &str = "Token usage";
+pub(crate) const CLOSE_SECTIONS: [&str; 4] =
+    [SECTION_ARCHITECTURE, SECTION_BEHAVIOUR, SECTION_USAGE, SECTION_TOKEN_USAGE];
 
-/// The keys the three lists ride under on a stored feature-close line, in the
+/// The keys the four lists ride under on a stored feature-close line, in the
 /// same order as [`CLOSE_SECTIONS`].
-const CLOSE_NOTE_KEYS: [&str; 3] = ["architecture", "behaviour", "usage"];
+const CLOSE_NOTE_KEYS: [&str; 4] = ["architecture", "behaviour", "usage", "token_usage"];
 
 /// What a feature-close stop recorded for D14's three extra sections.
 ///
@@ -2084,19 +2684,23 @@ pub(crate) struct CloseNote {
     pub architecture: Vec<String>,
     pub behaviour: Vec<String>,
     pub usage: Vec<String>,
+    /// The one token-usage line close already printed (e97cc9d4). A list, not
+    /// an `Option`, so one run that closes two features carries both lines
+    /// through the SAME dedupe-and-drop pass as the other three.
+    pub token_usage: Vec<String>,
 }
 
 impl CloseNote {
     pub(crate) fn is_empty(&self) -> bool {
-        self.architecture.is_empty() && self.behaviour.is_empty() && self.usage.is_empty()
+        self.lists().iter().all(|list| list.is_empty())
     }
 
-    /// The three lists in [`CLOSE_SECTIONS`] order.
-    fn lists(&self) -> [&Vec<String>; 3] {
-        [&self.architecture, &self.behaviour, &self.usage]
+    /// The four lists in [`CLOSE_SECTIONS`] order.
+    fn lists(&self) -> [&Vec<String>; 4] {
+        [&self.architecture, &self.behaviour, &self.usage, &self.token_usage]
     }
 
-    /// `None` for a line that carries none of the three keys — which is every
+    /// `None` for a line that carries none of the four keys — which is every
     /// line every other stop kind ever wrote — and for one that carries them
     /// all empty, so an empty note can never keep a heading alive.
     fn from_value(v: &Value) -> Option<Self> {
@@ -2108,6 +2712,7 @@ impl CloseNote {
             architecture: string_list(m, CLOSE_NOTE_KEYS[0]),
             behaviour: string_list(m, CLOSE_NOTE_KEYS[1]),
             usage: string_list(m, CLOSE_NOTE_KEYS[2]),
+            token_usage: string_list(m, CLOSE_NOTE_KEYS[3]),
         };
         (!note.is_empty()).then_some(note)
     }
@@ -2154,15 +2759,15 @@ pub(crate) fn close_sentence(feature: &str) -> String {
     }
 }
 
-/// D14's three sections' bullets, in [`CLOSE_SECTIONS`] order.
+/// D14's extra sections' bullets, in [`CLOSE_SECTIONS`] order.
 ///
 /// Deduped in first-seen order across every feature-close stop the run
 /// recorded (one run may close two features): dropping a repeat is DROPPING,
 /// which D8 allows, and nothing is re-worded or added on the way. An entry
 /// that is blank after `one_line` is dropped rather than rendered as an empty
 /// bullet.
-fn close_section_lines(notes: &[CloseNote]) -> [Vec<String>; 3] {
-    let mut out: [Vec<String>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+fn close_section_lines(notes: &[CloseNote]) -> [Vec<String>; 4] {
+    let mut out: [Vec<String>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
     for note in notes {
         for (slot, list) in out.iter_mut().zip(note.lists()) {
             for raw in list {
@@ -2179,10 +2784,10 @@ fn close_section_lines(notes: &[CloseNote]) -> [Vec<String>; 3] {
     out
 }
 
-/// [`compose_body`] plus D14's three extra sections — the ONE body renderer a
+/// [`compose_body`] plus D14's extra sections — the ONE body renderer a
 /// feature-close letter uses.
 ///
-/// The three come AFTER D7's five, which keeps those five contiguous and in
+/// They come AFTER D7's five, which keeps those five contiguous and in
 /// D7's own order: the news the human came for stays at the top of the file,
 /// and the reference material about what the feature now is sits below it.
 /// With no notes this is byte-identical to [`compose_body`], which is what
@@ -2242,6 +2847,23 @@ fn mark_flag<'a>(parsed: &'a ParsedArgs, name: &str) -> Option<&'a str> {
     parsed.flags.get(name).map(|s| js_trim(s)).filter(|s| !s.is_empty())
 }
 
+/// Take a BARE `--<name>` out of the token list, answering whether it was
+/// there. The remaining tokens are what the value-flag parser sees, so a
+/// boolean flag never has to teach that parser a second token shape.
+fn lift_bare_flag(tokens: &[OsString], name: &str) -> (Vec<OsString>, bool) {
+    let want = format!("--{name}");
+    let mut present = false;
+    let mut kept: Vec<OsString> = Vec::new();
+    for tok in tokens {
+        if tok.to_str() == Some(want.as_str()) {
+            present = true;
+            continue;
+        }
+        kept.push(tok.clone());
+    }
+    (kept, present)
+}
+
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first()?.to_str()? != "mailbox" {
         return None;
@@ -2250,6 +2872,19 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let rest = &args[2..];
     match verb {
         "mark" => run_mark(parse_shape(rest, &["id", "status"])?, t0),
+        "reflect" => {
+            // reflection-becomes-lesson D2: `--no-mistakes` is a BARE flag,
+            // and `parse_shape` only knows value flags (plus `--json`), so it
+            // is lifted out of the token list here — the same shape `--json`
+            // already has, kept out of the shared parser because this one
+            // belongs to a single verb.
+            let (rest, no_mistakes) = lift_bare_flag(rest, "no-mistakes");
+            run_reflect(
+                parse_shape(&rest, &["wrong", "better", "fix-at", "session-id"])?,
+                no_mistakes,
+                t0,
+            )
+        }
         _ => None,
     }
 }
@@ -2306,6 +2941,119 @@ fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     }
 }
 
+// ─── the verb: `bee mailbox reflect` (letter-reflection D2, D3) ─────────
+//
+// Argv plumbing only, exactly like `mark` above. The rule about what a
+// reflection IS lives in [`read_reflection`] and [`Entry::reflection`], with
+// the store.
+//
+//     bee mailbox reflect --wrong <text> --better <text> --fix-at <layer>
+//                         [--session-id <id>]
+//
+// WHAT IT IS CALLED, AND WHY — CONTEXT.md left the name and the place to the
+// agent's discretion, so the reasons are written down here rather than left to
+// be re-derived:
+//
+//   * The GROUP is `mailbox`, beside `mark`: this appends to the mailbox's own
+//     entry layer, and the store's name is already the group.
+//   * The VERB is `reflect`. It is the human's own word for the ask ("1 dạng
+//     phản tư" — a form of reflection), it is plain language, and it says
+//     nothing about reading or listing, so D1's ceiling on this feature — no
+//     rendering surface ships from bee — is untouched.
+//   * The two parts ride `--wrong` and `--better`, one flag per required part,
+//     the shape `cells dissent --reason/--alternative` already uses for "two
+//     halves of one record, each required". They are NEW spellings in this
+//     CLI's flag vocabulary, and the ratchet in `catalog.rs` carries the check
+//     of every near miss that was considered and rejected.
+//   * The run rides `--session-id`, the SAME spelling every other stop uses
+//     for "which session is this", and it resolves through the SAME chain
+//     (`resolve_session_flag_env`: the flag, then `BEE_SESSION_ID`, then
+//     `CLAUDE_CODE_SESSION_ID`) before `run_id` normalises it. A `--run` flag
+//     would have been a second word for a concept the vocabulary already has,
+//     and a caller who learned `--session-id` at the cap would have got it
+//     wrong here.
+//
+// FAIL-OPEN like every other append (D10): `record_stop` warns and returns, so
+// a mailbox that cannot be written never turns this into a refusal. The ONLY
+// refusals are the door's — a missing part (D3), or a `--fix-at` outside
+// mistake-fix-at D1's four layers — and both happen BEFORE anything is
+// written.
+//
+//   * The LAYER rides `--fix-at`, one flag for one required part, exactly as
+//     `--wrong` and `--better` do. It is the third part of one record, not a
+//     classification added afterwards, which is why it is refused at the same
+//     door and never defaulted: a layer nobody named is the empty field D1
+//     exists to end.
+
+fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<ExitCode> {
+    let cmd = "mailbox reflect";
+    let Ok(cwd) = std::env::current_dir() else { return None };
+    let root = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r.root,
+        RootsWt::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, cmd, parsed.pre_json, t0, &why))
+        }
+        RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, parsed.pre_json, t0)),
+    };
+    let drift = check_manifest_drift(&root);
+
+    // reflection-becomes-lesson D2: the clean-run answer. The two forms are
+    // exclusive on purpose — a call that states a mistake AND states there
+    // was none says nothing, and guessing which half was meant would store a
+    // fact nobody wrote.
+    if no_mistakes {
+        if mark_flag(&parsed, "wrong").is_some() || mark_flag(&parsed, "better").is_some() {
+            let msg = format!(
+                "bee {cmd}: --no-mistakes states that this run hit none, so it cannot be passed with --wrong or --better — remedy: drop --no-mistakes to write the mistake down, or drop the two parts to state the clean run."
+            );
+            return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+        }
+        let session =
+            crate::verbs::cells::resolve_session_flag_env(mark_flag(&parsed, "session-id"));
+        let run = run_id(session.as_deref());
+        let entry = Entry::no_mistakes(&now_iso());
+        record_stop(&root, &run, &entry);
+        let result = json!({
+            "run": run,
+            "kind": KIND_NO_MISTAKES,
+            "at": entry.at,
+            "what": entry.what,
+        });
+        let text = format!(
+            "Wrote down that run {run} was asked about mistakes and hit none. It appears in no letter section."
+        );
+        return Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0));
+    }
+
+    let (wrong, better, fix_at) = match read_reflection(
+        mark_flag(&parsed, "wrong"),
+        mark_flag(&parsed, "better"),
+        mark_flag(&parsed, "fix-at"),
+    ) {
+        Ok(parts) => parts,
+        Err(why) => {
+            let msg = format!("bee {cmd}: {why}");
+            return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+        }
+    };
+
+    let session = crate::verbs::cells::resolve_session_flag_env(mark_flag(&parsed, "session-id"));
+    let run = run_id(session.as_deref());
+    let entry = Entry::reflection(&now_iso(), wrong, better, fix_at);
+    record_stop(&root, &run, &entry);
+
+    let result = json!({
+        "run": run,
+        "kind": KIND_REFLECTION,
+        "at": entry.at,
+        "what": entry.what,
+        "better": entry.better,
+        "fix_at": entry.fix_at,
+    });
+    let text = format!("Wrote down one mistake for run {run}. It goes in that run's letter.");
+    Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0))
+}
+
 // ─── tests ──────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2331,6 +3079,8 @@ mod tests {
                         why: "It makes a dead run's record findable by name".to_string(),
                         kind: "found a better route".to_string(),
                     }),
+                    better: None,
+                    fix_at: None,
                 },
                 LetterItem {
                     what: "Followed the plan exactly".to_string(),
@@ -2338,12 +3088,15 @@ mod tests {
                     commit: None,
                     proof: None,
                     departure: None,
+                    better: None,
+                    fix_at: None,
                 },
             ],
             needs_you: vec![NeedsYou {
                 id: "ny-1".to_string(),
                 what: "Should the letters be kept forever?".to_string(),
                 blocks: "the clean-up work".to_string(),
+                kind: Some(WAITING_ON_QUESTION.to_string()),
             }],
             body: "# Done\n\nTwo things.".to_string(),
         }
@@ -2359,7 +3112,16 @@ mod tests {
             proof: Some("cargo test — green — one module".to_string()),
             departure: None,
             needs_you: vec![],
+            better: None,
+            fix_at: None,
         }
+    }
+
+    /// One reflection entry (letter-reflection D2, D3 + mistake-fix-at D1),
+    /// built the ONE way the verb builds it — through `Entry::reflection`, so
+    /// a test can never prove a shape the command does not produce.
+    fn sample_reflection(at: &str, wrong: &str, better: &str) -> Entry {
+        Entry::reflection(at, wrong, better, "check")
     }
 
     // ── D2: the subject is a validity rule ──────────────────────────────
@@ -2558,6 +3320,30 @@ mod tests {
     }
 
     #[test]
+    fn a_digest_is_never_read_as_a_letter() {
+        // letter-digest D1: digests are filed BESIDE the letters, in the same
+        // directory. Every surface that means "letters" must skip them, or
+        // D12's recovery pass sees a run that never existed.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_letter(root, &sample_letter()).unwrap();
+        for name in ["digest-2026-08-25.md", "digest-2026-W35.md"] {
+            write_text_atomic(&mailbox_dir(root).join(name), "---\ntype: \"digest\"\n---\n").unwrap();
+        }
+        let names: Vec<String> = list_letter_files(root)
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["20260825T031500Z-run-2026-08-25-0315.md".to_string()]);
+        let by_slug = letter_paths_by_run_slug(root);
+        assert_eq!(by_slug.len(), 1, "a digest was folded in as a run's letter: {by_slug:?}");
+        assert!(by_slug.contains_key("run-2026-08-25-0315"));
+        for slug in by_slug.keys() {
+            assert!(!slug.starts_with("2026-"), "a digest name was split into a run slug: {slug}");
+        }
+    }
+
+    #[test]
     fn two_long_run_ids_sharing_a_prefix_never_collapse_onto_one_name() {
         let a = "session-2026-08-25-overnight-alpha";
         let b = "session-2026-08-25-overnight-bravo";
@@ -2622,6 +3408,7 @@ mod tests {
             id: "ny-7".to_string(),
             what: "Which name do you want?".to_string(),
             blocks: "the rename".to_string(),
+            kind: Some(WAITING_ON_QUESTION.to_string()),
         }];
         append_entry(root, "run-one", &entry).unwrap();
         let read_back = read_entries(root, "run-one");
@@ -2926,6 +3713,127 @@ mod tests {
         assert_eq!(cap_sentence(None, None), "Finished a piece of work.");
     }
 
+    #[test]
+    fn a_blocked_stop_says_only_what_the_block_stored() {
+        // D8 at the PRODUCER, not just at the composing pass: the reason is
+        // the sentence, verbatim to its first line.
+        assert_eq!(block_sentence("Which door wins?\nsecond line"), "Which door wins?");
+        assert_eq!(block_sentence("   "), "Stopped on a blocker.");
+
+        // D13's item: the cell's id, the cell's title, the recorded reason —
+        // three stored facts and no fourth.
+        let item = block_needs_you("blp-4", Some("Wire the blocker letter"), "  Which door\n wins? ");
+        assert_eq!(item.id, "blp-4");
+        assert_eq!(item.what, "Which door wins?");
+        assert_eq!(item.blocks, "Wire the blocker letter");
+
+        // No title to name: the id, never a sentence composed here.
+        assert_eq!(block_needs_you("blp-4", None, "why").blocks, "blp-4");
+        assert_eq!(block_needs_you("blp-4", Some("   "), "why").blocks, "blp-4");
+    }
+
+    // ── a7e6f237: the needs-human-decision flag on a queued ask ─────────
+
+    fn ask_item(id: &str, kind: Option<&str>) -> NeedsYou {
+        NeedsYou {
+            id: id.to_string(),
+            what: format!("Ask {id}?"),
+            blocks: format!("work {id}"),
+            kind: kind.map(str::to_string),
+        }
+    }
+
+    /// TRUTH: the flag derives from the item's KIND and nothing else, through
+    /// the same one rule the WakeReport reads — a second copy of the kind list
+    /// would let a letter and a report disagree and both stay green.
+    #[test]
+    fn the_flag_on_an_ask_derives_from_its_kind_and_nothing_else() {
+        for yes in ["gate", "question", "escalation", "urgent", "advisor-nudge"] {
+            assert!(ask_item("a", Some(yes)).needs_human_decision(), "{yes} is the human's call");
+            assert!(needs_human_decision(yes), "and the report agrees about {yes}");
+        }
+        for no in ["intervention", "turn-end", "", "   ", "QUESTION", "not-a-kind"] {
+            assert!(!ask_item("a", Some(no)).needs_human_decision(), "{no:?} must not flag yes");
+        }
+        assert!(!ask_item("a", None).needs_human_decision(), "no kind, no claim on the human");
+        // A blocked cell IS a question only the human can answer.
+        assert!(block_needs_you("blp-4", None, "which door wins?").needs_human_decision());
+    }
+
+    /// TRUTH: "a letter lists yes-flagged items before all others, stable
+    /// within groups" — in the machine contract AND in the prose, because both
+    /// go through one helper.
+    #[test]
+    fn a_letter_lists_the_asks_only_you_can_decide_first() {
+        let mut entry = sample_entry("2026-08-25T01:00:00.000Z", "Did the thing");
+        // Recorded worst-first on purpose: append order alone would print the
+        // two the human must decide last.
+        entry.needs_you = vec![
+            ask_item("no-1", Some("intervention")),
+            ask_item("yes-1", Some("advisor-nudge")),
+            ask_item("no-2", None),
+            ask_item("yes-2", Some("urgent")),
+        ];
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[entry]).unwrap();
+
+        let ids: Vec<&str> = letter.needs_you.iter().map(|n| n.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["yes-1", "yes-2", "no-1", "no-2"],
+            "flagged first, append order kept inside each group"
+        );
+
+        let ordered = |text: &str| {
+            let at = |id: &str| {
+                text.find(id).unwrap_or_else(|| panic!("{id} is missing from:\n{text}"))
+            };
+            at("yes-1") < at("yes-2") && at("yes-2") < at("no-1") && at("no-1") < at("no-2")
+        };
+        assert!(ordered(&letter.body), "the prose keeps the same order: {}", letter.body);
+        let text = render_letter(&letter);
+        assert!(ordered(&text), "and so does the frontmatter: {text}");
+        assert!(text.contains("needs_human_decision: true"), "the flag is carried: {text}");
+        assert!(text.contains("needs_human_decision: false"), "both ways: {text}");
+    }
+
+    /// TRUTH: "a malformed queue row derives flag=no and still renders" — a
+    /// kind is DATA, never a control token, and a renderer that panics on one
+    /// bad row loses the human the whole letter (20260711).
+    #[test]
+    fn a_malformed_ask_flags_no_and_still_renders() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut letter = sample_letter();
+        letter.needs_you = vec![
+            ask_item("junk", Some("{\"kind\": \"urgent\"}\nrm -rf /")),
+            ask_item("empty", Some("")),
+            ask_item("nokind", None),
+            ask_item("real", Some("escalation")),
+        ];
+        let path = write_letter(root, &letter).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        for id in ["junk", "empty", "nokind", "real"] {
+            assert!(text.contains(id), "{id} was dropped instead of rendered:\n{text}");
+        }
+        assert!(
+            text.find("real").unwrap() < text.find("junk").unwrap(),
+            "the one honest ask leads, the malformed ones follow:\n{text}"
+        );
+
+        // The flag is DERIVED on every read: a hand-edited `true` in the file
+        // cannot promote a row whose kind does not earn it.
+        let hacked = text.replace("needs_human_decision: false", "needs_human_decision: true");
+        std::fs::write(&path, hacked).unwrap();
+        let back = read_letter(&path).unwrap();
+        assert_eq!(back.needs_you.len(), 4, "every row read back, malformed included");
+        assert_eq!(
+            back.needs_you.iter().filter(|n| n.needs_human_decision()).count(),
+            1,
+            "only the escalation is the human's call"
+        );
+    }
+
     // ── D7/D8/D9/D11: composing and filing the letter at run end ────────
 
     fn full_run() -> Vec<Entry> {
@@ -2936,14 +3844,26 @@ mod tests {
             kind: "found a better route".to_string(),
         });
         let second = sample_entry("2026-08-25T02:00:00.000Z", "Wired the note into every clean stop");
+        // letter-reflection: a mistake the agent wrote down mid-run. It rides
+        // the shared fixture on purpose, so every authorship walk and every
+        // section-position check below covers the new section for free — a
+        // section only one test looks at is a section the next change breaks
+        // silently. Stamped BEFORE the blocker, because D12's sweep names the
+        // moment a run went quiet out of the LAST entry's `at`.
+        let reflected = sample_reflection(
+            "2026-08-25T02:30:00.000Z",
+            "Guessed at the folder name instead of asking",
+            "Ask once, up front, before touching anything",
+        );
         let mut blocked = sample_entry("2026-08-25T03:00:00.000Z", "Stopped short of the rename");
         blocked.kind = KIND_BLOCKER.to_string();
         blocked.needs_you = vec![NeedsYou {
             id: "ny-7".to_string(),
             what: "Which name do you want for the folder?".to_string(),
             blocks: "the rename".to_string(),
+            kind: Some(WAITING_ON_QUESTION.to_string()),
         }];
-        vec![first, second, blocked]
+        vec![first, second, reflected, blocked]
     }
 
     /// Lowercase word tokens — the unit "a fact this text states" is checked in.
@@ -2954,45 +3874,65 @@ mod tests {
             .collect()
     }
 
+    /// Every word ONE stored entry carries — the whole allowance an authorship
+    /// walk gives that entry. It is a function rather than a block copied into
+    /// each walk so a NEW stored field (letter-reflection's `better` was one)
+    /// widens every walk at once: a walk that forgot the new field would go
+    /// green while the composer printed a fact it had no permission to print,
+    /// which is the hole a per-test copy leaves (20260710).
+    fn entry_words(e: &Entry) -> Vec<String> {
+        let mut allowed: Vec<String> = Vec::new();
+        allowed.extend(words(&e.what));
+        allowed.extend(words(&e.kind));
+        allowed.extend(words(&e.at));
+        for f in &e.files {
+            allowed.extend(words(f));
+        }
+        if let Some(c) = &e.commit {
+            allowed.extend(words(c));
+        }
+        if let Some(p) = &e.proof {
+            allowed.extend(words(p));
+        }
+        if let Some(b) = &e.better {
+            allowed.extend(words(b));
+        }
+        if let Some(d) = &e.departure {
+            allowed.extend(words(&d.what));
+            allowed.extend(words(&d.why));
+            allowed.extend(words(&d.kind));
+        }
+        for n in &e.needs_you {
+            allowed.extend(words(&n.id));
+            allowed.extend(words(&n.what));
+            allowed.extend(words(&n.blocks));
+        }
+        allowed
+    }
+
+    /// The connectives the composing pass is allowed to add of its own — the
+    /// complete list, named here so a third one cannot be slipped in without
+    /// this constant growing in the same commit.
+    const COMPOSER_CONNECTIVES: [&str; 2] = ["blocks", "better"];
+
     #[test]
     fn composition_never_states_a_fact_no_entry_carries() {
         // D8's authorship ban, as a test that FAILS the moment the composing
         // pass writes prose of its own. Every word the body says must come
-        // from a stored entry, from one of D7's five headings, or be the one
-        // fixed connective the Needs-your-call bullet adds.
+        // from a stored entry, from one of D7's headings (as amended by
+        // letter-reflection D1), or be one of the two fixed connectives.
         let entries = full_run();
         let letter =
             compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &entries).unwrap();
 
         let mut allowed: Vec<String> = Vec::new();
         for e in &entries {
-            allowed.extend(words(&e.what));
-            allowed.extend(words(&e.kind));
-            allowed.extend(words(&e.at));
-            for f in &e.files {
-                allowed.extend(words(f));
-            }
-            if let Some(c) = &e.commit {
-                allowed.extend(words(c));
-            }
-            if let Some(p) = &e.proof {
-                allowed.extend(words(p));
-            }
-            if let Some(d) = &e.departure {
-                allowed.extend(words(&d.what));
-                allowed.extend(words(&d.why));
-                allowed.extend(words(&d.kind));
-            }
-            for n in &e.needs_you {
-                allowed.extend(words(&n.id));
-                allowed.extend(words(&n.what));
-                allowed.extend(words(&n.blocks));
-            }
+            allowed.extend(entry_words(e));
         }
         for heading in SECTIONS {
             allowed.extend(words(heading));
         }
-        allowed.push("blocks".to_string());
+        allowed.extend(COMPOSER_CONNECTIVES.map(str::to_string));
 
         for word in words(&letter.body) {
             assert!(
@@ -3000,10 +3940,11 @@ mod tests {
                 "the body says {word:?}, which no stored entry carries — that is authoring (D8)"
             );
         }
-        // The subject is CHOSEN out of the stored sentences, never re-worded.
+        // The subject is CHOSEN out of the stored sentences, never re-worded —
+        // and never out of a reflection (letter-reflection D1).
         assert!(
-            entries.iter().any(|e| e.what == letter.subject),
-            "the subject {:?} is not one of the stored sentences",
+            entries.iter().filter(|e| !e.is_reflection()).any(|e| e.what == letter.subject),
+            "the subject {:?} is not one of the stored non-reflection sentences",
             letter.subject
         );
     }
@@ -3044,10 +3985,13 @@ mod tests {
 
     #[test]
     fn a_section_with_nothing_to_report_is_absent_never_printed_empty() {
-        // One plain cap: no departure, no blocker, no question, no next step.
+        // One plain cap: no departure, no blocker, no mistake, no question, no
+        // next step.
         let body = compose_body(&[sample_entry("2026-08-25T01:00:00.000Z", "Did one thing")]);
         assert!(body.contains(&format!("## {SECTION_DONE}")));
-        for heading in [SECTION_DEPARTED, SECTION_BROKEN, SECTION_NEEDS_YOU, SECTION_NEXT] {
+        for heading in
+            [SECTION_DEPARTED, SECTION_BROKEN, SECTION_REFLECTION, SECTION_NEEDS_YOU, SECTION_NEXT]
+        {
             assert!(
                 !body.contains(&format!("## {heading}")),
                 "section {heading:?} has nothing to report and must be dropped (D7)\n{body}"
@@ -3063,6 +4007,511 @@ mod tests {
         // with nothing to report is dropped.
         let body = compose_body(&full_run());
         assert!(!body.contains(&format!("## {SECTION_NEXT}")));
+    }
+
+    // ── letter-reflection: the Mistakes & reflection section ────────────
+
+    /// TRUTH: the section renders where D1 put it, with the ONE connective,
+    /// and it says exactly the two parts the entry stored.
+    #[test]
+    fn the_reflection_section_renders_between_broken_and_needs_your_call() {
+        let body = compose_body(&full_run());
+
+        let at = |heading: &str| {
+            body.find(&format!("## {heading}"))
+                .unwrap_or_else(|| panic!("{heading:?} is missing from:\n{body}"))
+        };
+        // D1's place, stated as the two neighbours it was named against.
+        assert!(at(SECTION_BROKEN) < at(SECTION_REFLECTION), "{body}");
+        assert!(at(SECTION_REFLECTION) < at(SECTION_NEEDS_YOU), "{body}");
+
+        // The bullet is the two stored parts and the one connective — the same
+        // "<label>: " shape the Needs-your-call bullet already teaches.
+        assert!(
+            body.contains(
+                "- Guessed at the folder name instead of asking — better: Ask once, up front, before touching anything"
+            ),
+            "{body}"
+        );
+    }
+
+    /// TRUTH: D7's drop rule reaches the new section too — a run that made no
+    /// mistake files a letter with no such heading, never an empty one. The
+    /// section is fed ONLY by stored reflection entries, so an empty one would
+    /// mean the composer invented the question.
+    #[test]
+    fn a_run_with_no_reflection_files_a_letter_without_the_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        // Every kind of stop EXCEPT a reflection.
+        for entry in full_run().into_iter().filter(|e| !e.is_reflection()) {
+            append_entry(root, "run-clean", &entry).unwrap();
+        }
+        let RunEnd::Filed(path) = file_run_letter(root, "run-clean") else {
+            panic!("an armed run that ends files its letter");
+        };
+        let letter = read_letter(&path).unwrap();
+        assert!(
+            !letter.body.contains(&format!("## {SECTION_REFLECTION}")),
+            "a run with no mistake to report must drop the section (D1, D7):\n{}",
+            letter.body
+        );
+        // …and the whole letter is still there.
+        assert!(letter.body.contains(&format!("## {SECTION_DONE}")));
+        assert!(letter.body.contains(&format!("## {SECTION_BROKEN}")));
+    }
+
+    /// TRUTH: a mistake is not a thing the run DID. It never appears under
+    /// Done — the section a human reads to learn what landed.
+    #[test]
+    fn a_reflection_never_appears_under_done() {
+        let body = compose_body(&full_run());
+        let done_at = body.find(&format!("## {SECTION_DONE}")).unwrap();
+        let broken_at = body.find(&format!("## {SECTION_BROKEN}")).unwrap();
+        let done_block = &body[done_at..broken_at];
+        assert!(
+            !done_block.contains("Guessed at the folder name"),
+            "the mistake landed under Done:\n{done_block}"
+        );
+        // It is in the letter — dropped from Done, never dropped entirely.
+        assert!(body.contains("Guessed at the folder name instead of asking"), "{body}");
+    }
+
+    /// TRUTH: a letter is never TITLED by its mistake, even when the mistake
+    /// is the first thing the run recorded and reads as a perfectly valid
+    /// subject on its own. This is the case the naive "first valid sentence
+    /// wins" rule gets wrong, so it is the case the test is written for.
+    #[test]
+    fn a_reflection_never_wins_the_subject() {
+        let mistake = sample_reflection(
+            "2026-08-25T01:00:00.000Z",
+            "The overnight run deleted the wrong folder",
+            "Read the path back before deleting anything",
+        );
+        // On its own the sentence WOULD be a valid subject — that is the trap.
+        assert!(check_subject(&mistake.what).is_ok(), "the fixture must be a valid subject");
+
+        let work = sample_entry("2026-08-25T02:00:00.000Z", "The overnight run rebuilt the index");
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[mistake, work])
+                .unwrap();
+        assert_eq!(letter.subject, "The overnight run rebuilt the index");
+    }
+
+    /// TRUTH: a run whose ONLY entries are reflections still gets a valid
+    /// subject — the last resort, which says nothing about what the run did.
+    /// Without the fallback, excluding reflections from the choice would file
+    /// a letter with no inbox row, which D2 refuses outright.
+    #[test]
+    fn a_run_of_nothing_but_reflections_still_gets_a_subject() {
+        let letter = compose_letter(
+            "beehive",
+            "run-one",
+            "2026-08-25T06:00:00.000Z",
+            &[sample_reflection("2026-08-25T01:00:00.000Z", "Guessed a path", "Read it first")],
+        )
+        .unwrap();
+        assert_eq!(letter.subject, FALLBACK_SUBJECT);
+        assert!(letter.validate().is_ok(), "and it is a valid record");
+    }
+
+    /// TRUTH: D3's two parts and mistake-fix-at D1's third are all required,
+    /// and the refusal names the part that is missing. Checked at
+    /// [`read_reflection`], the ONE door — the verb is argv plumbing and calls
+    /// this.
+    #[test]
+    fn a_reflection_missing_a_part_is_refused_and_the_refusal_names_it() {
+        let all = read_reflection(Some("went wrong"), Some("would be better"), Some("check"))
+            .unwrap();
+        assert_eq!(all, ("went wrong", "would be better", "check"));
+        // Trimmed on the way through, like every other stored sentence.
+        assert_eq!(
+            read_reflection(Some("  a  "), Some("  b  "), Some(" none ")).unwrap(),
+            ("a", "b", "none")
+        );
+
+        for (wrong, better, fix_at, named) in [
+            (None, Some("would be better"), Some("check"), "--wrong"),
+            (Some("went wrong"), None, Some("check"), "--better"),
+            (Some("went wrong"), Some("would be better"), None, "--fix-at"),
+            (Some("   "), Some("would be better"), Some("check"), "--wrong"),
+            (Some("went wrong"), Some("\t"), Some("check"), "--better"),
+            (Some("went wrong"), Some("would be better"), Some("  "), "--fix-at"),
+        ] {
+            let err = read_reflection(wrong, better, fix_at).unwrap_err();
+            assert!(err.contains(named), "the refusal does not name {named}: {err}");
+            assert!(err.contains("remedy:"), "a refusal must say what to fix: {err}");
+        }
+        // All three missing: ALL are named, so one fix answers one refusal.
+        let err = read_reflection(None, None, None).unwrap_err();
+        assert!(
+            err.contains("--wrong") && err.contains("--better") && err.contains("--fix-at"),
+            "{err}"
+        );
+    }
+
+    /// TRUTH (mistake-fix-at D1): the refusal a caller with no `--fix-at` gets
+    /// is SELF-SUFFICIENT — it says how many parts a reflection has, lists the
+    /// four layers with what each one means, and ends on a remedy naming all
+    /// three flags. A worker on a new binary whose doctrine still says "two
+    /// parts" recovers from these words alone, in one retry.
+    #[test]
+    fn the_missing_layer_refusal_teaches_the_whole_vocabulary() {
+        let err =
+            read_reflection(Some("went wrong"), Some("would be better"), None).unwrap_err();
+        assert!(err.contains("three required parts"), "it says how many parts: {err}");
+        for layer in FIX_AT_VALUES {
+            assert!(err.contains(layer), "the refusal does not list {layer}: {err}");
+        }
+        for flag in ["--wrong", "--better", "--fix-at"] {
+            assert!(err.contains(flag), "the remedy does not name {flag}: {err}");
+        }
+        assert!(err.contains("remedy:"), "{err}");
+    }
+
+    /// TRUTH (mistake-fix-at D1): the layer vocabulary is CLOSED. A word
+    /// outside it is refused by the same door, and that refusal lists the four
+    /// that are in it — so a caller who guessed recovers without reading a
+    /// file, and no free-text layer ever reaches the store.
+    #[test]
+    fn a_layer_outside_the_vocabulary_is_refused_listing_the_four() {
+        for layer in FIX_AT_VALUES {
+            assert_eq!(
+                read_reflection(Some("a"), Some("b"), Some(layer)).unwrap().2,
+                layer,
+                "{layer} is in the vocabulary"
+            );
+        }
+        for guess in ["hooks", "Check", "test", "architecture|check"] {
+            let err = read_reflection(Some("a"), Some("b"), Some(guess)).unwrap_err();
+            assert!(err.contains(guess), "the refusal quotes what was passed: {err}");
+            for layer in FIX_AT_VALUES {
+                assert!(err.contains(layer), "the refusal does not list {layer}: {err}");
+            }
+            assert!(err.contains("remedy:"), "{err}");
+        }
+    }
+
+    // ── reflection-becomes-lesson D2: the clean-run answer ───────────────
+
+    /// TRUTH: the clean-run answer renders in NO section — not Done, not
+    /// Mistakes & reflection — and it never becomes the letter's subject.
+    /// It is the record that the run was ASKED, not a thing the run did.
+    #[test]
+    fn the_clean_run_answer_renders_in_no_section_and_never_titles_the_letter() {
+        let clean = Entry::no_mistakes("2026-08-25T01:00:00.000Z");
+        assert_eq!(clean.kind, KIND_NO_MISTAKES);
+        assert!(clean.is_no_mistakes() && clean.is_mistakes_answer() && !clean.is_reflection());
+
+        // Alone in a run: the letter still composes, and its body says
+        // nothing about it — no Done bullet, no Mistakes section, no
+        // sentence anywhere.
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[clean.clone()])
+                .unwrap();
+        assert!(
+            !letter.body.contains(&format!("## {SECTION_DONE}")),
+            "the clean-run answer grew a Done section:\n{}",
+            letter.body
+        );
+        assert!(
+            !letter.body.contains(&format!("## {SECTION_REFLECTION}")),
+            "the clean-run answer grew a Mistakes section:\n{}",
+            letter.body
+        );
+        assert!(
+            !letter.body.contains(NO_MISTAKES_WHAT),
+            "the stored sentence reached the letter:\n{}",
+            letter.body
+        );
+        // Nothing else could have titled it, and it did not.
+        assert_eq!(letter.subject, FALLBACK_SUBJECT);
+        assert!(letter.validate().is_ok(), "and it is still a valid record");
+
+        // Beside real work: the work is what the human reads, and the
+        // answer is still invisible.
+        let work = sample_entry("2026-08-25T02:00:00.000Z", "The overnight run rebuilt the index");
+        let letter =
+            compose_letter("beehive", "run-two", "2026-08-25T06:00:00.000Z", &[clean, work])
+                .unwrap();
+        assert_eq!(letter.subject, "The overnight run rebuilt the index");
+        assert!(!letter.body.contains(NO_MISTAKES_WHAT), "{}", letter.body);
+    }
+
+    /// TRUTH: the belt-and-braces half of D2 — the stored sentence itself
+    /// FAILS `check_subject`, so a build that has never heard of this kind
+    /// still cannot elect it as a letter's subject.
+    #[test]
+    fn the_clean_run_sentence_could_not_be_a_subject_even_to_a_binary_that_ignores_its_kind() {
+        assert!(
+            check_subject(NO_MISTAKES_WHAT).is_err(),
+            "the stored sentence must not be electable as a subject"
+        );
+        // Chosen by a chooser that does NOT know the kind: still refused.
+        let entries = [Entry::no_mistakes("2026-08-25T01:00:00.000Z")];
+        let older_binary_choice = entries
+            .iter()
+            .map(|e| e.what.trim())
+            .find(|s| check_subject(s).is_ok())
+            .map(str::to_string)
+            .unwrap_or_else(|| FALLBACK_SUBJECT.to_string());
+        assert_eq!(older_binary_choice, FALLBACK_SUBJECT);
+    }
+
+    /// TRUTH: the bare `--no-mistakes` token reaches the verb, and the
+    /// value-flag parser never sees it. `parse_shape` refuses any token it
+    /// does not know, so without this lift the whole command would fall
+    /// through instead of recording the answer.
+    #[test]
+    fn the_bare_clean_run_flag_is_lifted_out_before_the_value_parser_runs() {
+        let toks = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+
+        let (rest, present) = lift_bare_flag(&toks(&["--no-mistakes"]), "no-mistakes");
+        assert!(present);
+        assert!(rest.is_empty());
+        // What is left is exactly what the value-flag parser accepts.
+        let parsed = parse_shape(&rest, &["wrong", "better", "session-id"]).expect("parses");
+        assert!(parsed.flags.is_empty());
+
+        // Beside a value flag, in either order, the value flag survives.
+        let (rest, present) =
+            lift_bare_flag(&toks(&["--session-id", "run-7", "--no-mistakes"]), "no-mistakes");
+        assert!(present);
+        let parsed = parse_shape(&rest, &["wrong", "better", "session-id"]).expect("parses");
+        assert_eq!(parsed.flags.get("session-id").map(String::as_str), Some("run-7"));
+
+        // Absent: nothing is taken, and nothing is claimed.
+        let (rest, present) = lift_bare_flag(&toks(&["--wrong", "a", "--better", "b"]), "no-mistakes");
+        assert!(!present);
+        assert_eq!(rest.len(), 4);
+    }
+
+    /// TRUTH: a recorded mistake reaches the store through the SAME three-part
+    /// door the verb uses, in either shape it was written, and a half-written
+    /// one is refused by the words that door hands back.
+    #[test]
+    fn read_mistake_takes_both_shapes_and_refuses_a_missing_part() {
+        let line = Value::String(
+            "Guessed the folder name — Read the path back before deleting anything — check"
+                .to_string(),
+        );
+        assert_eq!(
+            read_mistake(&line).unwrap(),
+            (
+                "Guessed the folder name".to_string(),
+                "Read the path back before deleting anything".to_string(),
+                "check".to_string()
+            )
+        );
+        let object = json!({
+            "wrong": "  Guessed the folder name  ",
+            "better": "Read it first",
+            "fix_at": " architecture ",
+        });
+        assert_eq!(
+            read_mistake(&object).unwrap(),
+            (
+                "Guessed the folder name".to_string(),
+                "Read it first".to_string(),
+                "architecture".to_string()
+            )
+        );
+
+        // Half a record, in each shape: refused, and the refusal names the
+        // missing part — the same words `read_reflection` hands the verb.
+        let err = read_mistake(&Value::String("Guessed the folder name".to_string())).unwrap_err();
+        assert!(err.contains("--better") && err.contains("--fix-at"), "{err}");
+        assert!(err.contains("remedy:"), "{err}");
+        let err = read_mistake(&json!({ "better": "Read it first" })).unwrap_err();
+        assert!(err.contains("--wrong"), "{err}");
+    }
+
+    /// TRUTH (mistake-fix-at D1): a mistake written as two segments is refused
+    /// naming the third part, and a `better` that carries the separator itself
+    /// is refused too — with the reason said out loud, so a writer whose
+    /// `better` swallowed the layer can see which of their own parts was
+    /// eaten instead of reading "add a third part" and adding a fourth.
+    #[test]
+    fn a_two_segment_mistake_line_is_refused_naming_the_third_part() {
+        let two_parts =
+            Value::String("Guessed the folder name — Read the path back first".to_string());
+        let err = read_mistake(&two_parts).unwrap_err();
+        assert!(err.contains("--fix-at"), "the refusal names the third part: {err}");
+        assert!(err.contains("may not itself contain that separator"), "{err}");
+
+        // A `better` carrying the separator eats the layer: refused by the
+        // vocabulary check, with the same sentence about the separator.
+        let greedy = Value::String(
+            "Ran the wrong command — filtered the suite — and missed the case — check".to_string(),
+        );
+        let err = read_mistake(&greedy).unwrap_err();
+        assert!(err.contains("and missed the case — check"), "it quotes what it read: {err}");
+        assert!(err.contains("may not itself contain that separator"), "{err}");
+
+        // The object form has no such limit: it is the shape for a part that
+        // needs the dash.
+        assert_eq!(
+            read_mistake(&json!({
+                "wrong": "Ran the wrong command",
+                "better": "filtered the suite — and missed the case",
+                "fix_at": "check",
+            }))
+            .unwrap()
+            .1,
+            "filtered the suite — and missed the case"
+        );
+    }
+
+    /// TRUTH: the frontmatter contract only GROWS. A letter filed before the
+    /// `better` key existed reads back unchanged, and a letter carrying it
+    /// round-trips — so a consumer written against the older item shape never
+    /// breaks on a newer letter.
+    #[test]
+    fn the_better_key_is_additive_on_both_sides_of_the_contract() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let entries = full_run();
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &entries).unwrap();
+        let text = render_letter(&letter);
+        // Carried, beside the keys the contract already had.
+        assert!(text.contains("better: \"Ask once, up front, before touching anything\""), "{text}");
+        // …and `null` on every item that is not a reflection, exactly like
+        // `commit` and `proof` already emit.
+        assert!(text.contains("better: null"), "{text}");
+
+        let path = write_letter(root, &letter).unwrap();
+        // The reader trims the body, so the record — not the trailing byte —
+        // is what round-trips.
+        let mut expected = letter.clone();
+        expected.body = expected.body.trim().to_string();
+        assert_eq!(read_letter(&path).unwrap(), expected, "the record round-trips");
+
+        // An OLDER letter — no `better` key anywhere — still reads.
+        let older = text
+            .replace("    better: null\n", "")
+            .replace("    better: \"Ask once, up front, before touching anything\"\n", "");
+        // Only the FRONTMATTER key is stripped: the body's own "better:"
+        // connective is prose the older reader was always going to see.
+        assert!(
+            !split_frontmatter(&older).unwrap().0.contains("better:"),
+            "the fixture still carries the key:\n{older}"
+        );
+        let old_path = mailbox_dir(root).join("20260825T060000Z-older.md");
+        write_text_atomic(&old_path, &older).unwrap();
+        let read_back = read_letter(&old_path).unwrap();
+        assert_eq!(read_back.items.len(), letter.items.len(), "every item still parses");
+        assert!(read_back.items.iter().all(|i| i.better.is_none()), "a missing key reads as None");
+    }
+
+    /// TRUTH: a reflection entry survives the append/read round trip through
+    /// the entry layer, and an OLD stored line with no `better` still reads as
+    /// an entry rather than a corrupt one.
+    #[test]
+    fn a_reflection_entry_rides_the_entry_layer_and_old_lines_still_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let entry = sample_reflection("2026-08-25T02:30:00.000Z", "Guessed a path", "Read it first");
+        append_entry(root, "run-a", &entry).unwrap();
+        let read_back = read_entries(root, "run-a");
+        assert_eq!(read_back, vec![entry.clone()]);
+        assert!(read_back[0].is_reflection());
+        assert_eq!(read_back[0].better.as_deref(), Some("Read it first"));
+
+        assert_eq!(read_back[0].fix_at.as_deref(), Some("check"));
+
+        // A line appended before the field existed: no `better`, still an entry.
+        let mut old = entry.to_value();
+        old.as_object_mut().unwrap().remove("better");
+        append_jsonl(&entries_path(root, "run-a"), &old).unwrap();
+        let read_back = read_entries(root, "run-a");
+        assert_eq!(read_back.len(), 2, "the old line is read, not warned away");
+        assert_eq!(read_back[1].better, None);
+    }
+
+    /// TRUTH (mistake-fix-at D4): the 465 reflection rows written before
+    /// `fix_at` existed are NOT backfilled. A row with no `fix_at` key reads
+    /// back as an entry with `None` — the store's spelling of the `none`
+    /// layer — rather than as a corrupt line the run's whole entry set dies
+    /// on.
+    #[test]
+    fn a_reflection_row_written_before_the_layer_existed_reads_back_as_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let entry = sample_reflection("2026-08-25T02:30:00.000Z", "Guessed a path", "Read it first");
+        let mut old = entry.to_value();
+        old.as_object_mut().unwrap().remove("fix_at");
+        append_jsonl(&entries_path(root, "run-a"), &old).unwrap();
+
+        let read_back = read_entries(root, "run-a");
+        assert_eq!(read_back.len(), 1, "the old line is read, not warned away");
+        assert!(read_back[0].is_reflection(), "and it is still a reflection");
+        assert_eq!(read_back[0].fix_at, None);
+        // Every part the old row DID carry is untouched.
+        assert_eq!(read_back[0].what, "Guessed a path");
+        assert_eq!(read_back[0].better.as_deref(), Some("Read it first"));
+    }
+
+    /// TRUTH (mistake-fix-at D1): the layer rides the letter as well as the
+    /// entry row, on the same additive terms `better` took — emitted after
+    /// `better`, `null` on every item that is not a reflection, and read back
+    /// as `None` from a letter filed before the key existed.
+    #[test]
+    fn the_layer_rides_the_letter_frontmatter_and_round_trips() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let entries = vec![
+            sample_entry("2026-08-25T01:00:00.000Z", "Wrote the store that keeps these letters"),
+            sample_reflection("2026-08-25T02:00:00.000Z", "Guessed a path", "Read it first"),
+        ];
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &entries).unwrap();
+        let text = render_letter(&letter);
+        assert!(text.contains("fix_at: \"check\""), "{text}");
+        assert!(text.contains("fix_at: null"), "the non-reflection item emits null: {text}");
+
+        let path = write_letter(root, &letter).unwrap();
+        let read_back = read_letter(&path).unwrap();
+        let layers: Vec<Option<&str>> =
+            read_back.items.iter().map(|i| i.fix_at.as_deref()).collect();
+        assert!(layers.contains(&Some("check")), "the layer round-trips: {layers:?}");
+
+        // An OLDER letter — no `fix_at` key anywhere — still reads, every item
+        // with `None`.
+        let older = text
+            .replace("    fix_at: null\n", "")
+            .replace("    fix_at: \"check\"\n", "");
+        let old_path = mailbox_dir(root).join("20260825T060000Z-older.md");
+        write_text_atomic(&old_path, &older).unwrap();
+        let old_letter = read_letter(&old_path).unwrap();
+        assert_eq!(old_letter.items.len(), letter.items.len(), "every item still parses");
+        assert!(old_letter.items.iter().all(|i| i.fix_at.is_none()), "a missing key reads as None");
+    }
+
+    /// TRUTH: `bee mailbox reflect` builds its entry through the store's own
+    /// constructor, so what the verb appends and what the section renders can
+    /// never be two different shapes.
+    #[test]
+    fn the_verb_and_the_section_agree_about_what_a_reflection_is() {
+        let entry = Entry::reflection(
+            "2026-08-25T02:30:00.000Z",
+            "  Guessed  a path ",
+            " Read it ",
+            " check ",
+        );
+        assert_eq!(entry.kind, KIND_REFLECTION);
+        assert!(ENTRY_KINDS.contains(&entry.kind.as_str()), "the kind set names it");
+        // One line each, the only edit a stored sentence ever gets.
+        assert_eq!(entry.what, "Guessed a path");
+        assert_eq!(entry.better.as_deref(), Some("Read it"));
+        assert_eq!(entry.fix_at.as_deref(), Some("check"));
+        // A reflection edited nothing and proved nothing — empty, never guessed.
+        assert!(entry.files.is_empty() && entry.commit.is_none() && entry.proof.is_none());
+        assert!(entry.departure.is_none() && entry.needs_you.is_empty());
+
+        let body = compose_body(&[entry]);
+        assert!(body.contains("- Guessed a path — better: Read it"), "{body}");
     }
 
     #[test]
@@ -3112,7 +4561,7 @@ mod tests {
         assert!(!letter.project.trim().is_empty());
         assert!(!letter.filed_at.trim().is_empty());
         assert_eq!(letter.status, STATUS_UNREAD);
-        assert_eq!(letter.items.len(), 3, "every stored entry is an item");
+        assert_eq!(letter.items.len(), full_run().len(), "every stored entry is an item");
         assert_eq!(letter.needs_you.len(), 1);
         assert_eq!(letter.needs_you[0].id, "ny-7");
     }
@@ -3129,7 +4578,7 @@ mod tests {
         }
         assert!(matches!(file_run_letter(root, "run-one"), RunEnd::NotArmed));
         assert!(list_letter_files(root).is_empty());
-        assert_eq!(read_entries(root, "run-one").len(), 3, "the entries are kept");
+        assert_eq!(read_entries(root, "run-one").len(), full_run().len(), "the entries are kept");
     }
 
     #[test]
@@ -3409,33 +4858,12 @@ nested:
 
         let mut allowed: Vec<String> = Vec::new();
         for e in &entries {
-            allowed.extend(words(&e.what));
-            allowed.extend(words(&e.kind));
-            allowed.extend(words(&e.at));
-            for f in &e.files {
-                allowed.extend(words(f));
-            }
-            if let Some(c) = &e.commit {
-                allowed.extend(words(c));
-            }
-            if let Some(p) = &e.proof {
-                allowed.extend(words(p));
-            }
-            if let Some(d) = &e.departure {
-                allowed.extend(words(&d.what));
-                allowed.extend(words(&d.why));
-                allowed.extend(words(&d.kind));
-            }
-            for n in &e.needs_you {
-                allowed.extend(words(&n.id));
-                allowed.extend(words(&n.what));
-                allowed.extend(words(&n.blocks));
-            }
+            allowed.extend(entry_words(e));
         }
         for heading in SECTIONS {
             allowed.extend(words(heading));
         }
-        allowed.push("blocks".to_string());
+        allowed.extend(COMPOSER_CONNECTIVES.map(str::to_string));
         // The whole extra vocabulary D12 buys, named as constants so this test
         // measures the marking rather than being widened by it.
         allowed.extend(words(SECTION_UNFINISHED));
@@ -3635,6 +5063,10 @@ nested:
                 "A section with nothing to report is dropped".to_string(),
             ],
             usage: vec!["skills/bee-hive/SKILL.md".to_string()],
+            token_usage: vec![
+                "usage: 2 session(s) — 1.6k tokens (main 1.3k, subagents 255; new 390, cached 1.2k)"
+                    .to_string(),
+            ],
         }
     }
 
@@ -3648,6 +5080,8 @@ nested:
             proof: None,
             departure: None,
             needs_you: vec![],
+            better: None,
+            fix_at: None,
         }
     }
 
@@ -3693,6 +5127,33 @@ nested:
         assert_eq!(letter.status, STATUS_UNREAD);
     }
 
+    /// e97cc9d4: the one token-usage line close printed reaches the letter,
+    /// verbatim and under its own heading — and a close that could read no
+    /// transcript grows no heading at all, which is `close_usage_line`'s
+    /// silence reaching the mailbox unchanged.
+    #[test]
+    fn the_feature_close_letter_carries_the_token_usage_line() {
+        let entries = vec![close_entry()];
+        let note = close_note();
+        let body = compose_body_with(&entries, &[note.clone()]);
+        assert!(
+            body.contains(&format!("## {SECTION_TOKEN_USAGE}")),
+            "the token-usage section is missing:\n{body}"
+        );
+        assert!(
+            body.contains(&format!("- {}", note.token_usage[0])),
+            "the stored usage line is not in the letter verbatim:\n{body}"
+        );
+        // Below the other three: cost is reference material, not the news.
+        let at = |heading: &str| body.find(&format!("## {heading}")).unwrap();
+        assert!(at(SECTION_USAGE) < at(SECTION_TOKEN_USAGE));
+
+        // No line rendered (no readable transcript) → no heading.
+        let silent = CloseNote { token_usage: vec![], ..note };
+        let body = compose_body_with(&entries, &[silent]);
+        assert!(!body.contains(&format!("## {SECTION_TOKEN_USAGE}")), "{body}");
+    }
+
     #[test]
     fn a_nightly_letter_never_grows_the_extra_sections() {
         // The other direction of D7's promise: "only in the feature-close
@@ -3729,6 +5190,7 @@ nested:
             architecture: vec!["   ".to_string()],
             behaviour: vec![String::new()],
             usage: vec![],
+            token_usage: vec![],
         };
         let body = compose_body_with(&entries, &[blank]);
         for heading in CLOSE_SECTIONS {
@@ -3748,9 +5210,7 @@ nested:
 
         let mut allowed: Vec<String> = Vec::new();
         for e in &entries {
-            allowed.extend(words(&e.what));
-            allowed.extend(words(&e.kind));
-            allowed.extend(words(&e.at));
+            allowed.extend(entry_words(e));
         }
         for list in note.lists() {
             for line in list {
@@ -3824,5 +5284,161 @@ nested:
         assert!(closed.filename().ends_with(&format!("-{}.md", short_run_slug("run-close"))));
         assert!(nightly.filename().ends_with(&format!("-{}.md", short_run_slug("run-night"))));
         assert_eq!(list_letter_files(root).len(), 2, "one letter per run, no extra file");
+    }
+
+    // ── D2 (aedb5be9): the close letter is filed at the close ───────────
+
+    /// Push `path`'s mtime `secs` into the past, so "the entries outran the
+    /// letter" is a fact the test STATES rather than a race it hopes to win on
+    /// a filesystem with coarse timestamps.
+    fn age_file(path: &Path, secs: u64) {
+        let old = filetime::FileTime::from_system_time(
+            std::time::SystemTime::now() - std::time::Duration::from_secs(secs),
+        );
+        filetime::set_file_mtime(path, old).unwrap();
+    }
+
+    /// An UNARMED store: the herding block is there, the owner's switch is
+    /// not — the attended session D9 files no run-end letter for.
+    fn attended_store(root: &Path) {
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+    }
+
+    #[test]
+    fn an_attended_close_files_its_letter_at_the_moment_of_the_close() {
+        // D2: the letter no longer waits for the run to end, and no longer
+        // waits for arming. An attended close leaves something to read.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        attended_store(root);
+        assert!(!armed(root), "this store is the attended one D9 excludes");
+
+        append_entry(root, "run-close", &sample_entry("2026-08-25T03:00:00.000Z", "Did a thing"))
+            .unwrap();
+        append_close_entry(root, "run-close", &close_entry(), &close_note()).unwrap();
+
+        let RunEnd::Filed(path) = file_close_letter(root, "run-close") else {
+            panic!("every close files its close letter, attended included (D2)");
+        };
+        assert_eq!(list_letter_files(root).len(), 1, "one run, one letter (D11)");
+
+        let letter = read_letter(&path).unwrap();
+        assert_eq!(letter.run, "run-close");
+        assert_eq!(letter.status, STATUS_UNREAD);
+        for heading in CLOSE_SECTIONS {
+            assert!(
+                letter.body.contains(&format!("## {heading}")),
+                "the close letter is missing {heading}: {}",
+                letter.body
+            );
+        }
+        // D9 is untouched: the RUN END of this same attended run still files
+        // nothing for a run that has no letter yet.
+        assert!(matches!(file_run_letter(root, "run-nothing"), RunEnd::NotArmed));
+    }
+
+    #[test]
+    fn a_run_end_after_a_close_letter_recomposes_the_same_one_file() {
+        // The advisor's P1: without this, an attended run's letter freezes at
+        // the close and the rest of the run is never in it.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        attended_store(root);
+        append_entry(root, "run-close", &sample_entry("2026-08-25T03:00:00.000Z", "Before close"))
+            .unwrap();
+        append_close_entry(root, "run-close", &close_entry(), &close_note()).unwrap();
+        let RunEnd::Filed(first) = file_close_letter(root, "run-close") else { panic!("filed") };
+
+        // The human reads it, and the run works on.
+        let mut read_back = read_letter(&first).unwrap();
+        read_back.status = STATUS_READ.to_string();
+        write_letter(root, &read_back).unwrap();
+        let filed_at = read_back.filed_at.clone();
+        append_entry(root, "run-close", &sample_entry("2026-08-25T06:00:00.000Z", "After close"))
+            .unwrap();
+
+        let RunEnd::Filed(second) = file_run_letter(root, "run-close") else {
+            panic!("an existing letter re-composes whatever the arming says (D2, D11)");
+        };
+        assert_eq!(second, first, "one run keeps ONE letter, rewritten in place (D11)");
+        assert_eq!(list_letter_files(root).len(), 1, "no second letter file (D11)");
+
+        let letter = read_letter(&second).unwrap();
+        assert_eq!(letter.filed_at, filed_at, "the filename stays stable");
+        assert_eq!(letter.status, STATUS_READ, "the human's read state survives");
+        assert_eq!(letter.items.len(), 3, "the post-close entry is in the letter");
+        assert!(letter.body.contains("- After close"), "{}", letter.body);
+        assert!(letter.body.contains("- Before close"), "{}", letter.body);
+    }
+
+    #[test]
+    fn a_close_lettered_run_that_then_goes_silent_is_still_recovered() {
+        // D12 met D2: "has a letter" no longer means "reached its end". A run
+        // whose entries OUTRAN its close letter is a candidate again.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        append_entry(root, "sess-dead", &sample_entry("2026-08-25T03:00:00.000Z", "Before close"))
+            .unwrap();
+        append_close_entry(root, "sess-dead", &close_entry(), &close_note()).unwrap();
+        let RunEnd::Filed(first) = file_close_letter(root, "sess-dead") else { panic!("filed") };
+        let filed_at = read_letter(&first).unwrap().filed_at;
+
+        // As long as nothing was recorded after the letter, the run is not a
+        // candidate at all — no letter is rewritten under the human.
+        dead_session(root, "sess-dead");
+        assert!(
+            silent_run_candidates(root, "sess-now").is_empty(),
+            "a letter that is still the whole run keeps the run out of the pass (D11)"
+        );
+
+        // Then the run works on and dies without reaching its end.
+        age_file(&first, 60);
+        append_entry(root, "sess-dead", &sample_entry("2026-08-25T07:00:00.000Z", "After close"))
+            .unwrap();
+
+        assert_eq!(silent_run_candidates(root, "sess-now"), vec!["sess-dead".to_string()]);
+        let outcomes = file_letters_for_silent_runs(root, "sess-now");
+        assert_eq!(outcomes.len(), 1);
+        let RunEnd::Filed(second) = &outcomes[0].1 else {
+            panic!("the run that outran its letter gets its unfinished mark (D12)");
+        };
+        assert_eq!(second, &first, "in place — one run, one letter (D11)");
+        assert_eq!(list_letter_files(root).len(), 1);
+
+        let letter = read_letter(second).unwrap();
+        assert!(letter.subject.starts_with(UNFINISHED_SUBJECT_MARK), "{}", letter.subject);
+        assert_eq!(letter.filed_at, filed_at, "the filename stays stable");
+        assert_eq!(letter.items.len(), 3, "the post-close entry is in the letter");
+        assert!(letter.body.contains("- After close"), "{}", letter.body);
+        assert!(letter.body.contains("2026-08-25T07:00:00.000Z"), "{}", letter.body);
+        // D14's sections the close recorded are still there.
+        for heading in CLOSE_SECTIONS {
+            assert!(letter.body.contains(&format!("## {heading}")), "{}", letter.body);
+        }
+
+        // And the pass is idempotent: the rewrite is now the whole run again.
+        assert!(silent_run_candidates(root, "sess-later").is_empty());
+    }
+
+    #[test]
+    fn a_close_letter_that_cannot_be_filed_is_said_and_never_doubles() {
+        // D10, fail-open: the close has already happened. The filing failure
+        // is REPORTED — the caller in `drivers/close.rs` warns and returns —
+        // and no second letter lands for this one run (D11).
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        attended_store(root);
+        append_entry(root, "run-close", &sample_entry("2026-08-25T03:00:00.000Z", "Did a thing"))
+            .unwrap();
+        let RunEnd::Filed(path) = file_close_letter(root, "run-close") else { panic!("filed") };
+        std::fs::write(&path, "someone deleted the fence\n").unwrap();
+
+        append_close_entry(root, "run-close", &close_entry(), &close_note()).unwrap();
+        let RunEnd::Failed(why) = file_close_letter(root, "run-close") else {
+            panic!("a second letter for one run is refused (D11)")
+        };
+        assert!(why.contains("remedy"), "a refusal names what to fix: {why}");
+        assert_eq!(list_letter_files(root).len(), 1, "nothing was written beside it");
     }
 }

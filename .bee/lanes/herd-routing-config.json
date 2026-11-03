@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The skill text is correct. Now I check the ship steps in bee-swarming, and the always-loaded AGENTS.md text.",
-    "asked_at": "2026-08-26T05:19:12.783Z",
-    "session": "fc596859-0d53-4166-8592-b9b4bc98fb52"
+    "subject": "Scan is back — with one important correction to record: `bee worktree merge` has no judge-debt door today, so that half is new code, not a c",
+    "asked_at": "2026-08-27T21:04:01.934Z",
+    "session": "6c826f6d-0970-4902-a994-c87f96d17650"
   }
 }

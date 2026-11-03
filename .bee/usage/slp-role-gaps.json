@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "slp-role-gaps",
+  "closed_at": "2026-10-15T13:18:57.917Z",
+  "sessions": [
+    {
+      "session_id": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 706,
+          "output": 194389,
+          "cache_write": 605863,
+          "cache_read": 105048724,
+          "new": 800958,
+          "cached": 105048724,
+          "total": 105849682
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5-5": {
+          "input": 474,
+          "output": 179378,
+          "cache_write": 755420,
+          "cache_read": 14774493,
+          "new": 935272,
+          "cached": 14774493,
+          "total": 15709765
+        }
+      },
+      "subagent_count": 11,
+      "started_ms": 1792059068199,
+      "ended_ms": 1792070330855,
+      "totals": {
+        "new": 1736230,
+        "cached": 119823217,
+        "total": 121559447
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 800958,
+      "cached": 105048724,
+      "total": 105849682
+    },
+    "subagents": {
+      "new": 935272,
+      "cached": 14774493,
+      "total": 15709765
+    },
+    "total": {
+      "new": 1736230,
+      "cached": 119823217,
+      "total": 121559447
+    }
+  }
+}

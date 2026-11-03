@@ -1,0 +1,147 @@
+{
+  "id": "psd-4",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Render Pi blocks into the shared agents skill tree only",
+  "action": "Per D1. Add pi to MARKER_RUNTIMES in devtools/skill_trees.rs and to RENDER_RUNTIMES in onboard/templates.rs. Make the onboarding render for the repo-agents root keep both bee:only codex and bee:only pi blocks (Pi and Codex both read .agents/skills). The repo-claude and repo-opencode roots, and the dev render-skill-trees outputs .claude-plugin/skills and .codex-plugin/skills, strip pi blocks like any off-runtime block. Keep the .bee-render.json sidecar schema unchanged. Write tests first: a source with claude, codex, and pi blocks renders codex and pi text into the agents root, only claude text into the claude root, and no pi text into the opencode root or either plugin tree; a marker-free file stays byte-identical everywhere; a bee:only pi marker passes marker validation.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- render skill_trees",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/src/onboard/render.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+    "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/render.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "deps": [],
+  "decisions": [
+    "a20cf301",
+    "15109d96"
+  ],
+  "must_haves": {
+    "truths": [
+      "The agents skill root keeps codex and pi blocks",
+      "The claude root, the opencode root, and both plugin trees contain no pi block text",
+      "Marker-free skill files render byte-identical",
+      "A bee:only pi marker validates in both marker label lists"
+    ],
+    "prohibitions": [
+      "No change to Claude-rendered skill bytes for existing sources",
+      "No render sidecar schema change"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-4b",
+    "outcome": "pi joins both marker label lists (templates.rs RENDER_RUNTIMES, skill_trees.rs MARKER_RUNTIMES); onboard render.rs render_skill_bytes keeps pi blocks for the codex agents-root render only; claude/opencode roots and devtools plugin trees strip pi; sidecar schema unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/render.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: approved plan sets affects_skills empty for psd-4: this cell only adds the pi marker label and agents-root render rule; skill text that uses bee:only pi blocks lands in other pi-stage-dispatch cells"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T09:37:19.522Z",
+    "behavior_change": false,
+    "verification_evidence": "140 passed; the cell verify filter covers the touched render and skill_trees code plus the new onboard pi test",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- render skill_trees",
+    "claimed_at": "2026-09-15T09:33:14.396Z",
+    "verified_at": null,
+    "sync_ack": "approved plan sets affects_skills empty for psd-4: this cell only adds the pi marker label and agents-root render rule; skill text that uses bee:only pi blocks lands in other pi-stage-dispatch cells",
+    "mistakes": [
+      {
+        "wrong": "git add in the shared worktree was refused by the concurrent-worker guard",
+        "better": "use a path-scoped git commit -- <paths> from the start when siblings are live"
+      }
+    ],
+    "report": {
+      "outcome": "Pi blocks render into .agents/skills only; claude, opencode, and both plugin trees strip them",
+      "commit": "b49c3be7b8e5b3ca028f1049df635c461d57d46c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/render.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- render skill_trees — green:unit — 140 passed; the cell verify filter covers the touched render and skill_trees code plus the new onboard pi test",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "git add in the shared worktree was refused by the concurrent-worker guard — use a path-scoped git commit -- <paths> from the start when siblings are live"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "psd-4-truth-agents-keeps-codex-and-pi",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- skills_with_claude_codex_and_pi_blocks_render_per_d1_into_managed_roots: passed onboard::tests::skills_with_claude_codex_and_pi_blocks_render_per_d1_into_managed_roots; render.rs:434"
+          },
+          {
+            "id": "psd-4-truth-other-trees-strip-pi",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- devtools::skill_trees::tests::pi_only_content_never_lands_in_either_plugin_tree: passed; onboard/tests.rs:1764,1774 and skill_trees.rs:896-915"
+          },
+          {
+            "id": "psd-4-truth-marker-free-identical",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/onboard/tests.rs:1791-1793 and skill_trees.rs:911-914 assert byte identity of marker-free content across all trees; render.rs:420-440"
+          },
+          {
+            "id": "psd-4-truth-marker-validation",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- pi_marker_label_is_accepted_and_filters_like_the_others: passed onboard::render::tests::pi_marker_label_is_accepted_and_filters_like_the_others; templates.rs:350, skill_trees.rs:48"
+          },
+          {
+            "id": "psd-4-prohibition-claude-bytes-unmodified",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- devtools::skill_trees::tests::render_matches_the_committed_trees: passed; skill_trees.rs:48-52"
+          },
+          {
+            "id": "psd-4-prohibition-sidecar-schema-unchanged",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/onboard/tests.rs:1804 asserts sidecar schema is \"bee-render/2\"; templates.rs:351, skill_trees.rs:50"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-15T11:21:00.005Z"
+      }
+    ]
+  },
+  "role_reroutes": [
+    {
+      "from": "code",
+      "to": "plan",
+      "decision": "df429f87-a3ce-49a2-9017-16d16d60e4f0",
+      "at": "2026-09-15T09:33:14.319Z",
+      "plan_sha256": "295bd671b0b999e57f1f3cd5cd58927c5aa9c2f58682205c68407c735bc9104c"
+    }
+  ]
+}

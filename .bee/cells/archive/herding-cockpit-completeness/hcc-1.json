@@ -1,0 +1,91 @@
+{
+  "id": "hcc-1",
+  "feature": "herding-cockpit-completeness",
+  "title": "Add job marks (interrupted/cancelled/cancel_pending) to job.json with read and write helpers",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "c943feb9",
+    "7172010b",
+    "afec9446"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::mailbox",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/CONTEXT.md",
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In mailbox.rs add a small `pub(crate) enum Mark { Interrupted, Cancelled, CancelPending }` with `as_str()` returning exactly `interrupted` / `cancelled` / `cancel_pending` (D8 word list, afec9446) and `parse(&str)`. Add `pub(crate) fn read_mark(bee_dir: &Path, job_id: &str) -> Option<(Mark, Option<String>)>` that reads job.json fields `mark` and `mark_reason` (None when absent or unreadable), `pub(crate) fn write_mark(bee_dir, job_id, mark: Mark, reason: &str) -> Result<(), String>` that read-modify-writes job.json setting `mark`, `mark_reason`, `mark_at` (ms epoch), and `pub(crate) fn clear_mark(bee_dir, job_id) -> Result<(), String>` that removes those three keys (used when `--continue` resumes an interrupted job, D1 c943feb9). Reuse the existing `job_path` helper (mailbox.rs:65) and the file-write style already used in this module; no new dependency. Keep every existing job.json key untouched (no-new-key law: the three keys exist only while a mark holds). Add unit tests beside the existing mailbox tests: round-trip write then read for each variant, clear removes all three keys and keeps other keys, read on a job without a mark returns None, read on a missing dir returns None.",
+  "must_haves": {
+    "truths": [
+      "write_mark then read_mark returns the same mark and reason",
+      "clear_mark leaves job.json without mark, mark_reason, mark_at and keeps every other key",
+      "Mark::as_str yields exactly interrupted, cancelled, cancel_pending"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "substantive": "Mark enum, read_mark, write_mark, clear_mark with tests, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "hcc-3 and hcc-4 call read_mark/write_mark/clear_mark from mailbox.rs"
+    ],
+    "prohibitions": [
+      "No new file",
+      "No change to ACTIVITY_FRESHNESS_SECS or any existing helper signature",
+      "No new crate dependency"
+    ]
+  },
+  "trace": {
+    "worker": "w-hcc-1",
+    "outcome": "Mark enum plus read/write/clear mark helpers on job.json",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal mailbox.rs helpers with no surface change; the bee-herding skill sync is hcc-10's docs cell after hcc-3..9 land"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T09:49:02.958Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T09:30:49.431Z",
+    "sync_ack": "internal mailbox.rs helpers with no surface change; the bee-herding skill sync is hcc-10's docs cell after hcc-3..9 land",
+    "plan_followed": true,
+    "mistakes": [
+      {
+        "wrong": "worker hcc-1-w1 committed and wrote result-1.json but never ran bee cells finish",
+        "better": "the brief should put the finish command before the result-file step so the cap is never the skipped last step"
+      }
+    ],
+    "report": {
+      "outcome": "Mark enum plus read_mark/write_mark/clear_mark on job.json with six unit tests",
+      "commit": "821265a030fc4122c4309650b52f0a14872a0dd2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::mailbox — green:unit — 54 passed with the six mark tests listed by name; touched mailbox.rs only",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "worker hcc-1-w1 committed and wrote result-1.json but never ran bee cells finish — the brief should put the finish command before the result-file step so the cap is never the skipped last step"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 236 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

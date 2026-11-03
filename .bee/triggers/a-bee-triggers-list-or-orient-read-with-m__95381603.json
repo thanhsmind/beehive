@@ -1,0 +1,11 @@
+{
+  "id": "a-bee-triggers-list-or-orient-read-with-m__95381603",
+  "decision": "95381603",
+  "condition": "A bee triggers list or orient read with many open path-changed findings is noticeably slow; then replace per-trigger git log with one git log --name-only <oldest anchor>..HEAD matched in memory",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-21T22:30:57.329Z",
+  "updated_at": "2026-09-21T22:30:57.329Z",
+  "outcome": null
+}

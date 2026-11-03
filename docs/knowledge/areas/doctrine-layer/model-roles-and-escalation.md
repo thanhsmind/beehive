@@ -2,14 +2,14 @@
 type: bee.area
 title: Doctrine Layer — model roles, fall-through, and escalation
 description: "How work says which model should run it: an open set of job-named roles resolved through one parser, an ordered fall-through that warns instead of failing, cost held apart as an explicit escalation flag, and an explicit-only retry chain that never fires on a semantic failure."
-timestamp: 2026-08-25
+timestamp: 2026-08-26
 bee:
   id: doctrine-layer-model-roles-and-escalation
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1]
-  sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md"]
+  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9, deploy-stage-execution D1, effort-at-the-door D2/D4/D4a/D5/D7/D10]
+  sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md", "role-slot-description cell rsd-1 (capture stub c1952702, flushed 2026-08-26)", "models-show-verb cells ms-1..ms-3 (capture stub feeed5df, flushed 2026-08-26)", "agent-model-unpin cells amu-1/amu-2 (capture stub 003a23fc, flushed 2026-08-26)"]
   authoritative_for: "doctrine-layer: how a unit of work selects the model that runs it"
 ---
 
@@ -26,7 +26,7 @@ that keep an open set safe, and the separate lever cost moved onto.
 
 ## Behaviors & Operations
 
-**B1 — One parser owns the `models.<runtime>` shape** (model-role-split D1,
+**B1 — One parser owns the `team.<runtime>` shape** (model-role-split D1,
 store `cd72ec97`). A single `resolve_role` in the drivers module reads the
 config; the model guard calls through to it rather than carrying a second
 implementation, and `resolve_advisor` collapses the same way. Why it is first
@@ -39,7 +39,7 @@ already drifted four entries against five with nothing intending it.
 `06e49368`). A consumer names an ordered *list* of role names. An unset or
 unresolvable name yields to the next; the last entry is always a name bee
 resolves, so no existing host changes model when the feature lands. Any name
-present in `models.<runtime>` is legal — the guard asks "is this configured",
+present in `team.<runtime>` is legal — the guard asks "is this configured",
 never "is this one of four words". `CLAUDE_TIERS` and `CODEX_TIERS` end as
 hand-maintained closed lists. A name nothing configures is **warned on stderr**,
 never silently accepted and never a refusal. Falling through on an *absent*
@@ -73,7 +73,7 @@ information in `tier` meant budget rather than model choice, and 20 of them said
 `ceiling`. Holding cost apart also preserves decision `0015` with no carve-out:
 `ceiling` is not a role name at all, so the open set needs no exception for it —
 and since role-edge-hardening D1, `0015` has teeth: a configured
-`models.<rt>.ceiling` key is named by the config validator for every value
+`team.<rt>.ceiling` key is named by the config validator for every value
 shape, with a teach line pointing at `bee cells escalate`, instead of being
 silently accepted and then poisoning a dispatch with the marker-plus-model
 pair the guard denies.
@@ -88,8 +88,9 @@ treats a present flag key of either value as final. The disarm door writes the
 explicit false only on cells that carry the legacy spelling; every other cell
 keeps absent-means-absent. Before this, `bee cells escalate --off` reported
 success and disarmed nothing on exactly the 20 cells the live backfill
-converted, and a later pass re-armed even a hypothetically effective disarm —
-the red test's own output showed a recorded `false` flipped back to `true`.
+converted, and a follow-on migration pass re-armed even a hypothetically
+effective disarm — the red test's own output showed a recorded `false`
+flipped back to `true`.
 
 **B6 — Accounting follows the split** (model-role-split D6, store `97ce5225`).
 The tier-mix count at close becomes a role mix plus an escalation share, and the
@@ -144,11 +145,145 @@ extraction model. It was recorded as an open question and answered, never
 silently dropped — the answer is in `docs/history/model-role-split/plan.md`
 ("D12's fate").
 
+**B12 — A role slot may describe itself, and only the door line reads the
+description** (role-slot-description, cell rsd-1, PBI p-a1399c00; display order
+amended by leader-sees-team D1 and D4 on 2026-09-09 — the leader chooses a team
+member by job, so every read surface leads with role and description and shows
+the transport last). A
+`team.<runtime>` role slot may carry an optional description string.
+Exactly one surface renders it: the dispatch-door roles line, reading the
+RAW config and clipping to 60 characters, as `name=model ("desc")`. The
+normalizer drops the field, which is what keeps resolution, the model
+guard, and dispatch prepare blind to it — a display string can never
+steer a dispatch. The validator already tolerated unknown keys; that
+tolerance is now pinned by test. Amended by leader-sees-team D4
+(2026-09-09): the dispatch-door roster prints every role with no
+descriptions and no six-role cap; descriptions appear only in `bee team
+show`. Amended by token-thrift D4 (2026-10-21): the roster prints one line
+per distinct rendered target, `- <target>: <role>, <role>`, with every role
+in full and no 60-character cut
+(`areas/hook-runtime/token-economy-of-injected-context.md`).
+
+**B13 — `bee team show` is the one read door for the role table**
+(models-show-verb, cells ms-1/ms-2/ms-3, PBI p-0a5e6c44; the rule that the
+leader picks by job and the transport is config ships to every host under
+leader-sees-team D3 — one sentence in the rendered AGENTS.md block, the
+delegation contract and the worker prompt; renamed from
+`bee models show` by team-config-rename D1 on 2026-09-09, when the config block
+itself went from `models.<runtime>` to `team.<runtime>` — the block is the
+leader's roster of who does which job, not a list of model ids, and the old
+name made agents read it as one. `models` is still read as an alias, folded
+into `team` once at config load (team-config-rename D2): `team` wins when both
+are present, a `models`-only config gets one `note legacy_models_key` line from
+`bee doctor` and one line in the preamble's Dispatch door, and `bee models
+show` still runs with one stderr notice.) It prints the
+raw `team.<runtime>` slots verbatim — description intact — plus the
+built-in defaults, each row source-marked. `bee status --json` keeps
+descriptions display-only; the default config seeds described roles; and
+the missing-role refusal and the `bee cells add` help both send an
+author to this verb before assigning a role. Resolution, guard, and
+dispatch are untouched by the verb — it reads, never resolves. Amended
+by leader-sees-team D4 (2026-09-09): `team show` resolves for display
+(role, source, description, model, transport) and still writes nothing;
+the roster is one role per line.
+
+**B14 — A rendered agent file carries no model pin; the dispatch payload
+is the one authority** (agent-model-unpin, cells amu-1/amu-2). On the
+first runtime, rendering a known agent file is unconditional and writes
+no `model:` line — the model reaches the worker only through the
+dispatch payload's model param. The drift check flips accordingly: a
+PRESENT model line in an agent file is the drift, not a missing one.
+Opencode is unchanged on purpose — there the rendered file IS the
+enforcement (see Open Gaps).
+
+**B15 — Blind-lane and hat-wave seats carry their own roles, and an empty
+seat yields to the advisor** (lane-model-diversity D1/D2/D3/D4/D5). The
+eight seat names — `lane-1..lane-3` and `hat-facts-gaps`,
+`hat-risks`, `hat-value`, `hat-alternatives`, `hat-user-impact` — live in
+`SEAT_ROLES` beside `tier_role_list` in the drivers module (case-folded
+membership), and each configures a model in the same open `team.<runtime>`
+table as every other role (D1). On `--kind advisor` only, a declared seat
+whose slot resolves nothing — absent, null, or shapeless — rebinds to the
+advisor slot instead of refusing, keeping `resolve_advisor`'s one-name
+no-floor walk as the tail and stamping the marker `advisor` while the
+dispatch record keeps the asked-for seat as `economics.requested_role`
+(D2/D4); every other kind, and every non-seat name, keeps the
+`role_not_configured` refusal. A configured `hat-*` slot without a
+`description` is a `bee doctor` advisory, never a resolution input — the
+display-only law of B12 stands (lane-model-diversity D3, venue decision).
+The two procedure homes in `gates-and-delegation.md` name the seats and
+point back at `SEAT_ROLES` as the constant of record (D5).
+
+**B15a — Planning's plan check rides the advisor-kind hat seats, not the
+`review` tier** (proactive-leader-intake D4, decision `b34fdea9`). The old
+merged plan reviewer was a `review`-role dispatch; it is retired as a seat
+holder. The plan check is now the plan-step hat wave — three `hat-*` seats by
+default, five on high-risk — dispatched `--kind advisor`, which is the one
+kind whose empty-seat rebind (B15) applies, so a host that configured no
+`hat-*` slot still gets the wave through its advisor slot instead of a
+`role_not_configured` refusal. Only the Structure mandate moved with it: the
+cold-pickup cell review stays with the leader, and the `review` role keeps its
+other consumers (bee-reviewing's specialists, exploring's fresh-eyes) plus its
+`null` fallback to generation. No constant changed — `SEAT_ROLES` and the
+resolution path are untouched; what moved is which skill asks for which kind.
+A `hat-*` advisor prompt carries a seat block on every runtime: the seat name
+and a pointer to its row in `gates-and-delegation.md` "Hat wave", never a
+copy of the instrument or the configured description; a non-hat advisor
+prompt is byte-identical (pi-stage-dispatch D5). `bee dispatch prepare` and
+`bee state advisor-ref record|show` serve from main's store when run inside a
+granted feature worktree, where every other verb still refuses; a non-cell
+dispatch with no `--feature` resolves its feature from the bound lane, then
+the granted worktree it runs in, then main's default `state.json` feature
+(pi-stage-dispatch D6/D7).
+
+**B16 — `team.pi` is a herding-only role table with a settled value set**
+(pi-support D5/D6). The pi runtime resolves roles from the same one config
+home, but every slot must resolve `kind: herding` — the dispatch door's
+`pi_requires_herding` refusal covers plain-string, native, cli, budget and
+the escalation path by construction, because Pi has no subagent surface.
+The settled values (pi-support D6): heavy roles (code, test, docs, review)
+ride herding agents running `claude --model opus`, advisor rides
+`claude --model fable`, and the cheap roles (read, extraction, generation,
+supervisor) ride `agy-flash` — herding constrains the transport, never the
+model vendor. Delivery status (pi-result-mailbox): a Pi worker's result
+returns, and the path to plan on is the SYNCHRONOUS one every runtime
+shares — `bee herding run`'s own output, carrying `report_path` when the
+worker wrote a report. The Pi-only async half is opt-in per dispatch
+(`--inbox-session <token>`) and carries named limits: at-least-once
+delivery with `job_id` as the dedupe key, a drain that needs a live Pi
+session, and header-only injection (the report body is never injected).
+This rule held through pi-stage-dispatch (pi-stage-dispatch D9): its seat name, hat ceiling, detached
+runner, and worktree dispatch door all ride herding, and the supported host is
+`@earendil-works/pi-coding-agent` 0.84–0.85.
+See `docs/config-reference.md`, "Pi — team.pi is herding-only".
+
+**B17 — A gather asks for the read job** (gather-reads-the-read-slot D1/D3,
+store `295f3d03`). A `--kind gather` dispatched with no `--role` resolves the
+`read` slot, walking `[read, generation]` and taking the first name the host
+configures. `extraction` is NOT in that tail, and its absence is the decision:
+extraction was the tier era's cheapest slot and never the gather slot, so a
+legacy host that configures `extraction` + `generation` and no `read` keeps its
+gathers on `generation` byte for byte — a walk through extraction would move
+them onto the cheapest model silently, the exact downgrade B2's fall-through
+rule exists to prevent. The read-shaped CELL list is a different consumer with
+a different history (B8 backfilled `tier: extraction` cells to `role: read`)
+and stays `[read, extraction, generation]`; the two lists differ on purpose and
+each says why. The agent comes from the ASKED name and the kind, never from the
+winner: a role-less gather pins `bee-gather` whichever spelling of the read job
+won, while `--kind gather --role extraction` — or `--role read`, the same job
+under its other spelling — keeps B11's `bee-extract`. A broad multi-file hunt
+is therefore the ROLE-LESS gather, never `--role read`, and the seeded `read`
+description says so. The
+name that won the walk is the name the dispatch travels under — `[bee-tier:
+<winner>]` and `economics.logical_tier` — on this path and on the cell-role
+path; every other path keeps its asked name, so a review-less host's reviewer
+is untouched.
+
 ## The one deliberate silent case
 
 Every rule above refuses or warns rather than resolving silently, with a single
 exception that is deliberate and bounded: `code` or `read` asked on a runtime
-whose `models.<runtime>` configures neither of them. That is the pre-roles
+whose `team.<runtime>` configures neither of them. That is the pre-roles
 migration window, and it closes the moment either key is **written** — an
 explicit null counts, because a written key means the operator knows the
 vocabulary, and a present-but-null name resolves Budget at its own slot rather
@@ -177,6 +312,104 @@ can ever travel under — is warned by name instead of dying silently.
   `areas/doctrine-layer/delegation-threshold.md`. Roles answer "which model",
   never "should this be delegated".
 
+
+**B18 — Plan-time role assignment is an explicit planning output** (semantic-role-routing D1, decision `fc2bb09a`). After locked decisions are cited, the planner reads team role descriptions (`bee team show`), assigns each stage and job to the semantically fitting role, and records the assignment in `plan.md` (under `## Role assignments`) or the scoping synthesis. Execution dispatches must follow this approved assignment. A newly discovered stage or a required role change during execution needs a logged decision with tag `role-reroute` (`bee decisions log --relation touches:<id> --tag role-reroute`), never an ad hoc role choice at dispatch time. This does not change the open set of roles (B2), the cell's role as sole selector (B4), or the fall-through resolution (B2/B9) — only the step at which the assignment is made, from dispatch-time leader prose to planning-time structured output.
+
+**B19 — Approved role plans enforce at dispatch and native guard doors** (semantic-role-routing D3, decision `68bc3484`). Under `bee-plan/v2`, Gate 2 approval stores immutable `role_plan` data alongside cells. Dispatch preparation derives cell role identity from the approved cell, refusing an explicit mismatched `--role` before building a payload. Non-cell dispatches under v2 require an explicit `--stage`, refusing missing, unknown, or not-applicable stages. Native dispatch guards verify anchored feature and stage markers against the approved plan. The cell's escalation flag still outranks the planned role (open-issues-sweep D1, issues #109, #111, #113): an escalated cell resolves the session model with no herding command on a v2 feature too, and only an explicit `--role` on the command line outranks the flag.
+
+**B20 — Structured cell rerouting requires a tagged decision and claim lock** (semantic-role-routing D4, decision `68bc3484`). `bee cells reroute --id <id> --role <role> --decision <id>` acquires the cell claim lock, validates that the cited decision belongs to the feature and carries tag `role-reroute`, ensures the target role is configured for the plan's runtime, and records an audited entry in `role_reroutes[]`. This provides the verified revision door for cell role changes while leaving the approved plan packet immutable.
+
+**B20a — Per-role toolset narrowing was built elsewhere and then abolished;
+bee does not build it.** A distill of `ak-pi-workflow-roles` at commit
+`e401f195` found bee already owning 14 of that source's 20 role-architecture
+rows. Four were genuinely new and worth having: a per-Pi-version capability
+audit table, the role's own description reaching the worker's prompt, a
+measured note per herding agent, and the reviewer reading the retained
+artifact. The finding that saved the most work is negative: the source BUILT
+per-role toolset narrowing and then abolished it (ADR 0008 amended by ADR
+0064). A source that tried a thing and retired it is stronger evidence than one
+that never tried it, so this stays unbuilt here by decision, not by omission.
+Brief: `docs/history/research/ak-pi-workflow-roles-xia.md`.
+
+**B21 — Release execution requires deploy authorization** (semantic-role-routing D6, decision `c0a4d406`). Publishing a release version through `scripts/release.sh` requires an authorized dispatch permit (`bee dispatch authorize`) issued for stage `deployment` and role `deploy`. The permit binds version, plan hash, main commit, and issuer session with a two-hour lifetime; direct script calls and replayed permits are refused. `bee dispatch prepare` stamps `issuer_session` through the same resolver `bee dispatch authorize` uses for the acting session — the `--session-id` flag, then `BEE_SESSION_ID` / `CLAUDE_CODE_SESSION_ID` / `PI_SESSION_ID`, then the one live session — so a flagless prepare on pi no longer writes a record that authorize can never accept (deploy-issuer-session, cell `dis-1`).
+
+**B22 — Deployment-stage dispatch permits authorized release mutation rooted at main** (deploy-stage-execution D1, decision `38edea83`). The shared delegation contract permits mutation only for an authorized deployment stage; ordinary gather remains explicitly read-only. Preparing a deployment-stage dispatch (`--stage deployment` with role `deploy`) produces an explicit mutating execution brief naming the authorized version and the positional `scripts/release.sh <version>` command. The herding command sets `--cwd` to the main control root unconditionally, even when the feature has a granted worktree. Deployment requests require an approved v2 role plan and refuse on non-main branches before payload creation; authorization checks and one-use permit consumption (B21) remain unchanged. The herding command exports `BEE_DISPATCH_ID`, `BEE_RELEASE_VERSION` and the resolved issuer `BEE_SESSION_ID`, and `bee herding run` forwards those three into the worker pane, so `release.sh` there authorizes as the issuer session (deploy-pane-authorization, cell `dpa-1`). A deployment-stage herding payload never carries the read-only flag; plain gather and advisor payloads keep it (open-issues-sweep, decision `e0da7c92`, issue #126).
+
+**B23 — A release is a lane, not a command.** B21 and B22 compose into an
+ordering: `scripts/release.sh` refuses without a permit, the permit needs a
+dispatch at stage `deployment` under role `deploy`, and that dispatch needs an
+approved `bee-plan/v2` plan carrying a role plan — so a release needs its own
+feature lane opened before the script can run at all. Three ordering rules fell
+out of doing one. `--release-version` is refused on `--kind cell`, because the
+deploy dispatch is a NON-cell kind plus `--stage deployment`. The permit pins
+`main_commit`, so every piece of bookkeeping must be committed BEFORE the
+permit is minted, not after. And the cell packet must pass `cells add
+--dry-run` before the gate, because `.claude-plugin/plugin.json` is a
+release-manifest root and the regen obligation would otherwise force a
+plan-rev bump after approval — which retires the gate you just took. The
+previous release's `docs/history/release-<version>/` is the template to copy;
+reading it first is what avoids rediscovering all three.
+
+**B24 — The door moves effort by kind and lane; the leader passes none**
+(effort-at-the-door D1-D10 and effort-at-the-door D4a; D6 keeps fast
+mode out of the door — a session toggle the user owns). A role slot's `effort` in
+`team.<runtime>.<role>` is the base on the closed scale `low < medium < high <
+xhigh < max`. `bee dispatch prepare` moves it one ladder, `EFFORT_LADDER` beside
+`EFFORT_LEVELS` in `models.rs`, and clamps at both ends: `cell/high-risk` +1,
+`cell/tiny` −1, `cell/small` 0, `cell/standard` 0, `cell/spike` 0, `gather` −2,
+`advisor` −1, `reviewer` 0. A role with no `effort` gets none and the step reads
+`no-base` — so nothing moves until a role sets `effort`, and `bee team show`
+says so on its `effort ladder:` line (`— idle: …`, `effort_ladder_idle` in
+`--json`). The leader passes no effort; the door's value is what the payload
+carries. The door writes `[bee-kind: <kind>]` on every native payload and
+`[bee-lane: <lane>]` for a cell, and the model guard recomputes the same
+function from those tokens with config as the base: on the claude leg a
+missing or different `Agent` `effort` is REPAIRED to the computed value, the
+AO5 posture of the model repair; the codex leg compares `reasoning_effort`
+and denies a mismatch as before; no `[bee-kind:]` token is allowed unchanged.
+`derive_economics` carries `effort`, `effort_base`, `effort_step` and
+`effort_reason` after `enforcement`, so the audit is a grep over the dispatch
+log: `rg '"effort":"max"' .bee/logs/dispatch.jsonl` (or any other value). The
+herding arm carries no effort until `bee herding run` gains a per-run thinking
+flag (Open Gaps).
+
+## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
+
+<!-- bee:not-a-deferral: This section records rejected transport alternatives and the current decision; it promises no future work. -->
+The premise behind `pi_requires_herding` is that Pi ships no **built-in**
+Task/Agent tool, which is true. The stronger reading — that herding is Pi's only
+possible fan-out — is not. A study of pi 0.84.4 found three unused paths:
+`pi.registerTool()` works at runtime and Pi ships a working subagent example
+extension that spawns pi child processes from markdown agent definitions; the Pi
+SDK's `createAgentSession` gives in-process child sessions; and `pi --mode rpc`
+gives headless children.
+
+The user was shown all three on 2026-09-02 and **declined** then: Pi dispatch
+stayed herding-only (store `9f5c6d17`), and `pi` means the pi binary 0.84.x
+alone, not omp (store `5d87f14e`). So the rule stood on a choice about one
+transport, not on an absence of alternatives.
+
+**That choice was reversed on 2026-09-18.** `9f5c6d17` is superseded by
+`0d11a415`: Pi worker dispatch gains a native path beside herding, and native
+is now the DEFAULT with herding as the fallback (`pi-native-stage-driver` D1).
+`0d11a415` was itself amended by `31fb9e15` — the child `pi` process is spawned
+from Rust inside `bee herding run`, NOT from the extension, so the belt still
+carries no dispatch tool and no spawner and model-guard stays a named exclusion
+on it. The 2026-09-02 study is why the reversal was cheap when it came: the
+paths were already mapped. Read the 2026-09-02 "declined" as a dated choice,
+never as the current rule.
+<!-- /bee:not-a-deferral -->
+
+**`pi` and `omp` are two different binaries.** Both were installed side by side
+on the development machine: pi (`@earendil-works/pi-coding-agent`) and omp
+(`github:can1357/oh-my-pi`, `~/.omp` paths). bee supports pi only — there is no
+`.omp` directory and no omp entry among the runtimes. omp loads legacy pi
+extensions, rewriting the old import paths and shimming the trust call, so an
+extension written to pi's **narrower** surface runs on both while the reverse is
+false. A belt meant to reach two targets therefore stays inside the portable
+core: the extension factory, `on(session_start|tool_call|tool_result)`,
+`registerTool`, `registerCommand`, and `sendMessage`/`appendEntry`.
+
 ## Open Gaps
 
 - The escalation ration's denominator moved from `ceiling / tiered` to
@@ -184,6 +417,22 @@ can ever travel under — is warned by name instead of dying silently.
   denominator reads 0 once `role` is required — and is argued at all three code
   sites, but D5's wording still says the ration is "unchanged in force".
 - On opencode the rendered agent file is the enforcement rather than a dispatch
-  model param, so a configured `models.opencode.code` is currently ignored.
-- `role` is the one required field with no revision door: it is absent from the
-  cell `UPDATE_FIELDS` list and is not named as frozen either.
+  model param, so a configured `team.opencode.code` is currently ignored.
+- `role` previously lacked a revision door; this was settled by `bee cells reroute`
+  under decision `68bc3484` (B20).
+- A herding dispatch carries no effort (B24): `bee herding run` has no per-run
+  thinking flag (`herding/run.rs` `parse_options`), so the ladder stops at the
+  native and codex sinks until that flag exists.
+
+## Pointers (implementation)
+
+- The scale, the ladder and the one function `effort_for_dispatch`:
+  `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs`.
+- The door that applies the step and writes `[bee-kind:]`/`[bee-lane:]`:
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`.
+- The four economics keys: `derive_economics` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs`.
+- The recompute-and-repair (claude) and deny (codex) legs:
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`.
+- The `effort ladder:` line, the `model/effort` cell and the JSON keys:
+  `packages/bee-rs/crates/bee/src/verbs/models_group.rs`.

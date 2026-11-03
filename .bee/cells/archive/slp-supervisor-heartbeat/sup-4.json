@@ -1,0 +1,62 @@
+{
+  "id": "sup-4",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Make every shipped supervisor command spelling schema-valid",
+  "lane": "standard",
+  "role": "code",
+  "status": "dropped",
+  "deps": [
+    "sup-3"
+  ],
+  "decisions": [
+    "322695d6"
+  ],
+  "files": [
+    "skills/bee-herding/references/supervisor-prompt.md",
+    "docs/history/research/slp-blind-lanes-surfaces.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Fix-first cell: the full suite is red on one deterministic test — hooks::cli_shape::documented_invocations::no_shipped_command_spelling_is_refused_by_the_widened_guard. It extracts fenced/backtick bee command spellings from shipped files and refuses 2: (1) skills/bee-herding/references/supervisor-prompt.md:92 — the fenced `.bee/bin/bee supervisor record --kind observation|silence \\` line lacks --note and uses pipe-alternation in a runnable spelling; rewrite the example as ONE complete, schema-valid invocation (e.g. --kind observation --signal struggling-loop --note \"...\") or use the exact exclusion style the test already honors (see cli_shape.rs:1134-1136, U+2026 ellipsis) — keep the vocabulary words the prompt-pinning test needs (KNOWN_KINDS/KNOWN_SIGNALS all still present in the prompt). (2) docs/history/research/slp-blind-lanes-surfaces.md — run the test, read its refusal, and repair that spelling the same way; it is a research doc, prose meaning must not change. Run the failing test to red first, fix, re-run to green, and also re-run the control_loop prompt tests (the_shipped_prompt_pins_the_record_verbs_own_closed_sets must stay green).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml no_shipped_command_spelling && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml control_loop",
+  "must_haves": {
+    "truths": [
+      "no_shipped_command_spelling_is_refused_by_the_widened_guard passes",
+      "the_shipped_prompt_pins_the_record_verbs_own_closed_sets still passes"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-herding/references/supervisor-prompt.md",
+        "substantive": "example invocation schema-valid or exclusion-styled; observer contract text unchanged in meaning"
+      }
+    ],
+    "key_links": [
+      "prompt still names bee supervisor record as the tick's one required write"
+    ],
+    "prohibitions": [
+      "No change to cli_shape.rs or any test to make it pass",
+      "No behavior change to the supervisor role"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "Superseded: the NEEDS_REVISION verdict reopened sup-3 itself; the fix is sup-3's revision round, a separate cell is redundant"
+  }
+}

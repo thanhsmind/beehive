@@ -141,14 +141,14 @@ sequenceDiagram
     O->>B: cells add --stdin
     O->>B: dispatch prepare --claim (from MAIN checkout)
     B->>S: claim cell + reserve files
-    B-->>O: rendered worker prompt + tier/model
+    B-->>O: rendered worker prompt + role/model
     O->>W: spawn with that prompt (inside the worktree)
     W->>S: edit reserved files, one commit (cell: id trailer)
     W->>B: cells finish --id
     B->>S: cap — commit-only proof, records its own proof line
     W-->>O: [DONE] / [BLOCKED] / [HANDOFF] / [NOOP]
     O->>B: bee close --feature (checks each cap's recorded proof line unconditionally, retires cells)
-    O->>B: worktree merge --id (auto-commit .bee + this feature's docs/history,<br/>refuse and NAME anything dirty outside those, verify green, worktree removed)
+    O->>B: worktree merge --id (auto-commit the bookkeeping roots,<br/>refuse and NAME tracked dirt outside them — an untracked bystander passes,<br/>check dissent/nudge/uat doors, keep the worktree unless told otherwise)
     O-->>U: outcome + capture line
     Note over O: scribing + compounding later,<br/>at the owner's pace
 ```
@@ -253,7 +253,7 @@ flowchart TB
     H3 -->|"edit before Gate 2 (gated phase:<br/>only .bee/, docs/history/, plans/, AGENTS.md)<br/>secret-shaped path<br/>generated tree<br/>foreign worktree path"| DENY["DENY — names its remedy<br/>(the fix is in the message)"]
     H3 -->|otherwise| ALLOW["allow"]
     E3 --> H4{"model-guard"}
-    H4 -->|"dispatch without a tier"| REPAIR["repair or refuse the dispatch"]
+    H4 -->|"dispatch without a role"| REPAIR["repair or refuse the dispatch"]
     E3 --> H5{"git guard (in write-guard)"}
     H5 -->|"git add with live sibling workers"| PS["refuse — demand path-scoped commit<br/>(shared index protection)"]
     E5 --> H7["state-sync — refresh the state.json projection<br/>from the workflow record (try-once, never partial)"]

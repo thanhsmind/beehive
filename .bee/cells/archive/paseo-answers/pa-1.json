@@ -1,0 +1,184 @@
+{
+  "id": "pa-1",
+  "feature": "paseo-answers",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Continue a Paseo job in the same idle agent",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-answers/CONTEXT.md",
+    "docs/history/paseo-answers/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Red first. paseo.rs: add send_argv(id, text) = [\"send\", id, \"--no-wait\", text]. run.rs: (1) in execute_paseo (run.rs:3262) keep the agent when the outcome is a Result whose status is question: no archive call, eprintln that the agent is kept for the answer. (2) Add execute_continue_paseo(opts, cli: &dyn PaseoCli): read job.json; refuse (RunOutcome::SpawnFailed with a FIX line) when transport is not paseo or paseo_agent_id is missing; run the same --version check as execute_paseo; inspect the agent with inspect_argv + parse_inspect and refuse with `paseo agent <id> is not idle — FIX: wait for it to finish, then run bee herding run --continue <job>` unless the state is Idle, making no send call; compute the next round and write its brief from opts.task exactly as execute_continue (run.rs:3602) does (refuse the same way when there is no prior result); call send_argv with the pointer prompt for the next round's brief; update job.json round; wait with wait_for_round_paseo using min_round = next round; read result-(next).json; archive with the same rule as execute_paseo (keep on question, keep on own PASEO_AGENT_ID, keep on failure). (3) In run, when opts.is_continue and the job's job.json has transport paseo, call execute_continue_paseo with RealPaseoCli on the configured paseo command instead of the pane transport; every other continue is unchanged. Tests with a fake PaseoCli: a question result keeps the agent; a continue on an Idle agent sends one prompt naming brief round 2 and returns the round 2 result; a continue on a Working agent refuses with no send; a continue with no paseo_agent_id refuses; an old version refuses before inspect. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a Paseo worker result with status question does not archive the agent",
+      "bee herding run --continue on a paseo job sends the round N+1 pointer to the same agent only when it is Idle",
+      "a continue on a Working, Blocked, Dead or unknown agent refuses with a FIX line and makes no send call",
+      "the continued round's result is read from result-(N+1).json",
+      "a continue on a non-paseo job runs the existing execute_continue unchanged and the existing herding tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "execute_continue_paseo, its routing, and keep-on-question"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "substantive": "send_argv"
+      }
+    ],
+    "key_links": [
+      "run routes a continue on a paseo job to execute_continue_paseo"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No send call unless inspect says Idle",
+      "No change to PaneTransport, RealHerdr or RealTmux"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-pa-1",
+    "outcome": "A Paseo job continues in the same idle agent after a question",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+    ],
+    "deviations": [
+      "sync-ack: skills/bee-herding covers the cockpit roles, not how herding run carries a worker; the Paseo channel concept is the owning doc"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T00:26:57.124Z",
+    "behavior_change": true,
+    "verification_evidence": "678 passed 0 failed, run by the leader",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+    "claimed_at": "2026-10-06T00:05:40.855Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T00:26:57.124Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T00:43:09.261Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T00:47:36.572Z"
+      }
+    ],
+    "sync_ack": "skills/bee-herding covers the cockpit roles, not how herding run carries a worker; the Paseo channel concept is the owning doc",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "A Paseo job continues in the same idle agent after a question",
+      "commit": "de0df2376",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding — green:unit — 678 passed 0 failed, run by the leader",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pa1-t1",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06 for pa-1; truths checked against code, 684 herding tests and docs/history/paseo-answers/evidence"
+          },
+          {
+            "id": "pa1-t2",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06 for pa-1; truths checked against code, 684 herding tests and docs/history/paseo-answers/evidence"
+          },
+          {
+            "id": "pa1-t3",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06 for pa-1; truths checked against code, 684 herding tests and docs/history/paseo-answers/evidence"
+          },
+          {
+            "id": "pa1-t4",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06 for pa-1; truths checked against code, 684 herding tests and docs/history/paseo-answers/evidence"
+          },
+          {
+            "id": "pa1-t5",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06 for pa-1; truths checked against code, 684 herding tests and docs/history/paseo-answers/evidence"
+          },
+          {
+            "id": "pa1-p",
+            "status": "PASS",
+            "evidence": "see judge digest 2026-10-06 for pa-1; truths checked against code, 684 herding tests and docs/history/paseo-answers/evidence"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T00:43:09.261Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a Paseo worker result with status question does not archive the agent",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "bee herding run --continue on a paseo job sends the round N+1 pointer to the same agent only when it is Idle",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a continue on a Working, Blocked, Dead or unknown agent refuses with a FIX line and makes no send call",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "the continued round's result is read from result-(N+1).json",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a continue on a non-paseo job runs the existing execute_continue unchanged and the existing herding tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T00:47:36.572Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

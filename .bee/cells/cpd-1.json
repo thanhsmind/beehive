@@ -1,0 +1,63 @@
+{
+  "id": "cpd-1",
+  "feature": "catalog-pin-detached",
+  "title": "Pin the flag vocabulary at 208 for --detached",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "cf50327a-104e-4e44-97b7-d52fd850494b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In catalog.rs test distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision, bump PINNED_FLAG_COUNT from 207 to 208 and add a comment entry '207 -> 208 (harness-worktree-relocation hwr-2)' saying worktree.merge gained --detached and no existing flag name means skip the caller-session relocation check (per D1).",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee distinct_flag_vocabulary_is_pinned",
+  "must_haves": {
+    "truths": [
+      "the flag vocabulary pin test passes at 208"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Do not rename or remove any flag"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "flag vocabulary pin bumped to 208",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-16T13:20:04.901Z",
+    "behavior_change": false,
+    "verification_evidence": "the pin test passed (1 passed); the full declared suite also ran green in the worktree (36 suites, 0 failed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7033d8f8-2786-4936-b02c-73b18858ea0e",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee distinct_flag_vocabulary_is_pinned",
+    "claimed_at": "2026-09-16T13:17:48.209Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "flag vocabulary pin bumped to 208 for worktree merge --detached",
+      "commit": "5f4deccd7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee distinct_flag_vocabulary_is_pinned — green:unit — the pin test passed (1 passed); the full declared suite also ran green in the worktree (36 suites, 0 failed)",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

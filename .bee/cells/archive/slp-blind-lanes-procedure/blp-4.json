@@ -1,0 +1,73 @@
+{
+  "id": "blp-4",
+  "feature": "slp-blind-lanes-procedure",
+  "title": "Give a blocked worker a letter that actually asks the human something",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes-procedure/plan.md",
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "docs/knowledge/areas/human-mailbox"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::mailbox && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells",
+  "must_haves": {
+    "truths": [
+      "Blocking a cell files a letter of the blocker kind, the first producer that kind has ever had",
+      "That letter's Needs your call section carries the blocked cell and the reason the blocker recorded, and nothing that was not stored",
+      "A cap letter's Needs your call section stays ABSENT, exactly as today — a cap still has nothing to ask",
+      "A letter is never composed from a fact no entry carries; the authorship ban holds",
+      "The block path still records the block itself whether or not the letter write succeeds"
+    ]
+  },
+  "action": "Wire the first real producer of the blocker letter, so an unattended run that gets stuck can reach the human (D2(e)).\n\nWHAT EXISTS AND WHAT DOES NOT. The blocker entry kind is declared and has never had a producer — its own comment says it is wired by the cell that owns it, and this is that cell. Two other kinds do have producers, and every one of them hard-codes an empty Needs-your-call list, so that section has been dropped from every letter this repo has ever written. The section renders from stored entries only.\n\nTHE DOOR. Blocking a cell with a reason is the intended producer. The stop is complete when the mutation returns the cell, and the reason it just stored is the sentence's raw material — do not invent a second reason field and do not compose one from the cell's title.\n\nTHE AUTHORSHIP BAN IS THE HARD PART. Every word of a letter body must come from a stored entry, a heading, or the single allowed connective. A test already pins that. Write the item from what the block actually stored; if a needed word is not stored, store it or leave it out — never write it into the letter.\n\nWHAT MUST NOT CHANGE. A plain cap letter still has no Needs-your-call section: the existing test asserting that section is ABSENT for a cap stays green untouched. And a letter that fails to write must never convert a recorded block into a different error — the block is the operation, the letter is the notification.\n\nRED FIRST. A failing case that blocking a cell produces a blocker-kind letter carrying the item, before the producer exists.",
+  "status": "capped",
+  "trace": {
+    "worker": "blp-4-builder",
+    "outcome": "Blocking a cell now files a blocker letter whose Needs-your-call item names the cell and the reason it recorded",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+    ],
+    "deviations": [
+      "Extracted run_block's mutation into a callable block_cell before wiring the producer — the stop lived inside a dispatch closure, so the letter could not be proved end to end without it — something else had to be fixed first",
+      "Capped through --sync-ack — the workflow-state sync door fired, but this change touches no skill text and the cell declares affects_skills: [] — hit an unforeseen obstacle",
+      "sync-ack: No skill surface changes: this wires the first producer of an already-declared entry kind inside the mailbox module. No bee-planning/swarming/reviewing/capturing text describes what cells block appends, and the cell declares affects_skills: []. The blind-lane procedure prose that DOES describe this channel is phase 4's own cell."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T14:20:41.381Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b97c221a-fd60-40c2-bd86-9681b9f547bf",
+    "claimed_at": "2026-08-28T14:09:43.431Z",
+    "sync_ack": "No skill surface changes: this wires the first producer of an already-declared entry kind inside the mailbox module. No bee-planning/swarming/reviewing/capturing text describes what cells block appends, and the cell declares affects_skills: []. The blind-lane procedure prose that DOES describe this channel is phase 4's own cell.",
+    "report": {
+      "outcome": "Blocking a cell now files a blocker letter whose Needs-your-call item names the cell and the reason it recorded",
+      "commit": "2ddc292749ee097cc20bbe531184a3dc21d57456",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::mailbox && cargo test ... verbs::cells — green — the cell's own verify: 68 mailbox + 283 cells tests, 0 failed; a red-first probe with the producer disabled failed first on 0 entries",
+      "deviations": [
+        "Extracted run_block's mutation into a callable block_cell before wiring the producer — the stop lived inside a dispatch closure, so the letter could not be proved end to end without it — something else had to be fixed first",
+        "Capped through --sync-ack — the workflow-state sync door fired, but this change touches no skill text and the cell declares affects_skills: [] — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 276 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -158,8 +158,18 @@ pub(crate) fn git_global_flag_takes_value(t: &str) -> bool {
 }
 
 pub(crate) struct GitInvocation {
+    pub(crate) globals: Vec<String>,
     pub(crate) subcommand: Option<String>,
     pub(crate) rest: Vec<String>,
+}
+
+pub(crate) fn push_main_bookkeeping(rest: &[String]) -> bool {
+    match rest {
+        [remote, refspec] => {
+            !remote.starts_with('-') && matches!(refspec.as_str(), "main" | "HEAD:main")
+        }
+        _ => false,
+    }
 }
 
 /// Every git invocation in the token list, in order — not just the first.
@@ -204,10 +214,15 @@ pub(crate) fn find_git_invocations(tokens: &[String]) -> Vec<GitInvocation> {
         }
         out.push(match (subcommand, sub_idx) {
             (Some(s), Some(idx)) => GitInvocation {
+                globals: invocation[..idx].to_vec(),
                 subcommand: Some(s),
                 rest: invocation[idx + 1..].to_vec(),
             },
-            _ => GitInvocation { subcommand: None, rest: Vec::new() },
+            _ => GitInvocation {
+                globals: invocation,
+                subcommand: None,
+                rest: Vec::new(),
+            },
         });
         i = end;
     }
@@ -425,7 +440,7 @@ const ALL_HOLDS_PATH: &str = "*";
 /// guessed at — counting it could push a lone worker to two, and blocking a
 /// solo worker is a worse defect than the blindness being fixed.
 fn worktree_hold_cohort_size(control_root: &str, own_workspace: &str) -> R<usize> {
-    let holds = find_foreign_holds(control_root, ALL_HOLDS_SENTINEL, &[ALL_HOLDS_PATH.to_string()])?;
+    let holds = find_foreign_holds(control_root, ALL_HOLDS_SENTINEL, &[ALL_HOLDS_PATH.to_string()]);
     let mut cells: std::collections::HashSet<String> = std::collections::HashSet::new();
     for hold in &holds {
         match hold.get("holder") {
@@ -449,7 +464,13 @@ pub(crate) fn resolve_live_worker_count(root: &str, control_root: &str, ctx: &Js
     if reservation_store_corrupt(root) {
         return Ok(WorkerCount::Unresolved("the reservation store is present but unparseable"));
     }
-    let reservations = list_active_reservations(root)?;
+    // sfg-5: infallible now. This reader used to `?` a `date_parse_ms` error
+    // out of `check_git_bash_command` to `emit_undecidable`, so one lease with
+    // an unreadable stamp switched the gc-2 whole-tree denial — and the whole
+    // write guard — off. Note the shape beside it: `reservation_store_corrupt`
+    // already answers "more than one worker" for a store it cannot parse, so
+    // failing OPEN on one unreadable LEASE was the odd arm out, not this one.
+    let reservations = list_active_reservations(root);
     let mut worker_keys: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut sessions_with_agents: std::collections::HashSet<String> = std::collections::HashSet::new();
     for resv in &reservations {
@@ -529,13 +550,66 @@ set guards.idle_gate to false in .bee/config.json (plain JSON; delete the key to
     )
 }
 
-pub(crate) fn intake_refusal(phase: &Value, blocked: &str, extra: &str) -> String {
+#[derive(Clone, Copy)]
+pub(crate) enum OutwardForm {
+    Push,
+    Gh,
+    Launch,
+}
+
+pub(crate) fn outward_fix_line(form: OutwardForm, worktree_id: Option<&str>) -> String {
+    let id = worktree_id.unwrap_or("<worktree-id>");
+    let remedy = match form {
+        OutwardForm::Push => format!(
+            "FIX: if you are executing a cell, stop here and report the push as blocked — your leader \
+lands the work. To land it yourself, run `bee worktree merge --id {id}` from the MAIN checkout; a \
+release goes through `scripts/release.sh <version>` from main."
+        ),
+        OutwardForm::Gh => format!(
+            "FIX: open the pull request or make the GitHub write from the MAIN checkout, or land the \
+branch with `bee worktree merge --id {id}` from main; releases and their GitHub writes go through \
+`scripts/release.sh` from main."
+        ),
+        OutwardForm::Launch => "FIX: run `bee dispatch prepare --runtime <rt> --kind \
+cell|gather|reviewer|advisor --json` and then run exactly the tool and payload it returns; `bee` \
+itself is never judged by this guard."
+            .to_string(),
+    };
     format!(
-        "bee intake gate: no bee work is active (phase: {}) — {} is blocked. {}{}",
+        "{remedy} Last resort, repo-level opt-out: set guards.worker_outward to false in the MAIN \
+checkout's .bee/config.json (plain JSON; delete the key to re-enable) — the copy inside this \
+worktree is not read."
+    )
+}
+
+/// sfg-1 / slp-followup-gaps D2. The intake FIX line tells the caller to
+/// route the request through the workflow. For a session that is bound to no
+/// lane, that is the wrong remedy: the work IS routed — this session just is
+/// not attached to it, so the gate read the control-root default record
+/// instead of the lane the session is actually working under. Named only when
+/// the default record answered AND this session carries no lane binding; a
+/// lane-bound session, a claim-derived one, and a sessionless call never see
+/// this line.
+pub(crate) fn session_bind_remedy_line() -> String {
+    " ALSO: this session is bound to no lane, so the gate judged it against the default record \
+(.bee/state.json), not the lane it is working under — bind it to that lane \
+(`bee state session bind --lane <feature>`), or claim its cell, and retry."
+        .to_string()
+}
+
+pub(crate) fn intake_refusal(
+    phase: &Value,
+    blocked: &str,
+    extra: &str,
+    session_bind_remedy: bool,
+) -> String {
+    format!(
+        "bee intake gate: no bee work is active (phase: {}) — {} is blocked. {}{}{}",
         js_disp(phase),
         blocked,
         extra,
-        intake_fix_line()
+        intake_fix_line(),
+        if session_bind_remedy { session_bind_remedy_line() } else { String::new() }
     )
 }
 

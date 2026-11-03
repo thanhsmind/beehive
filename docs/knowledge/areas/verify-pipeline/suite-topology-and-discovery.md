@@ -234,6 +234,7 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   fails standalone against the live hook and is excluded with a dated
   comment — filed as a P1 fix-first item, not silently adopted or trusted.
 
+
 ## Open Gaps
 
 - The CLI dispatcher (4.4k lines, all handlers inline) remains the last

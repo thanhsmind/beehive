@@ -70,7 +70,12 @@ fn workflows_dir(repo: &Path) -> PathBuf {
 }
 
 fn run(cwd: &Path, args: &[&str]) -> (i32, String) {
-    let out = Command::new(binary()).args(args).current_dir(cwd).output().unwrap();
+    let out = Command::new(binary())
+        .args(args)
+        .env_remove("PI_SESSION_ID")
+        .current_dir(cwd)
+        .output()
+        .unwrap();
     (
         out.status.code().unwrap_or(-1),
         format!(
@@ -82,7 +87,12 @@ fn run(cwd: &Path, args: &[&str]) -> (i32, String) {
 }
 
 fn run_json(cwd: &Path, args: &[&str]) -> (i32, serde_json::Value) {
-    let out = Command::new(binary()).args(args).current_dir(cwd).output().unwrap();
+    let out = Command::new(binary())
+        .args(args)
+        .env_remove("PI_SESSION_ID")
+        .current_dir(cwd)
+        .output()
+        .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let v = serde_json::from_str(stdout.trim())
         .unwrap_or_else(|e| panic!("`bee {}` did not print JSON: {stdout} ({e})", args.join(" ")));
@@ -627,6 +637,7 @@ fn run_with_no_session_env(cwd: &Path, args: &[&str]) -> (i32, String) {
         .current_dir(cwd)
         .env_remove("BEE_SESSION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("PI_SESSION_ID")
         .output()
         .unwrap();
     (
@@ -650,4 +661,261 @@ fn waiting_on_set_refuses_when_no_session_resolves() {
     );
     assert_ne!(code, 0, "{out}");
     assert!(out.contains("no session resolves"), "{out}");
+}
+
+// ── state handoff dismiss & workflow close handoff coordination ─────────────
+
+#[test]
+fn handoff_dismiss_clears_pause_handoff_and_rebuilds_projection() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+
+    // Start a feature workflow
+    run(&repo, &["state", "start-feature", "--feature", "feat-dismiss"]);
+    let records = list_by_feature(&repo);
+    let wf_id = records[0]["id"].as_str().unwrap().to_string();
+
+    // Write a pause handoff via CLI
+    let (code, out) = run(&repo, &["state", "handoff", "write", "--kind", "pause", "--cell", "c-pause"]);
+    assert_eq!(code, 0, "{out}");
+
+    // Legacy projection exists
+    let proj_file = repo.join(".bee/HANDOFF.json");
+    assert!(proj_file.is_file(), ".bee/HANDOFF.json must exist after write");
+
+    // Mailbox record file exists and is open
+    let mb_file = repo.join(format!(".bee/runtime/handoffs/{wf_id}/0001.json"));
+    assert!(mb_file.is_file(), "mailbox file must exist");
+    let mb_json: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&mb_file).unwrap()).unwrap();
+    assert_eq!(mb_json["status"], "open");
+
+    // Dismiss via CLI
+    let (code, dis_v) = run_json(&repo, &["state", "handoff", "dismiss", "--json"]);
+    assert_eq!(code, 0, "{dis_v}");
+    assert_eq!(dis_v["ok"], true);
+    assert_eq!(dis_v["workflow_id"], wf_id);
+    assert_eq!(dis_v["seq"], 1);
+
+    // Legacy projection must be gone
+    assert!(!proj_file.is_file(), ".bee/HANDOFF.json must be removed after dismiss of only handoff");
+
+    // Mailbox record file must STILL exist on disk and be cleared!
+    assert!(mb_file.is_file(), "mailbox audit file must be preserved");
+    let mb_cleared: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&mb_file).unwrap()).unwrap();
+    assert_eq!(mb_cleared["status"], "cleared");
+    assert!(mb_cleared["cleared_at"].is_string());
+}
+
+#[test]
+fn handoff_dismiss_refuses_planned_next() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+
+    run(&repo, &["state", "start-feature", "--feature", "feat-pn"]);
+    let records = list_by_feature(&repo);
+    let wf_id = records[0]["id"].as_str().unwrap().to_string();
+
+    // Seed a planned-next mailbox record directly
+    let mb_dir = repo.join(format!(".bee/runtime/handoffs/{wf_id}"));
+    std::fs::create_dir_all(&mb_dir).unwrap();
+    let mb_file = mb_dir.join("0001.json");
+    std::fs::write(
+        &mb_file,
+        serde_json::json!({
+            "seq": 1,
+            "status": "open",
+            "kind": "planned-next",
+            "workflow_id": wf_id,
+            "writer_session": "s-1",
+            "previous_cell": "c-prev",
+            "next_cell": "c-next",
+            "written_at": "2026-09-13T00:00:00Z"
+        }).to_string(),
+    ).unwrap();
+
+    // Rebuild projection so .bee/HANDOFF.json exists
+    let (code, out) = run(&repo, &["state", "rebuild-projections"]);
+    assert_eq!(code, 0, "{out}");
+    let proj_file = repo.join(".bee/HANDOFF.json");
+    assert!(proj_file.is_file());
+
+    // Dismiss must refuse
+    let (code, out) = run(&repo, &["state", "handoff", "dismiss"]);
+    assert_ne!(code, 0, "{out}");
+    assert!(out.contains("never dismissed") || out.contains("cannot be dismissed"), "{out}");
+
+    // Mailbox record must still be open
+    let mb_json: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&mb_file).unwrap()).unwrap();
+    assert_eq!(mb_json["status"], "open");
+
+    // Projection must still exist
+    assert!(proj_file.is_file(), "projection must remain when dismiss refused");
+}
+
+#[test]
+fn workflows_close_refuses_when_target_has_open_planned_next_all_or_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+
+    // Start active feature first so subsequent lanes stay live
+    run(&repo, &["state", "start-feature", "--feature", "wf-active"]);
+    run(&repo, &["state", "start-feature", "--feature", "wf-target-a", "--as-lane"]);
+    run(&repo, &["state", "start-feature", "--feature", "wf-target-b", "--as-lane"]);
+    let records = list_by_feature(&repo);
+    let id_b = records.iter().find(|r| r["feature"] == "wf-target-b").unwrap()["id"].as_str().unwrap().to_string();
+
+    // Give wf-target-b an open planned-next handoff
+    let mb_dir = repo.join(format!(".bee/runtime/handoffs/{id_b}"));
+    std::fs::create_dir_all(&mb_dir).unwrap();
+    let mb_file = mb_dir.join("0001.json");
+    std::fs::write(
+        &mb_file,
+        serde_json::json!({
+            "seq": 1,
+            "status": "open",
+            "kind": "planned-next",
+            "workflow_id": id_b,
+            "writer_session": "s-1",
+            "previous_cell": "c-prev",
+            "next_cell": "c-next",
+            "written_at": "2026-09-13T00:00:00Z"
+        }).to_string(),
+    ).unwrap();
+
+    // Closing wf-target-b by feature must refuse
+    let (code, out) = run(&repo, &["state", "workflows", "close", "--feature", "wf-target-b"]);
+    assert_ne!(code, 0, "{out}");
+    assert!(out.contains("open planned-next handoff"), "{out}");
+
+    // Multi-record close (--all-but-active): wf-target-b has planned-next, so NEITHER target may close!
+    let (code, out) = run(&repo, &["state", "workflows", "close", "--all-but-active"]);
+    assert_ne!(code, 0, "{out}");
+    assert!(out.contains("open planned-next handoff"), "{out}");
+
+    // Verify all-or-nothing: wf-target-a and wf-target-b MUST STILL BE active
+    let after = list_by_feature(&repo);
+    let a = after.iter().find(|r| r["feature"] == "wf-target-a").unwrap();
+    let b = after.iter().find(|r| r["feature"] == "wf-target-b").unwrap();
+    assert_eq!(a["status"], "active", "wf-target-a must not have closed");
+    assert_eq!(b["status"], "active", "wf-target-b must not have closed");
+}
+
+#[test]
+fn workflows_close_clears_pause_handoff_and_excludes_closed_workflow_from_projection() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+
+    run(&repo, &["state", "start-feature", "--feature", "wf-pause-close"]);
+    let records = list_by_feature(&repo);
+    let wf_id = records[0]["id"].as_str().unwrap().to_string();
+
+    // Write a pause handoff
+    let (code, out) = run(&repo, &["state", "handoff", "write", "--kind", "pause", "--cell", "c-pause"]);
+    assert_eq!(code, 0, "{out}");
+
+    // Projection exists
+    let proj_file = repo.join(".bee/HANDOFF.json");
+    assert!(proj_file.is_file());
+
+    // Close the workflow by id
+    let (code, out) = run(&repo, &["state", "workflows", "close", "--id", &wf_id]);
+    assert_eq!(code, 0, "{out}");
+
+    // Mailbox record must be cleared (not deleted)
+    let mb_file = repo.join(format!(".bee/runtime/handoffs/{wf_id}/0001.json"));
+    assert!(mb_file.is_file());
+    let mb_json: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&mb_file).unwrap()).unwrap();
+    assert_eq!(mb_json["status"], "cleared");
+
+    // Projection must be removed (no open handoffs in any active workflow)
+    assert!(!proj_file.is_file(), "projection must not project closed workflow handoff");
+}
+
+#[test]
+fn workflows_close_versus_handoff_write_linearizes_cleanly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+
+    run(&repo, &["state", "start-feature", "--feature", "wf-race"]);
+    let records = list_by_feature(&repo);
+    let wf_id = records[0]["id"].as_str().unwrap().to_string();
+
+    // Prepare cell requirements for planned-next write
+    write_cell(&repo, "c-prev", "wf-race", "capped");
+    std::fs::create_dir_all(repo.join(".bee/claims")).unwrap();
+    std::fs::write(
+        repo.join(".bee/claims/c-next.json"),
+        r#"{"cell":"c-next","session":"sess-w","fence_epoch":1}"#,
+    )
+    .unwrap();
+
+    let repo1 = repo.clone();
+    let wf_id1 = wf_id.clone();
+    let t_close = std::thread::spawn(move || {
+        run(&repo1, &["state", "workflows", "close", "--id", &wf_id1])
+    });
+
+    let repo2 = repo.clone();
+    let t_write = std::thread::spawn(move || {
+        run(
+            &repo2,
+            &[
+                "state",
+                "handoff",
+                "write",
+                "--kind",
+                "planned-next",
+                "--previous-cell",
+                "c-prev",
+                "--next-cell",
+                "c-next",
+                "--writer-session",
+                "sess-w",
+            ],
+        )
+    });
+
+    let (code_close, out_close) = t_close.join().unwrap();
+    let (code_write, out_write) = t_write.join().unwrap();
+
+    let records_after = list_by_feature(&repo);
+    let wf_status = records_after[0]["status"].as_str().unwrap();
+
+    let mb_dir = repo.join(format!(".bee/runtime/handoffs/{wf_id}"));
+    let mb_rec = mb_dir.join("0001.json");
+
+    if code_write == 0 {
+        // Outcome 1: Writer won.
+        // Handoff must be open and visible. Close must have refused.
+        assert_ne!(
+            code_close, 0,
+            "if write won, close must have refused. close output: {out_close}"
+        );
+        assert!(
+            out_close.contains("open planned-next handoff"),
+            "close refusal must state open planned-next authority: {out_close}"
+        );
+        assert_eq!(wf_status, "active", "workflow must remain active if handoff won");
+        assert!(mb_rec.is_file(), "mailbox record must exist");
+        let mb_json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&mb_rec).unwrap()).unwrap();
+        assert_eq!(mb_json["status"], "open");
+        assert_eq!(mb_json["kind"], "planned-next");
+    } else {
+        // Outcome 2: Close won.
+        // Close succeeded, writer refused, workflow is closed, no handoff was written.
+        assert_eq!(
+            code_close, 0,
+            "if write lost, close must have succeeded. close output: {out_close}"
+        );
+        assert!(
+            out_write.contains("closed") || out_write.contains("no handoff was written"),
+            "writer refusal must name closed state or no handoff was written: {out_write}"
+        );
+        assert_eq!(wf_status, "closed", "workflow must be closed if close won");
+        assert!(
+            !mb_rec.exists(),
+            "no handoff record may be written when close won"
+        );
+    }
 }

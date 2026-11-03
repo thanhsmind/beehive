@@ -1,0 +1,5 @@
+{"schema":"leader-check/1","answers":[
+{"requirement":"A worktree whose queue is a copy of main's is not kept for its queue","artifact":"packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"},
+{"requirement":"A worktree whose queue holds a pending stub main never names is kept, and the reason names that stub","artifact":"packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs"},
+{"requirement":"Every read or parse doubt keeps the worktree","artifact":"packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs"}
+]}

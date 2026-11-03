@@ -44,11 +44,13 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const ATTEST_REL: &str = ".bee/doctor-attest.json";
+include!(concat!(env!("OUT_DIR"), "/pi_guard_files.rs"));
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Runtime {
     Claude,
     Codex,
+    Pi,
 }
 
 impl Runtime {
@@ -56,12 +58,14 @@ impl Runtime {
         match self {
             Runtime::Claude => "claude",
             Runtime::Codex => "codex",
+            Runtime::Pi => "pi",
         }
     }
     fn parse(s: &str) -> Option<Self> {
         match s {
             "claude" => Some(Runtime::Claude),
             "codex" => Some(Runtime::Codex),
+            "pi" => Some(Runtime::Pi),
             _ => None,
         }
     }
@@ -70,12 +74,14 @@ impl Runtime {
         match self {
             Runtime::Claude => ".claude/settings.json",
             Runtime::Codex => ".codex/hooks.json",
+            Runtime::Pi => ".pi/extensions/bee-guard/index.ts",
         }
     }
     fn skills_rel(self) -> &'static str {
         match self {
             Runtime::Claude => ".claude/skills",
             Runtime::Codex => ".agents/skills",
+            Runtime::Pi => ".agents/skills",
         }
     }
 }
@@ -86,15 +92,35 @@ struct Row {
     detail: String,
 }
 
+const WARN_ROWS: [&str; 1] = ["design_skill"];
+
 impl Row {
+    fn status(&self) -> &'static str {
+        match self.ok {
+            Some(true) => "ok",
+            Some(false) if WARN_ROWS.contains(&self.key) => "warn",
+            Some(false) => "not_ok",
+            None => "unknown",
+        }
+    }
+
+    fn votes(&self) -> bool {
+        !WARN_ROWS.contains(&self.key)
+    }
+
+    fn mark(&self) -> &'static str {
+        match self.status() {
+            "ok" => "ok  ",
+            "warn" => "warn",
+            "not_ok" => "FAIL",
+            _ => "?   ",
+        }
+    }
+
     fn value(&self) -> Value {
         json!({
             "row": self.key,
-            "status": match self.ok {
-                Some(true) => "ok",
-                Some(false) => "not_ok",
-                None => "unknown",
-            },
+            "status": self.status(),
             "detail": self.detail,
         })
     }
@@ -136,18 +162,40 @@ fn sha256_of(bytes: &[u8]) -> String {
 /// exception: a missing installed binary is not_ok on `hook_handler` already,
 /// so `binary_freshness` reports unknown there rather than repeating the
 /// same verdict under a second name.
+#[cfg(test)]
 fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
+    mechanical_rows_with_env(root, runtime, &|k| std::env::var(k).ok())
+}
+
+fn mechanical_rows_with_env(
+    root: &Path,
+    runtime: Runtime,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Vec<Row> {
     let mut rows = Vec::new();
 
     let hooks_path = root.join(runtime.hooks_rel());
-    let hooks_bytes = std::fs::read(&hooks_path).ok();
+    let (hooks_ok, hooks_detail, hooks_bytes) = match std::fs::read(&hooks_path) {
+        Ok(b) => (
+            Some(true),
+            format!("{} present ({} bytes)", runtime.hooks_rel(), b.len()),
+            Some(b),
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+            Some(false),
+            format!("{} is missing — the runtime loads no bee hooks", runtime.hooks_rel()),
+            None,
+        ),
+        Err(e) => (
+            None,
+            format!("{} cannot be read ({e})", runtime.hooks_rel()),
+            None,
+        ),
+    };
     rows.push(Row {
         key: "hooks_file",
-        ok: Some(hooks_bytes.is_some()),
-        detail: match &hooks_bytes {
-            Some(b) => format!("{} present ({} bytes)", runtime.hooks_rel(), b.len()),
-            None => format!("{} is missing — the runtime loads no bee hooks", runtime.hooks_rel()),
-        },
+        ok: hooks_ok,
+        detail: hooks_detail,
     });
 
     // Hook-handler resolvability: the path every wired command names must
@@ -164,63 +212,163 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
     });
 
     let skills_dir = root.join(runtime.skills_rel());
-    let skill_count = std::fs::read_dir(&skills_dir)
-        .map(|e| e.filter_map(|x| x.ok()).filter(|x| x.path().is_dir()).count())
-        .unwrap_or(0);
+    let (skills_ok, skills_detail) = match std::fs::read_dir(&skills_dir) {
+        Ok(entries) => {
+            let skill_count = entries.filter_map(|x| x.ok()).filter(|x| x.path().is_dir()).count();
+            if skill_count > 0 {
+                (
+                    Some(true),
+                    format!("{} skill(s) under {}", skill_count, runtime.skills_rel()),
+                )
+            } else {
+                (
+                    Some(false),
+                    format!("no skills under {} — the agent has no bee craft to load", runtime.skills_rel()),
+                )
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+            Some(false),
+            format!("no skills under {} — the agent has no bee craft to load", runtime.skills_rel()),
+        ),
+        Err(e) => (
+            None,
+            format!("{} cannot be enumerated ({e})", runtime.skills_rel()),
+        ),
+    };
     rows.push(Row {
         key: "skills_installed",
-        ok: Some(skill_count > 0),
-        detail: if skill_count > 0 {
-            format!("{} skill(s) under {}", skill_count, runtime.skills_rel())
-        } else {
-            format!("no skills under {} — the agent has no bee craft to load", runtime.skills_rel())
-        },
+        ok: skills_ok,
+        detail: skills_detail,
     });
 
+    if let Some(row) = design_skill_row(root) {
+        rows.push(row);
+    }
+
+    rows.push(wiring_row(root, runtime, hooks_bytes.as_deref()));
+    match runtime {
+        Runtime::Codex | Runtime::Claude => {
+            if let Some(row) = binary_freshness_row(root) {
+                rows.push(row);
+            }
+        }
+        Runtime::Pi => {
+            rows.push(pi_binary_freshness_row(root));
+            rows.push(pi_herding_transport_row_with_env(root, env));
+            if let Some(row) = paseo_ready_row_with_env(root, env) {
+                rows.push(row);
+            }
+        }
+    }
+
+    rows
+}
+
+const DESIGN_SKILL: &str = "bee-design";
+const DESIGN_AGENT_REL: &str = ".claude/agents/bee-design.md";
+
+fn design_role_configured(config: &Map<String, Value>) -> bool {
+    config.get("team").and_then(Value::as_object).is_some_and(|team| {
+        team.values()
+            .any(|roles| roles.get("design").is_some_and(|slot| !slot.is_null()))
+    })
+}
+
+fn design_pick_is_none(config: &Map<String, Value>) -> bool {
+    match config.get("design").and_then(|d| d.get("packs")) {
+        Some(Value::Array(packs)) => packs.is_empty(),
+        Some(Value::String(pick)) => pick == "none",
+        _ => false,
+    }
+}
+
+fn design_skill_row(root: &Path) -> Option<Row> {
+    let config = crate::state::read_config_raw(root);
+    let role = design_role_configured(&config);
+    let agent = root.join(DESIGN_AGENT_REL).is_file();
+    if !role && !agent {
+        return None;
+    }
+    let homes: Vec<String> = crate::onboard::templates::REPO_SKILL_TARGETS
+        .iter()
+        .map(|(_, segments)| segments.join("/"))
+        .collect();
+    let installed_under = homes
+        .iter()
+        .find(|home| root.join(home).join(DESIGN_SKILL).is_dir());
+    let configured_by = match (role, agent) {
+        (true, true) => "the design role is configured and .claude/agents/bee-design.md is installed",
+        (true, false) => "the design role is configured in .bee/config.json",
+        _ => ".claude/agents/bee-design.md is installed",
+    };
+    let (ok, detail) = if design_pick_is_none(&config) {
+        (
+            true,
+            format!(
+                "{configured_by}, and design.packs records no pick — no design taste is installed, so design work runs as a plain executor"
+            ),
+        )
+    } else if let Some(home) = installed_under {
+        (true, format!("{configured_by}, and {home}/{DESIGN_SKILL} carries the taste"))
+    } else {
+        let packs = crate::onboard::templates::DESIGN_PACKS.join(",");
+        (
+            false,
+            format!(
+                "{configured_by}, and no {DESIGN_SKILL} skill sits under any of {} — design work runs without the design taste. FIX: install it with `bee onboard --apply --design-packs <{packs}>`, or record that this project takes no packs with `bee onboard --apply --design-packs none`",
+                homes.join(", ")
+            ),
+        )
+    };
+    Some(Row {
+        key: "design_skill",
+        ok: Some(ok),
+        detail,
+    })
+}
+
+fn wiring_row(root: &Path, runtime: Runtime, hooks_bytes: Option<&[u8]>) -> Row {
     // The byte match. See the header: this stands in for the retired
     // capability baseline, against an artifact that still exists.
     //
-    // THE TWO RUNTIMES ARE NOT THE SAME SHAPE, and treating them alike is a
+    // THE THREE RUNTIMES ARE NOT THE SAME SHAPE, and treating them alike is a
     // false FAIL. `.codex/hooks.json` IS the rendered artifact, so whole-file
     // equality is the right question. `.claude/settings.json` is the user's
     // settings file that onboarding MERGES a `hooks` key into — it also
     // carries permissions and anything else the host put there, none of which
     // bee renders. Comparing the whole file there fails every correctly
     // installed repo. Only the `hooks` subtree is bee's to answer for.
-    let rendered = crate::devtools::render_projection_text_for(runtime.name());
-    rows.push(match runtime {
-        // `.codex/hooks.json` IS the rendered artifact — onboarding copies it,
-        // so whole-file equality is exactly the question, and a host running a
-        // different bee is caught.
-        Runtime::Codex => match (hooks_bytes.as_ref(), rendered) {
-            (Some(on_disk), Some(expected)) => {
-                let same = sha256_of(on_disk) == sha256_of(expected.as_bytes());
-                Row {
-                    key: "wiring_matches_binary",
-                    ok: Some(same),
-                    detail: if same {
-                        ".codex/hooks.json is byte-identical to what this bee renders".to_string()
-                    } else {
-                        ".codex/hooks.json differs from what this bee renders — re-run the installer to refresh it".to_string()
-                    },
+    // `.pi/extensions/bee-guard.ts` is a TypeScript extension whose canonical
+    // text is embedded at compile time — exact byte equality against the
+    // compiled extension is the right question.
+    match runtime {
+        Runtime::Codex => {
+            let rendered = crate::devtools::render_projection_text_for(runtime.name());
+            match (hooks_bytes, rendered) {
+                (Some(on_disk), Some(expected)) => {
+                    let same = sha256_of(on_disk) == sha256_of(expected.as_bytes());
+                    Row {
+                        key: "wiring_matches_binary",
+                        ok: Some(same),
+                        detail: if same {
+                            ".codex/hooks.json is byte-identical to what this bee renders".to_string()
+                        } else {
+                            ".codex/hooks.json differs from what this bee renders — re-run the installer to refresh it".to_string()
+                        },
+                    }
                 }
+                _ => Row {
+                    key: "wiring_matches_binary",
+                    ok: Some(false),
+                    detail: "no .codex/hooks.json to compare".to_string(),
+                },
             }
-            _ => Row {
-                key: "wiring_matches_binary",
-                ok: Some(false),
-                detail: "no .codex/hooks.json to compare".to_string(),
-            },
-        },
-        // `.claude/settings.json` is the USER's file, with a hooks key merged
-        // in; it also carries permissions and whatever else the host put
-        // there, and the per-repo renderer feature-detects bee vs bee.exe. So
-        // byte equality against a shipped projection is the wrong question and
-        // fails every correct install. What must hold is that the wiring is
-        // bee's and points at the vendored binary — which is precisely what
-        // broke when the installer copied the binary in after onboarding.
+
+        }
         Runtime::Claude => {
             let parsed: Option<Value> =
-                hooks_bytes.as_ref().and_then(|b| serde_json::from_slice(b).ok());
+                hooks_bytes.and_then(|b| serde_json::from_slice(b).ok());
             let mut total = 0usize;
             let mut wrong: Vec<String> = Vec::new();
             if let Some(Value::Object(hooks)) = parsed.as_ref().and_then(|v| v.get("hooks")) {
@@ -251,14 +399,226 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
                     )
                 },
             }
+
         }
-    });
+        Runtime::Pi => {
+            let legacy_path = root.join(".pi/extensions/bee-guard.ts");
+            let extension_match = if legacy_path.exists() {
+                Row {
+                    key: "wiring_matches_binary",
+                    ok: Some(false),
+                    detail: "legacy .pi/extensions/bee-guard.ts is present — run `bee onboard --apply` to migrate to .pi/extensions/bee-guard/".to_string(),
+                }
+            } else {
+                let guard_dir = root.join(".pi/extensions/bee-guard");
+                let mut unreadable: Option<String> = None;
+                let mut mismatched: Vec<String> = Vec::new();
 
-    if let Some(row) = binary_freshness_row(root) {
-        rows.push(row);
+                for (name, expected_content) in PI_GUARD_FILES {
+                    let path = guard_dir.join(name);
+                    match std::fs::read(&path) {
+                        Ok(bytes) => {
+                            if bytes.as_slice() != expected_content.as_bytes() {
+                                mismatched.push((*name).to_string());
+                            }
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                            mismatched.push((*name).to_string());
+                        }
+                        Err(e) => {
+                            if unreadable.is_none() {
+                                unreadable = Some(format!(
+                                    ".pi/extensions/bee-guard/{name} cannot be read to compare ({e})"
+                                ));
+                            }
+                        }
+                    }
+                }
+
+                match std::fs::read_dir(&guard_dir) {
+                    Ok(read_dir) => {
+                        for entry in read_dir.flatten() {
+                            let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
+                            if is_file {
+                                let name = entry.file_name().to_string_lossy().to_string();
+                                if name.ends_with(".ts")
+                                    && !PI_GUARD_FILES.iter().any(|(n, _)| *n == name)
+                                {
+                                    mismatched.push(name);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => {
+                        if unreadable.is_none() {
+                            unreadable = Some(format!(
+                                ".pi/extensions/bee-guard cannot be read to compare ({e})"
+                            ));
+                        }
+                    }
+                }
+
+                if let Some(detail) = unreadable {
+                    Row {
+                        key: "wiring_matches_binary",
+                        ok: None,
+                        detail,
+                    }
+                } else {
+                    mismatched.sort();
+                    mismatched.dedup();
+                    if mismatched.is_empty() {
+                        Row {
+                            key: "wiring_matches_binary",
+                            ok: Some(true),
+                            detail: format!(
+                                ".pi/extensions/bee-guard/ ({} files) is byte-identical to what this bee embeds",
+                                PI_GUARD_FILES.len()
+                            ),
+                        }
+                    } else {
+                        let count = mismatched.len();
+                        let preview = if count > 3 {
+                            format!("{}, ...", mismatched[..3].join(", "))
+                        } else {
+                            mismatched.join(", ")
+                        };
+                        let file_str = if count == 1 { "file" } else { "files" };
+                        let verb_str = if count == 1 { "differs" } else { "differ" };
+                        Row {
+                            key: "wiring_matches_binary",
+                            ok: Some(false),
+                            detail: format!(
+                                "{count} {file_str} in .pi/extensions/bee-guard/ {verb_str} from what this bee embeds ({preview}) — run `bee onboard --apply` to refresh"
+                            ),
+                        }
+                    }
+                }
+            };
+            extension_match
+        }
     }
+}
 
-    rows
+/// The configured `hat-*` slots on this runtime that carry no description —
+/// lane-model-diversity D3 (store `23de5362`).
+///
+/// D3 requires every configured hat slot to state what the hat is FOR, so the
+/// model table reads self-documenting: five hats fanning out at once are worth
+/// nothing to the operator who cannot tell which seat is which. D3 named `bee
+/// config validate` as the enforcement point; that command was never ported off
+/// Node, and the dispatch door may not enforce it either, because `description`
+/// is DISPLAY-ONLY law (`hooks::model_guard::role_slot_description`) —
+/// `normalize_models` drops the field before any resolver sees it, and nothing
+/// that resolves, guards, or dispatches may read it. So the venue is `bee
+/// doctor`, as an ADVISORY: it reports, it never votes on the verdict ladder,
+/// and no dispatch behavior depends on the field. D3's intent is served and the
+/// display-only law stands unsuperseded.
+///
+/// Reads the RAW config for that same reason — the normalized map has no
+/// `description` to find. Three cases and their answers:
+///
+///   * a string-shaped slot (`"hat-risks": "opus"`) has nowhere to PUT a
+///     description, so it is flagged: it resolves fine, and it still reads as
+///     an unlabelled seat.
+///   * an object slot with no `description`, or an empty/whitespace one, is
+///     flagged — the same emptiness test the door itself applies.
+///   * a `null` slot is a seat switched OFF, not a configured one. It has no
+///     purpose to state and falls through to the advisor at dispatch, so it is
+///     passed over rather than nagged about.
+///
+/// Any key spelled `hat-…` counts, not only the five in `SEAT_ROLES`: an
+/// operator who invents a sixth hat is asking the same question of their own
+/// config, and a rule keyed to a closed list would answer it silently.
+fn hat_slots_missing_a_description(root: &Path, runtime: Runtime) -> Vec<String> {
+    let config = crate::state::read_config_raw(root);
+    let Some(table) = config
+        .get("team")
+        .and_then(|m| m.get(runtime.name()))
+        .and_then(Value::as_object)
+    else {
+        return Vec::new();
+    };
+    let mut missing = Vec::new();
+    for (slot, value) in table {
+        if !slot.to_ascii_lowercase().starts_with(crate::verbs::drivers::HAT_ROLE_PREFIX) {
+            continue;
+        }
+        if value.is_null() {
+            continue;
+        }
+        let described = value
+            .as_object()
+            .and_then(|o| o.get("description"))
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.trim().is_empty());
+        if !described {
+            missing.push(slot.clone());
+        }
+    }
+    missing
+}
+
+/// The advisory as doctor publishes it — `None` when every configured hat says
+/// what it is for, so a clean config's payload and lines are byte-identical to
+/// before this row existed.
+///
+/// Status `advisory` is a fourth word beside ok/not_ok/unknown, and it is
+/// deliberately NOT a `Row`: every `Row` votes in `mechanical_ok`, so a hat
+/// missing one sentence would have BLOCKED the runtime. A missing description
+/// costs an operator clarity, never a working dispatch.
+fn hat_description_advisory(root: &Path, runtime: Runtime) -> Option<(Value, String)> {
+    let missing = hat_slots_missing_a_description(root, runtime);
+    if missing.is_empty() {
+        return None;
+    }
+    let detail = format!(
+        "{} hat slot(s) in team.{} carry no description: {} — each hat's purpose belongs in its own slot (\"{}\": {{\"model\": \"…\", \"description\": \"what this hat looks for\"}}), so the config reads self-documenting. Advisory only: it does not change the verdict.",
+        missing.len(),
+        runtime.name(),
+        missing.join(", "),
+        missing[0],
+    );
+    Some((
+        json!({"row": "hat_slot_descriptions", "status": "advisory", "detail": detail.clone()}),
+        detail,
+    ))
+}
+
+/// team-config-rename D2: a top-level check for the legacy models config key.
+/// Emits one advisory when .bee/config.json still uses models (folded on read).
+/// When both keys are present, notes that team is used and models is ignored.
+pub(crate) fn team_config_advisory(root: &Path) -> Option<(Value, String)> {
+    let config_path = root.join(".bee").join("config.json");
+    let ReadJson::Parsed(Value::Object(map)) = read_json(&config_path) else {
+        return None;
+    };
+    let had_team = map.contains_key("team");
+    let mut copy = map;
+    if !crate::verbs::drivers::fold_team_key(&mut copy) {
+        return None;
+    }
+    let detail = if had_team {
+        ".bee/config.json still uses the models key — team is used and models is ignored.".to_string()
+    } else {
+        ".bee/config.json still uses the models key — rename it to team (models is read as an alias for now).".to_string()
+    };
+    Some((
+        json!({"row": "legacy_models_key", "status": "advisory", "detail": detail.clone()}),
+        detail,
+    ))
+}
+
+pub(crate) fn owner_briefs_advisory(root: &Path) -> Option<(Value, String)> {
+    let problems = crate::verbs::brief::owner_view(root, root)["problems"].as_u64().unwrap_or(0);
+    if problems == 0 {
+        return None;
+    }
+    let detail = format!(
+        "{problems} live item(s) or active feature(s) have no valid owner brief — run: bee backlog briefs"
+    );
+    Some((json!({"row": "owner_briefs", "status": "note", "detail": detail.clone()}), detail))
 }
 
 /// Source that ships without reinstalling the binary the hooks call is
@@ -287,20 +647,48 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
 /// rather than fresh. The mtime leg still runs first: real evidence of drift
 /// beats "unknown".
 fn binary_freshness_row(root: &Path) -> Option<Row> {
+    binary_freshness_row_impl(root, false)
+}
+
+fn pi_binary_freshness_row(root: &Path) -> Row {
+    binary_freshness_row_impl(root, true).expect("pi binary freshness is always present")
+}
+
+const REMEDY: &str = "FIX: cargo build --release --manifest-path packages/bee-rs/Cargo.toml \
+    -p bee --bin bee, then copy target/release/bee to .bee/bin/bee.";
+const HOST_REMEDY: &str = "FIX: re-run the bee installer in this repo: curl -fsSL \
+    https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y";
+
+fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
     const KEY: &str = "binary_freshness";
-    const REMEDY: &str = "FIX: cargo build --release --manifest-path packages/bee-rs/Cargo.toml \
-        -p bee --bin bee, then copy target/release/bee to .bee/bin/bee.";
+    const PLUGIN_MANIFEST: &str = ".claude-plugin/plugin.json";
+    const ONBOARDING_RECORD: &str = ".bee/onboarding.json";
 
     let workspace_cargo = root.join("packages/bee-rs/Cargo.toml");
-    if !workspace_cargo.is_file() {
+    let is_source_checkout = workspace_cargo.is_file();
+    if !is_source_checkout && !is_pi {
         return None;
     }
 
-    let Some(source_version) = read_source_release_version(root) else {
+    // A host has no plugin manifest; the version its installer wrote to
+    // `.bee/onboarding.json` is what it expects (host-packaging-gaps D1).
+    let (expected, source, remedy) = if is_source_checkout {
+        (read_source_release_version(root), PLUGIN_MANIFEST, REMEDY)
+    } else {
+        match read_onboarded_version(root) {
+            Some(v) => (Some(v), ONBOARDING_RECORD, HOST_REMEDY),
+            None => (read_source_release_version(root), PLUGIN_MANIFEST, HOST_REMEDY),
+        }
+    };
+    let Some(source_version) = expected else {
         return Some(Row {
             key: KEY,
             ok: None,
-            detail: ".claude-plugin/plugin.json is missing or unreadable — cannot determine source release version".to_string(),
+            detail: if is_source_checkout {
+                ".claude-plugin/plugin.json is missing or unreadable — cannot determine source release version".to_string()
+            } else {
+                ".bee/onboarding.json has no bee_version and .claude-plugin/plugin.json is missing or unreadable — cannot determine the expected release version".to_string()
+            },
         });
     };
 
@@ -314,14 +702,14 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         });
     };
 
-    let mut probe_failed = false;
+    let mut probe_failed: Option<String> = None;
     match installed_binary_bee_version(&bin) {
         ProbedBeeVersion::Missing => {
             return Some(Row {
                 key: KEY,
                 ok: Some(false),
                 detail: format!(
-                    "installed binary is too old to report its release version (rs-info carries no bee_version field). {REMEDY}"
+                    "installed binary is too old to report its release version (rs-info carries no bee_version field). {remedy}"
                 ),
             });
         }
@@ -332,7 +720,7 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
                     ok: Some(false),
                     detail: format!(
                         "installed binary reports release version {installed_version}, source \
-                         (.claude-plugin/plugin.json) is {source_version}. {REMEDY}"
+                         ({source}) is {source_version}. {remedy}"
                     ),
                 });
             }
@@ -342,51 +730,588 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         // is not evidence of freshness either. The mtime scan below still
         // runs and still wins; only when it finds nothing does this flag turn
         // the row into an honest unknown.
-        ProbedBeeVersion::Failed => probe_failed = true,
+        ProbedBeeVersion::Failed(reason) => probe_failed = Some(reason),
     }
 
-    if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
-        let mut newest: Option<(PathBuf, std::time::SystemTime)> = None;
-        for path in source_inputs(root) {
-            let Ok(mtime) = std::fs::metadata(&path).and_then(|m| m.modified()) else { continue };
-            if mtime > bin_mtime && newest.as_ref().is_none_or(|(_, t)| mtime > *t) {
-                newest = Some((path, mtime));
+    if is_source_checkout {
+        if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
+            let mut newest: Option<(PathBuf, std::time::SystemTime)> = None;
+            for path in source_inputs(root) {
+                let Ok(mtime) = std::fs::metadata(&path).and_then(|m| m.modified()) else { continue };
+                if mtime > bin_mtime && newest.as_ref().is_none_or(|(_, t)| mtime > *t) {
+                    newest = Some((path, mtime));
+                }
+            }
+            if let Some((path, mtime)) = newest {
+                let rel = path.strip_prefix(root).unwrap_or(&path);
+                return Some(Row {
+                    key: KEY,
+                    ok: Some(false),
+                    detail: format!(
+                        "{} was modified {} (binary is {}). {remedy}",
+                        rel.display(),
+                        fmt_system_time(mtime),
+                        fmt_system_time(bin_mtime)
+                    ),
+                });
             }
         }
-        if let Some((path, mtime)) = newest {
-            let rel = path.strip_prefix(root).unwrap_or(&path);
-            return Some(Row {
-                key: KEY,
-                ok: Some(false),
-                detail: format!(
-                    "{} was modified {} (binary is {}). {REMEDY}",
-                    rel.display(),
-                    fmt_system_time(mtime),
-                    fmt_system_time(bin_mtime)
-                ),
-            });
-        }
     }
 
-    if probe_failed {
+    if let Some(reason) = probe_failed {
         return Some(Row {
             key: KEY,
             ok: None,
-            detail: format!(
-                "could not run the installed binary to read its release version (bee rs-info \
-                 failed), and no source input is newer than it — freshness is unknown. {REMEDY}"
-            ),
+            detail: if is_source_checkout {
+                format!(
+                    "could not read the installed binary's release version (bee rs-info: {reason}), \
+                     and no source input is newer than it — freshness is unknown. {remedy}"
+                )
+            } else {
+                format!(
+                    "could not read the installed binary's release version (bee rs-info: {reason}) \
+                     — freshness is unknown. {remedy}"
+                )
+            },
         });
     }
 
     Some(Row {
         key: KEY,
         ok: Some(true),
-        detail: format!(
-            "installed binary matches source (version {source_version}), no source input newer \
-             than the binary"
-        ),
+        detail: if is_source_checkout {
+            format!(
+                "installed binary matches source (version {source_version}), no source input newer \
+                 than the binary"
+            )
+        } else {
+            format!("installed binary matches release version {source_version}")
+        },
     })
+}
+
+#[allow(dead_code)]
+fn pi_herding_transport_row(root: &Path) -> Row {
+    pi_herding_transport_row_with_env(root, &|k| std::env::var(k).ok())
+}
+
+fn pi_herding_transport_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Row {
+    const KEY: &str = "herding_transport";
+    if every_pi_slot_runs_no_pane(root) {
+        return Row {
+            key: KEY,
+            ok: Some(true),
+            detail: "every team.pi role runs a Pi process with --no-pane; no pane multiplexer is needed"
+                .to_string(),
+        };
+    }
+    match crate::herding::transport_kind_at(root) {
+        Ok(kind) => {
+            let (ready, reason, _) =
+                crate::verbs::drivers::herding_transport_probe_for(kind, env);
+            Row {
+                key: KEY,
+                ok: Some(ready),
+                detail: reason,
+            }
+        }
+        Err(reason) => Row {
+            key: KEY,
+            ok: None,
+            detail: reason,
+        },
+    }
+}
+
+fn read_folded_config(root: &Path) -> Value {
+    let mut map = crate::state::read_config_raw(root);
+    crate::verbs::drivers::fold_team_key(&mut map);
+    Value::Object(map)
+}
+
+fn team_pi_paseo_specs(cfg: &Value) -> Vec<Result<crate::herding::paseo::PaseoSpec, String>> {
+    let Some(slots) = cfg.pointer("/team/pi").and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    let mut specs = Vec::new();
+    for slot in slots.values() {
+        if slot.get("kind").and_then(Value::as_str) == Some("herding") {
+            if let Some(agent_name) = slot.get("agent").and_then(Value::as_str) {
+                if let Some(spec) = crate::herding::paseo::PaseoSpec::from_config(cfg, agent_name) {
+                    specs.push(spec);
+                }
+            }
+        }
+    }
+    specs
+}
+
+fn is_bare_version(line: &str) -> bool {
+    let s = line.trim();
+    let s = s.strip_prefix('v').or_else(|| s.strip_prefix('V')).unwrap_or(s);
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+}
+
+fn is_appimage_wrapper_script(cmd: &str, env: &dyn Fn(&str) -> Option<String>) -> bool {
+    locate_on_path(cmd, env)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .is_some_and(|content| content.contains("AppImage"))
+}
+
+fn locate_on_path(cmd: &str, env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
+    if cmd.contains('/') || cmd.contains('\\') {
+        let p = PathBuf::from(cmd);
+        return p.exists().then_some(p);
+    }
+    let val = env("PATH")?;
+    for dir in std::env::split_paths(&val) {
+        let candidate = dir.join(cmd);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        #[cfg(windows)]
+        {
+            for ext in [".exe", ".cmd", ".bat"] {
+                let cand_ext = dir.join(format!("{cmd}{ext}"));
+                if cand_ext.is_file() {
+                    return Some(cand_ext);
+                }
+            }
+        }
+    }
+    None
+}
+
+pub(crate) const BELT_CONTRACT: u32 = 1;
+
+const ONBOARD_FIX: &str = "bee onboard --apply";
+
+struct RuntimeCheck {
+    name: &'static str,
+    detail: String,
+    fix: Option<String>,
+}
+
+impl RuntimeCheck {
+    fn key(&self) -> String {
+        format!("runtime_{}", self.name)
+    }
+
+    fn value(&self) -> Value {
+        json!({
+            "row": self.key(),
+            "status": "advisory",
+            "ok": self.fix.is_none(),
+            "detail": self.detail,
+            "fix": self.fix,
+        })
+    }
+
+    fn lines(&self) -> Vec<String> {
+        let mark = if self.fix.is_none() { "ok  " } else { "note" };
+        let mut out = vec![format!("  {mark} {:<22} {}", self.key(), self.detail)];
+        if let Some(fix) = &self.fix {
+            out.push(format!("       {:<22} fix: {fix}", ""));
+        }
+        out
+    }
+}
+
+fn belt_contract_version(sources: &[PathBuf]) -> Option<u32> {
+    sources.iter().find_map(|path| {
+        let text = std::fs::read_to_string(path).ok()?;
+        let after = &text[text.find("BELT_CONTRACT_VERSION")? + "BELT_CONTRACT_VERSION".len()..];
+        let after = after.trim_start_matches(|c: char| c == '=' || c == ':' || c.is_whitespace());
+        let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+        digits.parse().ok()
+    })
+}
+
+fn belt_sources(dir: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "ts"))
+        .collect();
+    out.sort();
+    out
+}
+
+pub(crate) fn belt_contract_check(root: &Path, version: Option<u32>) -> (String, Option<String>) {
+    match version {
+        None => (format!("belt contract unknown (no BELT_CONTRACT_VERSION; binary is {BELT_CONTRACT})"), None),
+        Some(v) if v == BELT_CONTRACT => (format!("belt contract {v} matches the binary"), None),
+        Some(v) if v < BELT_CONTRACT => (
+            format!("belt contract {v} is older than the binary's {BELT_CONTRACT}"),
+            Some(ONBOARD_FIX.to_string()),
+        ),
+        Some(v) => {
+            let remedy = if root.join("packages/bee-rs/Cargo.toml").is_file() { REMEDY } else { HOST_REMEDY };
+            (
+                format!("belt contract {v} is newer than the binary's {BELT_CONTRACT}"),
+                Some(remedy.trim_start_matches("FIX: ").to_string()),
+            )
+        }
+    }
+}
+
+fn runtime_checks_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Vec<RuntimeCheck> {
+    let cfg = read_folded_config(root);
+    let paseo_cmd = crate::herding::paseo::paseo_command(&cfg);
+    let specs: [(&'static str, &str, &str); 5] = [
+        ("claude", "claude", "npm install -g @anthropic-ai/claude-code"),
+        ("codex", "codex", "npm install -g @openai/codex"),
+        ("opencode", "opencode", "npm install -g opencode-ai"),
+        ("pi", "pi", "npm install -g @mariozechner/pi-coding-agent"),
+        ("paseo", paseo_cmd.as_str(), "npm install -g @getpaseo/cli"),
+    ];
+    specs
+        .into_iter()
+        .map(|(name, tool, install)| {
+            let found = locate_on_path(tool, env);
+            let mut parts = vec![match &found {
+                Some(p) => format!("{tool} found at {}", p.display()),
+                None => format!("{tool} not found on PATH"),
+            }];
+            let mut fixes: Vec<String> = Vec::new();
+            if found.is_none() {
+                fixes.push(format!("install {tool}: {install}"));
+            }
+            let onboard = || Some(ONBOARD_FIX.to_string());
+            let (wiring_detail, wiring_fix, belt) = match name {
+                "opencode" => {
+                    let plugin = root.join(".opencode/plugins/bee-guard.ts");
+                    if plugin.is_file() {
+                        let belt = belt_contract_check(root, belt_contract_version(std::slice::from_ref(&plugin)));
+                        (".opencode/plugins/bee-guard.ts present".to_string(), None, Some(belt))
+                    } else {
+                        (".opencode/plugins/bee-guard.ts is missing".to_string(), onboard(), None)
+                    }
+                }
+                "paseo" => {
+                    let paseo_agents = ["/agents", "/herding/agents"]
+                        .iter()
+                        .filter_map(|p| cfg.pointer(p).and_then(Value::as_object))
+                        .flat_map(|m| m.values())
+                        .filter(|a| a.get("paseo").is_some_and(Value::is_object))
+                        .count();
+                    if paseo_agents > 0 || cfg.pointer("/herding/paseo").is_some_and(|v| !v.is_null()) {
+                        (format!("herding config names {paseo_agents} paseo agent(s)"), None, None)
+                    } else {
+                        (
+                            "no paseo agent configured".to_string(),
+                            Some("add an agent with a paseo block under herding.agents in .bee/config.json".to_string()),
+                            None,
+                        )
+                    }
+                }
+                _ => {
+                    let runtime = Runtime::parse(name).expect("claude, codex and pi parse");
+                    let bytes = std::fs::read(root.join(runtime.hooks_rel())).ok();
+                    let row = wiring_row(root, runtime, bytes.as_deref());
+                    let belt = (runtime == Runtime::Pi).then(|| {
+                        belt_contract_check(root, belt_contract_version(&belt_sources(&root.join(".pi/extensions/bee-guard"))))
+                    });
+                    let fix = if row.ok == Some(true) { None } else { onboard() };
+                    (format!("wiring: {}", row.detail), fix, belt)
+                }
+            };
+            parts.push(wiring_detail);
+            fixes.extend(wiring_fix);
+            if let Some((detail, fix)) = belt {
+                parts.push(detail);
+                fixes.extend(fix.filter(|f| !fixes.contains(f)));
+            }
+            RuntimeCheck {
+                name,
+                detail: parts.join("; "),
+                fix: (!fixes.is_empty()).then(|| fixes.join(", then ")),
+            }
+        })
+        .collect()
+}
+
+fn paseo_ready_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Option<Row> {
+    paseo_ready_row_with_env_and_cli(root, env, None, None)
+}
+
+fn paseo_ready_row_with_env_and_cli(
+    root: &Path,
+    env: &dyn Fn(&str) -> Option<String>,
+    cli_override: Option<&dyn crate::herding::paseo::PaseoCli>,
+    daemon_probe: Option<bool>,
+) -> Option<Row> {
+    const KEY: &str = "paseo_ready";
+    let cfg = read_folded_config(root);
+    let specs = team_pi_paseo_specs(&cfg);
+    if specs.is_empty() {
+        return None;
+    }
+
+    let cmd = crate::herding::paseo::paseo_command(&cfg);
+    let real_cli = crate::herding::paseo::RealPaseoCli::new(cmd.clone())
+        .with_timeout(std::time::Duration::from_secs(5));
+    let cli: &dyn crate::herding::paseo::PaseoCli = match cli_override {
+        Some(c) => c,
+        None => &real_cli,
+    };
+
+    let mut failures = Vec::new();
+
+    let daemon_answers = daemon_probe.unwrap_or_else(crate::herding::paseo::daemon_reachable);
+    if !daemon_answers {
+        failures.push("paseo daemon is down — FIX: start the daemon with paseo daemon start".to_string());
+    }
+
+    let is_wrapper = is_appimage_wrapper_script(&cmd, env);
+    match cli.call(&["--version".to_string()]) {
+        Ok(out) => {
+            let first_line = out.lines().find(|l| !l.trim().is_empty()).map(str::trim);
+            let bare = first_line.is_some_and(is_bare_version);
+            if !bare || is_wrapper {
+                failures.push(format!(
+                    "{cmd} is an AppImage CLI — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo"
+                ));
+            } else if !crate::herding::paseo::version_at_least(&out, (0, 12, 0)) {
+                failures.push(format!(
+                    "{cmd} version is below 0.12.0 — FIX: upgrade to 0.12.0 with npm @getpaseo/cli"
+                ));
+            }
+        }
+        Err(e) => {
+            if is_wrapper {
+                failures.push(format!(
+                    "{cmd} is an AppImage CLI — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo"
+                ));
+            } else {
+                failures.push(format!(
+                    "{cmd} --version failed ({e}) — FIX: upgrade to 0.12.0 with npm @getpaseo/cli"
+                ));
+            }
+        }
+    }
+
+    let any_provider_is_pi = specs.iter().any(|s| match s {
+        Ok(spec) => spec.provider.trim().eq_ignore_ascii_case("pi"),
+        Err(_) => false,
+    });
+    if any_provider_is_pi {
+        let home = env("HOME").or_else(|| env("USERPROFILE"));
+        let auth_exists = home
+            .as_deref()
+            .is_some_and(|h| Path::new(h).join(".pi/agent/auth.json").is_file());
+        if !auth_exists {
+            failures.push("~/.pi/agent/auth.json is missing — FIX: log in with pi".to_string());
+        }
+    }
+
+    let mut herding_agents = std::collections::BTreeMap::new();
+    if let Some(map) = cfg.get("agents").and_then(Value::as_object) {
+        for (name, val) in map {
+            herding_agents.insert(name.clone(), val.clone());
+        }
+    }
+    if let Some(map) = cfg.pointer("/herding/agents").and_then(Value::as_object) {
+        for (name, val) in map {
+            herding_agents.insert(name.clone(), val.clone());
+        }
+    }
+
+    for (agent, val) in &herding_agents {
+        let Some(paseo_obj) = val.get("paseo").and_then(Value::as_object) else {
+            continue;
+        };
+        let is_pi = paseo_obj
+            .get("provider")
+            .and_then(Value::as_str)
+            .is_some_and(|s| s.trim().eq_ignore_ascii_case("pi"));
+        let isolated = paseo_obj
+            .get("isolated_config")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !is_pi || !isolated {
+            continue;
+        }
+
+        let agent_dir = root.join(".bee/runtime/pi-agent").join(agent);
+        if agent_dir.exists() {
+            let settings_file = agent_dir.join("settings.json");
+            let settings_ok = std::fs::read_to_string(&settings_file)
+                .ok()
+                .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+                .and_then(|v| {
+                    v.get("defaultProjectTrust")
+                        .and_then(Value::as_str)
+                        .map(|s| s == "always")
+                })
+                .unwrap_or(false);
+            if !settings_ok {
+                failures.push(format!(
+                    "isolated agent folder .bee/runtime/pi-agent/{agent} settings.json does not set defaultProjectTrust to always — FIX: recreate isolated config for {agent}"
+                ));
+            }
+
+            let auth_file = agent_dir.join("auth.json");
+            let auth_ok = std::fs::symlink_metadata(&auth_file)
+                .map(|meta| meta.file_type().is_symlink())
+                .unwrap_or(false)
+                && auth_file.exists();
+            if !auth_ok {
+                failures.push(format!(
+                    "isolated agent folder .bee/runtime/pi-agent/{agent} auth.json is not a resolving symlink — FIX: recreate isolated config for {agent}"
+                ));
+            }
+        } else {
+            let home = env("HOME").or_else(|| env("USERPROFILE"));
+            let home_auth_exists = home
+                .as_deref()
+                .is_some_and(|h| Path::new(h).join(".pi/agent/auth.json").is_file());
+            if !home_auth_exists {
+                failures.push(format!(
+                    "~/.pi/agent/auth.json is missing for agent {agent} — FIX: log in with pi for {agent}"
+                ));
+            }
+        }
+    }
+
+    let marker_dir = root.join(".bee/runtime/paseo-heartbeat");
+    if let Ok(entries) = std::fs::read_dir(&marker_dir) {
+        let mut marker_paths: Vec<PathBuf> = entries
+            .flatten()
+            .filter(|e| e.file_type().map(|ft| ft.is_file()).unwrap_or(false))
+            .map(|e| e.path())
+            .collect();
+        marker_paths.sort();
+        for marker_path in marker_paths {
+            let raw = std::fs::read_to_string(&marker_path).unwrap_or_default();
+            let parsed: Option<Value> = serde_json::from_str(&raw).ok();
+            let file_stem = marker_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            let file_name = marker_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or(file_stem);
+            let agent_id = parsed
+                .as_ref()
+                .and_then(|v| v.get("agent_id").and_then(Value::as_str))
+                .unwrap_or(file_stem);
+            let schedule_id = parsed
+                .as_ref()
+                .and_then(|v| {
+                    v.get("schedule_id")
+                        .or_else(|| v.get("id"))
+                        .or_else(|| v.get("Id"))
+                        .or_else(|| v.get("ID"))
+                        .and_then(Value::as_str)
+                })
+                .unwrap_or(agent_id);
+
+            if let Some(del_failed) = parsed.as_ref().and_then(|v| v.get("delete_failed")) {
+                if !del_failed.is_null() {
+                    let reason = del_failed.as_str().unwrap_or("failed delete");
+                    failures.push(format!(
+                        "marker {file_name} carries delete_failed ({reason}) — FIX: delete the orphan heartbeat with paseo heartbeat delete {schedule_id} and remove the marker"
+                    ));
+                }
+            }
+
+            let inspect_argv = crate::herding::paseo::inspect_argv(agent_id);
+            let inspect_res = cli.call(&inspect_argv);
+            let is_orphan = match inspect_res {
+                Err(_) => true,
+                Ok(stdout) => {
+                    let state = crate::herding::paseo::parse_inspect(&stdout);
+                    let is_dead = state == Some(crate::herding::paseo::PaseoState::Dead);
+                    let mut archived = false;
+                    for (i, c) in stdout.char_indices() {
+                        if c == '{' {
+                            let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
+                            if let Some(Ok(Value::Object(map))) = de.next() {
+                                if map
+                                    .get("Archived")
+                                    .or_else(|| map.get("archived"))
+                                    .and_then(|v| {
+                                        v.as_bool().or_else(|| {
+                                            v.as_str().map(|s| s == "true" || s == "archived")
+                                        })
+                                    })
+                                    .unwrap_or(false)
+                                {
+                                    archived = true;
+                                }
+                                if map
+                                    .get("Status")
+                                    .or_else(|| map.get("status"))
+                                    .and_then(Value::as_str)
+                                    == Some("archived")
+                                {
+                                    archived = true;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    is_dead || archived
+                }
+            };
+
+            if is_orphan {
+                failures.push(format!(
+                    "orphan heartbeat marker {file_name} (agent {agent_id}) — FIX: delete the orphan heartbeat with paseo heartbeat delete {schedule_id} and remove the marker"
+                ));
+            }
+        }
+    }
+
+    if failures.is_empty() {
+        Some(Row {
+            key: KEY,
+            ok: Some(true),
+            detail: "paseo daemon is reachable, version >= 0.12.0, and heartbeats ready".to_string(),
+        })
+    } else {
+        Some(Row {
+            key: KEY,
+            ok: Some(false),
+            detail: failures.join("; "),
+        })
+    }
+}
+
+/// True when `team.pi` has at least one slot and every slot is a herding slot
+/// whose agent is a Pi process — the same test dispatch uses to add
+/// `--no-pane` (host-packaging-gaps D5).
+fn every_pi_slot_runs_no_pane(root: &Path) -> bool {
+    let mut map = crate::state::read_config_raw(root);
+    crate::verbs::drivers::fold_team_key(&mut map);
+    let cfg = Value::Object(map);
+    let Some(slots) = cfg.pointer("/team/pi").and_then(Value::as_object) else {
+        return false;
+    };
+    !slots.is_empty()
+        && slots.values().all(|slot| {
+            slot.get("kind").and_then(Value::as_str) == Some("herding")
+                && slot
+                    .get("agent")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| crate::verbs::drivers::is_pi_agent(&cfg, name))
+        })
+}
+
+/// The `bee_version` the installer recorded in `<root>/.bee/onboarding.json`;
+/// null or absent reads as missing.
+fn read_onboarded_version(root: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(root.join(".bee/onboarding.json")).ok()?;
+    let parsed: Value = serde_json::from_str(&text).ok()?;
+    parsed.get("bee_version").and_then(Value::as_str).map(str::to_string)
 }
 
 /// The release version from `<root>/.claude-plugin/plugin.json`.
@@ -400,21 +1325,26 @@ fn read_source_release_version(root: &Path) -> Option<String> {
 enum ProbedBeeVersion {
     Present(String),
     Missing,
-    Failed,
+    /// Carries WHY the probe produced no version. The reason is not decoration:
+    /// this arm ends in an `ok: None` row, and a row that says only "unknown"
+    /// leaves the next reader with nothing to act on.
+    Failed(String),
 }
 
 /// The installed binary's answer to what release version it was built from —
 /// `bee rs-info`'s `bee_version` field. A probe, never a mutation: this only
 /// spawns and reads stdout.
 fn installed_binary_bee_version(bin: &Path) -> ProbedBeeVersion {
-    let Ok(out) = std::process::Command::new(bin).arg("rs-info").output() else {
-        return ProbedBeeVersion::Failed;
+    let spawned = crate::fsutil::retry_executable_busy(|| std::process::Command::new(bin).arg("rs-info").output());
+    let out = match spawned {
+        Ok(out) => out,
+        Err(e) => return ProbedBeeVersion::Failed(format!("could not spawn it ({e})")),
     };
     if !out.status.success() {
-        return ProbedBeeVersion::Failed;
+        return ProbedBeeVersion::Failed(format!("it exited {}", out.status));
     }
     let Ok(value) = serde_json::from_slice::<Value>(&out.stdout) else {
-        return ProbedBeeVersion::Failed;
+        return ProbedBeeVersion::Failed("its rs-info output is not JSON".to_string());
     };
     match value.get("bee_version").and_then(Value::as_str) {
         Some(ver) => ProbedBeeVersion::Present(ver.to_string()),
@@ -550,11 +1480,17 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
         return ExitCode::from(1);
     };
 
-    let rows = mechanical_rows(&root, runtime);
-    let mechanical_ok = rows.iter().all(|r| r.ok == Some(true));
+    let (payload, lines) = doctor_report(&root, runtime, &|k| std::env::var(k).ok());
+    emit(&payload, as_json, &lines);
+    if payload["overall_status"] == "blocked" { ExitCode::from(1) } else { ExitCode::SUCCESS }
+}
+
+fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<String>) -> (Value, Vec<String>) {
+    let rows = mechanical_rows_with_env(root, runtime, env);
+    let mechanical_ok = rows.iter().all(|r| !r.votes() || r.ok == Some(true));
 
     let mut all: Vec<Value> = rows.iter().map(Row::value).collect();
-    let attest = read_attestation(&root, runtime);
+    let attest = read_attestation(root, runtime);
     if runtime == Runtime::Codex {
         for (key, what) in CODEX_TRUST_ROWS {
             let detail = if attest.valid {
@@ -569,6 +1505,24 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
             }));
         }
     }
+
+    // D3's advisory rides ALONGSIDE the ladder, never inside it: it is
+    // appended after every row that votes, and `status` below is computed from
+    // `mechanical_ok` and the attestation exactly as it was.
+    let advisory = hat_description_advisory(root, runtime);
+    if let Some((row, _)) = &advisory {
+        all.push(row.clone());
+    }
+    let team_advisory = team_config_advisory(root);
+    if let Some((row, _)) = &team_advisory {
+        all.push(row.clone());
+    }
+    let briefs_advisory = owner_briefs_advisory(root);
+    if let Some((row, _)) = &briefs_advisory {
+        all.push(row.clone());
+    }
+    let runtime_checks = runtime_checks_with_env(root, env);
+    all.extend(runtime_checks.iter().map(RuntimeCheck::value));
 
     // Never ready from presence alone: the ladder is evaluated, not assumed.
     let status = if !mechanical_ok {
@@ -593,12 +1547,7 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
 
     let mut lines = vec![format!("bee doctor ({}): {}", runtime.name(), status.to_uppercase())];
     for r in &rows {
-        let mark = match r.ok {
-            Some(true) => "ok  ",
-            Some(false) => "FAIL",
-            None => "?   ",
-        };
-        lines.push(format!("  {mark} {:<22} {}", r.key, r.detail));
+        lines.push(format!("  {} {:<22} {}", r.mark(), r.key, r.detail));
     }
     if runtime == Runtime::Codex && !attest.valid {
         lines.push(format!(
@@ -606,18 +1555,33 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
             attest.reason
         ));
     }
+    if let Some((_, detail)) = &advisory {
+        lines.push(format!("  note {:<22} {}", "hat_slot_descriptions", detail));
+    }
+    if let Some((_, detail)) = &team_advisory {
+        lines.push(format!("  note {:<22} {}", "legacy_models_key", detail));
+    }
+    if let Some((_, detail)) = &briefs_advisory {
+        lines.push(format!("  note {:<22} {}", "owner_briefs", detail));
+    }
+    for check in &runtime_checks {
+        lines.extend(check.lines());
+    }
     lines.push(match status {
         "blocked" => "next: fix the FAIL row(s) above — nothing else can be trusted until they are ok".to_string(),
         "degraded" => "next: the wiring is correct; what is unproven is whether Codex is letting it fire".to_string(),
         _ => "next: nothing — this runtime is ready".to_string(),
     });
-    emit(&payload, as_json, &lines);
-    if status == "blocked" { ExitCode::from(1) } else { ExitCode::SUCCESS }
+    (payload, lines)
 }
 
 fn run_attest(runtime: Runtime, session: Option<&str>, as_json: bool) -> ExitCode {
     if runtime != Runtime::Codex {
-        let msg = "bee doctor attest: --runtime codex only. Claude has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.";
+        let msg = match runtime {
+            Runtime::Claude => "bee doctor attest: --runtime codex only. Claude has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.",
+            Runtime::Pi => "bee doctor attest: --runtime codex only. Pi has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.",
+            Runtime::Codex => unreachable!(),
+        };
         if as_json {
             print!("{}\n", jsjson::stringify(&json!({"error": msg, "kind": "not_applicable"})));
         } else {
@@ -715,3 +1679,102 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
 
 #[cfg(test)]
 mod tests;
+
+
+#[cfg(test)]
+mod design_skill_tests {
+    use super::*;
+
+    const ROLE_CONFIG: &str = r#"{"team":{"claude":{"design":{"model":"sonnet"}}}}"#;
+
+    fn repo(tmp: &Path, config: &str, design_agent: bool) -> PathBuf {
+        let root = tmp.join("repo");
+        std::fs::create_dir_all(root.join(".bee").join("bin")).unwrap();
+        std::fs::write(root.join(".bee/bin/bee"), b"#!/bin/sh\n").unwrap();
+        std::fs::create_dir_all(root.join(".claude/skills/bee-hive")).unwrap();
+        std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
+        std::fs::write(
+            root.join(".claude/settings.json"),
+            r#"{"hooks":{"PreToolUse":[{"hooks":[{"command":".bee/bin/bee hook write-guard"}]}]}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join(".bee/config.json"), config).unwrap();
+        if design_agent {
+            std::fs::create_dir_all(root.join(".claude/agents")).unwrap();
+            std::fs::write(
+                root.join(".claude/agents/bee-design.md"),
+                "---\nname: bee-design\n---\n",
+            )
+            .unwrap();
+        }
+        root
+    }
+
+    fn design_row(root: &Path) -> Option<Row> {
+        mechanical_rows(root, Runtime::Claude)
+            .into_iter()
+            .find(|r| r.key == "design_skill")
+    }
+
+    fn install_skill(root: &Path, home: &str) {
+        std::fs::create_dir_all(root.join(home).join("bee-design")).unwrap();
+        std::fs::write(root.join(home).join("bee-design/SKILL.md"), "bee-design\n").unwrap();
+    }
+
+    #[test]
+    fn doctor_design_skill_warns_when_the_role_has_no_bee_design_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), ROLE_CONFIG, false);
+        let row = design_row(&root).expect("a configured design role with no bee-design skill is named");
+        assert_eq!(row.value()["status"], "warn", "{}", row.detail);
+        assert!(row.detail.contains("--design-packs"), "{}", row.detail);
+        assert!(!row.votes(), "a warning never votes");
+
+        let (payload, lines) = doctor_report(&root, Runtime::Claude, &|_| None);
+        assert_ne!(payload["overall_status"], "blocked", "{payload}");
+        assert!(
+            lines.iter().any(|l| l.contains("design_skill") && l.contains("--design-packs")),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn doctor_design_skill_warns_when_only_the_agent_file_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", true);
+        let row = design_row(&root).expect("an installed bee-design agent with no skill is named");
+        assert_eq!(row.value()["status"], "warn", "{}", row.detail);
+    }
+
+    #[test]
+    fn doctor_design_skill_is_ok_when_the_skill_is_installed() {
+        for home in [".claude/skills", ".agents/skills", ".opencode/skills"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(tmp.path(), ROLE_CONFIG, true);
+            install_skill(&root, home);
+            let row = design_row(&root).expect("the row reports on a project with a design role");
+            assert_eq!(row.value()["status"], "ok", "{home}: {}", row.detail);
+            assert!(!row.detail.contains("--design-packs"), "{home}: {}", row.detail);
+        }
+    }
+
+    #[test]
+    fn doctor_design_skill_is_ok_when_the_pick_is_none() {
+        for config in [
+            r#"{"team":{"claude":{"design":{"model":"sonnet"}}},"design":{"packs":[]}}"#,
+            r#"{"team":{"claude":{"design":{"model":"sonnet"}}},"design":{"packs":"none"}}"#,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(tmp.path(), config, true);
+            let row = design_row(&root).expect("the row reports on a project with a design role");
+            assert_eq!(row.value()["status"], "ok", "{config}: {}", row.detail);
+        }
+    }
+
+    #[test]
+    fn doctor_design_skill_is_absent_when_no_design_role_and_no_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        assert!(design_row(&root).is_none(), "nothing configures design work, so nothing is named");
+    }
+}

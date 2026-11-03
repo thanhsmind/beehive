@@ -1,0 +1,113 @@
+{
+  "id": "pse-1",
+  "feature": "proof-strength-and-expiry",
+  "lane": "standard",
+  "role": "code",
+  "title": "Close the cap proof's result segment over three strength values",
+  "action": "Per D1/D2/D3. Add a named three-value constant — green:live, green:unit, green:static — to packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, modelled on ROUTE_CLASS_VALUES (state_group/workflows.rs:287-288), with each value's meaning in a comment beside it: live = the real product or command was driven and its observable result inspected; unit = automated tests passed; static = it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.\n\nCHECK IT IN `parse_report_flag`, in the match arm at :195-196 immediately BESIDE the existing `red` arm, on the tuple parse_tests_proof returns. Do NOT touch parse_tests_proof itself, and do NOT touch proof.rs's feature_proof_check. That inaction IS D2: proof.rs:61 calls the same parser, so closing the parser would retroactively refuse ~200 historical capped cells. Add a comment at the parse_tests_proof definition saying the vocabulary is deliberately NOT checked there and naming why, so a later reader does not 'fix' it.\n\nThe refusal must name all three values, the way the route-class refusal names its legal set. Update the refusal-message example at finish_support.rs:204 — it currently reads (e.g. \"cargo test -p bee — green — touched close.rs\") and would otherwise teach the form it now refuses. The message at :211 carries no example and needs no change.\n\nPin the refusal message with a test, the second half of the model (state_group/tests.rs:1725 pins the route-class one). Add unit tests both ways: a bare `green` refuses naming the three; `green:unit` caps. And add the D2 test: a cell already capped with a bare `green` still passes feature_proof_check with NO read-path code changed.\n\nWrite-path test fixtures elsewhere in the crate will go red from this change — that is expected and they are yours to update. Read-path fixtures must KEEP their bare `green`: proof.rs carries two, and each should gain a one-line comment marking it as deliberate D2 evidence so a later sweep cannot silently kill it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "A bare green refuses at cells finish with a typed message naming green:live, green:unit and green:static. green:unit caps. parse_tests_proof and feature_proof_check are unedited except for comments. A capped bare-green cell still passes the close door. The refusal message is pinned by a test.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "decisions": [
+    "cb7b14b7-a6d0-4e9d-81dc-5fd8273317a2"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "docs/history/proof-strength-and-expiry/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "the vocabulary check lives in parse_report_flag beside the red arm; parse_tests_proof's BODY is unedited",
+      "proof.rs's feature_proof_check is unedited except for comments, and a capped bare-green cell still passes it",
+      "the refusal names all three values and is pinned by a test",
+      "the refusal-message example at finish_support.rs:204 no longer shows a bare green",
+      "proof.rs's two bare-green fixtures survive and each carries a comment marking it as D2 evidence",
+      "the full workspace suite is green"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pse-1",
+    "outcome": "Closed the cap proof result segment over green:live/green:unit/green:static on the write path; the read path stays tolerant of historical bare-green caps",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "Also qualified the two bare-green examples in the boundary/undeclared refusal at finish_support.rs:192 — the cell named only :204, but :192 sits in the same function and would teach the exact form that function now refuses — the plan was wrong about a fact",
+      "Labelled the existing proof.rs test a_capped_cell_with_a_valid_proof_line_is_proven_not_blocking as the D2 test with a doc comment instead of adding a second one — it already caps a bare-green cell and passes feature_proof_check, so a new test would assert the same thing twice — found a better route",
+      "Reserved and edited packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, which the files list on this cell did not name — its cap fixture goes through cap_cell_from_flags with a bare green and the change turns it red — hit an unforeseen obstacle",
+      "Also qualified the fixture proof strings in hooks/cli_shape.rs and hooks/write_guard/tests.rs — neither went red, but both are in the file set for this cell and both show a bee cells cap command carrying the now-refused form — the plan was wrong about a fact",
+      "Left hooks/session_preamble/tests.rs unedited though the cell listed it — its bare-green example pins a literal source string in session_preamble/budget.rs, which slice 3 owns; editing the test alone would go red — the plan was wrong about a fact",
+      "sync-ack: D5 assigns every skill, prompt and doc teaching site to slice 3 (skills/bee-swarming/references/worker-details.md among them); this cell is the vocabulary and its write-path check only, and its files list names no skill"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T15:38:15.524Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5a3619c8-a3c2-470a-be32-189bc3db79ac",
+    "claimed_at": "2026-09-01T15:23:26.290Z",
+    "ownership_overrides": [
+      {
+        "verb": "unclaimCell",
+        "forced_by": "5a3619c8-a3c2-470a-be32-189bc3db79ac",
+        "owner_bypassed": "c021e309-e77a-4956-a752-9611003c58bd",
+        "at": "2026-09-01T15:23:26.230Z"
+      }
+    ],
+    "verify_command": null,
+    "verified_at": null,
+    "sync_ack": "D5 assigns every skill, prompt and doc teaching site to slice 3 (skills/bee-swarming/references/worker-details.md among them); this cell is the vocabulary and its write-path check only, and its files list names no skill",
+    "mistakes": [
+      {
+        "wrong": "Piped the first full cargo test --no-fail-fast run to tail -80, which showed only the last crate results and hid the pass/fail summary, so the whole suite had to be re-run",
+        "better": "should have grepped for the test result and error lines on the first run instead of tailing"
+      }
+    ],
+    "report": {
+      "outcome": "The cap result segment is closed over green:live/green:unit/green:static on the write path only; the read path and its historical bare-green caps are untouched.",
+      "commit": "9ad04c732d353b6887609bd2faced1dbabc87f39",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the verify this cell declared; the whole workspace, because a write-path refusal reaches every cap fixture in the crate",
+      "deviations": [
+        "Also qualified the two bare-green examples in the boundary/undeclared refusal at finish_support.rs:192 — the cell named only :204, but :192 sits in the same function and would teach the exact form that function now refuses — the plan was wrong about a fact",
+        "Labelled the existing proof.rs test a_capped_cell_with_a_valid_proof_line_is_proven_not_blocking as the D2 test with a doc comment instead of adding a second one — it already caps a bare-green cell and passes feature_proof_check, so a new test would assert the same thing twice — found a better route",
+        "Reserved and edited packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, which the files list on this cell did not name — its cap fixture goes through cap_cell_from_flags with a bare green and the change turns it red — hit an unforeseen obstacle",
+        "Also qualified the fixture proof strings in hooks/cli_shape.rs and hooks/write_guard/tests.rs — neither went red, but both are in the file set for this cell and both show a bee cells cap command carrying the now-refused form — the plan was wrong about a fact",
+        "Left hooks/session_preamble/tests.rs unedited though the cell listed it — its bare-green example pins a literal source string in session_preamble/budget.rs, which slice 3 owns; editing the test alone would go red — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Piped the first full cargo test --no-fail-fast run to tail -80, which showed only the last crate results and hid the pass/fail summary, so the whole suite had to be re-run — should have grepped for the test result and error lines on the first run instead of tailing"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

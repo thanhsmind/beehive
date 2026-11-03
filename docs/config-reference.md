@@ -15,24 +15,26 @@ Two rules the deleted CLI used to enforce for you, now yours to keep:
 - **`hooks.*` and `guards.*` are local-only namespaces.** Put them in `.bee/config.local.json`
   (gitignored, per-machine), never in the tracked `.bee/config.json` — so one developer muting a
   hook never lands in everyone's config. The overlay wins over the tracked file at read time.
-- **The models/cli-executor block has to stay valid.** `config set` refused a write that broke it;
+- **The team/cli-executor block has to stay valid.** `config set` refused a write that broke it;
   nothing refuses a hand-edit, so re-read [Which model each role uses](#which-model-each-role-uses)
-  after changing `models`.
+  after changing `team`.
 
 Values are ordinary JSON: `false` is a boolean, `12` a number, `"repo"` a string. Nested keys that
 the old `--key guards.idle_gate` dot-notation reached are just nested objects in the file.
 
 ## Which model each role uses
 
-bee picks a worker model by **the job the work is**, never by how expensive the model is. A cell declares a `role`; the dispatch asks for that role; `models.<runtime>` answers with a model. **`role` is a cell's sole model selector** — the old three-value cost enum (`extraction` / `generation` / `ceiling`) is retired as a selector (model-role-split D4, store `97ce5225`).
+bee picks a worker model by **the job the work is**, never by how expensive the model is. A cell declares a `role`; the dispatch asks for that role; `team.<runtime>` answers with a model. **`role` is a cell's sole model selector** — the old three-value cost enum (`extraction` / `generation` / `ceiling`) is retired as a selector (model-role-split D4, store `97ce5225`).
 
 **The strongest model is still never configured.** It is always the model you run the session on (decision `0015`). Work that needs it is *escalated*, which is a flag and a budget, not a role — see [Escalation](#escalation--the-cost-lever-not-a-role) below.
 
-`models` is keyed by runtime first (Claude Code, Codex, and OpenCode name models differently), then by role name:
+> **Was `models` until 2026-09-09 (team-config-rename D1/D2).** The block is the leader's *roster* — which agent does which job — not a list of model ids, and the old name made agents read it as one. The old key is still read as an **alias**: when `team` is absent, `models` is folded into it at load; when both are present, `team` wins and `models` is ignored. A config that still says `models` gets one `note legacy_models_key` line from `bee doctor --runtime <rt>` and one line in the session preamble's *Dispatch door* section. `bee models show` still works and prints one notice on stderr; `bee team show` is the verb. The alias is removed only by a separate release with its own decision (firing condition: trigger `every-host-bee-dogfoods-or-onboards-has-m__0b1c2a7a`).
+
+`team` is keyed by runtime first (Claude Code, Codex, and OpenCode name models differently; Pi names no model at all — it names a herding agent, see [Pi](#pi--teampi-is-herding-only)), then by role name:
 
 ```jsonc
 {
-  "models": {
+  "team": {
     "claude": {
       "code": "sonnet",        // the work WRITES: implementation, wiring, tests
       "read": "haiku",         // the work only READS: retrieval, tracing a call path, mining
@@ -60,14 +62,14 @@ bee picks a worker model by **the job the work is**, never by how expensive the 
 - **`review` and `advisor` are deliberately NOT seeded.** Both already resolve with no config key at all — an unset `review` falls through to `generation`'s model, and an unset `advisor` reads as "no advisor" (decision `4faf1de9`; the advisor has no fall-through of its own). Publishing a default would silently decide that product question for every new host. Copy either key in only when you mean to override that behavior.
 - **`ceiling` is not a key and is not a role name.** It never was configurable and it still is not; it is the escalation flag's wire word, nothing a config carries.
 
-To change the worker models, edit `models.claude.code` / `read` (or add your own role key). To change the escalated model, run the session on a different model — there is no config for it.
+To change the worker models, edit `team.claude.code` / `read` (or add your own role key). To change the escalated model, run the session on a different model — there is no config for it.
 
 ### Any non-empty role name is legal
 
 bee holds **no fixed list of roles.** Validation checks a role's *presence and shape*, never its membership (D2/D7, store `06e49368` / `4eaf1b71`):
 
 - **`role` is required on a cell**, exactly as `lane` is — `bee cells add` refuses a cell without it.
-- **Any non-empty name passes.** Add `"test": "opus"` or `"migrate": "sonnet"` under `models.claude`, declare that role on a cell, and the cell gets that model. A new job role needs no new bee code.
+- **Any non-empty name passes.** Add `"test": "opus"` or `"migrate": "sonnet"` under `team.claude`, declare that role on a cell, and the cell gets that model. A new job role needs no new bee code.
 - `code` · `read` · `test` · `docs` · `review` · `design` are the **recommended vocabulary** (D8, store `4eaf1b71`) — authoring guidance, carried on the planning surface and in `bee cells add --help`, and printed in the missing-`role` refusal so an author has somewhere to start. Nothing ever matches against it. It is guidance, never an enum.
 
 ### An unconfigured role falls through — it never fails
@@ -83,11 +85,13 @@ The walk takes the **first name that resolves**; an unset or unresolvable name y
 
 Two rules keep the fall-through honest:
 
-- **A name nothing configures WARNS on stderr**, naming what it fell through to — e.g. `bee: model role "tset" is not configured in models.claude of .bee/config.json — falling through to "code"`. It is never silently accepted, and it never hands back another role's model as if the config had named it.
-- **One silent case, and it closes itself — the pre-roles window.** `code` and `read`, the two names bee's own ordered lists ask for, do not warn on a runtime whose `models.<runtime>` configures **NEITHER** of them. That is a host from before roles shipped: falling through to `generation` is the intended no-op, there is no better-fitting model it could have picked, and a warning that fires on every single dispatch is one nobody reads. Configure **either** key — `models.claude.code` is enough — and the window shuts for that runtime: from then on the sibling you left out warns like any other name, so a half-migrated config is loud about what it missed instead of silent about it forever. The window is per runtime, because the table is. An operator-invented name like `test` or `desgin` warns loudly from the start, migrated or not.
+- **A name nothing configures WARNS on stderr**, naming what it fell through to — e.g. `bee: model role "tset" is not configured in team.claude of .bee/config.json — falling through to "code"`. It is never silently accepted, and it never hands back another role's model as if the config had named it.
+- **One silent case, and it closes itself — the pre-roles window.** `code` and `read`, the two names bee's own ordered lists ask for, do not warn on a runtime whose `team.<runtime>` configures **NEITHER** of them. That is a host from before roles shipped: falling through to `generation` is the intended no-op, there is no better-fitting model it could have picked, and a warning that fires on every single dispatch is one nobody reads. Configure **either** key — `team.claude.code` is enough — and the window shuts for that runtime: from then on the sibling you left out warns like any other name, so a half-migrated config is loud about what it missed instead of silent about it forever. The window is per runtime, because the table is. An operator-invented name like `test` or `desgin` warns loudly from the start, migrated or not.
 - **A present-but-`null` slot is a slot you turned OFF**, not an absent one. It yields without a word, and the built-in default is never consulted for it — answering a cleared slot with a built-in would resurrect the very model you just cleared.
 
 One path deliberately does **not** fall through: `bee dispatch prepare --role <name>` names the slot **outright** — the kind's default slot is not consulted, and neither is a cell's own recorded value. A name that runtime cannot resolve is a typed refusal (`role_not_configured`) whose FIX lists the roles it can, because an operator who typed a flag made a typo, not a policy choice.
+
+Under `bee-plan/v2`, role assignments are planned and approved in Gate 2 (`## Role assignments`). Cell dispatches derive the planned role; an explicit `--role` cannot mismatch the cell role (`planned_role_mismatch`). Non-cell dispatches require an approved `--stage` matching its configured role (`stage_required`, `stage_unknown`, `stage_not_applicable`). Changing an open or blocked cell's role requires `bee cells reroute --id <id> --role <role> --decision <id>` citing a decision tagged `role-reroute`. Releasing a version requires dispatch authorization (`bee dispatch authorize`) for stage `deployment` and role `deploy`.
 
 ### Escalation — the cost lever, not a role
 
@@ -130,18 +134,26 @@ Every role slot — a seeded one, `review`, `advisor`, or a name you invented �
   | `opus` | Opus 4.8 | `claude-opus-4-8` |
   | `fable` | Fable 5 | `claude-fable-5` |
 
-  You **cannot pin an exact sub-version** for a Claude Code subagent — the model param is family-alias only, and it tracks the latest of each family as Anthropic ships new ones. (For **Codex**, the `codex` roles take the runtime's real model ids, e.g. `"gpt-5"`, because that runtime addresses models by id.)
 - `bee status` prints the active map — every role the runtime configures, bee's own dispatch roles first and the rest in config order, e.g. `Models (claude): generation=… review=… extraction=… test=…` — plus the `role_mix` and its escalated share, and warns when too many cells run escalated — the cost lever erodes when the strongest model touches most dispatches.
+- **Dispatch economics status vocabulary (`effective_model_status`).** Every dispatch records its economic status in `.bee/logs/dispatch.jsonl`:
 
-### Runtimes: Claude Code, Codex, and OpenCode — and everything else (agy, …)
+  | status | meaning |
+  |---|---|
+  | `pinned` | structural `model` parameter passed to the runtime (Claude Code Agent/Task) |
+  | `declared` | model named in the argv of a herding agent or cli command, read back by bee |
+  | `unverified` | prompt-budget dispatch (marker only) or external command with no model flag |
+  | `inherited-or-unknown` | session model (escalated cell) or runtime without per-agent selection (Codex default) |
+  | `native-requested` | capability probe confirmed the runtime accepted the native model override |
 
-`models` accepts **three runtime keys: `claude`, `codex`, and `opencode`** — the three first-class runtimes bee ships hooks, rendered skills, and worker agents for (opencode-support D1). Any other top-level runtime key (e.g. `"gemini"`) is still **silently ignored**: not an error, just dead config that never resolves.
+### Runtimes: Claude Code, Codex, OpenCode, and Pi — and everything else (agy, …)
 
-- **OpenCode** names models as `provider/model` ids (e.g. `"opencode/big-pickle"` on the zero-config `opencode/*` free provider this machine ships out of the box) — a real catalog id, the same way Codex takes its real model ids, never a Claude-style family alias. There is no per-call model override on OpenCode's dispatch (`task`) tool, so `models.opencode.{code,read,extraction,generation,review}` is consumed **structurally**: each `.opencode/agent/bee-{build,gather,extract,review}.md` worker file pins its role's model directly in that file's own `model:` frontmatter (today hand-authored to match this key, not yet rendered by a `bee dev` generator the way `.claude/agents/*.md` is), so a wrong-role dispatch is unrepresentable rather than caught after the fact. Example:
+`team` accepts **four runtime keys: `claude`, `codex`, `opencode`, and `pi`** — the runtimes bee ships hooks or a guard belt, rendered skills, and a dispatch door for (opencode-support D1; pi-support D5 added `pi`). Any other top-level runtime key (e.g. `"gemini"`) is still **silently ignored**: not an error, just dead config that never resolves.
+
+- **OpenCode** names models as `provider/model` ids (e.g. `"opencode/big-pickle"` on the zero-config `opencode/*` free provider this machine ships out of the box) — a real catalog id, the same way Codex takes its real model ids, never a Claude-style family alias. There is no per-call model override on OpenCode's dispatch (`task`) tool, so `team.opencode.{code,read,extraction,generation,review}` is consumed **structurally**: each `.opencode/agent/bee-{build,gather,extract,review}.md` worker file pins its role's model directly in that file's own `model:` frontmatter (today hand-authored to match this key, not yet rendered by a `bee dev` generator the way `.claude/agents/*.md` is), so a wrong-role dispatch is unrepresentable rather than caught after the fact. Example:
 
   ```jsonc
   {
-    "models": {
+    "team": {
       "opencode": {
         "code": "opencode/big-pickle",                 // bee-build
         "read": "opencode/ling-3.0-tiny-free",         // bee-gather
@@ -159,7 +171,7 @@ That does *not* mean other CLIs are unusable — they plug in through the **exte
 
 ```json
 {
-  "models": {
+  "team": {
     "claude": {
       "code": { "model": "sonnet", "effort": "medium" },
       "read": "haiku",
@@ -176,6 +188,95 @@ That does *not* mean other CLIs are unusable — they plug in through the **exte
 ```
 
 Two rules travel with every cli-shaped slot: it is **gather/review/advisor-only** — cell *execution* against a cli slot is refused (`cli_tier_gather_only`), so implementation work never rides an executor bee cannot supervise — and `promptVia` must state how the prompt reaches the process (`"stdin"`, or the `"$(cat)"` wrapper for CLIs that only take argv), never guessed from the command string. A ready-to-run demo with **agy** (generation) and **opencode** (review) lives at [`.bee/config-sample-cli-executors.json`](../.bee/config-sample-cli-executors.json); per-flag reasoning and more presets: [`docs/model-presets.md`](model-presets.md).
+
+### Pi — `team.pi` is herding-only
+
+> **Results come back — know which path you are on** (`pi-result-mailbox` D1/D2/D6, the feature pi-support D7 split out; `herding-cockpit-completeness` c943feb9, 7172010b, 1ef811f7, e0f6b8b5, afec9446). The **synchronous** path is the primary contract and it works on every runtime: `bee herding run` blocks, then prints the validated result envelope, which carries **`report_path`** (a path, never the report body) when the worker wrote a report, and `report_note` when a report was expected but is missing or stale. Both are **additive keys** — a result with no report keeps the exact envelope it always had. On completion or termination, `bee herding run` returns typed outcome words: `done`, `blocked`, `died`, `paused_limit`, `timed_out_idle`, `interrupted` (after `bee herding interrupt <job-id>`), or `cancelled` (after `bee herding cancel <job-id>`). Non-result envelopes carry the **`retryable`** boolean (`true` only for `spawn_failed`; `false` for others); result envelopes on git checkouts add the **`git`** handoff block (`branch`, `head_sha`, `base_sha`, `ahead`, `dirty`, `changed_paths`). In-flight jobs project status words `working`, `idle`, `stalled` (activity stale past 120 s while alive), and `recovered` (first activity resume after a stall).
+>
+> On Pi you may **additionally** opt a job nothing is waiting on into async delivery: `bee herding run --inbox-session <session-token>` is the detached fact, it returns at once with outcome `detached` while a runner in its own process group finishes the job — so a wait on the command no longer blocks the leader, and a Pi bash timeout no longer kills the run — it writes a pending marker under `.bee/result-inbox/<token>/` before the pane spawns, and `.pi/extensions/bee-guard/` (`result-inbox.ts`, entry `index.ts`) injects that job's finished **header** (`job_id`, `cell_id`, `status`, `summary`, `proof`, `report_path`) into the session — steered when busy, a fresh turn when idle. The token is `"$PI_SESSION_ID"`, the variable Pi's bash tool exports; when it is empty, run the job in the foreground with no flag. Its limits are real: delivery is **at-least-once**, so the injected `job_id` is the **dedupe key** and a `job_id` you already handled is a replay, not a second result; the drain only runs while that Pi session is **live** (a job finishing with no session up waits in its marker); and the report body never rides the injection — read `report_path` yourself. Control verbs `bee herding interrupt <job-id>` and `bee herding cancel <job-id>` manage running jobs directly.
+
+`pi` is a legal runtime at both dispatch doors — `bee dispatch prepare --runtime pi` and `bee dispatch wave --runtime pi` — and resolves `team.pi` in the **same one config home** every other runtime reads (pi-support D5). Pi's guard belt is not configured here at all: it is the checked-in extension folder `.pi/extensions/bee-guard/` (entry `index.ts`), which `bee onboard` copies into the host repo.
+
+**The law: every slot resolves herding, or the door refuses by name.** Pi ships **no Agent/subagent tool surface** (store `7f9c8518`), so an Agent payload, a `spawn_agent` payload, a bare `model` parameter, or a cli command emitted for `pi` would dispatch **nothing** while the envelope read as a successful dispatch. So on `pi` every slot must be `{ "kind": "herding" }` (optionally `"agent": "<herding.agents name>"`), and every other resolution is a typed refusal carrying the one reason word **`pi_requires_herding`**, plus the `slot`, the `resolution` word, and a `fix`:
+
+| what `team.pi.<slot>` resolved | `resolution` | what happens |
+|---|---|---|
+| `{ "kind": "herding", … }` | — | the herding-exec payload — the one transport Pi can take |
+| `"opus"` (plain string) | `model` | refused: set the slot to `{"kind":"herding","agent":"<name>"}` |
+| `{ "kind": "native", … }` | `native` | refused, same fix |
+| `{ "kind": "cli", … }` | `cli` | refused, same fix |
+| `null` / unset-and-nothing-falls-through | `budget` | refused, same fix — a prompt-budget slot needs a subagent to inherit the session model, and there is none |
+| an escalated cell, or `--role ceiling` | `escalation` | refused with its **own** remedy: *Pi has no subagent surface — run the escalated cell inline in the session* |
+
+The refusals fire at both doors (`prepare` and `wave`), and **seat roles ride along** under the same law: a `lane-*` or `hat-*` slot must be herding too, and an unconfigured seat falls through to `advisor` — so keep `advisor` herding as well.
+
+**Seat name and hat ceiling (pi-stage-dispatch D3).** `bee herding run --seat <name>` is optional; it writes `seat` into the result-inbox marker and the JSON result envelope, and the Pi drain shows a `seat:` row right after `job_id`. Without the flag both stay byte-identical. On `--runtime pi` only, `prepare` appends `--seat "<role>"` to every non-cell herding command that names a role, and a `hat-*` command caps `--ceiling` at `min(herding.ceiling_seconds, 600)` — 600 when the key is absent — so each seat fits the 10-minute hat-wave budget. Claude and Codex herding commands carry neither.
+
+**The values (the settled table, pi-support D6).** Herding constrains the **transport**, not the model vendor, so the agents named here are ordinary `herding.agents` entries:
+
+```jsonc
+{
+  "team": {
+    "pi": {
+      "code":       { "kind": "herding", "agent": "claude-opus" },   // heavy roles:
+      "test":       { "kind": "herding", "agent": "claude-opus" },   //   claude --model opus
+      "docs":       { "kind": "herding", "agent": "claude-opus" },
+      "review":     { "kind": "herding", "agent": "claude-opus" },
+      "advisor":    { "kind": "herding", "agent": "claude-fable" },  // claude --model fable
+      "read":       { "kind": "herding", "agent": "agy-flash" },     // cheap roles: agy-flash
+      "extraction": { "kind": "herding", "agent": "agy-flash" },
+      "generation": { "kind": "herding", "agent": "agy-flash" },
+      "supervisor": { "kind": "herding", "agent": "agy-flash" }
+    }
+  },
+  "herding": {
+    "agents": {
+      "claude-opus":  ["claude", "--model", "opus",  "--permission-mode", "bypassPermissions"],
+      "claude-fable": ["claude", "--model", "fable", "--permission-mode", "bypassPermissions"],
+      "agy-flash":    { "argv": ["agy", "--dangerously-skip-permissions"] }
+    }
+  }
+}
+```
+
+An `agent` name that is not in `herding.agents` refuses and lists every registry key — the same rule every herding slot follows. The full block, annotated, is in [`.bee/config-sample.json`](../.bee/config-sample.json); the `herding.*` contract is [bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md). Every dispatch this table serves returns its result through `bee herding run`'s own output — that is the path to plan on; add `--inbox-session <token>` only for a job you have detached, and take the async limits with it: at-least-once delivery with `job_id` as the dedupe key, and a drain that needs a live Pi session.
+
+#### Pi guard belt (`.pi/extensions/bee-guard/`)
+
+Pi enforces bee rules through the extension folder [`.pi/extensions/bee-guard/`](../.pi/extensions/bee-guard/) (entry `index.ts`), which `bee onboard` copies into the project. The extension uses two failure policies:
+- **Blocking (fail closed):** `write-guard` on `tool_call`. If the check fails, the binary is missing, or the hook returns exit code 2 (`DENY`), `ask`, or invalid JSON, tool execution is blocked.
+- **Advisory (fail open):** All other lifecycle events. Errors, crashes, or missing binaries are logged to stderr and swallowed so the session continues.
+
+##### Wired rules
+
+| Rule | Pi Event | Policy | Description |
+|---|---|---|---|
+| `write-guard` | `tool_call` | Blocking | Validates tool executions (`bash`, `powershell`, `write`, `edit`, `read`, `grep`, `find`, `ls`, and custom tools). |
+| `worker-guard` | `tool_call` | Blocking | Judges shell commands for Paseo workers (refuses git push, gh writes, agent launches, paseo commands, bee verbs) and supervisor allowlist mode when `BEE_SUPERVISOR_ALLOWED` is set (paseo-pi-hardening D5, D9). |
+| `session-init` | `session_start` | Advisory | Runs at every real session boundary — a fresh start, a new session, a resume, or a fork — and caches the session preamble. A `/reload` does not run it a second time: the session keeps the preamble it already has. A reload that arrives before it has ever run does run it once, because Pi can hand the extension a fresh copy of itself. It reports a new session as a clear; a resume, a fork, or a reload as a resume; and anything else as a startup. |
+| `prompt-context` | `before_agent_start` | Advisory | Generates the per-turn context delta appended to the system prompt. |
+| `activity` | `before_agent_start` (`UserPromptSubmit`), `tool_execution_start` (`PreToolUse`), `tool_result` (`PostToolUse` / `PostToolUseFailure`), `ui_prompt_start` (`Notification:agent_needs_input`), `ui_prompt_end` (`UserPromptSubmit`), `agent_settled` (`Stop`), `session_shutdown` (`SessionEnd`) | Advisory | Records session state transitions across prompt submission, tool execution, extension UI prompts, turn completion, and session shutdown. |
+| `state-sync` | `tool_result` (`PostToolUse`), `agent_settled` (`Stop`) | Advisory | Synchronizes session state after tool execution and on turn completion. |
+| `tools-logger` | `tool_result` (`PostToolUse`) | Advisory | Appends one line per tool call to the tools log, carrying the timestamp and the tool name. Tool arguments and results are never logged. The agent-identity fields the rule can carry on other runtimes stay empty on Pi, because Pi's tool result does not carry them. |
+| `session-close` | `agent_settled` (`Stop`), `session_before_compact` (`PreCompact`), `session_shutdown` (`SessionEnd`) | Advisory | Manages turn-end marks and continuation nudges on settle; the `PreCompact` arm returns undecidable (fail-open) today so the belt is ready when native `PreCompact` becomes real; and marks the session record closed on shutdown for every reason except `reload`, which keeps the same session running. A shutdown that carries no reason at all also closes the record. |
+
+The extension also runs an advisory result inbox drain on `session_start` to poll for detached `bee herding run` background job results under `.bee/result-inbox/<token>/` and inject them into the session via `pi.sendUserMessage`. The drain (`renderResultInjection` in `result-inbox.ts`) extracts only result header fields (`job_id`, `seat` when the marker carries one, `cell_id`, `status`, `summary`, `proof`, `report_path`) from `result-N.json`, safely ignoring the run verb's outer envelope keys (`retryable`, `git`).
+
+##### Excluded rules
+
+The following rules from the bee catalog are not wired on Pi:
+
+- **`model-guard`:** Pi has no built-in subagent tool surface (`Agent` or `Task` tools). Worker dispatches and lifecycle controls run via external herding commands (`bee herding run`, `bee herding interrupt`, `bee herding cancel`) through `bash`, which `write-guard` intercepts.
+- **`chain-nudge`:** Requires in-process subagent lifecycle events (such as `SubagentStop`) that Pi does not provide.
+- **`codex-subagent-audit`:** Codex-specific audit hook for OpenAI subagent lifecycle events (`SubagentStart` / `SubagentStop`); not applicable to Pi.
+
+##### Rules on the Claude belt without a Pi carrier
+
+The Claude hook manifest (`packages/bee/hooks/claude-hooks.json`) fires some rules on lifecycle events that have no equivalent in Pi:
+
+- **`activity` on `PermissionRequest`:** Pi 0.84–0.85 provides no interactive permission request event.
+- **`state-sync` on `SubagentStop`:** Pi has no `SubagentStop` event (state synchronization runs on `tool_result` and `agent_settled`).
+
 
 ## `retry.fallbackChains` — a chain bee PUBLISHES, never one it runs
 
@@ -261,18 +362,18 @@ Notes:
 - **You recorded both.** Nothing to do beyond deleting `verify` — `test` already governed the dev loop, and it now governs merge and CI too. If your `verify` was materially broader, decide whether that breadth belongs in `test` (paid at the boundary) or in your CI workflow (paid on push).
 - **You recorded ONLY `verify`.** You currently have **no test gate at all** — onboarding says so loudly. Move the command to `commands.test`, or set `commands.test` to `"none"` if the repo is deliberately test-free. `"none"` on `verify` no longer declares a no-test repo.
 
-The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (decision fanout-delegation D1). If your `.bee/config.json` still has one, onboarding warns about the stale key and ignores it — delete it. This is **not** the same thing as the `models.<runtime>.advisor` slot above, which is current and valid.
+The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (decision fanout-delegation D1). If your `.bee/config.json` still has one, onboarding warns about the stale key and ignores it — delete it. This is **not** the same thing as the `team.<runtime>.advisor` slot above, which is current and valid.
 
 ## Other keys
 
 | Key | What it does | Default |
 |---|---|---|
-| `models` | runtime-keyed role→model map — the job a piece of work is picks the model that runs it; full section above | `code` · `read` · `extraction` · `generation` seeded per runtime at onboarding |
+| `team` | runtime-keyed role→model map — the job a piece of work is picks the model that runs it; full section above | `code` · `read` · `extraction` · `generation` seeded per runtime at onboarding |
 | `retry.fallbackChains` | the ordered model chain bee **publishes** on a dispatch for its executor to follow after a *transient* provider failure — explicit-only, no built-in chain, never a retry loop bee runs; full section above | unset — no chain, every payload unchanged |
 | `commands` | the host project's `setup` / `start` / `test` commands — full section above | none — captured at onboarding |
 | `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via `bee-hive`'s "Gates" section (gate-bypass levels) | `false` |
 | `hooks` | per-hook kill switch — nine hooks: `session-init`, `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`, `session-close`, `tools-logger`, `codex-subagent-audit` | all `true` (an absent key also reads `true`) |
-| `guards` | `idle_gate` (`false` disables the idle intake gate) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) | idle gate on · `800` · no memory root |
+| `guards` | `idle_gate` (`false` disables the idle intake gate) · `worker_outward` (`false` disables the worker-outward guard — see the section below) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) | idle gate on · worker-outward guard on · `800` · no memory root |
 | `cells_archive_on_close` | whether a green `bee close` retires the feature's cells into `.bee/cells/archive/<feature>/`, out of the scan path `status`/`orient` parse on every call. Only fires when every one of the feature's cells is capped or dropped; reverse with `bee cells unarchive --feature <f>`. Set `false` for a repo whose own tooling reads `.bee/cells/*.json` by path | `true` |
 | `ship_visibility` | how finished work is surfaced — `"off"` or `"draft-pr"`. An unrecognized value normalizes to `"off"` and says so once, by name | `"off"` |
 | `worktree_first` | code-touching feature work lives in its own worktree and the write guard refuses feature edits made in the main checkout; the exact string `"off"` disables that refusal — see [specs/worktree-first.md](specs/worktree-first.md) | on |
@@ -282,7 +383,48 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `dogfood_repos` | foreign repos whose feedback digest `bee feedback collect`/`rank` (and the [handbook/evolving.md](handbook/evolving.md) loop) fold in — see below | `null` (local digest only) |
 | `product_root` | where the project's PRODUCT docs live (`docs/backlog.md`, `docs/specs/`, the product README) when they are NOT beside `.bee/` — a path relative to the bee root, or absolute. For the "workshop + nested product repo" (repo-divorce) topology where `.bee/` sits one level above the product's own git repo. Unset ⇒ the bee root (every ordinary single-root repo is unaffected). A set-but-missing path warns loudly to stderr rather than silently reading nothing. `.bee/*` runtime state and `docs/history/` (bee's own workshop trail) are never affected — only the product's own docs. | unset ⇒ bee root |
 | `doc_viewer` | opt-in URL prefix for a local doc viewer (e.g. mdview) — `base_url` + `project` join as `<base_url>/p/<project>/<repo-relative-path>`, so the agent gives a clickable URL instead of a bare path — see below | unset ⇒ bare paths |
-| `herding` | `agent_command` / `control_command` — the runtime adapter for `bee herding run`/`--continue` (one external agent as a cell-execution worker), `bee herding wave`, and `bee herding control-loop`; both keys are optional and independent. Canonical doc, not duplicated here: [skills/bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md) | absent ⇒ today's `claude` spawn, unchanged |
+| `herding` | `agent_command` / `control_command` — the runtime adapter for `bee herding run`/`--continue` (one external agent as a cell-execution worker), `bee herding interrupt`, `bee herding cancel`, `bee herding wave`, and `bee herding control-loop`; both keys are optional and independent. Canonical doc, not duplicated here: [skills/bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md) | absent ⇒ today's `claude` spawn, unchanged |
+| `herding.supervisor_runtime` | selects the supervisor observer runtime: `"claude"` (default) or `"pi"` (paseo-pi-hardening D9). With `"pi"`, runs `team.pi.supervisor` under `worker-guard` with `BEE_SUPERVISOR_ALLOWED`. | `"claude"` |
+| `herding.paseo.broker_tick_secs` | interval in seconds for the Pi leader's internal broker timer (paseo-pi-hardening D8). Runs `bee herding broker tick --json` and sends news to the leader. | `30` |
+| `herding.paseo.heartbeat_cron` | cron schedule for the Paseo heartbeat backstop (paseo-pi-hardening D8). Replaces the previous 5-minute default (`*/5 * * * *`). | `"*/30 * * * *"` |
+| `herding.budget.tokens_per_job` | token budget per herded job for the Detector's `budget-80` rule (slp-detector D3). A positive whole number. Read by `bee detector tick`. | unset ⇒ the token rule is off |
+| `herding.limits.concurrency` / `herding.limits.depth` | non-negative integers (piggery-borrow D3). `concurrency` caps live herding workers: a fresh `bee herding run`, and a `bee dispatch prepare` whose role resolves to a herding agent, counts live workers (wave ledger rows crossed against the live pane list, Paseo agents counted even with no pane list) and refuses at the limit with `{ok:false, reason:"limits.concurrency", live, limit, retryable:true, fix}`, or with `limits.unverifiable` when no live list can be read. `depth` caps nested runs: a run whose `BEE_HERDING_DEPTH` (absent = 0) reaches the limit refuses with `limits.depth`, and with a depth limit set the worker gets `BEE_HERDING_DEPTH` one above its caller. `bee dispatch prepare --explain` prints each check (role, claim, limits) as pass, refuse or skip and writes nothing. The cockpit spawn path (`herdr agent start` + `record-worker`) is not checked. | absent ⇒ no limit; payloads and pane exports byte-identical |
+| `herding.agents.<name>.paseo.isolated_config` | boolean flag for a Pi Paseo agent (herding-leader-toil D5). When true, creates an isolated Pi folder at `.bee/runtime/pi-agent/<name>/` and sets `PI_CODING_AGENT_DIR`. | `false` |
+
+### `guards.worker_outward` — the three commands a worktree never runs
+
+Inside any linked git worktree — one `bee worktree new` created, granted or not — the write guard
+refuses three outward-facing shell commands, in every phase. The location decides, not the caller:
+a human working in their own worktree is refused exactly as an execution worker is.
+
+1. **`git push`**, in every spelling the guard resolves a git invocation from (`git -C <path> push`,
+   a wrapper, a compound line). `--dry-run` is a push too.
+2. **Every `gh` command** except these reads: `pr view|list|status|checks|diff`,
+   `run list|view|watch|download`, `issue view|list`, `release view|list|download`, `repo view`,
+   `workflow list|view`, `search <anything>`, `cache list`, `label list`, `status`, `auth status`,
+   `api` with an explicit GET (`-f`/`-F` fields are allowed then), and `api graphql` with no
+   `mutation` in the query. A verb that is not on this list is refused, and so is a `gh` alias —
+   the guard cannot read what an alias expands to.
+3. **A nested agent launch** — `claude`, `codex`, `pi` or `opencode` as the command word, through
+   `env`, `npx`, `bunx`, `sudo`, `nohup` or `timeout` too. The one exemption is the command
+   `bee dispatch prepare` itself returns: a line starting with a configured
+   `models.<runtime>.<name>.command`, or `codex exec` carrying `--sandbox read-only` / `-s read-only`.
+   `bee` is never judged, so `bee herding run` still opens its pane agent.
+
+Every refusal leads with the remedy for its own form: land through `bee worktree merge` from the
+main checkout, push and write to GitHub through `scripts/release.sh` from main, and start a helper
+through `bee dispatch prepare`. A cell worker stops and reports the command as blocked.
+
+```jsonc
+// .bee/config.json in the MAIN checkout — the worktree's own tracked copy is NOT read
+{ "guards": { "worker_outward": false } }
+```
+
+The key is read from the main checkout because the worktree is the place being guarded. Setting it
+inside the worktree changes nothing, and every refusal says so.
+
+The guard judges command lines, not files. A script that contains a push runs; the line that ran the
+script is what the guard saw.
 
 ### `guards.memory_root` (GH #71) — letting the agent keep its own memory
 
@@ -366,6 +508,63 @@ staying quiet.
 space (or another character a URL cannot carry as-is) has to be percent-escaped by whoever writes the
 link — bee will not do it for you.
 
+### `herding.supervisor_runtime` and `herding.paseo` — supervisor and Paseo controls
+
+Three keys configure supervisor execution and the Paseo channel (paseo-pi-hardening D8, D9):
+
+#### `herding.supervisor_runtime`
+
+Selects the runtime for the supervisor observer tick: `"claude"` (default) or `"pi"`.
+
+When set to `"claude"`, the supervisor runs through Claude with model `team.claude.supervisor`.
+
+When set to `"pi"`, the supervisor runs through Pi (paseo-pi-hardening D9, store `e2af1dab`):
+- `team.pi.supervisor` must resolve to a herding agent with provider `pi`, or a plain model slot.
+- Other providers (such as `claude`) refuse before spawn with a `FIX:` message.
+- Refuses before spawn if `.pi/extensions/bee-guard` is missing from the main repository root.
+- Spawns in the main repository root with:
+  ```text
+  pi --print <prompt> --model <model> [--thinking <level>] --no-session --no-extensions -e <main root>/.pi/extensions/bee-guard --tools read,grep,find,ls,bash
+  ```
+- Sets `BEE_SUPERVISOR_ALLOWED` so `worker-guard` enforces the supervisor allowlist on all shell commands.
+
+#### `herding.paseo.broker_tick_secs`
+
+Sets the interval in seconds for the Pi leader's internal broker timer (paseo-pi-hardening D8, store `f26723a1`).
+The default value is `30` (positive integer).
+Every interval, the extension runs `bee herding broker tick --json`.
+When the tick reports news, it starts a model turn or delivers a steer message.
+
+#### `herding.paseo.heartbeat_cron`
+
+Sets the cron schedule for the Paseo heartbeat backstop (paseo-pi-hardening D8, store `f26723a1`).
+The default value is `"*/30 * * * *"` (superseding the previous 5-minute default).
+If the marker file contains a different cron, `ensureHeartbeat` updates the heartbeat schedule on session start.
+On session shutdown (except reload), the extension stops the broker timer and awaits heartbeat deletion (`paseo heartbeat delete <id>`).
+
+#### `herding.budget.tokens_per_job`
+
+Sets the token budget per herded job for the Detector's `budget-80` rule (slp-detector D3, store `936eb9a8`).
+The value is a positive whole number of tokens.
+The default is unset, and an unset key turns the token rule off.
+`bee detector tick` reads the key and fires one `budget-80` event when a live job's `usage.total_tokens` reaches 80% of it.
+
+#### `herding.agents.<name>.paseo.isolated_config`
+
+Configures an isolated Pi directory for a Paseo agent (herding-leader-toil D5, store `8fa9692a`, contract store `db780128`).
+This key applies only when `provider` is `"pi"`.
+The default value is `false`.
+
+When set to `true`:
+- bee keeps an isolated Pi directory at `.bee/runtime/pi-agent/<name>/`.
+- The directory links `auth.json` to `~/.pi/agent/auth.json`.
+- The directory links `models.json`, `models-store.json`, and `npm` when those sources exist in `~/.pi/agent/`.
+- The directory writes `settings.json` with `{"defaultProjectTrust": "always", "quietStartup": true}`.
+- The directory creates empty `skills/` and `extensions/` subdirectories.
+- bee passes `PI_CODING_AGENT_DIR=<path>` in the environment of the worker process.
+- bee never replaces an existing real file or directory where a link belongs; it reports the item.
+- A missing `~/.pi/agent/auth.json` refuses the worker spawn with a `FIX:` message.
+
 ## Full sample to copy
 
 Clean JSON — paste into `.bee/config.json` and edit values (keep any existing `commands` you already have):
@@ -375,7 +574,7 @@ Clean JSON — paste into `.bee/config.json` and edit values (keep any existing 
   "commands": { "setup": "npm install", "start": "npm run dev", "test": "npx jest --onlyChanged" },
   "gate_bypass": false,
   "guards": { "idle_gate": true, "max_read_lines": 800 },
-  "models": {
+  "team": {
     "claude": {
       "code": { "model": "sonnet", "effort": "medium" },
       "read": "haiku",
@@ -396,3 +595,5 @@ A second, ready-to-run demo lives at [`.bee/config-sample-cli-executors.json`](.
 > **`ceiling` has no entry** — it is not a role name and never was configurable. The strongest model is always the one you run the session on, and a cell reaches it through `bee cells escalate`, not through this file.
 >
 > `review` and `advisor` appear in the sample above to show their shapes. A fresh `bee onboard` writes neither on purpose — both already resolve with no key at all.
+>
+> **`team.pi` is not in this copy sample on purpose** — the pi runtime is herding-only, so every slot needs a `herding.agents` entry standing behind it (pi-support D5/D6). Copy its block out of [`.bee/config-sample.json`](../.bee/config-sample.json) when you mean to run Pi, and read the delivery paths with it — sync `bee herding run` output is the contract to plan on, and the opt-in async drain is at-least-once with `job_id` as the dedupe key: [Pi](#pi--teampi-is-herding-only).

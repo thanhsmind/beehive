@@ -1,0 +1,63 @@
+{
+  "id": "nma-1",
+  "title": "Forbid mid-work continue-asks in the always-loaded instruction layer",
+  "lane": "tiny",
+  "role": "docs",
+  "feature": "no-midslice-ask",
+  "deps": [],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "skills/bee-swarming/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Agents end turns mid-slice asking 'Say go'/'continue?' — the no-ask rule lives only in go-mode.md (loaded only under /go), so ordinary sessions never see it. Promote it to the always-loaded layer: (1) packages/bee/AGENTS.block.md, rule agents-one-next-action — after 'never a menu', add: when the next action is the agent's own move, the agent takes it in the same turn; between the merged gate and the uat stop, a finished slice with approved work remaining continues without asking — 'Say go' / 'continue?' is drift, not a stop. (2) skills/bee-swarming/SKILL.md Completion — 'slice done with more approved work remaining -> return to bee-planning for the next batch' gains 'in the same turn, never a user question'. Then bee dev regen inside this cell to sync AGENTS.md and mirrors (render-skill-trees, onboard --repo-root . --apply, release-manifest --write).",
+  "must_haves": {
+    "truths": [
+      "AGENTS.block.md and generated AGENTS.md state the same-turn continuation rule inside agents-one-next-action",
+      "bee-swarming Completion says the next batch continues in the same turn, never as a user question",
+      "The two legitimate stops (plan gate, uat) are unchanged",
+      "bee dev regen green, mirrors in sync"
+    ]
+  },
+  "verify": "bee dev regen green; bee dev release-manifest --check clean; rg 'in the same turn' AGENTS.md skills/bee-swarming/SKILL.md packages/bee/AGENTS.block.md confirms the promoted rule in all three",
+  "verify_owner": "main (feature close) — run at cap",
+  "read_first": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "nma-inline",
+    "outcome": "Always-loaded layer now forbids mid-work continue-asks; slice boundary continues in the same turn",
+    "files_changed": [],
+    "deviations": [
+      "sync-ack: AGENTS.md touched only inside the agents-one-next-action rule body; the flagged rule agents-capture-line-at-close and its applied_at files are untouched by this diff"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T05:56:23.409Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "14038471-5ea0-46ca-afd6-5bf3cbf492c3",
+    "claimed_at": "2026-08-26T05:54:52.029Z",
+    "sync_ack": "AGENTS.md touched only inside the agents-one-next-action rule body; the flagged rule agents-capture-line-at-close and its applied_at files are untouched by this diff",
+    "report": {
+      "outcome": "AGENTS.block.md agents-one-next-action and bee-swarming Completion now state the same-turn continuation rule; mirrors regenerated",
+      "commit": "f8e45569",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md",
+        "skills/bee-swarming/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bee dev regen && bee dev release-manifest --check — green: 3/3 steps, 270 files match; rg confirms rule text in block, AGENTS.md, swarming — docs-lane instruction change: regen/parity chain is the declared docs proof",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

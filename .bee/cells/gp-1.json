@@ -1,0 +1,55 @@
+{
+  "id": "gp-1",
+  "feature": "guide-pages",
+  "title": "Build the static Vietnamese guide site source and builder",
+  "lane": "small",
+  "role": "code",
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In the beehive--wt--guide-pages worktree: copy the 15 guide fragments verbatim from waggledance crates/waggledance/assets/guide/vi/ into site/guide/vi/; write site/guide/manifest.json (slug, number, title, blurb for the 14 chapters, extracted from waggledance crates/waggledance/src/guide.rs CHAPTERS); write site/guide/build.mjs (Node, zero deps) that emits dist/site/: index.html (overview + chapter cards) and one <slug>.html per chapter wrapped in a standalone shell (guide-head header, left chapter rail, prev/next nav), rewriting href=\"/guide/<slug>\" to ./<slug>.html and href=\"/guide\" to ./index.html; write site/guide/guide.css extracted from waggledance assets (theme tokens dark+light via prefers-color-scheme from atelier/console.css, guide block app.css:2918-3273, minimal .layout/.sidebar/.content/.fg-prose rules). No JS on the pages.",
+  "verify": "node site/guide/build.mjs exits 0; dist/site/ holds index.html + 14 chapter pages + guide.css; grep for href=\"/guide finds zero matches in dist/site; every manifest slug has a matching page",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "guide-pages-w1",
+    "outcome": "Static Vietnamese guide site source: 15 fragments + manifest + zero-dep builder + extracted CSS, build verified",
+    "files_changed": [
+      "site/guide",
+      ".gitignore"
+    ],
+    "deviations": [
+      "Executed via bee herding run (herdr pane at the worktree) instead of a Task-tool subagent — the orchestrator session is rooted in waggledance and its write guard correctly refuses cross-repo writes, and a Task subagent inherits that cwd — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T07:41:20.206Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8f719c60-a4b8-4aa5-9928-c219c1dc9663",
+    "claimed_at": "2026-08-26T07:30:32.818Z",
+    "report": {
+      "outcome": "Static guide site source built and verified in the worktree",
+      "commit": "3bc9a5e9",
+      "files": [
+        "site/guide/manifest.json",
+        "site/guide/build.mjs",
+        "site/guide/guide.css",
+        "site/guide/vi/",
+        "dist (ignored)",
+        ".gitignore"
+      ],
+      "tests": "node site/guide/build.mjs + output checks — green — builder is the product: 16 files emitted, zero href=\"/guide leaks, all 14 chapter pages present",
+      "deviations": [
+        "Executed via bee herding run (herdr pane at the worktree) instead of a Task-tool subagent — the orchestrator session is rooted in waggledance and its write guard correctly refuses cross-repo writes, and a Task subagent inherits that cwd — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 3237 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

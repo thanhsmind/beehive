@@ -1,0 +1,154 @@
+{
+  "id": "ob-4",
+  "feature": "owner-brief",
+  "title": "Read and write owner briefs in the checkout the command runs in",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ob-1"
+  ],
+  "decisions": [
+    "e47e9f57-17aa-4697-ac22-7738537cf763",
+    "344df11d-8580-4f39-ae29-d2b37b96143e",
+    "95917163-6c3f-4dbb-bb0f-3c004c7545f7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "read_first": [
+    "docs/history/owner-brief/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D14 of docs/history/owner-brief/CONTEXT.md. Today the backlog preamble resolves ctx.root through resolve_root_serving_granted(cwd).0, which is the MAIN checkout when the command runs in a granted feature worktree, and the brief code reads and writes docs/briefs under that root; so a brief that Lock wrote inside the worktree reads as MISSING. Fix: the backlog verbs keep ctx.root for the PBI store, and gain a docs root = resolve_root_serving_granted(cwd).1 (the worktree root) when it is Some, else ctx.root. store_brief, the briefs verb (single id and listing) and the brief status inside the add doors use the docs root. Change owner_view to take two roots, owner_view(store_root, docs_root): lanes, state and the PBI fold come from store_root, brief files from docs_root; brief_status takes the docs root. doctor.rs passes its root for both. RED FIRST: a unit test in brief.rs where the store root and the docs root are two different temp dirs, a brief exists only under the docs root, and owner_view reports it ok (and reports missing when the roots are swapped). Keep every existing test green. No comment of any form in what you add. One commit, imperative subject, trailer cell: ob-4.",
+  "must_haves": {
+    "truths": [
+      "from a granted feature worktree, a brief that exists only in that worktree reads as ok in the single-id check and in the listing",
+      "a brief stored by an add door run inside a worktree lands in that worktree",
+      "the PBI store and lane records are still read from the control root",
+      "doctor still shows the owner_briefs note without changing overall_status"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+        "substantive": "owner_view takes a store root and a docs root, with the two-root test"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "substantive": "docs root resolved from the granted worktree and used for every brief read and write"
+      }
+    ],
+    "key_links": [
+      "backlog.rs derives the docs root from resolve_root_serving_granted"
+    ],
+    "prohibitions": [
+      "No change to where PBI events are written",
+      "No code comment of any form"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- brief backlog doctor",
+  "status": "capped",
+  "trace": {
+    "worker": "ob-4-w",
+    "outcome": "Brief files resolve against the granted worktree; PBI store and lanes stay at the control root",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs"
+    ],
+    "deviations": [
+      "owner_view reads brief.language from the docs root, not the store root — brief_status already reads language from the root it is given, so one root keeps the two consistent; .bee/config.json is tracked, so both roots carry it — found a better route",
+      "read_brief_draft keeps ctx.root — its only root use is the language read and the error emit; the draft path is resolved against the cwd, so D14 already holds for it — found a better route",
+      "swapped-roots half of the RED test calls owner_view(store, store), because a true swap leaves no lane records and so no items to report — the plan was wrong about a fact",
+      "sync-ack: root-resolution fix only; no skill-facing behavior or wording changes, briefs still live at docs/briefs/<id>.md"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-28T08:02:28.967Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify, 160 passed; plus the fresh release binary run from the worktree as backlog briefs --id owner-brief, output at /tmp/claude-1000/ob4-single.txt (ok docs/briefs/owner-brief.md, exit 0), listing at /tmp/claude-1000/ob4-list.txt (ok feature owner-brief; listing exits 1 because 112 other live items lack briefs)",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "172917c8-4be5-4077-8e98-d3bd61f8b912",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- brief backlog doctor",
+    "escalation_reason": "edits the same two files the flash herding worker idled out on in ob-1; the session-model worker that wrote them is the safe owner",
+    "claimed_at": "2026-10-28T07:57:21.913Z",
+    "sync_ack": "root-resolution fix only; no skill-facing behavior or wording changes, briefs still live at docs/briefs/<id>.md",
+    "mistakes": [
+      {
+        "wrong": "first commit put the Co-Authored-By line after the cell: ob-4 trailer, so the trailer was not the last body line",
+        "better": "write the attribution above the cell trailer in the first commit",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Brief files resolve against the granted worktree; PBI store and lanes stay at the control root",
+      "commit": "fde7f1142",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+        "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- brief backlog doctor — green:live — cell verify, 160 passed; plus the fresh release binary run from the worktree as backlog briefs --id owner-brief, output at /tmp/claude-1000/ob4-single.txt (ok docs/briefs/owner-brief.md, exit 0), listing at /tmp/claude-1000/ob4-list.txt (ok feature owner-brief; listing exits 1 because 112 other live items lack briefs)",
+      "deviations": [
+        "owner_view reads brief.language from the docs root, not the store root — brief_status already reads language from the root it is given, so one root keeps the two consistent; .bee/config.json is tracked, so both roots carry it — found a better route",
+        "read_brief_draft keeps ctx.root — its only root use is the language read and the error emit; the draft path is resolved against the cwd, so D14 already holds for it — found a better route",
+        "swapped-roots half of the RED test calls owner_view(store, store), because a true swap leaves no lane records and so no items to report — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "first commit put the Co-Authored-By line after the cell: ob-4 trailer, so the trailer was not the last body line — write the attribution above the cell trailer in the first commit — none"
+      ],
+      "baseline": "on base the new test did not compile (E0061, owner_view took one argument); the live briefs --id owner-brief printed MISSING and exited 1"
+    },
+    "baseline": "on base the new test did not compile (E0061, owner_view took one argument); the live briefs --id owner-brief printed MISSING and exited 1",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "from a granted feature worktree, a brief that exists only in that worktree reads as ok in the single-id check and in the listing",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+          },
+          {
+            "requirement": "a brief stored by an add door run inside a worktree lands in that worktree",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+          },
+          {
+            "requirement": "the PBI store and lane records are still read from the control root",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+          },
+          {
+            "requirement": "doctor still shows the owner_briefs note without changing overall_status",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "backlog.rs derives the docs root from resolve_root_serving_granted",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/brief.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/doctor.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          }
+        ],
+        "recorded_at": "2026-10-28T08:02:52.168Z",
+        "recorded_by": "172917c8-4be5-4077-8e98-d3bd61f8b912",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

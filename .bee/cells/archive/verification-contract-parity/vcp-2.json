@@ -1,0 +1,86 @@
+{
+  "id": "vcp-2",
+  "feature": "verification-contract-parity",
+  "title": "Pin the verify-app name across every surface that states it, and pin the cap-proof case",
+  "lane": "tiny",
+  "role": "test",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "d0e3c3a0-233a-4396-94c2-b364f3f9abac",
+    "036e8a79-3aa8-4e69-b1b5-6b43e6729447",
+    "29b853d8-a4b9-4997-ab9d-dc663c0eec6f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/verification_contract_parity.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs",
+    "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs",
+    "docs/history/verification-contract-parity/CONTEXT.md",
+    "docs/knowledge/patterns/20260826-a-rule-living-in-n-places-needs-one-test-that-reads-all-n.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Close two rows of a shipped feature's test matrix that no cell ever built (decision 87f9409b). ONE new file: `packages/bee-rs/crates/bee/tests/verification_contract_parity.rs`. Nothing else is edited.\n\nRead its two siblings FIRST — `rule_index_parity.rs` and `agents_block_render_parity.rs`. Match their shape exactly: repo text read as text, std only, no crate-internal import, and a header comment block telling a reader six months from now what is pinned, what is deliberately NOT pinned and why, and why this file is not redundant with the fence. Both siblings word their assertion messages so the failure names the fix; do the same.\n\nTEST 1 — the name is one constant, stated identically everywhere.\n\nPer D1 (d0e3c3a0) `verify-app` is a fixed literal in every repo. Today that literal is stated in eight source surfaces with nothing holding them together: rename the Rust constant and seven prose surfaces go stale in silence. This is the repo's own recorded pattern — read `docs/knowledge/patterns/20260826-a-rule-living-in-n-places-needs-one-test-that-reads-all-n.md` before designing the assertion.\n\nRead the VALUE of `VERIFY_APP_SKILL_NAME` out of `packages/bee-rs/crates/bee/src/onboard/templates.rs` as TEXT — an integration test cannot see the symbol, and `rule_index_parity.rs` shows the technique for reading a constant out of source. Do not hardcode the string `verify-app` as the expected value anywhere except, at most, one clearly-labelled sanity assertion that the parse found something; a test hardcoding both sides pins nothing.\n\nThen assert, over every surface that states a verification skill name:\n  - each uses that same parsed literal, and\n  - none still carries the retired per-project form `verify-<app>`.\n\nDERIVE the surface list, never hand-copy it. `rg -l 'verify-app'` over sources today returns `packages/bee/AGENTS.block.md` and the five skill bodies `bee-verifying`, `bee-verify-upkeep`, `bee-shaping`, `bee-planning`, `bee-swarming` (plus `templates.rs` itself and `onboard/tests.rs`). A derived walk covers a sixth skill joining the set without editing this test. Exclude the generated trees — `.claude/`, `.agents/`, `.opencode/`, `.claude-plugin/`, `.codex-plugin/` — and `docs/history/`, an immutable record that legitimately holds the old form. State that exclusion in a comment with its reason.\n\nTEST 2 — the cap-proof case is present.\n\n`agents_block_render_parity.rs` pins `AGENTS.md` byte-for-byte to `packages/bee/AGENTS.block.md`, which means it CANNOT catch a deletion: remove a line from the SOURCE, regenerate, and both files agree while the doctrine is gone. Say exactly that in the header — it is why this test is not redundant with the fence.\n\nAssert against `packages/bee/AGENTS.block.md`, per D5 (036e8a79): the `agents-proof-at-cap` bullet carries a user-facing-surface case naming `green:live`, and it sits INSIDE that existing bullet rather than in a new one.\n\nAssert on load-bearing substance, not whole sentences. A test pinning prose verbatim goes red on every reword and gets deleted by the next person; pick the few tokens carrying the meaning and say in a comment why those and not the sentence.\n\nWHAT THIS TEST MUST NOT PIN — and the header must say so, with the reason.\n\nD4's read-first feature-map mention is deliberately NOT asserted. D4 (c93a6948) carries its own named falsifier as trigger `two-features-have-been-planned-with-a-ma__c93a6948`: if two planned features do not cite gotchas from a mapped feature file, D4's shaping tier is REVERTED. A test asserting D4's line is present would turn that agreed revert into a test failure — the test would defend a rule the repo has already agreed to drop on evidence. Settled contracts get pinned; provisional ones do not. Decision 29b853d8 records this.\n\nPROVE BOTH TESTS CAN FAIL. A parity test never observed failing is not known to work. For each: make a scratch edit that should break it, run it, keep the red output, revert, run green. Both reds and the final green go in the cap proof. Revert by rewriting the file text, not by a tree-wide git checkout.\n\nIf a test goes red on the tree AS IT STANDS, that is a finding — report it as a deviation and return [BLOCKED] rather than editing the surface it caught. This cell writes one file and no others.",
+  "must_haves": {
+    "truths": [
+      "Renaming VERIFY_APP_SKILL_NAME in templates.rs without updating the skill bodies turns test 1 red",
+      "Deleting the user-facing-surface proof case from packages/bee/AGENTS.block.md turns test 2 red even after a regen",
+      "Both tests pass on the tree as it stands today",
+      "The surface list is derived by walking the repo, not hand-copied into the test",
+      "The header states that D4's read-first mention is deliberately unpinned, and why"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/verification_contract_parity.rs",
+        "substantive": "two named tests, a header comment stating what is pinned, what is deliberately not and why, and why the fence does not already cover it; std only, no crate-internal import, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the expected name is parsed out of templates.rs, not hardcoded as the expected value",
+      "generated skill trees and docs/history are excluded with a stated reason"
+    ],
+    "prohibitions": [
+      "No file changed except the one new test",
+      "No assertion that D4's read-first feature-map mention is present",
+      "No edit to a surface a test catches - report it instead",
+      "No crate-internal import",
+      "No scratch proof edit left in the tree"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test verification_contract_parity --test agents_block_render_parity --test rule_index_parity",
+  "trace": {
+    "worker": "w-vcp-2",
+    "outcome": "New verification_contract_parity fence: verify-app name parity across derived surfaces, plus the green:live cap-proof case in agents-proof-at-cap",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/verification_contract_parity.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T02:50:08.821Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e2b06a7d-ba76-42eb-848e-bd3b0cd118c3",
+    "claimed_at": "2026-09-02T02:40:45.501Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "New verification_contract_parity fence: verify-app name parity across derived surfaces, plus the green:live cap-proof case in agents-proof-at-cap",
+      "commit": "b42b94bf",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/verification_contract_parity.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test verification_contract_parity --test agents_block_render_parity --test rule_index_parity — green:unit — the cell verify command: the new fence plus the two sibling parity fences it reads the same files as; both new tests also observed RED on four scratch edits (constant rename, retired verify-<app> form, case deleted from AGENTS.block.md+AGENTS.md, case moved to a new bullet) and reverted",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

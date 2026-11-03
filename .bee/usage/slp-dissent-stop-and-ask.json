@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "slp-dissent-stop-and-ask",
+  "closed_at": "2026-09-07T03:29:38.034Z",
+  "sessions": [
+    {
+      "session_id": "2fb422f4-77ee-414b-8666-98a59d64866c",
+      "models": {
+        "claude-opus-5": {
+          "input": 48,
+          "output": 13528,
+          "cache_write": 55149,
+          "cache_read": 1531406,
+          "new": 68725,
+          "cached": 1531406,
+          "total": 1600131
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1788750708264,
+      "ended_ms": 1788751771808,
+      "totals": {
+        "new": 68725,
+        "cached": 1531406,
+        "total": 1600131
+      }
+    }
+  ],
+  "skipped": 1,
+  "totals": {
+    "main": {
+      "new": 68725,
+      "cached": 1531406,
+      "total": 1600131
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 68725,
+      "cached": 1531406,
+      "total": 1600131
+    }
+  }
+}

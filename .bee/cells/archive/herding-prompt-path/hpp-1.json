@@ -1,0 +1,67 @@
+{
+  "id": "hpp-1",
+  "feature": "herding-prompt-path",
+  "lane": "small",
+  "title": "control-loop: resolve the role prompt against every installed skill root, not just the bee source tree",
+  "behavior_change": true,
+  "role": "code",
+  "tier": "generation",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+    "packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs"
+  ],
+  "action": "read_prompt_file (control_loop.rs:413) joins <main-root>/skills/bee-herding/references/<role>-prompt.md, a layout that exists ONLY in the bee source repo. Every host project installs the skill tree under a runtime prefix instead (.claude/skills, .agents/skills, .opencode/skills, .codex/skills - see PROJECT_SKILL_ROOTS at devtools/plugin_distribution.rs:39), so dispatch, merge and supervisor all die with 'prompt file not found'. Reproduced live: `bee herding control-loop --role supervisor --once` in the waggledance host repo errors with that exact message. Replace the single join with an ordered candidate search: a module-level const of skill-root prefixes in the order [skills, .claude/skills, .agents/skills, .opencode/skills, .codex/skills], each joined with bee-herding/references/<role>-prompt.md, first readable file wins. Keep skills/ FIRST so the bee source repo's behaviour and every existing path assertion stay byte-identical. When no candidate reads, the error must name EVERY path tried so a cold operator sees where bee looked - update the existing missing_prompt_file_is_an_error_not_a_panic assertion to the new wording rather than deleting it. Add tests: (1) a host-repo layout with the prompt ONLY under .claude/skills resolves it; (2) the bee-repo layout under skills/ still resolves and still wins when both exist; (3) an empty root errors with a message naming all five candidate paths. Keep the doc comment on read_prompt_file honest about the new search order and why skills/ leads.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml control_loop",
+  "must_haves": {
+    "truths": [
+      "A host repo with the prompt only under .claude/skills/bee-herding/references resolves it",
+      "The bee source repo layout (skills/) still resolves and still takes precedence",
+      "A root with no prompt anywhere errors naming every candidate path that was tried",
+      "Every pre-existing control_loop test stays green without loosening what it asserts",
+      "All three roles - dispatch, merge, supervisor - go through the one fixed reader"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "hpp-code-1",
+    "outcome": "read_prompt_file searches five skill roots in order, skills/ first, and names every path tried on failure",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: Cell scope is one file and declares affects_skills: []. The bee-herding skill text is unchanged by design - the prompt still lives at bee-herding/references/<role>-prompt.md, only the root bee searches for that tree widens from skills/ to the installed runtime prefixes. No documented herding contract moved; the cell routes the doc side to docs/knowledge/areas/bee-herding/overview.md via affects_specs, which is the scribe's file, not this worker's."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T06:08:14.298Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9edcd966-07e8-402f-89f0-a1ec504f42c1",
+    "claimed_at": "2026-08-30T06:03:55.652Z",
+    "sync_ack": "Cell scope is one file and declares affects_skills: []. The bee-herding skill text is unchanged by design - the prompt still lives at bee-herding/references/<role>-prompt.md, only the root bee searches for that tree widens from skills/ to the installed runtime prefixes. No documented herding contract moved; the cell routes the doc side to docs/knowledge/areas/bee-herding/overview.md via affects_specs, which is the scribe's file, not this worker's.",
+    "report": {
+      "outcome": "read_prompt_file searches five skill roots in order, skills/ first, and names every path tried on failure",
+      "commit": "2712c838",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml control_loop — green — 50 passed 0 failed; the cell verify, filtered to the one module touched",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "id": "pl-1",
+  "feature": "paseo-leverage",
+  "title": "Read Paseo's on-disk agent state",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D7",
+    "28b0b5c2",
+    "6fc537f6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo_state.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-leverage/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Create herding/paseo_state.rs and declare it beside the other herding modules in herding.rs, per D7 and its refinement. Paseo home resolution: a `--home <path>` token inside the configured `herding.paseo.command`, else PASEO_HOME, else <home dir>/.paseo. Agent files live at <paseo home>/agents/<project slug>/<agent id>.json. Provide: find one agent record by id (search every project dir), list agent records whose labels carry a given key (bee_job), and a parsed record with id, provider, cwd, labels, lastStatus, archivedAt, runtimeInfo.model, runtimeInfo.thinkingOptionId, runtimeInfo.sessionId and persistence.nativeHandle (all optional except id). A missing home, a missing file or bad JSON gives None or an empty list, never a panic, and the reader never writes. Wire it into the untracked-agent report in herding.rs status (search `untracked_paseo_agents`): use the on-disk list when the home reads, fall back to the existing `paseo ls` path when it does not. The run loop is not touched. Tests use a temp PASEO_HOME with fixture files shaped like the fields in CONTEXT.md Environment facts.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee paseo_state",
+  "must_haves": {
+    "truths": [
+      "An agent file under a temp PASEO_HOME is found by id and its nativeHandle is returned",
+      "Agents labeled bee_job are listed from disk",
+      "A missing or corrupt file gives None, not a panic",
+      "A --home token in the configured command wins over PASEO_HOME",
+      "status falls back to paseo ls when the disk read finds no home"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo_state.rs",
+        "substantive": "reader with home resolution, find-by-id, list-by-label and a parsed record, plus unit tests"
+      }
+    ],
+    "key_links": [
+      "herding.rs declares the module and the untracked report calls it"
+    ],
+    "prohibitions": [
+      "No change to the run loop's inspect or wait calls",
+      "No write to any file under the Paseo home"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pl-1",
+    "outcome": "paseo_state.rs reads Paseo agent files (home resolution, find-by-id, list-by-label, parsed record); status untracked report reads disk first, falls back to paseo ls",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo_state.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs"
+    ],
+    "deviations": [
+      "Tests set a cfg(test) thread-local TEST_PASEO_HOME that stands in for the PASEO_HOME env var, not the real env var — env mutation races in the parallel in-process suite and a real ~/.paseo on a dev box would leak into the old status tests — found a better route",
+      "sync-ack: plan sets affects_skills to none for pl-1; the reader is internal and changes no bee-herding skill text"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-12T08:34:18.407Z",
+    "behavior_change": false,
+    "verification_evidence": "6 tests named paseo_state ran (5 in herding::paseo_state::tests, 1 status test in herding::tests); herding::tests::status also ran, 13 passed; whole suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee paseo_state",
+    "claimed_at": "2026-10-12T08:30:00.973Z",
+    "sync_ack": "plan sets affects_skills to none for pl-1; the reader is internal and changes no bee-herding skill text",
+    "mistakes": [
+      {
+        "wrong": "First commit staged into the shared index and the concurrent-worker guard refused it",
+        "better": "use a path-scoped commit from the start when siblings are live",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "paseo_state.rs reads Paseo agent files; status untracked report reads disk first, falls back to paseo ls",
+      "commit": "78d74e2e2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo_state.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee paseo_state — green:unit — 6 tests named paseo_state ran (5 in herding::paseo_state::tests, 1 status test in herding::tests); herding::tests::status also ran, 13 passed; whole suite not run",
+      "deviations": [
+        "Tests set a cfg(test) thread-local TEST_PASEO_HOME that stands in for the PASEO_HOME env var, not the real env var — env mutation races in the parallel in-process suite and a real ~/.paseo on a dev box would leak into the old status tests — found a better route"
+      ],
+      "mistakes": [
+        "First commit staged into the shared index and the concurrent-worker guard refused it — use a path-scoped commit from the start when siblings are live — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An agent file under a temp PASEO_HOME is found by id and its nativeHandle is returned",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo_state.rs"
+          },
+          {
+            "requirement": "Agents labeled bee_job are listed from disk",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo_state.rs"
+          },
+          {
+            "requirement": "A missing or corrupt file gives None, not a panic",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo_state.rs"
+          },
+          {
+            "requirement": "A --home token in the configured command wins over PASEO_HOME",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo_state.rs"
+          },
+          {
+            "requirement": "status falls back to paseo ls when the disk read finds no home",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "herding.rs declares the module and the untracked report calls it",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          }
+        ],
+        "recorded_at": "2026-10-12T08:34:46.913Z",
+        "recorded_by": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

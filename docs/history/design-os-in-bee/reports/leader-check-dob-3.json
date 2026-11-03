@@ -1,0 +1,18 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "each new test fails first for its own reason", "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"},
+    {"requirement": "a host that picks web and charts gets exactly bee-design, bee-design-web and bee-design-charts and no other bee-design dir", "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"},
+    {"requirement": "dropping a pack removes only that pack's dir and never a non-bee skill", "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"},
+    {"requirement": "a host with no pick gets no bee-design dir", "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"},
+    {"requirement": "an unknown pack name refuses before any write", "artifact": "packages/bee-rs/crates/bee/src/onboard/mod.rs"},
+    {"requirement": "a host with UI files and no pick sees the offer; a host with a pick or no UI files does not", "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"},
+    {"requirement": "an existing host config gains team.<runtime>.design once, keeping its other bytes", "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"},
+    {"requirement": "the existing skills sync tests stay green", "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"},
+    {"requirement": "packages/bee-rs/crates/bee/src/onboard/skills.rs", "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"},
+    {"requirement": "packages/bee-rs/crates/bee/src/onboard/notices.rs", "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"},
+    {"requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs", "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"},
+    {"requirement": "the sync_skill and remove_skill apply arms read each item's own source dir", "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"},
+    {"requirement": "--design-packs reaches the config write through Args and Options", "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"}
+  ]
+}

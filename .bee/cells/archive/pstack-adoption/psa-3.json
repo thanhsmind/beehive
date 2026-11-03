@@ -1,0 +1,96 @@
+{
+  "id": "psa-3",
+  "feature": "pstack-adoption",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Update the four documents naming the route class, and write D2's migration note",
+  "action": "Turn psa-2's red test green. Add perf to all four source sites: skills/bee-hive/references/scout-and-ticks.md:34, docs/product-description/goal.md:48, docs/product-description/lifecycle/planning.md:35, and docs/product-description/verification/lifecycle.md:114 (that last one is an executable verification row, so keep its run/expect wording coherent). Then write the migration note D2 requires — flatly, not conditionally: D2 states the enum change 'is a public-contract change and carries a migration note'. The note records what a host repo pinning an older bee sees when it meets class: perf. The answer is already established: validation runs on --set only (workflows.rs:268 — '--show is a pure read'), so an older bee prints an unknown class and never validates it. Put the note where this repo keeps contract-change notes; if no such home exists, say so in the cap and put it in docs/history/pstack-adoption/. Run `bee dev regen` after touching skills/**.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "acceptance": "psa-2's parity test passes. All four documents list eight class values. The migration note exists and states the degradation behavior with its workflows.rs anchor. bee dev regen ran and its output is committed.",
+  "files": [
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "docs/product-description/goal.md",
+    "docs/product-description/lifecycle/planning.md",
+    "docs/product-description/verification/lifecycle.md",
+    "docs/history/pstack-adoption/migration-note.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/scout-and-ticks.md"
+  ],
+  "affects_specs": [],
+  "deps": [
+    "psa-2"
+  ],
+  "decisions": [
+    "1593e365-d911-4cd0-9c9b-8cee78bc61a3"
+  ],
+  "read_first": [
+    "docs/history/pstack-adoption/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "all four source documents list eight class values including perf",
+      "psa-2's parity test passes",
+      "the migration note exists and states, with its workflows.rs:268 anchor, that an older bee prints an unknown class and never validates it because validation runs on --set only",
+      "bee dev release-manifest --check passes after the regen chain ran"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-psa-3",
+    "outcome": "All four documents naming the route class list perf as the eighth value, and the migration note D2 requires records the older-bee degradation",
+    "files_changed": [
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/product-description/goal.md",
+      "docs/product-description/lifecycle/planning.md",
+      "docs/product-description/verification/lifecycle.md",
+      "docs/history/pstack-adoption/migration-note.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Updated all FOUR class sites, scout-and-ticks.md included, because the dispatch correction from psa-2 reported that site stale too and the fence confirmed it — the plan was wrong about a fact",
+      "Widened the Expected wording of row PLAN-03 in docs/product-description/verification/lifecycle.md to say the refusal names all eight values, ending in perf, because that row is an executable verification row and its expect text had to stay coherent with the enum it now lists — something else had to be fixed first",
+      "Put the migration note at docs/history/pstack-adoption/migration-note.md because this repo has NO dedicated home for contract-change notes (no CHANGELOG, no docs/migrations/, no upgrade guide); the nearest existing practice is a migration note inside the causing feature history folder, per docs/history/multisession-native/plan.md:64 — hit an unforeseen obstacle",
+      "The commit also carries bee dev regen output the cell files list does not name: the five rendered skill trees (.agents, .claude, .claude-plugin, .codex-plugin, .opencode) and a timestamp-only bump in .bee/onboarding.json, because the cell ordered the regen run and its acceptance requires that output committed — followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T14:11:29.456Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T14:05:23.052Z",
+    "mistakes": [
+      {
+        "wrong": "Ran the verify as one compound shell line with an env prefix, a redirect and a pipe, and the worktree-isolation guard refused it twice before I split it",
+        "better": "in an isolated worktree, run the test command plain and read its persisted output instead of piping"
+      }
+    ],
+    "report": {
+      "outcome": "All four documents naming the route class now list perf as the eighth value, and the migration note D2 requires records the older-bee degradation",
+      "commit": "a7c743472640f81fc9edfc95c38dc4d15f9fa47c",
+      "files": [
+        "skills/bee-hive/references/scout-and-ticks.md",
+        "docs/product-description/goal.md",
+        "docs/product-description/lifecycle/planning.md",
+        "docs/product-description/verification/lifecycle.md",
+        "docs/history/pstack-adoption/migration-note.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check — green — both halves of the verify this cell declares: 3294 unit tests plus every integration target passed with 0 failed, the two route_class_parity tests each printed ok, and release-manifest --check reports 292 files matching after bee dev regen, owed because skills/** moved",
+      "deviations": [
+        "Updated all FOUR class sites, scout-and-ticks.md included, because the dispatch correction from psa-2 reported that site stale too and the fence confirmed it — the plan was wrong about a fact",
+        "Widened the Expected wording of row PLAN-03 in docs/product-description/verification/lifecycle.md to say the refusal names all eight values, ending in perf, because that row is an executable verification row and its expect text had to stay coherent with the enum it now lists — something else had to be fixed first",
+        "Put the migration note at docs/history/pstack-adoption/migration-note.md because this repo has NO dedicated home for contract-change notes (no CHANGELOG, no docs/migrations/, no upgrade guide); the nearest existing practice is a migration note inside the causing feature history folder, per docs/history/multisession-native/plan.md:64 — hit an unforeseen obstacle",
+        "The commit also carries bee dev regen output the cell files list does not name: the five rendered skill trees (.agents, .claude, .claude-plugin, .codex-plugin, .opencode) and a timestamp-only bump in .bee/onboarding.json, because the cell ordered the regen run and its acceptance requires that output committed — followed the plan"
+      ],
+      "mistakes": [
+        "Ran the verify as one compound shell line with an env prefix, a redirect and a pipe, and the worktree-isolation guard refused it twice before I split it — in an isolated worktree, run the test command plain and read its persisted output instead of piping"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

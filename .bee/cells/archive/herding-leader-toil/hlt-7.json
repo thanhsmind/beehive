@@ -1,0 +1,169 @@
+{
+  "id": "hlt-7",
+  "feature": "herding-leader-toil",
+  "lane": "high-risk",
+  "role": "docs",
+  "title": "Document from-job caps, worktree control verbs, judge text, Paseo wait and isolated Pi folders",
+  "deps": [
+    "hlt-1",
+    "hlt-3",
+    "hlt-4",
+    "hlt-5",
+    "hlt-6"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/config-reference.md",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-leader-toil/CONTEXT.md",
+    "docs/history/herding-leader-toil/plan.md"
+  ],
+  "action": "Update docs to match the shipped code, citing herding-leader-toil D1-D7 with store ids from bee decisions search --text herding-leader-toil. the-paseo-channel.md: the event wait (D4), the per-agent Pi folder and isolated_config (D5), the doctor AppImage and folder checks (D6), worker titles and labels (D7), and that a herded run's uncapped-success line names cells finish --from-job (D1). control-plane-topology.md: which verbs now serve main from a granted worktree and which still refuse (D2, narrowing d7b83394). skills/bee-swarming/references/swarming-reference.md: in the tending and cap steps for herded workers, the leader checks the work, then caps with bee cells finish --id <cell> --from-job <job> --proof-result <green:...>; the slice judge's answer is recorded with bee cells judge-record --from-text (D1, D3). docs/config-reference.md: herding.agents.<name>.paseo.isolated_config. Plain technical English, no deferral words. Also (leader addition, 2026-10-06): the documented-invocations test no_shipped_command_spelling_is_refused_by_the_widened_guard in packages/bee-rs/crates/bee/src/hooks/cli_shape.rs refuses three spans in the fenced cells JSON of the frozen docs/history/herding-leader-toil/plan.md (cells finish --from-job with no --id, cells judge-record --from-text with no value). Following the precedent of the prd-1, dis-1 and psd-1 entries, pin the exact candidate strings the test prints into KNOWN_HISTORICAL_EXCEPTIONS, each with a one-line explanation in the same style as its neighbours, and bump the array length. In every doc you write, a bee command inside a fenced code block must be a complete runnable spelling (every required flag with a value) or carry a placeholder like <cell>, so this test stays green.",
+  "must_haves": {
+    "truths": [
+      "the Paseo channel concept describes the event wait, isolated Pi folders, the doctor checks and worker titles with their decision ids",
+      "control-plane-topology.md names the verbs served from a granted worktree and those that still refuse",
+      "the swarming reference tells the leader to cap herded cells with --from-job after checking and to record judges with --from-text",
+      "the config reference names isolated_config",
+      "bee knowledge check passes",
+      "the documented-invocations test passes"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "event wait, isolated folders, doctor, titles"
+      },
+      {
+        "path": "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md",
+        "substantive": "served verbs"
+      },
+      {
+        "path": "skills/bee-swarming/references/swarming-reference.md",
+        "substantive": "from-job and from-text steps"
+      },
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "isolated_config"
+      }
+    ],
+    "key_links": [
+      "each doc cites herding-leader-toil decision ids"
+    ],
+    "prohibitions": [
+      "No change outside these docs"
+    ]
+  },
+  "verify": ".bee/bin/bee knowledge check --json && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee no_shipped_command_spelling",
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hlt-7",
+    "outcome": "docs describe the shipped leader-toil changes",
+    "files_changed": [
+      "docs/config-reference.md",
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+      "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "sync-ack: herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T09:17:37.836Z",
+    "behavior_change": false,
+    "verification_evidence": "knowledge check in the worktree: 0 errors, and the documented-invocations test green inside the whole-bin run (4101 passed); the leader dropped the new comment lines the comment baseline refused",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": ".bee/bin/bee knowledge check --json && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee no_shipped_command_spelling",
+    "claimed_at": "2026-10-06T09:09:56.878Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T09:17:37.836Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:02:22.347Z"
+      }
+    ],
+    "sync_ack": "herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "docs describe the shipped leader-toil changes",
+      "commit": "b222177f3",
+      "files": [
+        "docs/config-reference.md",
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md",
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --json && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee no_shipped_command_spelling — green:static — knowledge check in the worktree: 0 errors, and the documented-invocations test green inside the whole-bin run (4101 passed); the leader dropped the new comment lines the comment baseline refused",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the Paseo channel concept describes the event wait, isolated Pi folders, the doctor checks and worker titles with their decision ids",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "control-plane-topology.md names the verbs served from a granted worktree and those that still refuse",
+            "artifact": "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md"
+          },
+          {
+            "requirement": "the swarming reference tells the leader to cap herded cells with --from-job after checking and to record judges with --from-text",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "the config reference names isolated_config",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "bee knowledge check passes",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the documented-invocations test passes",
+            "artifact": "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md"
+          }
+        ],
+        "recorded_at": "2026-10-06T10:02:22.347Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

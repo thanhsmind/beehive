@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "close-usage-record",
+  "mode": "small",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"close-usage-record\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"close-usage-record\" — feature is closed.",
+  "created_at": "2026-08-30T12:19:01.805Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The builder finished green — 3218 tests pass, 15 of them are the usage tests. Now I merge it into main.",
+    "asked_at": "2026-08-30T12:30:59.059Z",
+    "session": "b3245841-d406-4c7d-a62e-3f8fda66b632"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "persist close usage to docs/history/<feature>/usage.json and the close letter; close.rs + mailbox.rs",
+    "updated_at": "2026-08-30T12:19:01.820Z",
+    "feature": "close-usage-record"
+  }
+}

@@ -7,6 +7,7 @@ timestamp: 2026-07-22
 bee:
   id: pattern-20260722-a-migration-is-not-done-until-its-instructions-are
   lifecycle: active
+  areas: [doctrine-layer]
   sources: ["okf-integration-close-f4 (the seven-gap audit and its four closing cells; CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, 2026-07-22)", red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`]
   polarity: pitfall
   critical: true

@@ -7,6 +7,7 @@ timestamp: 2026-07-27
 bee:
   id: pattern-20260727-an-impacted-run-after-commit-selects-nothing
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["state-phase-lock-race cell splr-1 (verify_passed: true capped on IMPACTED RUN: 0 suite(s) from 5 changed file(s); trace .bee/cells/splr-1.json, commit e787819a, 2026-07-27)", docs/history/state-phase-lock-race/CONTEXT.md, decision f7de0f50-c59a-4455-8699-e7c183fca2b6 (D12 correction), "orchestrator's own full run_verify (109 suites) catching test_cli_state.mjs red after the cap"]
   polarity: pitfall
   critical: false

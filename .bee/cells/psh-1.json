@@ -1,0 +1,121 @@
+{
+  "id": "psh-1",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-skills-ship",
+  "title": "Ship bee-unslop and bee-technical-writing as bee skills",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-unslop/SKILL.md",
+    "skills/bee-unslop/CREATION-LOG.md",
+    "skills/bee-technical-writing/SKILL.md",
+    "skills/bee-technical-writing/CREATION-LOG.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-skills-ship/plan.md",
+    "skills/bee-writing-skills/SKILL.md",
+    "skills/bee-writing-skills/references/prompt-style.md",
+    "skills/bee-writing-skills/references/creation-log-template.md",
+    ".claude/skills/unslop/SKILL.md",
+    ".claude/skills/technical-writing/SKILL.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-unslop/SKILL.md",
+    "skills/bee-technical-writing/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Create two NEW bee skills from the verified local ports (per D1). Source bodies: .claude/skills/unslop/SKILL.md and .claude/skills/technical-writing/SKILL.md. Do NOT run bee dev regen: this cell carries regen_obligation_ack wave-barrier and psh-4 runs the one regen. FRONTMATTER for both, following the bee-writing-skills checklist and the shape of skills/bee-planning/SKILL.md: name equal to the directory; a folded description (description: >-); metadata with version '0.1', ecosystem bee, and dependencies []. No disable-model-invocation key. Descriptions, exactly. bee-unslop: Remove the patterns that make prose read as machine-generated. Use when writing or editing user-facing prose — a reply, a document, a plan, a spec, a README, a PR description or a commit message — and when asked to make text read like a person wrote it. Not for progress ticks, red or refusal lines, command output, quoted evidence, ids, or code, which stay verbatim. bee-technical-writing: The layered standard for technical documents: document mode, reader-facing sentences, one-reading instructions, and plain global English. Use when writing or reviewing a document, RFC, README, spec, plan, PR description or commit message. Not for chat replies, which bee-unslop covers, or product UI copy. BODIES: keep every rule and every unslop rule number. In bee-unslop add one short section right after the Process list, titled 'Scope', saying (per D4): apply these rules to user-facing prose and saved documents; never rewrite progress ticks, red or refusal lines, command output, quoted evidence, ids or code; when the project's own instructions set tone, length, style or language, they win where the two disagree; reply in the user's language, and apply the English word lists only to English text. In bee-technical-writing: every mention of the unslop skill becomes `bee-unslop`; delete the line that begins 'Note: This repo's CLAUDE.md already asks for ASD-STE100' and put in its place: When the project's own instructions set a writing standard, a code style or a language, that standard wins where the two disagree, including over the tabs rule below. Add one line to its Voice section: Never rewrite quoted evidence, ids, commands or code. Provenance line: Ported from pstack (cursor/plugins, pstack/skills/<name>), adapted for bee. Add a short `## Headless` section to each (headless runs apply the rules unchanged and never ask). End each SKILL.md with: Text written to the standard. Invoke bee-hive skill. CREATION-LOG.md for each, from skills/bee-writing-skills/references/creation-log-template.md: source material; extraction decisions (including the new Scope section and why: the hat-user-impact seat found the port would rewrite progress ticks and override host language rules); the named deviation that the Iron Law's delete-and-rewrite step does not apply to a port of field-used content; RED S1 recorded as below; GREEN and Final Outcome left as 'pending, recorded by cell psh-4'. RED S1 (pressures Exhaustion + Authority + Time): asked for the PR body the agent would post over a sloppy teammate draft; output began 'Trim a trailing newline from `--report` JSON before `bee cells finish` parses it' / '## Problem'; verdict PASS on behavior; caveat stated plainly: the subagent inherited the bee source repo's CLAUDE.md, which already told it to write through the local unslop port, so this RED run is contaminated and does not prove the skill unneeded.",
+  "verify": "rg -q '^name: bee-unslop$' skills/bee-unslop/SKILL.md && rg -q '^name: bee-technical-writing$' skills/bee-technical-writing/SKILL.md && rg -q 'ecosystem: bee' skills/bee-unslop/SKILL.md && rg -q 'ecosystem: bee' skills/bee-technical-writing/SKILL.md && rg -q '^## Scope' skills/bee-unslop/SKILL.md && ! rg -n 'disable-model-invocation|CLAUDE.md already asks|--runtime claude' skills/bee-unslop skills/bee-technical-writing",
+  "must_haves": {
+    "truths": [
+      "Both skills have a checklist-conformant frontmatter with no invocation flag",
+      "Every unslop rule keeps its original number",
+      "bee-unslop never rewrites ticks, red lines, command output, quoted evidence, ids or code, and yields to the project's own rules and the user's language"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-unslop/SKILL.md",
+        "substantive": "the full tell catalog with stable rule numbers, a Scope section, a Headless section and the handoff line"
+      },
+      {
+        "path": "skills/bee-technical-writing/SKILL.md",
+        "substantive": "the four-layer standard with its worked example and checklist, naming bee-unslop, with the project-standard-wins line"
+      },
+      {
+        "path": "skills/bee-unslop/CREATION-LOG.md",
+        "substantive": "source, extraction decisions, named deviation, RED S1 with its contamination caveat"
+      },
+      {
+        "path": "skills/bee-technical-writing/CREATION-LOG.md",
+        "substantive": "the same sections for technical-writing"
+      }
+    ],
+    "key_links": [
+      "bee-technical-writing names bee-unslop by name"
+    ],
+    "prohibitions": [
+      "No bee dev regen in this cell",
+      "No write outside the four listed files",
+      "No sentence true only in the bee source repo"
+    ]
+  },
+  "trace": {
+    "worker": "leader-psh-1",
+    "outcome": "bee-unslop and bee-technical-writing shipped in skills/ with bee frontmatter, Scope/Headless/handoff, CREATION-LOGs with RED S1; GREEN left to psh-4",
+    "files_changed": [
+      "skills/bee-unslop/SKILL.md",
+      "skills/bee-unslop/CREATION-LOG.md",
+      "skills/bee-technical-writing/SKILL.md",
+      "skills/bee-technical-writing/CREATION-LOG.md"
+    ],
+    "deviations": [
+      "made a path-scoped commit after an intent-to-add instead of a plain index add — the concurrent-worker guard refused adds to the shared index — hit an unforeseen obstacle",
+      "capped with --sync-ack instead of editing affects_skills — the sync door counted sibling psh-2 bee-teach paths and this cell own CREATION-LOG files, and the cell record belongs to the orchestrator — hit an unforeseen obstacle",
+      "sync-ack: bee-teach paths are sibling cell psh-2's commit in the same branch; the two CREATION-LOG.md files are listed in this cell's files but not its affects_skills; commit a3c3a866 touches only the four psh-1 files"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T00:07:28.524Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "The agy-flash herding agent behind the docs role is stalled at an Antigravity OAuth consent screen and the Fable quota is spent (decision 1c407980); skill prose needs the session model.",
+    "claimed_at": "2026-09-10T23:59:44.912Z",
+    "sync_ack": "bee-teach paths are sibling cell psh-2's commit in the same branch; the two CREATION-LOG.md files are listed in this cell's files but not its affects_skills; commit a3c3a866 touches only the four psh-1 files",
+    "mistakes": [
+      {
+        "wrong": "skills/bee-technical-writing/CREATION-LOG.md quoted the deleted CLAUDE.md-already-asks line verbatim, so the cell verify negative rg matched it",
+        "better": "run the verify negative patterns against every new file, CREATION-LOG included, before the first verify run"
+      }
+    ],
+    "report": {
+      "outcome": "bee-unslop and bee-technical-writing shipped in skills/ (commit a3c3a866). Frontmatter per checklist in both SKILL.md heads; bee-unslop ## Scope after Process (D4 carve-outs, project rules win, user language); all 26 rule numbers identical to the port (diff of numbered-rule list empty); bee-technical-writing names bee-unslop (3 mentions), STE note replaced by the project-standard-wins line, Voice gains the never-rewrite line; ## Headless and the handoff line in both; CREATION-LOG.md in both with source, extraction decisions incl. Scope and the hat-user-impact reason, the Iron Law named deviation, RED S1 with its contamination caveat, GREEN and Final Outcome pending psh-4.",
+      "commit": "a3c3a866",
+      "files": [
+        "skills/bee-unslop/SKILL.md",
+        "skills/bee-unslop/CREATION-LOG.md",
+        "skills/bee-technical-writing/SKILL.md",
+        "skills/bee-technical-writing/CREATION-LOG.md"
+      ],
+      "tests": "cell verify rg chain + cargo test -p bee --test pointer_integrity --test instruction_laws — green:static — new docs-only skill files; verify passed (VERIFY-OK), pointer_integrity 9/9 and instruction_laws 10/10 scan skills/, rule-number diff against the port empty, yaml frontmatter check ok",
+      "deviations": [
+        "made a path-scoped commit after an intent-to-add instead of a plain index add — the concurrent-worker guard refused adds to the shared index — hit an unforeseen obstacle",
+        "capped with --sync-ack instead of editing affects_skills — the sync door counted sibling psh-2 bee-teach paths and this cell own CREATION-LOG files, and the cell record belongs to the orchestrator — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "skills/bee-technical-writing/CREATION-LOG.md quoted the deleted CLAUDE.md-already-asks line verbatim, so the cell verify negative rg matched it — run the verify negative patterns against every new file, CREATION-LOG included, before the first verify run"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "escalate": true
+}

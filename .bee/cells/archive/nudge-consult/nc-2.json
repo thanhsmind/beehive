@@ -1,0 +1,94 @@
+{
+  "id": "nc-2",
+  "feature": "nudge-consult",
+  "lane": "small",
+  "role": "docs",
+  "title": "Define the lead-run nudge consult as the third bundle shape",
+  "action": "The supervisor's `advisor-nudge` tells a lead to run an advisor consult, but no consult is defined at execution altitude — worker-details.md defines only the worker-owned on-failure consult and the gate-time pre-cap consult. Add the third, WITHOUT inventing a new seat, kind, verb or flag. (1) In skills/bee-swarming/references/worker-details.md section 'Advisor consult in full', add one paragraph: the *nudge consult*, lead-owned, triggered by a supervisor advisor-nudge row rather than a red verify. It reuses the configured `advisor` slot via `bee dispatch prepare --kind advisor --purpose \"nudge <row-id>: <cell-id>\"`, carries the GATE-TIME compact-digest bundle shape (not the on-failure bundle — nothing failed) plus the nudge row verbatim and the in-flight diff, and its budget is one consult per nudge row because the mailbox point key already forbids a second nudge on the same point. Bundle rides the prompt body, never --brief-file. State the fixed return form: `verdict: on-track|redirect|stop` / `finding: <scenario with file:line> | none` / `next: <one line>`, and that `on-track / none` is the expected majority answer. Add the NEVER list for this trigger only, omitting what the section already forbids: never answer a question the nudge row did not ask; never treat green as suspect without a scenario at file:line; never re-plan or propose a new cell; never reinterpret a locked decision (a conflict is `stop` citing the D-id); never grade diff size or ambition. (2) In skills/bee-swarming/references/swarming-reference.md, replace the stale `resolveAdvisor(root, runtime)` call with what nc-1 makes true — the Advisor line is rendered by the dispatch door, not added by hand. (3) In docs/handbook/stages/swarming.md near the existing advisor-nudge debt line, add the decision text form that clears the debt: `advisor-nudge <row-id>: <on-track|redirect|stop|declined> — <reason> [-> <follow-up id>]`, and what each verdict does next (on-track/declined: decision only, cap proceeds; redirect: re-dispatch or `bee cells reopen`; stop: a Blocker-class finding is a red base, so `bee cells block` and back to planning). (4) In docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md section 'The advisor-nudge record', add a pointer to the worker-details.md home. Do not restate the consult there — one fact, one home. Run `bee dev regen` after editing skills/**: the skill projections and release manifest are committed artifacts and two parity tests go red without it.",
+  "files": [
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/handbook/stages/swarming.md",
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/nudge-consult/CONTEXT.md",
+    "skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "decisions": [],
+  "verify": "bee dev regen && bee dev release-manifest --check && rg -c 'nudge consult' skills/bee-swarming/references/worker-details.md",
+  "must_haves": {
+    "truths": [
+      "worker-details.md's advisor section names three bundle shapes: on-failure, gate-time, and the lead-run nudge consult.",
+      "The nudge consult paragraph states its dispatch verb, its bundle shape, its one-per-row budget, and the three-line return form.",
+      "swarming-reference.md no longer instructs the orchestrator to call resolveAdvisor by hand.",
+      "docs/handbook/stages/swarming.md carries the decision text form that clears the advisor-nudge debt and what each verdict does.",
+      "The supervisor area doc points at worker-details.md for the consult and does not restate it."
+    ]
+  },
+  "affects_skills": [
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+  ],
+  "depends_on": [
+    "nc-1"
+  ],
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "nudge-consult-w2",
+    "outcome": "The lead-run nudge consult is defined as the third bundle shape, with its dispatch verb, return form and debt-clearing decision text",
+    "files_changed": [
+      "skills/bee-swarming/references/worker-details.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/handbook/stages/swarming.md",
+      "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "The orchestrator capped this cell instead of the dispatched worker — the worker committed cleanly but never ran bee cells finish, the same miss as nc-1 — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T10:00:59.711Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "34a24bf4-5655-4cff-84e1-d02eaf823966",
+    "claimed_at": "2026-09-04T09:53:45.928Z",
+    "mistakes": [
+      {
+        "wrong": "The nc-2 herding worker committed de331778 but returned without running bee cells finish, leaving the cell claimed",
+        "better": "the same failure as nc-1, so the miss is in the herding worker path rather than a one-off, and it is now worth a captured learning instead of a second reflection"
+      }
+    ],
+    "report": {
+      "outcome": "worker-details.md defines the lead-run nudge consult as a third bundle shape, swarming.md carries the debt-clearing decision form, the stale resolveAdvisor prose is gone, and the supervisor doc points at the one home",
+      "commit": "de331778",
+      "files": [
+        "skills/bee-swarming/references/worker-details.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/handbook/stages/swarming.md",
+        "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "bee dev release-manifest --check && rg -c 'nudge consult' skills/bee-swarming/references/worker-details.md — green:static — 337 files match stored manifest and the consult section carries 2 matches; docs-only change so parity plus a pointer check is the proof its type needs, re-run by the orchestrator after the commit",
+      "deviations": [
+        "The orchestrator capped this cell instead of the dispatched worker — the worker committed cleanly but never ran bee cells finish, the same miss as nc-1 — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "The nc-2 herding worker committed de331778 but returned without running bee cells finish, leaving the cell claimed — the same failure as nc-1, so the miss is in the herding worker path rather than a one-off, and it is now worth a captured learning instead of a second reflection"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 365 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

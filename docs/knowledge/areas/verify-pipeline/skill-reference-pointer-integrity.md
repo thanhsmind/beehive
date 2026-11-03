@@ -115,6 +115,16 @@ run on every verification, not once at authoring time.
   cue to search elsewhere. Resolution is deterministic; guessing would hide the error.
 - **A pointer whose target exists in a rendered projection but not in the source** is a finding: the
   source is the truth, and the projection is downstream of it.
+- **A citation written inside a `skills/**` document that already spells its own leading `skills/`
+  segment resolves one level too deep.** The Rust checker treats every citation found inside
+  `skills/**` as relative to the `skills/` root and re-prepends `skills/` itself; a citation that
+  already includes that segment (e.g. `` `skills/bee-planning/references/foo.md` `` written inside
+  another file under `skills/`) resolves to `skills/skills/...` and fails as a missing target, even
+  though the real file exists one directory up from where the check looked. Write such a citation
+  relative to `skills/` with no leading `skills/` segment instead. Found and fixed live
+  (`playbook-file-split` cell pfs-1's defect, caught by cell pfs-2's own verify, 2026-09-25) —
+  the citation being moved was `skills/bee-planning/playbooks/spike.md`'s cross-reference to
+  `bee-planning/references/planning-reference.md`.
 
 - **A finding that cannot fail a build is a finding that gets stepped over.** The advisory
   sibling's *reachability* check misread a two-heading citation for as long as that citation had
@@ -142,6 +152,12 @@ nothing had ever looked.
 
 - **Only reference-document pointers are checked.** Citations to source files, history documents, or
   external URLs are out of scope. Whether they deserve the same treatment is undecided.
+- **A citation that names a line number is outside every check.** The gate resolves a pointer that
+  names a document and, optionally, a heading; a line range is not a pointer it can resolve. History
+  records routinely cite a source by line range, and those ranges rot on the next edit to the cited
+  file while every check stays green — two records still point at ranges the named behavior left long
+  ago. A reader who follows one lands in unrelated code with no signal that the anchor moved, so a
+  line range is read as a hint, never as an address.
 - Pointer erratum (2026-08-10): the Node implementation this concept's pointers name retired with
   the Rust port; the gate lives in `packages/bee-rs/crates/bee/tests/pointer_integrity.rs`
   (its own header records the Node provenance).
@@ -171,7 +187,7 @@ nothing had ever looked.
 ## Pointers (implementation)
 
 - `scripts/tests/test_skill_pointers.mjs` — the check, with `--selftest` carrying the negative controls.
-- `scripts/run_verify.mjs` — the discovery roots that make registration unnecessary.
+- `.bee/bin/bee test` (the declared `commands.test`) — cargo's own `crates/bee/tests/*.rs` discovery, which makes registration unnecessary.
 - `scripts/okf_instructions_fence.mjs` — the sibling instruction-surface check whose reporting style
   this one follows.
 - Advisory sibling: `scripts/skill_lint.mjs`. Its reachability check carries the multi-heading

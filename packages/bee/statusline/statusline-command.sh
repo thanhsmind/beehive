@@ -3,6 +3,7 @@
 # Segments: cwd | branch | model [effort] | ctx X% | 5h: X% | 7d: X%
 
 input=$(cat)
+[ -z "${input//[[:space:]]/}" ] && exit 0
 
 # jq with PATH fallback (GUI launches don't inherit shell PATH)
 JQ=$(command -v jq || true)
@@ -10,14 +11,17 @@ for cand in /opt/homebrew/bin/jq /usr/local/bin/jq /usr/bin/jq; do
   [ -n "$JQ" ] && break
   [ -x "$cand" ] && JQ="$cand"
 done
-[ -z "$JQ" ] && { printf '%b\n' '\033[31mstatusline: jq not found\033[0m'; exit 0; }
+[ -z "$JQ" ] && exit 0
 
-cwd=$(echo "$input"    | "$JQ" -r '.cwd // empty')
-model=$(echo "$input"  | "$JQ" -r '.model.display_name // empty')
-effort=$(echo "$input" | "$JQ" -r '.effort.level // empty')
-remaining=$(echo "$input" | "$JQ" -r '.context_window.remaining_percentage // empty')
-five_pct=$(echo "$input"  | "$JQ" -r '.rate_limits.five_hour.used_percentage // empty')
-week_pct=$(echo "$input"  | "$JQ" -r '.rate_limits.seven_day.used_percentage // empty')
+# Unparseable payload check: fail-open, exit silently without error
+echo "$input" | "$JQ" empty 2>/dev/null || exit 0
+
+cwd=$(echo "$input"    | "$JQ" -r '.cwd // empty' 2>/dev/null)
+model=$(echo "$input"  | "$JQ" -r '.model.display_name // empty' 2>/dev/null)
+effort=$(echo "$input" | "$JQ" -r '.effort.level // empty' 2>/dev/null)
+remaining=$(echo "$input" | "$JQ" -r '.context_window.remaining_percentage // empty' 2>/dev/null)
+five_pct=$(echo "$input"  | "$JQ" -r '.rate_limits.five_hour.used_percentage // empty' 2>/dev/null)
+week_pct=$(echo "$input"  | "$JQ" -r '.rate_limits.seven_day.used_percentage // empty' 2>/dev/null)
 
 branch=""
 [ -n "$cwd" ] && branch=$(git -C "$cwd" --no-optional-locks symbolic-ref --short HEAD 2>/dev/null)
@@ -36,23 +40,23 @@ if [ -n "$model" ]; then
 fi
 
 if [ -n "$remaining" ]; then
-  r=$(printf '%.0f' "$remaining")
+  r=$(printf '%.0f' "$remaining" 2>/dev/null)
   # Red = past the ~65%-used handoff mark, not routine work.
-  if   [ "$r" -gt 35 ]; then c="${green}"
-  elif [ "$r" -ge 20 ]; then c="${yellow}"
+  if   [ "$r" -gt 35 ] 2>/dev/null; then c="${green}"
+  elif [ "$r" -ge 20 ] 2>/dev/null; then c="${yellow}"
   else c="${red}"; fi
   line="${line}${sep}${c}ctx: ${r}%${reset}"
 fi
 
 if [ -n "$five_pct" ]; then
-  u=$(printf '%.0f' "$five_pct")
-  [ "$u" -ge 70 ] && c="${bright}${yellow}" || c="${dim}"
+  u=$(printf '%.0f' "$five_pct" 2>/dev/null)
+  [ "$u" -ge 70 ] 2>/dev/null && c="${bright}${yellow}" || c="${dim}"
   line="${line}${sep}${c}5h: ${u}%${reset}"
 fi
 
 if [ -n "$week_pct" ]; then
-  w=$(printf '%.0f' "$week_pct")
-  [ "$w" -ge 70 ] && c="${bright}${yellow}" || c="${dim}"
+  w=$(printf '%.0f' "$week_pct" 2>/dev/null)
+  [ "$w" -ge 70 ] 2>/dev/null && c="${bright}${yellow}" || c="${dim}"
   line="${line}${sep}${c}7d: ${w}%${reset}"
 fi
 

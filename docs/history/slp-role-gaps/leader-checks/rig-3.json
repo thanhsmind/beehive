@@ -1,0 +1,7 @@
+{"schema":"leader-check/1","answers":[
+{"requirement":"A herding result with the new fields round-trips into the run envelope","artifact":"packages/bee-rs/crates/bee/src/herding/run.rs"},
+{"requirement":"Wrong-typed new fields never make a result Malformed","artifact":"packages/bee-rs/crates/bee/src/herding/mailbox.rs"},
+{"requirement":"With on_model_mismatch absent a mismatch only warns and the envelope carries model_mismatch","artifact":"packages/bee-rs/crates/bee/src/herding/run.rs"},
+{"requirement":"With refuse a mismatch seen while polling stops the agent and ends the run with reason model_mismatch","artifact":"packages/bee-rs/crates/bee/src/herding/paseo.rs"},
+{"requirement":"A herding dissent with new_evidence after a verdict is recorded with that evidence","artifact":"packages/bee-rs/crates/bee/src/herding/run.rs"}
+]}

@@ -67,7 +67,12 @@ fn write_cell(repo: &Path, id: &str, status: &str, deps: &[&str]) {
 }
 
 fn run(cwd: &Path, args: &[&str]) -> (i32, String) {
-    let out = Command::new(binary()).args(args).current_dir(cwd).output().unwrap();
+    let out = Command::new(binary())
+        .args(args)
+        .env_remove("PI_SESSION_ID")
+        .current_dir(cwd)
+        .output()
+        .unwrap();
     (
         out.status.code().unwrap_or(-1),
         format!(

@@ -215,6 +215,48 @@ pub(crate) fn find_granted_worktree_for_feature(main_root: &Path, feature: &str)
     None
 }
 
+pub(crate) fn find_unmerged_granted_worktree_for_feature(
+    main_root: &Path,
+    feature: &str,
+) -> Option<(String, String)> {
+    let (id, worktree_root) = find_granted_worktree_for_feature(main_root, feature)?;
+    let Some(branch) = read_worktree_branch(main_root, &id) else {
+        return Some((id, worktree_root));
+    };
+    let branch_ref = format!("refs/heads/{branch}");
+    let Some((code, _)) = run_git(
+        main_root,
+        &["merge-base", "--is-ancestor", &branch_ref, "HEAD"],
+    ) else {
+        return Some((id, worktree_root));
+    };
+    if code != 0 {
+        return Some((id, worktree_root));
+    }
+    let Some((code, tip_out)) = run_git(main_root, &["rev-parse", &branch_ref]) else {
+        return Some((id, worktree_root));
+    };
+    if code != 0 {
+        return Some((id, worktree_root));
+    }
+    let tip_sha = tip_out.trim();
+    if tip_sha.is_empty() {
+        return Some((id, worktree_root));
+    }
+    let Some((code, rev_out)) = run_git(main_root, &["rev-list", "--first-parent", "HEAD"]) else {
+        return Some((id, worktree_root));
+    };
+    if code != 0 {
+        return Some((id, worktree_root));
+    }
+    let is_on_first_parent = rev_out.lines().any(|line| line.trim() == tip_sha);
+    if !is_on_first_parent {
+        None
+    } else {
+        Some((id, worktree_root))
+    }
+}
+
 /// bee.mjs ungrantedWorktreeNotice (GH #30) — messaging only, and the ONE
 /// status field whose presence depends on the checkout's grant state.
 ///

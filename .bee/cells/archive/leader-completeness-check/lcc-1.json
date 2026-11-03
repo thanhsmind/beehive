@@ -1,0 +1,75 @@
+{
+  "id": "lcc-1",
+  "feature": "leader-completeness-check",
+  "lane": "small",
+  "role": "docs",
+  "title": "Add leader completeness check instruction",
+  "action": "Add instruction to bee-hive and bee-swarming references: when worker caps a cell, leader must compare every approved requirement against actual artifacts before accepting",
+  "summary": "Add instruction that when worker caps a cell, leader must compare every approved requirement against actual artifacts before accepting the result",
+  "verify": "grep -q 'navigation aid' skills/bee-hive/references/routing-and-contracts.md && grep -q 'requirement.*artifact' skills/bee-hive/references/routing-and-contracts.md && bee dev release-manifest --check",
+  "files": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "must_haves": [
+    "When worker caps a cell, leader compares every approved requirement (from cell and plan) against actual artifacts, wiring, and execution evidence",
+    "Worker reports are navigation aids, not completion evidence",
+    "Reuse existing must_haves and proof lines from cell/plan",
+    "No new report schema or mandatory full-suite rerun",
+    "Verification depth stays risk-based: deeper checks for high risk, missing evidence, or contradictions"
+  ],
+  "deps": [],
+  "read_first": [
+    "docs/history/leader-completeness-check/CONTEXT.md"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "wk-lcc-1",
+    "outcome": "Added leader completeness check instruction to skills",
+    "files_changed": [
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "skills/bee-hive/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: cell prediction listed SKILL.md files, actual changes were in references/*.md files"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-05T14:44:48.495Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "24d10ef7-b153-4dfe-9b14-6fde0f3108bc",
+    "claimed_at": "2026-09-05T14:35:27.030Z",
+    "sync_ack": "cell prediction listed SKILL.md files, actual changes were in references/*.md files",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added leader completeness check instruction",
+      "commit": "1ddab652fc12ba95a405a7eaecc41ebbdf950cdd",
+      "files": [
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-swarming/references/worker-details.md",
+        "skills/bee-hive/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "grep + release-manifest --check — green:static — docs parity check",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

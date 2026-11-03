@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "feature": "slp-dissent-stop-and-ask",
+  "mode": "high-risk",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
+  "next_action": "promote proposal reviewed 2026-09-08 (decision 8d81aa89); delivery record accepted, pattern candidates rejected as cell-local craft",
+  "created_at": "2026-08-27T20:58:29.709Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-09-08T14:49:43.850Z",
+    "session": "ac83adf7-9f51-4558-a3ad-49533284ee5d"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "data-model",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 12,
+    "rationale": null,
+    "updated_at": "2026-08-27T22:55:09.278Z",
+    "feature": "slp-dissent-stop-and-ask"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-27T23:05:27.157Z",
+    "feature": "slp-dissent-stop-and-ask",
+    "newest_decision_id": "e29918f7-49fe-45f6-911e-d696b954d20d",
+    "plan_sha256": "absent",
+    "advisor": "fable",
+    "digest_head": "# Advisor consult — slp-dissent-stop-and-ask plan shape\n\n**Advisor tier:** fable (configured advisor slot), 2026-08-28\n**Scope:** the high-risk plan shape at `docs/history/slp-dissent-stop-and-ask/plan.md`,\nread against CONTEXT.md's locked decisions and the named source anchors.\n\n## P1 — the plan is wrong here\n\n**P1.1 — The merge precondition as described drops the deferral escape.**\nThe proof-debt style has no escape: `verbs/worktree/phases.rs:154-178` refuses\nunconditionally. The judge-debt sh"
+  },
+  "last_scribing_run": {
+    "feature": "slp-dissent-stop-and-ask",
+    "date": "2026-08-28",
+    "at": "2026-08-28T13:06:04.911Z",
+    "areas_synced": [
+      "workflow-state",
+      "worktree-parallelism",
+      "bee-herding"
+    ],
+    "next_action": "Proposal reviewed and the delivery record written; the feature still owes its close"
+  }
+}

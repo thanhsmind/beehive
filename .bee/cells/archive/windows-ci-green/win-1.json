@@ -1,0 +1,92 @@
+{
+  "id": "win-1",
+  "feature": "windows-ci-green",
+  "title": "Canonicalize the worktree test's expected paths, and make the release-dirt test show its real error",
+  "lane": "small",
+  "role": "test",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "00967a93-511b-46bb-8b0e-f06e9bef8623"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "docs/history/windows-ci-green/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Two edits, both in test code. FIRST, in packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs, inside `fn enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller`: the expected paths are built with `p(...)`, which does not canonicalize, while the product builds the real value with `canonical_path_str` (verbs/worktree/handlers.rs:38), which runs dunce::canonicalize and so turns the Windows 8.3 short name RUNNER~1 into the long name runneradmin. Replace BOTH expectation sites in that test — `let target_str = p(&created.worktree_root);` and `let main_str = p(&main);` — with `canonical_path_str(&...).unwrap()`. This is the idiom the same file already uses; search it for `canonical_path_str(&` and match those lines exactly. Do not change the product, and do not change what the assertions check. SECOND, in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs, inside `fn test_release_dirt_script_filters_only_bee_paths`: both script runs assert success with a message that prints only stderr, and on Windows stderr was empty, so the failure named no cause. Change BOTH assertion messages — the one on `out` and the one on `out_clean` — to print the exit status, stdout and stderr together, labelled, so the next Windows run shows what actually happened. Change only the message: the condition stays `status.success()`. Do NOT touch scripts/release-dirt.sh: its cause is unknown, and changing a script the release path uses on a guess is out of scope for this cell.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
+  "must_haves": {
+    "truths": [
+      "Both expected paths in the worktree test are built with canonical_path_str",
+      "Both release-dirt assertion messages print the exit status, stdout and stderr",
+      "No assertion condition changed, only how the expectations are built and what the messages print",
+      "The full bin suite stays green on Linux"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "both expectation sites use canonical_path_str, matching the file's own idiom"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "both script-run failure messages carry exit status, stdout and stderr"
+      }
+    ],
+    "key_links": [
+      "the expected path goes through the product's own canonicalizer rather than a second implementation of it"
+    ],
+    "prohibitions": [
+      "No change to scripts/release-dirt.sh",
+      "No change to any product source file",
+      "No weakening of an assertion condition to make a test pass"
+    ]
+  },
+  "trace": {
+    "worker": "worker-win",
+    "outcome": "Canonicalize the worktree test paths and make the release-dirt failure show its cause",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: No skill text changes: two test-only edits, no behavior a skill describes."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-19T16:05:00.417Z",
+    "behavior_change": false,
+    "verification_evidence": "3689 passed, 0 failed, 20 ignored, re-run by the leader on Linux; both target tests executed and passed: test_release_dirt_script_filters_only_bee_paths and enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller. The leader read the diff: both path expectations now call canonical_path_str(...).unwrap(), both failure messages print status, stdout and stderr, and no assertion condition, product file or script changed. This proves Linux only; the Windows result comes from the branch push that follows this cap.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
+    "claimed_at": "2026-09-19T15:58:39.092Z",
+    "sync_ack": "No skill text changes: two test-only edits, no behavior a skill describes.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The worktree test builds both expected paths with canonical_path_str, and the release-dirt test prints exit status, stdout and stderr when its script fails.",
+      "commit": "dd7b98bfd",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee — green:unit — 3689 passed, 0 failed, 20 ignored, re-run by the leader on Linux; both target tests executed and passed: test_release_dirt_script_filters_only_bee_paths and enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller. The leader read the diff: both path expectations now call canonical_path_str(...).unwrap(), both failure messages print status, stdout and stderr, and no assertion condition, product file or script changed. This proves Linux only; the Windows result comes from the branch push that follows this cap.",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

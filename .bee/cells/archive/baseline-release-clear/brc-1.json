@@ -1,0 +1,89 @@
+{
+  "id": "brc-1",
+  "feature": "baseline-release-clear",
+  "title": "Clear the cap baseline when a cell is released",
+  "lane": "tiny",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "7bd47edd"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add \"baseline\" to release_trace's cleared key list in trace.rs, beside verify_passed and verification_evidence, and pin it with a named test. Decision 7bd47edd: the baseline is verify evidence, so a released cell must not carry the previous run's floor into its next claim.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells",
+  "must_haves": {
+    "truths": [
+      "A released cell's trace carries no baseline",
+      "The other verify-evidence fields are still cleared"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+        "substantive": "baseline in the release_trace key array"
+      }
+    ],
+    "key_links": [
+      "the baseline is cleared for the same reason as its neighbours"
+    ],
+    "prohibitions": [
+      "No change to the report key name",
+      "No refusal added for a missing baseline"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": "Clear the cap baseline when a cell is released, proven red first",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: No skill text is stale: this clears an internal trace field on release. worker-details.md already tells a worker the baseline is optional and what it means, and nothing in any skill describes what a RELEASED cell keeps — that is plumbing an agent never reads. The instruction half of this feature shipped with proof-honesty."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T18:55:43.827Z",
+    "behavior_change": true,
+    "verification_evidence": "378 passed, 0 failed; and proven red first: with \"baseline\" removed from release_trace the new test fails on 'a released cell must not carry the previous run's baseline' (exit 101), with it restored the suite is green",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells",
+    "sync_ack": "No skill text is stale: this clears an internal trace field on release. worker-details.md already tells a worker the baseline is optional and what it means, and nothing in any skill describes what a RELEASED cell keeps — that is plumbing an agent never reads. The instruction half of this feature shipped with proof-honesty.",
+    "mistakes": [
+      {
+        "wrong": "Two sessions built the same spec-drop practice concurrently under different field names, and I only found out when the merge conflicted",
+        "better": "check bee state session list for a live sibling lane before shaping work that came from a shared spec drop"
+      }
+    ],
+    "inline_reason": "Tiny lane, one direct task, solo on this lane; the leader ran it inline rather than paying a dispatch for a one-line change plus its test.",
+    "report": {
+      "outcome": "Clear the cap baseline when a cell is released",
+      "commit": "934bbd87a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells — green:unit — 378 passed, 0 failed; and proven red first: with \"baseline\" removed from release_trace the new test fails on 'a released cell must not carry the previous run's baseline' (exit 101), with it restored the suite is green",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "Two sessions built the same spec-drop practice concurrently under different field names, and I only found out when the merge conflicted — check bee state session list for a live sibling lane before shaping work that came from a shared spec drop"
+      ],
+      "baseline": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells — green:unit — same command on the base commit, before this change: 378 passed, 0 failed (the new test did not exist there)"
+    },
+    "baseline": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells — green:unit — same command on the base commit, before this change: 378 passed, 0 failed (the new test did not exist there)",
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

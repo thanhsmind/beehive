@@ -1,0 +1,211 @@
+{
+  "id": "mfa-2",
+  "feature": "mistake-fix-at",
+  "title": "File one backlog row per mechanizable mistake at close",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "mfa-1"
+  ],
+  "decisions": [
+    "6e79d14e-7961-4a3f-b0a2-c9d9af288c07"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "read_first": [
+    "docs/history/mistake-fix-at/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/references/promotion.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md"
+  ],
+  "action": "At close, file one backlog row for every mechanizable mistake of the closing feature (per D2, source set per the D2a decision). In verbs/backlog.rs: make `backlog_jsonl_path` `pub(crate)` (rg hit: `fn backlog_jsonl_path(root: &Path) -> PathBuf {`); lift ONLY the seven-key row builder out of `run_add` (rg hit: `fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCode> {`) into `pub(crate) fn backlog_finding_row(ty: &str, title: &str, detail: &str, severity: &str, layer: &str, feature: &str) -> Map<String, Value>` that keeps the exact key order and carries its comment (rg hit: `    // Row key order: ts, type, title, detail, severity, layer, feature.`), and have `run_add` call it — the append stays `fsutil::append_jsonl` (rg hit: `    if append_jsonl(&path, &Value::Object(line.clone())).is_err() {`); add `pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool` as a fold over `read_jsonl(&backlog_jsonl_path(root)).rows` filtered by `is_finding_row` (rg hit: `fn is_finding_row(row: &Value) -> bool {`) with exact equality on the three fields. In verbs/drivers/close.rs, in the green tail AFTER the headline (rg hit: `    let headline = format!(\"Tests GREEN for \\\"{feature}\\\" — {}\", proof_door_detail(&proof));`) and BEFORE retirement (rg hit: `    let retired = auto_archive_on_close(root, feature);`): collect the feature's mistakes from two sources — each capped cell's `trace.mistakes` objects, walked with `list_cells_including_archive(root, feature, Some(\"capped\"))` exactly as `mistakes_debt` walks (rg hit: `pub(crate) fn mistakes_debt(root: &Path, feature: &str) -> D<DebtSummary> {`), and the closing run's own reflection entries, resolved the way `closing_run_answered_mistakes` resolves the run and control root (rg hit: `fn closing_run_answered_mistakes(root: &Path) -> bool {`). For each whose `fix_at` is `check` or `architecture`: title = the wrong text truncated to `BACKLOG_MAX_TITLE` characters, detail = the better text plus ` (from cell <id>)` or ` (from run <run>)`, severity `P3`, layer `fix-at:<value>`, type `finding`, feature = the closing feature; skip when `backlog_finding_exists` says so; never file for `doctrine`, `none`, or a missing fix_at. Count filed and skipped; add `fix_at_rows: {\"filed\": N, \"skipped\": M}` to the close result JSON; print ONE text line in the tail's voice, placed right after the Retired line (rg hit: `\"Retired \\\"{feature}\\\": {moved} cell(s) moved out of the active scan (bee cells unarchive --feature {feature} to reverse).\"`): `Filed for \"{feature}\": {N} fix-at row(s) to .bee/backlog.jsonl ({M} already there) — bee backlog findings --feature {feature} to read them.` Fail-open: a write error prints one warning line naming the path and never changes the exit code. TESTS, red-first, in close.rs's test module beside `close_refuses_a_feature_whose_capped_cell_never_answered_about_mistakes` (reuse `init_bee_repo` and the `capped_cell` fixture shape, giving the cells `trace.mistakes` objects with `fix_at`): two capped cells each carrying one `check` mistake → exactly two rows with `layer: fix-at:check`, `type: finding`, `severity: P3`, `feature` set, and the close exits 0 with the Filed line naming the feature; the same close run again → zero new rows and the line says 2 already there; a `doctrine` mistake and a mistake with no `fix_at` file nothing; a read-only .bee/backlog.jsonl → close still exits 0 and prints the warning. Add one backlog.rs test that `backlog_finding_row` yields the seven keys in order and one that `backlog_finding_exists` matches exactly and only on the three fields.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers::close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee backlog",
+  "must_haves": {
+    "truths": [
+      "a green close of a feature with two check mistakes appends exactly two rows to .bee/backlog.jsonl, each with type finding, severity P3, layer fix-at:check, feature set to the closing feature",
+      "the close text carries one line starting Filed for \"<feature>\": that names the count, the path, the already-there count and the bee backlog findings command, placed after the Retired line",
+      "running the same close again appends zero rows and reports them as already there",
+      "doctrine and none mistakes and mistakes with no fix_at file no row",
+      "an unwritable backlog file prints one warning and the close exit code is unchanged",
+      "bee backlog add still writes the seven keys in the same order"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "fix-at row filing in the green tail before retirement, result field, tail-voice text line, tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "substantive": "backlog_finding_row lifted out of run_add, backlog_finding_exists fold, pub(crate) backlog_jsonl_path, tests"
+      }
+    ],
+    "key_links": [
+      "close.rs appends with fsutil::append_jsonl through backlog::backlog_finding_row — no second row shape",
+      "the walk reuses list_cells_including_archive with Some(\"capped\") so archived cells count"
+    ],
+    "prohibitions": [
+      "No new blocking door: the mistakes door's refusal and remedy text are unchanged",
+      "No write before the green tail — a refused close files nothing",
+      "The backlog row key order and the four required fields are unchanged"
+    ]
+  },
+  "trace": {
+    "worker": "mfa-w2",
+    "outcome": "bee close files one P3 fix-at backlog row per mechanizable mistake, deduped and fail-open",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+    ],
+    "deviations": [
+      "The Filed line is suppressed when filed and skipped are both 0 — a close with no mechanizable mistake would otherwise print a 0 fix-at row(s), 0 already there line on nearly every close, and the Retired line already takes that rule at moved == 0 — found a better route",
+      "BACKLOG_MAX_TITLE was made pub(crate) beside the three items the cell named, so close truncates the title to the same cap bee backlog add enforces instead of re-declaring the number — hit an unforeseen obstacle",
+      "sync-ack: bee backlog add behaviour is byte-identical (the seven-key row builder was only lifted, no verb, flag or row shape changed), so no bee-shaping or bee-grooming page goes stale; the one doctrine edit this feature owes is mfa-4, which owns skills/bee-capturing/references/promotion.md and every other prose home, and this cell may not write outside its two declared files"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T06:12:09.806Z",
+    "behavior_change": true,
+    "verification_evidence": "73 close tests and 32 backlog tests, the two modules this cell touched; the full declared suite was NOT run here and is left to CI",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers::close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee backlog",
+    "claimed_at": "2026-09-22T05:57:42.163Z",
+    "sync_ack": "bee backlog add behaviour is byte-identical (the seven-key row builder was only lifted, no verb, flag or row shape changed), so no bee-shaping or bee-grooming page goes stale; the one doctrine edit this feature owes is mfa-4, which owns skills/bee-capturing/references/promotion.md and every other prose home, and this cell may not write outside its two declared files",
+    "mistakes": [
+      {
+        "wrong": "Ran cargo test while the sibling mfa-3 worker was mid-edit on mailbox_digest.rs in the same worktree and read its three compile errors as my own red",
+        "better": "inspect the working tree for a sibling file diff before treating a crate-wide compile error as this cell fault"
+      }
+    ],
+    "report": {
+      "outcome": "close.rs file_fix_at_rows plus mechanizable_mistakes file one P3 finding row per check/architecture mistake (capped cells trace.mistakes and the closing run reflections), deduped by backlog::backlog_finding_exists, appended through backlog::backlog_finding_row and fsutil::append_jsonl; result field fix_at_rows and the Filed line after the Retired line; 4 close tests plus 2 backlog tests",
+      "commit": "e82490e22",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers::close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee backlog — green:unit — 73 close tests and 32 backlog tests, the two modules this cell touched; the full declared suite was NOT run here and is left to CI",
+      "deviations": [
+        "The Filed line is suppressed when filed and skipped are both 0 — a close with no mechanizable mistake would otherwise print a 0 fix-at row(s), 0 already there line on nearly every close, and the Retired line already takes that rule at moved == 0 — found a better route",
+        "BACKLOG_MAX_TITLE was made pub(crate) beside the three items the cell named, so close truncates the title to the same cap bee backlog add enforces instead of re-declaring the number — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "Ran cargo test while the sibling mfa-3 worker was mid-edit on mailbox_digest.rs in the same worktree and read its three compile errors as my own red — inspect the working tree for a sibling file diff before treating a crate-wide compile error as this cell fault"
+      ],
+      "baseline": "The four new close tests cannot exist on the base commit ba3cf5f8; red-first was proved by neutralizing mechanizable_mistakes to an empty Vec — a_green_close_files_one_backlog_row_per_mechanizable_mistake, closing_the_same_feature_again_files_no_second_row and an_unwritable_backlog_warns_and_the_close_still_passes all FAILED, then green after restore"
+    },
+    "baseline": "The four new close tests cannot exist on the base commit ba3cf5f8; red-first was proved by neutralizing mechanizable_mistakes to an empty Vec — a_green_close_files_one_backlog_row_per_mechanizable_mistake, closing_the_same_feature_again_files_no_second_row and an_unwritable_backlog_warns_and_the_close_still_passes all FAILED, then green after restore",
+    "warnings": [
+      "advisory: this cap's commit changes 415 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a green close of a feature with two check mistakes appends exactly two rows to .bee/backlog.jsonl, each with type finding, severity P3, layer fix-at:check, feature set to the closing feature",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "the close text carries one line starting Filed for \"<feature>\": that names the count, the path, the already-there count and the bee backlog findings command, placed after the Retired line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "running the same close again appends zero rows and reports them as already there",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "doctrine and none mistakes and mistakes with no fix_at file no row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "an unwritable backlog file prints one warning and the close exit code is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "bee backlog add still writes the seven keys in the same order",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T06:13:12.302Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "mfa2-t1",
+            "status": "PASS",
+            "evidence": "close.rs:340 mechanizable_mistakes walks list_cells_including_archive(root, feature, Some(\"capped\")) keeping fix_at in {check, architecture}; close.rs:401 file_fix_at_rows builds via backlog::backlog_finding_row and appends with append_jsonl. Proven by close.rs:5198 a_green_close_files_one_backlog_row_per_mechanizable_mistake. Ran: cargo test --release -p bee drivers::close -> 73 passed."
+          },
+          {
+            "id": "mfa2-t2",
+            "status": "PASS",
+            "evidence": "close.rs:3138-3143 pushes the Filed for line right after the Retired push at close.rs:3125; test close.rs:5227 asserts the sentence verbatim. Recorded deviation: suppressed when filed==0 and skipped==0 (close.rs:3138), asserted by close.rs:5274."
+          },
+          {
+            "id": "mfa2-t3",
+            "status": "PASS",
+            "evidence": "backlog.rs:434 backlog_finding_exists exact (feature, layer, title) fold; close.rs:409-412 skips and counts; close.rs:5236 closing_the_same_feature_again_files_no_second_row asserts 2 rows stay 2, text says 2 already there, fix_at_rows == {filed:0, skipped:2}."
+          },
+          {
+            "id": "mfa2-t4",
+            "status": "PASS",
+            "evidence": "close.rs:342-344 mechanizable(layer) matches check | architecture only; missing key yields empty and fails. close.rs:5263 doctrine_and_layerless_mistakes_file_no_row."
+          },
+          {
+            "id": "mfa2-t5",
+            "status": "PASS",
+            "evidence": "close.rs:415-421 the append Err arm sets one warning and never returns early; close.rs:3144-3146 prints it. close.rs:5282 an_unwritable_backlog_warns_and_the_close_still_passes: exit 0 with the warning."
+          },
+          {
+            "id": "mfa2-t6",
+            "status": "PASS",
+            "evidence": "backlog.rs:406-431 backlog_finding_row keeps the insert order ts, type, title, detail, severity, layer, feature; run_add (backlog.rs:875-878) calls it. backlog.rs:1816 backlog_finding_row_keeps_the_seven_keys_in_order. Ran: cargo test --release -p bee backlog -> 32 passed, 1 ignored (pre-existing)."
+          },
+          {
+            "id": "mfa2-p1",
+            "status": "PASS",
+            "evidence": "git show e82490e2 has no edit to the mistakes door region; the diff is close.rs:299-433, 3093-3097, 3138-3146 plus tests. No refusal or remedy string changed."
+          },
+          {
+            "id": "mfa2-p2",
+            "status": "PASS",
+            "evidence": "file_fix_at_rows is called at close.rs:3093 after the headline (3052) and after every door; no return Ok(Out::Emit past the filing point."
+          },
+          {
+            "id": "mfa2-p3",
+            "status": "PASS",
+            "evidence": "Single builder; run_add's four validated fields come from the unchanged add_refusal validation (backlog.rs:875). No key added or removed."
+          },
+          {
+            "id": "mfa2-x2",
+            "status": "PASS",
+            "evidence": "Ordering: file_fix_at_rows 3093, auto_archive_on_close 3115, Retired push 3125, Filed push 3140. Dedupe backlog.rs:434-446 exact three-field equality on finding rows; backlog.rs:1834 asserts each field alone flips the answer. Observation: a mistake capped in the same session as the close is seen twice (cell trace + run entry); the file stays correct but skipped is inflated by one."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-22T06:21:38.151Z"
+      }
+    ]
+  },
+  "status": "capped"
+}

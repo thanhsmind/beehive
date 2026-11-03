@@ -7,6 +7,7 @@ timestamp: 2026-07-14
 bee:
   id: pattern-20260714-hardcoded-fixture-file-lists-rot-silently
   lifecycle: active
+  areas: [hook-runtime]
   sources: ["docs/history/learnings/critical-patterns.md#PAT7", "original feature: shim-retire", docs/history/learnings/20260714-shim-retire.md]
   polarity: pitfall
   critical: true

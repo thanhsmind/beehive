@@ -1,0 +1,270 @@
+{
+  "id": "mfa-1",
+  "feature": "mistake-fix-at",
+  "title": "Name the fix-at layer on every mistake record, at the verb and at the cap",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "af14e1d6-6c5e-4034-b257-0401bd0e0a1f",
+    "5c43da33-0b88-4dab-9faa-891a57a74e24"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+    ".bee/verify/verify-app/features/cells-and-proof.md"
+  ],
+  "read_first": [
+    "docs/history/mistake-fix-at/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    ".bee/verify/verify-app/features/cells-and-proof.md"
+  ],
+  "action": "Give every mistake record its fix-at layer (per D1), at the verb and at the cap, as the data shape the rest of the feature reads. DATA SHAPE, in verbs/mailbox.rs: add one vocabulary constant `pub(crate) const FIX_AT_VALUES: [&str; 4] = [\"architecture\", \"check\", \"doctrine\", \"none\"]` beside `KIND_REFLECTION`; add `pub fix_at: Option<String>` to `Entry` and to `LetterItem` (rg hit, twice: `    pub better: Option<String>,`), emitted AFTER `better` in both `to_value` sites (rg hit, twice: `            \"better\": self.better,`) and in the letter frontmatter (rg hit: `            emit_opt(&mut out, 4, \"better\", item.better.as_deref());`), parsed with `opt_string(m, \"fix_at\")` at both `from_value` sites (rg hit, twice: `            better: opt_string(m, \"better\"),`) so a row or letter without the key reads `None` (per D4: old rows are `none`). Change `Entry::reflection` (rg hit: `    pub(crate) fn reflection(at: &str, wrong: &str, better: &str) -> Self {`) to take `fix_at: &str` and store it; `Entry::to_item` carries it. THE DOOR: extend `read_reflection` (rg hit: `pub(crate) fn read_reflection<'a>(`) to take a third `fix_at: Option<&str>` and return three parts. Rewrite its one refusal string (rg hit: `\"a reflection has two required parts, and it is missing {} (D3) — remedy: pass --wrong (what went wrong) and --better (what would have been better), each with text.\",`) so it is self-sufficient for a cold worker or a host on a new binary with old doctrine: say a reflection has THREE required parts, name exactly the missing flag(s), list the four values `architecture | check | doctrine | none` with a five-word gloss each (architecture: a code change makes it impossible; check: a test, hook, guard or doctor row catches it; doctrine: only prose can carry it; none: a one-off nobody would guard), and give the remedy naming all three flags. A `--fix-at` outside the vocabulary is refused by a second string listing the four values and the remedy. Extend `read_mistake` (rg hit: `pub(crate) fn read_mistake(v: &Value) -> Result<(String, String), String> {`) to read the third part as a third ` — ` segment of the string form (split the first TWO separators only, so a `better` may not itself contain the separator — say so in the refusal) or a `fix_at` key of the object form, returning three parts through the same door. In `run_reflect` (rg hit: `    let entry = Entry::reflection(&now_iso(), wrong, better);`) read `--fix-at` via `mark_flag(&parsed, \"fix-at\")`, pass it through the door, store it, and add `fix_at` to the success JSON. THE CAP, in verbs/cells/handlers_close.rs: add `\"fix-at\"` to `CAP_FLAGS` and bump its size literal (rg hit: `pub(crate) const CAP_FLAGS: [&str; 15] = [`); add `pub(crate) fix_at: Option<String>` to `CapFlags` beside `mistake` (rg hit: `    pub(crate) mistake: Option<String>,`), parsed in `cap_flags_from` with `opt_string_flag(flags, \"fix-at\")` beside the `mistake` read; define `pub(crate) struct Mistake { pub wrong: String, pub better: String, pub fix_at: String }` and make `MistakesAnswer::Recorded(Vec<Mistake>)`; in `read_mistakes_answer` (rg hit: `pub(crate) fn read_mistakes_answer(id: &str, f: &CapFlags, report: &Value) -> MR<MistakesAnswer> {`) build the object form `{wrong, better, fix_at}` from `--mistake` plus `f.fix_at` before handing it to `mailbox::read_mistake`, so a `--mistake` with no `--fix-at` is refused by the door naming `--fix-at`; each report `mistakes` item goes through `read_mistake` as it is; dedupe on all three fields. Write `fix_at` as the third key of each `trace.mistakes` object (rg hit: `                            .map(|(wrong, better)| json!({ \"wrong\": wrong, \"better\": better }))`) and pass it to `mailbox::Entry::reflection` in `record_cap_in_mailbox` (rg hit: `                    &mailbox::Entry::reflection(&utc_now(), wrong, better),`). `cells finish` shares this parse site (`run_cap(finish: bool, …)`), so no second site exists. In verbs/cells/finish_support.rs update the `mistakes` refusal text (rg hit: `must be an array — one entry per mistake`) to spell the three parts `<what went wrong> — <what would have been better> — <fix-at>`. COMPILE-FIX ONLY, no behavior: the test caller in verbs/drivers/close.rs (rg hit: `            &crate::verbs::mailbox::Entry::reflection(`) and the test helper in verbs/mailbox_digest.rs (rg hit: `.map(|(wrong, better)| Entry::reflection(stamp, wrong, better))`) pass `\"none\"`; touch nothing else in those two files. CATALOG AND REGISTRY: in catalog.rs add the `fix-at` flag to `mailbox reflect`, `cells cap` and `cells finish` following the entry shape the existing `no-mistakes` flag uses, and bump `PINNED_FLAG_COUNT` from 210 to 211 with a dated comment in the block above it (rg hit: `        const PINNED_FLAG_COUNT: usize = 210;`) saying the one new name is `fix-at`, reused by all three verbs; `--fix-at` takes a value, so `FLAG_ALONE_BOOLEANS` is untouched. In generated/registry_payload.json (hand-edited here, decision 3358743e): add `fix-at` to the `properties` of `mailbox.reflect`, `cells.cap` and `cells.finish`, its description naming the four values and that it is required with --wrong/--better or --mistake; change the `mailbox.reflect` description's 'A reflection has TWO required parts' to three. FEATURE MAP: in .bee/verify/verify-app/features/cells-and-proof.md, the `--no-mistakes` gotcha's clause `or put a \\`mistakes\\` array in \\`--report\\`` and the `mistakes is an optional sixth` line now say each item has three parts and name `--fix-at`. TESTS, red-first, in mailbox.rs's test module beside `a_reflection_missing_a_part_is_refused_and_the_refusal_names_it`: a reflection missing `--fix-at` is refused and the text names `--fix-at`, contains all four values and the word `remedy`; a value outside the vocabulary is refused listing the four; `read_mistake` takes the three-segment string and the object key; an entry row without `fix_at` reads back `None`; a letter round-trips `fix_at`. In handlers_close.rs beside `a_half_written_mistake_is_refused_by_the_two_part_door`: a cap with `--mistake` and no `--fix-at` is refused naming it; a cap with `--fix-at check` writes `trace.mistakes[0].fix_at == \"check\"` and the mailbox entry carries the same; a report item with only two segments is refused naming the third; an empty `mistakes` array and `--no-mistakes` still record the clean run. Where an existing test asserts the two-part text, extend it to the three-part text rather than deleting it. Do NOT reinstall .bee/bin/bee in this cell: the vendored binary stays the old build until the post-merge step.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handlers_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish_support && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+  "must_haves": {
+    "truths": [
+      "bee mailbox reflect --wrong x --better y is refused; the refusal names --fix-at, lists architecture, check, doctrine, none, and states the remedy with all three flags",
+      "bee mailbox reflect --wrong x --better y --fix-at check appends an entry row whose last key is fix_at with value check, and the letter item carries it",
+      "bee cells cap --mistake \"a — b\" without --fix-at is refused naming --fix-at; with --fix-at check it writes trace.mistakes[0] as {wrong, better, fix_at} and one mailbox reflection entry with fix_at check",
+      "a --report mistakes item \"a — b — architecture\" and {\"wrong\":\"a\",\"better\":\"b\",\"fix_at\":\"architecture\"} both record fix_at architecture; a two-segment item is refused naming the third part",
+      "an entry row, a letter item and a trace.mistakes object written before this change parse with fix_at None; --no-mistakes and an empty mistakes array are unchanged",
+      "PINNED_FLAG_COUNT is 211 and the pin test is green; registry_payload.json lists fix-at on mailbox.reflect, cells.cap and cells.finish and both registry test targets are green",
+      "cells-and-proof.md's cap gotchas say three parts and name --fix-at"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "substantive": "FIX_AT_VALUES, fix_at on Entry and LetterItem, three-part read_reflection with a self-sufficient refusal, three-part read_mistake, run_reflect reading --fix-at, tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "CAP_FLAGS with fix-at, CapFlags.fix_at, Mistake struct, three-part MistakesAnswer, trace.mistakes with fix_at, tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "substantive": "three-part refusal text for the mistakes key"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+        "substantive": "fix-at declared on the three verbs; PINNED_FLAG_COUNT 211 with reason"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "fix-at property on mailbox.reflect, cells.cap, cells.finish; three-part description"
+      },
+      {
+        "path": ".bee/verify/verify-app/features/cells-and-proof.md",
+        "substantive": "cap gotchas naming the three parts and --fix-at"
+      }
+    ],
+    "key_links": [
+      "run_reflect and read_mistakes_answer both end at read_reflection — the three-part rule has one home",
+      "record_cap_in_mailbox passes fix_at into Entry::reflection; LetterItem.fix_at is emitted after better and parsed back"
+    ],
+    "prohibitions": [
+      "No change to filing, arming, recovery or digest composition; close.rs and mailbox_digest.rs change only at the two named test callers",
+      "The letter frontmatter, the entry row and trace.mistakes only grow: every existing key keeps its name, order and shape",
+      "The --report contract keeps its five required keys; mistakes stays optional and array-shaped",
+      "--no-mistakes keeps its meaning and its refusal when paired with --wrong/--better",
+      "No reinstall of .bee/bin/bee"
+    ]
+  },
+  "trace": {
+    "worker": "mfa-w1",
+    "outcome": "bee mailbox reflect and the cap now take a required --fix-at layer, read through one door and stored on the entry row, the letter and trace.mistakes",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+      "packages/bee-rs/crates/bee/src/verbs/work.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      ".bee/verify/verify-app/features/cells-and-proof.md"
+    ],
+    "deviations": [
+      "Added fix_at: None to the CapFlags, Entry and LetterItem literals in verbs/cells/tests.rs, verbs/knowledge/tests.rs and verbs/work.rs, and to the three non-test mailbox::Entry literals in handlers_close.rs and drivers/close.rs — compile-only, no behavior; the cell named only two compile-fix callers, but a new struct field breaks every exhaustive literal, and the three extra files were reserved before writing — hit an unforeseen obstacle",
+      "Also refreshed the `mistake` and `report` flag descriptions on cells.cap and cells.finish in registry_payload.json; the cell named only the new fix-at property, but leaving \"in two parts on one line\" there would have walked a caller straight into the new refusal — something else had to be fixed first",
+      "sync-ack: cell mfa-1 declares affects_skills [] on purpose: D4 of docs/history/mistake-fix-at/CONTEXT.md puts the fix-at instruction in AGENTS.md, the host onboarding template and the rendered worker/cap prompts, which the plan assigns to a later cell of this feature; this cell is the data shape and the door only"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T05:56:02.209Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell's own verify, all five stages exit 0: mailbox 218, handlers_close 19, catalog 11, registry_contracts 12, registry_dispatch 9. NARROWED, and the gaps are named: the finish_support stage matches ZERO tests (no test asserts that refusal string), so the finish_support.rs edit is compile-proof only; the whole crate was also run separately and is green (3796 unit + every integration target, 0 failed); and the reflect verb was driven live on the fresh release binary - the missing-flag refusal, the off-vocabulary refusal, and an appended entry row whose last key is fix_at with value check",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handlers_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish_support && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+    "claimed_at": "2026-09-22T05:36:45.481Z",
+    "verified_at": null,
+    "baseline": "On the base commit fd7e213f3 the same five-stage command was green against the old two-part door; the seven tests added here did not exist, so this proof could not have passed before the change",
+    "sync_ack": "cell mfa-1 declares affects_skills [] on purpose: D4 of docs/history/mistake-fix-at/CONTEXT.md puts the fix-at instruction in AGENTS.md, the host onboarding template and the rendered worker/cap prompts, which the plan assigns to a later cell of this feature; this cell is the data shape and the door only",
+    "mistakes": [
+      {
+        "wrong": "Wrote a test asserting the one-line mistake form keeps its LAST segment as the layer, which splitn(3) does not do (it keeps the remainder)",
+        "better": "so the doc comment I had just written on read_mistake in mailbox.rs was wrong too — I should have traced splitn(3) on a four-segment string before writing either the comment or the test, since the cell said plainly \"split the first TWO separators only\""
+      }
+    ],
+    "report": {
+      "outcome": "bee mailbox reflect and the cap now take a required --fix-at layer, read through one door (read_reflection) and stored on the entry row, the letter frontmatter and trace.mistakes",
+      "commit": "ba3cf5f8662806d9e08cd4fdbcb528007a6d55f8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "packages/bee-rs/crates/bee/src/verbs/work.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        ".bee/verify/verify-app/features/cells-and-proof.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handlers_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish_support && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch — green:unit — the cell's own verify, all five stages exit 0: mailbox 218, handlers_close 19, catalog 11, registry_contracts 12, registry_dispatch 9. NARROWED, and the gaps are named: the finish_support stage matches ZERO tests (no test asserts that refusal string), so the finish_support.rs edit is compile-proof only; the whole crate was also run separately and is green (3796 unit + every integration target, 0 failed); and the reflect verb was driven live on the fresh release binary - the missing-flag refusal, the off-vocabulary refusal, and an appended entry row whose last key is fix_at with value check",
+      "deviations": [
+        "Added fix_at: None to the CapFlags, Entry and LetterItem literals in verbs/cells/tests.rs, verbs/knowledge/tests.rs and verbs/work.rs, and to the three non-test mailbox::Entry literals in handlers_close.rs and drivers/close.rs — compile-only, no behavior; the cell named only two compile-fix callers, but a new struct field breaks every exhaustive literal, and the three extra files were reserved before writing — hit an unforeseen obstacle",
+        "Also refreshed the `mistake` and `report` flag descriptions on cells.cap and cells.finish in registry_payload.json; the cell named only the new fix-at property, but leaving \"in two parts on one line\" there would have walked a caller straight into the new refusal — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "Wrote a test asserting the one-line mistake form keeps its LAST segment as the layer, which splitn(3) does not do (it keeps the remainder) — so the doc comment I had just written on read_mistake in mailbox.rs was wrong too — I should have traced splitn(3) on a four-segment string before writing either the comment or the test, since the cell said plainly \"split the first TWO separators only\""
+      ],
+      "baseline": "On the base commit fd7e213f3 the same five-stage command was green against the old two-part door; the seven tests added here did not exist, so this proof could not have passed before the change"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee mailbox reflect --wrong x --better y is refused; the refusal names --fix-at, lists architecture, check, doctrine, none, and states the remedy with all three flags",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "bee mailbox reflect --wrong x --better y --fix-at check appends an entry row whose last key is fix_at with value check, and the letter item carries it",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "bee cells cap --mistake \"a — b\" without --fix-at is refused naming --fix-at; with --fix-at check it writes trace.mistakes[0] as {wrong, better, fix_at} and one mailbox reflection entry with fix_at check",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "a --report mistakes item \"a — b — architecture\" and {\"wrong\":\"a\",\"better\":\"b\",\"fix_at\":\"architecture\"} both record fix_at architecture; a two-segment item is refused naming the third part",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "an entry row, a letter item and a trace.mistakes object written before this change parse with fix_at None; --no-mistakes and an empty mistakes array are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+          },
+          {
+            "requirement": "PINNED_FLAG_COUNT is 211 and the pin test is green; registry_payload.json lists fix-at on mailbox.reflect, cells.cap and cells.finish and both registry test targets are green",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "cells-and-proof.md's cap gotchas say three parts and name --fix-at",
+            "artifact": ".bee/verify/verify-app/features/cells-and-proof.md"
+          }
+        ],
+        "recorded_at": "2026-09-22T05:59:50.907Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "mfa1-t1",
+            "status": "PASS",
+            "evidence": "mailbox.rs:859-882 read_reflection collects missing of [--wrong,--better,--fix-at] and refuses with \"a reflection has three required parts...\" + FIX_AT_GLOSS (mailbox.rs:837) + FIX_AT_REMEDY (mailbox.rs:840, names all three flags). Proven by mailbox.rs:4160 the_missing_layer_refusal_teaches_the_whole_vocabulary. Ran: cargo test --release -p bee mailbox -> 223 passed; 0 failed."
+          },
+          {
+            "id": "mfa1-t2",
+            "status": "PASS",
+            "evidence": "Entry::to_value emits fix_at last (mailbox.rs:702); Entry::reflection stores it (mailbox.rs:727); letter frontmatter emits it after better (mailbox.rs:1453). Round-trip proven by mailbox.rs:4461 the_layer_rides_the_letter_frontmatter_and_round_trips and mailbox.rs:4419-4422."
+          },
+          {
+            "id": "mfa1-t3",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:925 read_mistakes_answer folds --mistake+f.fix_at into one {wrong,better,fix_at} object before mailbox::read_mistake; test handlers_close.rs:2101 a_cap_mistake_without_a_layer_is_refused_naming_the_flag; handlers_close.rs:1999 the_cap_flag_pair_records_the_layer_in_both_sinks asserts trace.mistakes and the mailbox entry carry check. Ran: cargo test -p bee handlers_close -> 19 passed."
+          },
+          {
+            "id": "mfa1-t4",
+            "status": "PASS",
+            "evidence": "read_mistake splits with splitn(3, MISTAKE_SEPARATOR) (mailbox.rs:909-925) and reads the object key fix_at; one-line form mailbox.rs:4294; object form handlers_close.rs:1977; two-segment refusal mailbox.rs:4336 and handlers_close.rs:2124."
+          },
+          {
+            "id": "mfa1-t5",
+            "status": "PASS",
+            "evidence": "Entry::from_value opt_string(m,\"fix_at\") (mailbox.rs:781) and LetterItem::from_value (mailbox.rs:574); mailbox.rs:4439 a_reflection_row_written_before_the_layer_existed_reads_back_as_none; mailbox.rs:4461 strips fix_at from a letter and parses None. --no-mistakes untouched; empty array still caps (handlers_close.rs:2029). Qualifier: trace.mistakes read-with-missing-fix_at is exercised by mfa-2's close.rs:5263."
+          },
+          {
+            "id": "mfa1-t6",
+            "status": "PASS",
+            "evidence": "catalog.rs:819 PINNED_FLAG_COUNT = 211 with dated comment; registry_payload.json fix-at under cells.cap, cells.finish, mailbox.reflect; mailbox.reflect description says THREE required parts. Ran: catalog 11 passed; registry_contracts 12 passed; registry_dispatch 9 passed."
+          },
+          {
+            "id": "mfa1-t7",
+            "status": "PASS",
+            "evidence": ".bee/verify/verify-app/features/cells-and-proof.md:113-119 and 129-133 say three parts and name --fix-at with the four values."
+          },
+          {
+            "id": "mfa1-p1",
+            "status": "PASS",
+            "evidence": "git show ba3cf5f8: mailbox_digest.rs changes are three test-module lines; drivers/close.rs also changed at one non-test site record_feature_close_in_mailbox (close.rs:3319-3322, fix_at: None on a non-reflection entry) — compile-forced, behavior-neutral, recorded in trace.deviations."
+          },
+          {
+            "id": "mfa1-p2",
+            "status": "PASS",
+            "evidence": "fix_at appended LAST in Entry::to_value (mailbox.rs:702), LetterItem::to_value (559), the frontmatter emit (1453) and the trace.mistakes object (handlers_close.rs:581-586); no existing key renamed or reordered."
+          },
+          {
+            "id": "mfa1-p3",
+            "status": "PASS",
+            "evidence": "finish_support.rs:208-212 changed only the refusal text; the five required keys and the optional array-shaped mistakes gate are byte-unchanged."
+          },
+          {
+            "id": "mfa1-p4",
+            "status": "PASS",
+            "evidence": "run_reflect's no_mistakes branch still refuses --no-mistakes with --wrong/--better and returns before read_reflection. Observation: --no-mistakes with --fix-at is silently ignored; no truth covers that pairing."
+          },
+          {
+            "id": "mfa1-p5",
+            "status": "PASS",
+            "evidence": "git show --name-only ba3cf5f8 lists no .bee/bin/ path."
+          },
+          {
+            "id": "mfa1-x1",
+            "status": "PASS",
+            "evidence": "mailbox.rs:837 FIX_AT_GLOSS carries all four values; mailbox.rs:840 FIX_AT_REMEDY begins remedy: and names all three flags; both refusal arms (871, 878) interpolate both; asserted by mailbox.rs:4160 and 4178."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-22T06:21:38.148Z"
+      }
+    ]
+  },
+  "status": "capped"
+}

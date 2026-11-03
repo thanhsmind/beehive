@@ -26,22 +26,47 @@
       "The session_close and drivers suites are green."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "read_first": [],
   "trace": {
     "worker": "wk-cq-1",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "The capture-queue nudge and close door escalate on settlements only; sweep and promote rows stay queued and named but no longer read as a breach",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [
+      "Edited and committed in the MAIN checkout on a code-touching lane; worktree-first refused the next edit in the same lane and was right. Kind: something else had to be fixed first.",
+      "Renamed the close doors wording, then reverted it: the suite failed under_threshold_detail_is_byte_identical_to_before, whose comment freezes that string deliberately. Kind: the plan was wrong about a fact.",
+      "Authored first at lane small and REFUSED by the judge obligation because hooks/ is machine-guard source. Raised to standard rather than acking — I wrote both the change and its tests, so my own green suite is not independent evidence. Kind: hit an unforeseen obstacle.",
+      "sync-ack: A nudge's own threshold and wording, not a rule any skill states; bee-capturing still teaches drain-oldest-first unchanged."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-26T05:42:51.102Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
-    "claimed_at": "2026-08-26T05:42:22.725Z"
+    "claimed_at": "2026-08-26T05:42:22.725Z",
+    "sync_ack": "A nudge's own threshold and wording, not a rule any skill states; bee-capturing still teaches drain-oldest-first unchanged.",
+    "report": {
+      "outcome": "Escalation counts settlements only; bookkeeping rows stay queued and named",
+      "commit": "dc4f07c7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_close (36 passed, 2 new) and drivers (260 passed) — green, exit 0 read from cargo directly — the two suites owning the nudge and the close door",
+      "deviations": [
+        "Edited and committed in the MAIN checkout on a code-touching lane; worktree-first refused the next edit in the same lane and was right. Kind: something else had to be fixed first.",
+        "Renamed the close doors wording, then reverted it: the suite failed under_threshold_detail_is_byte_identical_to_before, whose comment freezes that string deliberately. Kind: the plan was wrong about a fact.",
+        "Authored first at lane small and REFUSED by the judge obligation because hooks/ is machine-guard source. Raised to standard rather than acking — I wrote both the change and its tests, so my own green suite is not independent evidence. Kind: hit an unforeseen obstacle."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

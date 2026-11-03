@@ -1,0 +1,230 @@
+{
+  "id": "pes-1",
+  "feature": "pi-extension-split",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "refactor",
+  "title": "Split the Pi guard into a folder of small modules",
+  "deps": [
+    "pes-3"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D5",
+    "D6",
+    "19afb54e-dadc-48af-b293-fee2398e47bf",
+    "75e947e9-554d-41cd-89cb-ecfe99ea7ace",
+    "b8635d0e-5609-4bda-b58a-b948505e1cbb",
+    "8cdd7725-c059-4b92-aaef-b548c427ae36",
+    "94dc9af8-eff7-4ad4-8b0e-82afe4965fde"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    ".pi/extensions/bee-guard/index.ts",
+    ".pi/extensions/bee-guard/locate.ts",
+    ".pi/extensions/bee-guard/hooks.ts",
+    ".pi/extensions/bee-guard/tool-map.ts",
+    ".pi/extensions/bee-guard/state.ts",
+    ".pi/extensions/bee-guard/session.ts",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    ".pi/extensions/bee-guard/workers-widget.ts",
+    ".pi/extensions/bee-guard/bee-cli.ts",
+    ".pi/extensions/bee-guard/transition.ts",
+    ".pi/extensions/bee-guard/model-usage.ts",
+    ".pi/extensions/bee-guard/tool-verdict.ts",
+    ".pi/extensions/bee-guard/tool-dispatch.ts",
+    ".pi/extensions/bee-guard/tool-steer.ts",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/commands.ts",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+    "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+    "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-extension-split/CONTEXT.md",
+    "docs/history/pi-extension-split/plan.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "action": "Move .pi/extensions/bee-guard.ts into the flat folder .pi/extensions/bee-guard/ with exactly the module layout in plan.md Approach, per D1 and D6. Move code verbatim: no logic change, every comment moves with its code, the file header comment (lines 1-94, with the NAMED EXCLUSION lines) goes to the top of index.ts. Relative imports use ./name.ts specifiers. Every module ends with a newline. Per D2, every module-level let (cachedPreamble, preambleInjected, sessionInitRun, drainTimer, drainToken, drainDirectory, activeDrainCtx, drainInFlight, turnStartPending, selfBusy, activeTransition, transitionTeardownOccurred, cachedLimitsText, lastLimitsFetchTime, lastLimitsModelKey, isFetchingLimits, dispatchCounter, workerSteerDrainInFlight) becomes a field of one exported state object in state.ts and every read and write uses state.<name>. Per D6, every pi.on handler moves into events.ts in its original order inside registerEvents(pi: ExtensionAPI, belt), every pi.registerCommand into commands.ts inside registerCommands(pi: ExtensionAPI, belt), and the default export in index.ts makes the belt object { fullToolSet, lastStage, toolsReopened } inside the factory. index.ts re-exports every name in the old export list. Delete the old file. In doctor.rs, embed .pi/extensions/bee-guard/index.ts for now, set hooks_rel for Pi to .pi/extensions/bee-guard/index.ts, and fail the wiring row when .pi/extensions/bee-guard.ts exists with text that names bee onboard --apply; update doctor/tests.rs to match. Per D5, in both contract test files replace the include_str! constant with one helper that reads index.ts, then every other .ts file in the folder sorted by name, joined with a newline, and point the node harness path at index.ts. Never edit an assertion. Update the old-path mentions in stage_tools.rs, hook_manifests.rs, devtools/mod.rs and release_manifest.rs doc comments to the folder without adding comment lines. Then run .bee/bin/bee dev release-manifest --write and commit the regenerated manifest. No new code comments.",
+  "must_haves": {
+    "truths": [
+      "the Pi contract suite is green with no assertion changed",
+      "the OpenCode contract suite is green with no assertion changed",
+      "the release manifest check is green",
+      "no module assigns a let binding imported from another module",
+      "index.ts re-exports every name the old file exported",
+      "the header comment with the NAMED EXCLUSION lines opens index.ts",
+      "doctor fails the wiring row naming bee onboard --apply when the legacy single file exists"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/index.ts",
+        "substantive": "default export registers every handler, tool and command"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/state.ts",
+        "substantive": "one exported state object holding the former module-level lets"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/events.ts",
+        "substantive": "every pi.on handler in its original order"
+      }
+    ],
+    "key_links": [
+      "pi_plugin_contracts.rs runs .pi/extensions/bee-guard/index.ts",
+      "doctor.rs embeds .pi/extensions/bee-guard/index.ts"
+    ],
+    "prohibitions": [
+      "No guard behavior change",
+      "No assertion edited to pass",
+      "No new code comments",
+      "No subfolder under .pi/extensions/bee-guard/"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts --test opencode_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor:: && .bee/bin/bee dev release-manifest --check",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "pes1-fix",
+    "outcome": "Restore verbatim comments and align Pi guard contract path",
+    "files_changed": [
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/hooks.ts",
+      ".pi/extensions/bee-guard/index.ts",
+      ".pi/extensions/bee-guard/model-usage.ts",
+      ".pi/extensions/bee-guard/result-inbox.ts",
+      ".pi/extensions/bee-guard/state.ts",
+      ".pi/extensions/bee-guard/tool-map.ts",
+      ".pi/extensions/bee-guard/tool-verdict.ts",
+      ".pi/extensions/bee-guard/transition.ts",
+      ".pi/extensions/bee-guard/workers-widget.ts",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T16:56:53.023Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts --test opencode_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor:: && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-10-02T16:41:49.170Z",
+    "dissent": [
+      {
+        "target": "pes-1",
+        "claim": "Cell pes-1 deleted bee-guard.ts while onboard is not updated until pes-3, causing pi_lifecycle_end_to_end_onboarded_repo_parity in the Pi contract suite to fail.",
+        "alternative": "Either defer onboard lifecycle verification to pes-3 or include onboard updates in pes-1.",
+        "severity": "blocker",
+        "worker": "pes1-split",
+        "recorded_at": "2026-10-02T16:21:54.307Z",
+        "verdict": "accept",
+        "verdict_reason": "pi_lifecycle_end_to_end_onboarded_repo_parity onboards a repo and needs onboard to vendor the folder, which is pes-3. Order changes: pes-3 runs next on top of the pes-1 commit ebd9ddc9c, then pes-1 caps with its full verify green. Scope of every cell stays as approved.",
+        "answered_at": "2026-10-02T16:23:31.768Z"
+      }
+    ],
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-10-02T16:21:54.307Z",
+        "claim_session": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+        "claimed_at": "2026-10-02T16:21:41.764Z",
+        "acquired_at": "2026-10-02T15:57:13.165Z",
+        "worker": "pes1-split",
+        "verdict": "blocked",
+        "failure_signature": "ba5315df093f",
+        "note": "blocker dissent on pes-1: Cell pes-1 deleted bee-guard.ts while onboard is not updated until pes-3, causing pi_lifecycle_end_to_end_onboarded_repo_parity in the Pi contract suite to fail. — alternative: Either defer onboard lifecycle verification to pes-3 or include onboard updates in pes-1."
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "baseline": null,
+    "reopened_at": "2026-10-02T16:23:31.768Z",
+    "reopened_reason": "dissent answered: accept — pi_lifecycle_end_to_end_onboarded_repo_parity onboards a repo and needs onboard to vendor the folder, which is pes-3. Order changes: pes-3 runs next on top of the pes-1 commit ebd9ddc9c, then pes-1 caps with its full verify green. Scope of every cell stays as approved.",
+    "mistakes": [
+      {
+        "wrong": "earlier split commit ebd9ddc9c dropped 71 comment lines that D5 required to move verbatim",
+        "better": "restore all section headers and docblocks verbatim from base commit beside their respective code",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "Restore verbatim comments and align Pi guard contract path",
+      "commit": "51504365ee25b1a72cd1e3364c0a4cb96aafb795",
+      "files": [
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/hooks.ts",
+        ".pi/extensions/bee-guard/index.ts",
+        ".pi/extensions/bee-guard/model-usage.ts",
+        ".pi/extensions/bee-guard/result-inbox.ts",
+        ".pi/extensions/bee-guard/state.ts",
+        ".pi/extensions/bee-guard/tool-map.ts",
+        ".pi/extensions/bee-guard/tool-verdict.ts",
+        ".pi/extensions/bee-guard/transition.ts",
+        ".pi/extensions/bee-guard/workers-widget.ts",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts --test opencode_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor:: && .bee/bin/bee dev release-manifest --check — green:unit — cell verify passed",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "earlier split commit ebd9ddc9c dropped 71 comment lines that D5 required to move verbatim — restore all section headers and docblocks verbatim from base commit beside their respective code — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the Pi contract suite is green with no assertion changed",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "the OpenCode contract suite is green with no assertion changed",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "the release manifest check is green",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "no module assigns a let binding imported from another module",
+            "artifact": ".pi/extensions/bee-guard/state.ts"
+          },
+          {
+            "requirement": "index.ts re-exports every name the old file exported",
+            "artifact": ".pi/extensions/bee-guard/index.ts"
+          },
+          {
+            "requirement": "the header comment with the NAMED EXCLUSION lines opens index.ts",
+            "artifact": ".pi/extensions/bee-guard/index.ts"
+          },
+          {
+            "requirement": "doctor fails the wiring row naming bee onboard --apply when the legacy single file exists",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          }
+        ],
+        "recorded_at": "2026-10-02T17:13:51.919Z",
+        "recorded_by": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

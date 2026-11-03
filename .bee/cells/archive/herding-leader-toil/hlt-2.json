@@ -1,0 +1,268 @@
+{
+  "id": "hlt-2",
+  "feature": "herding-leader-toil",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Serve the main control plane for allow-listed verbs inside a granted worktree",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "e32f3a66-e323-45cb-bf58-df29a4f1b447"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-leader-toil/CONTEXT.md",
+    "docs/history/herding-leader-toil/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/roots.rs",
+    "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md"
+  ],
+  "action": "Red first. Per D2 (revised): do NOT change verbs/reservations/emit.rs prelude or resolve_store_root. Use the existing serve-granted resolvers in verbs/drivers/prepare.rs (resolve_root_serving_granted and ctx_serving_granted, already used by state_group/advisor_ref.rs) as an opt-in: (1) state_group's entry (verbs/state_group/set_gate.rs, search `go` and its prelude call) serves granted worktrees for every state verb, and the gate and route aliases with it; (2) verbs/drivers/close.rs: both root resolutions (search resolve_store_root and prelude) serve granted worktrees, and its reads of docs/history/<feature>/ and docs/knowledge go through the worktree found for the feature (reuse find_granted_worktree_for_feature or the advisor_plan_path approach) so a worktree close judges the worktree's docs; (3) cells: add a dispatch_serving_granted twin next to dispatch in verbs/cells/handlers_write.rs and route ONLY add, update, schedule, escalate, reroute, judge, judge-record, dissent, dissent-verdict and leader-check through it (find the routing in verbs/cells/util.rs try_mutating and the handlers that call dispatch); every other cells verb keeps the existing refusal untouched; list, ready and show in verbs/cells/mod.rs serve granted worktrees too. cells finish stays on its full door. dispatch prepare --claim, dispatch wave and dispatch authorize keep refusing. Gate and plan reads already resolve the worktree plan through advisor_plan_path: add a test, no second resolver. A served call's text output gains one line `control plane: <main root>`; a JSON object output gains control_root; JSON array outputs (cells list, ready) are unchanged. Tests (inline #[cfg(test)] modules in the touched files, not verbs/cells/tests.rs): from a granted worktree, state route --set, state set, gate --preview (reads the worktree plan.md), cells add, cells list and close --dry-run (reads the worktree CONTEXT.md) succeed against main's store; cells claim, claim-next, unclaim, reopen, cap, block, drop and rebind-session still refuse with the GrantedWorktree text; cells finish still caps from the worktree; the main checkout and an ungranted worktree behave as before. Cite decision e32f3a66 (contract:control-plane-from-worktree). No code comments. REVISION ROUND (judge NEEDS_REVISION; the first round is committed as 639356de4 — make one more commit on top with the cell trailer last). Fix exactly these: (1) close promotion root: verbs/drivers/close.rs passes the worktree from docs_root_for_feature as the root to build_promotion, so verbs/knowledge/promote.rs read_capped_cell_traces reads the worktree .bee/cells, which is empty. Split the roots: every .bee read (cells, state, decisions) uses the main store root; only docs/history/<feature>/ and docs/knowledge reads use the worktree. (2) docs_root_for_feature must pick the worktree only when the close was run from inside that granted worktree (the served call); a close run from the main checkout keeps reading main's docs exactly as before. (3) every state verb served through set_gate.rs go() must name the main root: emit the `control plane: <main root>` text line and the control_root JSON key from one central place in go() (or finish_serving), not per verb, so waiting-on, session, handoff, worker, workflows, policy, plan-conflicts, feature and plan-packets verbs all get it. (4) restore the keys_known / bool_flag_ok flag checks that run_gate_preview had (plan_packets.rs) for the served gate preview path, and keep run_gate's keys_known(...) call in a form the registry contract test can parse: tests/registry_contracts.rs state_gate_and_gate_list_every_flag_set_gate_rs_actually_accepts and known_flags_parser_would_catch_a_new_handler_flag currently fail ('parsed only 3 known flags from run_gate's keys_known(...)', 'parser missed known real flag name'); make them green without editing that test. (5) remove run_route_served, which copies about 140 lines of workflows.rs run_route; serve the existing run_route through go(). (6) the close test must assert that a worktree close reads the worktree CONTEXT.md and that the promotion still sees the capped cells from main; the refusal tests must assert the GrantedWorktree text, not only a failure code. Verify with the cell verify plus: cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts. Run only this cell's verify commands, in the foreground; do not start the whole crate suite in the background and wait on it — commit as soon as the verify is green.",
+  "must_haves": {
+    "truths": [
+      "state verbs, gate, route, close and cells add/list/show/ready/update/schedule/escalate/reroute/judge/judge-record/dissent/dissent-verdict/leader-check run from a granted worktree against the main store and name the main root",
+      "close and gate run from a granted worktree read the worktree's docs/history files",
+      "every other cells verb, dispatch prepare --claim, dispatch wave and dispatch authorize still refuse inside a granted worktree with the existing text, and cells finish still caps there",
+      "JSON array outputs are unchanged; JSON object outputs gain control_root when served",
+      "the main checkout and ungranted worktrees behave exactly as before; the shared prelude and resolve_store_root are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "substantive": "dispatch_serving_granted for the allow-listed cells verbs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "close served with worktree docs reads"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "substantive": "state entry served"
+      }
+    ],
+    "key_links": [
+      "only allow-listed verbs call the serve-granted resolver"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to verbs/reservations/emit.rs prelude or resolve_store_root",
+      "No per-worktree cells store",
+      "No change to cells finish"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hlt-2",
+    "outcome": "allow-listed control verbs serve main from a granted worktree",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [
+      "sync-ack: herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T10:01:35.657Z",
+    "behavior_change": false,
+    "verification_evidence": "whole bee bin 4101 passed 0 failed and registry_contracts 12 passed on d73d40256, after the judge revisions; run by the leader",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-10-06T09:20:18.304Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T09:17:37.717Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T09:19:22.717Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:01:35.525Z"
+      },
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:01:35.657Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:02:22.298Z"
+      }
+    ],
+    "sync_ack": "herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "allow-listed control verbs serve main from a granted worktree",
+      "commit": "d73d40256",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+        "packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — whole bee bin 4101 passed 0 failed and registry_contracts 12 passed on d73d40256, after the judge revisions; run by the leader",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "allow-listed verbs serve main's store",
+            "status": "PASS",
+            "evidence": "set_gate.rs go() ctx_serving_granted; handlers_write.rs allow-list; cells/mod.rs list/ready/show; close.rs served"
+          },
+          {
+            "id": "served verbs name the main root",
+            "status": "FAIL",
+            "evidence": "only state set, gate, gate preview, route and plan-rev-bump call finish_serving (set_gate.rs:135); waiting_on.rs, sessions.rs, workers.rs, workflows.rs, policy.rs, plan_conflicts.rs, feature.rs, plan_packets.rs still call plain finish"
+          },
+          {
+            "id": "close and gate read the worktree docs/history",
+            "status": "FAIL",
+            "evidence": "close.rs:822 docs_root_for_feature returns the worktree and close.rs:3103 passes it as root to build_promotion; promote.rs:360 read_capped_cell_traces(root) reads the worktree .bee/cells, which holds no cells; the close test asserts only exit success"
+          },
+          {
+            "id": "main checkout and ungranted worktrees behave as before",
+            "status": "FAIL",
+            "evidence": "docs_root_for_feature calls find_granted_worktree_for_feature whatever the cwd, so a close run from main while the worktree is kept reads the worktree docs and .bee; set_gate.rs:94-101 gate.preview skips the keys_known/bool_flag_ok checks of plan_packets.rs:470-475"
+          },
+          {
+            "id": "other verbs refuse; prelude unchanged; no per-worktree store; no comments",
+            "status": "PASS",
+            "evidence": "dispatch() unchanged for unlisted verbs; stat touches only the planned files"
+          }
+        ],
+        "failure_signature": "close promotion reads the worktree's .bee (no cells) whenever the feature has a granted worktree, from main too; most served state verbs do not name the main root",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T09:19:22.717Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "allow-listed verbs run from a granted worktree against the main store and name the main root",
+            "status": "PASS",
+            "evidence": "ctx_serving_granted sets SERVED_CONTROL_ROOT when serving; emit.rs finish takes it and augments; set_gate.rs child-run test asserts control_root and control plane text"
+          },
+          {
+            "id": "close and gate read the worktree docs/history files",
+            "status": "PASS",
+            "evidence": "close.rs docs_root_for_feature uses the worktree only when served and it owns the feature; promote.rs build_promotion_split reads cells from main; close test asserts c1 and the worktree CONTEXT.md"
+          },
+          {
+            "id": "other verbs refuse with the existing text; cells finish caps",
+            "status": "PASS",
+            "evidence": "handlers_write.rs child run asserts the GrantedWorktree text 8 times"
+          },
+          {
+            "id": "JSON arrays unchanged; objects gain control_root",
+            "status": "PASS",
+            "evidence": "augment_served_output inserts only into objects"
+          },
+          {
+            "id": "main and ungranted unchanged; prelude and resolve_store_root unchanged",
+            "status": "PASS",
+            "evidence": "emit.rs diff touches only finish; roots.rs untouched"
+          },
+          {
+            "id": "no comments; no per-worktree cells store; no change to cells finish",
+            "status": "PASS",
+            "evidence": "suite green incl. the comment baseline; served roots resolve to main"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T10:01:35.525Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-10-06T09:19:22.717Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "state verbs, gate, route, close and cells add/list/show/ready/update/schedule/escalate/reroute/judge/judge-record/dissent/dissent-verdict/leader-check run from a granted worktree against the main store and name the main root",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+          },
+          {
+            "requirement": "close and gate run from a granted worktree read the worktree's docs/history files",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "every other cells verb, dispatch prepare --claim, dispatch wave and dispatch authorize still refuse inside a granted worktree with the existing text, and cells finish still caps there",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "JSON array outputs are unchanged; JSON object outputs gain control_root when served",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+          },
+          {
+            "requirement": "the main checkout and ungranted worktrees behave exactly as before; the shared prelude and resolve_store_root are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T10:02:22.298Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

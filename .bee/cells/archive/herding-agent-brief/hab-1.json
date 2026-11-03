@@ -1,0 +1,79 @@
+{
+  "id": "hab-1",
+  "feature": "herding-agent-brief",
+  "lane": "small",
+  "role": "code",
+  "change_class": "refactor",
+  "behavior_change": false,
+  "deps": [],
+  "title": "Embed the four bee agent bodies so the dispatch renderer can read them at runtime",
+  "action": "The four rendered bee agents (bee-build, bee-gather, bee-extract, bee-review) live only as on-disk templates read at ONBOARDING time (packages/bee-rs/crates/bee/src/onboard/agents.rs:142 reads engine.templates_agents_dir). The dispatch renderer needs their bodies at RUN time. (1) Move `split_frontmatter` out of onboard/agents.rs:176 into packages/bee-rs/crates/bee/src/textutil.rs as `pub(crate) fn split_frontmatter(&str) -> (&str, &str)` with its doc comment intact, and make onboard/agents.rs call the moved copy — exactly ONE parser must exist afterwards. (2) In packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs add four consts beside the existing PROMPT_* block (prompt.rs:33-39), each `include_str!(\"../../../../../../bee/agents/bee-<name>.md.tmpl\")`, and `pub(crate) fn embedded_agent_body(agent_name: &str) -> Option<&'static str>` that matches on \"bee-build\"|\"bee-gather\"|\"bee-extract\"|\"bee-review\", splits the frontmatter off with the moved helper, and returns the trimmed body — None for every other name including \"general-purpose\". Do NOT change any existing prompt const, load_prompt, normalize_template, or prompt_skew behavior. Do NOT touch prepare.rs — that is hab-2.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::prompt onboard::agents",
+  "must_haves": {
+    "truths": [
+      "textutil.rs holds the ONLY split_frontmatter in the crate; onboard/agents.rs calls it and defines no copy",
+      "embedded_agent_body(\"bee-gather\") returns a body starting \"You are a bee gather worker\" and containing no \"---\" frontmatter delimiter",
+      "embedded_agent_body(\"general-purpose\") and embedded_agent_body(\"nonsense\") both return None",
+      "a new unit test in drivers covers one Some case and one None case",
+      "cargo build succeeds: the four include_str! paths resolve from prompt.rs"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/textutil.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "packages/bee/agents/bee-gather.md.tmpl"
+  ],
+  "decisions": [],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "hab-w1",
+    "outcome": "Embedded the four bee agent bodies in prompt.rs and moved split_frontmatter to textutil.rs as the single parser",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/textutil.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-08T13:41:18.513Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "91bfae1e-9a10-4077-ab0d-1f6b8f28c115",
+    "claimed_at": "2026-09-08T13:34:11.244Z",
+    "mistakes": [
+      {
+        "wrong": "the herding worker committed the code but never ran bee cells finish, so the leader had to cap it",
+        "better": "the cell brief should say the cap is the worker's last mechanical step, or the leader should expect to cap every pane worker's cell"
+      }
+    ],
+    "report": {
+      "outcome": "embedded_agent_body() now resolves bee-build/bee-gather/bee-extract/bee-review bodies at runtime; split_frontmatter lives once, in textutil.rs",
+      "commit": "e06aa39e44c4f1bd3c541a00f196172cc2abb3c3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/textutil.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+      ],
+      "tests": "cargo test --release -- drivers::prompt onboard::agents textutil — green:unit — the moved parser, the new loader, and every onboard agent-render test that reads it",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "the herding worker committed the code but never ran bee cells finish, so the leader had to cap it — the cell brief should say the cap is the worker's last mechanical step, or the leader should expect to cap every pane worker's cell"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

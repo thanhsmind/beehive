@@ -53,6 +53,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let (leading, rest) = toks.split_at(split);
     let (verb, consumed): (&str, usize) = match leading {
         ["set", ..] => ("set", 1),
+        ["gate", "preview", ..] => ("gate.preview", 2),
         ["gate", ..] => ("gate", 1),
         ["waiting-on", "set", ..] => ("waiting-on.set", 2),
         ["waiting-on", "clear", ..] => ("waiting-on.clear", 2),
@@ -73,6 +74,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["session", "release", ..] => ("session.release", 2),
         ["handoff", "write", ..] => ("handoff.write", 2),
         ["handoff", "adopt", ..] => ("handoff.adopt", 2),
+        ["handoff", "dismiss", ..] => ("handoff.dismiss", 2),
         ["handoff", "show", ..] => ("handoff.show", 2),
         ["workflows", "list", ..] => ("workflows.list", 2),
         ["workflows", "close", ..] => ("workflows.close", 2),
@@ -89,6 +91,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let (flags, use_json) = parse_flags(rest)?;
     match verb {
         "set" => run_set(flags, use_json, t0),
+        "gate.preview" => run_gate_preview(flags, use_json, t0),
         "gate" => run_gate(flags, use_json, t0),
         "waiting-on.set" => run_waiting_on_set(flags, use_json, t0),
         "waiting-on.clear" => run_waiting_on_clear(flags, use_json, t0),
@@ -109,6 +112,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "session.release" => run_session_release(flags, use_json, t0),
         "handoff.write" => run_handoff_write(flags, use_json, t0),
         "handoff.adopt" => run_handoff_adopt(flags, use_json, t0),
+        "handoff.dismiss" => run_handoff_dismiss(flags, use_json, t0),
         "handoff.show" => run_handoff_show(flags, use_json, t0),
         "workflows.list" => run_workflows_list(flags, use_json, t0),
         "workflows.close" => run_workflows_close(flags, use_json, t0),
@@ -121,12 +125,14 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     }
 }
 
+
 pub(crate) fn go(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Result<Ctx, ExitCode>> {
-    match prelude(cmd, use_json, t0)? {
-        Pre::Go(c) => Some(Ok(c)),
-        Pre::Emitted(code) => Some(Err(code)),
+    match crate::verbs::drivers::ctx_serving_granted(cmd, use_json, t0)? {
+        Ok(c) => Some(Ok(c)),
+        Err(code) => Some(Err(code)),
     }
 }
+
 
 // ─── state set ─────────────────────────────────────────────────────────────
 
@@ -227,6 +233,7 @@ fn log_scribing_debt_waiver(root: &Path, feature: &str, ids: &[Value]) -> R2<()>
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         },
         15,
     )? {
@@ -259,6 +266,7 @@ fn log_scribing_debt_swap_waiver(root: &Path, outgoing_feature: &str, ids: &[Val
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         },
         15,
     )? {
@@ -288,6 +296,7 @@ fn log_compounding_waiver(root: &Path, feature: &str) -> R2<()> {
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         },
         15,
     )? {
@@ -562,13 +571,16 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
 // ─── state gate ────────────────────────────────────────────────────────────
 
 pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if flags.get("preview").is_some() {
+        return run_gate_preview(flags, use_json, t0);
+    }
     if !keys_known(
         &flags,
-        &["name", "merge", "approved", "lane", "no-lane", "owner", "actor", "bypass-level", "reason"],
+        &["name", "merge", "approved", "lane", "no-lane", "owner", "actor", "bypass-level", "reason", "preview"],
     ) {
         return None;
     }
-    for b in ["merge", "no-lane"] {
+    for b in ["merge", "no-lane", "preview"] {
         if !bool_flag_ok(&flags, b) {
             return None;
         }
@@ -611,7 +623,7 @@ fn high_risk_advisor_refusal(
     Some(format!(
         "gate: execution approval refused for high-risk work \u{2014} the advisor consult is missing or stale (AO3/AO13). \
          Reason(s): {}. \
-         FIX: resolve the advisor from config (models.<runtime>.advisor), run it read-only with the evidence bundle on stdin, \
+         FIX: resolve the advisor from config (team.<runtime>.advisor), run it read-only with the evidence bundle on stdin, \
          then record the consult: bee state advisor-ref record --advisor \"<identity>\" --digest-file <path>{lane_tail}. Nothing is written until a non-stale advisor_ref exists.",
         staleness.reasons.join("; "),
     ))
@@ -742,6 +754,35 @@ fn acknowledged_conflicts(root: &Path, lane: Option<&str>) -> Result<Vec<String>
     Ok(acknowledged_conflict_ids(&review))
 }
 
+// ─── D1/D2's load-bearing claims precondition (existence-is-not-evidence) ───
+//
+// The third precondition beside the two above, and the ONLY one that does not
+// ride `exec_component`. It has its own guard — `approved && (merge || name ==
+// "shape")` — because plan.md FREEZES at shape approval
+// (`skills/bee-planning/references/planning-reference.md`: "the only permitted
+// post-approval write is the approval stamp"). A refusal fired on a plain
+// `--name execution` would name a remedy the author is forbidden to take, so
+// the door stands where the plan is still editable: at shape, and at the
+// merged approval that contains it. The rules themselves live in
+// `plan_claims.rs`; this is only the target-selection wrapper.
+
+/// The claims-table refusal for the record this approval targets, or `None` to
+/// proceed. Feature selection copies the advisor precondition's M1 rule: a
+/// LANE approval reads that lane's own plan.md, a default-record approval
+/// reads the record's own `feature`, and a record naming no feature has no
+/// plan to check.
+fn plan_claims_refusal(
+    root: &Path,
+    record: &Map<String, Value>,
+    lane: Option<&str>,
+) -> Option<String> {
+    let feature = match lane {
+        Some(l) => l.to_string(),
+        None => record.get("feature").filter(|v| truthy(v)).map(js_disp)?,
+    };
+    claims_refusal(root, &feature)
+}
+
 /// The mutation body, root-parameterized so it can be exercised directly in
 /// tests without a process CWD (`run_gate` above is the only caller in
 /// production; `prelude`'s CWD-resolved root is threaded through as `root`).
@@ -846,8 +887,33 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
             return Ok(Out::Thrown(msg));
         }
     }
+    // D1/D2's claims precondition, on its own guard and LAST of the three, off
+    // the same pre-lock peek. Last on purpose: the two preconditions above
+    // keep their exact refusal messages for the calls that already hit them,
+    // and this door only speaks for a plan that got past them. One call site
+    // is enough here — unlike a record field, plan.md is not mutated under the
+    // lock this verb takes, so there is no peek/lock race to re-check.
+    if approved && (merge || name == "shape") {
+        if let Some(peek) = peek_target_record(root, &scope, lane_feature.as_deref())? {
+            let lane = match &scope.feature {
+                Some(f) if scope.lane => Some(f.as_str()),
+                _ => None,
+            };
+            if let Some(msg) = plan_claims_refusal(root, &peek, lane) {
+                return Ok(Out::Thrown(msg));
+            }
+            if let Some(msg) = gate_preview_refusal(root, &peek, lane) {
+                return Ok(Out::Thrown(msg));
+            }
+        }
+    }
     let locks = acquire_mutation_locks(root, &scope, &workflows)?;
     let mut target = resolve_mutation_target(root, lane_feature.as_deref(), "gate", no_lane)?;
+    if approved && (merge || name == "shape") {
+        if let Some(msg) = gate_preview_refusal(root, target.record(), target.lane()) {
+            return Ok(Out::Thrown(msg));
+        }
+    }
     // D5 (koh-9): the `conflicts` verdicts standing behind this approval,
     // read INSIDE the lock right after the precondition that validated
     // them — surfaced on the output, never a refusal.
@@ -910,6 +976,11 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
             gates.insert(name.clone(), json!(approved));
         }
         state.insert("approved_gates".into(), Value::Object(gates));
+        if approved && (merge || name == "shape") {
+            if let Some(prev) = state.get("gate_preview").cloned() {
+                state.insert("approved_cell_packet".into(), prev);
+            }
+        }
     }
     let record = target.record().clone();
     write_through_projection(root, &target, &record, &stamps)?;
@@ -1465,12 +1536,15 @@ mod tests {
     fn high_risk_merged_gate_approval_succeeds_after_a_fresh_advisor_ref_is_recorded() {
         let tmp = tmp_root();
         let root = tmp.path();
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, "docs/history/gate-door-open/plan.md", &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         let advisor_ref = fresh_advisor_ref(root, "gate-door-open");
         w(
             root,
             ".bee/lanes/gate-door-open.json",
             &format!(
-                r#"{{"feature":"gate-door-open","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+                r#"{{"feature":"gate-door-open","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref},"gate_preview":{{"feature":"gate-door-open","plan_sha256":"{sha}"}}}}"#
             ),
         );
         let out = run_gate_body(
@@ -1494,12 +1568,15 @@ mod tests {
     fn high_risk_execution_gate_approval_on_the_default_record_succeeds_after_a_fresh_ref() {
         let tmp = tmp_root();
         let root = tmp.path();
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, "docs/history/demo/plan.md", &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         let advisor_ref = fresh_advisor_ref(root, "demo");
         w(
             root,
             ".bee/state.json",
             &format!(
-                r#"{{"phase":"planning","feature":"demo","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+                r#"{{"phase":"planning","feature":"demo","mode":"high-risk","advisor_ref":{advisor_ref},"gate_preview":{{"feature":"demo","plan_sha256":"{sha}"}}}}"#
             ),
         );
         let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
@@ -1659,7 +1736,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-safe.json",
-            r#"{"feature":"gate-door-safe","phase":"planning","mode":"safe"}"#,
+            r#"{"feature":"gate-door-safe","phase":"planning","mode":"tiny"}"#,
         );
         let out = run_gate_body(
             root,
@@ -1688,10 +1765,15 @@ mod tests {
     /// One lane whose workflow record carries `plan_rev` and, optionally,
     /// the `conflict_review` object `state plan-conflicts derive` writes.
     fn write_conflict_fixture(root: &Path, feature: &str, plan_rev: u64, review: Option<&str>) {
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, &format!("docs/history/{feature}/plan.md"), &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         w(
             root,
             &format!(".bee/lanes/{feature}.json"),
-            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"}}"#),
+            &format!(
+                r#"{{"feature":"{feature}","phase":"planning","mode":"standard","gate_preview":{{"feature":"{feature}","plan_sha256":"{sha}"}}}}"#
+            ),
         );
         let review_field = match review {
             Some(r) => format!(r#","conflict_review":{r}"#),
@@ -1904,7 +1986,7 @@ mod tests {
         w(
             root,
             ".bee/state.json",
-            r#"{"phase":"planning","feature":"koh9-default"}"#,
+            r#"{"phase":"planning","feature":"koh9-default","mode":"tiny"}"#,
         );
         let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
             .unwrap();
@@ -1938,6 +2020,196 @@ mod tests {
         let Out::Emit(..) = out else {
             panic!("a shape-only approval is not an execution approval")
         };
+    }
+
+    // ── the load-bearing claims precondition (D1/D2) ───────────────────────
+    //
+    // The rule-level cases all live in `plan_claims.rs`. What is proved HERE
+    // is the wiring nobody else can see: which gate spellings open the door,
+    // which record's plan.md it reads, and that a refusal writes nothing.
+
+    const CLAIMS_HEADER: &str =
+        "| # | Claim | Label | Anchor | Verbatim evidence |\n|---|---|---|---|---|";
+
+    fn plan_with(rows: &str) -> String {
+        format!("# Plan\n\n## Approach\n\nprose\n\n## Load-bearing claims\n\n{CLAIMS_HEADER}\n{rows}\n\n## Shape\n\none cell\n")
+    }
+
+    /// A lane at `standard` mode — neither the advisor precondition nor the
+    /// conflict precondition applies, so the claims door is the only one that
+    /// can speak.
+    fn seed_claims_lane(root: &Path, feature: &str, plan_body: Option<&str>) {
+        let preview_field = if let Some(body) = plan_body {
+            w(root, &format!("docs/history/{feature}/plan.md"), body);
+            let sha = compute_plan_sha256(body.as_bytes());
+            format!(r#","gate_preview":{{"feature":"{feature}","plan_sha256":"{sha}"}}"#)
+        } else {
+            String::new()
+        };
+        w(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"{preview_field}}}"#),
+        );
+    }
+
+    #[test]
+    fn a_merged_approval_refuses_over_a_still_guessed_claim_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(
+            root,
+            "eine-guessed",
+            Some(&plan_with("| 1 | the parser accepts it | guessed | somewhere | probably |")),
+        );
+        let Out::Thrown(msg) = run_gate_body(
+            root,
+            &flags(&["--lane", "eine-guessed", "--merge", "--approved", "true"]),
+        )
+        .unwrap() else {
+            panic!("a guessed load-bearing claim must refuse the merged approval")
+        };
+        assert!(msg.contains("row 1 is still labeled `guessed`"), "names the row: {msg}");
+        assert!(msg.contains("docs/history/eine-guessed/plan.md"), "names the file: {msg}");
+        assert!(msg.contains("read / ran / guessed"), "names the vocabulary: {msg}");
+        assert!(msg.contains("## Open Questions"), "names the second remedy: {msg}");
+        let lane = read_json_file(root, ".bee/lanes/eine-guessed.json");
+        assert!(lane.get("approved_gates").is_none(), "a refusal writes nothing: {lane}");
+    }
+
+    /// The guard is this feature's one deliberate departure from its two
+    /// neighbours: `--name shape` IS covered (the plan is still editable) and
+    /// plain `--name execution` is NOT (plan.md froze at shape approval, so
+    /// the refusal's remedy would be forbidden).
+    #[test]
+    fn the_claims_precondition_covers_name_shape_but_not_name_execution() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(
+            root,
+            "eine-named",
+            Some(&plan_with("| 1 | it holds | guessed | somewhere | probably |")),
+        );
+        let Out::Thrown(msg) = run_gate_body(
+            root,
+            &flags(&["--lane", "eine-named", "--name", "shape", "--approved", "true"]),
+        )
+        .unwrap() else {
+            panic!("a shape approval is exactly where this door stands")
+        };
+        assert!(msg.contains("load-bearing claims table"), "{msg}");
+
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "eine-named", "--name", "execution", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else {
+            panic!("a post-freeze execution approval is never refused by the claims door")
+        };
+        let lane = read_json_file(root, ".bee/lanes/eine-named.json");
+        assert_eq!(lane["approved_gates"]["execution"], json!(true), "{lane}");
+    }
+
+    #[test]
+    fn a_lane_with_no_plan_md_approves_exactly_as_before() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/eine-planless.json",
+            r#"{"feature":"eine-planless","phase":"planning","mode":"tiny"}"#,
+        );
+        let out =
+            run_gate_body(root, &flags(&["--lane", "eine-planless", "--merge", "--approved", "true"]))
+                .unwrap();
+        let Out::Emit(..) = out else {
+            panic!("tiny and small lanes have no plan.md and must approve untouched")
+        };
+        let lane = read_json_file(root, ".bee/lanes/eine-planless.json");
+        assert_eq!(lane["approved_gates"]["shape"], json!(true), "{lane}");
+    }
+
+    #[test]
+    fn an_unapproval_never_consults_the_claims_table() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(
+            root,
+            "eine-revoke",
+            Some(&plan_with("| 1 | it holds | guessed | somewhere | probably |")),
+        );
+        for argv in [
+            vec!["--lane", "eine-revoke", "--merge", "--approved", "false"],
+            vec!["--lane", "eine-revoke", "--name", "shape", "--approved", "false"],
+        ] {
+            let out = run_gate_body(root, &flags(&argv)).unwrap();
+            let Out::Emit(..) = out else {
+                panic!("closing a gate is never gated on the plan's evidence: {argv:?}")
+            };
+        }
+    }
+
+    /// Fail-closed at the verb surface: "I could not read the plan" is not
+    /// "the plan is fine".
+    #[test]
+    fn an_unreadable_plan_md_refuses_the_shape_approval() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(root, "eine-unreadable", None);
+        std::fs::create_dir_all(
+            root.join("docs").join("history").join("eine-unreadable").join("plan.md"),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = run_gate_body(
+            root,
+            &flags(&["--lane", "eine-unreadable", "--name", "shape", "--approved", "true"]),
+        )
+        .unwrap() else {
+            panic!("an unreadable plan.md must refuse")
+        };
+        assert!(msg.contains("could not be read"), "{msg}");
+    }
+
+    #[test]
+    fn a_sound_claims_table_lets_the_merged_approval_through() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, "src/real.rs", "fn real() {}\n");
+        seed_claims_lane(
+            root,
+            "eine-sound",
+            Some(&plan_with(
+                "| 1 | the helper exists | read | `src/real.rs:1` | fn real() {} |\n| 2 | the suite is green | ran | `cargo test` | test result: ok |",
+            )),
+        );
+        let out =
+            run_gate_body(root, &flags(&["--lane", "eine-sound", "--merge", "--approved", "true"]))
+                .unwrap();
+        let Out::Emit(..) = out else { panic!("a sound table is a door that opens") };
+        let lane = read_json_file(root, ".bee/lanes/eine-sound.json");
+        assert_eq!(lane["approved_gates"]["shape"], json!(true), "{lane}");
+        assert_eq!(lane["approved_gates"]["execution"], json!(true), "{lane}");
+    }
+
+    /// Feature selection, M1's default-record arm: a `--no-lane` approval
+    /// reads the plan.md of the feature the DEFAULT record names.
+    #[test]
+    fn the_default_record_approval_reads_its_own_features_plan() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", r#"{"phase":"planning","feature":"eine-default"}"#);
+        w(
+            root,
+            "docs/history/eine-default/plan.md",
+            &plan_with("| 1 | it holds | guessed | somewhere | probably |"),
+        );
+        let Out::Thrown(msg) =
+            run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"])).unwrap()
+        else {
+            panic!("the default record's own plan.md is the one that is checked")
+        };
+        assert!(msg.contains("docs/history/eine-default/plan.md"), "{msg}");
     }
 
     // ── run_gate_body — input validation (giv-1) ────────────────────────────
@@ -2011,7 +2283,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-legal-name.json",
-            r#"{"feature":"gate-door-legal-name","phase":"planning","mode":"safe","approved_gates":{}}"#,
+            r#"{"feature":"gate-door-legal-name","phase":"planning","mode":"tiny","approved_gates":{}}"#,
         );
         let out = run_gate_body(
             root,
@@ -2036,7 +2308,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-legal-merge.json",
-            r#"{"feature":"gate-door-legal-merge","phase":"planning","mode":"safe"}"#,
+            r#"{"feature":"gate-door-legal-merge","phase":"planning","mode":"tiny"}"#,
         );
         let out = run_gate_body(
             root,
@@ -2309,7 +2581,7 @@ mod tests {
     fn gate_merge_with_actor_auto_writes_the_same_trace_to_shape_and_execution() {
         let tmp = tmp_root();
         let root = tmp.path();
-        write_gate_trace_fixture(root, "gate-trace-merge-auto", None);
+        write_gate_trace_fixture(root, "gate-trace-merge-auto", Some("tiny"));
         let out = run_gate_body(
             root,
             &flags(&[
@@ -2755,5 +3027,245 @@ mod tests {
             json.get("gate_durable_stamp_skipped").is_none(),
             "the field must not appear on the default-record path: {json:?}"
         );
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(target: &Path) -> Self {
+            let guard = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(target).unwrap();
+            Self { _lock: guard, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn fixture_e32f3a66(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"generation":"sonnet"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        crate::verbs::worktree::run_git(&main, &["init", "-q", "-b", "main", "."]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.email", "a@b.c"]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.name", "t"]);
+        crate::verbs::worktree::run_git(&main, &["add", "-A"]);
+        crate::verbs::worktree::run_git(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        let ungranted = tmp.join("wt-ungranted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/u"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-granted\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(ungranted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(ungranted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            ungranted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo-ungranted\"}\n",
+        )
+        .unwrap();
+        (main, granted, ungranted)
+    }
+
+    #[test]
+    #[ignore = "spawned by contract_control_plane_from_worktree_e32f3a66_state_verbs"]
+    fn served_state_verbs_name_the_main_root_child() {
+        let set = try_native(
+            &[
+                OsString::from("state"),
+                OsString::from("waiting-on"),
+                OsString::from("set"),
+                OsString::from("--kind"),
+                OsString::from("gate"),
+                OsString::from("--subject"),
+                OsString::from("review"),
+                OsString::from("--session-id"),
+                OsString::from("s1"),
+                OsString::from("--json"),
+            ],
+            Instant::now(),
+        );
+        assert_eq!(set, Some(ExitCode::SUCCESS));
+        let clear = try_native(
+            &[OsString::from("state"), OsString::from("waiting-on"), OsString::from("clear")],
+            Instant::now(),
+        );
+        assert_eq!(clear, Some(ExitCode::SUCCESS));
+    }
+
+    #[test]
+    fn contract_control_plane_from_worktree_e32f3a66_state_verbs() {
+        let tmp = tmp_root();
+        let (main, granted, ungranted) = fixture_e32f3a66(tmp.path());
+        w(&main, ".bee/state.json", r#"{"schema_version":"1.0","phase":"idle","feature":null}"#);
+
+        {
+            let _cwd = CwdGuard::enter(&granted);
+            let code = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("planning"),
+                    OsString::from("--feature"),
+                    OsString::from("demo"),
+                    OsString::from("--owner"),
+                    OsString::from("idle"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code, Some(ExitCode::SUCCESS));
+            let state: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state["phase"], "planning");
+            assert_eq!(state["feature"], "demo");
+
+            let code_route = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("route"),
+                    OsString::from("--set"),
+                    OsString::from("--class"),
+                    OsString::from("feature"),
+                    OsString::from("--lane"),
+                    OsString::from("standard"),
+                    OsString::from("--flags"),
+                    OsString::from("multi-domain"),
+                    OsString::from("--files"),
+                    OsString::from("7"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_route, Some(ExitCode::SUCCESS));
+            let state_after_route: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_after_route["route"]["class"], "feature");
+
+            w(
+                &granted,
+                "docs/history/demo/plan.md",
+                "# Plan: demo\n\n## Cells, current slice preview\n\n```json\n[{\"id\":\"c1\",\"feature\":\"demo\",\"title\":\"Do thing\",\"lane\":\"standard\",\"role\":\"code\",\"action\":\"Implement it\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"It works\"]},\"verify\":\"cargo check\"}]\n```\n",
+            );
+            let code_preview = crate::router::try_native(
+                &[
+                    OsString::from("gate"),
+                    OsString::from("--preview"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_preview, Some(ExitCode::SUCCESS));
+            let code_state_preview = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("gate"),
+                    OsString::from("--preview"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_state_preview, Some(ExitCode::SUCCESS));
+
+            let code_waiting_set = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("waiting-on"),
+                    OsString::from("set"),
+                    OsString::from("--kind"),
+                    OsString::from("gate"),
+                    OsString::from("--subject"),
+                    OsString::from("review"),
+                    OsString::from("--session-id"),
+                    OsString::from("s1"),
+                    OsString::from("--json"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_waiting_set, Some(ExitCode::SUCCESS));
+
+            let code_waiting_clear = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("waiting-on"),
+                    OsString::from("clear"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_waiting_clear, Some(ExitCode::SUCCESS));
+
+            let exe = std::env::current_exe().expect("test binary path");
+            let out = std::process::Command::new(&exe)
+                .args([
+                    "--exact",
+                    "verbs::state_group::set_gate::tests::served_state_verbs_name_the_main_root_child",
+                    "--ignored",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .current_dir(&granted)
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert!(out.status.success(), "{stdout}");
+            let canonical_main = dunce::canonicalize(&main).unwrap();
+            let control_root_json = serde_json::to_string(&canonical_main.display().to_string()).unwrap();
+            assert!(stdout.contains(&format!("\"control_root\": {control_root_json}")), "{stdout}");
+            assert!(stdout.contains(&format!("control plane: {}", canonical_main.display())), "{stdout}");
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&main);
+            let code_main = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("swarming"),
+                    OsString::from("--owner"),
+                    OsString::from("planning"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_main, Some(ExitCode::SUCCESS));
+            let state_main: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_main["phase"], "swarming");
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&ungranted);
+            let code_ungranted = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("planning"),
+                    OsString::from("--owner"),
+                    OsString::from("swarming"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_ungranted, Some(ExitCode::SUCCESS));
+            let state_ungranted: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_ungranted["phase"], "planning");
+        }
     }
 }

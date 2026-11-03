@@ -78,6 +78,17 @@ line (e.g. "133 of 145"), generated from the catalog like everything else.
   now requires deliberately moving a number, which makes it a decision instead
   of an accident.
 
+- **R6 — Adding a flag name obliges the pin test in the cell's own proof.** A
+  cell that introduces a new flag spelling must run the distinct-flag-name pin
+  in its scoped proof, not leave it to the release gate. `harness-worktree-relocation`
+  cell `hwr-2` added `worktree merge --detached`, scoped its proof to the
+  worktree and registry tests, and the release test gate is where the pin
+  surfaced red — 208 against a pinned 207. Repaired by `catalog-pin-detached`
+  cell `cpd-1`, with the growth recorded as decision `cf50327a`; the count has
+  moved again since, to 210, when `herding run` published `--seat` and
+  `--inbox-session`. The ratchet in R5 only makes the number a decision if
+  the cell that moves it is the one that sees it move.
+
 ## Edge Cases Settled
 
 - A command whose only flag is the machine-readable-output one renders as its

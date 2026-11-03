@@ -923,5 +923,895 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-26T05:42:15.643Z"
+  },
+  "no-midslice-ask": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-26T05:59:28.809Z"
+  },
+  "slp-supervisor-heartbeat": {
+    "capped": 10,
+    "dropped": 1,
+    "archived_at": "2026-08-27T20:56:17.914Z"
+  },
+  "slp-dissent-stop-and-ask": {
+    "capped": 0,
+    "dropped": 1,
+    "archived_at": "2026-09-07T03:29:37.977Z"
+  },
+  "uat-lane-source": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-28T05:34:02.977Z"
+  },
+  "merge-door-precision": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-28T06:13:17.164Z"
+  },
+  "slp-blind-lanes": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-08-28T13:10:32.116Z"
+  },
+  "slp-blind-lanes-procedure": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-08-28T14:50:03.184Z"
+  },
+  "slp-contract-original-request": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-08-29T02:35:59.631Z"
+  },
+  "slp-followup-gaps": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-08-29T06:03:32.368Z"
+  },
+  "slp-advisor-nudge": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-08-29T11:16:46.800Z"
+  },
+  "lane-model-diversity": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-29T15:17:55.731Z"
+  },
+  "pi-support": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-29T17:00:27.073Z"
+  },
+  "pi-result-mailbox": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-08-29T21:55:27.453Z"
+  },
+  "proactive-leader-intake": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-30T00:38:55.447Z"
+  },
+  "install-orchestrator-link": {
+    "capped": 1,
+    "dropped": 1,
+    "archived_at": "2026-08-30T02:36:39.183Z"
+  },
+  "herding-prompt-path": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T06:10:31.475Z"
+  },
+  "mise-shim-stdout": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T07:47:07.028Z"
+  },
+  "doctor-probe-etxtbsy": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T08:24:01.139Z"
+  },
+  "existence-is-not-evidence": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-30T11:53:21.651Z"
+  },
+  "close-usage-summary": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T12:12:56.511Z"
+  },
+  "close-usage-record": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T12:30:46.335Z"
+  },
+  "usage-in-bee-store": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T12:48:05.467Z"
+  },
+  "hook-name-before-stdin": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T13:54:00.554Z"
+  },
+  "letter-digest": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-30T15:07:31.730Z"
+  },
+  "letter-reflection": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T17:05:19.613Z"
+  },
+  "version-verb": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-31T00:55:54.178Z"
+  },
+  "install-target-dir": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-31T01:12:20.873Z"
+  },
+  "supervisor-tick-contract": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-31T08:42:32.608Z"
+  },
+  "reflection-becomes-lesson": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-31T15:36:14.582Z"
+  },
+  "verification-ships-to-hosts": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-01T10:18:22.847Z"
+  },
+  "plan-conflicts-scope": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-01T13:43:12.247Z"
+  },
+  "pstack-adoption": {
+    "capped": 6,
+    "dropped": 1,
+    "archived_at": "2026-09-01T14:45:38.492Z"
+  },
+  "code-shape-doctrine": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-01T14:58:34.425Z"
+  },
+  "proof-strength-and-expiry": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-01T16:01:41.867Z"
+  },
+  "pstack-gaps": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-09-01T17:32:56.387Z"
+  },
+  "expertise-principles": {
+    "capped": 9,
+    "dropped": 0,
+    "archived_at": "2026-09-01T19:16:31.813Z"
+  },
+  "class-playbooks": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-01T19:30:08.245Z"
+  },
+  "verification-in-the-flow": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-09-02T02:33:50.385Z"
+  },
+  "verification-contract-parity": {
+    "capped": 1,
+    "dropped": 1,
+    "archived_at": "2026-09-02T02:52:30.045Z"
+  },
+  "gather-reads-the-read-slot": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-02T05:53:44.428Z"
+  },
+  "dispatch-label-seat-first": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-02T06:00:15.229Z"
+  },
+  "learning-loop-gaps": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-02T09:30:43.124Z"
+  },
+  "pi-beehive": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-09-02T14:36:52.722Z"
+  },
+  "nudge-consult": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-04T10:16:02.381Z"
+  },
+  "install-fetch-reason": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-07T04:02:28.376Z"
+  },
+  "pi-worktree-session-relocation": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-07T23:17:24.700Z"
+  },
+  "herding-agent-brief": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-08T14:06:28.321Z"
+  },
+  "team-config-rename": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-09T07:54:09.081Z"
+  },
+  "leader-sees-team": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-09T07:54:43.848Z"
+  },
+  "herding-route-role": {
+    "capped": 7,
+    "dropped": 1,
+    "archived_at": "2026-09-09T07:55:49.884Z"
+  },
+  "read-role-description": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-10T15:25:27.837Z"
+  },
+  "writing-flow-wiring": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-11T07:10:01.569Z"
+  },
+  "windows-test-portability": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-11T08:52:27.724Z"
+  },
+  "codex-parity-completion": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-13T04:43:22.254Z"
+  },
+  "codex-reliability-closeout": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-09-13T12:52:56.256Z"
+  },
+  "pi-full-workflow-parity": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-13T14:52:20.848Z"
+  },
+  "pi-parity-review-fixes": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-14T03:46:40.377Z"
+  },
+  "deploy-role-agy-flash": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-14T04:13:42.808Z"
+  },
+  "semantic-role-routing": {
+    "capped": 8,
+    "dropped": 0,
+    "archived_at": "2026-09-14T11:05:13.498Z"
+  },
+  "deploy-stage-execution": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-15T01:54:25.055Z"
+  },
+  "deploy-issuer-session": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-15T02:45:48.333Z"
+  },
+  "deploy-pane-authorization": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-15T05:36:06.668Z"
+  },
+  "release-clean-tree": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-15T06:31:11.466Z"
+  },
+  "release-red-fixes": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-15T06:58:24.683Z"
+  },
+  "pi-stage-dispatch": {
+    "capped": 14,
+    "dropped": 0,
+    "archived_at": "2026-09-15T12:50:47.815Z"
+  },
+  "pi-relocation-delivery": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-16T02:40:13.180Z"
+  },
+  "release-2-40-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-16T06:35:45.367Z"
+  },
+  "release-2-41-1": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-17T11:48:01.543Z"
+  },
+  "pi-statusline-model-limits": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-18T09:52:20.950Z"
+  },
+  "release-2-41-2": {
+    "capped": 0,
+    "dropped": 1,
+    "archived_at": "2026-09-18T10:12:04.507Z"
+  },
+  "pi-version-floor": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-18T14:16:55.915Z"
+  },
+  "three-findings": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-18T14:53:00.220Z"
+  },
+  "pi-native-stage-driver": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-09-19T03:47:13.869Z"
+  },
+  "herding-caps-on-clean-report": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-19T05:44:28.906Z"
+  },
+  "windows-ci-green": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-19T22:44:25.559Z"
+  },
+  "stage-gate-phase-parity": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-19T23:28:23.833Z"
+  },
+  "worker-ledger-and-empty-fleet": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-20T02:24:12.469Z"
+  },
+  "idempotent-herding-receipts": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-20T05:03:58.214Z"
+  },
+  "herding-preflight-test-seam": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-20T06:30:30.888Z"
+  },
+  "pi-worker-surface": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-20T10:47:41.133Z"
+  },
+  "herding-cap-check": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-20T14:17:30.037Z"
+  },
+  "touches-sweep-active-gate": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-20T15:13:45.084Z"
+  },
+  "baseline-release-clear": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-20T18:56:23.379Z"
+  },
+  "dispatch-cell-id-flag": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-20T23:18:33.426Z"
+  },
+  "leader-check-door": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-21T06:23:02.490Z"
+  },
+  "release-2-42-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-21T06:31:45.026Z"
+  },
+  "leader-check-diff": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-21T08:05:59.852Z"
+  },
+  "finding-recheck-trigger": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-21T22:30:58.524Z"
+  },
+  "trigger-cache-path": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-21T22:34:08.277Z"
+  },
+  "release-2-43-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-21T23:22:31.561Z"
+  },
+  "host-packaging-gaps": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-22T02:24:57.266Z"
+  },
+  "release-2-44-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-22T02:50:33.921Z"
+  },
+  "mistake-fix-at": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-22T06:33:04.221Z"
+  },
+  "no-code-comments": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-22T10:15:10.018Z"
+  },
+  "release-2-45-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-22T10:34:38.137Z"
+  },
+  "windows-cfg-unix": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-22T10:36:42.619Z"
+  },
+  "windows-json-path": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-22T10:48:27.434Z"
+  },
+  "ci-green-fixes": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-22T11:05:07.732Z"
+  },
+  "live-proof-evidence": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-22T15:13:25.164Z"
+  },
+  "skill-trigger-cases": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-22T23:45:01.563Z"
+  },
+  "worker-outward-guard": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-22T23:57:52.828Z"
+  },
+  "bee-playbooks": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-24T22:41:29.528Z"
+  },
+  "playbook-file-split": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-25T01:14:40.480Z"
+  },
+  "pi-1-0-upgrade": {
+    "capped": 14,
+    "dropped": 0,
+    "archived_at": "2026-10-02T14:54:43.572Z"
+  },
+  "release-2-47-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-02T15:01:41.094Z"
+  },
+  "pi-extension-split": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-02T22:33:37.576Z"
+  },
+  "release-2-48-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-02T23:31:33.112Z"
+  },
+  "refusal-followups": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-03T04:02:24.796Z"
+  },
+  "orient-merged-worktree": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-03T05:28:16.072Z"
+  },
+  "pi-slp-dispatch-return": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-10-03T06:26:49.786Z"
+  },
+  "pi-slp-operations": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-03T06:26:52.295Z"
+  },
+  "pi-slp-next-ops": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-03T06:39:57.730Z"
+  },
+  "release-red-2-49-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-03T08:51:34.834Z"
+  },
+  "release-2-49-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-03T08:58:55.175Z"
+  },
+  "mailbox-broker": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-10-04T07:37:26.945Z"
+  },
+  "paseo-pi": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-05T23:22:49.091Z"
+  },
+  "paseo-heartbeat": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-05T23:59:09.769Z"
+  },
+  "paseo-answers": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-06T01:13:02.190Z"
+  },
+  "paseo-observe": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-10-06T04:37:02.209Z"
+  },
+  "release-2-50-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-06T04:47:29.008Z"
+  },
+  "paseo-pi-hardening": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-10-06T10:08:03.497Z"
+  },
+  "herding-leader-toil": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-10-06T10:08:09.166Z"
+  },
+  "bee-report-issues": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-06T11:31:20.503Z"
+  },
+  "leader-check-worktree-root": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-06T15:40:16.098Z"
+  },
+  "occupancy-test-pane-fixture": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-06T17:02:39.371Z"
+  },
+  "leader-check-windows-paths": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-06T17:16:08.716Z"
+  },
+  "piggery-borrow": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-10-07T06:26:06.710Z"
+  },
+  "windows-path-tests": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T06:37:29.396Z"
+  },
+  "set-gate-windows-json": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T06:49:49.575Z"
+  },
+  "set-gate-windows-longpath": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T07:02:20.138Z"
+  },
+  "pi-tests-unix-stubs": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T07:08:13.738Z"
+  },
+  "worker-guard-stub-stdin": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T07:49:08.155Z"
+  },
+  "spawn-busy-retry": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T11:25:39.991Z"
+  },
+  "paseo-leverage": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-10-13T02:35:18.387Z"
+  },
+  "claude-read-only": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-13T02:35:21.111Z"
+  },
+  "release-2-52-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-13T03:32:56.135Z"
+  },
+  "paseo-cli-autodetect": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-15T02:59:26.970Z"
+  },
+  "paseo-system-prompts": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-15T05:32:14.917Z"
+  },
+  "paseo-worker-subagent": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-15T06:49:27.863Z"
+  },
+  "release-2-53-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-15T07:27:18.842Z"
+  },
+  "slp-role-gaps": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-10-15T13:18:57.821Z"
+  },
+  "prune-queue-copy": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-15T14:14:36.647Z"
+  },
+  "slp-detector": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-16T03:52:48.230Z"
+  },
+  "release-2-54-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-16T04:20:27.500Z"
+  },
+  "piggery-eval": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-16T10:16:09.462Z"
+  },
+  "pstack-playbook-rules": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-17T03:49:52.385Z"
+  },
+  "pstack-verify-trust": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-17T04:17:46.200Z"
+  },
+  "effort-at-the-door": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-17T04:19:06.400Z"
+  },
+  "pstack-0-15-port": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-17T04:19:57.854Z"
+  },
+  "run-git-stdin-thread": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-17T04:27:44.731Z"
+  },
+  "release-2-55-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-17T04:53:02.376Z"
+  },
+  "open-issues-sweep": {
+    "capped": 11,
+    "dropped": 0,
+    "archived_at": "2026-10-18T03:53:32.871Z"
+  },
+  "release-2-56-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-18T04:32:52.390Z"
+  },
+  "token-thrift": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-21T07:33:41.277Z"
+  },
+  "preamble-law-fix": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-21T07:42:26.583Z"
+  },
+  "release-2-57-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-21T08:30:16.977Z"
+  },
+  "design-os-in-bee": {
+    "capped": 8,
+    "dropped": 0,
+    "archived_at": "2026-10-24T11:01:01.484Z"
+  },
+  "release-2-60-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-24T11:28:50.723Z"
+  },
+  "release-2-63-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-27T08:01:48.246Z"
+  },
+  "paseo-013-compat": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-10-27T13:36:50.050Z"
+  },
+  "pi-1-4-capability-audit": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-27T14:24:04.647Z"
+  },
+  "release-2-64-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-27T18:31:02.742Z"
+  },
+  "owner-brief": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-28T10:20:20.591Z"
+  },
+  "release-2-65-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-28T10:20:24.005Z"
+  },
+  "ui-ux-pro-max-a11y-port": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-29T15:27:34.596Z"
+  },
+  "release-2-66-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-29T15:51:52.259Z"
+  },
+  "bee-deploying-skill": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-30T10:52:19.065Z"
+  },
+  "release-2-67-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-30T11:13:07.709Z"
+  },
+  "design-os-checks": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-30T15:48:16.223Z"
+  },
+  "release-2-68-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-31T00:16:29.300Z"
+  },
+  "pstack-0-15-36-port": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-31T15:32:01.587Z"
+  },
+  "release-2-69-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-31T15:55:28.816Z"
+  },
+  "stageshow-frame-rehearsal": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-02T09:43:18.184Z"
+  },
+  "design-check-motion-frames": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-02T09:54:17.600Z"
+  },
+  "cli-output-spill": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T02:59:45.244Z"
+  },
+  "wave-run": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T03:14:47.838Z"
+  },
+  "paseo-wait-deadline": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T04:12:41.159Z"
+  },
+  "release-2-71-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T04:35:27.929Z"
   }
 }

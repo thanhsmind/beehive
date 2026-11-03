@@ -1,0 +1,89 @@
+{
+  "id": "slr-3",
+  "feature": "semantic-role-routing",
+  "role": "code",
+  "lane": "standard",
+  "title": "Store and display approved workflow role assignments",
+  "action": "Add red-first tests, then implement the Role-plan packet contract: exact v2 discriminator and section, exact JSON fields, runtime and roster digest validation, complete configured-role coverage, unique stages, classification rules, stored role_plan output, rendered visibility, duplicate and malformed refusals, and a byte-identical legacy path.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_packets",
+  "read_first": [
+    "docs/history/semantic-role-routing/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    ".agents/skills/bee-planning/references/planning-reference.md"
+  ],
+  "deps": [],
+  "decisions": [
+    "fc2bb09a",
+    "68bc3484"
+  ],
+  "must_haves": {
+    "truths": [
+      "Gate preview JSON and text show every role stage and roster identity.",
+      "The approved packet stores the exact validated role_plan object.",
+      "bee-plan/v2 refuses missing, duplicate, malformed, incomplete, unknown-field, unconfigured-role, and stale-roster blocks.",
+      "Legacy plans without a role block keep byte-identical behavior."
+    ]
+  },
+  "affects_skills": [
+    "skills/bee-planning/references/planning-reference.md"
+  ],
+  "affects_specs": [
+    "docs/specs/doctrine-layer.md"
+  ],
+  "acceptance": "Role assignments are visible, immutable with the plan hash, validated for v2, and optional for legacy plans.",
+  "status": "capped",
+  "trace": {
+    "worker": "slr-3-worker",
+    "outcome": "Approved bee-plan/v2 packets validate, store, and display complete semantic role assignments while legacy packets stay unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      ".agents/skills/bee-planning/references/planning-reference.md",
+      "skills/bee-planning/references/planning-reference.md"
+    ],
+    "deviations": [
+      "Added skills/bee-planning/references/planning-reference.md — the approved cell listed only its generated .agents mirror, and the sync door exposed the source-of-truth path — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T08:08:19.190Z",
+    "behavior_change": false,
+    "verification_evidence": "15 role-plan packet tests passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09ebc-3389-747b-a74c-ed61ea9ddf04",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_packets",
+    "claimed_at": "2026-09-14T08:08:01.845Z",
+    "verified_at": null,
+    "mistakes": [
+      {
+        "wrong": "The slr-3 file list omitted the source planning reference",
+        "better": "it should have listed both source and generated paths before Gate 2"
+      },
+      {
+        "wrong": "The first worker result omitted cells finish",
+        "better": "it should have capped and released its reservations before reporting done"
+      }
+    ],
+    "report": {
+      "outcome": "Approved bee-plan/v2 packets validate, store, and display complete semantic role assignments while legacy packets stay unchanged",
+      "commit": "2c0718aec9aea754ec6a4a0010a00db4507799f6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        ".agents/skills/bee-planning/references/planning-reference.md",
+        "skills/bee-planning/references/planning-reference.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_packets — green:unit — 15 role-plan packet tests passed",
+      "deviations": [
+        "Added skills/bee-planning/references/planning-reference.md — the approved cell listed only its generated .agents mirror, and the sync door exposed the source-of-truth path — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "The slr-3 file list omitted the source planning reference — it should have listed both source and generated paths before Gate 2",
+        "The first worker result omitted cells finish — it should have capped and released its reservations before reporting done"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

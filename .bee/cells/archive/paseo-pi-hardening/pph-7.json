@@ -1,0 +1,156 @@
+{
+  "id": "pph-7",
+  "feature": "paseo-pi-hardening",
+  "lane": "high-risk",
+  "role": "docs",
+  "title": "Document the hardened Paseo channel, worker-guard and the Pi supervisor",
+  "deps": [
+    "pph-1",
+    "pph-2",
+    "pph-3",
+    "pph-4",
+    "pph-5",
+    "pph-6"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7",
+    "D8",
+    "D9",
+    "D10"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi-hardening/CONTEXT.md",
+    "docs/history/paseo-pi-hardening/plan.md"
+  ],
+  "action": "Update the concepts to match the shipped code, citing each rule as paseo-pi-hardening D1 to D10 with its store id from bee decisions search --text paseo-pi-hardening. the-paseo-channel.md: the 15 s timeout and 3 s inspect cadence (D1), the silent-idle nudge and second-idle end (D2), UpdatedAt liveness and stalled (D3), the observed model fields and model_mismatch (D4), heartbeat delete on shutdown (D6), the doctor row (D7), the broker timer and the */30 backstop replacing the 5-minute default (D8, superseding paseo-pi D7), and the parent cascade: paseo run from inside the leader records it as parent, so archiving the leader archives every in-flight worker (D10); add the new files to Pointers. hook-runtime-the-worker-outward-guard.md: a section on worker-guard, the second hook past the herded marker, its deny list and the supervisor allowlist mode (D5, D9). the-supervisor-observer-and-its-interventions.md: herding.supervisor_runtime and the Pi argv (D9); in the Paseo channel concept, say that status is bee's freshness view and paseo_state is the daemon's raw state, so status=stalled with paseo_state=working is expected. docs/config-reference.md: herding.paseo.broker_tick_secs, the new heartbeat_cron default, herding.supervisor_runtime. Plain technical English, no code comments, no deferral words.",
+  "must_haves": {
+    "truths": [
+      "the Paseo channel concept describes the timeouts, nudge, stalled, model check, heartbeat delete, doctor row, broker timer and parent cascade with their decision ids",
+      "the worker-outward guard concept describes worker-guard and the supervisor allowlist",
+      "the supervisor concept and the config reference name herding.supervisor_runtime and herding.paseo.broker_tick_secs",
+      "bee knowledge check passes"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "the hardened channel"
+      },
+      {
+        "path": "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+        "substantive": "worker-guard"
+      },
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+        "substantive": "Pi supervisor"
+      },
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "new keys"
+      }
+    ],
+    "key_links": [
+      "each concept cites paseo-pi-hardening decision ids"
+    ],
+    "prohibitions": [
+      "No change outside docs"
+    ]
+  },
+  "verify": ".bee/bin/bee knowledge check --json",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-pph-7",
+    "outcome": "the Paseo channel, worker-outward guard and supervisor concepts and the config reference describe the hardened behavior",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+      "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+      "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+      "docs/config-reference.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-06T06:42:35.260Z",
+    "behavior_change": false,
+    "verification_evidence": "run in the worktree: 431 concepts, 0 errors; the leader checked that each concept cites paseo-pi-hardening D1-D10 with store ids",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": ".bee/bin/bee knowledge check --json",
+    "claimed_at": "2026-10-06T06:34:31.963Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:42:35.260Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:55:03.222Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "the Paseo channel, worker-outward guard and supervisor concepts and the config reference describe the hardened behavior",
+      "commit": "ddbc82a05",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+        "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+        "docs/config-reference.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --json — green:static — run in the worktree: 431 concepts, 0 errors; the leader checked that each concept cites paseo-pi-hardening D1-D10 with store ids",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 256 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the Paseo channel concept describes the timeouts, nudge, stalled, model check, heartbeat delete, doctor row, broker timer and parent cascade with their decision ids",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the worker-outward guard concept describes worker-guard and the supervisor allowlist",
+            "artifact": "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+          },
+          {
+            "requirement": "the supervisor concept and the config reference name herding.supervisor_runtime and herding.paseo.broker_tick_secs",
+            "artifact": "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+          },
+          {
+            "requirement": "bee knowledge check passes",
+            "artifact": "docs/config-reference.md"
+          }
+        ],
+        "recorded_at": "2026-10-06T06:55:03.222Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

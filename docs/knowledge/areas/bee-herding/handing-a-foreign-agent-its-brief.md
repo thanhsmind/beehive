@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/the-run-verb-and-worker-outcomes.md]
-  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)", "herding-prompt-stall D6 (narrows D1: a stalled submission is retryable, not an immediate delivery failure)"]
+  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)", "herding-prompt-stall D6 (narrows D1: a stalled submission is retryable, not an immediate delivery failure)", "pi-result-mailbox D1/D3 (the brief names report-<round>.md and its atomic write; report first, result last, and a resumed attempt rewrites its report before its result)", "pi-slp-dispatch-return D1 (a herding cell brief drops the bee-build body and every bee bookkeeping line; the native cell render stays byte-identical)"]
   sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-brief-file/CONTEXT.md, docs/history/herding-worker-standalone/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "live smoke smoke-agy-delivery-1/-2/-3", "live case job hws-1-r1"]
   authoritative_for: "bee-herding: the brief mailbox, the standalone-worker contract, and delivery receipts"
 ---
@@ -35,6 +35,38 @@ kind silently drops a multi-line injected prompt even when idle.
 
 The pane start retries through a booting shell, and readiness is observed before
 the send.
+
+## The brief asks for the report FIRST and the result LAST
+
+Locked in pi-result-mailbox D1/D3 (2026-08-30). `summary` is one line and
+`proof` is one line; neither can carry the worker's actual deliverable, and
+before this rule the digest existed only in the pane's own scrollback, where it
+died with the pane.
+
+So the rendered brief names a second mailbox file beside the result —
+**`<mailbox>/report-<round>.md`**, the worker's FULL report — with the same
+write gesture the result already uses: write the `.tmp` file, then RENAME it
+onto the exact final name. The ORDER is the contract. The report is written
+first; the result file is written last, because the appearance of
+`result-N.json` under its final name is what ends the round — a result that
+lands before its report names a file the reader may not find yet. The result
+schema the brief shows carries `report_path` so the worker can name what it
+wrote, and a round with nothing worth reporting simply writes no report: the
+result stays legal without one.
+
+A RESUMED attempt gets one extra sentence, because the round number does not
+change on a retry: rewrite the report before writing the result again. Without
+it, round N's earlier attempt leaves a stale `report-N.md` that looks exactly
+like this attempt's. The run verb catches that case from the other side —
+it compares the file against the round's own brief delivery and reports a stale
+report rather than attaching it (`the-run-verb-and-worker-outcomes.md`, "The
+worker's report rides the mailbox as a PATH") — but the brief asks first, and
+the reader's freshness check is the belt underneath.
+
+None of this makes the worker any less bee-ignorant: it is one more file named
+in the brief, written with the gesture the brief already teaches. The worker
+still runs no bee command, and the report is read by the ORCHESTRATOR, from the
+path the envelope hands back.
 
 ## The worker's own hook reports its state into the mailbox
 
@@ -92,6 +124,45 @@ Expertise-listed files are explicitly its to read (D3). Workflow-ignorance is
 not expertise-denial. The same entry shape reaches Task-tool workers through
 `bee dispatch prepare --expertise` and the worker-cell prompt's conditional
 Expertise block (D4).
+
+## The agent's own contract rides the brief only when the transport is a pane
+
+A dispatch names a job role, and the role's configured slot decides the
+transport: a slot holding a model resolves to an in-family subagent, a slot
+holding an agent name resolves to a pane. Those two transports differ in who
+reads the agent's contract. On the subagent path the host loads the rendered
+agent file itself, so the dispatch payload carries only the kind brief. On the
+pane path nobody loads it — the foreign worker has never seen the tool, which is
+the whole premise of this area — so for as long as the payloads were symmetric,
+a pane worker served a read-only job received two lines of instruction where its
+in-family sibling received the full contract: read-only rule, digest form, no
+reservations, and the decide-altitude boundary that keeps it from judging.
+
+The asymmetry is now answered at the source. Every pane- and cli-shaped payload
+carries the related agent's own body at the head of its brief, above the kind
+text, chosen by the same pinned agent the subagent path would have named:
+bee-build for a cell, bee-gather for a gather, bee-extract for an extraction,
+bee-review for a review. The subagent payload is untouched and byte-identical,
+because adding the body there would state twice what the host already reads
+once.
+
+One exception: a **cell on the herding transport** gets no bee-build body
+(pi-slp-dispatch-return D1). bee-build is a bee workflow contract — claim,
+reserve, cap — and the herding wrapper forbids every `bee` command, so the body
+was a second, opposite order. The worker-cell template renders three flags for
+this: `native_bookkeeping` (every non-herding render) keeps the swarming-skill,
+reservation, report, status-token, Result-form and Finish lines;
+`native_worktree_check` keeps the cwd self-check that ends in a `[BLOCKED]`
+token; `herding` adds one line asking for the proof line, a summary ending with
+the commit sha, and a blocked result file instead of a text token. Shared rules
+— one cell only, no reinterpretation, no comments, the `cell: <id>` trailer —
+render for both. A golden test pins the native render byte for byte.
+
+A role whose pinned agent is the generic fallback adds nothing at all. That is
+not a gap to close later: most configurable roles — advisor, plan, test, docs —
+have no rendered agent file, and answering one would name a contract that does
+not exist. Nothing is the honest answer, and the payload for those roles stays
+exactly as it was.
 
 ## A delivery receipt is an artifact the receiver wrote
 
@@ -177,7 +248,7 @@ A stalled submission is a RETRYABLE outcome, not an immediate delivery
 failure. A stall only means the herd tool observed no state change from that
 one submission; for an agent it already reports as ready but whose interface
 has not finished drawing, that is the expected transient — measured live, the
-identical submission typed by hand seconds later on the same pane returned
+identical submission typed by hand seconds afterward on the same pane returned
 working at once. A stall therefore feeds the same bounded retry the
 ready-with-no-ack path uses, under the same two bounds, and becomes terminal
 only when a bound runs out, with a distinct failure saying the agent never
@@ -249,6 +320,16 @@ permit.
 
 ## Pointers (implementation)
 
+- The agent body that rides a pane brief is joined once into `pane_prompt` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, which the three
+  Bash-payload arms (native-fallback cli, `Resolved::Cli`, `Resolved::Herding`)
+  read instead of the bare rendered prompt; the Agent arm still reads the bare
+  one. The bodies are compiled in beside the prompt templates as
+  `embedded_agent_body` in `verbs/drivers/prompt.rs`, sourced from
+  `packages/bee/agents/bee-*.md.tmpl` and split by the single
+  `split_frontmatter` in `textutil.rs`. Which agent a role pins is
+  `pinned_agent_type` / `agent_for_role` in `verbs/drivers/guard.rs`, where
+  `None` is a legal answer.
 - The mailbox contract it writes and reads is
   `packages/bee-rs/crates/bee/src/herding/mailbox.rs`; the delivery path
   (`deliver_pointer`), the ack-wait budget, and the stall/blocked errors are in
@@ -264,6 +345,14 @@ permit.
   is in `hooks/mod.rs`); reader is `activity_path` / `parse_activity_text` /
   `ACTIVITY_FRESHNESS_SECS` in `herding/mailbox.rs`, wired through
   `status_with_activity` in `herding/run.rs`.
+- A fresh spawn whose caller has `BEE_DISPATCH_ID` set also exports
+  `BEE_DISPATCH_ID`, `BEE_RELEASE_VERSION` and `BEE_SESSION_ID` (each only when
+  non-empty) into the pane, before the two markers, which still win. This is how a
+  deploy dispatch's worker runs `scripts/release.sh`: `dispatch authorize` inside the
+  pane sees the permit id and resolves the issuer session first in the env chain.
+  Without `BEE_DISPATCH_ID` none of the three passes, so an ordinary worker keeps its
+  own identity. Home: `resolve_pane_env_passthrough_from` and `Options.pane_env_passthrough`
+  in `herding/run.rs` (deploy-pane-authorization, cell `dpa-1`).
 - The worker marker is the environment variable `BEE_HERDING_WORKER=1`, exported
   into the pane before `agent start`; the mailbox directory is
   `.bee/mailbox/<job-id>/`. The repo instructions the contract tells the worker to

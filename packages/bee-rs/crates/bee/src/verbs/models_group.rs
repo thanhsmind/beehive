@@ -1,11 +1,11 @@
-// bee models — the role table read out loud (models-show-verb D1).
+// bee team — the role table read out loud (team-config-rename D1).
 //
 // Verbs served natively (exact argv shapes only — see the probe):
-//   models show [--runtime claude|codex|opencode] [--json]
+//   team show [--runtime claude|codex|opencode] [--json]
 //
 // WHY IT EXISTS. An agent that has to pick a role for a dispatch had exactly
 // one way to learn what the roles MEAN: open `.bee/config.json` and parse
-// `models.<runtime>` by hand. D1 makes that a verb — "lấy thông tin models từ
+// `team.<runtime>` by hand. D1 makes that a verb — "lấy thông tin models từ
 // config nên là 1 verb trong bee để nhận trọn bộ không cần phải viết code
 // đọc" — so the table has one reader and the descriptions have one home.
 //
@@ -14,7 +14,7 @@
 // acts on, and a sentence written for a human would be dead weight (and a
 // silent behaviour surface) down there. That strip is exactly what makes it
 // the wrong source for this verb — the whole point here is the sentence. So
-// this module reads `read_config_raw(root)["models"]` and carries every slot
+// this module reads `read_config_raw(root)["team"]` and carries every slot
 // through VERBATIM: string slots, `{kind:"cli"}` slots, `{kind:"herding"}`
 // slots, junk slots normalize would have dropped, all of it. A slot shape
 // this file understands is a slot shape it renders more prettily, never a
@@ -31,7 +31,10 @@
 // lock, no normalization, no dispatch code reached.
 
 use crate::state::read_config_raw;
-use crate::verbs::drivers::{default_models, RUNTIMES};
+use crate::verbs::drivers::{
+    declared_model_for, default_models, normalize_models, resolve_role, Resolved, EFFORT_LADDER,
+    EFFORT_LEVELS, RUNTIMES,
+};
 use crate::verbs::knowledge::{g_prelude, pre_json_scan, GPre};
 use crate::verbs::reservations::{js_trim, keys_known, parse_flags, FlagV};
 use serde_json::{Map, Value};
@@ -45,13 +48,54 @@ pub(crate) const SOURCE_DEFAULT: &str = "default";
 
 /// The teaching line the text rendering opens with. An agent that ran this
 /// verb once should never go back to parsing the config by hand.
-const TEACH: &str = "models — the role table bee dispatches from. A role's `description` is written in \
-.bee/config.json under models.<runtime>.<role>, and this verb is how it is read; \
+const TEACH: &str = "team — who does which job. Pick team members by the description column; the transport is configuration. A role's `description` is written in \
+.bee/config.json under team.<runtime>.<role>, and this verb is how it is read; \
 never parse that file by hand.";
 
+/// Resolve a slot's model and transport for display and --json.
+fn resolve_slot_display(
+    cfg: &Value,
+    role: &str,
+    slot: &Value,
+    rt: &str,
+    normalized: &Map<String, Value>,
+) -> (Option<String>, Option<String>) {
+    if slot.is_null() {
+        return (None, None);
+    }
+    let resolved = resolve_role(normalized, &[role], rt, "gather");
+    match &resolved {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => {
+            (Some(model.clone()), Some("native".to_string()))
+        }
+        Resolved::Herding { agent, .. } => {
+            let dm = declared_model_for(cfg, &resolved, rt);
+            let tr = match agent {
+                Some(a) => format!("herding: {a}"),
+                None => "herding".to_string(),
+            };
+            (dm, Some(tr))
+        }
+        Resolved::Cli { .. } | Resolved::Refused { .. } => {
+            let dm = declared_model_for(cfg, &resolved, rt);
+            (dm, Some("cli".to_string()))
+        }
+        Resolved::Inherit => {
+            (Some("session default".to_string()), Some("native".to_string()))
+        }
+        Resolved::Budget => (None, None),
+    }
+}
+
 /// One role's row: the slot exactly as the config wrote it, plus where it came
-/// from and the description lifted out for readers who only want the sentence.
-fn row(role: &str, slot: &Value, source: &str) -> Value {
+/// from, the description, and the resolved model and transport fields.
+fn row(
+    role: &str,
+    slot: &Value,
+    source: &str,
+    model: Option<String>,
+    transport: Option<String>,
+) -> Value {
     let description = slot
         .as_object()
         .and_then(|o| o.get("description"))
@@ -62,6 +106,22 @@ fn row(role: &str, slot: &Value, source: &str) -> Value {
     m.insert("role".into(), Value::String(role.to_string()));
     m.insert("source".into(), Value::String(source.to_string()));
     m.insert("description".into(), description);
+    m.insert(
+        "model".into(),
+        model.map(Value::String).unwrap_or(Value::Null),
+    );
+    m.insert(
+        "transport".into(),
+        transport.map(Value::String).unwrap_or(Value::Null),
+    );
+    let effort = slot
+        .get("effort")
+        .and_then(Value::as_str)
+        .map(js_trim)
+        .filter(|e| EFFORT_LEVELS.contains(e))
+        .map(|e| Value::String(e.to_string()))
+        .unwrap_or(Value::Null);
+    m.insert("effort".into(), effort);
     // VERBATIM: no normalize, no trim, no key filtering.
     m.insert("slot".into(), slot.clone());
     Value::Object(m)
@@ -82,15 +142,30 @@ fn known_runtimes(raw_models: Option<&Map<String, Value>>) -> Vec<String> {
     names
 }
 
-/// The whole result, built from a raw `models` value. `runtime` filters to one
-/// table; `None` is every runtime the config or the defaults know.
+/// The whole result, built from a raw `models` or `team` or root config value.
+/// `runtime` filters to one table; `None` is every runtime the config or the defaults know.
 pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> Result<Value, String> {
-    let raw = raw_models.and_then(Value::as_object);
+    let (cfg_val, team_val) = match raw_models {
+        Some(v) if v.is_object() => {
+            let obj = v.as_object().unwrap();
+            if obj.contains_key("team") || obj.contains_key("models") {
+                let team = obj.get("team").or_else(|| obj.get("models"));
+                (v.clone(), team.cloned().unwrap_or_else(|| Value::Object(Map::new())))
+            } else {
+                let mut c = Map::new();
+                c.insert("team".into(), v.clone());
+                (Value::Object(c), v.clone())
+            }
+        }
+        _ => (Value::Object(Map::new()), Value::Object(Map::new())),
+    };
+    let normalized = normalize_models(Some(&team_val));
+    let raw = team_val.as_object();
     let mut names = known_runtimes(raw);
     if let Some(want) = runtime {
         if !names.iter().any(|n| n == want) {
             return Err(format!(
-                "bee models show: --runtime {want:?} is not a runtime this repo knows. Legal: {}.",
+                "bee team show: --runtime {want:?} is not a runtime this repo knows. Legal: {}.",
                 names.join(", ")
             ));
         }
@@ -107,7 +182,9 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
         if let Some(table) = table {
             for (role, slot) in table {
                 configured_total += 1;
-                rows.push(row(role, slot, SOURCE_CONFIGURED));
+                let (model, transport) =
+                    resolve_slot_display(&cfg_val, role, slot, rt, &normalized);
+                rows.push(row(role, slot, SOURCE_CONFIGURED, model, transport));
             }
         }
         // Built-ins only where bee actually ships them, and only for a role
@@ -118,7 +195,9 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
                     continue;
                 }
                 default_total += 1;
-                rows.push(row(&role, &slot, SOURCE_DEFAULT));
+                let (model, transport) =
+                    resolve_slot_display(&cfg_val, &role, &slot, rt, &normalized);
+                rows.push(row(&role, &slot, SOURCE_DEFAULT, model, transport));
             }
         }
         roles_total += rows.len();
@@ -138,34 +217,36 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
     result.insert("runtimes".into(), Value::Array(runtimes));
     result.insert("counts".into(), Value::Object(counts));
     result.insert("note".into(), Value::String(TEACH.to_string()));
+    let idle = !result["runtimes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|r| r["roles"].as_array().into_iter().flatten())
+        .any(|r| r["effort"].is_string());
+    let ladder: Vec<Value> = EFFORT_LADDER
+        .iter()
+        .map(|(kind, lane, step)| {
+            let lane = if lane.is_empty() { Value::Null } else { Value::from(*lane) };
+            serde_json::json!({"kind": kind, "lane": lane, "step": step})
+        })
+        .collect();
+    result.insert("effort_ladder".into(), Value::Array(ladder));
+    result.insert("effort_ladder_idle".into(), Value::Bool(idle));
     Ok(Value::Object(result))
 }
 
 /// The raw table for a repo root. `read_config_raw` is the config layer's own
 /// reader (tracked config + the local overlay, corrupt-tolerant); nothing is
 /// normalized on the way out.
-pub(crate) fn models_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
+pub(crate) fn team_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
     let config = read_config_raw(root);
-    build_table(config.get("models"), runtime)
+    build_table(Some(&Value::Object(config)), runtime)
 }
 
-/// A slot on one line. The description is printed as prose beside the row, so
-/// it is dropped from the JSON echo here rather than shown twice — every OTHER
-/// key of the slot is rendered exactly as stored.
-fn slot_display(slot: &Value) -> String {
-    match slot {
-        Value::Null => "unset".to_string(),
-        Value::Object(o) => {
-            let rest: Map<String, Value> =
-                o.iter().filter(|(k, _)| *k != "description").map(|(k, v)| (k.clone(), v.clone())).collect();
-            if rest.is_empty() {
-                "(description only)".to_string()
-            } else {
-                crate::jsjson::stringify(&Value::Object(rest))
-            }
-        }
-        other => crate::jsjson::stringify(other),
-    }
+/// Legacy alias for `team_table`.
+#[allow(dead_code)]
+pub(crate) fn models_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
+    team_table(root, runtime)
 }
 
 fn render(result: &Value) -> String {
@@ -181,29 +262,84 @@ fn render(result: &Value) -> String {
             lines.push("  (no roles — this runtime has no table and no built-in defaults)".to_string());
             continue;
         }
-        let width = roles
+        let width_role = roles
             .iter()
             .filter_map(|r| r.get("role").and_then(Value::as_str))
             .map(str::len)
             .max()
             .unwrap_or(0);
+        let width_source = roles
+            .iter()
+            .filter_map(|r| r.get("source").and_then(Value::as_str))
+            .map(|s| s.len() + 2)
+            .max()
+            .unwrap_or(0);
+        let width_desc = roles
+            .iter()
+            .map(|r| r.get("description").and_then(Value::as_str).unwrap_or("").len())
+            .max()
+            .unwrap_or(0);
+        let width_model = roles.iter().map(|r| model_cell(r).chars().count()).max().unwrap_or(0);
+
         for role_row in roles {
             let role = role_row.get("role").and_then(Value::as_str).unwrap_or("?");
             let source = role_row.get("source").and_then(Value::as_str).unwrap_or("?");
-            let slot = role_row.get("slot").unwrap_or(&Value::Null);
-            let mut line =
-                format!("  {role:<width$}  [{source}]  {}", slot_display(slot), width = width);
-            if let Some(description) = role_row.get("description").and_then(Value::as_str) {
-                line.push_str(&format!(" — {description}"));
-            }
+            let source_col = format!("[{source}]");
+            let description = role_row.get("description").and_then(Value::as_str).unwrap_or("");
+            let model_str = model_cell(role_row);
+            let transport_str = role_row.get("transport").and_then(Value::as_str).unwrap_or("-");
+
+            let line = format!(
+                "  {role:<width_role$}  {source_col:<width_source$}  {description:<width_desc$}  {model_str:<width_model$}  {transport_str}"
+            );
             lines.push(line);
         }
     }
+    lines.push(String::new());
+    lines.push(ladder_line(result.get("effort_ladder_idle") != Some(&Value::Bool(false))));
     lines.join("\n")
 }
 
+fn model_cell(role_row: &Value) -> String {
+    let model = match role_row.get("model") {
+        Some(Value::String(s)) => s.as_str(),
+        _ => {
+            let tr = role_row.get("transport").and_then(Value::as_str).unwrap_or("");
+            if tr.starts_with("herding") {
+                "model chosen by the agent"
+            } else if role_row.get("slot").is_some_and(Value::is_null) {
+                "unset"
+            } else {
+                "-"
+            }
+        }
+    };
+    match role_row.get("effort").and_then(Value::as_str) {
+        Some(effort) => format!("{model}/{effort}"),
+        None => model.to_string(),
+    }
+}
+
+fn ladder_line(idle: bool) -> String {
+    let rows: Vec<String> = EFFORT_LADDER
+        .iter()
+        .map(|(kind, lane, step)| {
+            let name = if lane.is_empty() { kind.to_string() } else { format!("{kind}/{lane}") };
+            let step = if *step > 0 { format!("+{step}") } else { step.to_string() };
+            format!("{name} {step}")
+        })
+        .collect();
+    let (low, max) = (EFFORT_LEVELS[0], EFFORT_LEVELS[EFFORT_LEVELS.len() - 1]);
+    let mut line = format!("effort ladder: {} (clamped to {low}…{max}; no base → none)", rows.join(" · "));
+    if idle {
+        line.push_str(" — idle: no role sets effort; add \"effort\" to a team.<runtime>.<role> slot");
+    }
+    line
+}
+
+
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
-    if args.first()?.to_str()? != "models" {
+    if args.first()?.to_str()? != "team" {
         return None;
     }
     if args.get(1)?.to_str()? != "show" {
@@ -223,12 +359,12 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         _ => None,
     };
 
-    let ctx = match g_prelude("models show", json, pre_json, t0)? {
+    let ctx = match g_prelude("team show", json, pre_json, t0)? {
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
 
-    match models_table(&ctx.root, runtime.as_deref()) {
+    match team_table(&ctx.root, runtime.as_deref()) {
         Err(message) => Some(ctx.fail(&message)),
         Ok(result) => {
             let text = render(&result);
@@ -356,7 +492,9 @@ mod tests {
             .iter()
             .map(|r| r["runtime"].as_str().unwrap())
             .collect();
-        assert_eq!(names, vec!["claude", "codex", "opencode", "acme"]);
+        // The four names bee itself knows (drivers::RUNTIMES — `pi` joined
+        // them with pi-support D5), in that order, then the operator's own.
+        assert_eq!(names, vec!["claude", "codex", "opencode", "pi", "acme"]);
         // An operator's own runtime key gets its table and no invented rows.
         assert_eq!(roles_of(&result, "acme").len(), 1);
         assert_eq!(role(&result, "acme", "code")["source"], json!(SOURCE_CONFIGURED));
@@ -417,18 +555,30 @@ mod tests {
         std::fs::create_dir_all(root.join(".bee")).unwrap();
         std::fs::write(
             root.join(".bee").join("config.json"),
-            r#"{"models":{"claude":{"code":{"model":"opus","description":"from disk"}}}}"#,
+            r#"{"team":{"claude":{"code":{"model":"opus","description":"from disk"}}}}"#,
         )
         .unwrap();
-        let result = models_table(root, None).unwrap();
+        let result = team_table(root, None).unwrap();
         assert_eq!(role(&result, "claude", "code")["description"], json!("from disk"));
         assert_eq!(
             role(&result, "claude", "code")["slot"],
             json!({"model": "opus", "description": "from disk"})
         );
+
+        // Alias config still works via fold at load
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        std::fs::create_dir_all(root2.join(".bee")).unwrap();
+        std::fs::write(
+            root2.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"code":{"model":"opus","description":"from legacy models"}}}}"#,
+        )
+        .unwrap();
+        let result2 = team_table(root2, None).unwrap();
+        assert_eq!(role(&result2, "claude", "code")["description"], json!("from legacy models"));
     }
 
-    /// Read-only means read-only: a `models show` must leave the store exactly
+    /// Read-only means read-only: a `team show` must leave the store exactly
     /// as it found it.
     #[test]
     fn reading_the_table_writes_nothing() {
@@ -436,10 +586,10 @@ mod tests {
         let root = tmp.path();
         std::fs::create_dir_all(root.join(".bee")).unwrap();
         let config = root.join(".bee").join("config.json");
-        std::fs::write(&config, r#"{"models":{"claude":{"code":"opus"}}}"#).unwrap();
+        std::fs::write(&config, r#"{"team":{"claude":{"code":"opus"}}}"#).unwrap();
         let before = std::fs::read_dir(root.join(".bee")).unwrap().count();
         let raw_before = std::fs::read_to_string(&config).unwrap();
-        models_table(root, None).unwrap();
+        team_table(root, None).unwrap();
         let after = std::fs::read_dir(root.join(".bee")).unwrap().count();
         assert_eq!(before, after, "reading the role table created or removed a store file");
         assert_eq!(raw_before, std::fs::read_to_string(&config).unwrap());
@@ -451,16 +601,90 @@ mod tests {
             "claude": {"code": {"model": "opus", "description": "write the cell's code"}}
         });
         let text = render(&table(&raw, Some("claude")));
-        assert!(text.contains("models.<runtime>.<role>"), "the teaching line is missing: {text}");
+        assert!(text.contains("team.<runtime>.<role>"), "the teaching line is missing: {text}");
         assert!(text.contains("code"), "{text}");
         assert!(text.contains("[configured]"), "{text}");
         assert!(text.contains("write the cell's code"), "{text}");
-        assert!(text.contains(r#"{"model":"opus"}"#), "{text}");
-        assert!(
-            !text.contains("\"description\":\"write the cell's code\""),
-            "the description is printed twice: {text}"
-        );
+        assert!(text.contains("opus"), "{text}");
+        assert!(text.contains("native"), "{text}");
         assert!(text.contains("[default]"), "the built-ins are missing from the text: {text}");
+    }
+
+    #[test]
+    fn team_show_columns_order_on_claude_and_pi() {
+        let raw = json!({
+            "claude": {
+                "code": {"model": "opus", "description": "write the code"}
+            },
+            "pi": {
+                "plan": {"model": "gpt-5", "description": "shape the plan"}
+            }
+        });
+        for rt in &["claude", "pi"] {
+            let text = render(&table(&raw, Some(rt)));
+            let role_name = if *rt == "claude" { "code" } else { "plan" };
+            let line = text.lines().find(|l| l.contains(role_name)).expect("found role line");
+            let pos_role = line.find(role_name).unwrap();
+            let pos_source = line.find("[configured]").unwrap();
+            let desc_str = if *rt == "claude" { "write the code" } else { "shape the plan" };
+            let pos_desc = line.find(desc_str).unwrap();
+            let model_str = if *rt == "claude" { "opus" } else { "gpt-5" };
+            let pos_model = line.find(model_str).unwrap();
+            let pos_transport = line.find("native").unwrap();
+
+            assert!(pos_role < pos_source, "role before source in {line}");
+            assert!(pos_source < pos_desc, "source before desc in {line}");
+            assert!(pos_desc < pos_model, "desc before model in {line}");
+            assert!(pos_model < pos_transport, "model before transport in {line}");
+        }
+    }
+
+    #[test]
+    fn team_show_json_preserves_slot_and_adds_model_and_transport() {
+        let raw = json!({
+            "claude": {
+                "code": {"model": "opus", "description": "write code"}
+            }
+        });
+        let result = table(&raw, Some("claude"));
+        let code = role(&result, "claude", "code");
+        assert_eq!(code["slot"], json!({"model": "opus", "description": "write code"}));
+        assert_eq!(code["model"], json!("opus"));
+        assert_eq!(code["transport"], json!("native"));
+    }
+
+    const LADDER_LINE: &str = "effort ladder: cell/high-risk +1 · cell/tiny -1 · cell/small 0 · cell/standard 0 · cell/spike 0 · gather -2 · advisor -1 · reviewer 0 (clamped to low…max; no base → none)";
+    const IDLE_SUFFIX: &str = " — idle: no role sets effort; add \"effort\" to a team.<runtime>.<role> slot";
+
+    #[test]
+    fn the_ladder_line_says_idle_when_no_role_sets_effort() {
+        let raw = json!({"claude": {"code": {"model": "opus"}}});
+        let text = render(&table(&raw, Some("claude")));
+        let line = text.lines().find(|l| l.starts_with("effort ladder:")).expect("ladder line");
+        assert_eq!(line, format!("{LADDER_LINE}{IDLE_SUFFIX}"));
+    }
+
+    #[test]
+    fn a_role_with_effort_shows_model_slash_effort_and_the_ladder_is_live() {
+        let raw = json!({"claude": {"code": {"kind": "native", "model": "opus", "effort": "high"}}});
+        let text = render(&table(&raw, Some("claude")));
+        let code = text.lines().find(|l| l.contains("[configured]")).expect("code row");
+        assert!(code.contains("opus/high"), "{code}");
+        let line = text.lines().find(|l| l.starts_with("effort ladder:")).expect("ladder line");
+        assert_eq!(line, LADDER_LINE);
+    }
+
+    #[test]
+    fn the_json_carries_the_ladder_and_its_idle_state() {
+        let idle = table(&json!({"claude": {"code": {"model": "opus"}}}), Some("claude"));
+        assert_eq!(idle["effort_ladder_idle"], json!(true));
+        let ladder = idle["effort_ladder"].as_array().expect("effort_ladder array");
+        assert_eq!(ladder.len(), EFFORT_LADDER.len());
+        assert_eq!(ladder[0], json!({"kind": "cell", "lane": "high-risk", "step": 1}));
+        assert_eq!(ladder[5], json!({"kind": "gather", "lane": null, "step": -2}));
+        let live = table(&json!({"claude": {"code": {"model": "opus", "effort": "max"}}}), Some("claude"));
+        assert_eq!(live["effort_ladder_idle"], json!(false));
+        assert_eq!(role(&live, "claude", "code")["effort"], json!("max"));
     }
 
     #[test]

@@ -1,0 +1,11 @@
+{
+  "id": "more-than-20-backlog-rows-with-layer-fix__6e79d14e",
+  "decision": "6e79d14e",
+  "condition": "more than 20 backlog rows with layer fix-at:check or fix-at:architecture stand older than 30 days — then a bee doctor row that counts them is worth building",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-22T06:24:03.275Z",
+  "updated_at": "2026-09-22T06:24:03.275Z",
+  "outcome": null
+}

@@ -1,0 +1,76 @@
+{
+  "id": "thf-2",
+  "feature": "three-findings",
+  "title": "Point the codex probe concept at the mechanism that exists",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md"
+  ],
+  "read_first": [
+    "docs/history/three-findings/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md",
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D2, correct this concept's dead pointers. Three things it names do not exist at this commit: the constant PROBED_CODEX_VERSION 'in the bee binary' (rg 'PROBED' over packages/bee-rs/crates/bee/src returns nothing), the canary scripts/canary_codex.mjs (fd finds nothing), and the cell trace .bee/cells/i54-closeout-8.json (fd finds nothing). One thing it names DOES exist and must stay cited: docs/history/i54-closeout/reports/validation-canary.md. Replace the dead ones with the mechanism that survived the Rust port: the attestation record .bee/doctor-attest.json (doctor.rs:46 ATTEST_REL), written by `bee doctor attest --runtime codex`, whose three legs are the hooks-file hash, the codex version and the repo identity, and whose version leg yields reason `unprobed_version` when the live CLI does not answer and `version_changed` when it answers differently (doctor.rs:772-784). Keep the concept's RULE intact — a pin moves only on live evidence — because that rule is this page's reason to exist and it is unchanged; only its implementation pointers and its frontmatter sources were wrong. Update the frontmatter sources list to drop the dead cell-trace entry. Do not restate anything the Pi sibling page owns.",
+  "verify": ".bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check --json",
+  "must_haves": {
+    "truths": [
+      "Every path and symbol the page names exists at this commit",
+      "The evidence-gated pin rule is unchanged in substance",
+      "validation-canary.md stays cited"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md",
+        "substantive": "Pointers section names .bee/doctor-attest.json and the attest verb; no PROBED_CODEX_VERSION, no canary_codex.mjs"
+      }
+    ],
+    "key_links": [
+      "the page still reads as the home of the evidence-gated pin rule that the Pi audit page cites"
+    ],
+    "prohibitions": [
+      "No change to the rule the page owns",
+      "No new claim about Pi — that belongs to the sibling page"
+    ]
+  },
+  "trace": {
+    "worker": "w-thf-2",
+    "outcome": "Point the codex probe concept at the mechanism that exists",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-18T14:34:18.413Z",
+    "behavior_change": false,
+    "verification_evidence": "leader re-ran both checks after the worker: errors 0, profile_errors 0, index drift false",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "5a2a6f63-6aa3-4e56-9873-ac37dc35bfa9",
+    "verify_command": ".bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check --json",
+    "claimed_at": "2026-09-18T14:29:36.135Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The codex probe concept now points at the attestation record and the attest verb; the two dead pointers and the dead cell-trace source are gone, validation-canary.md and the evidence-gated rule are untouched.",
+      "commit": "8b5f8775c",
+      "files": [
+        "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check --json — green:static — leader re-ran both checks after the worker: errors 0, profile_errors 0, index drift false",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

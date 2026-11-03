@@ -1,0 +1,109 @@
+{
+  "cpc-1": {
+    "schema": "judge-verdict/1",
+    "verdict": "PASS",
+    "checks": [
+      {
+        "id": "installed write deny and allow",
+        "status": "PASS",
+        "evidence": "/var/tmp/bee-codex-canary-VVDuwM/evidence/report.json:11-26 records native Bash/apply_patch and denied backlog writes with allowed history writes; docs/history/codex-parity-completion/verification-summary.md:22 records deny exit 2, allow exit 0, and unchanged bytes."
+      },
+      {
+        "id": "manifest and activity parity",
+        "status": "PASS",
+        "evidence": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs:454-467 checks three generated projections; packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs:638-701 checks the decided activity set and shared Claude launcher; final-green-suite.log:4266 records hook_contracts 13 passed."
+      },
+      {
+        "id": "honest live canary report",
+        "status": "PASS",
+        "evidence": "/var/tmp/bee-codex-canary-VVDuwM/evidence/report.json:2-15 reports Codex 0.154.0, observed events, observed tools, and no spawn input; lines 76-77 explicitly report skipped native spawn."
+      }
+    ],
+    "fixability": "automatic",
+    "confidence": "high"
+  },
+  "cpc-2": {
+    "schema": "judge-verdict/1",
+    "verdict": "PASS",
+    "checks": [
+      {
+        "id": "unsupported native dispatch refusal",
+        "status": "PASS",
+        "evidence": "/var/tmp/bee-codex-canary-ZPuEAI/evidence/report.json:16-55 records collaborationspawn_agent selection and installed guard status 2; lines 117-118 name opaque-role refusal. packages/bee-rs/crates/bee/src/hooks/model_guard.rs:731-734 implements codex-spawn-unmarked denial."
+      },
+      {
+        "id": "honest model reporting",
+        "status": "PASS",
+        "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:758-779 asserts native requested/effective null and CLI unverified reporting; skills/bee-swarming/references/swarming-reference.md:436 states the same contract without a pinned native-model claim."
+      },
+      {
+        "id": "live read-only execution boundary",
+        "status": "PASS",
+        "evidence": "docs/history/codex-parity-completion/cpc-2-recovery-green.log:2471-2555 records actual prepared patch and shell denials with identical hashes and no continuation file. /var/tmp/bee-verify/evidence/20260913-112318-3463334/003-bash-c-codex-exec-sandbox-read-only-ephemeral.err:38-46 records both shell writes denied with status 1 and unchanged content."
+      },
+      {
+        "id": "configured external transport preservation",
+        "status": "PASS",
+        "evidence": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs:808-811 directs herding roles to their configured transport; packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:9275-9322 checks herding, declared, pinned, and inherited reporting."
+      }
+    ],
+    "fixability": "automatic",
+    "confidence": "high"
+  },
+  "cpc-3": {
+    "schema": "judge-verdict/1",
+    "verdict": "PASS",
+    "checks": [
+      {
+        "id": "correct session turn-end mark",
+        "status": "PASS",
+        "evidence": "/var/tmp/bee-codex-canary-VVDuwM/evidence/state.json:16-20 contains a turn-end mark for the observed session. packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:589-637 checks transcript final text, kind, subject, and session."
+      },
+      {
+        "id": "no cumulative usage double count",
+        "status": "PASS",
+        "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:1205-1295 and 1491-1621 test cumulative totals, repeated counts, and multiple requests. final-green-suite.log:1022,1052 records both relevant tests passing."
+      },
+      {
+        "id": "malformed and cross-session isolation",
+        "status": "PASS",
+        "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:840-914 checks missing and malformed transcripts produce no mark; lines 1468-1484 assert separate session IDs and subjects."
+      },
+      {
+        "id": "Claude and child lifecycle preservation",
+        "status": "PASS",
+        "evidence": "final-green-suite.log:823 records subagent_stop_and_child_session_events_leave_parent_working passed. /var/tmp/bee-codex-canary-Cm0jce/evidence/report.json:95-160 separately records child and parent session identities and transcripts."
+      }
+    ],
+    "fixability": "automatic",
+    "confidence": "high"
+  },
+  "cpc-4": {
+    "schema": "judge-verdict/1",
+    "verdict": "PASS",
+    "checks": [
+      {
+        "id": "tested paths and limits documented",
+        "status": "PASS",
+        "evidence": "docs/06-runtime-integration.md:56-71 distinguishes shipped hooks, observed events, opaque native refusal, read-only fallback, and unproved live paths. docs/history/codex-parity-completion/verification-summary.md:29-34 records the tested limits."
+      },
+      {
+        "id": "verification map drives required behavior",
+        "status": "PASS",
+        "evidence": ".bee/verify/verify-app/features/codex-runtime.md:35-75 gives executable checks for deny, allow, model guard, read-only dispatch, turn completion, and child isolation."
+      },
+      {
+        "id": "installed dispatch and sandbox instructions",
+        "status": "PASS",
+        "evidence": "skills/bee-swarming/references/swarming-reference.md:387-395 documents the supported schema, Codex 0.154.0 refusal, external routes, fork_turns strings, and read-only sandbox. CREATION-LOG.md:25-43 retains the failed model-pinning instruction and final three-scenario GREEN result."
+      },
+      {
+        "id": "generated parity and full suite",
+        "status": "PASS",
+        "evidence": "docs/history/codex-parity-completion/verification-summary.md:10-18 records 3,920 passed, zero failed, 20 ignored, three generated hook projections, 376 release files, and git diff --check exit 0; final-green-suite.log:4168-4742 contains the raw successful suite results."
+      }
+    ],
+    "fixability": "automatic",
+    "confidence": "high"
+  }
+}

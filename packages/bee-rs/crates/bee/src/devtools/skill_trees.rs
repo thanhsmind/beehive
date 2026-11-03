@@ -42,11 +42,10 @@ use std::process::ExitCode;
 /// both trees this pipeline produces, same as any other off-runtime block.
 const RENDER_RUNTIMES: [&str; 2] = ["claude", "codex"];
 /// Runtime labels the `<!-- bee:only RUNTIME -->` marker grammar accepts —
-/// a strict superset of RENDER_RUNTIMES. `opencode` is a valid marker label
-/// (the ONBOARDING SYNC PATH renders an opencode target from this same
-/// canonical `skills/` source) even though this pipeline never emits an
-/// opencode tree of its own.
-const MARKER_RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
+/// a strict superset of RENDER_RUNTIMES. `opencode` and `pi` are valid marker labels
+/// (the ONBOARDING SYNC PATH renders an opencode target and keeps pi in the agents root)
+/// even though this pipeline never emits opencode or pi trees of its own.
+const MARKER_RUNTIMES: [&str; 4] = ["claude", "codex", "opencode", "pi"];
 /// Sidecar schema id (bee-render/2, D7).
 const RENDER_SCHEMA: &str = "bee-render/2";
 const RENDER_SIDECAR: &str = ".bee-render.json";
@@ -759,10 +758,11 @@ mod tests {
         // opencode is a valid marker LABEL even though RENDER_RUNTIMES (this
         // pipeline's own two committed trees) never includes it — D1/E2.
         assert!(matches!(classify_marker_line("<!-- bee:only opencode -->"), MarkerClass::Only(r) if r == "opencode"));
+        assert!(matches!(classify_marker_line("<!-- bee:only pi -->"), MarkerClass::Only(r) if r == "pi"));
         assert!(matches!(classify_marker_line("<!-- bee:end -->"), MarkerClass::End));
         match classify_marker_line("<!-- bee:only python -->") {
             MarkerClass::Error(e) => {
-                assert_eq!(e, "unknown runtime label \"python\" (expected claude or codex or opencode)")
+                assert_eq!(e, "unknown runtime label \"python\" (expected claude or codex or opencode or pi)")
             }
             _ => panic!("expected an unknown-runtime error"),
         }
@@ -815,7 +815,7 @@ mod tests {
         assert_eq!(
             validate_skill_markers("<!-- bee:only python -->\n<!-- bee:end -->\n"),
             [
-                "unknown runtime label \"python\" (expected claude or codex or opencode) at line 1",
+                "unknown runtime label \"python\" (expected claude or codex or opencode or pi) at line 1",
                 "stray bee:end with no open block at line 2"
             ]
         );
@@ -889,6 +889,29 @@ mod tests {
             String::from_utf8(render_skill_bytes(src.as_bytes(), "opencode")).unwrap(),
             "shared\nOPENCODE ONLY\ntail\n"
         );
+    }
+
+    /// D1: pi-only content is stripped from both dev render-skill-trees output
+    /// trees (.claude-plugin/skills and .codex-plugin/skills).
+    #[test]
+    fn pi_only_content_never_lands_in_either_plugin_tree() {
+        let src = "top\n<!-- bee:only claude -->\nCLAUDE ONLY\n<!-- bee:end -->\n<!-- bee:only codex -->\nCODEX ONLY\n<!-- bee:end -->\n<!-- bee:only pi -->\nPI ONLY\n<!-- bee:end -->\ntail\n";
+        assert!(validate_skill_markers(src).is_empty(), "a bee:only pi marker passes marker validation");
+
+        let claude_rendered = String::from_utf8(render_skill_bytes(src.as_bytes(), "claude")).unwrap();
+        assert_eq!(claude_rendered, "top\nCLAUDE ONLY\ntail\n");
+        assert!(!claude_rendered.contains("PI ONLY"));
+        assert!(!claude_rendered.contains("CODEX ONLY"));
+
+        let codex_rendered = String::from_utf8(render_skill_bytes(src.as_bytes(), "codex")).unwrap();
+        assert_eq!(codex_rendered, "top\nCODEX ONLY\ntail\n");
+        assert!(!codex_rendered.contains("PI ONLY"));
+        assert!(!codex_rendered.contains("CLAUDE ONLY"));
+
+        // A marker-free file stays byte-identical in both plugin trees.
+        let raw = b"---\ntitle: test\n---\nbody text without markers\n";
+        assert_eq!(render_skill_bytes(raw, "claude"), raw.to_vec());
+        assert_eq!(render_skill_bytes(raw, "codex"), raw.to_vec());
     }
 
     /// The other half of the wrong-target probe: before this cell,

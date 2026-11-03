@@ -21,7 +21,7 @@ RESOLUTION that names the agent once the work is going there.
 
 ## The route: a configured slot sends a whole purpose through a pane
 
-Setting `{"kind": "herding"}` on a `models.<runtime>.generation` slot (or any
+Setting `{"kind": "herding"}` on a `team.<runtime>.generation` slot (or any
 configurable slot) routes EVERY purpose dispatched against it — cell, gather,
 reviewer, advisor, extraction — through `bee herding run` automatically, with no
 per-purpose request needed. The old gather/review/advisor default-model fallback
@@ -70,7 +70,7 @@ use the same resolver, herding-bare-agent D1-D5), resolution follows a strict
 four-step precedence:
 
 1. An explicit `--agent <name>`, resolved through `herding.agents`;
-2. The cell-execution tier slot `models.<runtime>.generation`, but ONLY when it
+2. The cell-execution tier slot `team.<runtime>.generation`, but ONLY when it
    is an object with `kind: "herding"` and a non-empty `agent` string — that
    name resolves through `herding.agents`. This is the configured role-to-agent
    mapping that a bare `bee herding run` obeys;
@@ -276,6 +276,18 @@ raw samples: `herdr agent prompt <job> <text> --wait --until working
 sampled state — but it is a RETRYABLE one, not an immediate failure
 (herding-prompt-stall D6, narrowing D1); see
 `handing-a-foreign-agent-its-brief.md` for the bounded retry it feeds.
+
+
+## A pi agent's `--model` must name its provider
+
+A bare model name in a pi herding agent is resolved by the provider router, and
+the router can pick a variant that cannot serve interactive work.
+`gpt-5.6-luna:high` matched OpenRouter's `openai/gpt-5.6-luna:batch` — a
+batch-only endpoint — so every pi-runtime plan, review, advisor, lane and hat
+dispatch died on HTTP 404 while the config looked correct. Qualify the name with
+its provider (`openai-codex/gpt-5.6-luna:high`). The failure is silent at
+configuration time and only appears as a dead dispatch, so the provider prefix is
+part of the agent entry, never an optimisation.
 
 ## Open Gaps
 

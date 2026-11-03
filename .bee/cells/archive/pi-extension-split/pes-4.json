@@ -1,0 +1,171 @@
+{
+  "id": "pes-4",
+  "feature": "pi-extension-split",
+  "lane": "high-risk",
+  "role": "docs",
+  "title": "Point the live docs at the guard folder",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D6",
+    "19afb54e-dadc-48af-b293-fee2398e47bf",
+    "8cdd7725-c059-4b92-aaef-b548c427ae36"
+  ],
+  "files": [
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+    "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+    "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+    "docs/config-reference.md",
+    "docs/01-distillation.md",
+    "docs/02-architecture.md",
+    "docs/06-runtime-integration.md",
+    "docs/product-description/maintenance/onboarding.md",
+    "docs/product-description/observability/status.md",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    ".bee/verify/verify-app/features/semantic-role-routing.md",
+    ".claude/skills/verify-app/features/pi-runtime.md",
+    ".claude/skills/verify-app/features/semantic-role-routing.md",
+    ".agents/skills/verify-app/features/pi-runtime.md",
+    ".agents/skills/verify-app/features/semantic-role-routing.md",
+    ".opencode/skills/verify-app/features/pi-runtime.md",
+    ".opencode/skills/verify-app/features/semantic-role-routing.md",
+    ".bee/config-sample.json"
+  ],
+  "read_first": [
+    "docs/history/pi-extension-split/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "action": "Per D1 and D6, replace every live mention of the single file .pi/extensions/bee-guard.ts in the listed files with the folder .pi/extensions/bee-guard/ (entry index.ts), and name the module that holds a fact when a doc points at one function. A doc that describes onboard upgrade names the legacy file as the one onboard removes. Add a short module map (one line per file in the folder) to docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md, citing pi-extension-split D1-D6, plus the downgrade step rm -r .pi/extensions/bee-guard/. Edit the .bee/verify feature file first, then make the .claude, .agents and .opencode copies byte-identical to it. Leave docs/history/**, docs/knowledge/work/** (delivery records) and .bee/*.jsonl untouched.",
+  "must_haves": {
+    "truths": [
+      "no listed file names .pi/extensions/bee-guard.ts except as the legacy file onboard removes",
+      "one knowledge concept carries the module map and cites pi-extension-split D1-D6",
+      "the four verify-app feature copies are byte-identical"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+        "substantive": "names the bee-guard folder and carries the module map"
+      }
+    ],
+    "key_links": [
+      "the module map names each file in .pi/extensions/bee-guard/"
+    ],
+    "prohibitions": [
+      "No edit under docs/history",
+      "No edit under docs/knowledge/work",
+      "No edit to .bee jsonl stores"
+    ]
+  },
+  "verify": "! rg -n 'extensions/bee-guard\\.ts' docs/knowledge/areas docs/config-reference.md docs/01-distillation.md docs/02-architecture.md docs/06-runtime-integration.md docs/product-description .bee/verify .claude/skills/verify-app .agents/skills/verify-app .opencode/skills/verify-app .bee/config-sample.json | rg -v -i 'legacy'",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "pes-4-w",
+    "outcome": "Live docs and the four verify-app feature copies name the .pi/extensions/bee-guard/ folder; the hook-runtime audit concept carries the module map citing pi-extension-split D1-D6.",
+    "files_changed": [
+      ".agents/skills/verify-app/features/pi-runtime.md",
+      ".agents/skills/verify-app/features/semantic-role-routing.md",
+      ".bee/config-sample.json",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      ".bee/verify/verify-app/features/semantic-role-routing.md",
+      ".claude/skills/verify-app/features/pi-runtime.md",
+      ".claude/skills/verify-app/features/semantic-role-routing.md",
+      ".opencode/skills/verify-app/features/pi-runtime.md",
+      ".opencode/skills/verify-app/features/semantic-role-routing.md",
+      "docs/config-reference.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+      "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+      "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+      "docs/product-description/maintenance/onboarding.md",
+      "docs/product-description/observability/status.md"
+    ],
+    "deviations": [
+      "docs/01-distillation.md, docs/02-architecture.md and docs/06-runtime-integration.md needed no edit: their bee-guard mentions name the OpenCode plugin",
+      "sync-ack: governed-paths-and-the-intake-gate.md changed only the Pi guard path in one line; the hook-runtime-docs-lane-allowlist rule text is unchanged, so routing-and-contracts.md owes no edit"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T16:39:25.989Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell: no live doc names the old single file except as the legacy file onboard removes; md5 of the four pi-runtime.md copies is identical",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+    "verify_command": "! rg -n 'extensions/bee-guard\\.ts' docs/knowledge/areas docs/config-reference.md docs/01-distillation.md docs/02-architecture.md docs/06-runtime-integration.md docs/product-description .bee/verify .claude/skills/verify-app .agents/skills/verify-app .opencode/skills/verify-app .bee/config-sample.json | rg -v -i 'legacy'",
+    "claimed_at": "2026-10-02T16:23:41.437Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+        "owner_bypassed": null,
+        "at": "2026-10-02T16:39:25.988Z"
+      }
+    ],
+    "sync_ack": "governed-paths-and-the-intake-gate.md changed only the Pi guard path in one line; the hook-runtime-docs-lane-allowlist rule text is unchanged, so routing-and-contracts.md owes no edit",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Live docs and the four verify-app feature copies name the .pi/extensions/bee-guard/ folder; the hook-runtime audit concept carries the module map citing pi-extension-split D1-D6.",
+      "commit": "1cc54dc9f",
+      "files": [
+        ".agents/skills/verify-app/features/pi-runtime.md",
+        ".agents/skills/verify-app/features/semantic-role-routing.md",
+        ".bee/config-sample.json",
+        ".bee/verify/verify-app/features/pi-runtime.md",
+        ".bee/verify/verify-app/features/semantic-role-routing.md",
+        ".claude/skills/verify-app/features/pi-runtime.md",
+        ".claude/skills/verify-app/features/semantic-role-routing.md",
+        ".opencode/skills/verify-app/features/pi-runtime.md",
+        ".opencode/skills/verify-app/features/semantic-role-routing.md",
+        "docs/config-reference.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+        "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+        "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+        "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+        "docs/product-description/maintenance/onboarding.md",
+        "docs/product-description/observability/status.md"
+      ],
+      "tests": "! rg -n 'extensions/bee-guard\\.ts' docs/knowledge/areas docs/config-reference.md docs/01-distillation.md docs/02-architecture.md docs/06-runtime-integration.md docs/product-description .bee/verify .claude/skills/verify-app .agents/skills/verify-app .opencode/skills/verify-app .bee/config-sample.json | rg -v -i 'legacy' — green:static — docs-only cell: no live doc names the old single file except as the legacy file onboard removes; md5 of the four pi-runtime.md copies is identical",
+      "deviations": [
+        "docs/01-distillation.md, docs/02-architecture.md and docs/06-runtime-integration.md needed no edit: their bee-guard mentions name the OpenCode plugin"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "no listed file names .pi/extensions/bee-guard.ts except as the legacy file onboard removes",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "one knowledge concept carries the module map and cites pi-extension-split D1-D6",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "the four verify-app feature copies are byte-identical",
+            "artifact": ".bee/verify/verify-app/features/pi-runtime.md"
+          }
+        ],
+        "recorded_at": "2026-10-02T17:13:51.946Z",
+        "recorded_by": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

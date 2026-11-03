@@ -1,0 +1,135 @@
+{
+  "id": "psd-2",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Name each detached herding result by its seat",
+  "action": "Per D3 and D9. Add an optional --seat <name> flag to bee herding run. Write it into the result-inbox marker (write_inbox_marker, beside job_id) and into the run's JSON result envelope as seat. In .pi/extensions/bee-guard.ts renderResultInjection, push a seat row right after job_id when the marker carries one. In bee-guard.ts, change only the plain version label comment that says Pi 0.84.x has no interactive permission prompt event to say 0.84–0.85; leave comments that name which Pi docs or binary were read unchanged. Write tests first in herding/run.rs for the marker and envelope field, and for an absent flag leaving both byte-identical. Refresh the release manifest because .pi/extensions is a shipped root.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run && node --check .pi/extensions/bee-guard.ts && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    ".pi/extensions/bee-guard.ts",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "decisions": [
+    "a20cf301",
+    "15109d96"
+  ],
+  "must_haves": {
+    "truths": [
+      "herding run --seat hat-risks writes seat hat-risks into the inbox marker and the JSON envelope",
+      "The Pi drain injection shows a seat row when the marker has one",
+      "Without --seat the marker and envelope are byte-identical to before"
+    ],
+    "prohibitions": [
+      "Job id allocation is unchanged",
+      "Comments naming the Pi docs or binary that were read keep their version"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-2b",
+    "outcome": "herding run --seat writes seat into inbox marker (write_inbox_marker) and JSON envelope (result_envelope); Pi drain renderResultInjection pushes seat row after job_id; PermissionRequest comment says Pi 0.84–0.85; release manifest refreshed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      ".pi/extensions/bee-guard.ts",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "kept the run.rs seat flag, marker, envelope, and tests that an earlier worker on this cell left uncommitted in the worktree, after review against the cell action — found a better route",
+      "sync-ack: --seat is an additive herding flag; the dispatch payload that passes it is cell psd-3, and no plan cell names a skills/bee-herding file (affects_skills is empty)"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T09:36:45.818Z",
+    "behavior_change": false,
+    "verification_evidence": "217 herding::run tests incl. parse_options_reads_the_seat_flag_and_defaults_to_none, seat_flag_writes_seat_into_the_inbox_marker_and_absent_leaves_it_out, seat_flag_writes_seat_into_the_result_envelope_and_absent_leaves_keys_identical; node syntax ok; manifest 376 files match",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run && node --check .pi/extensions/bee-guard.ts && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-15T09:33:14.108Z",
+    "verified_at": null,
+    "sync_ack": "--seat is an additive herding flag; the dispatch payload that passes it is cell psd-3, and no plan cell names a skills/bee-herding file (affects_skills is empty)",
+    "mistakes": [
+      {
+        "wrong": "my first verify shell call chained version-control status and a CARGO_HOME variable with the tests, and the worktree guard refused it",
+        "better": "run cargo with a literal PATH in its own call"
+      }
+    ],
+    "report": {
+      "outcome": "seat flag lands in marker and envelope; Pi drain shows seat row; version label 0.84–0.85; manifest refreshed",
+      "commit": "efba913b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        ".pi/extensions/bee-guard.ts",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run && node --check .pi/extensions/bee-guard.ts && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check — green:unit — 217 herding::run tests incl. parse_options_reads_the_seat_flag_and_defaults_to_none, seat_flag_writes_seat_into_the_inbox_marker_and_absent_leaves_it_out, seat_flag_writes_seat_into_the_result_envelope_and_absent_leaves_keys_identical; node syntax ok; manifest 376 files match",
+      "deviations": [
+        "kept the run.rs seat flag, marker, envelope, and tests that an earlier worker on this cell left uncommitted in the worktree, after review against the cell action — found a better route"
+      ],
+      "mistakes": [
+        "my first verify shell call chained version-control status and a CARGO_HOME variable with the tests, and the worktree guard refused it — run cargo with a literal PATH in its own call"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "psd-2-truth-herding-seat-flag",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run: passed herding::run::tests::seat_flag_writes_seat_into_the_result_envelope_and_absent_leaves_keys_identical and seat_flag_writes_seat_into_the_inbox_marker_and_absent_leaves_it_out; run.rs:2195-2197,3235-3237"
+          },
+          {
+            "id": "psd-2-truth-pi-drain-seat-row",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts -- injected_pi_dispatch_covers_advisor_hat_reviewer_and_cell_with_a_detached_round_trip: passed; asserts seat row in .pi/extensions/bee-guard.ts:747 injection at tests/pi_plugin_contracts.rs:2568"
+          },
+          {
+            "id": "psd-2-truth-absent-seat-identical",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:5938-5947,6360-6372 assert envelope keys and marker omit seat when flag is absent; run.rs:2195,3235"
+          },
+          {
+            "id": "psd-2-prohibition-job-id-allocation",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run: passed herding::run::tests::pihp_unique_job_id_concurrent_cli_processes_cannot_share_default_id; run.rs:310-313"
+          },
+          {
+            "id": "psd-2-prohibition-version-comments-preserved",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:73 updated only the exclusion comment line 73; all documentation citations preserve original version references"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-15T11:20:59.988Z"
+      }
+    ]
+  },
+  "role_reroutes": [
+    {
+      "from": "code",
+      "to": "plan",
+      "decision": "df429f87-a3ce-49a2-9017-16d16d60e4f0",
+      "at": "2026-09-15T09:33:14.036Z",
+      "plan_sha256": "295bd671b0b999e57f1f3cd5cd58927c5aa9c2f58682205c68407c735bc9104c"
+    }
+  ]
+}

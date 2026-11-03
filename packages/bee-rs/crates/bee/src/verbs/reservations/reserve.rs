@@ -173,8 +173,7 @@ pub(crate) fn reserve_prechecks(topo: Option<Topo>, root_s: &str, p: &ReservePar
         .as_deref()
         .map(|s| !js_trim(s).is_empty())
         .unwrap_or(false)
-        || env_nonempty("BEE_SESSION_ID").is_some()
-        || env_nonempty("CLAUDE_CODE_SESSION_ID").is_some();
+        || crate::session_identity::env_session_id().is_some();
     if !flag_or_env_session {
         for r in list_session_records(&control_root)? {
             heartbeat_stale(&r, now)?;

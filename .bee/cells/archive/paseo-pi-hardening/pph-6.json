@@ -1,0 +1,176 @@
+{
+  "id": "pph-6",
+  "feature": "paseo-pi-hardening",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Run the supervisor tick on Pi when configured",
+  "deps": [
+    "pph-3"
+  ],
+  "decisions": [
+    "D9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi-hardening/CONTEXT.md",
+    "docs/history/paseo-pi-hardening/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+  ],
+  "action": "Red first. control_loop.rs: read herding.supervisor_runtime from the main root config; absent or claude keeps today's behavior byte-identical; pi selects the Pi path; any other value refuses the supervisor tick before any spawn with a FIX line naming the two legal values. Pi path (D9 revised): resolve the supervisor slot from team.pi with the same resolver supervisor_model uses (runtime pi). A herding slot whose agent's paseo block has provider pi gives its paseo model (required) and thinking; a plain model or native slot gives its model; a paseo provider other than pi, or no usable model, refuses with a FIX line (set team.pi.supervisor to a pi-provider agent). Refuse when `<main root>/.pi/extensions/bee-guard` does not exist. When herding.control_command is set it still wins and {MODEL} gets that model. Otherwise the default argv is [pi, --print, <prompt>, --model, <model>, --thinking, <level> (only when set), --no-session, --no-extensions, -e, <main root>/.pi/extensions/bee-guard, --tools, read,grep,find,ls,bash]. Spawn seam: IterationSpawner::spawn takes argv only today; add an env list and a cwd (the main root) to the spawn call (a second parameter or a small spawn-spec struct), have RealSpawner apply them, keep dispatch, merge, route and the claude supervisor passing an empty env and the current cwd, and pass BEE_SUPERVISOR_ALLOWED = SUPERVISOR_ALLOWED_TOOLS on the Pi path so worker-guard enforces the allowlist. Tests with the existing fake spawner: absent and claude give the exact current argv; pi with a pi-provider paseo slot gives the pi argv with model, thinking and the -e path; a claude-provider slot refuses; a missing extension directory refuses; pi with control_command uses the template; an illegal value refuses with no spawn; the Pi spawn carries BEE_SUPERVISOR_ALLOWED and the main root cwd. No code comments.",
+  "must_haves": {
+    "truths": [
+      "with supervisor_runtime absent or claude the supervisor argv and spawn are byte-identical to today",
+      "with supervisor_runtime pi and a pi-provider slot the supervisor runs pi --print with that model and thinking, --no-extensions -e <main root>/.pi/extensions/bee-guard and the read,grep,find,ls,bash tools, in the main root",
+      "the Pi supervisor process carries BEE_SUPERVISOR_ALLOWED equal to the supervisor allowlist",
+      "a non-pi provider slot, a missing bee-guard extension directory or an illegal supervisor_runtime refuses before any spawn",
+      "the existing control_loop tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+        "substantive": "supervisor runtime selection, the Pi argv and the env-carrying spawn seam"
+      }
+    ],
+    "key_links": [
+      "the Pi supervisor spawn sets BEE_SUPERVISOR_ALLOWED and loads bee-guard with -e"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to dispatch, merge or route argv or environment"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee control_loop",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-pph-6",
+    "outcome": "herding.supervisor_runtime pi runs the supervisor tick on Pi with the guarded allowlist",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
+    "deviations": [
+      "sync-ack: run-loop, status and control-loop internals change no bee-herding skill procedure; the bee-herding concepts are updated by pph-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T06:34:10.532Z",
+    "behavior_change": true,
+    "verification_evidence": "72 control_loop tests incl. claude byte-identical argv, pi argv with -e bee-guard, non-pi refusal, missing extension refusal, env and cwd on the spawn",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee control_loop",
+    "claimed_at": "2026-10-06T06:17:54.037Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:34:10.531Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:39:52.976Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:55:03.213Z"
+      }
+    ],
+    "sync_ack": "run-loop, status and control-loop internals change no bee-herding skill procedure; the bee-herding concepts are updated by pph-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "herding.supervisor_runtime pi runs the supervisor tick on Pi with the guarded allowlist",
+      "commit": "3a559a0ef",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee control_loop — green:unit — 72 control_loop tests incl. claude byte-identical argv, pi argv with -e bee-guard, non-pi refusal, missing extension refusal, env and cwd on the spawn",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 561 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "absent or claude byte-identical",
+            "status": "PASS",
+            "evidence": "resolve_iteration falls through with SpawnSpec::default(); test supervisor_runtime_absent_and_claude_give_exact_current_argv"
+          },
+          {
+            "id": "pi argv with -e bee-guard in the main root",
+            "status": "PASS",
+            "evidence": "Pi branch argv and cwd; tests for paseo slot and plain model slot"
+          },
+          {
+            "id": "BEE_SUPERVISOR_ALLOWED carried",
+            "status": "PASS",
+            "evidence": "SpawnSpec env applied by RealSpawner; asserted"
+          },
+          {
+            "id": "refusals before spawn",
+            "status": "PASS",
+            "evidence": "Err from resolve_iteration; refusal tests; minor: provider match is case-sensitive"
+          },
+          {
+            "id": "prohibitions: dispatch/merge/route unchanged, no comments",
+            "status": "PASS",
+            "evidence": "those roles use SpawnSpec::default()"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T06:39:52.976Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "with supervisor_runtime absent or claude the supervisor argv and spawn are byte-identical to today",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "with supervisor_runtime pi and a pi-provider slot the supervisor runs pi --print with that model and thinking, --no-extensions -e <main root>/.pi/extensions/bee-guard and the read,grep,find,ls,bash tools, in the main root",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "the Pi supervisor process carries BEE_SUPERVISOR_ALLOWED equal to the supervisor allowlist",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "a non-pi provider slot, a missing bee-guard extension directory or an illegal supervisor_runtime refuses before any spawn",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "the existing control_loop tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T06:55:03.213Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

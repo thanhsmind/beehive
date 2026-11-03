@@ -7,6 +7,7 @@ timestamp: 2026-07-15
 bee:
   id: pattern-20260715-the-bill-is-turns-prefix-keep-the-prefix
   lifecycle: active
+  areas: [performance-log]
   sources: ["docs/history/learnings/critical-patterns.md#PAT4", "original feature: session-economics", docs/history/learnings/20260715-cache-economics.md]
   polarity: practice
   critical: false

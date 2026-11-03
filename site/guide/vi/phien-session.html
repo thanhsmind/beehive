@@ -1,0 +1,143 @@
+<p>Một phiên chat với agent không phải là một cuộc nói chuyện trần trụi. Bee bọc quanh nó một cái khung: nói trước khi agent nói, lắng nghe trong lúc nó làm, và nhắc trước khi nó dừng.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 230" role="img" aria-labelledby="fig-doi-song-title">
+    <title id="fig-doi-song-title">Một phiên: bắt đầu, preamble được bơm vào, các turn chạy với heartbeat, đến turn cuối gắn dấu waiting-on, rồi có thể nén (compaction) hoặc bàn giao (handoff) cho phiên sau.</title>
+
+    <rect class="fig-box fig-fill-agent" x="10" y="80" width="110" height="60" rx="8"/>
+    <text class="fig-t" x="65" y="106" text-anchor="middle">bắt đầu</text>
+    <text class="fig-t fig-t--sm" x="65" y="124" text-anchor="middle">SessionStart</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M120 110 L156 110"/><path d="M148 104 l8 6 -8 6"/></g>
+
+    <rect class="fig-box" x="160" y="80" width="120" height="60" rx="8"/>
+    <text class="fig-t" x="220" y="106" text-anchor="middle">preamble</text>
+    <text class="fig-t fig-t--sm" x="220" y="124" text-anchor="middle">bơm vào 1 lần</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M280 110 L316 110"/><path d="M308 104 l8 6 -8 6"/></g>
+
+    <rect class="fig-box" x="320" y="80" width="120" height="60" rx="8"/>
+    <text class="fig-t" x="380" y="102" text-anchor="middle">các turn</text>
+    <text class="fig-t fig-t--sm" x="380" y="120" text-anchor="middle">heartbeat mỗi</text>
+    <text class="fig-t fig-t--sm" x="380" y="134" text-anchor="middle">tool call</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M440 110 L476 110"/><path d="M468 104 l8 6 -8 6"/></g>
+
+    <rect class="fig-box fig-fill-gate" x="480" y="80" width="130" height="60" rx="8"/>
+    <text class="fig-t" x="545" y="102" text-anchor="middle">waiting-on</text>
+    <text class="fig-t fig-t--sm" x="545" y="120" text-anchor="middle">turn kết thúc chờ</text>
+    <text class="fig-t fig-t--sm" x="545" y="134" text-anchor="middle">bạn</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M545 78 C 545 20, 220 20, 220 78"/><path d="M226 84 l-8 -8 11 -1"/></g>
+    <text class="fig-t fig-t--sm" x="380" y="30" text-anchor="middle">bạn trả lời — mark được xoá, vòng lặp lại</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M610 110 L646 110"/><path d="M638 104 l8 6 -8 6"/></g>
+
+    <rect class="fig-box" x="650" y="80" width="80" height="60" rx="8"/>
+    <text class="fig-t fig-t--sm" x="690" y="102" text-anchor="middle">nén</text>
+    <text class="fig-t fig-t--sm" x="690" y="118" text-anchor="middle">(compaction)</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M730 110 L766 110"/><path d="M758 104 l8 6 -8 6"/></g>
+
+    <rect class="fig-box fig-fill-ok" x="730" y="80" width="80" height="60" rx="8"/>
+    <text class="fig-t fig-t--sm" x="770" y="102" text-anchor="middle">handoff</text>
+    <text class="fig-t fig-t--sm" x="770" y="118" text-anchor="middle">→ phiên sau</text>
+  </svg>
+  <p class="guide-fig__cap">Preamble mở đầu, heartbeat giữ nhịp, waiting-on đánh dấu chỗ chờ bạn, handoff nối sang phiên kế tiếp.</p>
+</figure>
+
+<h2>Preamble — mọi thứ agent biết trước khi nói câu đầu tiên</h2>
+
+<p>Trước khi bạn gõ chữ nào, bee đã bơm vào phiên một khối văn bản gọi là <strong>preamble</strong>: phase và feature hiện tại, dòng trạng thái các <code>gate</code>, các lệnh chuẩn hay dùng, cửa <code>dispatch</code>, bản đồ dự án, và — chỉ khi có — các hàng đợi đang chờ (capture, scribing, đề xuất promote), một bản tóm tắt các mẫu hình quan trọng, và ba quyết định gần nhất. Nhờ vậy agent "mở mắt" ra là đã biết đang ở đâu, không cần bạn kể lại.</p>
+
+<p>Có bốn nguồn khởi động khác nhau, và không phải nguồn nào cũng bơm bản đầy đủ:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Nguồn</th><th>Bơm gì</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>startup</code>, <code>clear</code></td><td>preamble đầy đủ</td></tr>
+    <tr><td><code>resume</code></td><td>preamble đầy đủ</td></tr>
+    <tr><td><code>compact</code></td><td>bản rút gọn ("compact capsule") — cảnh báo ngay đầu rằng <strong>trạng thái trên đĩa đè lên trí nhớ cuộc trò chuyện</strong></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Heartbeat — nhịp tim giữ mọi thứ còn sống</h2>
+
+<p>Mỗi lần agent gọi một công cụ, bee đóng một dấu thời gian — nhưng chặn tối đa một lần mỗi <strong>60 giây</strong>, không phải mỗi lần gọi. Nhịp này làm ba việc cùng lúc:</p>
+
+<ul>
+  <li>Cập nhật hồ sơ phiên (<a href="/guide/kho-store">chương 4</a> gọi đây là <code>last_heartbeat</code>).</li>
+  <li>Gia hạn thời hạn (TTL) cho các <code>claim</code> cell, các reservation đường dẫn, và các hold liên-worktree đang giữ.</li>
+  <li>Hồi sinh một hồ sơ đang <code>dead</code> hay <code>closed</code> — trừ khi hồ sơ đó đã bị <code>released</code> tường minh, cái đó thì giữ nguyên.</li>
+</ul>
+
+<p>Không có nhịp tim trong <strong>900 giây</strong>, phiên bị coi là <em>stale</em>: các phiên khác ngừng tính nó là một worker đang sống, và các <code>claim</code> nó giữ trở thành đối tượng có thể dọn.</p>
+
+<h2>Waiting-on — đánh dấu turn nào chờ bạn</h2>
+
+<p>Khi một turn kết thúc mà không còn gì "nợ" ai, hook Stop tự gắn một dấu: phiên đang <em>chờ con người, kiểu turn-end</em>, kèm dòng cuối câu trả lời làm chủ đề. Có đúng ba kiểu dấu, một danh sách đóng:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Kiểu</th><th>Ai gắn</th><th>Khi nào</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>gate</code></td><td>agent, bằng <code>bee state waiting-on set</code></td><td>turn kết thúc chờ bạn duyệt một <a href="/guide/cong-gate">cổng</a></td></tr>
+    <tr><td><code>question</code></td><td>agent, bằng <code>bee state waiting-on set</code></td><td>turn kết thúc chờ bạn trả lời một câu hỏi tự do</td></tr>
+    <tr><td><code>turn-end</code></td><td>chỉ hook Stop — agent tự gắn kiểu này sẽ bị CLI từ chối</td><td>mọi turn bình thường kết thúc, không nợ gì</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Dấu này bị xoá bởi bất kỳ tin nhắn nào của bạn, bởi <code>bee state waiting-on clear</code>, hoặc bởi việc dọn tự động khi cả tuổi dấu <em>và</em> nhịp tim của phiên chủ đều đã cũ — chỉ tuổi thôi không đủ để hết hạn, nên một phiên chạy chậm nhưng vẫn sống thì dấu "đang chờ bạn" vẫn còn nguyên giá trị.</p>
+
+<h2>Compaction — khi cuộc trò chuyện bị nén lại</h2>
+
+<p>Một phiên dài đến lúc nào đó bị nén để tiết kiệm bộ nhớ. Khi phiên khởi động lại sau nén, nó nhận bản rút gọn thay vì preamble đầy đủ, và nguyên tắc là: <strong>đĩa nói gì thì nghe theo đĩa</strong>, không tự suy diễn lại từ những gì "nhớ mang máng" trong đoạn hội thoại đã bị nén.</p>
+
+<h2>Handoff — bàn giao qua ranh giới phiên</h2>
+
+<p>Khi một phiên dừng lại mà việc chưa xong, nó có thể để lại một <strong>handoff</strong> cho phiên kế tiếp, bằng <code>bee state handoff write</code>. Đúng hai kiểu:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Kiểu</th><th>Ý nghĩa</th><th>Phiên sau xử lý ra sao</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>planned-next</code></td>
+      <td>điểm dừng sạch: cell trước đã đóng (cap), cell sau đã được <code>claim</code> sẵn</td>
+      <td>một phiên <strong>thật sự mới</strong> (khởi động từ <code>startup</code> hoặc <code>clear</code>) có thể nhận bằng <code>bee state handoff adopt</code>. Một phiên <code>resume</code> hay vừa nén xong <strong>không bao giờ</strong> tự nhận — nó chỉ được thấy khối handoff kèm lý do "chưa nhận".</td>
+    </tr>
+    <tr>
+      <td><code>pause</code></td>
+      <td>"dừng ở đây, để con người quyết"</td>
+      <td>luôn được trình ra, <strong>không bao giờ</strong> tự nối tiếp. Một bản ghi không ghi rõ kiểu thì mặc định đọc là <code>pause</code>.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Chỗ này rất dễ hiểu nhầm</span>
+  <p>"Adoption chỉ diễn ra ở ranh giới phiên hoàn toàn mới" không phải là chi tiết vặt. Một phiên vừa được nén (compact) hay vừa <code>resume</code> mà tự ý nhận claim từ một handoff <code>planned-next</code> là làm sai quy trình — kể cả khi nó "nhớ" đã viết chính handoff đó. Đợi tường minh, đừng đoán.</p>
+</div>
+
+<h2>Kết thúc một phiên</h2>
+
+<p>Khi phiên đóng lại tử tế, hồ sơ của nó chuyển sang <code>closed</code>. Chạy <code>bee state session release</code> làm điều đó ngay lập tức thay vì chờ 900 giây staleness trôi qua — các phiên khác lập tức thôi tính nó vào số worker đang sống. Tin nhắn tiếp theo của bạn "đánh thức" phiên trở lại nếu nó còn mở.</p>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/kho-store">Chương 4 — Kho .bee/</a>: hồ sơ phiên, nhịp tim và handoff đều là bản ghi nằm trong kho này.</li>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: dấu <code>gate</code> ở đây chính là chỗ nối sang chương về cổng.</li>
+  <li><a href="/guide/hooks-guards">Chương 6 — Hooks, người gác cổng</a>: hook Stop chỉ là một trong cả họ hàng hook đứng canh mỗi phiên.</li>
+  <li><a href="/guide/phoi-hop">Chương 11 — Nhiều phiên cùng lúc</a>: nhịp tim của phiên này chính là thứ giữ claim và reservation của nó còn hiệu lực trước mắt các phiên khác.</li>
+</ul>
+</content>

@@ -1,0 +1,11 @@
+{
+  "id": "grooming-asks-for-the-fix-at-layers-of-t__5c43da33",
+  "decision": "5c43da33",
+  "condition": "grooming asks for the fix-at layers of the reflections written before the flag existed (the 465 rows that read as none); until then no backfill",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-22T06:24:01.072Z",
+  "updated_at": "2026-09-22T06:24:01.072Z",
+  "outcome": null
+}

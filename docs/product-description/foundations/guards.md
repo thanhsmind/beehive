@@ -28,7 +28,9 @@ What each guard watches, when it fires, and what its deny opens with. Write-capa
 
 - **Direct-edit guard** — CLI-owned store files deny hand edits in every phase, naming the verb ([the store](store.md) carries the table).
 - **Docs-history code guard** — a code-extension file written under `docs/history/` (the tech-agnostic knowledge layer) is denied toward the project's own scripts directory.
-- **Scratch-shape guard** — ephemeral probe/verdict/digest files landing in a tracked directory are denied toward `.bee/tmp/` (or `.bee/spikes/` for feasibility proofs), swept later by `bee tmp sweep`.
+<!-- bee:not-a-deferral: describes the scratch guard's sweep mechanism, not a promise to act later -->
+- **Scratch-shape guard** — ephemeral probe/verdict/digest files landing in a tracked directory are denied toward `.bee/tmp/` (or `.bee/spikes/` for feasibility proofs), swept afterwards by `bee tmp sweep`
+<!-- /bee:not-a-deferral -->.
 - **Plan-freeze guard** — a feature's `plan.md` denies direct edits once its shape gate is approved; the remedy is a stamped revision (`bee state plan-rev bump`).
 
 ### Coordination (write-capable tools)
@@ -49,7 +51,7 @@ What each guard watches, when it fires, and what its deny opens with. Write-capa
 ### Command shape and dispatch
 
 - **CLI-shape guard** — Bash only: a `bee` command whose argv does not match the registry schema is denied before the binary runs, with the mismatched field named and the `--help` to read. Same registry as the binary's own refusals, one layer earlier.
-- **Model guard** — on Agent/Task dispatch (Codex: `spawn_agent`). Three behaviors: *silent* when it has no opinion (no root, hook disabled, not a dispatch tool); *repair* when the dispatch names a pinned rendered agent wrongly or a `model` param disagreeing with the tier — the input is rewritten to what `models.<runtime>` configures, announced to both agent and human; *deny* for a bare dispatch (`every Agent/Task dispatch needs an explicit role … A bare dispatch would silently inherit the most expensive session model.` — the FIX names `bee dispatch prepare`), a role nothing configures, an ambiguous generic type where the role carries several rendered agents, or a tier that must not ride the Agent tool at all.
+- **Model guard** — on Agent/Task dispatch (Codex: `spawn_agent`). Three behaviors: *silent* when it has no opinion (no root, hook disabled, not a dispatch tool); *repair* when the dispatch names a pinned rendered agent wrongly or a `model` param disagreeing with the tier — the input is rewritten to what `team.<runtime>` configures, announced to both agent and human; *deny* for a bare dispatch (`every Agent/Task dispatch needs an explicit role … A bare dispatch would silently inherit the most expensive session model.` — the FIX names `bee dispatch prepare`), a role nothing configures, an ambiguous generic type where the role carries several rendered agents, or a tier that must not ride the Agent tool at all.
 
 ## The failure postures
 
@@ -95,7 +97,7 @@ The guards are instantaneous deciders — there is no extended phase to interrup
 
 **What the human sees.** A red or refusal line is never silenced. The privacy marker is routed to the human verbatim; model-guard repairs announce themselves to both parties.
 
-**Configuration.** Per-hook toggles (`hooks.<name>: false`), `guards.idle_gate`, `guards.auto_isolate`, `guards.max_read_lines`, `worktree_first` — each named in its guard's own deny.
+**Configuration.** Per-hook toggles (`hooks.<name>: false`), `guards.idle_gate`, `guards.worker_outward`, `guards.auto_isolate`, `guards.max_read_lines`, `worktree_first` — each named in its guard's own deny.
 
 **Output modes and exit codes.** Deny = exit 2 with stderr text; warn = exit 0 with attached context; repair = exit 0 with rewritten input; undecidable = exit 0 with a stderr line.
 

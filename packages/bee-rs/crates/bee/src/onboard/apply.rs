@@ -18,13 +18,19 @@ use super::hooks_wiring as hw;
 use super::merge::{merge_agents_content, merge_gitignore_content};
 use super::migration::{apply_worktree_migration, build_migration_conflict_reason, stranded_json};
 use super::notices::compose_agents_header;
-use super::plan::{compute_plan, ComputedPlan, Options};
-use super::render::{build_render_sidecar, runtime_for_target_kind, source_skill_digest_entries};
+use super::plan::{
+    compute_plan, verify_marker_errors, verify_root_refusal, verify_source_root, ComputedPlan,
+    Options,
+};
+use super::render::{
+    build_render_sidecar, render_skill_bytes, runtime_for_target_kind, source_skill_digest_entries,
+    walk_skill_tree,
+};
 use super::skills::{apply_remove_skill, apply_sync_skill};
 use super::source::Engine;
 use super::templates as T;
 use super::util::{
-    exists, join_rel, read_json_if_exists, read_text_if_exists, write_file_atomic,
+    exists, join_rel, lstat_if_exists, read_json_if_exists, read_text_if_exists, write_file_atomic,
 };
 use crate::jsjson;
 use serde_json::{json, Map, Value};
@@ -72,6 +78,19 @@ fn remove_helper_admissible(rel: &str) -> bool {
         && posix_dirname(rel) == ".bee/bin"
 }
 
+pub(crate) fn remove_pi_extension_admissible(rel: &str) -> bool {
+    if rel.contains("..") {
+        return false;
+    }
+    if rel == ".pi/extensions/bee-guard.ts" {
+        return true;
+    }
+    if let Some(rest) = rel.strip_prefix(".pi/extensions/bee-guard/") {
+        return !rest.is_empty() && rest.ends_with(".ts") && !rest.contains('/') && rest != ".ts";
+    }
+    false
+}
+
 /// JS `path.dirname` on the POSIX-shaped `item.path` strings this script
 /// constructs itself.
 fn posix_dirname(p: &str) -> &str {
@@ -89,22 +108,251 @@ fn posix_basename(p: &str) -> &str {
     }
 }
 
+/// The write half of plan.rs section 8 (verification-ships-to-hosts D3):
+/// render ONE host-generated `.bee/verify/<name>/` into ONE runtime skill
+/// home. `Some(reason)` is a loud per-skill skip, exactly as `apply_sync_skill`
+/// reports one.
+///
+/// It is modelled on the `copy_expertise` arm above, NOT on `apply_sync_skill`:
+/// it creates directories and writes rendered bytes, and it has no cleanup
+/// phase at all. `apply_remove_skill`, `remove_dir_all`, `remove_dir` and
+/// `remove_file` are unreachable from here by construction — a `verify-*`
+/// directory in a runtime home that bee never generated is data this code
+/// cannot delete, and neither is an extra file a host dropped INSIDE a
+/// rendered one. Staleness belongs to `bee-verify-upkeep`, in a git working
+/// tree, where a deletion is reviewable.
+///
+/// Every plan-time check is re-run here so a plan-to-apply race fails closed
+/// rather than writing through a link that appeared in between.
+fn apply_copy_verify_skill(
+    repo_root: &Path,
+    name: &str,
+    target_dir: &Path,
+    runtime: &str,
+) -> Result<Vec<(String, String)>, String> {
+    if let Some(reason) = verify_root_refusal(repo_root) {
+        return Err(format!("{reason} - {name} skipped"));
+    }
+    let source_dir = verify_source_root(repo_root).join(name);
+    if !lstat_if_exists(&source_dir).is_some_and(|s| !s.is_symlink && s.is_dir) {
+        return Err(format!("source .bee/verify/{name} is not a plain directory - skipped"));
+    }
+    let render = |buf: &[u8]| render_skill_bytes(buf, runtime);
+    let source_walk = walk_skill_tree(&source_dir, Some(&render));
+    if let Some(b) = &source_walk.blocked {
+        return Err(format!(
+            "source .bee/verify/{name} contains a {} at {} - skipped",
+            b.reason, b.path
+        ));
+    }
+    let marker_errors = verify_marker_errors(&source_dir);
+    if !marker_errors.is_empty() {
+        return Err(format!(
+            "source .bee/verify/{name} has malformed bee:only markers - skipped, nothing rendered: {}",
+            marker_errors.join("; ")
+        ));
+    }
+    let mut target_walk = super::render::Walk::default();
+    match lstat_if_exists(target_dir) {
+        Some(st) if st.is_symlink => {
+            return Err(format!(
+                "installed {name} is a symlink (plausibly a live checkout) - skipped, never written through"
+            ));
+        }
+        Some(st) if !st.is_dir => {
+            return Err(format!("installed {name} is not a directory - skipped, never removed"));
+        }
+        Some(_) => {
+            let walked = walk_skill_tree(target_dir, None);
+            if let Some(b) = &walked.blocked {
+                return Err(format!(
+                    "installed {name} contains a {} at {} - skipped, nothing inside it written",
+                    b.reason, b.path
+                ));
+            }
+            target_walk = walked;
+        }
+        None => {}
+    }
+    if std::fs::create_dir_all(target_dir).is_err() {
+        return Err(format!("installed {name} could not be created - skipped"));
+    }
+    for rel in &source_walk.dirs {
+        let _ = std::fs::create_dir_all(join_rel(target_dir, rel));
+    }
+    for (rel, hash) in &source_walk.files {
+        if target_walk.file_hash(rel) == Some(hash.as_str()) {
+            continue;
+        }
+        let raw = std::fs::read(join_rel(&source_dir, rel)).unwrap_or_default();
+        let _ = write_file_atomic(&join_rel(target_dir, rel), &render(&raw));
+    }
+    Ok(source_walk.files)
+}
+
 /// utcNow(): `new Date().toISOString()`.
 fn utc_now() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
+const SKILLSTATION_PUBLISH_STAGE: &str = ".bee/tmp/skillstation-publish";
+const SKILLSTATION_REASON_LIMIT: usize = 200;
+
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in super::util::read_dir_sorted(from) {
+        let source = from.join(&entry.name);
+        let target = to.join(&entry.name);
+        if entry.is_dir {
+            copy_tree(&source, &target)?;
+        } else if entry.is_file {
+            std::fs::copy(&source, &target)?;
+        }
+    }
+    Ok(())
+}
+
+fn skillstation_reason(text: &str) -> String {
+    let joined = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if joined.chars().count() <= SKILLSTATION_REASON_LIMIT {
+        return joined;
+    }
+    let cut: String = joined.chars().take(SKILLSTATION_REASON_LIMIT).collect();
+    format!("{cut}...")
+}
+
+fn skillstation_failure_text(out: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if !stderr.trim().is_empty() {
+        return skillstation_reason(&stderr);
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    if let Ok(v) = serde_json::from_str::<Value>(&stdout) {
+        if let Some(why) = v
+            .get("error")
+            .and_then(|e| e.get("render"))
+            .and_then(|r| r.get("WHY"))
+            .and_then(Value::as_str)
+        {
+            return skillstation_reason(why);
+        }
+        if let Some(summary) = v.get("summary").and_then(Value::as_str) {
+            return skillstation_reason(summary);
+        }
+    }
+    skillstation_reason(&stdout)
+}
+
+fn run_skillstation(cwd: &Path, args: &[&str]) -> Result<Value, String> {
+    let out = std::process::Command::new("skillstation")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                "skillstation is not on PATH".to_string()
+            } else {
+                format!("skillstation could not be started - {e}")
+            }
+        })?;
+    if !out.status.success() {
+        let said = skillstation_failure_text(&out);
+        let said = if said.is_empty() {
+            format!("skillstation exited {}", out.status)
+        } else {
+            said
+        };
+        return Err(said);
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    serde_json::from_str::<Value>(&stdout)
+        .map_err(|_| format!("skillstation printed no JSON - {}", skillstation_reason(&stdout)))
+}
+
+fn skillstation_commit_hash(v: &Value) -> Option<String> {
+    v.get("commit")
+        .and_then(|c| c.get("hash"))
+        .and_then(Value::as_str)
+        .or_else(|| v.get("hub_commit").and_then(Value::as_str))
+        .map(str::to_string)
+}
+
+fn apply_publish_skillstation(
+    repo_root: &Path,
+    skill: &str,
+    item_path: &str,
+) -> Result<Option<String>, String> {
+    let source_dir = join_rel(repo_root, item_path);
+    if !lstat_if_exists(&source_dir).is_some_and(|s| !s.is_symlink && s.is_dir) {
+        return Err("rendered skill folder is absent - run the skill sync first".to_string());
+    }
+    let stage = repo_root.join(SKILLSTATION_PUBLISH_STAGE);
+    let staged = stage.join(skill);
+    let _ = std::fs::remove_dir_all(&staged);
+    copy_tree(&source_dir, &staged)
+        .map_err(|e| format!("could not stage the rendered skill for the hub - {e}"))?;
+    let run = |args: &[&str]| run_skillstation(&stage, args);
+
+    let committed = run(&["skill", "commit", &staged.to_string_lossy(), "--yes", "--json"])
+        .map_err(|reason| format!("skill commit - {reason}"))?;
+    let hub_commit = skillstation_commit_hash(&committed);
+    let activated = committed.get("activated").and_then(Value::as_bool) == Some(true);
+
+    if !activated {
+        let activate = run(&["skill", "activate", skill, "--json"])
+            .map_err(|reason| format!("skill activate - {reason}"))?;
+        if activate.get("activated").and_then(Value::as_bool) != Some(true) {
+            let bind = activate
+                .get("cli")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| "skill activate - the CLI returned no confirm command".to_string())?;
+            let argv: Vec<&str> = bind.split_whitespace().collect();
+            let (program, rest) = argv
+                .split_first()
+                .ok_or_else(|| "skill activate - the confirm command was empty".to_string())?;
+            if *program != "skillstation" {
+                return Err(format!("skill activate - the confirm command runs {program}"));
+            }
+            let confirmed = run(rest).map_err(|reason| format!("skill confirm - {reason}"))?;
+            if confirmed.get("activated").and_then(Value::as_bool) == Some(false) {
+                return Err("skill confirm - the hub did not report the skill active".to_string());
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&staged);
+    Ok(hub_commit)
+}
+
 pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOutcome {
+    let computed = compute_plan(engine, repo_root, opts);
+    apply_computed_plan(engine, repo_root, opts, computed)
+}
+
+pub fn apply_computed_plan(
+    engine: &Engine,
+    repo_root: &Path,
+    opts: &Options,
+    computed: ComputedPlan,
+) -> ApplyOutcome {
     let ComputedPlan {
         mut plan,
         bee_version,
         rendered_block,
         rendered_gitignore_block,
+        rendered_gitattributes_block,
         desired_managed,
         skill_sync,
         codex_hybrid,
         worktree_migration,
-    } = compute_plan(engine, repo_root, opts);
+    } = computed;
 
     // 1. worktree-migration preflight — ALL-OR-NOTHING.
     if !worktree_migration.conflicts.is_empty() {
@@ -221,6 +469,29 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
 
     let mut applied: Vec<Value> = Vec::new();
     let mut skipped_skills: Vec<Value> = Vec::new();
+    let mut recorded_verify: Map<String, Value> = Map::new();
+
+    // BACKUP ONCE PER FILE PER RUN (4cac0774).
+    //
+    // `.claude/settings.json` now has two writers — the hooks merge and the
+    // statusline entry — and each takes a `<file>.bak` before writing. A second
+    // backup would copy the ALREADY-MODIFIED file over the pristine one, in
+    // either order, and `scripts/install.sh` promises that `.bak` restores the
+    // pre-bee state. Whichever writer reaches a file first takes its backup;
+    // the rest find it taken.
+    let mut backed_up: std::collections::HashSet<PathBuf> = plan
+        .iter()
+        .map(|item| join_rel(repo_root, item["path"].as_str().unwrap_or("")))
+        .filter(|path| !exists(path))
+        .collect();
+    let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+        if !exists(path) || !taken.insert(path.to_path_buf()) {
+            return;
+        }
+        let mut bak = path.to_path_buf().into_os_string();
+        bak.push(".bak");
+        let _ = std::fs::copy(path, PathBuf::from(bak));
+    };
 
     // Compose the header BEFORE any mergeAgentsContent call (decision D4).
     let propose_header = plan.iter().any(|i| i["action"] == "propose_agents_header");
@@ -257,6 +528,15 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     merge_gitignore_content(&read_text_if_exists(&target), &rendered_gitignore_block);
                 let _ = write_file_atomic(&target, merged.text.as_bytes());
             }
+            "create_gitattributes_block"
+            | "append_gitattributes_block"
+            | "update_gitattributes_block" => {
+                let merged = merge_gitignore_content(
+                    &read_text_if_exists(&target),
+                    &rendered_gitattributes_block,
+                );
+                let _ = write_file_atomic(&target, merged.text.as_bytes());
+            }
             "create_runtime_file" => {
                 if !exists(&target) {
                     let content = if rel.ends_with("state.json") {
@@ -272,6 +552,19 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     };
                     let _ = write_file_atomic(&target, content.as_bytes());
                 }
+            }
+            "add_pi_team" => {
+                add_pi_team(&target, item["table"].as_str().unwrap_or("team"));
+            }
+            "add_design_role" => {
+                add_design_role(
+                    &target,
+                    item["table"].as_str().unwrap_or("team"),
+                    item["runtimes"].as_array().map(Vec::as_slice).unwrap_or_default(),
+                );
+            }
+            "set_design_packs" => {
+                set_design_packs(&target, &item["packs"]);
             }
             "create_dir" => {
                 let _ = std::fs::create_dir_all(&target);
@@ -369,6 +662,24 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     read_text_if_exists(&engine.opencode_plugin_dir.join(name)).as_bytes(),
                 );
             }
+            "copy_pi_extension" => {
+                let rel_path = rel.strip_prefix(".pi/extensions/").unwrap_or(rel);
+                let _ = write_file_atomic(
+                    &target,
+                    read_text_if_exists(&join_rel(&engine.pi_extension_dir, rel_path)).as_bytes(),
+                );
+            }
+            "remove_pi_extension" => {
+                if !remove_pi_extension_admissible(rel) {
+                    eprintln!("refusing to remove {rel}: outside Pi extension scope");
+                    continue;
+                }
+                if let Err(err) = std::fs::remove_file(&target) {
+                    if err.kind() != std::io::ErrorKind::NotFound {
+                        eprintln!("failed to remove {}: {err}", target.display());
+                    }
+                }
+            }
             "copy_statusline" => {
                 let name = posix_basename(rel);
                 let _ = write_file_atomic(
@@ -406,21 +717,36 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                 // started; this Ok-only branch is a defensive fallback for a
                 // plan-to-apply race, not the primary refusal path.
                 if let Ok(merged) = hw::merge_repo_settings(&target) {
-                    if exists(&target) {
-                        let mut bak = target.clone().into_os_string();
-                        bak.push(".bak");
-                        let _ = std::fs::copy(&target, PathBuf::from(bak));
-                    }
+                    backup_once(&target, &mut backed_up);
                     let _ = write_file_atomic(&target, merged.text.as_bytes());
+                }
+            }
+            "merge_statusline_settings" => {
+                // Add-only, and no Err path by design: a settings file that does
+                // not parse is left alone rather than refused, so a broken host
+                // file never turns a default into a blocked install. Re-check
+                // the condition here for the plan-to-apply race, the same way
+                // `ensure_codex_statusline` below does.
+                if hw::statusline_settings_absent(repo_root) {
+                    let merged = hw::merge_statusline_settings(&target);
+                    if merged.changed {
+                        backup_once(&target, &mut backed_up);
+                        let _ = write_file_atomic(&target, merged.text.as_bytes());
+                    }
+                }
+            }
+            "merge_worktree_tool_allow" => {
+                if hw::worktree_tool_allow_missing(repo_root) {
+                    let merged = hw::merge_worktree_tool_allow(&target);
+                    if merged.changed {
+                        backup_once(&target, &mut backed_up);
+                        let _ = write_file_atomic(&target, merged.text.as_bytes());
+                    }
                 }
             }
             "merge_codex_hooks" => {
                 if let Ok(merged) = hw::merge_codex_hooks(&target) {
-                    if exists(&target) {
-                        let mut bak = target.clone().into_os_string();
-                        bak.push(".bak");
-                        let _ = std::fs::copy(&target, PathBuf::from(bak));
-                    }
+                    backup_once(&target, &mut backed_up);
                     let _ = write_file_atomic(&target, merged.text.as_bytes());
                 }
             }
@@ -478,9 +804,8 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     applied.push(item.clone());
                     continue;
                 };
-                if let Some(reason) =
-                    apply_sync_skill(&skill_sync.source_root, &root, skill, runtime_for_target_kind(kind))
-                {
+                let source = Path::new(item["source"].as_str().unwrap_or(""));
+                if let Some(reason) = apply_sync_skill(source, &root, skill, runtime_for_target_kind(kind)) {
                     skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
                     continue; // skipped loudly, not applied
                 }
@@ -502,11 +827,31 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     }));
                     continue;
                 }
-                if let Some(reason) =
-                    apply_sync_skill(&skill_sync.source_root, &root, skill, runtime_for_target_kind(kind))
-                {
+                let source = Path::new(item["source"].as_str().unwrap_or(""));
+                if let Some(reason) = apply_sync_skill(source, &root, skill, runtime_for_target_kind(kind)) {
                     skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
                     continue;
+                }
+            }
+            "publish_skillstation" => {
+                let skill = item["skill"].as_str().unwrap_or("");
+                match apply_publish_skillstation(repo_root, skill, rel) {
+                    Err(reason) => {
+                        skipped_skills.push(json!({
+                            "skill": skill, "target": "skillstation", "reason": reason
+                        }));
+                        continue;
+                    }
+                    Ok(hub_commit) => {
+                        let mut landed = item.clone();
+                        if let (Some(hash), Some(obj)) =
+                            (hub_commit, landed.as_object_mut())
+                        {
+                            obj.insert("hub_commit".into(), json!(hash));
+                        }
+                        applied.push(landed);
+                        continue;
+                    }
                 }
             }
             "remove_skill" => {
@@ -521,7 +866,32 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     continue;
                 }
             }
-            "blocked_symlink" | "blocked_alias" => {
+            // verification-ships-to-hosts D3. Deliberately NOT part of the
+            // three arms above: it shares no writer, no source root and no
+            // deletion domain with them. `item.path` is already the target
+            // skill directory, repo-relative, so `target` is the directory to
+            // render into.
+            "copy_verify_skill" => {
+                let kind = item["target"].as_str().unwrap_or("");
+                let skill = item["skill"].as_str().unwrap_or("");
+                match apply_copy_verify_skill(
+                    repo_root,
+                    skill,
+                    &target,
+                    runtime_for_target_kind(kind),
+                ) {
+                    Err(reason) => {
+                        skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
+                        continue;
+                    }
+                    Ok(files) => {
+                        let hashes: Map<String, Value> =
+                            files.into_iter().map(|(rel, h)| (rel, json!(h))).collect();
+                        recorded_verify.insert(rel.to_string(), Value::Object(hashes));
+                    }
+                }
+            }
+            "blocked_symlink" | "blocked_alias" | "blocked_verify_skill" => {
                 skipped_skills.push(json!({
                     "skill": item["skill"], "target": item["target"], "reason": item["reason"]
                 }));
@@ -569,6 +939,19 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
     let onboarding_path = repo_root.join(".bee").join("onboarding.json");
     let previous = read_json_if_exists(&onboarding_path).unwrap_or(json!({}));
     let mut managed = desired_managed.as_object().cloned().unwrap_or_default();
+    let prior_verify = previous
+        .get("managed")
+        .and_then(|m| m.get("verify_skills"))
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let mut verify_skills = prior_verify;
+    for (rel, hashes) in recorded_verify {
+        verify_skills.insert(rel, hashes);
+    }
+    if !verify_skills.is_empty() {
+        managed.insert("verify_skills".into(), Value::Object(verify_skills));
+    }
     // Advisor R6 / point 6: a --plugin-source apply lets a prior
     // --repo-hooks record LAPSE rather than silently carrying it forward.
     if !opts.repo_hooks && !opts.plugin_source {
@@ -593,6 +976,21 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
             &bee_version.as_ref().map(|v| json!(v)).unwrap_or(Value::Null),
         ),
     );
+    // host-packaging-gaps D2: once offered — added to an existing config, or
+    // written into a fresh one — the Pi table is never offered again.
+    for (key, action) in [
+        (T::PI_TEAM_OFFERED_KEY, "add_pi_team"),
+        (T::DESIGN_ROLE_OFFERED_KEY, "add_design_role"),
+    ] {
+        let offered = previous.get(key) == Some(&Value::Bool(true))
+            || applied.iter().any(|i| {
+                i["action"] == action
+                    || (i["action"] == "create_runtime_file" && i["path"] == ".bee/config.json")
+            });
+        if offered {
+            payload.insert(key.into(), json!(true));
+        }
+    }
     let created_at = match previous.get("created_at") {
         Some(v) if is_truthy(v) => v.clone(),
         _ => json!(utc_now()),
@@ -617,6 +1015,81 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
             "skipped": skipped_skills,
         }),
     }))
+}
+
+/// host-packaging-gaps D2: add the default Pi table (derived from
+/// `default_config()`) under `table`, and `herding.agents.pi`, each only when
+/// absent — no existing key is changed, reordered or removed. The file keeps
+/// its indent unit and line ending. Unparseable or non-object: left alone.
+fn add_pi_team(target: &Path, table: &str) {
+    edit_config(target, |config| {
+        let defaults = T::default_config();
+        let Some(roster) = config.get_mut(table).and_then(Value::as_object_mut) else {
+            return;
+        };
+        roster.entry("pi").or_insert_with(|| defaults["team"]["pi"].clone());
+        if let Some(herding) = config.entry("herding").or_insert_with(|| json!({})).as_object_mut() {
+            if let Some(agents) = herding.entry("agents").or_insert_with(|| json!({})).as_object_mut() {
+                agents.entry("pi").or_insert_with(|| defaults["herding"]["agents"]["pi"].clone());
+            }
+        }
+    });
+}
+
+fn add_design_role(target: &Path, table: &str, runtimes: &[Value]) {
+    edit_config(target, |config| {
+        let defaults = T::default_config();
+        let Some(roster) = config.get_mut(table).and_then(Value::as_object_mut) else {
+            return;
+        };
+        for runtime in runtimes.iter().filter_map(Value::as_str) {
+            if let Some(roles) = roster.get_mut(runtime).and_then(Value::as_object_mut) {
+                roles.entry("design").or_insert_with(|| defaults["team"][runtime]["design"].clone());
+            }
+        }
+    });
+}
+
+fn set_design_packs(target: &Path, packs: &Value) {
+    edit_config(target, |config| {
+        if let Some(design) = config.entry("design").or_insert_with(|| json!({})).as_object_mut() {
+            design.insert("packs".into(), packs.clone());
+        }
+    });
+}
+
+fn edit_config(target: &Path, edit: impl FnOnce(&mut Map<String, Value>)) {
+    let text = read_text_if_exists(target);
+    let Ok(Value::Object(mut config)) = serde_json::from_str::<Value>(&text) else {
+        return;
+    };
+    let before = config.clone();
+    edit(&mut config);
+    if config == before {
+        return;
+    }
+    let mut out = jsjson::stringify_pretty(&Value::Object(config));
+    // JSON strings hold no raw newline, so re-indenting line by line is safe.
+    let indent = text
+        .lines()
+        .map(|l| &l[..l.len() - l.trim_start().len()])
+        .find(|ws| !ws.is_empty())
+        .unwrap_or("  ");
+    if indent != "  " {
+        out = out
+            .lines()
+            .map(|l| {
+                let body = l.trim_start_matches(' ');
+                format!("{}{body}", indent.repeat((l.len() - body.len()) / 2))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+    out.push('\n');
+    if text.contains("\r\n") {
+        out = out.replace('\n', "\r\n");
+    }
+    let _ = write_file_atomic(target, out.as_bytes());
 }
 
 fn is_truthy(v: &Value) -> bool {
@@ -665,6 +1138,20 @@ mod tests {
         assert!(ok(".bee/expertise/tests/patterns/differential-testing.md"));
         assert!(!ok(".bee/expertise/../bin/bee.mjs"));
         assert!(!ok(".bee/bin/lib/state.mjs"));
+    }
+
+    #[test]
+    fn remove_pi_extension_scope_guard_accepts_exact_targets_and_refuses_escapes() {
+        assert!(remove_pi_extension_admissible(".pi/extensions/bee-guard.ts"));
+        assert!(remove_pi_extension_admissible(".pi/extensions/bee-guard/index.ts"));
+        assert!(remove_pi_extension_admissible(".pi/extensions/bee-guard/commands.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/../outside.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/../outside.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/sub/foo.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/other.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/notes.md"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/.ts"));
     }
 
     #[test]

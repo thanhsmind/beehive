@@ -1,0 +1,116 @@
+{
+  "id": "uxp-1",
+  "title": "Add the WCAG 2.2 rules bee-design lacks, ported from ui-ux-pro-max",
+  "action": "Write packages/bee/design/bee-design/additions/wcag-2-2.md with six rules (focus not obscured, drag alternative, accessible authentication, auto-rotation pause, scrim contrast on the real background, error summary with focus and field links) plus an MIT attribution line, and add one row to the More taste table in packages/bee/design/bee-design/SKILL.md that links it. The file lives outside references/ because scripts/sync-design-os.sh deletes and re-copies references/ on every sync.",
+  "feature": "ui-ux-pro-max-a11y-port",
+  "lane": "tiny",
+  "role": "docs",
+  "files": [
+    "packages/bee/design/bee-design/additions/wcag-2-2.md",
+    "packages/bee/design/bee-design/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/research/ui-ux-pro-max-into-bee-design-port.md",
+    "packages/bee/design/bee-design/references/accessibility.md",
+    "scripts/sync-design-os.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "acceptance": [
+    "packages/bee/design/bee-design/additions/wcag-2-2.md holds the six WCAG 2.2 rules and an MIT attribution to ui-ux-pro-max-skill at commit 28b3b8d",
+    "packages/bee/design/bee-design/SKILL.md links additions/wcag-2-2.md from its More taste table"
+  ],
+  "must_haves": {
+    "truths": [
+      "packages/bee/design/bee-design/additions/wcag-2-2.md holds the six WCAG 2.2 rules and an MIT attribution to ui-ux-pro-max-skill at commit 28b3b8d",
+      "packages/bee/design/bee-design/SKILL.md links additions/wcag-2-2.md from its More taste table"
+    ],
+    "artifacts": [
+      "packages/bee/design/bee-design/additions/wcag-2-2.md",
+      "packages/bee/design/bee-design/SKILL.md"
+    ],
+    "key_links": []
+  },
+  "verify": "rg -c \"additions/wcag-2-2.md\" packages/bee/design/bee-design/SKILL.md && .bee/bin/bee dev release-manifest --check",
+  "deps": [],
+  "decisions": [
+    "e7b47aa2-a1ef-46d3-809b-e5ee88bcc547"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "bee-design gains additions/wcag-2-2.md with six WCAG 2.2 rules, linked from SKILL.md; manifest regenerated",
+    "files_changed": [
+      "packages/bee/design/bee-design/additions/wcag-2-2.md",
+      "packages/bee/design/bee-design/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "tiny docs cell run inline by the leader",
+      "research brief rides the same commit as provenance"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-29T15:27:08.381Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only: link count 1 and 569 files match the manifest; cargo suite not run, no code changed",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "f40e9c91-c8a3-427e-a2ed-e2b2dfd128d5",
+    "verify_command": "rg -c \"additions/wcag-2-2.md\" packages/bee/design/bee-design/SKILL.md && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-10-29T15:26:13.736Z",
+    "mistakes": [
+      {
+        "wrong": "started the lane with --mode standard, so the merged gate demanded a plan.md",
+        "better": "start a tiny docs lane with --mode tiny",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "DONE",
+      "commit": "6beae0f51",
+      "files": [
+        "packages/bee/design/bee-design/additions/wcag-2-2.md",
+        "packages/bee/design/bee-design/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "rg -c \"additions/wcag-2-2.md\" packages/bee/design/bee-design/SKILL.md && .bee/bin/bee dev release-manifest --check — green:static — docs-only: link count 1 and 569 files match the manifest; cargo suite not run, no code changed",
+      "deviations": [
+        "tiny docs cell run inline by the leader",
+        "research brief rides the same commit as provenance"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "packages/bee/design/bee-design/additions/wcag-2-2.md holds the six WCAG 2.2 rules and an MIT attribution to ui-ux-pro-max-skill at commit 28b3b8d",
+            "artifact": "packages/bee/design/bee-design/additions/wcag-2-2.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/SKILL.md links additions/wcag-2-2.md from its More taste table",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/additions/wcag-2-2.md",
+            "artifact": "packages/bee/design/bee-design/additions/wcag-2-2.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/SKILL.md",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-10-29T15:27:17.133Z",
+        "recorded_by": "f40e9c91-c8a3-427e-a2ed-e2b2dfd128d5",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

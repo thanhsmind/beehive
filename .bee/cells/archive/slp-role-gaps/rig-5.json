@@ -1,0 +1,181 @@
+{
+  "id": "rig-5",
+  "feature": "slp-role-gaps",
+  "title": "Report a write worker whose worktree stopped changing as stalled, once",
+  "lane": "standard",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "8a826f2f-ae7a-4923-a2b0-a65d06445153",
+    "9bd8e0ce-714e-4527-b16a-b755cebb2f78"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "read_first": [
+    "docs/history/slp-role-gaps/CONTEXT.md",
+    "docs/history/slp-role-gaps/plan.md",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/notify.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "action": "Per D7 (store 8a826f2f) and the plan's settled list. Add a reader `stall_after_secs` for `herding.stall_after_secs` (default 900) in the style of `pub(crate) fn ceiling_seconds(cfg: &Value) -> Option<u64> {`. Stall is derived in two places in herding.rs, both at `mailbox::transition_status(bee_dir, ..., \"stalled\")` (in compute_job_status and in the status-list loop); add ONE shared helper used by both. For a job whose job record `read_only` is not true and whose status would otherwise be working: compute a fingerprint in the job record's `cwd` = `git rev-parse HEAD` plus a hash of `git diff HEAD` stdout; store `diff_fingerprint` and `diff_fingerprint_since` on the job record when the fingerprint changes; when it is unchanged for longer than stall_after_secs, the status is `stalled` and `stall_reason` is `no_diff_progress` (the existing activity stall writes `stall_reason: activity`). A change of reason is a new stretch. On the transition into a no_diff_progress stretch, append ONE message to the job's messages file with `crate::herding::notify::append_message` (kind `progress`, text `bee: stalled — no_diff_progress for <N>s; observe only, nothing was stopped; check with bee herding status`). Nothing is stopped or retried. `recovered` fires when the fingerprint moves. A git failure in cwd leaves status unchanged. Document the signal, the knob and the read-time nature (computed when status is read) in the herding overview concept. Tests: frozen past window stalls with the reason; moving fingerprint never stalls; read-only job never stalls by fingerprint; second read appends no second message; recovery. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee herding::tests",
+  "must_haves": {
+    "truths": [
+      "A write job with a frozen worktree past the window reads stalled with stall_reason no_diff_progress",
+      "A read-only job never stalls by fingerprint",
+      "Exactly one message is appended per stalled stretch"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding.rs",
+        "substantive": "shared stall helper, fingerprint, config reader, tests"
+      }
+    ],
+    "key_links": [
+      "both stall sites call the shared helper",
+      "the notice goes through append_message"
+    ],
+    "prohibitions": [
+      "Never stop, retry or archive a worker",
+      "No new notify kind",
+      "No edit to notify.rs or run.rs",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "rig5-test",
+    "outcome": "herding status reads a write job with a frozen worktree fingerprint as stalled with no_diff_progress and appends one progress message per stretch, observe-only",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "docs/knowledge/areas/bee-herding/overview.md"
+    ],
+    "deviations": [
+      "Added insert_stall_reason so herding status shows stall_reason beside a stalled word — the done-criterion says status shows stalled with no_diff_progress and the reason lived only on job.json — found a better route",
+      "compute_job_status now computes the existing word before the stall check so the fingerprint runs only when the status would be working — the action limits the fingerprint to would-be-working jobs — found a better route",
+      "sync-ack: plan predicts affects_skills empty: the stall reason surfaces through the existing herding status read and is documented in the bee-herding overview concept; no skill instruction changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T12:17:56.626Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify, run with the cargo binary path direct: herding::tests 35 passed; also herding:: across all herding modules 753 passed; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee herding::tests",
+    "claimed_at": "2026-10-15T12:11:25.796Z",
+    "verified_at": null,
+    "baseline": null,
+    "sync_ack": "plan predicts affects_skills empty: the stall reason surfaces through the existing herding status read and is documented in the bee-herding overview concept; no skill instruction changes",
+    "mistakes": [
+      {
+        "wrong": "Ran the cell verify with the CARGO_HOME expansion and edited through a python heredoc, and the worktree guard refused both",
+        "better": "call the cargo binary path and the Edit tool directly in an isolated worktree",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Shared stall_word in herding.rs serves compute_job_status and the Paseo status branch. diff_frozen_secs and worktree_fingerprint (HEAD plus sha256 of the diff) store diff_fingerprint and diff_fingerprint_since on job.json. stall_after_secs reader (default 900). One append_message progress notice per no_diff_progress stretch. stall_reason shown on stalled jobs. Documented in docs/knowledge/areas/bee-herding/overview.md Behaviors and Pointers. Tests in herding::tests: frozen_write_job_stalls_once_with_no_diff_progress_then_recovers, moving_fingerprint_never_stalls, read_only_job_and_non_git_cwd_never_stall_by_fingerprint, paseo_working_job_with_frozen_worktree_stalls_with_no_diff_progress, stall_after_secs_reads_the_knob_and_defaults_to_900",
+      "commit": "eb9514a55321a60cf9205c8e49c1dbe48187a0d5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "docs/knowledge/areas/bee-herding/overview.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee herding::tests — green:unit — the cell verify, run with the cargo binary path direct: herding::tests 35 passed; also herding:: across all herding modules 753 passed; full suite not run",
+      "deviations": [
+        "Added insert_stall_reason so herding status shows stall_reason beside a stalled word — the done-criterion says status shows stalled with no_diff_progress and the reason lived only on job.json — found a better route",
+        "compute_job_status now computes the existing word before the stall check so the fingerprint runs only when the status would be working — the action limits the fingerprint to would-be-working jobs — found a better route"
+      ],
+      "mistakes": [
+        "Ran the cell verify with the CARGO_HOME expansion and edited through a python heredoc, and the worktree guard refused both — call the cargo binary path and the Edit tool directly in an isolated worktree — none"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 346 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A write job with a frozen worktree past the window reads stalled with stall_reason no_diff_progress",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "A read-only job never stalls by fingerprint",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "Exactly one message is appended per stalled stretch",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          }
+        ],
+        "recorded_at": "2026-10-15T12:29:40.893Z",
+        "recorded_by": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-frozen-stalls-with-reason",
+            "status": "PASS",
+            "evidence": "tests frozen_write_job_stalls_once_with_no_diff_progress_then_recovers, paseo_working_job_with_frozen_worktree_stalls_with_no_diff_progress"
+          },
+          {
+            "id": "truth-read-only-never",
+            "status": "PASS",
+            "evidence": "test read_only_job_and_non_git_cwd_never_stall_by_fingerprint"
+          },
+          {
+            "id": "truth-one-message-per-stretch",
+            "status": "PASS",
+            "evidence": "test asserts one message after a second stalled read"
+          },
+          {
+            "id": "link-both-sites-shared-helper",
+            "status": "PASS",
+            "evidence": "compute_job_status and the collect_jobs paseo branch both call stall_word"
+          },
+          {
+            "id": "prohib-no-notify-or-run-edit",
+            "status": "PASS",
+            "evidence": "eb9514a55 touches herding.rs and overview.md only"
+          },
+          {
+            "id": "tests-green",
+            "status": "PASS",
+            "evidence": "herding:: 765 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-15T12:43:25.522Z"
+      }
+    ]
+  },
+  "status": "capped",
+  "escalate": true,
+  "role_reroutes": [
+    {
+      "from": "code",
+      "to": "test",
+      "decision": "d933d1a2-d7cf-4f34-b7a8-c5c3f71ade12",
+      "at": "2026-10-15T12:10:50.257Z",
+      "plan_sha256": "6b531c33ea36b645e78b4a6bfdffed64a47b98650c2f25028ac6e3b938944055"
+    }
+  ]
+}

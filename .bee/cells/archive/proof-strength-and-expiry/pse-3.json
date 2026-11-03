@@ -1,0 +1,119 @@
+{
+  "id": "pse-3",
+  "feature": "proof-strength-and-expiry",
+  "lane": "standard",
+  "role": "code",
+  "title": "Teach the qualified proof value everywhere the old form is shown, and fence the set",
+  "action": "Slice 3 of the plan. pse-1 (commit 9ad04c73) made a bare `green` illegal at the write path and added the constant PROOF_RESULT_VALUES in packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs. Every place that still SHOWS `— green —` as an example now teaches the refused form. Sweep only the sites that TEACH it, then pin that set with an allowlist fence.\n\nTeaching sites (each carries an example that must become a qualified value — pick the honest one per site, usually `green:unit`):\n- packages/bee/prompts/worker-cell.md — the Result form example. Also state D3's three meanings once, in one short line each: live = the real product or command was driven and its observable result inspected; unit = automated tests passed; static = it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.\n- skills/bee-swarming/references/worker-details.md — REQUIRED: pse-1 acked its sync door on the promise that slice 3 touches this file. Leaving it unedited fires the same door again.\n- docs/product-description/verification/lifecycle.md\n- docs/product-description/verification/foundations.md\n- docs/product-description/lifecycle/execution.md\n- site/guide/vi/cell-lane.html — hand-authored source; site/guide/build.mjs reads it as a fragment and writes to dist/. Edit it directly, never dist/.\n- packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs:606 — the no-test-sentinel example. Its literal text is pinned by hooks/session_preamble/tests.rs:164, so change BOTH in the same edit or the test goes red. pse-1 left that test alone for exactly this reason.\n- packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:230 — the capCell --report example. pse-1 left it; it is yours.\n\nNOT teaching sites — leave their bare `green` alone, it is deliberate D2 evidence that the read path stayed tolerant: packages/bee-rs/crates/bee/src/verbs/cells/proof.rs, verbs/work.rs, verbs/mailbox.rs (the letter fixtures at :2976 and :3010), verbs/drivers/close.rs.\n\nThen add the FENCE to packages/bee-rs/crates/bee/tests/proof_gate.rs — the proof domain's existing contract file, never a new file. It is an ALLOWLIST, modelled on route_class_parity.rs: it lists the teaching sites above and asserts each one still CONTAINS a qualified value from PROOF_RESULT_VALUES. Guard the allowlist against rot the way route_class_parity.rs does: a listed site that no longer holds its anchor FAILS, so a site cannot silently drop out of the set.\n\nAFTER the prompt file changes: packages/bee/prompts/*.md is EMBEDDED in the bee binary. A prompt that differs from the built binary makes `bee dispatch prepare --kind cell` refuse with a misleading `unsupported argument shape` and kills every worker dispatch in the repo. Say so in your outcome line so the integrator rebuilds and reinstalls .bee/bin/bee at merge. Do not install a binary into the main checkout yourself.\n\nREGEN: this cell touches packages/bee and skills/, both hashed by the release manifest. Run the full chain inside this cell, in this order: .bee/bin/bee dev render-skill-trees, then .bee/bin/bee onboard --repo-root . --apply, then .bee/bin/bee dev release-manifest --write. Note the trap another cell hit: .bee/expertise/* and .bee/bin/prompts/* are onboarding-INSTALLED copies — edit the source (expertise/*, packages/bee/prompts/*) and let onboard install it, never the installed copy.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "acceptance": "No teaching site shows a bare `— green —` example any more; the worker prompt states the three meanings. The read-path fixtures in proof.rs, work.rs, mailbox.rs and drivers/close.rs keep their bare green. proof_gate.rs carries an allowlist fence that fails when a listed site loses its qualified value.",
+  "files": [
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "docs/product-description/verification/lifecycle.md",
+    "docs/product-description/verification/foundations.md",
+    "docs/product-description/lifecycle/execution.md",
+    "site/guide/vi/cell-lane.html",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/references/worker-details.md"
+  ],
+  "affects_specs": [],
+  "deps": [
+    "pse-1"
+  ],
+  "decisions": [
+    "cb7b14b7-a6d0-4e9d-81dc-5fd8273317a2"
+  ],
+  "read_first": [
+    "docs/history/proof-strength-and-expiry/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/tests/proof_gate.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "every teaching site listed in the action shows a qualified value, never a bare green",
+      "the worker prompt states the three meanings of live, unit and static",
+      "the read-path fixtures in proof.rs, work.rs, mailbox.rs and drivers/close.rs still carry their bare green",
+      "the fence lives in tests/proof_gate.rs as an allowlist and fails when a listed site loses its anchor",
+      "the outcome line names the binary reinstall the prompt change requires",
+      "the full workspace suite is green",
+      "the regen chain ran inside this cell and bee dev release-manifest --check passes"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pse-3",
+    "outcome": "Every teaching site now shows a qualified proof value and proof_gate.rs fences the set; packages/bee/prompts/worker-cell.md changed, so .bee/bin/bee must be rebuilt and reinstalled at merge or dispatch prepare --kind cell refuses every worker",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "docs/product-description/verification/lifecycle.md",
+      "docs/product-description/verification/foundations.md",
+      "docs/product-description/lifecycle/execution.md",
+      "site/guide/vi/cell-lane.html",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json",
+      ".bee/bin/prompts/worker-cell.md",
+      ".agents/skills/bee-swarming/references/worker-details.md",
+      ".claude/skills/bee-swarming/references/worker-details.md",
+      ".claude-plugin/skills/bee-swarming/references/worker-details.md",
+      ".codex-plugin/skills/bee-swarming/references/worker-details.md",
+      ".opencode/skills/bee-swarming/references/worker-details.md"
+    ],
+    "deviations": [
+      "Also rewrote two prose claims that the result segment is free text — the Edge cases bullet in docs/product-description/lifecycle/execution.md and the EXEC-10 probe row in docs/product-description/verification/lifecycle.md — because pse-1 made both statements false and both files were already in scope — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T15:51:44.271Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5a3619c8-a3c2-470a-be32-189bc3db79ac",
+    "claimed_at": "2026-09-01T15:39:37.990Z",
+    "mistakes": [
+      {
+        "wrong": "Ran the full suite the first time with 2>/dev/null, so a 101 exit came back with no diagnostics at all and the whole run had to be repeated",
+        "better": "should have kept stderr on the first run of a long suite and filtered afterwards"
+      }
+    ],
+    "report": {
+      "outcome": "Every teaching site shows a qualified proof value; proof_gate.rs fences the set; the worker prompt states the three meanings",
+      "commit": "d6119e49",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-swarming/references/worker-details.md",
+        "docs/product-description/verification/lifecycle.md",
+        "docs/product-description/verification/foundations.md",
+        "docs/product-description/lifecycle/execution.md",
+        "site/guide/vi/cell-lane.html",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/tests/proof_gate.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json",
+        ".bee/bin/prompts/worker-cell.md"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the cell verify: full workspace suite (3299 lib + all integration, 0 failed) plus the new proof_gate fence, then bee dev release-manifest --check reported 292 file(s) match",
+      "deviations": [
+        "Also rewrote two prose claims that the result segment is free text — the Edge cases bullet in docs/product-description/lifecycle/execution.md and the EXEC-10 probe row in docs/product-description/verification/lifecycle.md — because pse-1 made both statements false and both files were already in scope — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Ran the full suite the first time with 2>/dev/null, so a 101 exit came back with no diagnostics at all and the whole run had to be repeated — should have kept stderr on the first run of a long suite and filtered afterwards"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

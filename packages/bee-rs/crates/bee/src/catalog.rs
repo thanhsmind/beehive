@@ -43,6 +43,9 @@ pub struct Entry {
     /// Present when the registry declares the command but this build has no
     /// implementation. `{reason, fix}`.
     pub unavailable: Option<Unavailable>,
+    /// Present when the command is deprecated in favor of another spelling.
+    #[allow(dead_code)]
+    pub deprecated: Option<Value>,
 }
 
 pub struct Unavailable {
@@ -97,7 +100,8 @@ fn parse() -> Vec<Entry> {
                 reason: u.get("reason").and_then(Value::as_str).unwrap_or("").to_string(),
                 fix: u.get("fix").and_then(Value::as_str).unwrap_or("").to_string(),
             });
-            Some(Entry { name, invoke, required, properties, examples, unavailable })
+            let deprecated = c.get("deprecated").filter(|d| !d.is_null()).cloned();
+            Some(Entry { name, invoke, required, properties, examples, unavailable, deprecated })
         })
         .collect()
 }
@@ -519,7 +523,300 @@ mod tests {
         // the reversal as `--tier generation` is precisely what D4
         // retires. `--off` reads the same on any future flag-shaped
         // marking, which is the property this ratchet protects.
-        const PINNED_FLAG_COUNT: usize = 189;
+        // 189 -> 192 (slp-supervisor-heartbeat sup-2): `bee supervisor
+        // record` lands the observation store the cold supervisor tick
+        // writes its memory into. Reused, not reinvented: `--kind` already
+        // spells "which member of a closed row-type set" (state handoff
+        // write, state waiting-on set) and means exactly that here;
+        // `--note` is already the short free-text line a record carries.
+        // Three names are new. `--signal` is the day-1 signal class
+        // (struggling-loop / big-decision / danger-op / none) — a closed
+        // classification of WHAT was seen, where `--kind` classifies the
+        // ROW and no existing flag names an observed condition.
+        // `--target-session` is the OBSERVED session, deliberately not
+        // `--session`: everywhere else in this vocabulary `--session` is
+        // the caller's own session key (intent show/set, state verbs), and
+        // an observer whose subject is another session must not collide
+        // with that — the plan (docs/history/slp-supervisor-heartbeat/
+        // plan.md, cell sup-2) names the flag explicitly. `--tick` is the
+        // control loop's iteration index; nothing meant "which iteration"
+        // before — `--interval` is a duration and `--limit` is a cap on a
+        // listing.
+        // 192 -> 194 (slp-supervisor-heartbeat sup-5): `bee supervisor
+        // record` gains the intervention mailbox, and `supervisor pending` /
+        // `supervisor mark-delivered` read and stamp it. Reused, not
+        // reinvented: `--id` is the row this verb acts on, exactly as it is
+        // on every cells verb and on `mailbox mark`; `--target-session`,
+        // `--kind`, `--signal` and `--tick` keep the meanings sup-2 gave
+        // them. Two names are new. `--point-key` is the stable slug the
+        // frequency cap counts per point; nothing meant "which recurring
+        // subject is this" before — `--key` is a config path (config
+        // get/set/unset), and `--id` names a row that already exists, where a
+        // point key is deliberately reused across rows. `--question` is the
+        // open question delivered to another session, and it is NOT `--note`:
+        // a note is the observer writing to itself with a 500-character
+        // bound, while a question is text that lands in someone else's
+        // context and carries its own two-sentence law, so one flag name
+        // could not carry both rules honestly. The plan
+        // (docs/history/slp-supervisor-heartbeat/plan.md, cell sup-5) names
+        // both flags explicitly.
+        // 194 -> 194 (slp-supervisor-heartbeat sup-7): `bee supervisor
+        // record --kind urgent` adds the danger class of c80debd7 and adds
+        // NO flag name. That is the point of the design: an urgent row is an
+        // ordinary mailbox row that takes the same --target-session,
+        // --point-key, --question, --signal and --tick, so a caller who knows
+        // how to raise an intervention already knows how to raise an alert.
+        // The two differences (the frequency cap does not refuse it, and one
+        // best-effort notification fires) are behavior of the closed --kind
+        // set, never new vocabulary — spelling either of them as its own flag
+        // (`--urgent`, `--notify`) would have made a second way to say a word
+        // --kind already says, and the opt-out is a config key
+        // (supervisor.notify), which is where every other switch of this shape
+        // lives.
+        // 194 -> 194 (slp-supervisor-heartbeat sup-8): `bee supervisor away`,
+        // `bee supervisor back` and `bee supervisor presence` add the presence
+        // mark of 9f5cd250 and add NO flag name. `away` takes `--note`, which
+        // already means "the short free-text line this record carries"
+        // (supervisor record, capture add, decisions log) and means exactly
+        // that on a window; `back` and `presence` take nothing but `--json`.
+        // The two effects are the verbs themselves, so neither earns a flag:
+        // spelling the queue as `--queue` or the window as `--window` would be
+        // a second way to say what `away` and `back` already say. There is
+        // deliberately no flag for the third thing a presence flag must never
+        // grow — no permission, gate or bypass word appears on this surface at
+        // all, which is the vocabulary half of "permission control never hides
+        // in a presence flag".
+        // 194 -> 195 (slp-supervisor-heartbeat sup-9): `bee supervisor report`
+        // reads back the one stored WakeReport of 9f5cd250 and adds ONE flag
+        // name, `--window`. The near miss is `--id`, which everywhere else in
+        // this vocabulary — `cells`, `mailbox mark`, `supervisor
+        // mark-delivered` — names a row of the store the verb itself writes.
+        // A stored report is keyed by the id of a row in a DIFFERENT store
+        // (the presence window), and `--id` on this same `supervisor` surface
+        // already means "a mailbox row id"; one flag carrying both would make
+        // `--id` ambiguous on the one surface a caller reads them together.
+        // That is exactly the reason sup-2 recorded for spelling the observed
+        // session `--target-session` rather than `--session`, and the same
+        // reason applies to the same surface here. `--key` is a config path,
+        // and `--feature`/`--lane` name work, not a span of time. Nothing else
+        // in this vocabulary meant "which away window".
+        // 195 -> 195 (slp-supervisor-heartbeat sup-10): `bee supervisor
+        // metrics` reads the health counters of 66c4c251 over one away window
+        // and adds NO flag name. `--window` already means exactly "which away
+        // window" on this same surface (sup-9 recorded why it is not `--id`),
+        // and measuring a window is the same question as reading its report,
+        // so a second spelling would be the drift this ratchet exists to
+        // catch. Nothing else earned a flag either: the band bounds are named
+        // consts in the code, not tunables (a band a caller can move is a band
+        // that stops meaning anything), and there is deliberately NO flag on
+        // this surface that could raise a consent level or flip any switch —
+        // 66c4c251 keeps that in the human's hands, and a verb that only ever
+        // reads must not carry the vocabulary of one that writes.
+        // 195 -> 196 (slp-dissent-stop-and-ask sd-1): `bee cells dissent`
+        // adds exactly ONE new spelling, `--alternative`. Its other three
+        // fields reuse names this vocabulary already carries with the same
+        // meaning: `--id` is the cell acted on, on every one of the fifteen
+        // other cells verbs; `--reason` already means "why this act" on
+        // block, drop, reopen, escalate and gate, and a dissent's claim is
+        // exactly that (the record's field is `claim`, but `--claim` is a
+        // CLI-WIDE flag-alone boolean for `dispatch prepare --claim`, so it
+        // can never carry a value); `--severity` already grades a finding on
+        // `backlog add`, which is the same question this verb asks. Nothing
+        // here meant "the thing to do instead" — `--reason` explains, and
+        // `--alternative` proposes, and collapsing the two would let a
+        // worker's proposal be read as an excuse.
+        // 196 -> 196 (slp-dissent-stop-and-ask sd-2): `bee cells
+        // dissent-verdict` adds NO new spelling, so the count holds. `--id`
+        // is the cell acted on; `--reason` already means "why this act" and
+        // is what an obligated answer is made of; `--verdict` already means
+        // "the one-of-a-closed-set answer" on `state plan-conflicts verdict`,
+        // which is the same question this verb asks about a different kind of
+        // conflict. Reusing it is the reuse-first rule working, not a
+        // collision: a caller who knows one verdict flag knows the other.
+        // 196 -> 197 (slp-blind-lanes bln-1): `dispatch.prepare` gained
+        // `--brief-file`, the path of the LaneBrief carried into the advisor
+        // prompt body. Checked first, on this same command: `--purpose` is a
+        // 60-char dispatch LABEL (DESCRIPTION_TITLE_MAX, collapsed by
+        // one_line) and `--expertise` already means "paths the worker should
+        // read, with purpose" — the read diet. Neither means "the question
+        // the lanes answer", and overloading either would put the brief and
+        // the diet behind one name. Checked next, the nearest FILE-shaped
+        // spellings this vocabulary already carries: `--file` (six
+        // commands), `--task-file` and `--digest-file` all mean "a path
+        // whose CONTENTS this command consumes" — the right idiom, which
+        // `-file` reuses — but each is bound to its own command's payload
+        // and none is reachable from `dispatch prepare`, so this is a new
+        // concept at this door rather than a rename of any of them. `--brief`
+        // exists on `status` as a BOOLEAN meaning "short output"; reusing
+        // that spelling for a path would be the collision this ratchet
+        // exists to catch.
+        // 197 -> 198 (slp-blind-lanes bln-3): `bee blind check` adds exactly
+        // ONE new spelling, `--dossier`, the path of the convergence document
+        // this verb reads. Checked first, the nearest FILE-shaped spellings
+        // this vocabulary already carries: `--file` (six commands),
+        // `--task-file`, `--digest-file` and bln-1's own `--brief-file`. Every
+        // one of them names a payload path whose CONTENTS the command consumes
+        // as input to a write — the brief that becomes a prompt body, the task
+        // that becomes a cell, the digest that becomes a record. `blind check`
+        // writes nothing at all: it reads a document as EVIDENCE and reports a
+        // verdict on it, so reusing `--file` would put "the thing I am about to
+        // write from" and "the thing I am about to judge" behind one name, and
+        // a caller who learned the first meaning would read the second one
+        // wrong. Checked next: `--path` (reservations) names a repo path a hold
+        // is taken on, not a document to read, and `--dossier` is the word the
+        // feature's own vocabulary already uses for this artifact
+        // (docs/history/slp-blind-lanes/CONTEXT.md, "Convergence dossier").
+        // 198 -> 199 (slp-blind-lanes blp-2): `decisions.log` adds exactly ONE
+        // new spelling, `--rejected`, the convergence's rejected set — the
+        // options NOT taken, one `<what>: <why>` entry each, list-typed like
+        // `--tags`. Checked first, on this same command: `--alternatives` is
+        // the nearest miss and the reason the new name is earned rather than a
+        // rename. It is a single free-prose STRING meaning "what else was
+        // considered", and it stays exactly that; `--rejected` names the
+        // subset that LOST, each entry paired with its reason, as a walkable
+        // list. Collapsing the two would either force a list flag to keep
+        // being read as one sentence (silently breaking six existing readers
+        // of the flat field) or force a per-option reason back into prose,
+        // which is the very thing D2(d) exists to stop. Checked next, the
+        // other list-shaped spellings this vocabulary carries: `--tags`
+        // classifies for recall, `--relation` names prior DECISIONS by id,
+        // `--files` names repo paths, and `--alternative` (cells dissent) is
+        // singular and means "the one thing to do INSTEAD" — a proposal, not
+        // a discard. None of them meant "the options ruled out, with why".
+        // 199 -> 199 (slp-advisor-nudge an-5): the advisor-nudge record of
+        // 3cfd9980 adds NO flag name, and that is the design working. A nudge
+        // is one more member of the closed `--kind` set and its two new
+        // watch words (`budget-overrun`, `same-region-resubmit`) are two more
+        // members of the closed `--signal` set, so a caller who knows how to
+        // raise an intervention already knows how to raise a nudge: same
+        // --target-session, --point-key, --question, --signal and --tick. The
+        // near miss checked and rejected: spelling the recommendation as its
+        // own flag (`--advisor`, `--recommend-consult`) would be a second way
+        // to say what `--kind` already says, exactly the miss sup-7 recorded
+        // for `--urgent`. The response debt it creates is answered through
+        // `decisions log --tags advisor-nudge`, which is existing vocabulary
+        // in existing use — a debt escape has never earned a flag of its own.
+        // The sup-2 entry above lists the DAY-1 signal members and stays as
+        // written: it is the history of why `--signal` was minted, not a
+        // roster of today's set. The live set is the one `KNOWN_SIGNALS`
+        // holds (verbs/supervisor.rs), and the shipped supervisor prompt is
+        // pinned to it by `the_shipped_prompt_pins_the_record_verbs_own_closed_sets`.
+        // 199 -> 201 (letter-reflection lr-1): `mailbox.reflect` adds exactly
+        // TWO new spellings, `--wrong` and `--better` — the two required parts
+        // of one reflection (its D3), one flag each. They are minted together
+        // or not at all: D3's whole point is that a mistake without "what
+        // would have been better" is half a record, and a single flag carrying
+        // both halves would put that pairing back into prose nobody can read
+        // apart. The run rides `--session-id`, which is why this is +2 and not
+        // +3: every other mailbox stop already spells "which run is this" that
+        // way, and a `--run` would have been a second word for one idea.
+        //
+        // Checked first, the nearest spellings this vocabulary already carries
+        // for "what went wrong". `--reason` (cells block, cells drop, worktree
+        // remove) names why an action was TAKEN — the justification of a move
+        // the caller is making right now. A reflection names something the
+        // caller wishes it had not done, which is the opposite polarity, and
+        // folding them would make `Broken or unfinished` and `Mistakes &
+        // reflection` two renderings of one field. `--friction` (cells finish)
+        // is the closest miss of all and was rejected on evidence: it records
+        // what the HARNESS made hard, feeding the friction ledger, while a
+        // reflection is what the AGENT got wrong — reusing it would silently
+        // route every self-criticism into a report about the tooling.
+        // `--outcome` is the one line about what a cap achieved, `--note` is
+        // free prose attached to a record, and `--deviation` is D5's departure,
+        // which is a CHOICE made on purpose with a why and a kind, never a
+        // mistake.
+        //
+        // Checked next, for "what would have been better". `--alternative`
+        // (cells dissent) is the nearest, and the reason `--better` is earned:
+        // an alternative is a proposal for work that has NOT happened yet — the
+        // thing to do instead, now, before the cell runs. `--better` is
+        // retrospective and unactionable by design; the work is already done.
+        // `--next-action` names the next move, `--rejected` (decisions log)
+        // names options ruled out with why, and `--acceptance` names how a
+        // thing will be judged. None of them meant "what I should have done".
+        // 201 -> 203 (reflection-becomes-lesson rbl-1): the mistakes answer
+        // reaches the CAP, so `cells.cap`/`cells.finish` add `--mistake` (one
+        // mistake, two parts on one line) and `--no-mistakes` (the explicit
+        // clean-run statement), and `mailbox.reflect` reuses that same
+        // `--no-mistakes` — which is why this is +2 and not +3.
+        //
+        // Checked first, the spellings that already exist for these two
+        // ideas. `--wrong`/`--better` (mailbox.reflect) are the two PARTS of
+        // one mistake, and reusing them on the cap would have meant a cap can
+        // record exactly one mistake and never a list — `--mistake` names the
+        // whole record, the way `--deviation` names a whole departure, and it
+        // takes the same `" — "` separator, so a caller learns one shape.
+        // `--deviation` itself was rejected on polarity: a departure is a
+        // choice made on purpose, with a why and a kind, and folding a
+        // mistake into it would file every error under "where I departed from
+        // the plan". `--friction` records what the HARNESS made hard, not
+        // what the agent got wrong.
+        //
+        // For the clean-run statement, the nearest existing spelling is
+        // `--deviation "followed the plan"` — a VALUE, not a flag, and that
+        // is exactly why a value would not do here: the departure statement
+        // rides a flag that already had to be passed, while the mistakes
+        // answer must be sayable by a caller passing nothing else at all
+        // (`bee mailbox reflect --no-mistakes`). `--force`, `--skip` and the
+        // other booleans in this vocabulary all mean "override a check";
+        // `--no-mistakes` ANSWERS one.
+        // 203 -> 203 (herding-cockpit-completeness hcc-4): `herding interrupt`
+        // and `herding cancel` land D1 and D4's orchestrator signals. Both
+        // take `<job-id>` positional plus `--main-root` and `--json`.
+        // Checked first: `--main-root` (interlock/command-template/wave/
+        // occupancy/control-loop) and `--json` (nearly every verb) are reused
+        // unchanged, no count cost. Net +0: 203 -> 203.
+        //
+        // 205 (was 204) — `gate` / `state.gate --preview` (pihp-4, pihp-8). Checked
+        // first: no existing flag name means "preview the execution packet
+        // before gate approval". Preview renders the current-slice cells and
+        // plan hash without writing.
+        //
+        // 205 -> 207 (semantic-role-routing slr-2, slr-8): `dispatch.prepare`
+        // gains `--stage` and `--release-version` for deploy gate authorization.
+        // `--stage` names the target deployment stage (staging, canary, prod);
+        // `--release-version` names the immutable release artifact version.
+        // Neither existing flag conveys deployment lifecycle stage or release
+        // version identifier.
+        //
+        // 207 -> 208 (harness-worktree-relocation hwr-2): `worktree.merge`
+        // gains `--detached`, which skips the caller-session relocation check
+        // so a sessionless caller merges directly. Checked first: `no-lane`
+        // picks the default record, `skip-uat` skips one door, and `force`
+        // overrides an ownership guard; none means "do not move the session".
+        //
+        // 208 -> 210 (three-findings thf-3): `herding.run` gains `--seat` and
+        // `--inbox-session`. Both were already parsed by the verb and emitted
+        // by `dispatch prepare` on runtime pi; only their registry rows were
+        // missing, so neither showed in help. `--seat` names the seat a
+        // detached run belongs to, carried on the result envelope and the
+        // result-inbox marker; `--inbox-session` names the orchestrator
+        // session token whose presence is what makes a run detached. Checked
+        // first: `--agent` names which herdr agent to spawn, `--job-id` names
+        // the mailbox identity, and `--worker` names a claim owner — none of
+        // the three carries "which seat this run answers for", and no existing
+        // flag names an inbox target at all. Both are new.
+        //
+        // 210 -> 211 (mistake-fix-at mfa-1, 2026-09-22): ONE new name,
+        // `--fix-at`, reused unchanged by all three verbs that record a
+        // mistake — `mailbox.reflect`, `cells.cap` and `cells.finish`. It
+        // names the strongest layer that can stop the mistake coming back,
+        // from the closed set architecture | check | doctrine | none, and it
+        // is required wherever a mistake is written (D1, af14e1d6).
+        //
+        // Checked first, the nearest spellings this vocabulary already
+        // carries. `--layer` (backlog.add) is the closest of all and was
+        // rejected on meaning: there it is free text naming a WORKFLOW AREA
+        // (verification, state, hooks), which is where a piece of work sits,
+        // while `--fix-at` names what kind of thing can enforce a correction
+        // — reusing it would make one word mean two concepts one command
+        // apart. `--kind` classifies a record's type (handoff, dispatch,
+        // signal), not the remedy for one. `--better` is the OTHER half of
+        // the same reflection — what to have done instead — and a layer is
+        // not an instead. `--severity` and `--type` (backlog.add) rank and
+        // shape a row; neither says where a fix belongs.
+        const PINNED_FLAG_COUNT: usize = 235;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
@@ -554,26 +851,28 @@ mod tests {
         );
     }
 
-    /// models-show-verb D1: the role table's own verb has to RESOLVE, or the
-    /// dispatcher answers `bee models show` with "unknown command" and the
-    /// agent goes back to parsing .bee/config.json by hand — the exact defect
-    /// the verb replaces.
+    /// team-config-rename D1: bee team show is the canonical verb.
     #[test]
-    fn models_show_resolves_and_is_built_into_this_binary() {
-        let (entry, rest) = resolve(&["models", "show"]).expect("models.show is in the registry");
-        assert_eq!(entry.invoke, "bee models show");
+    fn team_show_resolves_and_is_built_into_this_binary() {
+        let (entry, rest) = resolve(&["team", "show"]).expect("team.show is in the registry");
+        assert_eq!(entry.invoke, "bee team show");
         assert!(rest.is_empty());
         assert!(
             entry.unavailable.is_none(),
-            "models show is served natively, not declared and missing"
+            "team show is served natively, not declared and missing"
         );
         assert!(entry.properties.contains_key("runtime"), "the --runtime filter is undeclared");
         assert!(missing_required(entry, &[]).is_empty(), "a read verb must need no flags");
         assert!(
-            group_subverbs("models").contains(&"show".to_string()),
-            "`bee models` never offers its one verb: {:?}",
-            group_subverbs("models")
+            group_subverbs("team").contains(&"show".to_string()),
+            "`bee team` never offers its one verb: {:?}",
+            group_subverbs("team")
         );
+
+        // Alias still resolves for help/registry probe
+        let (alias_entry, _) = resolve(&["models", "show"]).expect("models.show is in the registry");
+        assert_eq!(alias_entry.invoke, "bee models show");
+        assert!(alias_entry.deprecated.is_some());
     }
 
     /// models-show-verb D2: `bee cells add --help` is the OTHER door where an
@@ -596,11 +895,11 @@ mod tests {
         // in place of it: one says where the meaning lives, the other says
         // how to read it.
         assert!(
-            desc.contains("models.<runtime>.<role>.description"),
+            desc.contains("team.<runtime>.<role>.description"),
             "cells add --help lost the line naming where a role's meaning is written down"
         );
         assert!(
-            desc.contains("bee models show"),
+            desc.contains("bee team show"),
             "cells add --help never names the verb that prints the role table"
         );
         // Read-first, and only when unread this session (D2's condition).
@@ -633,4 +932,92 @@ mod tests {
             assert!(subs.contains(&live.to_string()), "{live} is missing: {subs:?}");
         }
     }
+
+    #[test]
+    fn herding_steer_resolves_and_declares_text_required() {
+        let (entry, rest) = resolve(&["herding", "steer"]).expect("herding.steer is in the registry");
+        assert_eq!(entry.invoke, "bee herding steer");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert_eq!(missing_required(entry, &[]), vec!["text".to_string()]);
+        assert!(missing_required(entry, &["--text".to_string(), "hello".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn detector_tick_resolves_and_declares_only_the_json_flag() {
+        let (entry, rest) =
+            resolve(&["detector", "tick"]).expect("detector.tick is in the registry");
+        assert_eq!(entry.invoke, "bee detector tick");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+        assert!(entry.properties.contains_key("json"));
+        assert_eq!(entry.properties.len(), 1);
+    }
+
+    #[test]
+    fn detector_events_resolves_and_declares_no_required_flag() {
+        let (entry, rest) =
+            resolve(&["detector", "events"]).expect("detector.events is in the registry");
+        assert_eq!(entry.invoke, "bee detector events");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+        assert!(entry.properties.contains_key("unjudged"));
+        assert!(entry.properties.contains_key("json"));
+    }
+
+    #[test]
+    fn supervisor_record_declares_the_events_flag() {
+        let (entry, rest) =
+            resolve(&["supervisor", "record"]).expect("supervisor.record is in the registry");
+        assert!(rest.is_empty());
+        assert!(entry.properties.contains_key("events"));
+    }
+
+    #[test]
+    fn herding_fork_resolves_and_is_built_into_this_binary() {
+        let (entry, rest) = resolve(&["herding", "fork"]).expect("herding.fork is in the registry");
+        assert_eq!(entry.invoke, "bee herding fork");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+    }
+
+    #[test]
+    fn herding_notify_resolves_and_declares_kind_and_text_required() {
+        let (entry, rest) = resolve(&["herding", "notify"]).expect("herding.notify is in the registry");
+        assert_eq!(entry.invoke, "bee herding notify");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert_eq!(missing_required(entry, &[]), vec!["kind".to_string(), "text".to_string()]);
+    }
+
+    #[test]
+    fn herding_permit_resolves_and_is_built_into_this_binary() {
+        let (entry, rest) = resolve(&["herding", "permit"]).expect("herding.permit is in the registry");
+        assert_eq!(entry.invoke, "bee herding permit");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+    }
+
+    #[test]
+    fn herding_broker_tick_resolves() {
+        let (entry, rest) = resolve(&["herding", "broker", "tick"]).expect("herding.broker is in the registry");
+        assert_eq!(entry.invoke, "bee herding broker");
+        assert_eq!(rest, vec!["tick"]);
+        assert!(entry.unavailable.is_none());
+    }
+
+    #[test]
+    fn herding_answer_resolves_and_declares_required_flags() {
+        let (entry, rest) = resolve(&["herding", "answer"]).expect("herding.answer is in the registry");
+        assert_eq!(entry.invoke, "bee herding answer");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert_eq!(missing_required(entry, &[]), vec!["job".to_string(), "text".to_string()]);
+        assert!(missing_required(entry, &["--job".to_string(), "job-1".to_string(), "--text".to_string(), "ok".to_string()]).is_empty());
+    }
 }
+

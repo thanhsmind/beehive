@@ -7,6 +7,7 @@ timestamp: 2026-07-11
 bee:
   id: pattern-20260711-pre-code-gates-filter-spec-defects-only-diff
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT19", "original feature: skill-sync", docs/history/learnings/20260711-skill-sync.md]
   polarity: pitfall
   critical: false

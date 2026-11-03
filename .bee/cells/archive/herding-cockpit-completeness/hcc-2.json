@@ -1,0 +1,99 @@
+{
+  "id": "hcc-2",
+  "feature": "herding-cockpit-completeness",
+  "title": "Add pane_send_key to the pane transport for herdr, tmux, and the test fakes",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "c943feb9"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add ONE method to `trait PaneTransport` (run.rs:434): `fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String>;` placed beside pane_close (run.rs:491). Implement it for RealHerdr (run.rs:633) as `self.call(&[\"pane\", \"send-keys\", pane_id, key]).map(|_| ())` (herdr accepts `esc` as the canonical Escape name), for RealTmux (tmux.rs:462) as `send-keys -t <pane_id> <key>` WITHOUT the `-l` flag (a named key such as `Escape` must not be literal; see send_text_argv at pane_verbs.rs:311-318 which uses -l for text), and for every test double that implements PaneTransport: FakeHerdr (run.rs:3672), SharedLayoutHerdr (run.rs:3800), PanicHerdr (run.rs:4049), FakeCockpit (pane_verbs.rs:985). FakeHerdr and FakeCockpit record the (pane_id, key) calls in a Vec so hcc-4 tests can assert them; the others follow their existing style (SharedLayoutHerdr Ok, PanicHerdr panic). Do not touch CockpitTransport. Add one test per real transport that checks the argv shape (herdr: pane send-keys <id> esc; tmux: send-keys -t <id> Escape, no -l), following the existing argv-shape tests in pane_verbs.rs/tmux.rs. Run `cargo test -p bee herding::` scoped and the whole bee crate build must compile (every PaneTransport impl in the crate gains the method).",
+  "must_haves": {
+    "truths": [
+      "Every PaneTransport impl compiles with pane_send_key",
+      "herdr argv is [pane, send-keys, <id>, <key>]",
+      "tmux argv is [send-keys, -t, <id>, <key>] with no -l"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "trait method + RealHerdr impl + fakes"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+        "substantive": "RealTmux impl + argv test"
+      }
+    ],
+    "key_links": [
+      "hcc-4 calls transport.pane_send_key(pane, \"esc\"|\"Escape\") from job_verbs.rs"
+    ],
+    "prohibitions": [
+      "No second transport, no shelling out around PaneTransport",
+      "No change to pane_send_text or CockpitTransport",
+      "No behavior change to any existing verb"
+    ]
+  },
+  "trace": {
+    "worker": "w-hcc-2",
+    "outcome": "Add pane_send_key to PaneTransport for herdr, tmux, and test doubles",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+    ],
+    "deviations": [
+      "sync-ack: skill docs update scheduled for slice 3 per plan.md"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T09:58:56.011Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T09:30:49.880Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": null,
+        "owner_bypassed": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+        "at": "2026-09-06T09:58:56.011Z"
+      }
+    ],
+    "sync_ack": "skill docs update scheduled for slice 3 per plan.md",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Add pane_send_key to PaneTransport for herdr, tmux, and test doubles",
+      "commit": "b62c00a42e091872e76c674cab929074e03f36a5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+      ],
+      "tests": "cargo test -p bee herding:: — green:unit — touched run.rs tmux.rs pane_verbs.rs",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

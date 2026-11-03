@@ -31,7 +31,10 @@ The craft is interviewing, not writing. Scout lightly, then triage the
 request. With a bundle, the scout starts at the touched area's
 `docs/knowledge/areas/<area>/index.md` and its Open Gaps (no bundle:
 `docs/specs/<area>.md` when present): settled rules get cited, never
-re-asked, and Open Gaps are ready-made interview questions. Default:
+re-asked, and Open Gaps are ready-made interview questions. Read
+`.bee/verify/verify-app/features/README.md` when that index exists, for one
+question: is this ask a new feature, or a change to one already mapped? A
+mapped feature is a change — never a second door to the same room. Default:
 effort follows the signal, not a fixed script:
 
 | Request | Signal | Next step |
@@ -61,12 +64,26 @@ Make each reasoning move in plain words — "let me check what we're
 assuming", not "applying First Principles"; the method names in
 `.bee/expertise/thinking.md` are your routing table, not conversation
 vocabulary. `bee decisions log` the moment each answer settles — never
-batched at the end. Defer scope creep with `bee backlog add`, then
-return to the current question. Never answer your own question.
+batched at the end. Defer scope creep with `bee backlog pbi add
+--brief-file <draft>`, whose cost paragraph says why the scope moved out
+and what waiting costs, then return to the current question. Never answer your own question.
 
 Stop when every locked decision can be written without inventing intent
 and each remaining unknown is a named Open Question; past that,
 questions are stalling — never ask "anything else?", present what's locked.
+
+Two hat-wave windows touch shaping, and the PROCEDURE for both is
+single-homed in `bee-hive/references/gates-and-delegation.md` ("Hat wave"),
+decision 07328333 — these are pointers, never a second copy.
+
+- **Pre-Lock spec critique (discretionary).** A big, hard-to-reverse spec
+  earns a wave before Lock: the fixed perspectives critique the drafted
+  spec at SPEC altitude, and accepted findings route back through the
+  interview. A small spec gets no wave (decision `98ac20a1`).
+- **The plan-step wave (the default firing point).** Once shaping has
+  clarified the spec, the wave itself belongs to the PLAN step, where the
+  leader opens it to build the plan — not to shaping. Lock still never
+  takes hat output directly (decision `a52c854d`).
 
 ## Qualify (headless triage)
 
@@ -96,6 +113,15 @@ on this path; everything unresolved is written down, never guessed.
    visible map stub instead of sinking silently (D6.3); risk parks keep
    the Outstanding Questions path unchanged.
 
+A **foreign-origin spec drop** (decision 12deaa34) arrives as an ordinary
+proposed PBI whose id IS the sender's correlation id and whose CoS carries
+the provenance line (`from <repo>@<commit>`), usually with a spec file
+already written into this repo's docs tree. Qualify it like any other item —
+the evidence is the spec file itself; risk content parks at any confidence.
+It is deliberately NOT dispatchable by herding until this triage locks
+CONTEXT.md and flips it in-flight: the proposed-until-shaped hop is the
+safety net for work another repo authored.
+
 ## Lock (single writer)
 
 `docs/history/<feature>/CONTEXT.md` (`references/context-template.md`)
@@ -103,12 +129,19 @@ is the one decision record, written here for both paths. Lock renders
 what Explore or Qualify resolved — it never originates a decision, term,
 boundary, or scope note; a section the input left silent is an Open
 Question, never a guess. Concrete language only. Deferred ideas that are
-real future work get `bee backlog add` in the same turn. Downstream work
+real future work get `bee backlog pbi add --brief-file <draft>` in the
+same turn, the cost paragraph saying why the scope moved out and what
+waiting costs. Downstream work
 cites D-IDs, never reinterprets them (AGENTS.md). When a
 `docs/discovery/<effort>/` map backs the feature, Lock consumes the
 map's Decisions so far — the settled answers and their D-IDs — straight
 into CONTEXT.md, citing them; it never re-asks a question the map
 already resolved (D8).
+
+Lock also writes `docs/briefs/<feature>.md`, the owner brief, drawn from
+the Feature Boundary and the Locked Decisions in the owner language, and
+checks it with `bee backlog briefs --id <feature>`. The contract lives in
+`docs/knowledge/areas/decision-memory/owner-brief-contract.md`.
 
 **The `tiny`/`docs` brief (D1, traceable-runs).** Every file-touching
 request, at every lane, needs a brief written before any source edit —

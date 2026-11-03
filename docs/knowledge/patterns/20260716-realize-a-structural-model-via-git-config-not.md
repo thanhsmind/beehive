@@ -7,6 +7,7 @@ timestamp: 2026-07-16
 bee:
   id: pattern-20260716-realize-a-structural-model-via-git-config-not
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["docs/history/learnings/critical-patterns.md#PAT3", "original feature: worktree-feature-parallelism"]
   polarity: practice
   critical: false

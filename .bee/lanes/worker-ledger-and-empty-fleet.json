@@ -1,0 +1,526 @@
+{
+  "schema_version": "1.0",
+  "feature": "worker-ledger-and-empty-fleet",
+  "mode": "standard",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
+  "next_action": "Closed; proposal reviewed.",
+  "created_at": "2026-09-20T01:12:24.967Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "main is in sync. Checking the local worktree branches for anything not already in main.",
+    "asked_at": "2026-09-20T02:30:56.583Z",
+    "session": "216eecd1-df88-4449-9865-5310500ae2ba"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "multi-domain"
+    ],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-09-20T01:12:31.121Z",
+    "feature": "worker-ledger-and-empty-fleet"
+  },
+  "gate_preview": {
+    "feature": "worker-ledger-and-empty-fleet",
+    "plan_sha256": "540d413849282722171b91512e04c8fe620889a3a7c3d4af88ca0313fa9d84c0",
+    "previewed_at": "2026-09-20T02:20:15.002Z",
+    "cells": [
+      {
+        "id": "wlf-3",
+        "feature": "worker-ledger-and-empty-fleet",
+        "title": "Append the run's outcome to its wave-ledger row when the run ends",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `ledger_outcome` in it so one filter covers the cell. Today herding/run.rs appends a wave-ledger row at dispatch time with `outcome: None` (around line 2178-2194) and never appends again, so 431 of 437 worker rows in the live ledger are still blank. The ledger's own header (wave_ledger.rs:26-31) says a caller MAY append a second time for the same wave_id once the outcome is known, and the read-time fold (fold_waves_by_wave_id) makes the later row supersede the earlier one — so this is an APPEND, never a rewrite. Step 1, add tests that fail: a run that finishes appends a SECOND wave-ledger row for the same wave_id whose worker outcome equals the same string the result envelope reports (outcome_label, run.rs:3435-3449); the first row's bytes are still present and unchanged on disk; and an append failure leaves the run's own outcome and exit code exactly as they were. Step 2, make them pass: where the run's outcome becomes known, build a WaveRow with the same wave_id, started_at and worker identity as the dispatch-time row, set the worker's outcome to outcome_label(&result.outcome), fill evidence with the report or log path the run already knows (or None when it has none), and append it through wave_ledger::append_wave. Copy the existing best-effort contract at run.rs:2192-2194 exactly — a failure prints its own warning line and NEVER changes the run's outcome or exit code. Do not rewrite or delete any ledger line, do not change outcome_label's vocabulary, do not touch herding/wave.rs, and do not change any existing assertion.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml ledger_outcome",
+        "must_haves": {
+          "truths": [
+            "A finished run appends a second ledger row for its wave_id carrying the same outcome string the envelope reports",
+            "The dispatch-time row's bytes are still on disk unchanged after the second append",
+            "A failing ledger append leaves the run's outcome and exit code unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "a second append_wave call carrying outcome_label's value, under the existing best-effort contract; no TODO stubs"
+            }
+          ],
+          "key_links": [
+            "the appended outcome string is the same one outcome_label produces for the result envelope"
+          ],
+          "prohibitions": [
+            "No rewrite or deletion of any ledger line",
+            "No change to outcome_label's vocabulary",
+            "No change to herding/wave.rs or wave_ledger.rs",
+            "No new failure path in bee herding run",
+            "No edit to any existing assertion"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "wlf-4",
+        "feature": "worker-ledger-and-empty-fleet",
+        "title": "Name a closed wave in which no worker succeeded an empty fleet",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `empty_fleet` in it so one filter covers the cell. Add a pure verdict over the folded waves in wave_ledger.rs, beside the existing is_closed and live_worker_count. A wave is an EMPTY FLEET when all three hold: it is closed by the existing is_closed predicate (every worker reported an outcome — reuse it, do not write a second one), it has at least one worker, and no worker's outcome is \"done\". Three cases are explicitly NOT an empty fleet and each needs its own test: a wave with zero workers launched nothing; a wave with any worker still carrying a null outcome is still running; and a wave whose workers all carry \"dry_run\" did nothing real. A wave with at least one \"done\" is not an empty fleet however many others failed. Return enough for a caller to report it — the wave_id and the worker names with their outcomes — and cap the number of names returned so a huge wave cannot produce an unbounded string. This cell adds a function and its tests only: do not wire it into any command, any output or any hook, and do not change is_closed, fold_waves_by_wave_id, live_worker_count or any existing assertion.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml empty_fleet",
+        "must_haves": {
+          "truths": [
+            "A closed wave whose workers all failed is an empty fleet",
+            "A closed wave with at least one done outcome is not an empty fleet",
+            "A wave with no workers is not an empty fleet",
+            "A wave with any unreported worker is not an empty fleet",
+            "A closed wave whose workers are all dry_run is not an empty fleet"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+              "substantive": "an empty-fleet verdict reusing is_closed, with a cap on the number of worker names returned; no TODO stubs"
+            }
+          ],
+          "key_links": [
+            "the verdict calls the existing is_closed rather than re-deriving closedness"
+          ],
+          "prohibitions": [
+            "No wiring into any command, output or hook in this cell",
+            "No change to is_closed, fold_waves_by_wave_id or live_worker_count",
+            "No change to herding/run.rs or herding/wave.rs",
+            "No edit to any existing assertion"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "two small Rust changes, one file each, in one crate"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first tests are the whole proof of both cells"
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "the ledger reads that reordered this slice were done by the orchestrator; the evidence is claims 1 through 9 and the deviation is named in Approach"
+        },
+        {
+          "stage": "extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "no narrow fact lookup remains"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "code covers the only generation work"
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "this plan"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes an independent review",
+          "reason": "review is user-invoked, never automatic"
+        },
+        {
+          "stage": "advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "two small cells with ten recorded claims"
+        },
+        {
+          "stage": "docs",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "the bee-herding knowledge area needs the closed-row rule recorded",
+          "reason": "capture runs at close"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "two cells, no swarm to supervise"
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "no hat wave: ten recorded claims and two small cells"
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "the smaller-path check is recorded inline in Approach"
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes in this slice"
+        },
+        {
+          "stage": "lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "as above"
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "worker-ledger-and-empty-fleet",
+    "plan_sha256": "540d413849282722171b91512e04c8fe620889a3a7c3d4af88ca0313fa9d84c0",
+    "previewed_at": "2026-09-20T02:20:15.002Z",
+    "cells": [
+      {
+        "id": "wlf-3",
+        "feature": "worker-ledger-and-empty-fleet",
+        "title": "Append the run's outcome to its wave-ledger row when the run ends",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `ledger_outcome` in it so one filter covers the cell. Today herding/run.rs appends a wave-ledger row at dispatch time with `outcome: None` (around line 2178-2194) and never appends again, so 431 of 437 worker rows in the live ledger are still blank. The ledger's own header (wave_ledger.rs:26-31) says a caller MAY append a second time for the same wave_id once the outcome is known, and the read-time fold (fold_waves_by_wave_id) makes the later row supersede the earlier one — so this is an APPEND, never a rewrite. Step 1, add tests that fail: a run that finishes appends a SECOND wave-ledger row for the same wave_id whose worker outcome equals the same string the result envelope reports (outcome_label, run.rs:3435-3449); the first row's bytes are still present and unchanged on disk; and an append failure leaves the run's own outcome and exit code exactly as they were. Step 2, make them pass: where the run's outcome becomes known, build a WaveRow with the same wave_id, started_at and worker identity as the dispatch-time row, set the worker's outcome to outcome_label(&result.outcome), fill evidence with the report or log path the run already knows (or None when it has none), and append it through wave_ledger::append_wave. Copy the existing best-effort contract at run.rs:2192-2194 exactly — a failure prints its own warning line and NEVER changes the run's outcome or exit code. Do not rewrite or delete any ledger line, do not change outcome_label's vocabulary, do not touch herding/wave.rs, and do not change any existing assertion.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml ledger_outcome",
+        "must_haves": {
+          "truths": [
+            "A finished run appends a second ledger row for its wave_id carrying the same outcome string the envelope reports",
+            "The dispatch-time row's bytes are still on disk unchanged after the second append",
+            "A failing ledger append leaves the run's outcome and exit code unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "a second append_wave call carrying outcome_label's value, under the existing best-effort contract; no TODO stubs"
+            }
+          ],
+          "key_links": [
+            "the appended outcome string is the same one outcome_label produces for the result envelope"
+          ],
+          "prohibitions": [
+            "No rewrite or deletion of any ledger line",
+            "No change to outcome_label's vocabulary",
+            "No change to herding/wave.rs or wave_ledger.rs",
+            "No new failure path in bee herding run",
+            "No edit to any existing assertion"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "wlf-4",
+        "feature": "worker-ledger-and-empty-fleet",
+        "title": "Name a closed wave in which no worker succeeded an empty fleet",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `empty_fleet` in it so one filter covers the cell. Add a pure verdict over the folded waves in wave_ledger.rs, beside the existing is_closed and live_worker_count. A wave is an EMPTY FLEET when all three hold: it is closed by the existing is_closed predicate (every worker reported an outcome — reuse it, do not write a second one), it has at least one worker, and no worker's outcome is \"done\". Three cases are explicitly NOT an empty fleet and each needs its own test: a wave with zero workers launched nothing; a wave with any worker still carrying a null outcome is still running; and a wave whose workers all carry \"dry_run\" did nothing real. A wave with at least one \"done\" is not an empty fleet however many others failed. Return enough for a caller to report it — the wave_id and the worker names with their outcomes — and cap the number of names returned so a huge wave cannot produce an unbounded string. This cell adds a function and its tests only: do not wire it into any command, any output or any hook, and do not change is_closed, fold_waves_by_wave_id, live_worker_count or any existing assertion.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml empty_fleet",
+        "must_haves": {
+          "truths": [
+            "A closed wave whose workers all failed is an empty fleet",
+            "A closed wave with at least one done outcome is not an empty fleet",
+            "A wave with no workers is not an empty fleet",
+            "A wave with any unreported worker is not an empty fleet",
+            "A closed wave whose workers are all dry_run is not an empty fleet"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+              "substantive": "an empty-fleet verdict reusing is_closed, with a cap on the number of worker names returned; no TODO stubs"
+            }
+          ],
+          "key_links": [
+            "the verdict calls the existing is_closed rather than re-deriving closedness"
+          ],
+          "prohibitions": [
+            "No wiring into any command, output or hook in this cell",
+            "No change to is_closed, fold_waves_by_wave_id or live_worker_count",
+            "No change to herding/run.rs or herding/wave.rs",
+            "No edit to any existing assertion"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "two small Rust changes, one file each, in one crate"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first tests are the whole proof of both cells"
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "the ledger reads that reordered this slice were done by the orchestrator; the evidence is claims 1 through 9 and the deviation is named in Approach"
+        },
+        {
+          "stage": "extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "no narrow fact lookup remains"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "code covers the only generation work"
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "this plan"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes an independent review",
+          "reason": "review is user-invoked, never automatic"
+        },
+        {
+          "stage": "advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "two small cells with ten recorded claims"
+        },
+        {
+          "stage": "docs",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "the bee-herding knowledge area needs the closed-row rule recorded",
+          "reason": "capture runs at close"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "two cells, no swarm to supervise"
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "no hat wave: ten recorded claims and two small cells"
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "the smaller-path check is recorded inline in Approach"
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes in this slice"
+        },
+        {
+          "stage": "lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "as above"
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-09-20T01:55:26.455Z"
+  },
+  "last_scribing_run": {
+    "feature": "worker-ledger-and-empty-fleet",
+    "date": "2026-09-20",
+    "at": "2026-09-20T14:44:19.234Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
+  }
+}

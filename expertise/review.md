@@ -13,6 +13,10 @@ that produces thirty observations.
 | Assigning blocker / major / minor | Severity calibration |
 | Tempted to inflate, or torn between two levels | Severity is a spent signal |
 | Reading a diff for defects | Adversarial reading |
+| Building the list of what a correct change must handle | The 5-Layer rubric |
+| The diff adds branches, guards, or a new case | The Truth Table Test |
+| The change brings a thing into being or takes it away | The CRUD Lifecycle check |
+| Auditing a plan's load-bearing claims table | Claims-table audit |
 | About to file a suspected defect | Verify before reporting |
 | Cannot fully verify a finding | Label uncertainty exactly |
 | Writing the finding up | Evidence standards |
@@ -107,6 +111,122 @@ Concretely:
 The author's tests tell you what the author worried about. Your job is
 the worry they did not have.
 
+## The 5-Layer rubric
+
+**Five layers, and this file writes out none of them.** "Adversarial
+reading" tells you to list what a correct change must handle before you
+read the diff. This is the shape of that list — five layers, each one
+already written down somewhere in this repo. Go to the home and read the
+rule there. A second copy of a rule is the copy that goes stale.
+
+| Layer | The question it asks | Where the rule already lives |
+|---|---|---|
+| Data contract | What does the store promise about this data, and what holds the promise? | [data.md](data.md) ("The store is a contract", "Constraints belong beside the data") |
+| Happy path | Is the representative, intended use covered at its smallest demonstrating size? | [tests.md](tests.md) ("Choosing cases") |
+| Failure edge | Empty, boundary, arrives twice, dependency dies halfway — which of these does the change meet? | [tests.md](tests.md) ("Choosing cases"); on `high-risk` work, `skills/bee-planning/references/edge-dimensions.md` ("The 12 Edge-Case Dimensions") |
+| NFR | Speed, exposure, failure handling — the qualities no request names out loud | [performance.md](performance.md), [security.md](security.md), and the triggers in `skills/bee-reviewing/references/reviewing-reference.md` ("Conditional lenses — spawned by diff triggers") |
+| Definition of done | What proof exists that this works, and who checked it? | `AGENTS.md` ("Done means done", "Prove, then say so"), and the cell's own `must_haves` |
+
+The rubric earns its keep by finding the layer you skipped, never by
+producing five sections of write-up. A layer the change does not touch
+is answered "n/a" and left there. A layer it does touch, whose home
+answer you cannot state, is where this review starts.
+
+## The Truth Table Test
+
+**Every branch the diff adds owes you its other side.** A condition
+splits the world in two and the diff shows you one half. Write the
+halves down: one row per branch, one column for the condition true, one
+for the condition false, and fill every cell. An empty cell is the
+finding.
+
+Read for the shapes that hide a missing half:
+
+- An `if` with no `else`, where falling through is a real outcome and
+  nobody said what that outcome is.
+- A guard that returns early and hands the caller a value it did not
+  expect — a null, a zero, an empty list that reads as "none found"
+  when it means "never looked".
+- A chain of `else if` with no final `else`: the input that matches no
+  arm does nothing at all, silently.
+- A `switch` or `match` on a type that can grow — the case added next
+  month lands in a default nobody chose for it.
+- Two conditions read one at a time that can both be true. Two
+  branches make four rows: A, B, both, neither.
+
+For each empty cell, name the input that reaches it. That input is the
+missing test, and it is what turns the empty cell into a finding with a
+scenario — "What a finding is". If no input can reach the cell, the
+branch is dead code: still a finding, at minor, and say which of the two
+it is.
+
+## The CRUD Lifecycle check
+
+**Pick one thing the change touches and follow its whole life.** A diff
+usually adds one verb — a create, or an update — and gets reviewed as
+that one verb. The defects sit in the other three, which someone else
+wrote earlier and nobody has read beside this change.
+
+Take the record, the file, the session, the lock — whatever the change
+brings into being — and walk all four:
+
+- **Create.** What happens on a second create with the same identity —
+  refuse, overwrite, or a duplicate nobody can tell apart?
+- **Read.** What does a reader see between the create and the commit,
+  and what comes back for a thing that does not exist: an error, or a
+  shape that reads as empty?
+- **Update.** Two updates at once — last write wins, or lost update?
+  Does a half-applied update leave the thing in a shape no reader
+  expects?
+- **Delete.** What happens to whatever points at it? Is the delete real
+  or a flag, and does every reader honor the flag? May a later create
+  reuse the deleted identity?
+
+Then close the loop the diff almost never closes: delete it, then create
+it again. Re-create-after-delete is where stale caches, orphaned
+children, and a unique constraint over soft-deleted rows all surface at
+once. When the change owns only one of the four verbs, the other three
+are still the requirement it must not break — file that as the caller's
+expectation, not as an out-of-scope note.
+
+## Claims-table audit
+
+**Open every anchor. A quote nobody re-opened is not evidence.** A plan's
+`## Load-bearing claims` table says the shape rests on these facts and
+here is where each one was seen. The table is a promise about bytes on
+disk, and the only way to audit a promise about bytes is to go read the
+bytes. Reading the table and finding it well-formed audits nothing — the
+binary already did that at the gate.
+
+Row by row:
+
+1. **Open the anchor.** `path:line` or `path:line-line` → open that file
+   at those lines. A `ran` row → run that exact command again.
+2. **Compare bytes, by the match rule.** The evidence column must be a
+   verbatim byte substring of the anchored line(s); multi-line evidence
+   joins the lines with `" / "`. Reflowed, trimmed, prettified, or
+   paraphrased text is a MISMATCH. A dropped prefix is a mismatch. Close
+   enough is a mismatch.
+3. **File every mismatch as a BLOCKER.** Quote what the table claims and
+   what the file actually says, on one line each. A wrong anchor and a
+   wrong quote are the same finding at this severity: the shape rests on
+   a fact nobody verified, and severity follows the load the claim
+   carries, never the size of the diff between the two strings.
+
+Then the **membership sweep**, the half no machine can run: read the
+plan's prose — Approach, Discovery, Shape, the risk map — for a claim the
+shape depends on that never became a row. "X already handles this",
+"there is only one caller", "the format is stable" in prose, absent from
+the table, is a BLOCKER: the table's rule is that every load-bearing
+claim is a row, so a load-bearing claim in prose alone is the rule broken,
+not an oversight. Say which sentence, and which row it should have been.
+
+Two things this audit does NOT do. It does not re-argue the shape — that
+belongs to the plan's own review. And it does not soften a mismatch
+because the conclusion still looks right: a true conclusion resting on a
+fabricated quote is the most expensive finding in this file, because the
+next person will trust the next quote.
+
 ## Verify before reporting
 
 Reproduce or trace every suspected defect before you file it. Run the
@@ -120,14 +240,47 @@ burns their trust, and buries the real findings in the same report. A
 review with three verified defects outranks one with three verified
 defects and seven maybes — the maybes cost the three their credibility.
 
+A dropped suspicion is still a result. When a suspected defect fails
+verification and you drop it, RECORD the drop instead of discarding it:
+the suspicion in one line, the `path:line` that raised it, and the reason
+it went — what you checked, never a verdict word. "Traced `retry()`; the
+guard at `src/net/retry.ts:118` already catches it" is a reason. "Not a
+problem" is not. Return those records beside your findings; they are what
+the report renders as its Dismissed section
+(`skills/bee-reviewing/SKILL.md`, "Dismissed — show what the lead
+rejected"). A silent drop is an invisible filter — the author never sees
+the judgement, so they can never overturn it, and a wrong drop costs more
+than a wrong finding because nothing reveals it.
+
 ## Label uncertainty exactly
 
 Uncertainty is allowed; unlabeled uncertainty is not. When you cannot
-fully verify → say exactly what you established and what you did not:
+fully verify → say exactly what you established, how far you proved it,
+and where the check stopped.
 
-> "Verified: `parse()` returns `undefined` for empty string (ran it).
-> Unverified: whether any live caller passes empty string — I found no
-> guard, but did not trace all call sites. Confidence: medium."
+**How far is a rung, not a mood.** "Confidence: medium" reports a
+feeling. A rung reports what you did. Name the highest rung the claim
+reached:
+
+1. **said** — stated, nothing checked.
+2. **pointed at the line** — the `path:line` that shows it is cited. A
+   claims-table row with an anchor stands here.
+3. **walked the failure** — the path from input to wrong outcome was
+   traced by hand, step by step.
+4. **ran it** — a command ran and showed the behavior. A claims-table
+   `ran` row stands here.
+5. **reproduced live** — the real product was driven and the wrong
+   outcome seen.
+
+Every finding that shows a rung also names its meaning in words — "rung
+3 (walked the failure)", never a bare "rung 3" — so a reader who never
+saw this ladder still knows what was done. Then say where the check
+stopped: the next rung you did not reach, and why.
+
+> "`parse()` returns `undefined` for empty string — rung 4 (ran it).
+> Whether a live caller passes empty string — rung 2 (pointed at the
+> line): no guard at `src/parse.ts:40`. Stopped: I did not trace every
+> call site."
 
 That report is useful. "This probably breaks on empty string" is not.
 
@@ -224,6 +377,12 @@ judgement call, never a hard violation:
 - **Refused Bequest** — a subclass or implementer that ignores or
   overrides most of what it inherits -> drop the inheritance, use
   composition.
+- **Swelling File** — the diff pushes a file toward a size a reader can
+  no longer hold in their head -> split along the seam the new code
+  opened, in this change.
+- **Dual Path** — an old API or path kept alive beside its replacement,
+  with no external consumer left -> delete the old path in the same
+  change.
 
 ## Asking for a review
 

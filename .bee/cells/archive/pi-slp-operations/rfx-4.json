@@ -1,0 +1,102 @@
+{
+  "id": "rfx-4",
+  "feature": "pi-slp-operations",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "refactor",
+  "title": "Name the plan file in a preview-packet refusal",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "b9a6dfe6-4762-4025-9918-910a371a8a24",
+    "d361a53f-2317-4fca-b919-be571e88bc73",
+    "66f4fd2d-2327-4efd-a3af-942936133e6d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-slp-operations/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D1 and D2. In packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs the eight refusals `addCells: cell \\\"{id}\\\" differs from approved preview packet (<field> mismatch).` (about lines 728-784, fields action, verify, files, read_first, must_haves, title, lane, role) name no fix. check_cell_matches_approved_preview holds the feature. Keep each first sentence byte-identical, then append one fix: `FIX: copy <field> for cell <id> verbatim from the approved packet in docs/history/<feature>/plan.md.` One small local helper is fine for the eight sites. Do not echo the values. Keep the refusal trigger and return type unchanged (D2). Tests red first in the inline test module of the same file: a mismatch refusal still starts with the old sentence and contains `docs/history/<feature>/plan.md` with the real feature and the field name. Write no code comments.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group::plan_packets",
+  "must_haves": {
+    "truths": [
+      "a preview mismatch refusal keeps its first sentence",
+      "a preview mismatch refusal names copying the field from docs/history/<feature>/plan.md with the real feature"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "substantive": "mismatch refusals carry the plan file fix"
+      }
+    ],
+    "key_links": [
+      "every field mismatch uses the same fix wording"
+    ],
+    "prohibitions": [
+      "No change to when a mismatch refuses",
+      "No change to the first sentence",
+      "No echo of field values"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-rfx-4",
+    "outcome": "Preview mismatch refusals keep their first sentence and name the field and docs/history/<feature>/plan.md",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: only refusal fix wording changed; no workflow-state skill quotes these refusal texts (rg over skills/ found none)"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T03:23:42.878Z",
+    "behavior_change": false,
+    "verification_evidence": "covered inside the verbs::state_group run, 242 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group::plan_packets",
+    "claimed_at": "2026-10-03T03:00:04.439Z",
+    "sync_ack": "only refusal fix wording changed; no workflow-state skill quotes these refusal texts (rg over skills/ found none)",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Preview mismatch refusals keep their first sentence and name the field and docs/history/<feature>/plan.md",
+      "commit": "871f8246f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group::plan_packets — green:unit — covered inside the verbs::state_group run, 242 passed",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a preview mismatch refusal keeps its first sentence",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "a preview mismatch refusal names copying the field from docs/history/<feature>/plan.md with the real feature",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T03:25:14.973Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "id": "iol-3",
+  "feature": "install-orchestrator-link",
+  "lane": "tiny",
+  "role": "docs",
+  "title": "Move the orchestrator install section from README to INSTALL.md",
+  "behavior_change": false,
+  "files": [
+    "README.md",
+    "INSTALL.md"
+  ],
+  "read_first": [
+    "INSTALL.md"
+  ],
+  "action": "Owner correction: the orchestrator (waggledance) install section belongs in INSTALL.md, not README. Remove the README subsection; add an ## Orchestrator (waggledance) section to INSTALL.md after ## 5. Update / uninstall; amend the tiny brief.",
+  "verify": "README no longer mentions the waggledance installer; INSTALL.md carries the section; the raw install.sh URL resolves 200.",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "iol-inline",
+    "outcome": "Orchestrator install section moved verbatim README -> INSTALL.md (own ## section after Update/uninstall); README mention removed",
+    "files_changed": [
+      "README.md",
+      "INSTALL.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T02:36:38.946Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1994bcc5-28cb-45f8-9300-bc4469c0a11b",
+    "claimed_at": "2026-08-30T02:36:08.987Z",
+    "report": {
+      "outcome": "Moved the orchestrator (waggledance) install section from README § Install into INSTALL.md as its own ## section; README now has zero waggledance mentions",
+      "commit": "99424f08",
+      "files": [
+        "README.md",
+        "INSTALL.md"
+      ],
+      "tests": "rg -c waggledance README.md INSTALL.md; curl -s -o /dev/null -w %{http_code} .../waggledance/main/install.sh — README 0, INSTALL.md 3, link 200 — docs-only move; proof is absence in README, presence in INSTALL.md, live link target",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -6,7 +6,7 @@ timestamp: 2026-08-17
 bee:
   id: pattern-20260817-shared-git-index-in-one-worktree
   lifecycle: active
-  areas: [worktree-lifecycle]
+  areas: [worktree-parallelism]
   sources: ["worktree-keep-on-merge cells wkm-2/wkm-3 worker reports (2026-08-17): wkm-2's commit cycle swept wkm-3's staged registry.rs; a tests.rs edit was wiped and redone; both self-healed, final attribution clean (commits 3e32e605, 6ff041f8)", "sibling friction: merge-time bookkeeping sweep, backlog row 2026-08-16 (commit e9840f11)"]
 ---
 
@@ -30,3 +30,14 @@ in the same checkout, serialize the commit step (one worker commits at
 a time), give each worker its own `GIT_INDEX_FILE`, or simply dispatch
 one execution worker per worktree at a time. The cheapest reliable
 shape today is the last one.
+
+**Recurrences.** pstack-craft-adoption (2026-09-11): the concurrent-worker
+guard now refuses a whole-index add, so parallel workers in one worktree must
+commit path-scoped (a commit naming only the cell's own paths); seven of ten
+workers lost a call to that refusal before switching. The same run showed a
+second collision the file split cannot see: two parallel cells that write a
+procedure and a door to it both write the same rule, unless the plan gives
+the rule to the procedure cell alone. pi-stage-dispatch (2026-09-15): three
+workers on disjoint files of one Rust crate shared one build, so one worker's
+half-finished edit to a sibling's file broke the others' `cargo test` until
+it compiled again. Disjoint files do not make a shared build safe either.

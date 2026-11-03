@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
   decisions: ["lane-ceremony-v3 D1/D2/D9 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19 — plan document frozen at shape approval, slice-in-units)", self-correcting-loop D3 with Validating amendment Δ4 (change classification and the advisory verification standard), "regen-obligation-derived D1/D2 (derived regen obligation refuses at authoring, recorded escape hatch; roots derived from the tools, never hard-coded — 2026-07-23)", "8ef2bae6 (cli-ergonomics D2 — whole-batch exhaustive refusal + --dry-run preview, 2026-07-24)", "worker-conformance D4/D5/D6 (the trailing test unit stays unconditional but its first mandated step is a coverage judgement, not authoring; test shape below the highest-risk lane is the happy-path/edge-cases/error-paths triad and the twelve-dimension checklist applies only to high-risk/hard-gate work; no numeric per-group test cap is added — 2026-07-29)", "worker-conformance D13 (the doctrine-vs-machine disagreement over batching the trailing test unit at high risk is recorded as an open gap, not fixed — the close-door predicate was deliberately left unchanged)", "hook-teeth D3/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — no units before the gate: authoring into an ungated feature refuses the whole batch, documentation-lane work exempt)", "counter-teeth D3/D6 (docs/history/counter-teeth/CONTEXT.md, 2026-08-04 — the ceiling tier's 40% share becomes a refusal with a recorded-reason escape; decision 0012's threshold value unchanged)"]
-  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12", "hook-teeth cell bh-3 (gated authoring refuses the whole batch, lane record beats the default, docs lane exempt; trace .bee/cells/bh-3.json, 2026-08-04 — cells slice 83 passed)", "counter-teeth cell ct-4 (ceiling-share refusal with the --reason override persisted as trace.tier_reason; trace .bee/cells/ct-4.json, commit a5e564fa, 2026-08-04 — cells 71 passed, 0 failed)", "addcell-all-problems cell cap-1 (single-cell path joins all problems via the shared collector, 2026-08-17)", "cell-preflight cell cpf-1 (pre-flight checklist + mandatory dry-run in the planning flow, commit ea64d5b4, 2026-08-17)"]
+  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12", "hook-teeth cell bh-3 (gated authoring refuses the whole batch, lane record beats the default, docs lane exempt; trace .bee/cells/archive/hook-teeth/bh-3.json, 2026-08-04 — cells slice 83 passed)", "counter-teeth cell ct-4 (ceiling-share refusal with the --reason override persisted as trace.tier_reason; trace .bee/cells/archive/counter-teeth/ct-4.json, commit a5e564fa, 2026-08-04 — cells 71 passed, 0 failed)", "addcell-all-problems cell cap-1 (single-cell path joins all problems via the shared collector, 2026-08-17)", "cell-preflight cell cpf-1 (pre-flight checklist + mandatory dry-run in the planning flow, commit ea64d5b4, 2026-08-17)"]
   authoritative_for: "workflow-state: unit-of-work authoring, plan revision, and the frozen plan document"
 ---
 
@@ -32,7 +32,7 @@ revisable at all once its gate is granted.
 | `feature` | The feature slug the cell belongs to. |
 | `title` | One-line summary of what the cell delivers. |
 | `lane` | Lane classification (`tiny`, `small`, `standard`, `high-risk`, `spike`). |
-| `role` | The job this work is; the sole model selector. Required on `cells add`, exactly as `lane` is (model-role-split D7, store `4eaf1b71`). Any non-empty name is legal — validation checks presence and shape, never membership. `code`, `read`, `test`, `docs`, `review`, `design` are the recommended vocabulary (D8), authoring guidance only, never an enforced list. A role nothing in `models.<runtime>` configures still runs: the dispatch falls through to the next name it asked for and warns, it never refuses. The one silent case is `code` or `read` on a runtime whose `models.<runtime>` configures neither of them — the pre-roles window, closed by configuring either key. |
+| `role` | The job this work is; the sole model selector. Required on `cells add`, exactly as `lane` is (model-role-split D7, store `4eaf1b71`). Any non-empty name is legal — validation checks presence and shape, never membership. `code`, `read`, `test`, `docs`, `review`, `design` are the recommended vocabulary (D8), authoring guidance only, never an enforced list. A role nothing in `team.<runtime>` configures still runs: the dispatch falls through to the next name it asked for and warns, it never refuses. The one silent case is `code` or `read` on a runtime whose `team.<runtime>` configures neither of them — the pre-roles window, closed by configuring either key. |
 | `status` | State of the cell (`open`, `claimed`, `capped`, `blocked`, `dropped`). |
 | `deps` | Array of cell ids whose completion this cell depends on. |
 | `decisions` | Array of decision ids or tags cited by this cell. |
@@ -246,6 +246,14 @@ silent.
   replacement — so the proof recorded on the cap was never the command the
   author wrote. Two filters are two commands joined by `&&`, or one wider
   filter; never two positionals.
+- **A unit's verification command names tests that exist by the time it runs.**
+  A filter that matches nothing exits green, so a filter naming a module or a
+  symbol the unit is about to create reports success before a line is written.
+  Author the filter over the module the tests will actually live in, or make the
+  command assert the count of tests it expects. The general form — any
+  name-matching runner passes a selector that resolves to nothing — is the
+  selector-matches-nothing pitfall; this is its authoring-time half, because the
+  scope decision is made when the unit is written.
 
 - R46 — A unit's change classification is set explicitly or derived only from
   the behavior-change flag — never any richer auto-derivation — and an
@@ -350,6 +358,27 @@ silent.
   by running those tests green and recording the judgement with its citations
   (worker-conformance D4).
 
+
+**A cell that adds a file under a release-manifest root carries the manifest
+obligation in its own `verify` and `files`.** `expertise-principles` ep-1 added
+a skill file without a release-manifest row, so the manifest rebuild test was
+red (295 records against an expected 296) on the base the *next* cell inherited
+— a red the authoring cell never saw and the following cell could not explain.
+The cells-add pre-flight names this obligation already; ep-1 was drafted without
+reading it.
+
+**A `cargo test` invocation that names an integration test without `--test` is a
+test-NAME filter.** It matches zero tests, runs nothing, and exits `0`. A cell
+whose verify command is written that way can never go red, so the cap records a
+green that proves nothing. Running an integration test file requires
+`--test <name>`. Found by a worker checking its own verify line against
+`expertise-principles` cells ep-1 and ep-3. The sibling trap is a bare
+filter list: `cargo test <args> prepare model_guard drivers` is rejected by
+cargo itself (`unexpected argument`), because those filters belong to libtest
+and need a `--` separator. One form fails loudly, the other passes silently,
+and the silent one is the dangerous one — a verify line is not proven until it
+has been seen to go RED for the right reason.
+
 ## Open Gaps
 
 - *(Closed by supersession 2026-07-31 — decision 412e9b3a,
@@ -400,7 +429,7 @@ silent.
   `list_cells(root, feature, None)`, with the assigned cell removed and re-added
   under its new tier before the comparison. The escape is `--reason <text>`,
   persisted as `trace.tier_reason` (`handlers_close.rs:932-935`). Red-first per
-  counter-teeth D6. Evidence: trace `.bee/cells/ct-4.json`, commit a5e564fa
+  counter-teeth D6. Evidence: trace `.bee/cells/archive/counter-teeth/ct-4.json`, commit a5e564fa
   (cells 71 passed, 0 failed, 2026-08-04).
 - Gated authoring refusal (B46/R98): `gated_add_refusal` in
   `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:115-156` — the
@@ -408,7 +437,7 @@ silent.
   whose `mode` is `docs` is exempt. The refusal folds into
   `build_add_cells_report`'s per-row problems (`handlers_write.rs:179-197`), so
   one gated row fails the batch and nothing is written. Lane precedence mirrors
-  `plan_freeze_shape_approved`'s. Evidence: trace `.bee/cells/bh-3.json` (cells
+  `plan_freeze_shape_approved`'s. Evidence: trace `.bee/cells/archive/hook-teeth/bh-3.json` (cells
   slice 83 passed, 2026-08-04).
 - Judge obligation for guard-touching units below standard/high-risk
   (B52/R103): `judge_obligation_refusal` / `assert_judge_obligation`,
@@ -419,4 +448,4 @@ silent.
   required-roots list is pinned against the crate source tree in both
   directions by `every_judge_required_root_exists_on_disk` and
   `every_guard_segment_directory_under_crate_src_is_covered_by_a_declared_root`
-  in the same file. Evidence: trace `.bee/cells/jo-1.json`.
+  in the same file. Evidence: trace `.bee/cells/archive/judge-obligation/jo-1.json`.

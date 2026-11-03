@@ -28,9 +28,11 @@ pub(crate) const NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE: &str = "native_model_ov
 
 pub(crate) const NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY: &str = "native_budget_only";
 
+pub(crate) const NATIVE_TRANSPORT_EXTERNAL_CLI_ONLY: &str = "external_cli_only";
+
 /// Every role name a dispatch on this runtime may legally declare.
 ///
-/// DERIVED, never listed (model-role-split D2): the keys `models.<runtime>`
+/// DERIVED, never listed (model-role-split D2): the keys `team.<runtime>`
 /// carries after `normalize_models` — the operator's own roles plus the
 /// built-in defaults bee seeds there — and `ceiling`, which decision 0015
 /// keeps out of config on purpose and which `resolve_tier` answers with
@@ -176,11 +178,12 @@ pub(crate) fn role_list(models: &Map<String, Value>, runtime: &str) -> String {
 /// answer when nothing else in the dispatch says which of the two is meant;
 /// the one signal that CAN say so is `--kind cell`, and `prepare.rs` reads it
 /// before it ever reaches this table.
-pub(crate) const ROLE_AGENTS: [(&str, &str); 4] = [
+pub(crate) const ROLE_AGENTS: [(&str, &str); 5] = [
     ("generation", "bee-gather"),
     ("generation", "bee-build"),
     ("extraction", "bee-extract"),
     ("review", "bee-review"),
+    ("design", "bee-design"),
 ];
 
 /// What a rendered bee agent DOES, in one clause — the sentence a refusal
@@ -194,6 +197,7 @@ pub(crate) const ROLE_AGENTS: [(&str, &str); 4] = [
 pub(crate) fn agent_job_summary(agent: &str) -> Option<&'static str> {
     match agent {
         "bee-build" => Some("executes a cell (reserves, writes, commits, caps)"),
+        "bee-design" => Some("executes a design cell with the bee-design taste (reserves, writes, commits, caps)"),
         "bee-gather" => Some("reads and reports (never writes)"),
         "bee-extract" => Some("pulls one already-scoped fact and reports (never writes)"),
         "bee-review" => Some("checks a claim read-only and reports (never edits)"),
@@ -291,7 +295,7 @@ pub(crate) fn agents_for_role(role: &str) -> Vec<&'static str> {
 /// declaration in every sense that matters.
 ///
 /// NOT alias-normalized, and that is the point of the split: this answer is
-/// resolved against `models.<runtime>` by the caller, so it has to be the
+/// resolved against `team.<runtime>` by the caller, so it has to be the
 /// name the agent was rendered from — the historical one every host still
 /// carries. See `ROLE_ALIASES`.
 pub(crate) fn role_for_agent(agent: &str) -> Option<&'static str> {
@@ -347,9 +351,12 @@ pub(crate) fn derive_economics(
     param_model: Option<&str>,
     resolved: &Resolved,
     native_confirmed: bool,
+    declared: Option<&str>,
+    effort: Option<&EffortChoice>,
 ) -> Map<String, Value> {
-    let is_native_confirmed =
-        channel == "codex-native" && matches!(resolved, Resolved::Native { .. }) && native_confirmed;
+    let is_native_confirmed = channel == "codex-native"
+        && ((matches!(resolved, Resolved::Native { .. }) && native_confirmed)
+            || (matches!(resolved, Resolved::Model { .. }) && param_model.is_some()));
     let resolved_model: Option<String> = match resolved {
         Resolved::Model { model, .. } | Resolved::Native { model, .. } => Some(model.clone()),
         _ => None,
@@ -378,6 +385,8 @@ pub(crate) fn derive_economics(
         "native-requested"
     } else if channel == "codex-native" {
         "inherited-or-unknown"
+    } else if (channel == "cli-exec" || channel == "herding-exec") && declared.is_some() {
+        "declared"
     } else if channel == "cli-exec" || channel == "herding-exec" {
         "unverified"
     } else if let Some(pm) = param_model {
@@ -387,7 +396,9 @@ pub(crate) fn derive_economics(
         "unverified"
     };
 
-    let requested_model = if channel == "cli-exec" || channel == "herding-exec" || channel == "session-model" {
+    let requested_model = if (channel == "cli-exec" || channel == "herding-exec") && declared.is_some() {
+        Value::String(declared.unwrap().to_string())
+    } else if channel == "cli-exec" || channel == "herding-exec" || channel == "session-model" {
         Value::Null
     } else {
         match param_model.map(str::to_string).or(resolved_model) {
@@ -406,6 +417,11 @@ pub(crate) fn derive_economics(
     );
     out.insert("channel".into(), Value::String(channel.to_string()));
     out.insert("enforcement".into(), Value::String(enforcement.to_string()));
+    let text = |v: Option<&String>| v.map_or(Value::Null, |s| Value::String(s.clone()));
+    out.insert("effort".into(), text(effort.and_then(|c| c.effort.as_ref())));
+    out.insert("effort_base".into(), text(effort.and_then(|c| c.base.as_ref())));
+    out.insert("effort_step".into(), Value::from(effort.map_or(0, |c| c.step)));
+    out.insert("effort_reason".into(), Value::String(effort.map_or("none", |c| c.reason.as_str()).to_string()));
     out
 }
 
@@ -477,7 +493,13 @@ pub(crate) fn read_cell(root: &Path, id: &str) -> D<Option<Value>> {
 /// scribing-debt door detail, so the order reaches an emitted byte (caught by
 /// a live diff against the beehive repo itself, where a plain byte sort put
 /// "rust-port-5" after "rust-port-23").
-pub(crate) fn list_cells(root: &Path, feature: &str, status: &str) -> D<Vec<Value>> {
+/// slp-dissent-stop-and-ask sd-4: `status` is `Option<&str>` — `None` means
+/// EVERY status, the same shape `verbs/cells/read.rs list_cells` already
+/// uses. The dissent-debt door counts a dissent on a cell in ANY status (a
+/// `blocker` dissent leaves it `blocked`, a `consider` dissent leaves it
+/// `open` or `claimed`), so a single hard-coded status string would have made
+/// that door blind to exactly the cells a blocker dissent parks.
+pub(crate) fn list_cells(root: &Path, feature: &str, status: Option<&str>) -> D<Vec<Value>> {
     let mut cells: Vec<Value> = Vec::new();
     let Ok(entries) = std::fs::read_dir(cells_dir(root)) else {
         return Ok(cells);
@@ -498,8 +520,10 @@ pub(crate) fn list_cells(root: &Path, feature: &str, status: &str) -> D<Vec<Valu
         if !matches!(vget(&cell, "feature"), Some(Value::String(f)) if f == feature) {
             continue;
         }
-        if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
-            continue;
+        if let Some(status) = status {
+            if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
+                continue;
+            }
         }
         cells.push(cell);
     }
@@ -520,7 +544,7 @@ pub(crate) fn list_cells(root: &Path, feature: &str, status: &str) -> D<Vec<Valu
 /// is untouched and stays active-only: every other caller (`bee cells list`,
 /// `bee cells ready`, …) keeps its current behavior. Only
 /// `close::scribing_debt` calls this variant.
-pub(crate) fn list_cells_including_archive(root: &Path, feature: &str, status: &str) -> D<Vec<Value>> {
+pub(crate) fn list_cells_including_archive(root: &Path, feature: &str, status: Option<&str>) -> D<Vec<Value>> {
     let mut cells = list_cells(root, feature, status)?;
     let mut seen_ids: HashSet<String> = cells.iter().map(|c| tpl(vget(c, "id"))).collect();
     let archive_dir = cells_dir(root).join(ARCHIVE_DIR_NAME).join(feature);
@@ -543,8 +567,10 @@ pub(crate) fn list_cells_including_archive(root: &Path, feature: &str, status: &
         if !matches!(vget(&cell, "feature"), Some(Value::String(f)) if f == feature) {
             continue;
         }
-        if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
-            continue;
+        if let Some(status) = status {
+            if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
+                continue;
+            }
         }
         let id = tpl(vget(&cell, "id"));
         if !seen_ids.insert(id) {
@@ -654,19 +680,46 @@ mod tests {
 
     #[test]
     fn derive_economics_herding_exec() {
-        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false);
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
+        );
+    }
+
+    #[test]
+    fn derive_economics_herding_exec_declared() {
+        let e = derive_economics(
+            "herding-exec",
+            "generation",
+            None,
+            &Resolved::Budget,
+            false,
+            Some("gemini-3.8-flash-high"),
+            None,
+        );
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":"gemini-3.8-flash-high","effective_model":null,"effective_model_status":"declared","channel":"herding-exec","enforcement":"herding-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
+        );
+    }
+
+    #[test]
+    fn derive_economics_cli_exec_declared() {
+        let cli = Resolved::Cli { command: "tool --model gpt-4o".into() };
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("gpt-4o"), None);
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":"gpt-4o","effective_model":null,"effective_model_status":"declared","channel":"cli-exec","enforcement":"cli-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
     }
 
     #[test]
     fn derive_economics_session_model() {
-        let e = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false);
+        let e = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"ceiling","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"session-model","enforcement":"session-model"}"#
+            r#"{"logical_tier":"ceiling","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"session-model","enforcement":"session-model","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
     }
 }

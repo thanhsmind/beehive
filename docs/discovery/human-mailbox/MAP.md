@@ -84,13 +84,23 @@ integration, not a new bridge.
   answering path in this effort —
   tickets/013-does-the-inbox-act-or-only-read.md
 - D14 (a6475e2c): the feature-close letter is in scope; no weekly digest
-  — tickets/014-longer-horizon-letters.md
+  — tickets/014-longer-horizon-letters.md. The digest itself later shipped
+  as its own feature, letter-digest: daily/weekly digests are markdown
+  files beside the letters in `.bee/human-mailbox/` (b610a1dc), every
+  `bee close` now files its close letter at close time rather than waiting
+  for run end (aedb5be9, narrowing D9 to run-end letters only), and a
+  digest is composed by the next session that finds its period's digest
+  missing — the same recover-on-next-session pattern as D12 (dbbe0778).
 - D17 (1660158a): bee is a harness used to build waggledance, not half of
   it; bee authors the description and the handover crosses by messaging
   the waggledance session, which owns what enters its own backlog — a bee
   session never writes another project's backlog row —
   tickets/009-handover-spec.md (replaces D16 e255fe3a and D15 4c05dde2).
   Delivered: handover message accepted by session waggledance-e1.
+- D18 (4d837e6b): a bee session working inside another project runs no
+  record-writing or record-regenerating command in that project's tree —
+  not a store append, not a view render; it reads, and it messages that
+  project's own session. Extends D17 — tickets/009-handover-spec.md
 
 ## Not yet specified
 
@@ -100,6 +110,7 @@ integration, not a new bridge.
 
 - Real email delivery (SMTP, external inbox) — the mailbox is a
   directory of files; delivery beyond that is a separate effort.
-- A weekly digest folding several nights together (D14).
+- ~~A weekly digest folding several nights together (D14)~~ — shipped by
+  letter-digest, see D14's note above.
 - An answering path from the inbox back to a waiting session (D13) —
   the record stays addressable so this can return as its own effort.

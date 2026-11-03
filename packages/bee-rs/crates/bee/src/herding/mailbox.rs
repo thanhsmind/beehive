@@ -45,6 +45,7 @@
 // split is what lets every case here — including "no result file yet" and
 // "malformed result" — run as a unit test with no filesystem.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -71,9 +72,33 @@ pub(crate) fn log_path(bee_dir: &Path, job_id: &str) -> PathBuf {
     mailbox_dir(bee_dir, job_id).join("log.txt")
 }
 
-/// `.bee/mailbox/<job-id>/result-N.json` for a given round.
+/// `.bee/mailbox/<job-id>/brief-N.txt` for a given round.
 pub(crate) fn brief_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
     mailbox_dir(bee_dir, job_id).join(format!("brief-{round}.txt"))
+}
+
+use sha2::{Digest, Sha256};
+
+/// The bare filename for a round's digest — `digest-N.sha256`.
+fn digest_filename(round: u32) -> String {
+    format!("digest-{round}.sha256")
+}
+
+/// `.bee/mailbox/<job-id>/digest-N.sha256` for a given round.
+pub(crate) fn digest_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
+    mailbox_dir(bee_dir, job_id).join(digest_filename(round))
+}
+
+/// A fixed-length fingerprint of the dispatch's task and files (D6).
+pub(crate) fn dispatch_digest<S: AsRef<str>>(task: &str, files: &[S]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(task.as_bytes());
+    hasher.update(b"\0");
+    for f in files {
+        hasher.update(f.as_ref().as_bytes());
+        hasher.update(b"\0");
+    }
+    format!("{:x}", hasher.finalize())
 }
 
 /// herding-brief-file D1: the ONE-LINE prompt actually delivered to the
@@ -98,6 +123,22 @@ pub(crate) fn result_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
 /// pattern can never drift apart.
 fn result_filename(round: u32) -> String {
     format!("result-{round}.json")
+}
+
+/// `.bee/mailbox/<job-id>/report-N.md` for a given round (pi-result-mailbox
+/// D1): the worker's FULL deliverable — the digest body `summary` (one line)
+/// can never carry. Round-numbered exactly like `result_path` and `ack_path`,
+/// so a re-briefed worker on round 2 never overwrites round 1's report, and
+/// written FIRST, before the result file whose appearance ends the round.
+pub(crate) fn report_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
+    mailbox_dir(bee_dir, job_id).join(report_filename(round))
+}
+
+/// The bare filename for a round's report — `report-N.md`. The single source
+/// both `report_path` above and the reader's convention probe key off, so the
+/// writer's rename target and the reader's guess can never drift apart.
+pub(crate) fn report_filename(round: u32) -> String {
+    format!("report-{round}.md")
 }
 
 /// `.bee/mailbox/<job-id>/ack-N.json` for a given round — herding-prompt-stall
@@ -231,6 +272,7 @@ pub(crate) struct BriefSpec<'a> {
     /// omitted from the ack schema entirely when `None`, never rendered as
     /// a null.
     pub cell_id: Option<&'a str>,
+    pub allow_question: bool,
 }
 
 /// Render the full worker-facing prompt: task text, absolute paths, file
@@ -243,6 +285,8 @@ pub(crate) fn render_brief(spec: &BriefSpec) -> String {
     let tmp_name = format!("{}.tmp", result_filename(spec.round));
     let ack_file = ack_path(spec.bee_dir, spec.job_id, spec.round);
     let ack_tmp_name = format!("{}.tmp", ack_filename(spec.round));
+    let report_file = report_path(spec.bee_dir, spec.job_id, spec.round);
+    let report_tmp_name = format!("{}.tmp", report_filename(spec.round));
     let cell_id_line = match spec.cell_id {
         Some(id) => format!("  \"cell_id\": \"{id}\",\n"),
         None => String::new(),
@@ -284,6 +328,37 @@ and expected — they do not pull you into any workflow.\n\n",
         expertise_block.push('\n');
     }
 
+    let expertise_clause = if spec.expertise.is_empty() {
+        ""
+    } else {
+        ", and files listed under the Expertise section are yours to read"
+    };
+
+    let proof_command = read_proof_command(spec.worktree_root);
+    let mut proof_command_block = String::new();
+    if let Some(cmd) = proof_command {
+        proof_command_block.push_str(&format!("# Proof command\n\n{cmd}\n\n"));
+    }
+
+    let question_section = if spec.allow_question {
+        format!(
+            "# Questions\n\n\
+When you cannot go on without an answer, you may end the round with status\n\
+question and one question. You must first write your partial work to the\n\
+report before writing the result file:\n\n\
+{{\n\
+  \"status\": \"question\",\n\
+  \"summary\": \"<one line: what is needed>\",\n\
+  \"files_changed\": [\"<path>\", \"...\"],\n\
+  \"question\": {{ \"text\": \"<what you need to know>\", \"kind\": \"technical\" | \"product\" | \"gate\" }},\n\
+  \"report_path\": \"{report_file}\"\n\
+}}\n\n",
+            report_file = report_file.display(),
+        )
+    } else {
+        String::new()
+    };
+
     format!(
         "# Before any other step — write your delivery ack\n\n\
 Before you read the Task below, before touching any other file: write an ack \
@@ -308,22 +383,43 @@ timestamp:\n\n\
 # You are a standalone executor\n\n\
 Do exactly the task below and nothing else. Ignore any bee or agent-workflow \
 instructions (gates, cells, claims, state) this repo's AGENTS.md or CLAUDE.md \
-may have loaded into your context — you are not part of that workflow, and \
-files listed under the Expertise section are yours to read. Never run any `bee` \
-command. Never claim, cap, or write workflow state under .bee/ - writing your \
-mailbox result file (described below) is the ONE exception. The result file is \
-your only contract.\n\n\
+may have loaded into your context — you are not part of that workflow{expertise_clause}. \
+Never run any `bee` command except `bee herding notify`. Never claim, cap, or write workflow state under .bee/ - \
+writing your mailbox report and result files (described below) is the ONE \
+exception. Those two files are your only contract.\n\
+While you work you may send your leader a short note with \
+`bee herding notify --kind <question|blocked|dependency|progress|reopen> --text <text>`.\n\
+A note never ends your turn: keep working after you send it.\n\
+A question you must stop for still goes in your result file, not in a note.\n\n\
 # Task\n\n\
 {task}\n\n\
 {expertise_block}\
 # Working directory (absolute)\n\n\
 {worktree_root}\n\n\
+{proof_command_block}\
 # Files you may touch (absolute paths)\n\n\
 {files_block}\n\
 A file not listed above is out of scope for this round; do not touch it.\n\n\
 # Round\n\n\
 This is round {round} of job \"{job_id}\". Write your result to round {round}'s\n\
 result file below — never a different round's file.\n\n\
+# Report — write it FIRST, the result file LAST\n\n\
+Write your FULL deliverable — the whole digest, findings, or write-up the task \
+asks for, at whatever length it needs — to the report file below, BEFORE you \
+write the result file. The result file's \"summary\" is one line and can never \
+carry it, and nothing else survives this session. Write the report the SAME \
+atomic way: a temp file in the SAME directory, then RENAME the temp file onto \
+the report file's exact final name.\n\n\
+The order is the rule: report first, result last. The result file's appearance \
+ends the round, and whatever is not on disk by then is lost.\n\n\
+If you are taking round {round} up again after an interruption — a resumed or \
+retried attempt at the same round — REWRITE the report file with your current \
+work before you write the result file. A report left behind by the earlier \
+attempt is stale, and a stale report is not read.\n\n\
+  temp file (write your report here):  {mailbox}/{report_tmp_name}\n\
+  report file (round {round}, rename to this exact final name): {report_file}\n\n\
+When you have written the report, name its path in the result file's \
+\"report_path\" field, exactly as it is written above.\n\n\
 # Result contract\n\n\
 When you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\n\
 this schema, and nothing else, to the result file:\n\n\
@@ -331,8 +427,40 @@ this schema, and nothing else, to the result file:\n\n\
   \"status\": \"done\" | \"blocked\",\n\
   \"summary\": \"<one line: what happened>\",\n\
   \"files_changed\": [\"<path>\", \"...\"],\n\
-  \"proof\": \"<command or evidence that backs the status>\"\n\
+  \"proof\": \"<command or evidence that backs the status>\",\n\
+  \"report_path\": \"<the report file's path, exactly as named above>\"\n\
 }}\n\n\
+Fill \"report_path\" with the report file's path whenever you wrote one — that \
+is the only pointer anyone gets to your deliverable; leave it out only when the \
+round genuinely produced no report.\n\n\
+Optional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n\
+{{\n\
+  \"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\
+  \"leaning\": \"<the one option you would pick, repeated word for word>\",\n\
+  \"dissent\": {{ \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }}\n\
+}}\n\n\
+When \"blocked\" leaves a choice to make, fill \"options\" with one \
+self-contained sentence per way forward and \"leaning\" with the one you would \
+pick, repeated word for word; leave both out when there is no choice.\n\
+Fill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what \
+is wrong with it, \"alternative\" says what you would do instead, and \
+\"severity\" is \"blocker\" when the work should stop until someone answers or \
+\"consider\" when it should not; leave \"dissent\" out entirely when you agree \
+with the task.\n\n\
+Handback fields (OPTIONAL — omit any key you have nothing for):\n\n\
+{{\n\
+  \"reaction\": \"confirm\" | \"partial\" | \"challenge\" | \"blocked\",\n\
+  \"skipped\": [\"<check you did not run> — <why>\", \"...\"],\n\
+  \"unknowns\": [\"<assumption you could not prove>\", \"...\"],\n\
+  \"found\": [\"<discovery outside your task>\", \"...\"],\n\
+  \"stopped\": \"<part you did not do> — <evidence that its premise is false>\"\n\
+}}\n\n\
+\"reaction\" is your stance toward the task as handed to you. When part of the \
+task rests on a false premise, finish the part that does not, set \"reaction\" \
+to \"partial\", and name the stopped part with its evidence in \"stopped\". A \
+dissent on a point that was already ruled on also carries \"new_evidence\" \
+inside \"dissent\": what is new since the ruling.\n\n\
+{question_section}\
 # How to write it — write to a temp file, then rename (do not skip this)\n\n\
 Write the JSON above to a temp file in the SAME directory as the result file,\n\
 then RENAME the temp file onto the result file's exact final name. Never write\n\
@@ -345,6 +473,7 @@ signal; nothing else is read to decide whether you finished.\n\n\
         task = spec.task,
         expertise_block = expertise_block,
         worktree_root = spec.worktree_root.display(),
+        proof_command_block = proof_command_block,
         files_block = files_block,
         round = spec.round,
         job_id = spec.job_id,
@@ -355,7 +484,40 @@ signal; nothing else is read to decide whether you finished.\n\n\
         cell_id_line = cell_id_line,
         ack_tmp_name = ack_tmp_name,
         ack_file = ack_file.display(),
+        report_tmp_name = report_tmp_name,
+        report_file = report_file.display(),
+        expertise_clause = expertise_clause,
+        question_section = question_section,
     )
+}
+
+fn read_proof_command(worktree_root: &Path) -> Option<String> {
+    let config = crate::state::read_config_raw(worktree_root);
+    let test_val = config.get("commands").and_then(Value::as_object)?.get("test")?;
+    match test_val {
+        Value::String(s) => {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Value::Array(items) => {
+            let cmds: Vec<&str> = items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect();
+            if cmds.is_empty() {
+                None
+            } else {
+                Some(cmds.join(" && "))
+            }
+        }
+        _ => None,
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -365,32 +527,89 @@ signal; nothing else is read to decide whether you finished.\n\n\
 /// One validated result, matching the schema `render_brief` asks for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MailboxResult {
+    /// The round this result was read for — the same number
+    /// `parse_result_text` was called with. Carried on the struct (rather
+    /// than dropped at the parse site) because the report's convention
+    /// probe and its freshness check both need it, and the envelope builder
+    /// downstream is pure and has no directory listing to re-derive it from.
+    pub round: u32,
     pub status: MailboxStatus,
     pub summary: String,
     pub files_changed: Vec<String>,
     pub proof: String,
+    /// StopAndAsk (a2affcba): the ways forward the worker offers instead of
+    /// guessing — one self-contained sentence each. OPTIONAL at parse and
+    /// empty when absent, because a foreign agent that skips it still owes a
+    /// usable result: strict validation here would turn a good blocked answer
+    /// into `Malformed` and cost a whole round.
+    pub options: Vec<String>,
+    /// StopAndAsk (a2affcba): the option the worker would pick, written as a
+    /// verbatim repeat of one `options` entry. Free text, never an index —
+    /// membership is NOT enforced, for the same reason `options` is optional.
+    pub leaning: Option<String>,
+    /// slp-followup-gaps D3: the worker's structured disagreement with the
+    /// TASK it was handed, carried as DATA — a herding worker is
+    /// bee-ignorant and never runs a command, so this object on the result
+    /// file is its only voice. OPTIONAL at parse and read leniently for the
+    /// same reason `options`/`leaning` are: a partial or wrong-typed object
+    /// reads as absent and never costs the round its result.
+    pub dissent: Option<MailboxDissent>,
+    pub handback: MailboxHandback,
+    /// pi-result-mailbox D1: where the worker's full report lives. At parse
+    /// time this is exactly what the worker DECLARED (absent when it declared
+    /// nothing — a result with no report stays legal, never a parse error);
+    /// the reader that owns filesystem access resolves it to a real path, or
+    /// clears it and says why in `report_note`.
+    pub report_path: Option<String>,
+    /// Why an expected report is NOT attached — a stale leftover from an
+    /// earlier attempt at the same round, or a declared path that is not
+    /// there. Always `None` out of the pure parse: a note is a filesystem
+    /// FACT, so only the resolving reader can write one. Never a silent
+    /// drop and never a silent attach.
+    pub report_note: Option<String>,
+    pub question: Option<MailboxQuestion>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct MailboxQuestion {
+    pub text: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MailboxDissent {
+    pub claim: String,
+    pub alternative: String,
+    pub severity: String,
+    pub new_evidence: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct MailboxHandback {
+    pub reaction: Option<String>,
+    pub skipped: Vec<String>,
+    pub unknowns: Vec<String>,
+    pub found: Vec<String>,
+    pub stopped: Option<String>,
+}
+
+const REACTIONS: [&str; 4] = ["confirm", "partial", "challenge", "blocked"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MailboxStatus {
     Done,
     Blocked,
+    Question,
 }
 
-/// Every way reading a mailbox result can fail — missing or malformed is
-/// always a typed error, never a silent green.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MailboxError {
-    /// No entry matching `result-N.json` exists in the given listing.
     NoResultFile,
-    /// The file at the given round is not valid JSON.
     NotJson { round: u32, detail: String },
-    /// The parsed JSON is not an object.
     NotAnObject { round: u32 },
-    /// A required field is absent or the wrong type.
     MissingField { round: u32, field: &'static str },
-    /// `status` is present but not `"done"` or `"blocked"`.
     InvalidStatus { round: u32, value: String },
+    InvalidQuestion { round: u32, detail: String },
 }
 
 impl std::fmt::Display for MailboxError {
@@ -411,6 +630,9 @@ impl std::fmt::Display for MailboxError {
                     f,
                     "result-{round}.json has invalid status \"{value}\" (want \"done\" or \"blocked\")"
                 )
+            }
+            MailboxError::InvalidQuestion { round, detail } => {
+                write!(f, "result-{round}.json has invalid question: {detail}")
             }
         }
     }
@@ -456,6 +678,53 @@ fn parse_result_filename(name: &str) -> Option<u32> {
     digits.parse::<u32>().ok()
 }
 
+/// The `dissent` value off a result object, read leniently: `None` unless
+/// the value is an object carrying all three of `claim`, `alternative` and
+/// `severity` as strings. Nothing here validates the severity — that is
+/// `record_dissent`'s single check (D4).
+fn parse_dissent(value: Option<&Value>) -> Option<MailboxDissent> {
+    let obj = value?.as_object()?;
+    let field = |k: &str| obj.get(k).and_then(Value::as_str).map(str::to_string);
+    let claim = field("claim")?;
+    if claim.trim().is_empty() {
+        return None;
+    }
+    Some(MailboxDissent {
+        claim,
+        alternative: field("alternative")?,
+        severity: field("severity")?,
+        new_evidence: field("new_evidence").filter(|e| !e.trim().is_empty()),
+    })
+}
+
+fn parse_handback(obj: &serde_json::Map<String, Value>) -> MailboxHandback {
+    let text = |k: &str| {
+        obj.get(k).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+    };
+    let list = |k: &str| {
+        obj.get(k)
+            .and_then(Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    MailboxHandback {
+        reaction: text("reaction")
+            .map(|r| r.to_ascii_lowercase())
+            .filter(|r| REACTIONS.contains(&r.as_str())),
+        skipped: list("skipped"),
+        unknowns: list("unknowns"),
+        found: list("found"),
+        stopped: text("stopped"),
+    }
+}
+
 /// Parse and schema-validate one round's result text (already read by the
 /// caller) into a `MailboxResult`, or a typed `MailboxError` — invalid
 /// JSON, a non-object body, a missing field, or a `status` outside the
@@ -470,9 +739,42 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         .get("status")
         .and_then(Value::as_str)
         .ok_or(MailboxError::MissingField { round, field: "status" })?;
-    let status = match status_str {
-        "done" => MailboxStatus::Done,
-        "blocked" => MailboxStatus::Blocked,
+    let (status, question) = match status_str {
+        "done" => (MailboxStatus::Done, None),
+        "blocked" => (MailboxStatus::Blocked, None),
+        "question" => {
+            let q_obj = obj
+                .get("question")
+                .and_then(Value::as_object)
+                .ok_or_else(|| MailboxError::InvalidQuestion {
+                    round,
+                    detail: "missing or non-object question field".to_string(),
+                })?;
+            let text = q_obj
+                .get("text")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| MailboxError::InvalidQuestion {
+                    round,
+                    detail: "question text must be a non-empty string".to_string(),
+                })?
+                .to_string();
+            let kind = q_obj
+                .get("kind")
+                .and_then(Value::as_str)
+                .ok_or_else(|| MailboxError::InvalidQuestion {
+                    round,
+                    detail: "question kind must be technical, product, or gate".to_string(),
+                })?;
+            if kind != "technical" && kind != "product" && kind != "gate" {
+                return Err(MailboxError::InvalidQuestion {
+                    round,
+                    detail: format!("unknown question kind \"{kind}\" (want technical, product, or gate)"),
+                });
+            }
+            (MailboxStatus::Question, Some(MailboxQuestion { text, kind: kind.to_string() }))
+        }
         other => return Err(MailboxError::InvalidStatus { round, value: other.to_string() }),
     };
 
@@ -491,14 +793,346 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         .map(|v| v.as_str().unwrap_or_default().to_string())
         .collect();
 
-    let proof = obj
-        .get("proof")
-        .and_then(Value::as_str)
-        .ok_or(MailboxError::MissingField { round, field: "proof" })?
-        .to_string();
+    let proof = match obj.get("proof").and_then(Value::as_str) {
+        Some(p) => p.to_string(),
+        None if status == MailboxStatus::Question => String::new(),
+        None => return Err(MailboxError::MissingField { round, field: "proof" }),
+    };
 
-    Ok(MailboxResult { status, summary, files_changed, proof })
+    // StopAndAsk: both fields are OPTIONAL and never checked for membership —
+    // absent, wrong-typed, or a leaning matching no option all parse, exactly
+    // as a result parsed before this pair existed.
+    let options = obj
+        .get("options")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect())
+        .unwrap_or_default();
+
+    let leaning = obj.get("leaning").and_then(Value::as_str).map(str::to_string);
+
+    // slp-followup-gaps D3: read exactly as leniently as the pair above.
+    // Absent, not an object, or missing any one of the three fields all read
+    // as NO dissent — never a `Malformed` round. The severity string is
+    // passed through unchecked (D4): `record_dissent` owns that closed set.
+    let dissent = parse_dissent(obj.get("dissent"));
+    let handback = parse_handback(obj);
+
+    // pi-result-mailbox D1: read exactly as leniently as the three above.
+    // Absent, empty, or wrong-typed all read as NO declared report — a
+    // legacy result that predates the report contract parses byte-for-byte
+    // as it always did, and never becomes a `Malformed` round.
+    let report_path = obj
+        .get("report_path")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
+    Ok(MailboxResult {
+        round,
+        status,
+        summary,
+        files_changed,
+        proof,
+        options,
+        leaning,
+        dissent,
+        handback,
+        report_path,
+        report_note: None,
+        question,
+    })
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Job marks (herding-cockpit-completeness D1, D4, D5, D8)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Mark {
+    Interrupted,
+    Cancelled,
+    CancelPending,
+}
+
+impl Mark {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Mark::Interrupted => "interrupted",
+            Mark::Cancelled => "cancelled",
+            Mark::CancelPending => "cancel_pending",
+        }
+    }
+
+    pub(crate) fn parse(s: &str) -> Option<Self> {
+        match s {
+            "interrupted" => Some(Mark::Interrupted),
+            "cancelled" => Some(Mark::Cancelled),
+            "cancel_pending" => Some(Mark::CancelPending),
+            _ => None,
+        }
+    }
+}
+
+/// Read the mark on a job, if one holds.
+///
+/// Returns `None` when `job.json` is missing or unreadable, when `mark` is
+/// absent or unparseable. `mark_reason` is returned alongside `mark` as
+/// `Some(reason)` when present as a string, or `None` when absent or unreadable.
+pub(crate) fn read_mark(bee_dir: &Path, job_id: &str) -> Option<(Mark, Option<String>)> {
+    let path = job_path(bee_dir, job_id);
+    let value = match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(v) => v,
+        _ => return None,
+    };
+    let obj = value.as_object()?;
+    let mark_str = obj.get("mark")?.as_str()?;
+    let mark = Mark::parse(mark_str)?;
+    let mark_reason = obj
+        .get("mark_reason")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    Some((mark, mark_reason))
+}
+
+/// Write a mark to `job.json` for `job_id`, preserving all other keys.
+///
+/// Sets `mark`, `mark_reason`, and `mark_at` (ms epoch).
+pub(crate) fn write_mark(
+    bee_dir: &Path,
+    job_id: &str,
+    mark: Mark,
+    reason: &str,
+) -> Result<(), String> {
+    let path = job_path(bee_dir, job_id);
+    let mut obj = match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+        crate::fsutil::ReadJson::Missing => serde_json::Map::new(),
+        crate::fsutil::ReadJson::Corrupt => {
+            return Err(format!("corrupt JSON in {}", path.display()))
+        }
+        crate::fsutil::ReadJson::Parsed(_) => {
+            return Err(format!("expected JSON object in {}", path.display()))
+        }
+    };
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    obj.insert("mark".to_string(), Value::String(mark.as_str().to_string()));
+    obj.insert("mark_reason".to_string(), Value::String(reason.to_string()));
+    obj.insert(
+        "mark_at".to_string(),
+        Value::Number(serde_json::Number::from(now_ms)),
+    );
+
+    crate::fsutil::write_json_atomic(&path, &Value::Object(obj))
+        .map_err(|e| format!("could not write {}: {e}", path.display()))
+}
+
+/// Clear the mark from `job.json` for `job_id`, preserving all other keys.
+///
+/// Removes `mark`, `mark_reason`, and `mark_at`.
+pub(crate) fn clear_mark(bee_dir: &Path, job_id: &str) -> Result<(), String> {
+    let path = job_path(bee_dir, job_id);
+    let mut obj = match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+        crate::fsutil::ReadJson::Missing => return Ok(()),
+        crate::fsutil::ReadJson::Corrupt => {
+            return Err(format!("corrupt JSON in {}", path.display()))
+        }
+        crate::fsutil::ReadJson::Parsed(_) => {
+            return Err(format!("expected JSON object in {}", path.display()))
+        }
+    };
+
+    obj.remove("mark");
+    obj.remove("mark_reason");
+    obj.remove("mark_at");
+
+    crate::fsutil::write_json_atomic(&path, &Value::Object(obj))
+        .map_err(|e| format!("could not write {}: {e}", path.display()))
+}
+
+/// Sweep `.bee/mailbox/*/job.json` for orphaned jobs (D5 d5a1f7e1).
+///
+/// An orphan is a job whose `job.json` records a `pane_id` that is not present in
+/// `live_panes`, that has no `result-*.json` in its mailbox directory, and that has
+/// no mark yet (`read_mark` is `None`).
+///
+/// For each orphan found, writes mark `Interrupted` with reason `"process_restarted"`
+/// and records its `job_id`. Returns the marked job ids so the caller can print
+/// progress notifications. Jobs with no recorded `pane_id` are skipped. Nothing is
+/// relaunched (D7).
+pub(crate) fn mark_orphans(bee_dir: &Path, live_panes: &HashSet<String>) -> Vec<String> {
+    mark_orphans_with_paseo(bee_dir, live_panes, None)
+}
+
+pub(crate) fn mark_orphans_with_paseo(
+    bee_dir: &Path,
+    live_panes: &HashSet<String>,
+    paseo: Option<&dyn crate::herding::paseo::PaseoCli>,
+) -> Vec<String> {
+    let mailbox_base = bee_dir.join("mailbox");
+    let rd = match std::fs::read_dir(&mailbox_base) {
+        Ok(rd) => rd,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut job_dirs: Vec<PathBuf> = rd
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_dir())
+        .collect();
+    job_dirs.sort();
+
+    let labelled_agents_res = paseo.map(|p| {
+        p.call(&crate::herding::paseo::ls_label_argv("bee_job"))
+            .ok()
+            .and_then(|out| crate::herding::paseo::parse_ls_agents_checked(&out))
+    });
+    let ls_agents_opt = labelled_agents_res.flatten();
+    let labelled_ids: Option<HashSet<String>> = ls_agents_opt
+        .map(|agents| agents.into_iter().map(|(id, _, _)| id).collect());
+
+    let mut marked = Vec::new();
+    for job_dir in job_dirs {
+        let job_id = match job_dir.file_name().and_then(|n| n.to_str()) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+
+        let jp = job_path(bee_dir, &job_id);
+        let obj = match crate::fsutil::read_json(&jp) {
+            crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+            _ => continue,
+        };
+
+        let is_paseo = obj.get("transport").and_then(Value::as_str) == Some("paseo");
+        if is_paseo {
+            if let Some(cli) = paseo {
+                let agent_id = match obj.get("paseo_agent_id").and_then(Value::as_str) {
+                    Some(a) if !a.trim().is_empty() => a.trim(),
+                    _ => continue,
+                };
+
+                let has_result = match std::fs::read_dir(&job_dir) {
+                    Ok(entries) => entries
+                        .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+                        .any(|name| parse_result_filename(&name).is_some()),
+                    Err(_) => false,
+                };
+                if has_result {
+                    continue;
+                }
+
+                if read_mark(bee_dir, &job_id).is_some() {
+                    continue;
+                }
+
+                let is_missing = match labelled_ids {
+                    Some(ref set) => !set.contains(agent_id),
+                    None => false,
+                };
+
+                let is_dead = if is_missing {
+                    false
+                } else {
+                    match cli.call(&crate::herding::paseo::inspect_argv(agent_id)) {
+                        Ok(ref out) => crate::herding::paseo::parse_inspect(out) == Some(crate::herding::paseo::PaseoState::Dead),
+                        Err(_) => false,
+                    }
+                };
+
+                if is_missing || is_dead {
+                    if write_mark(bee_dir, &job_id, Mark::Interrupted, "process_restarted").is_ok() {
+                        marked.push(job_id);
+                    }
+                }
+            }
+            continue;
+        }
+
+        let pane_id = match obj.get("pane_id").and_then(Value::as_str) {
+            Some(p) if !p.trim().is_empty() => p.trim(),
+            _ => continue,
+        };
+
+        if live_panes.contains(pane_id) {
+            continue;
+        }
+
+        let has_result = match std::fs::read_dir(&job_dir) {
+            Ok(entries) => entries
+                .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+                .any(|name| parse_result_filename(&name).is_some()),
+            Err(_) => false,
+        };
+        if has_result {
+            continue;
+        }
+
+        if read_mark(bee_dir, &job_id).is_some() {
+            continue;
+        }
+
+        if write_mark(bee_dir, &job_id, Mark::Interrupted, "process_restarted").is_ok() {
+            marked.push(job_id);
+        }
+    }
+
+    marked
+}
+
+/// Write-on-transition helper for job status projection (D2 468c6cb8, plan Open Question 3).
+///
+/// Reads `last_status` from `job.json`.
+/// When `last_status` differs from `now_word` (or is absent and `now_word` is `"stalled"`),
+/// writes `last_status = now_word` to `job.json` and returns
+/// `Some((previous_or_empty, now_word))`.
+/// When equal (or absent and `now_word` is not `"stalled"`), returns `None` and writes nothing.
+pub(crate) fn transition_status(
+    bee_dir: &Path,
+    job_id: &str,
+    now_word: &str,
+) -> Option<(String, String)> {
+    let path = job_path(bee_dir, job_id);
+    let mut obj = match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+        _ => return None,
+    };
+
+    let prev = obj.get("last_status").and_then(Value::as_str);
+    match prev {
+        Some(p) => {
+            if p == now_word {
+                None
+            } else {
+                let prev_str = p.to_string();
+                obj.insert("last_status".to_string(), Value::String(now_word.to_string()));
+                if crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).is_ok() {
+                    Some((prev_str, now_word.to_string()))
+                } else {
+                    None
+                }
+            }
+        }
+        None => {
+            if now_word == "stalled" {
+                obj.insert("last_status".to_string(), Value::String(now_word.to_string()));
+                if crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).is_ok() {
+                    Some((String::new(), now_word.to_string()))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -519,7 +1153,38 @@ mod tests {
             expertise: &[],
             nickname: "w-job-42",
             cell_id: None,
+            allow_question: true,
         }
+    }
+
+    /// Every `bee <word>` COMMAND the brief names, for D6's negative pin.
+    /// A list of bee's command groups would leak the group nobody thought
+    /// of, so this works the other way round: it finds every standalone
+    /// `bee` token followed by a space and reports the word after it,
+    /// unless that word is one of the brief's two prose neighbours. A new
+    /// `bee anything` line therefore fails on its own, with no list to keep.
+    fn bee_command_mentions(text: &str) -> Vec<String> {
+        const PROSE_NEIGHBOURS: [&str; 1] = ["or"];
+        let bytes = text.as_bytes();
+        let mut found = Vec::new();
+        let mut idx = 0usize;
+        while let Some(pos) = text[idx..].find("bee") {
+            let at = idx + pos;
+            idx = at + 3;
+            // A `bee` glued to a word or path segment (`.bee/`, `beehive`)
+            // is never a command.
+            if at > 0 && !matches!(bytes[at - 1], b' ' | b'\n' | b'`' | b'(') {
+                continue;
+            }
+            let rest = &text[at + 3..];
+            let Some(tail) = rest.strip_prefix(' ') else { continue };
+            let word = tail.split_whitespace().next().unwrap_or("");
+            if word.is_empty() || PROSE_NEIGHBOURS.contains(&word) {
+                continue;
+            }
+            found.push(word.to_string());
+        }
+        found
     }
 
     // ─── path layout ─────────────────────────────────────────────────────
@@ -532,6 +1197,7 @@ mod tests {
         assert_eq!(log_path(bee_dir, "job-1"), PathBuf::from("/repo/.bee/mailbox/job-1/log.txt"));
         assert_eq!(result_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/result-5.json"));
         assert_eq!(ack_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/ack-5.json"));
+        assert_eq!(report_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/report-5.md"));
     }
 
     // ─── brief renderer ─────────────────────────────────────────────────
@@ -571,6 +1237,28 @@ mod tests {
         assert!(text.contains("\"summary\""), "missing summary field:\n{text}");
         assert!(text.contains("\"files_changed\""), "missing files_changed field:\n{text}");
         assert!(text.contains("\"proof\""), "missing proof field:\n{text}");
+        // StopAndAsk (a2affcba): the brief teaches the two optional fields, so
+        // a blocked worker can hand back a choice instead of prose.
+        assert!(text.contains("\"options\""), "missing options field:\n{text}");
+        assert!(text.contains("\"leaning\""), "missing leaning field:\n{text}");
+        assert!(
+            text.contains("leave both out when there is no choice"),
+            "brief never says the two fields are optional:\n{text}"
+        );
+        // slp-followup-gaps D3: a bee-ignorant worker can fill the dissent
+        // fields off the brief alone, without running anything.
+        assert!(text.contains("\"dissent\""), "missing dissent field:\n{text}");
+        assert!(text.contains("\"claim\""), "missing dissent claim field:\n{text}");
+        assert!(text.contains("\"alternative\""), "missing dissent alternative field:\n{text}");
+        assert!(text.contains("\"severity\""), "missing dissent severity field:\n{text}");
+        assert!(
+            text.contains("\"blocker\" | \"consider\""),
+            "the brief never names the two severities:\n{text}"
+        );
+        assert!(
+            text.contains("leave \"dissent\" out entirely when you agree with the task"),
+            "brief never says the dissent object is optional:\n{text}"
+        );
     }
 
     #[test]
@@ -612,9 +1300,32 @@ mod tests {
         let task_pos = text.find("# Task").expect("missing # Task heading");
         assert!(standalone_pos < task_pos, "standalone-executor block must come before # Task:\n{text}");
         assert!(text.contains("Ignore any bee or agent-workflow instructions (gates, cells, claims, state)"), "missing ignore-workflow wording:\n{text}");
-        assert!(text.contains("files listed under the Expertise section are yours to read"), "missing expertise-reading wording:\n{text}");
-        assert!(text.contains("Never run any `bee` command"), "missing never-run-bee wording:\n{text}");
-        assert!(text.contains("Never claim, cap, or write workflow state under .bee/ - writing your mailbox result file (described below) is the ONE exception."), "missing state-exception wording:\n{text}");
+        assert!(!text.contains("files listed under the Expertise section are yours to read"), "zero-expertise must omit expertise-reading wording:\n{text}");
+        assert!(
+            text.contains("Never run any `bee` command except `bee herding notify`."),
+            "missing never-run-bee wording with its one exception:\n{text}"
+        );
+        assert!(text.contains("A note never ends your turn"), "missing the notify turn rule:\n{text}");
+        assert!(text.contains("still goes in your result file"), "missing the question-in-result rule:\n{text}");
+        assert!(!text.contains("bee cells"), "the brief names a bee verb:\n{text}");
+        let mentions = bee_command_mentions(&text);
+        assert!(
+            !mentions.is_empty() && mentions.iter().all(|w| w == "herding"),
+            "the brief names a bee command other than bee herding notify: {mentions:?}\n{text}"
+        );
+        assert_eq!(
+            text.matches("bee herding ").count(),
+            text.matches("bee herding notify").count(),
+            "the brief names a herding verb other than notify:\n{text}"
+        );
+        assert!(
+            text.contains("\"dissent\""),
+            "the dissent field name belongs in the result schema now:\n{text}"
+        );
+        // pi-result-mailbox D1: the exception now names BOTH mailbox files —
+        // a brief that banned every .bee/ write but the result file would
+        // contradict the report instruction it also carries.
+        assert!(text.contains("Never claim, cap, or write workflow state under .bee/ - writing your mailbox report and result files (described below) is the ONE exception."), "missing state-exception wording:\n{text}");
     }
 
     // ─── first-step ack block (herding-prompt-stall D4) ─────────────────
@@ -686,15 +1397,14 @@ mod tests {
 
     #[test]
     fn render_brief_keeps_the_result_form_block_byte_identical_apart_from_the_new_ack_block() {
-        // D4's must_haves: existing Result-form block, round numbering and
-        // schema block stay byte-identical apart from the new block.
+        // prf-5: separate optional result keys (options, leaning, dissent) into an explicitly headed optional block
         let worktree_root = Path::new("/repo/work");
         let bee_dir = Path::new("/repo/.bee");
         let files = sample_files();
         let spec = sample_spec(worktree_root, bee_dir, &files, 1);
         let text = render_brief(&spec);
 
-        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\"\n}\n\n"), "Result-form block drifted:\n{text}");
+        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"report_path\": \"<the report file's path, exactly as named above>\"\n}\n\nFill \"report_path\" with the report file's path whenever you wrote one — that is the only pointer anyone gets to your deliverable; leave it out only when the round genuinely produced no report.\n\nOptional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n{\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\n"), "Result-form block drifted:\n{text}");
         assert!(
             text.contains(&format!(
                 "temp file (write your JSON here):   {}/result-1.json.tmp\n",
@@ -702,6 +1412,73 @@ mod tests {
             )),
             "result temp-file line drifted:\n{text}"
         );
+    }
+
+    // ─── report contract (pi-result-mailbox D1, D3) ─────────────────────
+
+    #[test]
+    fn render_brief_names_the_round_report_file_and_its_atomic_write() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 2);
+        let text = render_brief(&spec);
+
+        assert!(
+            text.contains(&report_path(bee_dir, "job-42", 2).display().to_string()),
+            "no absolute report file path:\n{text}"
+        );
+        assert!(text.contains("report-2.md.tmp"), "no named report temp file:\n{text}");
+        assert!(
+            text.contains("RENAME the temp file onto \
+the report file's exact final name"),
+            "no atomic write gesture for the report:\n{text}"
+        );
+        assert!(text.contains("\"report_path\""), "the result schema never names report_path:\n{text}");
+    }
+
+    #[test]
+    fn render_brief_puts_the_report_instruction_before_the_result_contract() {
+        // D1's order rule, in the brief's own layout: a worker reading top to
+        // bottom meets the report before the file whose appearance ends the
+        // round.
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        let text = render_brief(&spec);
+
+        let report_pos = text
+            .find("# Report — write it FIRST, the result file LAST")
+            .expect("missing the report heading");
+        let result_pos = text.find("# Result contract").expect("missing the result-contract heading");
+        assert!(report_pos < result_pos, "the report block must precede the result contract:\n{text}");
+        assert!(
+            text.contains("The order is the rule: report first, result last."),
+            "the brief never states the order rule:\n{text}"
+        );
+    }
+
+    #[test]
+    fn render_brief_tells_a_resumed_attempt_to_rewrite_the_report_first() {
+        // The stale-report guard's worker-side half: the reader refuses a
+        // report older than the round's own delivery, so the brief must tell
+        // a resumed attempt to rewrite it rather than leave the old one.
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 3);
+        let text = render_brief(&spec);
+
+        assert!(
+            text.contains("If you are taking round 3 up again after an interruption"),
+            "the brief never names the resumed attempt:\n{text}"
+        );
+        assert!(
+            text.contains("REWRITE the report file with your current work before you write the result file."),
+            "the brief never demands the rewrite:\n{text}"
+        );
+        assert!(text.contains("a stale report is not read"), "the brief never names the consequence:\n{text}");
     }
 
     #[test]
@@ -731,6 +1508,7 @@ mod tests {
             expertise: &expertise,
             nickname: "w-job-42",
             cell_id: None,
+            allow_question: true,
         };
         let text = render_brief(&spec);
 
@@ -745,10 +1523,12 @@ mod tests {
             worktree_root.join("skills/bee-swarming/references/swarming-reference.md").display()
         )));
         assert!(text.contains("  - /abs/path/docs/knowledge/foo.md — domain background. Read it to understand area rules."));
+        assert!(text.contains("files listed under the Expertise section are yours to read"));
     }
 
     #[test]
     fn render_brief_with_zero_expertise_is_byte_identical_to_empty_spec() {
+        // prf-5: zero-expertise brief omits the Expertise section and the standalone executor clause
         let worktree_root = Path::new("/repo/work");
         let bee_dir = Path::new("/repo/.bee");
         let files = sample_files();
@@ -762,9 +1542,53 @@ mod tests {
             expertise: &[],
             nickname: "w-job-42",
             cell_id: None,
+            allow_question: true,
         };
         let text = render_brief(&spec_no_exp);
         assert!(!text.contains("# Expertise"));
+        assert!(!text.contains("files listed under the Expertise section are yours to read"));
+    }
+
+    #[test]
+    fn render_brief_separates_optional_result_schema_fields() {
+        // prf-5: optional fields (options, leaning, dissent) are presented apart from the required schema
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        let text = render_brief(&spec);
+
+        assert!(text.contains("Optional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):"));
+    }
+
+    #[test]
+    fn render_brief_renders_proof_command_when_commands_test_is_set() {
+        // prf-5: when .bee/config.json declares commands.test, render # Proof command before # Files you may touch
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree_root = tmp.path();
+        let bee_dir = worktree_root.join(".bee");
+        std::fs::create_dir_all(&bee_dir).expect("create .bee");
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"commands":{"test":"cargo test -p bee"}}"#,
+        )
+        .expect("write config.json");
+
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, &bee_dir, &files, 1);
+        let text = render_brief(&spec);
+
+        let proof_pos = text.find("# Proof command\n\ncargo test -p bee\n\n").expect("missing proof command section");
+        let files_pos = text.find("# Files you may touch").expect("missing files section");
+        assert!(proof_pos < files_pos, "# Proof command must come before # Files you may touch");
+    }
+
+    #[test]
+    fn parse_result_text_treats_empty_dissent_claim_as_no_dissent() {
+        // prf-5: an empty-string dissent claim parses as no dissent
+        let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","dissent":{"claim":"","alternative":"a","severity":"blocker"}}"#;
+        let result = parse_result_text(1, text).expect("parses cleanly");
+        assert_eq!(result.dissent, None);
     }
 
     #[test]
@@ -803,6 +1627,38 @@ mod tests {
     fn latest_result_round_is_none_for_an_empty_mailbox() {
         let entries: Vec<String> = Vec::new();
         assert_eq!(latest_result_round(&entries), None);
+    }
+
+    #[test]
+    fn latest_result_round_ignores_digest_files() {
+        let entries = vec![
+            "digest-1.sha256".to_string(),
+            "digest-2.sha256".to_string(),
+            "result-1.json".to_string(),
+        ];
+        assert_eq!(latest_result_round(&entries), Some(1));
+    }
+
+    #[test]
+    fn digest_path_joins_brief_path_and_result_path_family() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let path = digest_path(&bee_dir, "job-test", 2);
+        assert_eq!(path, bee_dir.join("mailbox").join("job-test").join("digest-2.sha256"));
+    }
+
+    #[test]
+    fn dispatch_digest_covers_task_and_files_only() {
+        let d1 = dispatch_digest("implement feature", &["crates/bee/src/main.rs".to_string()]);
+        let d2 = dispatch_digest("implement feature", &["crates/bee/src/main.rs".to_string()]);
+        assert_eq!(d1, d2, "same task and files must produce the same digest");
+        assert_eq!(d1.len(), 64, "digest must be 64-char sha256 hex");
+
+        let d_diff_task = dispatch_digest("different task", &["crates/bee/src/main.rs".to_string()]);
+        assert_ne!(d1, d_diff_task, "differing task must produce different digest");
+
+        let d_diff_files = dispatch_digest("implement feature", &["crates/bee/src/other.rs".to_string()]);
+        assert_ne!(d1, d_diff_files, "differing files must produce different digest");
     }
 
     #[test]
@@ -864,6 +1720,188 @@ mod tests {
         assert!(result.files_changed.is_empty());
     }
 
+    // ─── StopAndAsk: options[] and leaning (a2affcba) ────────────────────
+
+    #[test]
+    fn parse_result_text_reads_options_and_leaning_off_a_blocked_result() {
+        let text = r#"{"status":"blocked","summary":"two ways to do this","files_changed":[],"proof":"n/a","options":["Widen the cell to cover the parser too.","Split the parser into its own cell."],"leaning":"Split the parser into its own cell."}"#;
+        let result = parse_result_text(1, text).expect("valid result should parse");
+        assert_eq!(result.status, MailboxStatus::Blocked);
+        assert_eq!(
+            result.options,
+            vec![
+                "Widen the cell to cover the parser too.".to_string(),
+                "Split the parser into its own cell.".to_string(),
+            ]
+        );
+        assert_eq!(result.leaning.as_deref(), Some("Split the parser into its own cell."));
+    }
+
+    #[test]
+    fn parse_result_text_leaves_options_and_leaning_empty_when_a_result_carries_neither() {
+        // The negative half of the round trip: a result written before this
+        // pair existed parses exactly as it always did.
+        let text = r#"{"status":"done","summary":"fixed it","files_changed":["a.rs"],"proof":"cargo test — green"}"#;
+        let result = parse_result_text(1, text).expect("valid result should parse");
+        assert!(result.options.is_empty(), "options must be empty when absent: {:?}", result.options);
+        assert_eq!(result.leaning, None);
+    }
+
+    #[test]
+    fn parse_result_text_accepts_a_leaning_that_matches_no_option() {
+        // Membership is NEVER enforced: strict validation of foreign-agent
+        // output would turn a useful blocked answer into a whole lost round.
+        let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","options":["Do A."],"leaning":"Actually, do C."}"#;
+        let result = parse_result_text(1, text).expect("a mismatched leaning still parses");
+        assert_eq!(result.options, vec!["Do A.".to_string()]);
+        assert_eq!(result.leaning.as_deref(), Some("Actually, do C."));
+    }
+
+    #[test]
+    fn parse_result_text_ignores_wrong_typed_options_and_leaning() {
+        // Same lenience one level down: a wrong-typed pair is absent, never a
+        // refusal, and a non-string element degrades to "" like files_changed.
+        let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","options":"not an array","leaning":7}"#;
+        let result = parse_result_text(1, text).expect("wrong-typed fields must not refuse");
+        assert!(result.options.is_empty());
+        assert_eq!(result.leaning, None);
+
+        let mixed = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","options":["Do A.",7]}"#;
+        let result = parse_result_text(1, mixed).expect("a non-string option must not refuse");
+        assert_eq!(result.options, vec!["Do A.".to_string(), String::new()]);
+    }
+
+    // ─── the carried dissent (slp-followup-gaps D3/D4) ───────────────────
+
+    #[test]
+    fn parse_result_text_reads_a_full_dissent_object_off_a_result() {
+        let text = r#"{"status":"blocked","summary":"the cell is wrong","files_changed":[],"proof":"n/a","dissent":{"claim":"The paginator is not the bug.","alternative":"Fix the cursor encoder instead.","severity":"blocker"}}"#;
+        let result = parse_result_text(1, text).expect("a result carrying a dissent parses");
+        assert_eq!(
+            result.dissent,
+            Some(MailboxDissent {
+                claim: "The paginator is not the bug.".to_string(),
+                alternative: "Fix the cursor encoder instead.".to_string(),
+                severity: "blocker".to_string(),
+                new_evidence: None,
+            })
+        );
+    }
+
+    #[test]
+    fn parse_result_text_leaves_dissent_absent_when_a_result_carries_none() {
+        let text = r#"{"status":"done","summary":"did it","files_changed":["a.rs"],"proof":"cargo test"}"#;
+        let result = parse_result_text(1, text).expect("a result with no dissent still parses");
+        assert_eq!(result.dissent, None);
+    }
+
+    #[test]
+    fn parse_result_text_reads_the_handback_fields_and_the_dissent_evidence() {
+        let text = r#"{"status":"done","summary":"half","files_changed":[],"proof":"p","reaction":" Partial ","skipped":["e2e — no browser"],"unknowns":["the API is stable"],"found":["a dead flag"],"stopped":"the parser — it never ran","dissent":{"claim":"c","alternative":"a","severity":"consider","new_evidence":"the log shows it"}}"#;
+        let result = parse_result_text(1, text).expect("handback fields parse");
+        assert_eq!(
+            result.handback,
+            MailboxHandback {
+                reaction: Some("partial".to_string()),
+                skipped: vec!["e2e — no browser".to_string()],
+                unknowns: vec!["the API is stable".to_string()],
+                found: vec!["a dead flag".to_string()],
+                stopped: Some("the parser — it never ran".to_string()),
+            }
+        );
+        assert_eq!(result.dissent.unwrap().new_evidence.as_deref(), Some("the log shows it"));
+    }
+
+    #[test]
+    fn parse_result_text_reads_wrong_typed_handback_fields_as_absent() {
+        let text = r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","reaction":"maybe","skipped":"no","unknowns":[7,"real"],"found":{},"stopped":3,"dissent":{"claim":"c","alternative":"a","severity":"consider","new_evidence":9}}"#;
+        let result = parse_result_text(1, text).expect("wrong-typed handback fields never refuse");
+        assert_eq!(
+            result.handback,
+            MailboxHandback { unknowns: vec!["real".to_string()], ..MailboxHandback::default() }
+        );
+        assert_eq!(result.dissent.unwrap().new_evidence, None);
+    }
+
+    #[test]
+    fn render_brief_names_the_handback_fields_as_optional_without_a_bee_command() {
+        let files = sample_files();
+        let spec = sample_spec(Path::new("/repo/work"), Path::new("/repo/.bee"), &files, 1);
+        let text = render_brief(&spec);
+        assert!(text.contains("Handback fields (OPTIONAL"), "{text}");
+        for key in ["\"reaction\"", "\"skipped\"", "\"unknowns\"", "\"found\"", "\"stopped\"", "\"new_evidence\""] {
+            assert!(text.contains(key), "missing {key}:\n{text}");
+        }
+        let start = text.find("Handback fields").unwrap();
+        let end = text.find("# How to write it").unwrap();
+        assert!(!text[start..end].contains("bee "), "the handback block names no bee command:\n{text}");
+    }
+
+    #[test]
+    fn parse_result_text_reads_a_partial_or_wrong_typed_dissent_as_absent() {
+        // Missing `alternative`, missing `severity`, missing `claim`, and a
+        // non-object body: every one of them reads as NO dissent and the
+        // round still comes back green.
+        for body in [
+            r#""dissent":{"claim":"c","severity":"blocker"}"#,
+            r#""dissent":{"claim":"c","alternative":"a"}"#,
+            r#""dissent":{"alternative":"a","severity":"blocker"}"#,
+            r#""dissent":"just a sentence""#,
+            r#""dissent":["c","a","blocker"]"#,
+            r#""dissent":{"claim":7,"alternative":"a","severity":"blocker"}"#,
+            r#""dissent":null"#,
+        ] {
+            let text = format!(
+                r#"{{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a",{body}}}"#
+            );
+            let result = parse_result_text(1, &text).expect("a malformed dissent never fails the round");
+            assert_eq!(result.dissent, None, "malformed dissent must read as absent: {text}");
+        }
+    }
+
+    #[test]
+    fn parse_result_text_passes_an_unknown_severity_straight_through() {
+        // D4: the closed set is `record_dissent`'s single check. A second
+        // copy here would be the drift a boundary listed twice always earns,
+        // so the parser never looks at the value.
+        let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","dissent":{"claim":"c","alternative":"a","severity":"catastrophic"}}"#;
+        let result = parse_result_text(1, text).expect("an unknown severity still parses");
+        assert_eq!(result.dissent.expect("dissent present").severity, "catastrophic");
+    }
+
+    // ─── report_path on the result (pi-result-mailbox D1) ────────────────
+
+    #[test]
+    fn parse_result_text_reads_a_declared_report_path_and_carries_the_round() {
+        let text = r#"{"status":"done","summary":"wrote it up","files_changed":[],"proof":"n/a","report_path":"/repo/.bee/mailbox/job-42/report-2.md"}"#;
+        let result = parse_result_text(2, text).expect("a declared report path parses");
+        assert_eq!(result.report_path.as_deref(), Some("/repo/.bee/mailbox/job-42/report-2.md"));
+        assert_eq!(result.round, 2, "the round must ride the result for the reader's probe");
+        assert!(result.report_note.is_none(), "the pure parse never writes a filesystem note");
+    }
+
+    #[test]
+    fn parse_result_text_reads_a_legacy_result_with_no_report_path_as_absent() {
+        // D1: a result written before the report contract existed stays legal.
+        let text = r#"{"status":"done","summary":"fixed it","files_changed":["a.rs"],"proof":"cargo test — green"}"#;
+        let result = parse_result_text(1, text).expect("a legacy result still parses");
+        assert!(result.report_path.is_none());
+        assert!(result.report_note.is_none());
+    }
+
+    #[test]
+    fn parse_result_text_reads_an_empty_or_wrong_typed_report_path_as_absent() {
+        for raw in [
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":""}"#,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":"   "}"#,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":7}"#,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":null}"#,
+        ] {
+            let result = parse_result_text(1, raw).expect("a malformed report_path never fails the round");
+            assert!(result.report_path.is_none(), "kept a useless report path from: {raw}");
+        }
+    }
+
     #[test]
     fn parse_result_text_refuses_text_that_is_not_json() {
         let err = parse_result_text(2, "not json at all").unwrap_err();
@@ -895,6 +1933,82 @@ mod tests {
         let err = MailboxError::MissingField { round: 9, field: "proof" };
         assert!(err.to_string().contains("result-9.json"));
         assert!(err.to_string().contains("proof"));
+    }
+
+    #[test]
+    fn parse_result_text_accepts_status_question_with_valid_question() {
+        let text = r#"{"status":"question","summary":"need clarification","files_changed":["a.rs"],"question":{"text":"what API to use?","kind":"technical"}}"#;
+        let result = parse_result_text(1, text).expect("valid question result should parse");
+        assert_eq!(result.status, MailboxStatus::Question);
+        assert_eq!(result.summary, "need clarification");
+        assert_eq!(result.files_changed, vec!["a.rs".to_string()]);
+        assert_eq!(
+            result.question,
+            Some(MailboxQuestion {
+                text: "what API to use?".to_string(),
+                kind: "technical".to_string(),
+            })
+        );
+        assert!(result.proof.is_empty());
+    }
+
+    #[test]
+    fn parse_result_text_accepts_question_with_proof() {
+        let text = r#"{"status":"question","summary":"need clarification","files_changed":[],"proof":"cargo check — green","question":{"text":"gate or product?","kind":"gate"}}"#;
+        let result = parse_result_text(1, text).expect("question with proof should parse");
+        assert_eq!(result.status, MailboxStatus::Question);
+        assert_eq!(result.proof, "cargo check — green");
+        assert_eq!(
+            result.question,
+            Some(MailboxQuestion {
+                text: "gate or product?".to_string(),
+                kind: "gate".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_result_text_refuses_done_result_with_no_proof() {
+        let text = r#"{"status":"done","summary":"all good","files_changed":[]}"#;
+        let err = parse_result_text(1, text).unwrap_err();
+        assert_eq!(err, MailboxError::MissingField { round: 1, field: "proof" });
+    }
+
+    #[test]
+    fn parse_result_text_refuses_question_with_missing_question_object() {
+        let text = r#"{"status":"question","summary":"need help","files_changed":[]}"#;
+        let err = parse_result_text(1, text).unwrap_err();
+        assert!(matches!(err, MailboxError::InvalidQuestion { round: 1, .. }));
+    }
+
+    #[test]
+    fn parse_result_text_refuses_question_with_empty_text() {
+        let text = r#"{"status":"question","summary":"need help","files_changed":[],"question":{"text":"   ","kind":"technical"}}"#;
+        let err = parse_result_text(1, text).unwrap_err();
+        assert!(matches!(err, MailboxError::InvalidQuestion { round: 1, .. }));
+    }
+
+    #[test]
+    fn parse_result_text_refuses_question_with_unknown_kind() {
+        let text = r#"{"status":"question","summary":"need help","files_changed":[],"question":{"text":"which one?","kind":"unknown"}}"#;
+        let err = parse_result_text(1, text).unwrap_err();
+        assert!(matches!(err, MailboxError::InvalidQuestion { round: 1, .. }));
+    }
+
+    #[test]
+    fn render_brief_offers_question_status_by_default_and_omits_under_no_question() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let mut spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        spec.allow_question = true;
+        let text = render_brief(&spec);
+        assert!(text.contains("status question") || text.contains("\"question\""));
+
+        spec.allow_question = false;
+        let text_no_q = render_brief(&spec);
+        assert!(!text_no_q.contains("# Questions"));
+        assert!(!text_no_q.contains("\"question\""));
     }
 
     // ── activity record (herding-activity-hook D2/D3) ────────────────────
@@ -984,4 +2098,468 @@ mod tests {
             "clock skew is jitter, never staleness"
         );
     }
+
+    // ── job marks (herding-cockpit-completeness D1, D4, D5, D8) ─────────
+
+    #[test]
+    fn mark_as_str_and_parse_contract() {
+        assert_eq!(Mark::Interrupted.as_str(), "interrupted");
+        assert_eq!(Mark::Cancelled.as_str(), "cancelled");
+        assert_eq!(Mark::CancelPending.as_str(), "cancel_pending");
+
+        assert_eq!(Mark::parse("interrupted"), Some(Mark::Interrupted));
+        assert_eq!(Mark::parse("cancelled"), Some(Mark::Cancelled));
+        assert_eq!(Mark::parse("cancel_pending"), Some(Mark::CancelPending));
+        assert_eq!(Mark::parse("unknown"), None);
+        assert_eq!(Mark::parse(""), None);
+    }
+
+    #[test]
+    fn round_trip_write_then_read_mark_for_each_variant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let cases = [
+            (Mark::Interrupted, "user", "job-1"),
+            (Mark::Cancelled, "cancel_termination_failed", "job-2"),
+            (Mark::CancelPending, "kill_timeout", "job-3"),
+        ];
+
+        for (mark, reason, job_id) in cases {
+            write_mark(&bee_dir, job_id, mark, reason).expect("write_mark succeeds");
+            let read = read_mark(&bee_dir, job_id).expect("read_mark returns Some");
+            assert_eq!(read.0, mark);
+            assert_eq!(read.1, Some(reason.to_string()));
+
+            // Verify mark_at is present in the raw JSON
+            let raw = crate::fsutil::read_json(&job_path(&bee_dir, job_id));
+            if let crate::fsutil::ReadJson::Parsed(Value::Object(obj)) = raw {
+                assert_eq!(obj.get("mark").and_then(Value::as_str), Some(mark.as_str()));
+                assert_eq!(obj.get("mark_reason").and_then(Value::as_str), Some(reason));
+                assert!(obj.get("mark_at").and_then(Value::as_u64).unwrap_or(0) > 0);
+            } else {
+                panic!("job.json not readable as JSON object");
+            }
+        }
+    }
+
+    #[test]
+    fn clear_mark_removes_all_three_keys_and_keeps_other_keys() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-clear-test";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut initial = serde_json::Map::new();
+        initial.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        initial.insert("round".to_string(), Value::Number(1.into()));
+        initial.insert("task".to_string(), Value::String("run test".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(initial)).unwrap();
+
+        write_mark(&bee_dir, job_id, Mark::Interrupted, "user").expect("write_mark");
+        assert_eq!(read_mark(&bee_dir, job_id), Some((Mark::Interrupted, Some("user".to_string()))));
+
+        clear_mark(&bee_dir, job_id).expect("clear_mark succeeds");
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+
+        let raw = crate::fsutil::read_json(&path);
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(obj)) = raw {
+            assert!(!obj.contains_key("mark"));
+            assert!(!obj.contains_key("mark_reason"));
+            assert!(!obj.contains_key("mark_at"));
+            assert_eq!(obj.get("job_id").and_then(Value::as_str), Some(job_id));
+            assert_eq!(obj.get("round").and_then(Value::as_u64), Some(1));
+            assert_eq!(obj.get("task").and_then(Value::as_str), Some("run test"));
+        } else {
+            panic!("job.json was not parsed as JSON object");
+        }
+    }
+
+    #[test]
+    fn read_mark_on_job_without_mark_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-no-mark";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut initial = serde_json::Map::new();
+        initial.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(initial)).unwrap();
+
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn read_mark_on_missing_dir_returns_none() {
+        let nonexistent = Path::new("/nonexistent/mailbox/directory/.bee");
+        assert_eq!(read_mark(nonexistent, "job-ghost"), None);
+    }
+
+    #[test]
+    fn read_mark_handles_absent_and_non_string_mark_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-unusual-reason";
+        let path = job_path(&bee_dir, job_id);
+
+        // mark without mark_reason
+        let mut obj = serde_json::Map::new();
+        obj.insert("mark".to_string(), Value::String("cancelled".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).unwrap();
+        assert_eq!(read_mark(&bee_dir, job_id), Some((Mark::Cancelled, None)));
+
+        // mark with numeric mark_reason
+        let mut obj = serde_json::Map::new();
+        obj.insert("mark".to_string(), Value::String("cancel_pending".to_string()));
+        obj.insert("mark_reason".to_string(), Value::Number(42.into()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).unwrap();
+        assert_eq!(read_mark(&bee_dir, job_id), Some((Mark::CancelPending, None)));
+
+        // invalid mark value
+        let mut obj = serde_json::Map::new();
+        obj.insert("mark".to_string(), Value::String("not_a_mark".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).unwrap();
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn mark_orphans_marks_dead_pane_with_no_result_and_no_mark() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-orphan-1";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        job_spec.insert("pane_id".to_string(), Value::String("pane-dead".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        let live_panes = HashSet::from(["pane-other".to_string()]);
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert_eq!(marked, vec![job_id.to_string()]);
+        let mark_info = read_mark(&bee_dir, job_id).expect("job should be marked");
+        assert_eq!(mark_info.0, Mark::Interrupted);
+        assert_eq!(mark_info.1, Some("process_restarted".to_string()));
+    }
+
+    #[test]
+    fn mark_orphans_leaves_job_with_result_file_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-with-result";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        job_spec.insert("pane_id".to_string(), Value::String("pane-dead".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        let res_path = result_path(&bee_dir, job_id, 1);
+        std::fs::write(&res_path, "{}").unwrap();
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn mark_orphans_leaves_job_with_live_pane_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-live-pane";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        job_spec.insert("pane_id".to_string(), Value::String("pane-alive".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        let live_panes = HashSet::from(["pane-alive".to_string()]);
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn mark_orphans_leaves_already_marked_job_alone_and_mark_reason_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-already-marked";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        job_spec.insert("pane_id".to_string(), Value::String("pane-dead".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        write_mark(&bee_dir, job_id, Mark::Cancelled, "user").expect("write_mark");
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert!(marked.is_empty());
+        let mark_info = read_mark(&bee_dir, job_id).expect("mark should still exist");
+        assert_eq!(mark_info.0, Mark::Cancelled);
+        assert_eq!(mark_info.1, Some("user".to_string()));
+    }
+
+    #[test]
+    fn mark_orphans_skips_jobs_without_pane_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-no-pane";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn transition_status_returns_some_only_on_change_and_none_on_repeat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-transition-test";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        // 1. Initial state (no last_status) with "working" -> returns None, writes nothing
+        assert_eq!(transition_status(&bee_dir, job_id, "working"), None);
+        let raw = crate::fsutil::read_json(&path);
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(obj)) = raw {
+            assert!(!obj.contains_key("last_status"));
+        }
+
+        // 2. Initial transition to "stalled" -> returns Some(("", "stalled"))
+        assert_eq!(
+            transition_status(&bee_dir, job_id, "stalled"),
+            Some(("".to_string(), "stalled".to_string()))
+        );
+
+        // 3. Repeat "stalled" -> returns None
+        assert_eq!(transition_status(&bee_dir, job_id, "stalled"), None);
+
+        // 4. Transition from "stalled" to "recovered" -> returns Some(("stalled", "recovered"))
+        assert_eq!(
+            transition_status(&bee_dir, job_id, "recovered"),
+            Some(("stalled".to_string(), "recovered".to_string()))
+        );
+
+        // 5. Repeat "recovered" -> returns None
+        assert_eq!(transition_status(&bee_dir, job_id, "recovered"), None);
+
+        // 6. Transition from "recovered" to "working" -> returns Some(("recovered", "working"))
+        assert_eq!(
+            transition_status(&bee_dir, job_id, "working"),
+            Some(("recovered".to_string(), "working".to_string()))
+        );
+
+        // 7. Repeat "working" -> returns None
+        assert_eq!(transition_status(&bee_dir, job_id, "working"), None);
+
+        // Verify last_status on disk
+        let raw = crate::fsutil::read_json(&path);
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(obj)) = raw {
+            assert_eq!(
+                obj.get("last_status").and_then(Value::as_str),
+                Some("working")
+            );
+        } else {
+            panic!("job.json was not parsed as JSON object");
+        }
+    }
+
+    struct FakeMailboxPaseoCli {
+        ls_out: Result<String, String>,
+        inspect_map: std::collections::HashMap<String, Result<String, String>>,
+    }
+
+    impl crate::herding::paseo::PaseoCli for FakeMailboxPaseoCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            if args.first().map(|s| s.as_str()) == Some("ls") {
+                self.ls_out.clone()
+            } else if args.first().map(|s| s.as_str()) == Some("inspect") {
+                let id = args.last().cloned().unwrap_or_default();
+                self.inspect_map
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or(Err("inspect failed".to_string()))
+            } else {
+                Ok(String::new())
+            }
+        }
+    }
+
+    #[test]
+    fn mark_orphans_paseo_marks_dead_agent_and_missing_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let job_dead = "job-p-dead";
+        let path_dead = job_path(&bee_dir, job_dead);
+        let mut spec_dead = serde_json::Map::new();
+        spec_dead.insert("job_id".to_string(), Value::String(job_dead.to_string()));
+        spec_dead.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_dead.insert("paseo_agent_id".to_string(), Value::String("agent-dead".to_string()));
+        crate::fsutil::write_json_atomic(&path_dead, &Value::Object(spec_dead)).unwrap();
+
+        let job_missing = "job-p-missing";
+        let path_missing = job_path(&bee_dir, job_missing);
+        let mut spec_missing = serde_json::Map::new();
+        spec_missing.insert("job_id".to_string(), Value::String(job_missing.to_string()));
+        spec_missing.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_missing.insert("paseo_agent_id".to_string(), Value::String("agent-gone".to_string()));
+        crate::fsutil::write_json_atomic(&path_missing, &Value::Object(spec_missing)).unwrap();
+
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert("agent-dead".to_string(), Ok("{\"Status\":\"closed\"}".to_string()));
+
+        let ls_json = serde_json::json!([
+            {
+                "id": "agent-dead",
+                "labels": { "bee_job": "job-p-dead" },
+                "archived": false
+            }
+        ])
+        .to_string();
+
+        let fake = FakeMailboxPaseoCli {
+            ls_out: Ok(ls_json),
+            inspect_map,
+        };
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans_with_paseo(&bee_dir, &live_panes, Some(&fake));
+        assert_eq!(marked, vec![job_dead.to_string(), job_missing.to_string()]);
+
+        let (mark1, reason1) = read_mark(&bee_dir, job_dead).expect("marked dead");
+        assert_eq!(mark1, Mark::Interrupted);
+        assert_eq!(reason1, Some("process_restarted".to_string()));
+
+        let (mark2, reason2) = read_mark(&bee_dir, job_missing).expect("marked missing");
+        assert_eq!(mark2, Mark::Interrupted);
+        assert_eq!(reason2, Some("process_restarted".to_string()));
+    }
+
+    #[test]
+    fn mark_orphans_paseo_leaves_working_and_failed_inspect_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let job_working = "job-p-work";
+        let path_work = job_path(&bee_dir, job_working);
+        let mut spec_work = serde_json::Map::new();
+        spec_work.insert("job_id".to_string(), Value::String(job_working.to_string()));
+        spec_work.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_work.insert("paseo_agent_id".to_string(), Value::String("agent-work".to_string()));
+        crate::fsutil::write_json_atomic(&path_work, &Value::Object(spec_work)).unwrap();
+
+        let job_err = "job-p-err";
+        let path_err = job_path(&bee_dir, job_err);
+        let mut spec_err = serde_json::Map::new();
+        spec_err.insert("job_id".to_string(), Value::String(job_err.to_string()));
+        spec_err.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_err.insert("paseo_agent_id".to_string(), Value::String("agent-err".to_string()));
+        crate::fsutil::write_json_atomic(&path_err, &Value::Object(spec_err)).unwrap();
+
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert("agent-work".to_string(), Ok("{\"Status\":\"running\"}".to_string()));
+        inspect_map.insert("agent-err".to_string(), Err("command timeout".to_string()));
+
+        let ls_json = serde_json::json!([
+            {
+                "id": "agent-work",
+                "labels": { "bee_job": "job-p-work" },
+                "archived": false
+            },
+            {
+                "id": "agent-err",
+                "labels": { "bee_job": "job-p-err" },
+                "archived": false
+            }
+        ])
+        .to_string();
+
+        let fake = FakeMailboxPaseoCli {
+            ls_out: Ok(ls_json),
+            inspect_map,
+        };
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans_with_paseo(&bee_dir, &live_panes, Some(&fake));
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_working), None);
+        assert_eq!(read_mark(&bee_dir, job_err), None);
+    }
+
+    #[test]
+    fn mark_orphans_paseo_leaves_job_with_result_or_existing_mark_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let job_res = "job-p-res";
+        let path_res = job_path(&bee_dir, job_res);
+        let mut spec_res = serde_json::Map::new();
+        spec_res.insert("job_id".to_string(), Value::String(job_res.to_string()));
+        spec_res.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_res.insert("paseo_agent_id".to_string(), Value::String("agent-res".to_string()));
+        crate::fsutil::write_json_atomic(&path_res, &Value::Object(spec_res)).unwrap();
+        let res_path = result_path(&bee_dir, job_res, 1);
+        std::fs::write(&res_path, "{}").unwrap();
+
+        let job_marked = "job-p-marked";
+        let path_marked = job_path(&bee_dir, job_marked);
+        let mut spec_marked = serde_json::Map::new();
+        spec_marked.insert("job_id".to_string(), Value::String(job_marked.to_string()));
+        spec_marked.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_marked.insert("paseo_agent_id".to_string(), Value::String("agent-marked".to_string()));
+        crate::fsutil::write_json_atomic(&path_marked, &Value::Object(spec_marked)).unwrap();
+        write_mark(&bee_dir, job_marked, Mark::Interrupted, "earlier").unwrap();
+
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert("agent-res".to_string(), Ok("{\"Status\":\"closed\"}".to_string()));
+        inspect_map.insert("agent-marked".to_string(), Ok("{\"Status\":\"closed\"}".to_string()));
+
+        let ls_json = serde_json::json!([
+            {
+                "id": "agent-res",
+                "labels": { "bee_job": "job-p-res" },
+                "archived": false
+            },
+            {
+                "id": "agent-marked",
+                "labels": { "bee_job": "job-p-marked" },
+                "archived": false
+            }
+        ])
+        .to_string();
+
+        let fake = FakeMailboxPaseoCli {
+            ls_out: Ok(ls_json),
+            inspect_map,
+        };
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans_with_paseo(&bee_dir, &live_panes, Some(&fake));
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_res), None);
+        assert_eq!(
+            read_mark(&bee_dir, job_marked),
+            Some((Mark::Interrupted, Some("earlier".to_string())))
+        );
+    }
 }
+

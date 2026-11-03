@@ -1,0 +1,222 @@
+{
+  "id": "bpb-2",
+  "feature": "bee-playbooks",
+  "title": "Add content as the 9th route class with its playbook",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4",
+    "D5",
+    "D6",
+    "c76ddba9-bd68-4f56-a033-b02f3216b13f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "docs/product-description/goal.md",
+    "docs/product-description/lifecycle/planning.md",
+    "docs/product-description/verification/lifecycle.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "docs/history/bee-playbooks/migration-note.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:356-368",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs:1903",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs:1951-1998",
+    "packages/bee-rs/crates/bee/tests/route_class_parity.rs:53-58",
+    "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs:17-19",
+    "skills/bee-planning/references/planning-reference.md:220-262",
+    "docs/history/pstack-adoption/migration-note.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-hive/references/scout-and-ticks.md"
+  ],
+  "affects_specs": [],
+  "action": "Add `content` as the 9th ROUTE_CLASS_VALUES entry, following the exact `perf`-addition precedent (pstack-adoption D2, decision 1593e365; docs/history/pstack-adoption/migration-note.md is the template to mirror). Steps: (1) workflows.rs:356-357 — change `[&str; 8]` to `[&str; 9]` and append `, \"content\"` after `\"perf\"`. Update the safety-comment block immediately below (lines ~360-368) to note `content` is also absent from ROUTE_LANE_VALUES, so it cannot collide (per D6/row-7-style reasoning already in that comment). (2) tests.rs:1903 — update the pinned refusal-message assertion to end `...release, spike, perf, content)`. (3) tests.rs:1951-1998 — add a new test `route_set_accepts_content_as_the_ninth_class` immediately after `route_set_accepts_perf_as_the_eighth_class`, following its exact structure: assert `ROUTE_CLASS_VALUES.len() == 9` and `ROUTE_CLASS_VALUES[8] == \"content\"`, then the same start_default/validate_route_set_flags/resolve_mutation_target happy-path drive with `class=content`, and the same class-vs-lane refusal check (`--lane content` must refuse, listing all 6 lane values). (4) Append `, `content`` to the class list at each of the four CLASS_SITES, in the exact format each site already uses (comma/pipe/space per site — read_first shows each site's current line): skills/bee-hive/references/scout-and-ticks.md:34, docs/product-description/goal.md:48, docs/product-description/lifecycle/planning.md:35, docs/product-description/verification/lifecycle.md:115 (this last one also says 'all eight values, ending in perf' in its expected-refusal column two rows below the class line — update that prose to 'all nine values, ending in content' too, same file). (5) In skills/bee-planning/references/planning-reference.md, add a new `### content` subsection under `## Class playbooks`, placed after the existing `### spike` subsection (end of that section, ~line 391). Steps to write, per D2/D6 (host-agnostic, no plugin-skill names, no source-code/worktree assumptions): name the audience and the one claim or fact at risk first; draft; check the draft against the project's OWN style, fact, or brand rule if the project has documented one (cite it), otherwise do a documented second read naming what was checked; ship. Proof line (per D6, verbatim shape): 'the artifact checked against the project's own style/fact/brand rule when the project has one (name it), otherwise a documented second read naming what was checked — <check> — <result> — <scope reason>.' (6) In the same file's existing `### perf` subsection (~planning-reference.md:253-257, the 'When the ask is a sustained metric target' paragraph), add one sentence after 'Never loosen the stop rule.': 'A plateau is not a stop — it means pivot the hypothesis, not give up.' (7) Write docs/history/bee-playbooks/migration-note.md mirroring docs/history/pstack-adoption/migration-note.md's exact structure and headings, substituting content for perf, 9 for 8, and this feature's own decision id (D5) for D2/1593e365. (8) Run `bee dev regen` (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) so docs/history/codex-harness-hardening/release-manifest.json picks up the touched skills/ files, then `bee dev release-manifest --check` to confirm clean.",
+  "must_haves": {
+    "truths": [
+      "`bee route --set --class content --lane docs --flags \"\" --files 1` is accepted and `bee route --show` reads back class=content",
+      "`bee route --set --class nope --lane docs --flags \"\" --files 1` refuses, and the message lists `content` last",
+      "`bee route --set --class content --lane content ...` refuses naming content as an illegal lane value"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-planning/references/planning-reference.md",
+        "substantive": "new ### content section with a full, host-agnostic proof-line rule; ### perf section gains the plateau-pivot sentence"
+      },
+      {
+        "path": "docs/history/bee-playbooks/migration-note.md",
+        "substantive": "migration note mirroring the perf precedent's structure for content as the 9th class"
+      }
+    ],
+    "key_links": [
+      "all four CLASS_SITES documents list content as the 9th/last class value",
+      "route_class_parity and class_playbook_parity tests pass with 9 values"
+    ],
+    "prohibitions": [
+      "content's proof-line rule must not name a specific plugin skill (e.g. marketing:brand-review or any `namespace:skill` form)",
+      "no change to gates, worktrees, or the cell lifecycle code",
+      "no deletion or weakening of the existing perf/bugfix/refactor/research/feature/docs/release/spike sections beyond the one added sentence in perf"
+    ]
+  },
+  "trace": {
+    "worker": "w-bpb-2b",
+    "outcome": "content added as the 9th route class with its playbook, perf plateau-pivot sentence, and migration note (commit cb027e239)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/product-description/goal.md",
+      "docs/product-description/lifecycle/planning.md",
+      "docs/product-description/verification/lifecycle.md",
+      "docs/history/bee-playbooks/migration-note.md"
+    ],
+    "deviations": [
+      "no new commit: prior worker commit cb027e239 holds the work; regen again reverted AGENTS.md in the working tree and I restored it to HEAD, so AGENTS.md has no diff",
+      "sync-ack: must_haves artifact names skills/bee-planning/references/planning-reference.md; affects_skills predicted bee-planning/SKILL.md for the same skill, the reference file is the approved target"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-24T16:12:27.968Z",
+    "behavior_change": true,
+    "verification_evidence": "parity tests 2+5+2 and 4 route_set_ unit tests pin the class vocabulary this cell changed, regen 3/3 and manifest 376 match; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9992550a-eb0d-44ea-bf71-42308ac761c8",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test route_class_parity --test class_playbook_parity --test principle_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- route_set_ && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-24T16:10:38.488Z",
+    "verified_at": null,
+    "baseline": null,
+    "sync_ack": "must_haves artifact names skills/bee-planning/references/planning-reference.md; affects_skills predicted bee-planning/SKILL.md for the same skill, the reference file is the approved target",
+    "mistakes": [
+      {
+        "wrong": "bee dev regen onboard step reverts the committed bpb-1 AGENTS.md clause in the working tree",
+        "better": "onboard --apply should keep committed edits",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "content is the 9th route class with a host-agnostic playbook; implementation already in cb027e239",
+      "commit": "cb027e23977f1ff44a18152437d4a3fa35f1d85f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "skills/bee-planning/references/planning-reference.md",
+        "docs/history/bee-playbooks/migration-note.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test route_class_parity --test class_playbook_parity --test principle_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- route_set_ && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check — green:unit — parity tests 2+5+2 and 4 route_set_ unit tests pin the class vocabulary this cell changed, regen 3/3 and manifest 376 match; full suite not run",
+      "deviations": [
+        "no new commit: prior worker commit cb027e239 holds the work; regen again reverted AGENTS.md in the working tree and I restored it to HEAD, so AGENTS.md has no diff"
+      ],
+      "mistakes": [
+        "bee dev regen onboard step reverts the committed bpb-1 AGENTS.md clause in the working tree — onboard --apply should keep committed edits — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "`bee route --set --class content --lane docs --flags \"\" --files 1` is accepted and `bee route --show` reads back class=content",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "`bee route --set --class nope --lane docs --flags \"\" --files 1` refuses, and the message lists `content` last",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "`bee route --set --class content --lane content ...` refuses naming content as an illegal lane value",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-09-24T16:16:34.697Z",
+        "recorded_by": "9992550a-eb0d-44ea-bf71-42308ac761c8",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-content-accepted-and-shown",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:356-357 ROUTE_CLASS_VALUES: [&str; 9] ends \"content\"; tests.rs route_set_accepts_content_as_the_ninth_class validates class=content lane=docs flags=\"\" files=1, writes state, re-resolves 'route show' and asserts class==\"content\""
+          },
+          {
+            "id": "truth-2-nope-refusal-lists-content-last",
+            "status": "PASS",
+            "evidence": "tests.rs:1903 pinned message now 'must be one of feature, bugfix, docs, refactor, research, release, spike, perf, content)'; workflows.rs:578-580 builds it from ROUTE_CLASS_VALUES.join(\", \")"
+          },
+          {
+            "id": "truth-3-content-illegal-as-lane",
+            "status": "PASS",
+            "evidence": "workflows.rs:358-359 ROUTE_LANE_VALUES has no content; new test asserts message contains '--lane \"content\" (must be one of docs, tiny, small, spike, standard, high-risk)' and does not contain '--class \"content\"'"
+          },
+          {
+            "id": "artifact-content-playbook-section",
+            "status": "PASS",
+            "evidence": "skills/bee-planning/references/planning-reference.md:393 '### content' with 4 numbered steps and proof line matching D6 verbatim; mirrored to all 5 render trees"
+          },
+          {
+            "id": "artifact-perf-plateau-pivot",
+            "status": "PASS",
+            "evidence": "planning-reference.md ### perf (line ~257): appended 'A plateau is not a stop — it means pivot the hypothesis, not give up.'"
+          },
+          {
+            "id": "artifact-migration-note-mirrors-perf",
+            "status": "PASS",
+            "evidence": "docs/history/bee-playbooks/migration-note.md sections mirror docs/history/pstack-adoption/migration-note.md's heading set; cited lines verified accurate"
+          },
+          {
+            "id": "keylink-class-sites-list-content-last",
+            "status": "PASS",
+            "evidence": "route_class_parity.rs:53-58 CLASS_SITES all 4 docs updated to end in content, including verification/lifecycle.md's 'all nine values, ending in content' prose"
+          },
+          {
+            "id": "keylink-parity-tests-green-9",
+            "status": "PASS",
+            "evidence": "route_class_parity, class_playbook_parity, principle_index_parity and 4 route_set_ unit tests green, independently re-run by the leader"
+          },
+          {
+            "id": "prohibition-no-plugin-skill-named",
+            "status": "PASS",
+            "evidence": "### content section states 'This playbook names no tool or skill' and contains no namespace:skill form"
+          },
+          {
+            "id": "prohibition-no-gate-worktree-lifecycle-code",
+            "status": "PASS",
+            "evidence": "git show cb027e239 --numstat: only Rust changes are workflows.rs (the const) and tests.rs; no gate/worktree/cell-lifecycle code touched"
+          },
+          {
+            "id": "prohibition-no-weakening-other-sections",
+            "status": "PASS",
+            "evidence": "planning-reference.md hunks touch only the perf sentence and a pure addition after spike; bugfix/refactor/research/feature/docs/release/spike sections untouched"
+          },
+          {
+            "id": "decision-alignment",
+            "status": "PASS",
+            "evidence": "D1/D4/D5/D6 and c76ddba9 all satisfied: one new subsection in the existing home, content added the same small way perf was, host-agnostic proof line, 9 values ending content"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-24T16:19:50.162Z"
+      }
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test route_class_parity --test class_playbook_parity --test principle_index_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- route_set_ && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check"
+}

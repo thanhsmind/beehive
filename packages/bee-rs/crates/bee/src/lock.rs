@@ -85,15 +85,7 @@ fn read_holder(lock_path: &Path) -> Option<Value> {
 }
 
 fn env_session_id() -> Option<String> {
-    for var in ["BEE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
-        if let Ok(v) = std::env::var(var) {
-            let trimmed = v.trim();
-            if !trimmed.is_empty() {
-                return Some(trimmed.to_string());
-            }
-        }
-    }
-    None
+    crate::session_identity::env_session_id()
 }
 
 fn now_iso(t: SystemTime) -> String {

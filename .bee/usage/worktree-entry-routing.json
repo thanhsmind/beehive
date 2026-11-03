@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "worktree-entry-routing",
+  "closed_at": "2026-09-05T15:06:29.331Z",
+  "sessions": [
+    {
+      "session_id": "24d10ef7-b153-4dfe-9b14-6fde0f3108bc",
+      "models": {
+        "claude-opus-4-5-20251101": {
+          "input": 820,
+          "output": 31262,
+          "cache_write": 138218,
+          "cache_read": 11398905,
+          "new": 170300,
+          "cached": 11398905,
+          "total": 11569205
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1788618610309,
+      "ended_ms": 1788620783551,
+      "totals": {
+        "new": 170300,
+        "cached": 11398905,
+        "total": 11569205
+      }
+    }
+  ],
+  "skipped": 1,
+  "totals": {
+    "main": {
+      "new": 170300,
+      "cached": 11398905,
+      "total": 11569205
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 170300,
+      "cached": 11398905,
+      "total": 11569205
+    }
+  }
+}

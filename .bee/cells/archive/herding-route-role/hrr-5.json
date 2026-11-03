@@ -1,0 +1,68 @@
+{
+  "id": "hrr-5",
+  "feature": "herding-route-role",
+  "title": "Widen the route tool surface to what slice 2 actually needs",
+  "lane": "high-risk",
+  "role": "code",
+  "action": "Slice 2 gives route four new powers, and each one needs exactly one more verb on `ROUTE_ALLOWED_TOOLS` in `packages/bee-rs/crates/bee/src/herding/control_loop.rs`. Add ONLY these, keeping the verb-by-verb style and never reaching for the `Bash(.bee/bin/bee:*)` wildcard:\n\n1. **Start a reviewer** — `Bash(.bee/bin/bee herding run:*)` and `Bash(.bee/bin/bee dispatch prepare:*)`. Route dispatches through the one door like every other caller.\n2. **Record a verdict** — `Bash(.bee/bin/bee reviews:*)`. The review store is create/record/status/candidate; route needs all of them and they are all under one verb.\n3. **Write the CHANGES cell** — `Bash(.bee/bin/bee cells add:*)` and `Bash(.bee/bin/bee cells list:*)` (list is already there).\n4. **The two markers** — `Bash(mkdir:*)` and `Bash(touch:*)` for `.bee/tmp/bee-herding.review.<slug>` and `.bee/tmp/bee-herding.blocked.<slug>`, plus `Bash(rm:*)`. The merge role already carries `mkdir`/`touch` for exactly this pattern; route additionally needs `rm` because unlike merge it CLEARS its own marker when a verdict lands. `ls` is already there for reading them.\n5. **The waiting-on mark** — `Bash(.bee/bin/bee state waiting-on:*)`.\n\nWhat must still be ABSENT, and is asserted by the existing `ROUTE_FORBIDDEN_TOOL_TOKENS` test: `Write`, `Edit`, `Bash(git:*)`, `Bash(herdr:*)`, `Bash(tmux:*)`, `Bash(.bee/bin/bee:*)`, `Task`. Add two more forbidden tokens while you are here, because slice 2 is exactly when someone would be tempted: `Bash(.bee/bin/bee worktree merge` and `Bash(.bee/bin/bee gate`. Route never merges and never approves a gate.\n\nUpdate the doc comment above the constant to say what slice 2 added and why each verb is there. Extend the existing tests rather than adding parallel ones: the forbidden-token test gains the two new tokens, and the both-transports test still has to pass unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-route-role/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "8388df3e-48d5-4daf-976c-1932c947b775",
+    "4a395ea7-503d-4117-b84b-96b657490f70"
+  ],
+  "must_haves": {
+    "truths": [
+      "every new verb is enumerated, and the bee CLI wildcard is still absent",
+      "the forbidden-token list gains `bee worktree merge` and `bee gate`, and the test asserts them",
+      "the surface is still the identical string on both transports",
+      "the three existing roles' surfaces are still byte-unchanged"
+    ]
+  },
+  "change_class": "security",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "route-w5",
+    "outcome": "route tool surface widened to slice 2's five needs, verb by verb, with two new forbidden tokens",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: siblings in the same parallel wave touched skills/** in the shared worktree.",
+      "sync-ack: parallel wave: siblings hrr-6/7/8 landed skills/** and AGENTS.md in the same shared worktree. hrr-5's own commit f3acc88f carries control_loop.rs alone."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T03:26:23.511Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-08T15:33:20.021Z",
+    "sync_ack": "parallel wave: siblings hrr-6/7/8 landed skills/** and AGENTS.md in the same shared worktree. hrr-5's own commit f3acc88f carries control_loop.rs alone.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "ROUTE_ALLOWED_TOOLS gains bee dispatch prepare, bee herding run, bee reviews, bee cells add, mkdir/touch/rm for the two markers, and bee state waiting-on — each enumerated, no bee CLI wildcard. The forbidden-token list gains bee worktree merge and bee gate. Surface identical on both transports; the three sibling roles byte-unchanged.",
+      "commit": "f3acc88f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop — green:unit — 60 passed 0 failed on the worker commit, run by the orchestrator; includes route_allowlist_carries_no_forbidden_tool_tokens_on_either_transport and three_existing_roles_tool_surfaces_remain_byte_unchanged",
+      "deviations": [
+        "Capped with --sync-ack: siblings in the same parallel wave touched skills/** in the shared worktree."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

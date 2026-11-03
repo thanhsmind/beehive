@@ -253,6 +253,61 @@ fn num(v: Option<&Value>) -> f64 {
     }
 }
 
+fn usage_rows(files: &[String]) -> Vec<(String, Value)> {
+    // Streaming appends several lines per message id with cumulative usage —
+    // keep the LAST occurrence so nothing is double-counted.
+    let mut by_id: Vec<(String, String, Value)> = Vec::new();
+    let mut seq: u64 = 0;
+    for f in files {
+        let Ok(text) = std::fs::read_to_string(f) else { continue };
+        for line_raw in text.split('\n') {
+            if !line_raw.contains("\"usage\"") {
+                continue;
+            }
+            let Ok(obj) = serde_json::from_str::<Value>(line_raw) else { continue };
+            let Some(m) = obj.get("message").filter(|v| js_truthy(v)) else { continue };
+            let usage = m.get("usage").filter(|u| js_truthy(u));
+            // A non-string `model` would be truthy in JS and then coerced by
+            // the price regexes; transcripts never carry one, and treating it
+            // as absent is the fail-open direction (documented divergence).
+            let model = m.get("model").and_then(Value::as_str).filter(|s| !s.is_empty());
+            let (Some(usage), Some(model)) = (usage, model) else { continue };
+            if model == "<synthetic>" {
+                continue;
+            }
+            // `m.id ?? \`${f}#${seq++}\`` — the fallback (and the increment)
+            // fire only when id is null/undefined. Keys are tagged by JSON
+            // form so a numeric id can never collide with a string one, the
+            // way a JS Map's SameValueZero keying behaves.
+            let key = match m.get("id").filter(|v| !v.is_null()) {
+                Some(id) => format!("id:{}", jsjson::stringify(id)),
+                None => {
+                    let k = format!("gen:{f}#{seq}");
+                    seq += 1;
+                    k
+                }
+            };
+            match by_id.iter_mut().find(|(k, _, _)| *k == key) {
+                Some(slot) => {
+                    slot.1 = model.to_string();
+                    slot.2 = usage.clone();
+                }
+                None => by_id.push((key, model.to_string(), usage.clone())),
+            }
+        }
+    }
+    by_id.into_iter().map(|(_, model, usage)| (model, usage)).collect()
+}
+
+pub(crate) fn context_and_turns(transcript: &str) -> Option<(u64, u64)> {
+    let rows = usage_rows(&[transcript.to_string()]);
+    let (_, last) = rows.last()?;
+    let ctx = num(last.get("input_tokens"))
+        + num(last.get("cache_read_input_tokens"))
+        + num(last.get("cache_creation_input_tokens"));
+    Some((ctx as u64, rows.len() as u64))
+}
+
 /// provenance: statusline-usage.mjs main(input). `None` means "print
 /// nothing" — every early `return` in the .mjs plus every `catch`.
 ///
@@ -313,54 +368,13 @@ fn compute_line(input: &Value, tmpdir: &str) -> Option<String> {
         }
     }
 
-    // Streaming appends several lines per message id with cumulative usage —
-    // keep the LAST occurrence so nothing is double-counted.
-    let mut by_id: Vec<(String, String, Value)> = Vec::new(); // (key, model, usage)
-    let mut seq: u64 = 0;
-    for f in &files {
-        let Ok(text) = std::fs::read_to_string(f) else { continue };
-        for line_raw in text.split('\n') {
-            if !line_raw.contains("\"usage\"") {
-                continue;
-            }
-            let Ok(obj) = serde_json::from_str::<Value>(line_raw) else { continue };
-            let Some(m) = obj.get("message").filter(|v| js_truthy(v)) else { continue };
-            let usage = m.get("usage").filter(|u| js_truthy(u));
-            // A non-string `model` would be truthy in JS and then coerced by
-            // the price regexes; transcripts never carry one, and treating it
-            // as absent is the fail-open direction (documented divergence).
-            let model = m.get("model").and_then(Value::as_str).filter(|s| !s.is_empty());
-            let (Some(usage), Some(model)) = (usage, model) else { continue };
-            if model == "<synthetic>" {
-                continue;
-            }
-            // `m.id ?? \`${f}#${seq++}\`` — the fallback (and the increment)
-            // fire only when id is null/undefined. Keys are tagged by JSON
-            // form so a numeric id can never collide with a string one, the
-            // way a JS Map's SameValueZero keying behaves.
-            let key = match m.get("id").filter(|v| !v.is_null()) {
-                Some(id) => format!("id:{}", jsjson::stringify(id)),
-                None => {
-                    let k = format!("gen:{f}#{seq}");
-                    seq += 1;
-                    k
-                }
-            };
-            match by_id.iter_mut().find(|(k, _, _)| *k == key) {
-                Some(slot) => {
-                    slot.1 = model.to_string();
-                    slot.2 = usage.clone();
-                }
-                None => by_id.push((key, model.to_string(), usage.clone())),
-            }
-        }
-    }
+    let by_id = usage_rows(&files);
     if by_id.is_empty() {
         return None;
     }
 
     let mut per_model: Vec<(String, Sums)> = Vec::new();
-    for (_, model, usage) in &by_id {
+    for (model, usage) in &by_id {
         let idx = match per_model.iter().position(|(m, _)| m == model) {
             Some(i) => i,
             None => {
@@ -653,5 +667,21 @@ mod tests {
         assert!(compute_line(&json!({ "transcript_path": "/nope/nope.jsonl" }), &c).is_none());
         let empty = write_transcript(tmp.path(), "e.jsonl", &[json!({"hello": 1})]);
         assert!(compute_line(&json!({ "transcript_path": empty }), &c).is_none());
+    }
+
+    #[test]
+    fn context_and_turns_reads_the_latest_request_and_counts_messages() {
+        let tmp = tempfile::tempdir().unwrap();
+        let t = write_transcript(
+            tmp.path(),
+            "w.jsonl",
+            &[
+                row("a", "claude-opus-4-7", json!({"input_tokens": 5, "cache_read_input_tokens": 100})),
+                row("b", "claude-opus-4-7", json!({"input_tokens": 1})),
+                row("b", "claude-opus-4-7", json!({"input_tokens": 3, "cache_read_input_tokens": 12000, "cache_creation_input_tokens": 297, "output_tokens": 50})),
+            ],
+        );
+        assert_eq!(context_and_turns(&t), Some((12300, 2)));
+        assert_eq!(context_and_turns("/nope/nope.jsonl"), None);
     }
 }

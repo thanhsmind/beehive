@@ -36,7 +36,7 @@
 
 use super::{bee_source_root, rel_platform};
 use crate::jsjson;
-use crate::onboard::hooks_wiring::{codex_hook_command, codex_hook_command_windows};
+use crate::onboard::hooks_wiring::{codex_hook_command, codex_hook_command_windows, WORKER_GUARD_MATCHER};
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -50,6 +50,18 @@ use std::process::ExitCode;
 /// rendered JSON manifest sharing this catalog's `Entry`/`Group` rows). Adding
 /// `Runtime::Opencode` here would imply a fourth generated-manifest
 /// projection that does not exist; the plugin file is the projection.
+///
+/// PI TAKES THE SAME EXCLUSION (pi-support D4, named deviation recorded in
+/// docs/history/pi-support/plan.md). Pi is a first-class runtime at the
+/// dispatch door (D5: `team.pi`, herding-only) and ships no hook-config
+/// surface at all — its belt is the checked-in TypeScript extension at
+/// `.pi/extensions/bee-guard/`, auto-discovered by Pi from the workspace
+/// cwd, translating Pi's events onto `bee hook <rule>`. So there is NO
+/// `Runtime::Pi` and NO fourth projection here either; D4's purpose (derived
+/// coverage, never a hand list) is served the OpenCode way — the belt joins
+/// the parity test's derived row set, read out of the TS source. Adding a
+/// variant here would make `hook_manifests_match_disk` demand a generated
+/// file that cannot exist.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Runtime {
     Claude,
@@ -101,14 +113,15 @@ macro_rules! group {
     };
 }
 
-/// The agent-activity probe (agent-activity-hook D1). Claude-only in this
-/// slice: Codex exposes no PostToolUseFailure / PermissionRequest /
-/// Notification event, and the three events it does share carry no session
-/// activity record on that runtime yet. Matcher-less everywhere it appears —
+/// The agent-activity probe (agent-activity-hook D1). Codex carries the four
+/// shared lifecycle events. Claude also carries its four host-only events.
+/// Matcher-less everywhere it appears —
 /// on PreToolUse/PostToolUse EVERY tool is activity, and on Notification the
 /// verb itself filters on `notification_type`. Never on SubagentStop: a
 /// subagent's stop is not the session's state (D1, "Never SubagentStop").
-const ACTIVITY: Group = group!(CLAUDE_ONLY, None, [("bee-activity.mjs", "bee: activity")]);
+const ACTIVITY_SHARED: Group = group!(BOTH, None, [("bee-activity.mjs", "bee: activity")]);
+const ACTIVITY_CLAUDE_ONLY: Group =
+    group!(CLAUDE_ONLY, None, [("bee-activity.mjs", "bee: activity")]);
 
 /// One entry per lifecycle event bee wires. Runtime differences are explicit
 /// data, never hand-maintained projection drift — see ALLOWED_DIFFERENCES.
@@ -125,7 +138,7 @@ const CATALOG: &[Event] = &[
         name: "UserPromptSubmit",
         groups: &[
             group!(BOTH, None, [("bee-prompt-context.mjs", "bee: phase reminder")]),
-            ACTIVITY,
+            ACTIVITY_SHARED,
         ],
     },
     Event {
@@ -133,8 +146,13 @@ const CATALOG: &[Event] = &[
         groups: &[
             group!(
                 BOTH,
-                Some("Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion"),
+                Some("Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec"),
                 [("bee-write-guard.mjs", "bee: write guard")]
+            ),
+            group!(
+                CLAUDE_ONLY,
+                Some(WORKER_GUARD_MATCHER),
+                [("bee-worker-guard.mjs", "")]
             ),
             // Claude dispatches subagents as Agent|Task…
             group!(
@@ -142,15 +160,14 @@ const CATALOG: &[Event] = &[
                 Some("Agent|Task"),
                 [("bee-model-guard.mjs", "bee: model-tier guard")]
             ),
-            // …Codex exposes the same act as the tool name "spawn_agent"
-            // (codex-cli 0.144.4, capability-matrix row D1). A MATCHER
-            // difference, not a capability gap: same handler, Codex branch.
+            // Codex 0.154.0 also emits the joined namespace/tool name.
+            // Both names enter the same guard through adapter normalization.
             group!(
                 CODEX_ONLY,
-                Some("spawn_agent"),
+                Some("spawn_agent|collaborationspawn_agent"),
                 [("bee-model-guard.mjs", "bee: model-tier guard")]
             ),
-            ACTIVITY,
+            ACTIVITY_SHARED,
         ],
     },
     Event {
@@ -166,14 +183,14 @@ const CATALOG: &[Event] = &[
             // No matcher = every tool. Passive measurement only; this hook can
             // never deny or block.
             group!(BOTH, None, [("bee-tools-logger.mjs", "bee: tools logger")]),
-            ACTIVITY,
+            ACTIVITY_SHARED,
         ],
     },
     // Claude-only, activity-only: these three events exist to tell "working"
     // from "waiting for the human" from "blocked", and only Claude Code emits
     // them.
-    Event { name: "PostToolUseFailure", groups: &[ACTIVITY] },
-    Event { name: "PermissionRequest", groups: &[ACTIVITY] },
+    Event { name: "PostToolUseFailure", groups: &[ACTIVITY_CLAUDE_ONLY] },
+    Event { name: "PermissionRequest", groups: &[ACTIVITY_CLAUDE_ONLY] },
     Event {
         name: "SubagentStart",
         groups: &[group!(
@@ -219,10 +236,10 @@ const CATALOG: &[Event] = &[
                     ("bee-session-close.mjs", "bee: session close check"),
                 ]
             ),
-            ACTIVITY,
+            ACTIVITY_SHARED,
         ],
     },
-    Event { name: "Notification", groups: &[ACTIVITY] },
+    Event { name: "Notification", groups: &[ACTIVITY_CLAUDE_ONLY] },
     // Claude-only: Codex exposes no SessionEnd event to wire this against.
     Event {
         name: "SessionEnd",
@@ -232,7 +249,7 @@ const CATALOG: &[Event] = &[
                 None,
                 [("bee-session-close.mjs", "bee: session end close")]
             ),
-            ACTIVITY,
+            ACTIVITY_CLAUDE_ONLY,
         ],
     },
 ];
@@ -318,7 +335,9 @@ pub fn render_projection(runtime: Runtime, target: Target) -> Value {
                             json!(codex_hook_command_windows(h.script)),
                         );
                     }
-                    e.insert("statusMessage".into(), json!(h.status_message));
+                    if !h.status_message.is_empty() {
+                        e.insert("statusMessage".into(), json!(h.status_message));
+                    }
                     Value::Object(e)
                 })
                 .collect();
@@ -407,7 +426,7 @@ pub fn run(flags: &[&str]) -> Option<ExitCode> {
 // approved` below.
 //
 //   model-tier-guard-claude-only   PreToolUse "Agent|Task"  bee-model-guard
-//   model-tier-guard-codex-spawn   PreToolUse "spawn_agent" bee-model-guard
+//   model-tier-guard-codex-spawn   PreToolUse "spawn_agent|collaborationspawn_agent" bee-model-guard
 //   subagent-start-audit-codex-only  SubagentStart  bee-codex-subagent-audit
 //   subagent-stop-audit-codex-only   SubagentStop   bee-codex-subagent-audit
 //   session-end-claude-only          SessionEnd     bee-session-close
@@ -596,18 +615,15 @@ mod tests {
         let codex = triples(Runtime::Codex);
         let approved: &[(&str, &str, &str)] = &[
             ("PreToolUse", "Agent|Task", "model-guard"),
-            ("PreToolUse", "spawn_agent", "model-guard"),
+            ("PreToolUse", WORKER_GUARD_MATCHER, "worker-guard"),
+            ("PreToolUse", "spawn_agent|collaborationspawn_agent", "model-guard"),
             ("SubagentStart", "*", "codex-subagent-audit"),
             ("SubagentStop", "*", "codex-subagent-audit"),
             ("SessionEnd", "*", "session-close"),
-            // agent-activity-hook D1 — the probe is Claude-only on every
-            // event it touches.
-            ("UserPromptSubmit", "*", "activity"),
-            ("PreToolUse", "*", "activity"),
-            ("PostToolUse", "*", "activity"),
+            // agent-activity-hook D1 — only these four activity events are
+            // Claude-only. The other four are shared and do not appear here.
             ("PostToolUseFailure", "*", "activity"),
             ("PermissionRequest", "*", "activity"),
-            ("Stop", "*", "activity"),
             ("Notification", "*", "activity"),
             ("SessionEnd", "*", "activity"),
         ];
@@ -624,8 +640,8 @@ mod tests {
 
     /// agent-activity-hook D1 — the probe's event set is the decision, so it
     /// is pinned here rather than left to the drift byte-compare: exactly
-    /// eight Claude events carry it, SubagentStop carries none, and the Codex
-    /// projection carries none at all.
+    /// eight Claude events carry it, four supported Codex events carry it,
+    /// and SubagentStop carries none.
     #[test]
     fn the_activity_hook_covers_the_eight_decided_events_and_never_subagent_stop() {
         let claude = render_projection(Runtime::Claude, Target::Plugin);
@@ -658,10 +674,22 @@ mod tests {
             ]
         );
         for target in [Target::Plugin, Target::Repo] {
-            let text = render_projection_text(Runtime::Codex, target);
-            assert!(
-                !text.contains(" hook activity"),
-                "the activity hook leaked into a Codex projection"
+            let codex = render_projection(Runtime::Codex, target);
+            let mut codex_carrying = Vec::new();
+            for (event, groups) in codex["hooks"].as_object().unwrap() {
+                for g in groups.as_array().unwrap() {
+                    for h in g["hooks"].as_array().unwrap() {
+                        if h["statusMessage"] == "bee: activity" {
+                            assert!(g.get("matcher").is_none());
+                            codex_carrying.push(event.clone());
+                        }
+                    }
+                }
+            }
+            codex_carrying.sort();
+            assert_eq!(
+                codex_carrying,
+                vec!["PostToolUse", "PreToolUse", "Stop", "UserPromptSubmit"]
             );
         }
     }
@@ -681,6 +709,32 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_worker_guard_group_is_claude_only_and_silent() {
+        let groups = |runtime: Runtime, target: Target| -> Vec<Value> {
+            render_projection(runtime, target)["hooks"]["PreToolUse"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|g| {
+                    g["hooks"].as_array().unwrap().iter().any(|h| {
+                        h["command"].as_str().unwrap().contains(" hook worker-guard")
+                    })
+                })
+                .cloned()
+                .collect()
+        };
+        for target in [Target::Plugin, Target::Repo] {
+            let claude = groups(Runtime::Claude, target);
+            assert_eq!(claude.len(), 1, "{claude:?}");
+            assert_eq!(claude[0]["matcher"], json!(WORKER_GUARD_MATCHER));
+            let hooks = claude[0]["hooks"].as_array().unwrap();
+            assert_eq!(hooks.len(), 1);
+            assert!(hooks[0].get("statusMessage").is_none(), "{hooks:?}");
+            assert!(groups(Runtime::Codex, target).is_empty());
+        }
+    }
+
     /// The Codex REPO projection and onboard's HOST projection are now the
     /// SAME renderer. This pins that: if someone re-forks them, the trap that
     /// broke a release (two renderers, one generated file) comes back.
@@ -689,5 +743,12 @@ mod tests {
         let from_catalog = command_for("bee-write-guard.mjs", Target::Repo);
         let from_onboard = crate::onboard::hooks_wiring::codex_hook_command("bee-write-guard.mjs");
         assert_eq!(from_catalog, from_onboard);
+
+        let projection = render_projection(Runtime::Codex, Target::Repo);
+        let mut onboard = Map::new();
+        for (k, v) in crate::onboard::hooks_wiring::render_codex_hook_entries() {
+            onboard.insert(k.to_string(), v);
+        }
+        assert_eq!(projection, json!({ "hooks": Value::Object(onboard) }));
     }
 }

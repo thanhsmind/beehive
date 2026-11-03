@@ -1,0 +1,11 @@
+{
+  "id": "a-host-repo-needs-a-second-verification-s__9f4f90f0",
+  "decision": "9f4f90f0",
+  "condition": "A host repo needs a SECOND verification skill beside verify-app (two separate products in one repo). The fixed name allows exactly one; the feature map indexes multiple features inside that one skill. Revisit the naming convention only when a real two-product host appears.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-02T02:28:51.488Z",
+  "updated_at": "2026-09-02T02:28:51.488Z",
+  "outcome": null
+}

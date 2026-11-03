@@ -1,0 +1,554 @@
+   Compiling bee v0.1.0 (/home/thanhsmind/Projects/goglbe/beehive--wt--codex-parity-completion/packages/bee-rs/crates/bee)
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `ack_present` is never used
+   --> crates/bee/src/herding/mailbox.rs:546:15
+    |
+546 | pub(crate) fn ack_present(entries: &[String], round: u32) -> bool {
+    |               ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `ROLE_DESCRIPTION_MAX` is never used
+   --> crates/bee/src/hooks/model_guard.rs:344:7
+    |
+344 | const ROLE_DESCRIPTION_MAX: usize = 60;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `role_slot_description` is never used
+   --> crates/bee/src/hooks/model_guard.rs:360:4
+    |
+360 | fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) -> Option<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `posix_shell` is never used
+   --> crates/bee/src/verbs/drivers/close.rs:137:15
+    |
+137 | pub(crate) fn posix_shell() -> Option<&'static str> {
+    |               ^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `derive_candidates` is never used
+   --> crates/bee/src/verbs/state_group/plan_conflicts.rs:309:15
+    |
+309 | pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>, Err2> {
+    |               ^^^^^^^^^^^^^^^^^
+
+warning: function `interventions_store_path` is never used
+    --> crates/bee/src/verbs/supervisor.rs:1294:15
+     |
+1294 | pub(crate) fn interventions_store_path(root: &Path) -> PathBuf {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bee` (bin "bee") generated 11 warnings (run `cargo fix --bin "bee" -p bee` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 0.58s
+     Running tests/hook_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/hook_contracts-bcaa29b197869e50)
+
+running 1 test
+test installed_manifest_denies_observed_codex_spawn_with_opaque_message ... FAILED
+
+failures:
+
+---- installed_manifest_denies_observed_codex_spawn_with_opaque_message stdout ----
+
+thread 'installed_manifest_denies_observed_codex_spawn_with_opaque_message' (3198754) panicked at crates/bee/tests/hook_contracts.rs:538:28:
+manifest must select model-guard
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    installed_manifest_denies_observed_codex_spawn_with_opaque_message
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p bee --test hook_contracts`
+   Compiling bee v0.1.0 (/home/thanhsmind/Projects/goglbe/beehive--wt--codex-parity-completion/packages/bee-rs/crates/bee)
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `ack_present` is never used
+   --> crates/bee/src/herding/mailbox.rs:546:15
+    |
+546 | pub(crate) fn ack_present(entries: &[String], round: u32) -> bool {
+    |               ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `ROLE_DESCRIPTION_MAX` is never used
+   --> crates/bee/src/hooks/model_guard.rs:344:7
+    |
+344 | const ROLE_DESCRIPTION_MAX: usize = 60;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `role_slot_description` is never used
+   --> crates/bee/src/hooks/model_guard.rs:360:4
+    |
+360 | fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) -> Option<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `posix_shell` is never used
+   --> crates/bee/src/verbs/drivers/close.rs:137:15
+    |
+137 | pub(crate) fn posix_shell() -> Option<&'static str> {
+    |               ^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `derive_candidates` is never used
+   --> crates/bee/src/verbs/state_group/plan_conflicts.rs:309:15
+    |
+309 | pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>, Err2> {
+    |               ^^^^^^^^^^^^^^^^^
+
+warning: function `interventions_store_path` is never used
+    --> crates/bee/src/verbs/supervisor.rs:1294:15
+     |
+1294 | pub(crate) fn interventions_store_path(root: &Path) -> PathBuf {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bee` (bin "bee") generated 11 warnings (run `cargo fix --bin "bee" -p bee` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 17.01s
+   Compiling bee v0.1.0 (/home/thanhsmind/Projects/goglbe/beehive--wt--codex-parity-completion/packages/bee-rs/crates/bee)
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `ack_present` is never used
+   --> crates/bee/src/herding/mailbox.rs:546:15
+    |
+546 | pub(crate) fn ack_present(entries: &[String], round: u32) -> bool {
+    |               ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `ROLE_DESCRIPTION_MAX` is never used
+   --> crates/bee/src/hooks/model_guard.rs:344:7
+    |
+344 | const ROLE_DESCRIPTION_MAX: usize = 60;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `role_slot_description` is never used
+   --> crates/bee/src/hooks/model_guard.rs:360:4
+    |
+360 | fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) -> Option<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `posix_shell` is never used
+   --> crates/bee/src/verbs/drivers/close.rs:137:15
+    |
+137 | pub(crate) fn posix_shell() -> Option<&'static str> {
+    |               ^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `derive_candidates` is never used
+   --> crates/bee/src/verbs/state_group/plan_conflicts.rs:309:15
+    |
+309 | pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>, Err2> {
+    |               ^^^^^^^^^^^^^^^^^
+
+warning: function `interventions_store_path` is never used
+    --> crates/bee/src/verbs/supervisor.rs:1294:15
+     |
+1294 | pub(crate) fn interventions_store_path(root: &Path) -> PathBuf {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bee` (bin "bee") generated 11 warnings (run `cargo fix --bin "bee" -p bee` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 17.02s
+     Running tests/hook_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/hook_contracts-bcaa29b197869e50)
+
+running 13 tests
+test apply_patch_is_ignored_by_the_model_guard ... ok
+test a_write_guard_deny_reaches_the_host_as_exit_two_on_stderr ... ok
+test chain_nudge_advisory_names_the_returning_worker ... ok
+test an_unknown_hook_name_is_a_named_refusal_not_a_crash ... ok
+test a_model_guard_deny_reaches_the_host_as_exit_two_on_stderr ... ok
+test apply_patch_targeting_state_json_is_denied_by_the_write_guard ... ok
+test no_bee_root_is_silent_success_for_every_hook ... ok
+test advisory_events_never_block_a_turn ... ok
+test installed_manifest_denies_observed_codex_spawn_with_opaque_message ... ok
+test codex_installed_manifest_matcher_selects_write_guard_for_apply_patch ... ok
+test codex_installed_manifest_matcher_selects_write_guard_for_exec ... ok
+test every_hook_survives_a_two_megabyte_payload ... ok
+test every_hook_fails_open_on_adversarial_stdin ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+   Compiling bee v0.1.0 (/home/thanhsmind/Projects/goglbe/beehive--wt--codex-parity-completion/packages/bee-rs/crates/bee)
+warning: duplicated attribute
+    --> crates/bee/src/verbs/status_full/tests.rs:4614:5
+     |
+4614 |     #[test]
+     |     ^^^^^^^
+     |
+     = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/verbs/drivers/tests.rs:961:13
+    |
+961 |         let mut cell = |id: &str, title: &str| {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `use_json`
+    --> crates/bee/src/verbs/drivers/tests.rs:6407:21
+     |
+6407 |         let (flags, use_json) = parse_flags(&[
+     |                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_json`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `root`
+   --> crates/bee/src/verbs/state_group/advisor_ref.rs:445:20
+    |
+445 |     fn fresh_state(root: &Path, feature: &str) -> Map<String, Value> {
+    |                    ^^^^ help: if this is intentional, prefix it with an underscore: `_root`
+
+warning: unused variable: `win`
+    --> crates/bee/src/verbs/supervisor.rs:4747:13
+     |
+4747 |         let win = away_into(control, "supervisor away", Some("dinner")).unwrap();
+     |             ^^^ help: if this is intentional, prefix it with an underscore: `_win`
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:1785:9
+     |
+1785 |         ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+     = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+     |
+1785 |         let _ = ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2265:9
+     |
+2265 |         ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2265 |         let _ = ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2300:9
+     |
+2300 |         ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2300 |         let _ = ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: `bee` (bin "bee" test) generated 13 warnings (run `cargo fix --bin "bee" -p bee --tests` to apply 5 suggestions)
+    Finished `release` profile [optimized] target(s) in 34.14s
+     Running unittests src/main.rs (/home/thanhsmind/.cache/cargo-target/release/deps/bee-c971e971395acb0c)
+
+running 7 tests
+test devtools::hook_manifests::tests::both_claude_renderers_launch_the_same_activity_verb ... ok
+test devtools::hook_manifests::tests::projections_differ_only_where_approved ... ok
+test devtools::hook_manifests::tests::no_projection_launches_a_wrapper_or_node_on_any_transport ... ok
+test devtools::hook_manifests::tests::every_projection_fails_open_visibly ... ok
+test devtools::hook_manifests::tests::the_activity_hook_covers_the_eight_decided_events_and_never_subagent_stop ... ok
+test devtools::hook_manifests::tests::hook_manifests_match_disk ... ok
+test devtools::hook_manifests::tests::the_codex_repo_and_host_projections_share_one_renderer ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 3554 filtered out; finished in 0.00s
+
+warning: duplicated attribute
+    --> crates/bee/src/verbs/status_full/tests.rs:4614:5
+     |
+4614 |     #[test]
+     |     ^^^^^^^
+     |
+     = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/verbs/drivers/tests.rs:961:13
+    |
+961 |         let mut cell = |id: &str, title: &str| {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `use_json`
+    --> crates/bee/src/verbs/drivers/tests.rs:6407:21
+     |
+6407 |         let (flags, use_json) = parse_flags(&[
+     |                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_json`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `root`
+   --> crates/bee/src/verbs/state_group/advisor_ref.rs:445:20
+    |
+445 |     fn fresh_state(root: &Path, feature: &str) -> Map<String, Value> {
+    |                    ^^^^ help: if this is intentional, prefix it with an underscore: `_root`
+
+warning: unused variable: `win`
+    --> crates/bee/src/verbs/supervisor.rs:4747:13
+     |
+4747 |         let win = away_into(control, "supervisor away", Some("dinner")).unwrap();
+     |             ^^^ help: if this is intentional, prefix it with an underscore: `_win`
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:1785:9
+     |
+1785 |         ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+     = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+     |
+1785 |         let _ = ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2265:9
+     |
+2265 |         ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2265 |         let _ = ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2300:9
+     |
+2300 |         ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2300 |         let _ = ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: `bee` (bin "bee" test) generated 13 warnings (run `cargo fix --bin "bee" -p bee --tests` to apply 5 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.03s
+     Running unittests src/main.rs (/home/thanhsmind/.cache/cargo-target/release/deps/bee-c971e971395acb0c)
+
+running 23 tests
+test onboard::hooks_wiring::tests::both_wirings_are_recognized_as_bee_entries ... ok
+test onboard::hooks_wiring::tests::codex_bee_command_regex ... ok
+test onboard::hooks_wiring::tests::a_host_without_a_binary_gets_a_detecting_loop_and_a_visible_diagnostic ... ok
+test onboard::hooks_wiring::tests::codex_host_projection_launches_the_binary_on_both_legs ... ok
+test onboard::hooks_wiring::tests::codex_statusline_insertion_respects_an_existing_tui_section ... ok
+test onboard::hooks_wiring::tests::status_line_key_detection ... ok
+test onboard::hooks_wiring::tests::windows_transport_stays_parseable_by_both_shells ... ok
+test onboard::hooks_wiring::tests::malformed_settings_json_refuses_and_is_never_overwritten ... ok
+test onboard::hooks_wiring::tests::merge_statusline_settings_broken_or_non_object_returns_unchanged ... ok
+test onboard::hooks_wiring::tests::non_array_event_value_refuses_instead_of_dropping_it ... ok
+test onboard::hooks_wiring::tests::merge_statusline_settings_absent_or_empty_produces_fresh_statusline_object ... ok
+test onboard::hooks_wiring::tests::merge_replaces_a_stale_bee_entry_instead_of_stacking ... ok
+test onboard::hooks_wiring::tests::repo_settings_carry_the_activity_hook_on_the_decided_events ... ok
+test onboard::hooks_wiring::tests::malformed_codex_hooks_json_refuses_and_is_never_overwritten ... ok
+test onboard::hooks_wiring::tests::statusline_opt_in_only_for_project_level_references ... ok
+test onboard::hooks_wiring::tests::a_stale_node_codex_entry_is_replaced_not_stacked ... ok
+test onboard::hooks_wiring::tests::statusline_settings_absent_detection ... ok
+test onboard::hooks_wiring::tests::merge_preserves_foreign_entries_and_is_idempotent ... ok
+test onboard::hooks_wiring::tests::non_object_hooks_key_refuses_instead_of_dropping_it ... ok
+test onboard::hooks_wiring::tests::merge_statusline_settings_preserves_foreign_keys_and_is_idempotent ... ok
+test onboard::hooks_wiring::tests::wiring_is_one_shape_and_reaches_the_main_checkout ... ok
+test onboard::hooks_wiring::tests::codex_projection_shape_and_idempotence ... ok
+test onboard::hooks_wiring::tests::statusline_opt_in_round_trips_canonical_command ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 3538 filtered out; finished in 0.00s
+

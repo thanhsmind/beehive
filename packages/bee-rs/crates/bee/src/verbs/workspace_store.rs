@@ -479,6 +479,32 @@ pub(crate) fn list_workspaces(root: &Path) -> W<(Vec<Map<String, Value>>, Vec<Va
     Ok((workspaces, skipped))
 }
 
+pub(crate) fn set_paseo_workspace_id(root: &Path, id: &str, paseo_id: &str) -> W<()> {
+    let workspace_id = require_workspace_id(id)?;
+    let mut guard = acquire_workspace_lock(root, &workspace_id)?;
+    let out = (|| -> W<()> {
+        let mut record = read_workspace_record(root, &workspace_id)?;
+        record.insert("paseo_workspace_id".into(), json!(paseo_id));
+        write_workspace_file_atomic(root, &workspace_id, &record)
+    })();
+    guard.release();
+    out
+}
+
+pub(crate) fn record_for_dir(root: &Path, dir: &Path) -> Option<Map<String, Value>> {
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let target = canon(dir);
+    let (records, _) = list_workspaces(root).ok()?;
+    records
+        .into_iter()
+        .filter_map(|record| {
+            let record_root = canon(Path::new(record.get("root")?.as_str()?));
+            target.starts_with(&record_root).then_some((record_root.components().count(), record))
+        })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, record)| record)
+}
+
 // ─── ownership ────────────────────────────────────────────────────────────
 
 #[derive(Debug, PartialEq)]

@@ -6,7 +6,7 @@ timestamp: 2026-08-14
 bee:
   id: pattern-20260814-git-add-pathspec-fails-on-empty-match
   lifecycle: active
-  areas: [worktree-lifecycle]
+  areas: [worktree-parallelism]
   sources: [".bee/cells/archive/traceable-runs/trun-4.json (deviation, red test first)", "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs (commit_main_bookkeeping pathspec filter)"]
   polarity: pitfall
   evidence: wired

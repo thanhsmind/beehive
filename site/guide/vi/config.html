@@ -1,0 +1,411 @@
+<p>Bạn đổi một hành vi của bee — tắt một <code>hook</code>, cho phép tự duyệt cổng ở một mức nào đó, đổi model một vai trò dùng. Không có màn hình cài đặt nào cả. Có đúng hai file JSON, và một luật hợp nhất chúng lại thành một cấu hình duy nhất mà mọi lệnh <code>bee</code> đọc lại từ đầu, mỗi lần.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 260" role="img" aria-labelledby="fig-hai-file-title">
+    <title id="fig-hai-file-title">Hai file JSON hợp nhất thành một cấu hình có hiệu lực; file thứ hai thắng khi trùng khoá.</title>
+
+    <rect class="fig-box fig-fill-ok" x="60" y="30" width="300" height="76" rx="10"/>
+    <text class="fig-t" x="210" y="60" text-anchor="middle">.bee/config.json</text>
+    <text class="fig-t fig-t--sm" x="210" y="80" text-anchor="middle">theo dõi trong git — dùng chung cả team</text>
+    <text class="fig-t fig-t--sm" x="210" y="97" text-anchor="middle">seed bởi bee onboard</text>
+
+    <rect class="fig-box fig-fill-agent" x="460" y="30" width="300" height="76" rx="10"/>
+    <text class="fig-t" x="610" y="60" text-anchor="middle">.bee/config.local.json</text>
+    <text class="fig-t fig-t--sm" x="610" y="80" text-anchor="middle">gitignore — chỉ máy này, chỉ bạn</text>
+    <text class="fig-t fig-t--sm" x="610" y="97" text-anchor="middle">tự tạo khi cần, không ai seed sẵn</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M195 106 L305 172"/>
+      <path d="M293 165 l14 3 -3 14"/>
+    </g>
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M625 106 L515 172"/>
+      <path d="M527 165 l-14 3 3 14"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="610" y="130" text-anchor="middle">ghi đè — thắng mọi khi trùng khoá</text>
+
+    <rect class="fig-box fig-box--on" x="260" y="176" width="300" height="70" rx="10"/>
+    <text class="fig-t" x="410" y="204" text-anchor="middle">Cấu hình có hiệu lực</text>
+    <text class="fig-t fig-t--sm" x="410" y="224" text-anchor="middle">hợp nhất lại mỗi lần gọi lệnh — không cache, không bước reload</text>
+  </svg>
+  <p class="guide-fig__cap">Một file cho cả team đọc, một file chỉ máy bạn đọc. Đè lên nhau đúng một lần, ngay trước khi lệnh chạy.</p>
+</figure>
+
+<h2>Luật hợp nhất</h2>
+
+<p>Bốn dòng này là toàn bộ luật. Không có luật thứ năm.</p>
+
+<ul>
+  <li><strong>Overlay thắng.</strong> Khoá nào cả hai file cùng có, giá trị trong <code>config.local.json</code> là câu trả lời.</li>
+  <li><strong>Object hợp nhất đệ quy.</strong> <code>{"hooks": {"write-guard": false}}</code> trong overlay chỉ tắt đúng một hook đó; năm mục <code>hooks</code> khác của file tracked vẫn sống nguyên.</li>
+  <li><strong>Mảng thay nguyên khối.</strong> Một mảng trong overlay là toàn bộ giá trị — không cộng dồn từng phần tử, không nối thêm. Mảng rỗng nghĩa là "không khớp gì cả", không phải "quay về mặc định".</li>
+  <li><strong>Giá trị đơn thay giá trị đơn.</strong> File đọc sau cùng thắng.</li>
+</ul>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Cái bẫy: một khoá có mặt với giá trị <code>null</code> vẫn thắng</span>
+  <p>Với hầu hết khoá, <code>null</code> đọc là "chưa đặt". Nhưng nó vẫn <strong>ghi đè</strong> — nó không biến mất khỏi phép hợp nhất chỉ vì giá trị là null. Ví dụ rõ nhất là <code>close_commit_bookkeeping</code>: file tracked đặt <code>false</code>, overlay đặt <code>null</code> — kết quả là <strong>bật</strong>, vì overlay đã ghi đè xong rồi giá trị <code>null</code> đó mới được đọc là "chưa đặt" cho riêng khoá này. Một công cụ chỉ biết JSON <code>null</code> chứ không biết "xoá khoá đi" buộc phải rơi vào đúng chỗ mặc định như khi khoá vắng mặt hẳn — đó là lý do khoá này xử lý null như vậy một cách có chủ đích.</p>
+</div>
+
+<div class="guide-note guide-note--stop">
+  <span class="guide-note__title">Bốn lệnh <code>bee config</code> đã khai báo nhưng chưa lắp vào binary</span>
+  <p><code>bee config get/set/unset/validate</code> đứng trong <code>bee --help --all</code>, trông như thật. Chạy bất kỳ lệnh nào trong bốn lệnh đó, bạn nhận đúng câu trả lời này:</p>
+  <pre class="guide-code">bee: not built into this binary: `bee config get` is declared in the command
+registry, the config verbs were never ported off Node. Nothing ran and
+nothing changed. FIX: read and edit `.bee/config.json` directly — it is
+plain JSON; `bee status --json` shows the derived gate_bypass_level</pre>
+  <p>Không có gì chạy, không có gì đổi. Cách duy nhất để sửa cấu hình hôm nay là <strong>mở file lên và sửa tay</strong> — dùng đúng công cụ Write/Edit bình thường, được phép ở mọi phase vì <code>.bee/</code> nằm trong danh sách cho phép ghi và bản thân file cấu hình không nằm trong bảng cấm sửa trực tiếp. Muốn đọc lại một giá trị đã được <em>tính toán</em> (không phải giá trị thô trong file) — ví dụ mức <code>gate_bypass</code> hiệu lực là gì — chạy <code>bee status --json</code>: nó trả về <code>gate_bypass</code>, <code>gate_bypass_level</code>, <code>ship_visibility</code>, <code>models</code>, <code>commands</code> đã hợp nhất và chuẩn hoá sẵn.</p>
+</div>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 220" role="img" aria-labelledby="fig-doc-lai-title">
+    <title id="fig-doc-lai-title">Không có lệnh sửa cấu hình. Bạn sửa file bằng tay; lệnh bee kế tiếp đọc lại ngay, không cache.</title>
+
+    <rect class="fig-box fig-fill-agent" x="30" y="80" width="190" height="64" rx="10"/>
+    <text class="fig-t" x="125" y="106" text-anchor="middle">Bạn / agent</text>
+    <text class="fig-t fig-t--sm" x="125" y="124" text-anchor="middle">sửa JSON bằng Write/Edit</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M220 112 L326 112"/>
+      <path d="M318 106 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="273" y="99" text-anchor="middle">không lệnh, không hook</text>
+
+    <rect class="fig-box" x="330" y="80" width="190" height="64" rx="10"/>
+    <text class="fig-t" x="425" y="106" text-anchor="middle">Hai file trên đĩa</text>
+    <text class="fig-t fig-t--sm" x="425" y="124" text-anchor="middle">config.json + .local.json</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M520 112 L626 112"/>
+      <path d="M618 106 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="573" y="99" text-anchor="middle">lệnh bee kế tiếp</text>
+
+    <rect class="fig-box fig-fill-ok" x="630" y="80" width="160" height="64" rx="10"/>
+    <text class="fig-t" x="710" y="106" text-anchor="middle">Có hiệu lực ngay</text>
+    <text class="fig-t fig-t--sm" x="710" y="124" text-anchor="middle">không cache, không reload</text>
+
+    <text class="fig-t fig-t--sm" x="410" y="180" text-anchor="middle">Đọc cấu hình không bao giờ ghi gì cả — không lock, không timestamp, không hỏng gì để undo.</text>
+  </svg>
+  <p class="guide-fig__cap">Sửa xong, gọi lệnh tiếp theo — không có bước "áp dụng" nào ở giữa.</p>
+</figure>
+
+<h2>Từng nhóm khoá</h2>
+
+<h3><code>hooks.&lt;tên&gt;</code></h3>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>hooks.&lt;tên&gt;</code></td>
+      <td>bật</td>
+      <td>Đặt đúng <code>false</code> mới tắt hook đó; bất kỳ giá trị nào khác, hay một tên lạ, đều đọc là bật. Tên hợp lệ: <code>session-init</code>, <code>prompt-context</code>, <code>write-guard</code>, <code>model-guard</code>, <code>state-sync</code>, <code>chain-nudge</code>, <code>session-close</code>, <code>tools-logger</code>, <code>activity</code>, <code>codex-subagent-audit</code>. Xem <a href="/guide/hooks-guards">Chương 6</a> để biết mỗi hook chặn cái gì.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3><code>gate_bypass</code></h3>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>gate_bypass</code></td>
+      <td><code>false</code> (tắt)</td>
+      <td>Mức agent được tự duyệt <code>cổng</code> thay người: chuỗi <code>"total"</code>→total, <code>"full"</code>→full, <code>true</code>/<code>"on"</code>/<code>"normal"</code>→normal, còn lại→tắt. Bảng đầy đủ từng mức ở phần <a href="#thang-bypass">bên dưới</a>; <a href="/guide/cong-gate">Chương 3</a> sở hữu ý nghĩa của từng cổng.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3><code>models.&lt;runtime&gt;.&lt;role&gt;</code></h3>
+
+<p>Mỗi <em>vai trò</em> việc — không phải "hạng sang hay rẻ" — được cấu hình riêng cho từng runtime (<code>claude</code> hoặc <code>codex</code>). Đây là bảng mặc định của một host mới <code>bee onboard</code>:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Vai trò</th><th>Mặc định trên <code>claude</code></th><th>Mặc định trên <code>codex</code></th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td><code>code</code></td><td><code>sonnet</code></td><td><code>null</code></td><td>Model dùng khi một <code>cell</code> thực thi ghi code thật (bee-build).</td></tr>
+    <tr><td><code>read</code></td><td><code>haiku</code></td><td><code>null</code></td><td>Model cho việc chỉ đọc, tổng hợp, báo cáo (bee-gather) — không bao giờ ghi.</td></tr>
+    <tr><td><code>extraction</code></td><td><code>haiku</code></td><td><code>null</code></td><td>Model cho việc trích xuất máy móc: đọc, rút gọn, không cần phán đoán.</td></tr>
+    <tr><td><code>generation</code></td><td><code>sonnet</code></td><td><code>null</code></td><td>Model mặc định cho việc sinh nội dung/thực thi cell (bee-build) khi không có vai trò riêng nào khớp hơn.</td></tr>
+    <tr><td><code>review</code></td><td>không công bố sẵn — rơi xuống đúng model của <code>generation</code></td><td>không công bố sẵn</td><td>Vai trò rà soát (bee-review). Đặt riêng nếu muốn khác với <code>generation</code>.</td></tr>
+    <tr><td><code>advisor</code></td><td>không công bố sẵn — đọc là "tắt"</td><td>không công bố sẵn</td><td>Tư vấn AO3/AO13 bắt buộc trước khi mở nửa "execution" của Gate 2 cho việc high-risk. Không đặt nghĩa là không có tư vấn nào.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Một khoá là một trong bốn hình dạng: một chuỗi tên model (<code>"haiku"</code>); một object <code>{"model": "sonnet", "effort": "medium"}</code>; một object <code>{"kind": "cli", …}</code> gọi ra một chương trình ngoài (chỉ dùng được cho gather/review/advisor, không dùng để thực thi cell); một object <code>{"kind": "herding", …}</code> đẩy việc qua một pane bên ngoài; hoặc <code>null</code> — nghĩa là "chưa cấu hình", subagent thừa kế thẳng model của phiên đang chạy. Một tên vai trò lạ không bị từ chối, nó chỉ rơi xuống vai trò kế tiếp mà dispatch cần và cảnh báo một dòng. <a href="/guide/giao-viec">Chương 10</a> nói tiếp cơ chế dispatch dùng bảng này ra sao.</p>
+
+<h3><code>guards.*</code></h3>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>guards.idle_gate</code></td>
+      <td><code>true</code></td>
+      <td><code>false</code> cho phép ghi source ngay ở phase <code>idle</code>/<code>compounding-complete</code> mà không cần định tuyến qua bee-hive trước. Đây là lối thoát cuối cùng được nêu tên ngay trong lời từ chối của cổng nạp việc — không phải cài đặt dùng hằng ngày.</td>
+    </tr>
+    <tr>
+      <td><code>guards.auto_isolate</code></td>
+      <td><code>false</code></td>
+      <td><code>true</code> khiến phiên ghi thứ hai tự tạo một <code>worktree</code> riêng thay vì bị guard chính sách ghi từ chối thẳng. Tác dụng giống hệt việc gõ <code>--isolate</code> ở mỗi lệnh.</td>
+    </tr>
+    <tr>
+      <td><code>guards.max_read_lines</code></td>
+      <td><code>800</code></td>
+      <td>Số dòng mà một lệnh Read không có <code>offset</code>/<code>limit</code> sẽ bị chuyển hướng sang đọc có giới hạn. Giá trị không phải số, bằng 0, hoặc âm đều đọc như 800.</td>
+    </tr>
+    <tr>
+      <td><code>guards.write_policy</code></td>
+      <td><code>"isolated"</code> (và cũng là cách đọc cho bất kỳ giá trị lạ nào)</td>
+      <td><code>"isolated"</code>: một checkout chỉ có một phiên được ghi; phiên thứ hai bị từ chối ghi source cho tới khi phiên đầu giải phóng. <code>"shared-disjoint"</code>: hai phiên được ghi cùng một checkout, nhưng chỉ trên đúng đường dẫn mỗi bên đã <code>reserve</code> — một reserve kiểu glob hay quá rộng không đủ. <code>"observe"</code>: chỉ đo, không chặn gì — mọi lệnh ghi đều đi qua. <a href="/guide/phoi-hop">Chương 11</a> nói kỹ về claim/reservation/hold.</td>
+    </tr>
+    <tr>
+      <td><code>guards.exclusive_paths</code></td>
+      <td>danh sách sẵn có: lockfile, migration, <code>.bee/onboarding.json</code></td>
+      <td>Nối thêm (không thay thế) vào danh sách đường dẫn "độc quyền" — những đường dẫn mà một <code>hold</code> ở worktree khác sẽ chặn cứng, thay vì chỉ cảnh báo.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Các khoá luồng chính</h3>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>worktree_first</code></td>
+      <td>bật</td>
+      <td>Đúng chuỗi <code>"off"</code> mới tắt được: nó tắt sự từ chối của write guard khi việc code-touching bị ghi ngay ở main checkout thay vì trong worktree riêng. Mọi giá trị khác — kể cả <code>false</code>, <code>"false"</code>, <code>"OFF"</code>, <code>0</code> — vẫn giữ guard bật. <a href="/guide/worktree">Chương 7</a> giải thích vì sao việc nên có worktree riêng.</td>
+    </tr>
+    <tr>
+      <td><code>staging_before_merge</code></td>
+      <td><code>false</code></td>
+      <td><code>true</code> bật khu vực <code>staging</code> chung cho cả repo, khi đó <code>bee staging add</code>/<code>bee staging rebuild</code> mới chạy được. Để trống hoặc <code>false</code>, cả hai lệnh đó từ chối <code>STAGING_DISABLED</code> và luồng đi thẳng worktree → cổng uat → main. Giá trị không phải boolean bị từ chối <code>STAGING_CONFIG_INVALID</code>.</td>
+    </tr>
+    <tr>
+      <td><code>uat_stop</code></td>
+      <td><code>"close"</code></td>
+      <td><code>"merge"</code>: <code>bee worktree merge</code> tự áp cổng <code>uat</code> cho lane standard/high-risk. <code>"close"</code>: merge cứ vào main, nhưng worktree bị giữ lại và <code>bee close</code> mới áp cổng uat. <code>"off"</code>: bỏ hẳn điểm dừng. Một giá trị khác ba chữ này bị từ chối <code>WORKTREE_MERGE_UAT_CONFIG_INVALID</code>.</td>
+    </tr>
+    <tr>
+      <td><code>uat_before_merge</code></td>
+      <td>bí danh cũ — chỉ đọc khi <code>uat_stop</code> vắng mặt</td>
+      <td><code>true</code>→<code>"merge"</code>, <code>false</code>→<code>"off"</code>. Nếu <strong>cả hai khoá</strong> đều vắng, mặc định là <code>"close"</code> — không theo hình dạng true/false của bí danh này.</td>
+    </tr>
+    <tr>
+      <td><code>close_commit_bookkeeping</code></td>
+      <td>bật (vắng mặt <strong>và</strong> <code>null</code> đều đọc là bật)</td>
+      <td><code>false</code> thì <code>bee close</code> không tự tạo commit "bookkeeping" của riêng nó. Một giá trị hiện diện, không null, không phải boolean sẽ chặn hẳn <code>bee close</code> ngay từ đầu, nêu tên khóa, giá trị, và file nào mang nó.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3><code>commands.*</code></h3>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>commands.test</code></td>
+      <td>không khai báo</td>
+      <td>Lệnh test <strong>DUY NHẤT</strong> của dự án — một chuỗi, hoặc một mảng chạy tuần tự, không bao giờ dừng giữa chừng. <code>bee test</code> chạy nó theo yêu cầu và CI chạy nó ở mọi lần push — tấm lưới tất định duy nhất. Không cửa local nào tự chạy nó thay bạn: mỗi cell tự ghi dòng bằng chứng của mình, còn <code>bee close</code> và <code>bee worktree merge</code> chỉ đọc lại dòng đó. Chuỗi thần chú <code>"none"</code> khai báo "dự án này cố tình không có test" và bị loại khỏi danh sách khi chuẩn hoá — không chạy như một lệnh shell tên "none".</td>
+    </tr>
+    <tr>
+      <td><code>commands.staging_build</code></td>
+      <td>không cấu hình</td>
+      <td>Bước build mà <code>bee staging add</code> chạy bên trong worktree staging. Vắng mặt thì bước này bị bỏ qua kèm một dòng nói rõ; thoát khác 0 thì hiện nguyên lệnh và đuôi output.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Hiển thị và tài liệu</h3>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>ship_visibility</code></td>
+      <td><code>"off"</code></td>
+      <td><code>"draft-pr"</code> thêm một dòng vào preamble phiên — lần cap đầu tiên mở PR nháp, mọi lần cap sau đó push tiếp. Bản thân binary không tự mở PR nào cả; đây là lời nhắc cho agent và một field trong <code>bee status --json</code>. Giá trị lạ bị cảnh báo theo tên và chuẩn hoá về <code>"off"</code>.</td>
+    </tr>
+    <tr>
+      <td><code>doc_viewer</code></td>
+      <td>không đặt, im lặng</td>
+      <td><code>{base_url, project}</code> nối thành <code>&lt;base_url&gt;/p/&lt;project&gt;</code>, được nhét vào preamble và capsule nén để agent dán một đường dẫn tài liệu trong repo thành URL bấm được thay vì đường dẫn trần. Thiếu field, field rỗng sau khi trim, hay sai hình dạng đều không tạo URL và chỉ in một dòng cảnh báo nêu tên khóa.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3><code>herding.*</code></h3>
+
+<p>Khối này cấu hình cỗ máy dispatch không người trực tiếp cầm lái — <a href="/guide/giao-viec">Chương 10</a> nói bối cảnh, ở đây chỉ là các khoá.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>herding.transport</code></td>
+      <td><code>"herdr"</code> khi vắng mặt</td>
+      <td>Chọn <code>"herdr"</code> hay <code>"tmux"</code> cho toàn bộ cockpit — không bao giờ tự dò từ biến môi trường. Giá trị khác bị từ chối và nêu đúng hai cách viết hợp lệ.</td>
+    </tr>
+    <tr>
+      <td><code>herding.agent_command</code></td>
+      <td><code>["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]</code></td>
+      <td>Worker mặc định khi không chỉ tên herd cụ thể — một mảng argv (token đầu là loại agent), hoặc một chuỗi trỏ vào một mục trong <code>herding.agents</code>.</td>
+    </tr>
+    <tr>
+      <td><code>herding.control_command</code></td>
+      <td>dựng sẵn: <code>claude -p "&lt;prompt&gt;" --model sonnet --max-turns &lt;ceiling&gt; --allowedTools &lt;surface&gt;</code></td>
+      <td>Lệnh khởi động pane điều khiển, với các token <code>{PROMPT}</code>/<code>{MODEL}</code>/<code>{MAX_TURNS}</code>/<code>{ALLOWED_TOOLS}</code> được thay thế đúng vị trí — không có shell nào ở giữa, không join-rồi-split, không <code>eval</code>.</td>
+    </tr>
+    <tr>
+      <td><code>herding.agents</code></td>
+      <td>không có</td>
+      <td>Sổ đăng ký tên → argv (hoặc object có <code>argv</code>/<code>env</code>/<code>workspace_trust</code>). Một tên lạ bị từ chối và liệt kê toàn bộ khóa hợp lệ đang có.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Cockpit đọc <code>gate_bypass_level</code>, không đọc trạng thái riêng của nó</span>
+  <p>Vòng điều khiển herding chỉ tự dispatch việc khi <code>bee status --json</code> trả về <code>gate_bypass_level</code> đúng bằng <code>full</code> hoặc <code>total</code> — thấp hơn thì nó tự báo và dừng, không bao giờ tự nâng mức lên. Và dù mức đó là <code>total</code>, cổng <code>uat</code> dưới <code>--actor auto</code> <strong>vẫn từ chối</strong> — xem thang bên dưới.</p>
+</div>
+
+<h3>Những khoá còn lại, đều tùy chọn</h3>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td><code>cells_archive_on_close</code></td><td>bật</td><td>Một lần <code>close</code> xanh sẽ chuyển các cell đã cap của feature vào <code>.bee/cells/archive/&lt;feature&gt;/</code>, không còn nằm trên đường mà <code>bee status</code>/<code>bee orient</code> phải đọc mỗi lần.</td></tr>
+    <tr><td><code>worktree_cleanup_on_merge</code></td><td>bật</td><td>Một merge có gộp được gì đó sẽ tự xoá thư mục worktree, xoá branch, bỏ grant. Một giá trị không phải boolean bị từ chối thẳng thay vì đoán mò.</td></tr>
+    <tr><td><code>product_root</code></td><td>không đặt (= gốc bee)</td><td>Nơi tài liệu sản phẩm nằm khi nó KHÔNG nằm cạnh <code>.bee/</code>. Một giá trị không phải chuỗi, hoặc một đường dẫn không tồn tại, sẽ cảnh báo và dùng gốc bee thay thế.</td></tr>
+    <tr><td><code>capture_queue_threshold</code></td><td><code>{"count": 5, "days": 7}</code></td><td>Ngưỡng áp lực khiến lời nhắc "hàng đợi ghi nhận" đổi giọng gắt hơn. Không bao giờ chặn hẳn việc gì — chỉ đổi giọng nhắc. <a href="/guide/bo-nho">Chương 12</a> sở hữu ý nghĩa của việc ghi nhận.</td></tr>
+    <tr><td><code>retry.fallbackChains</code></td><td>không có gì mặc định — phải tự gõ</td><td>Map từ tên vai trò, tên model cụ thể, hoặc <code>"provider/*"</code>, sang một danh sách model dự phòng thử theo thứ tự khi model gốc gặp lỗi tạm thời (quá tải, lỗi 5xx…). Không bao giờ nhảy dự phòng vì test đỏ hay kết quả sai — chỉ vì lỗi hạ tầng.</td></tr>
+    <tr><td><code>dogfood_repos</code></td><td><code>[]</code></td><td>Chỉ dùng trong chính repo bee cho vòng tự-cải-thiện. Dự án của bạn cứ để trống.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="thang-bypass">Thang <code>gate_bypass</code></h2>
+
+<p>Bốn mức, mỗi mức mở thêm một khoảng — không có mức nào mở <em>tất cả</em>.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Mức</th><th>Bao phủ</th><th>Vẫn dừng cho người</th></tr></thead>
+  <tbody>
+    <tr><td><code>off</code></td><td>Không gì cả.</td><td>Mọi thứ.</td></tr>
+    <tr><td><code>normal</code></td><td>Cổng 1–2 cho lane <code>tiny</code>, <code>small</code>, <code>standard</code>.</td><td>Việc high-risk và hard-gate, đọc file bí mật, cổng 3 UAT.</td></tr>
+    <tr><td><code>full</code></td><td>Cổng 1–2 ở <strong>mọi</strong> lane, kể cả high-risk.</td><td>Đọc file bí mật, một P1 khi review, cổng 3 UAT.</td></tr>
+    <tr><td><code>total</code></td><td>Mọi điểm dừng mà cơ chế bypass có thể phủ.</td><td>Cổng UAT dưới <code>--actor auto</code> vẫn từ chối.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="guide-note guide-note--stop">
+  <span class="guide-note__title">Không mức nào tự duyệt UAT</span>
+  <p>Dù bạn đặt <code>gate_bypass</code> thành <code>"total"</code>, lệnh duyệt cổng <code>uat</code> với <code>--actor auto</code> vẫn bị từ chối — luôn luôn, ở mọi mức. Đây là điểm dừng duy nhất bee cố tình không cho tự động hoá: bạn phải thật sự thử sản phẩm rồi tự tay duyệt. <a href="/guide/cong-gate">Chương 3</a> nói vì sao.</p>
+</div>
+
+<h2>Ba cấu hình chép nguyên được</h2>
+
+<p>Ba ví dụ dưới đây là JSON đầy đủ, hợp lệ. Chép nguyên, đổi <code>commands.test</code> theo dự án của bạn.</p>
+
+<h3>1. Cẩn thận, mặc định — hợp với một team</h3>
+
+<pre class="guide-code">{
+  <span class="c">// .bee/config.json — file theo dõi trong git, dùng chung cả team</span>
+  "hooks": {
+    "session-init": true,
+    "prompt-context": true,
+    "write-guard": true,
+    "state-sync": true,
+    "chain-nudge": true,
+    "session-close": true
+  },
+  "gate_bypass": false,
+  "models": {
+    "claude": {
+      "code": "sonnet",
+      "read": "haiku",
+      "extraction": "haiku",
+      "generation": "sonnet"
+    }
+  },
+  "commands": {
+    "test": "cargo test --workspace"
+  }
+}</pre>
+
+<p>Đây gần như nguyên xi những gì <code>bee onboard</code> seed sẵn — chỉ thêm đúng một dòng, <code>commands.test</code>. Mọi cổng dừng cho người, mọi hook bật. Hợp với một team mới bắt đầu dùng bee, hoặc bất kỳ ai muốn hiểu rõ từng bước trước khi tắt bớt gì.</p>
+
+<h3>2. Tin tưởng, làm một mình — hợp với một người trên máy riêng</h3>
+
+<pre class="guide-code">{
+  <span class="c">// .bee/config.local.json — gitignore, chỉ máy này</span>
+  "gate_bypass": "normal",
+  "guards": {
+    "auto_isolate": true
+  },
+  "ship_visibility": "draft-pr"
+}</pre>
+
+<p>Đặt trong <code>config.local.json</code>, không phải <code>config.json</code> — đây là lựa chọn của một máy, không phải quyết định chung của cả team. <code>gate_bypass: "normal"</code> tự duyệt Cổng 1–2 cho lane <code>tiny</code>/<code>small</code>/<code>standard</code>, còn việc high-risk và cổng UAT vẫn chờ bạn. <code>guards.auto_isolate: true</code> nghĩa là mở phiên thứ hai trong cùng checkout sẽ tự tách sang worktree riêng thay vì bị chặn ghi.</p>
+
+<h3>3. Không giám sát trực tiếp — hợp với cockpit herding</h3>
+
+<pre class="guide-code">{
+  <span class="c">// .bee/config.json — bật cho vòng dispatch tự động chạy nhiều giờ</span>
+  "gate_bypass": "full",
+  "models": {
+    "claude": {
+      "code": "sonnet",
+      "read": "haiku",
+      "extraction": "haiku",
+      "generation": "sonnet"
+    }
+  },
+  "commands": {
+    "test": "cargo test --workspace"
+  },
+  "worktree_cleanup_on_merge": true,
+  "herding": {
+    "transport": "herdr",
+    "agent_command": [
+      "claude",
+      "--model",
+      "sonnet",
+      "--permission-mode",
+      "bypassPermissions"
+    ]
+  }
+}</pre>
+
+<p>Hợp với việc chạy <code>bee herding control-loop</code> nhiều giờ liền không có người ngồi cạnh: Cổng 1–2 tự duyệt ở mọi lane, worktree merge xong tự dọn. Nhưng cổng UAT vẫn đứng nguyên — bạn (hoặc vai trò merge của cockpit) vẫn phải chạy thử thật trước khi việc coi là xong, đúng như thang bên trên đã nói.</p>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: ý nghĩa đầy đủ của từng cổng mà <code>gate_bypass</code> chỉ nói tới bằng con số.</li>
+  <li><a href="/guide/giao-viec">Chương 10 — Giao việc cho subagent</a>: <code>models.&lt;runtime&gt;.&lt;role&gt;</code> và <code>herding.*</code> quyết định ai chạy việc, ở đây chỉ là bảng khoá.</li>
+  <li><a href="/guide/phoi-hop">Chương 11 — Nhiều phiên cùng lúc</a>: <code>guards.write_policy</code> và <code>guards.exclusive_paths</code> nói kỹ hơn ở đó, cùng claim/reservation/hold.</li>
+  <li><a href="/guide/dung-hieu-qua">Chương 14 — Dùng bee cho hiệu quả</a>: công thức thực chiến khi bạn đã biết mọi khoá nhưng chưa chắc chọn khoá nào.</li>
+</ul>

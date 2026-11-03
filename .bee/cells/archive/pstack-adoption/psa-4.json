@@ -1,0 +1,85 @@
+{
+  "id": "psa-4",
+  "feature": "pstack-adoption",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Give the route class a procedure: four playbooks in one home, cited not copied",
+  "action": "Add ONE new section `## Class playbooks` to skills/bee-planning/references/planning-reference.md — no new file (planning-reference.md:6 says 'Fold, don't fan out', and bee-planning/SKILL.md:77 already loads this file at the plan-drafting step, so a citation resolves with no extra read). Per D1 AS SUPERSEDED by decision 132551fb: the plan CITES a playbook by name and anchor; it never transcribes the steps into plan.md. A skipped step stays visible and carries its recorded reason — it is NEVER a refusal, which is bee's existing named-deviation rule, not a new one.\n\nThe section opens with one line naming which taxonomy it binds: the ROUTE class (bee route --set --class), NOT the cell-level change_class enum at verbs/cells/validate.rs:123, which overlaps on bugfix and refactor only.\n\nFour playbooks, each a short named step list:\n\n- perf — 1) capture a baseline with the real command or trace and record the number; 2) state the hypothesis; 3) change one thing; 4) re-measure the same way; 5) keep the win, discard the loss, and record both numbers. 'It feels faster' is not a result.\n- bugfix — 1) reproduce the symptom on the real interface; 2) watch the repro FAIL before the fix; 3) find the mechanism, not the symptom; 4) fix it; 5) re-run the same reproduction on the same interface. Step 2's rule already has a home: CITE skills/bee-swarming/references/worker-details.md:33-35 ('red-before-green is craft, applied by judgment and enforced by review, not by flags'). Point AT it — do not copy it and do not edit that file, which keeps a cold execution worker from having to load a planning reference.\n- refactor — 1) record existing behavior first (characterization test, snapshot, or equivalence script); 2) prove that record green on the UNCHANGED tree; 3) change structure in small steps; 4) the record stays green at every step; 5) a behavior change is not a refactor — it is a separate cell.\n- research — 1) read-only: the outcome is an account, never a diff; 2) trace the runtime path, not just the file list; 3) name every source searched that came up EMPTY; 4) end with anchors a reader can open. Per D3 this is the investigation route; note in one line that nothing yet ENFORCES read-only, so the step is craft (backlog p-69bee217).\n\nThen wire two pointers, each ONE line, neither a copy: (1) skills/bee-planning/SKILL.md at the Record line (:42) — the step that records the route also cites the matched class playbook into plan.md; (2) skills/bee-hive/references/scout-and-ticks.md beside the class enum line (:34) — point at the playbook section. Do NOT reword the anchor phrases that packages/bee-rs/crates/bee/tests/route_class_parity.rs reads; run that fence and read its failure if unsure. Run `bee dev regen` after touching skills/**.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "acceptance": "planning-reference.md carries one `## Class playbooks` section with all four playbooks. bee-planning/SKILL.md and scout-and-ticks.md each carry a one-line pointer, not a copy. worker-details.md is UNEDITED. route_class_parity passes. release-manifest --check passes after regen.",
+  "files": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-hive/references/scout-and-ticks.md"
+  ],
+  "affects_specs": [],
+  "deps": [],
+  "decisions": [
+    "132551fb-3672-41d7-90cf-b16e4b918a52",
+    "1593e365-d911-4cd0-9c9b-8cee78bc61a3",
+    "f1ffa7bd-798a-49c2-85a2-ace83bcbebf3"
+  ],
+  "read_first": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "docs/history/pstack-adoption/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "planning-reference.md has exactly one new `## Class playbooks` section carrying perf, bugfix, refactor and research",
+      "the section names the ROUTE class as the taxonomy it binds, and says the cell change_class enum is a different one",
+      "bee-planning/SKILL.md and scout-and-ticks.md each gained a ONE-LINE pointer; neither copies a step list",
+      "skills/bee-swarming/references/worker-details.md is unedited and the bugfix playbook cites it as the red-before-green home",
+      "the wording is CITES, never copies — no playbook step list is transcribed into plan.md by the SKILL.md wiring",
+      "cargo test is green and bee dev release-manifest --check passes after bee dev regen"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-psa-4",
+    "outcome": "Added the ## Class playbooks section to planning-reference.md and one-line pointers in bee-planning/SKILL.md and scout-and-ticks.md",
+    "files_changed": [
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T14:23:30.532Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T14:19:50.405Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added the ## Class playbooks section to planning-reference.md and one-line pointers in bee-planning/SKILL.md and scout-and-ticks.md",
+      "commit": "4385b132741d515afe34f3869b7646f95293ae83",
+      "files": [
+        "skills/bee-planning/references/planning-reference.md",
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-hive/references/scout-and-ticks.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml ; .bee/bin/bee dev release-manifest --check — green — the route_class_parity fence reads the scout-and-ticks.md class enum this cell writes beside, and a skills/** edit owes the regen manifest check",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 434 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

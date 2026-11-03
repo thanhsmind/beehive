@@ -719,12 +719,8 @@ pub(crate) fn heartbeat_stale(session: &JMap, now_ms_v: f64) -> bool {
 /// claims.mjs resolveSessionId — flag(unused here)/env/env-legacy, then the
 /// D5 single-live-session adoption when `root` is supplied.
 pub(crate) fn resolve_session_id(ctx: &Ctx, root: Option<&Path>) -> R<Option<String>> {
-    for var in ["BEE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
-        if let Ok(v) = std::env::var(var) {
-            if !js_trim(&v).is_empty() {
-                return Ok(Some(js_trim(&v).to_string()));
-            }
-        }
+    if let Some(v) = crate::session_identity::env_session_id() {
+        return Ok(Some(v));
     }
     if let Some(root) = root {
         let now = now_ms();

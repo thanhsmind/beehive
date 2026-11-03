@@ -1,0 +1,67 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "worker-ledger-and-empty-fleet",
+  "closed_at": "2026-09-20T02:24:12.533Z",
+  "sessions": [
+    {
+      "session_id": "216eecd1-df88-4449-9865-5310500ae2ba",
+      "models": {
+        "claude-opus-5": {
+          "input": 688,
+          "output": 233200,
+          "cache_write": 632623,
+          "cache_read": 114664051,
+          "new": 866511,
+          "cached": 114664051,
+          "total": 115530562
+        }
+      },
+      "subagent_models": {
+        "claude-fable-5-1": {
+          "input": 744,
+          "output": 66989,
+          "cache_write": 700357,
+          "cache_read": 2060442,
+          "new": 768090,
+          "cached": 2060442,
+          "total": 2828532
+        },
+        "claude-opus-5": {
+          "input": 20,
+          "output": 14952,
+          "cache_write": 57799,
+          "cache_read": 347019,
+          "new": 72771,
+          "cached": 347019,
+          "total": 419790
+        }
+      },
+      "subagent_count": 5,
+      "started_ms": 1789860913325,
+      "ended_ms": 1789871047851,
+      "totals": {
+        "new": 1707372,
+        "cached": 117071512,
+        "total": 118778884
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 866511,
+      "cached": 114664051,
+      "total": 115530562
+    },
+    "subagents": {
+      "new": 840861,
+      "cached": 2407461,
+      "total": 3248322
+    },
+    "total": {
+      "new": 1707372,
+      "cached": 117071512,
+      "total": 118778884
+    }
+  }
+}

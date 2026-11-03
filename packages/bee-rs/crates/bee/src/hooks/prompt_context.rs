@@ -143,7 +143,21 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     }
     if roots.worktree_resolution != "ordinary" {
         // Linked-worktree topology pulls the grants/control-root surface —
-        // delegated wholesale for now.
+        // delegated wholesale for now, with ONE read lifted above the bail.
+        //
+        // c80debd7 delivery is that read. It is self-contained: it resolves
+        // the mailbox's control root itself (the same git walk a worktree
+        // session's reservations use), so it needs nothing this bail cannot
+        // decide. Left below the bail it made the feature hollow — most bee
+        // work runs in a feature worktree, so the sessions a supervisor most
+        // needs to reach were exactly the ones that never heard it. Stamp
+        // first, print second, for execute()'s own reason: a printed-then-
+        // unstamped row would REPEAT a point.
+        let lines = worktree_delivery(&root, &payload);
+        if !lines.is_empty() {
+            use std::io::Write;
+            let _ = std::io::stdout().write_all(lines.join("\n").as_bytes());
+        }
         return Outcome::Delegate;
     }
 
@@ -164,6 +178,41 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     // exactly once, same as the .mjs's readHookContext.
     let ctx = read_hook_context(HOOK_NAME, argv, stdin);
     Outcome::Done(execute(&root, &ctx, plan))
+}
+
+// ─── c80debd7 turn-boundary delivery ────────────────────────────────────────
+
+/// Stamp each pending row delivered and return the lines whose stamp landed.
+///
+/// ONE owner for the rule both delivery sites obey — the ordinary path in
+/// `execute()` and the linked-worktree path in `run()`. Stamp first, print
+/// second: a row whose stamp failed stays pending and is offered again next
+/// turn, while a printed-then-unstamped row would REPEAT a point, which the
+/// frequency cap exists to forbid. Each stamp is isolated and best-effort — a
+/// failure is crash-logged and never takes the turn, or the other rows, down.
+fn deliver(root: &Path, pending: &[(String, String)]) -> Vec<String> {
+    let mut delivered: Vec<String> = Vec::new();
+    for (id, line) in pending {
+        match crate::verbs::supervisor::mark_delivered_for_session(root, id) {
+            Ok(()) => delivered.push(line.clone()),
+            Err(err) => log_crash(Some(root), HOOK_NAME, &err, Some("supervisor-delivery")),
+        }
+    }
+    delivered
+}
+
+/// The linked-worktree half: the mailbox read and its stamps, alone, without
+/// any of the plan a worktree session's topology makes undecidable. Total —
+/// no session id, or nothing addressed to it, delivers nothing and writes
+/// nothing at all.
+fn worktree_delivery(root: &Path, payload: &Map<String, Value>) -> Vec<String> {
+    let sid = payload
+        .get("session_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let Some(sid) = sid else { return Vec::new() };
+    deliver(root, &crate::verbs::supervisor::pending_delivery_for_session(root, sid))
 }
 
 // ─── plan (read-only preflight + full decision computation) ─────────────────
@@ -187,6 +236,10 @@ struct Plan {
     inject_key: String,
     inject_reminder: bool,
     nudge: Option<Nudge>,
+    /// c80debd7: the supervisor's undelivered questions for THIS session,
+    /// oldest first, as `(row id, line)`. Read-only here; execute() stamps
+    /// each row before it prints the line.
+    pending_interventions: Vec<(String, String)>,
 }
 
 /// Ok(None) = hook disabled (native exit 0). Err = delegate.
@@ -238,7 +291,9 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
     };
 
     // inject.mjs buildPromptReminder — fields + stableHash(sha1(JSON)).
-    let (reminder_text, reminder_hash) = build_prompt_reminder(&record);
+    let triggers_due = crate::verbs::triggers::due_count_for_prompt(&control_root);
+    let (reminder_text, reminder_hash) =
+        build_prompt_reminder(&record, triggers_due, Some(root), Some(&control_root));
     let inject_key = match &session_id {
         Some(sid) => format!("prompt:{sid}"),
         None => "prompt".to_string(),
@@ -260,6 +315,23 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
         None => None,
     };
 
+    // c80debd7: an intervention is READ at the target session's NEXT turn
+    // boundary, never injected mid-turn — and this hook IS that boundary. The
+    // read is scoped to the session that sent this prompt, so a row addressed
+    // to another session can never surface here. It is total (a missing or
+    // corrupt mailbox reads as nothing pending), it runs LAST so no delegate
+    // can follow a read that already warned, and the delivery stamp itself is
+    // a side effect that belongs to execute().
+    //
+    // This is the ORDINARY-checkout path. A linked worktree returns Delegate
+    // far above and takes the same delivery there, through `worktree_delivery`
+    // — the read is lifted above that bail so a worktree session hears the
+    // supervisor too.
+    let pending_interventions = match &session_id {
+        Some(sid) => crate::verbs::supervisor::pending_delivery_for_session(root, sid),
+        None => Vec::new(),
+    };
+
     Ok(Some(Plan {
         session_id,
         feature,
@@ -268,6 +340,7 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
         inject_key,
         inject_reminder,
         nudge,
+        pending_interventions,
     }))
 }
 
@@ -292,10 +365,14 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
     // fires on a real human action rather than on the agent remembering.
     // Own try/catch per clear, exactly like heartbeat_block above: a failure
     // here is crash-logged and must NEVER fail the hook or block the
-    // reminder that already printed. D4's stale-expiry reap rides the same
-    // best-effort pass, on the theory that any live session's prompt is as
-    // good an opportunity as any to sweep a mark left behind by a dead one.
-    clear_and_reap_waiting_on_best_effort(root, ctx, plan.feature.as_deref());
+    // reminder that already printed. D4's stale-expiry reap rides EVERY
+    // prompt — a Paseo system prompt is not the human, so it takes the reap
+    // alone, sweeping a mark left behind by a dead session.
+    if prompt_is_human(ctx) {
+        clear_and_reap_waiting_on_best_effort(root, ctx, plan.feature.as_deref());
+    } else {
+        crate::verbs::workflow_store::reap_stale_waiting_on(root, now_ms() as f64);
+    }
 
     let mut parts: Vec<String> = Vec::new();
     if plan.inject_reminder {
@@ -317,6 +394,19 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
             }
         }
     }
+    // c80debd7 delivery. Stamp FIRST, print second — the anchor nudge's own
+    // order, and for the same reason: a row whose stamp failed stays pending
+    // and is offered again next turn, while a printed-then-unstamped row
+    // would REPEAT a point, which the frequency cap exists to forbid. Each
+    // stamp is isolated and best-effort: a failure is crash-logged and never
+    // takes the turn (or the other rows) down with it. Delivered lines ride
+    // one appended block, after every existing part — the preamble content
+    // above is untouched.
+    let delivered = deliver(root, &plan.pending_interventions);
+    if !delivered.is_empty() {
+        parts.push(delivered.join("\n"));
+    }
+
     if !parts.is_empty() {
         // UserPromptSubmit stdout stays PLAIN developer context — direct
         // write, never a JSON envelope, no trailing newline.
@@ -361,6 +451,13 @@ fn clear_and_reap_waiting_on_best_effort(
     // is its own best-effort function (never returns an error to log) —
     // every record it touches is individually locked/re-verified.
     crate::verbs::workflow_store::reap_stale_waiting_on(root, now_ms() as f64);
+}
+
+fn prompt_is_human(ctx: &crate::hooks::adapter::HookContext) -> bool {
+    match ctx.payload.get("prompt").and_then(Value::as_str) {
+        Some(prompt) => !prompt.trim_start().starts_with("<paseo-system>"),
+        None => true,
+    }
 }
 
 fn waiting_on_err_message(e: crate::verbs::reservations::Err2) -> String {
@@ -821,11 +918,56 @@ fn first_open_gate(record: &StateRecord) -> Option<&'static str> {
         .find(|g| record.gates.get(*g) != Some(&Value::Bool(true)))
 }
 
-/// inject.mjs buildPromptReminder → (text, stableHash).
-fn build_prompt_reminder(record: &StateRecord) -> (String, String) {
+/// inject.mjs buildPromptReminder → (text, stableHash). A non-zero
+/// `triggers_due` (predicate triggers only) adds one line and one hashed
+/// field; at zero the text and hash are the JS shape, byte for byte.
+fn build_prompt_reminder(
+    record: &StateRecord,
+    triggers_due: usize,
+    root: Option<&Path>,
+    control_root: Option<&Path>,
+) -> (String, String) {
     let mode = nullish_or_null(Some(&record.mode));
     let next_action = nullish_or_null(Some(&record.next_action));
     let gate = first_open_gate(record);
+
+    let feature_str = match &record.feature {
+        Value::String(s) if !s.trim().is_empty() => Some(s.trim()),
+        _ => None,
+    };
+    let execution_gate_approved = matches!(record.gates.get("execution"), Some(Value::Bool(true)));
+    let is_main = root.is_none() || root == control_root;
+    let granted_worktree_id = if is_main {
+        feature_str
+            .and_then(|f| {
+                control_root.and_then(|cr| crate::verbs::status_full::find_unmerged_granted_worktree_for_feature(cr, f))
+            })
+            .map(|(id, _)| id)
+    } else {
+        None
+    };
+    let ready_count = if execution_gate_approved {
+        feature_str
+            .and_then(|f| control_root.and_then(|cr| crate::verbs::cells::ready_cells(cr, Some(f)).ok()))
+            .map(|cells| cells.len())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let caller = crate::session_identity::locate_caller();
+    let caller_runtime = caller.as_ref().map(|c| c.runtime.as_str());
+
+    let facts = crate::verbs::status_full::NextOpFacts {
+        wayfinding_resume: false,
+        handoff: false,
+        ready_count,
+        execution_gate_approved,
+        feature: feature_str,
+        granted_worktree_id: granted_worktree_id.as_deref(),
+        caller_runtime,
+        control_root,
+    };
+    let next_op = crate::verbs::status_full::next_operation(&facts);
 
     let mut fields = Map::new();
     fields.insert("phase".into(), record.phase.clone());
@@ -835,6 +977,12 @@ fn build_prompt_reminder(record: &StateRecord) -> (String, String) {
         "first_open_gate".into(),
         gate.map_or(Value::Null, |g| Value::String(g.to_string())),
     );
+    if triggers_due > 0 {
+        fields.insert("triggers_due".into(), Value::from(triggers_due as u64));
+    }
+    if let Some(cmd) = &next_op.command {
+        fields.insert("command".into(), Value::String(cmd.clone()));
+    }
     let hash = sha1_hex(&jsjson::stringify(&Value::Object(fields)));
 
     let mut lines = vec![format!(
@@ -849,10 +997,21 @@ fn build_prompt_reminder(record: &StateRecord) -> (String, String) {
     if js_truthy(&next_action) {
         lines.push(format!("next: {}", jsjson::js_to_string(&next_action)));
     }
+    if let Some(cmd) = &next_op.command {
+        let run_from = next_op
+            .run_from
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        lines.push(format!("run: {cmd} (from {run_from})"));
+    }
     if let Some(g) = gate {
         lines.push(format!("gate pending: {g}"));
     }
-    lines.truncate(3);
+    if triggers_due > 0 {
+        lines.push(format!("triggers due: {triggers_due} — bee triggers list --due"));
+    }
+    lines.truncate(5);
     (lines.join("\n"), hash)
 }
 
@@ -1328,14 +1487,7 @@ fn lock_file_path(root: &Path, name: &str) -> PathBuf {
 }
 
 fn env_session_id() -> Option<String> {
-    for var in ["BEE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
-        if let Ok(v) = std::env::var(var) {
-            if !v.trim().is_empty() {
-                return Some(v.trim().to_string());
-            }
-        }
-    }
-    None
+    crate::session_identity::env_session_id()
 }
 
 fn read_holder(lock_path: &Path) -> Option<Value> {
@@ -1975,7 +2127,7 @@ mod tests {
             r#"{"phase":"swarming","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":false,"review":false}}"#,
         );
         let record = read_state(tmp.path()).ok().unwrap();
-        let (text, hash) = build_prompt_reminder(&record);
+        let (text, hash) = build_prompt_reminder(&record, 0, None, None);
         assert_eq!(text, "bee: phase=swarming mode=standard\nnext: do x\ngate pending: execution");
         // stableHash = sha1(JSON.stringify({phase, mode, next_action, first_open_gate}))
         let expected = sha1_hex(
@@ -1990,8 +2142,184 @@ mod tests {
         bee_repo(tmp.path());
         // Missing state.json → defaultState(): idle, default next_action.
         let record = read_state(tmp.path()).ok().unwrap();
-        let (text, _) = build_prompt_reminder(&record);
+        let (text, _) = build_prompt_reminder(&record, 0, None, None);
         assert_eq!(text, "bee: phase=idle\nnext: No active bee work — awaiting a user request.");
+    }
+
+    fn trigger_file(root: &Path, id: &str, tier: &str, status: &str) {
+        let predicate = if tier == "predicate" { json!("path-missing:never-there.txt") } else { Value::Null };
+        let rec = json!({
+            "id": id, "decision": "deadbeef", "condition": "c", "tier": tier,
+            "predicate": predicate, "status": status,
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z", "outcome": null,
+        });
+        write(root, &format!(".bee/triggers/{id}.json"), &rec.to_string());
+    }
+
+    fn plan_for(root: &Path) -> Plan {
+        plan(root, &parse_payload(&json!({ "cwd": root.to_string_lossy() }).to_string()))
+            .ok()
+            .flatten()
+            .unwrap()
+    }
+
+    const IDLE_TEXT: &str = "bee: phase=idle\nnext: No active bee work — awaiting a user request.";
+
+    #[test]
+    fn a_due_predicate_trigger_adds_the_due_line_and_changes_the_hash() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        trigger_file(tmp.path(), "t1", "predicate", "due");
+        let p = plan_for(tmp.path());
+        assert_eq!(p.reminder_text, format!("{IDLE_TEXT}\ntriggers due: 1 — bee triggers list --due"));
+        let record = read_state(tmp.path()).ok().unwrap();
+        assert_ne!(p.reminder_hash, build_prompt_reminder(&record, 0, None, None).1, "a changed N must re-inject");
+    }
+
+    #[test]
+    fn the_due_line_survives_a_full_three_line_reminder() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/state.json",
+            r#"{"phase":"swarming","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true}}"#,
+        );
+        let record = read_state(tmp.path()).ok().unwrap();
+        let (text, _) = build_prompt_reminder(&record, 2, None, None);
+        assert_eq!(text.lines().count(), 4);
+        assert_eq!(text.lines().last(), Some("triggers due: 2 — bee triggers list --due"));
+    }
+
+    #[test]
+    fn a_manual_waiting_trigger_adds_no_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        trigger_file(tmp.path(), "t1", "manual", "waiting");
+        assert_eq!(plan_for(tmp.path()).reminder_text, IDLE_TEXT);
+    }
+
+    #[test]
+    fn no_trigger_store_keeps_text_and_hash_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let p = plan_for(tmp.path());
+        assert_eq!(p.reminder_text, IDLE_TEXT);
+        let expected = sha1_hex(
+            r#"{"phase":"idle","mode":null,"next_action":"No active bee work — awaiting a user request.","first_open_gate":null}"#,
+        );
+        assert_eq!(p.reminder_hash, expected);
+    }
+
+    fn session_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn with_session_env<T>(claude: Option<&str>, f: impl FnOnce() -> T) -> T {
+        let _guard = session_env_lock();
+        let prev_claude = std::env::var_os("CLAUDE_CODE_SESSION_ID");
+        // SAFETY: serialized by session_env_lock
+        unsafe {
+            match claude {
+                Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+            }
+        }
+        let res = f();
+        // SAFETY: serialized by session_env_lock
+        unsafe {
+            match prev_claude {
+                Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+            }
+        }
+        res
+    }
+
+    #[test]
+    fn record_with_ready_cells_under_approved_execution_gate_yields_run_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":true,"review":false}}"#,
+        );
+        write(
+            tmp.path(),
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","deps":[]}"#,
+        );
+        let record = read_state(tmp.path()).ok().unwrap();
+        let (text, hash) = with_session_env(Some("claude-test"), || {
+            build_prompt_reminder(&record, 0, Some(tmp.path()), Some(tmp.path()))
+        });
+        let expected_cmd = "bee dispatch wave --runtime claude --feature f1 --json";
+        let expected_run = format!("run: {expected_cmd} (from {})", tmp.path().display());
+        assert!(text.contains(&expected_run));
+        let expected_hash = sha1_hex(&jsjson::stringify(&json!({
+            "phase": "swarming",
+            "mode": "standard",
+            "next_action": "do x",
+            "first_open_gate": Value::Null,
+            "command": expected_cmd,
+        })));
+        assert_eq!(hash, expected_hash);
+    }
+
+    #[test]
+    fn record_with_nothing_to_run_yields_no_run_line_and_same_hash() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":false,"review":false}}"#,
+        );
+        write(
+            tmp.path(),
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","deps":[]}"#,
+        );
+        let record = read_state(tmp.path()).ok().unwrap();
+        let (text, hash) = with_session_env(Some("claude-test"), || {
+            build_prompt_reminder(&record, 0, Some(tmp.path()), Some(tmp.path()))
+        });
+        assert!(!text.contains("run:"));
+        let expected_hash = sha1_hex(
+            r#"{"phase":"swarming","mode":"standard","next_action":"do x","first_open_gate":"execution"}"#,
+        );
+        assert_eq!(hash, expected_hash);
+    }
+
+    #[test]
+    fn with_run_line_gate_pending_and_triggers_due_still_print() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/state.json",
+            r#"{"phase":"reviewing","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":true,"review":false}}"#,
+        );
+        write(
+            tmp.path(),
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","deps":[]}"#,
+        );
+        let record = read_state(tmp.path()).ok().unwrap();
+        let (text, _) = with_session_env(Some("claude-test"), || {
+            build_prompt_reminder(&record, 2, Some(tmp.path()), Some(tmp.path()))
+        });
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 5);
+        assert_eq!(lines[0], "bee: phase=reviewing mode=standard");
+        assert_eq!(lines[1], "next: do x");
+        assert!(lines[2].starts_with("run: bee dispatch wave"));
+        assert_eq!(lines[3], "gate pending: review");
+        assert_eq!(lines[4], "triggers due: 2 — bee triggers list --due");
     }
 
     #[test]
@@ -2466,6 +2794,62 @@ mod tests {
         );
     }
 
+    #[test]
+    fn run_keeps_a_live_default_waiting_on_mark_through_a_paseo_system_prompt() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "gate",
+            "approve the uat?",
+            "sess-asker",
+        ));
+        let heartbeat = "<paseo-system>\nSchedule \"bee-leader\" fired (id=x, run=y).\nbee heartbeat\n</paseo-system>";
+        let paseo_payload = json!({ "cwd": tmp.path().to_string_lossy(), "prompt": heartbeat }).to_string();
+
+        let outcome = run(&[], &paseo_payload);
+        assert!(
+            matches!(outcome, Outcome::Done(_)),
+            "a plain repo must decide natively, otherwise this proves nothing about the Rust clear path"
+        );
+        let after = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
+            "a Paseo schedule/heartbeat prompt is not a human action and must leave the live \
+             mark in place — otherwise the user never sees the uat ask: {after:?}"
+        );
+
+        let mut current = ok(crate::verbs::state_group::read_state_strict(tmp.path()));
+        current.insert(
+            "waiting_on".into(),
+            json!({"kind": "gate", "subject": "approve the uat?", "session": "dead-sess", "asked_at": "2020-01-01T00:00:00.000Z"}),
+        );
+        ok(crate::verbs::state_group::write_state(tmp.path(), &current));
+        let outcome = run(&[], &paseo_payload);
+        assert!(matches!(outcome, Outcome::Done(_)), "the second prompt must still decide natively");
+        let after = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            !crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
+            "D4's stale-expiry reap must still run on a Paseo system prompt — a mark left by a \
+             dead session has no other sweeper: {after:?}"
+        );
+
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "question",
+            "should we ship the v3 index?",
+            "sess-asker",
+        ));
+        let human_payload = json!({ "cwd": tmp.path().to_string_lossy(), "prompt": "ok" }).to_string();
+        let outcome = run(&[], &human_payload);
+        assert!(matches!(outcome, Outcome::Done(_)), "a human prompt must still decide natively");
+        let after = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            !crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
+            "a live mark must still be cleared by a prompt that IS the human speaking: {after:?}"
+        );
+    }
+
     /// TRUTH: "a failing clear inside the hook never fails the hook or the
     /// turn." `.bee/` itself (the direct parent of `state.json`) is made
     /// unwritable AFTER `.bee/locks/`, `.bee/cache/`, and `.bee/logs/` are
@@ -2549,5 +2933,263 @@ mod tests {
             crash_log.contains("prompt-context"),
             "a failing clear must be crash-logged (log_crash), not silently eaten: {crash_log}"
         );
+    }
+
+    // ─── c80debd7: the supervisor's questions land at the NEXT turn boundary ──
+    //
+    // These drive the same two seams the D2 tests above use: `plan()` for what
+    // the turn WILL say (its `pending_interventions` are exactly the lines
+    // execute() appends, one per row) and `run()` for the wiring end to end —
+    // a real UserPromptSubmit payload, the stamp written to the real mailbox.
+
+    /// Put one undelivered row in the mailbox, exactly as `supervisor record`
+    /// would. The tempdir is an ordinary checkout, so it is its own control
+    /// root — the same store the hook resolves.
+    fn ask(root: &Path, kind: &str, target: &str, point: &str, question: &str) -> String {
+        crate::verbs::supervisor::record_intervention_into(
+            root,
+            "supervisor record",
+            kind,
+            None,
+            Some(target),
+            Some(point),
+            Some(question),
+            None,
+            None,
+        )
+        .expect("the fixture row must be accepted")
+        .id
+    }
+
+    fn pending_ids(root: &Path, session: &str) -> Vec<String> {
+        crate::verbs::supervisor::pending_delivery_for_session(root, session)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    fn prompt_payload(root: &Path, session: &str) -> String {
+        json!({ "cwd": root.to_string_lossy(), "session_id": session }).to_string()
+    }
+
+    /// TRUTH: "an undelivered intervention for the calling session appears
+    /// exactly once at its next turn boundary and is marked delivered."
+    #[test]
+    fn a_pending_intervention_is_delivered_once_at_the_next_turn_and_never_repeats() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let id = ask(
+            tmp.path(),
+            "intervention",
+            "sess-a",
+            "retry-loop",
+            "What tells you the retry will end?",
+        );
+
+        // What this turn will say: the row, once, worded for the agent.
+        let p = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        assert_eq!(
+            p.pending_interventions,
+            vec![(id.clone(), "bee supervisor: What tells you the retry will end?".to_string())],
+            "the pending row is exactly the line the turn appends"
+        );
+
+        // And the real hook entry point delivers it AND stamps it.
+        let outcome = run(&[], &prompt_payload(tmp.path(), "sess-a"));
+        assert!(matches!(outcome, Outcome::Done(_)), "a plain repo must decide natively");
+        assert!(
+            pending_ids(tmp.path(), "sess-a").is_empty(),
+            "the delivered row must be stamped, not left pending"
+        );
+
+        // The next turn says nothing: never repeat a point (c80debd7).
+        let p2 = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        assert!(
+            p2.pending_interventions.is_empty(),
+            "a delivered row must never surface a second time: {:?}",
+            p2.pending_interventions
+        );
+    }
+
+    /// TRUTH: "rows for other sessions never leak into this session's output."
+    #[test]
+    fn a_row_addressed_to_another_session_never_leaks_into_this_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let other = ask(
+            tmp.path(),
+            "intervention",
+            "sess-other",
+            "big-decision",
+            "What made this the one-way door to take now?",
+        );
+
+        let p = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        assert!(
+            p.pending_interventions.is_empty(),
+            "sess-a must see nothing addressed to sess-other: {:?}",
+            p.pending_interventions
+        );
+
+        run(&[], &prompt_payload(tmp.path(), "sess-a"));
+        assert_eq!(
+            pending_ids(tmp.path(), "sess-other"),
+            vec![other],
+            "another session's turn must never consume — or stamp — this row"
+        );
+    }
+
+    /// TRUTH: zero rows add zero lines (and write nothing at all).
+    #[test]
+    fn an_empty_mailbox_adds_no_lines_and_no_events() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+
+        let p = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        assert!(p.pending_interventions.is_empty());
+        // The reminder itself is unchanged by an empty mailbox.
+        assert!(p.reminder_text.starts_with("bee: phase="), "{}", p.reminder_text);
+
+        run(&[], &prompt_payload(tmp.path(), "sess-a"));
+        assert!(
+            !crate::verbs::supervisor::interventions_store_path(tmp.path()).exists(),
+            "an empty mailbox stays absent — delivery writes nothing when there is nothing"
+        );
+    }
+
+    /// An escalation is the one row this cell marks differently: its line
+    /// reads as urgent (danger-class handling itself is a later cell).
+    #[test]
+    fn an_escalation_line_is_prefixed_so_it_reads_as_urgent() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        ask(tmp.path(), "escalation", "sess-a", "retry-loop", "What tells you the retry will end?");
+
+        let p = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        let line = &p.pending_interventions[0].1;
+        assert!(line.starts_with("bee supervisor URGENT: "), "{line}");
+        assert!(line.ends_with("What tells you the retry will end?"), "{line}");
+    }
+
+    // ─── delivery reaches a LINKED WORKTREE session too (an-1) ──────────
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixture");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A real main checkout plus one real linked worktree — the same fixture
+    /// `verbs::supervisor`'s own tests use. The worktree is UNGRANTED, so its
+    /// control root is main: one store, two checkouts.
+    fn worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf) {
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        bee_repo_files(&main);
+        write(&main, "f.txt", "x");
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let wt = tmp.join("wt");
+        git(&main, &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "wt/one"]);
+        bee_repo_files(&wt);
+        (main, wt)
+    }
+
+    /// `bee_repo` minus the `.git` DIRECTORY it fabricates — a real git
+    /// fixture owns that marker itself, and a linked worktree's marker is a
+    /// FILE, which is exactly what makes it linked.
+    fn bee_repo_files(dir: &Path) {
+        std::fs::create_dir_all(dir.join(".bee")).unwrap();
+        std::fs::write(dir.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+    }
+
+    /// TRUTH: "a recorded advisor-nudge row renders one delivery line at the
+    /// target session's next turn boundary, INCLUDING for a linked-worktree
+    /// session." Everything else about a worktree stays undecidable here —
+    /// the outcome is still `Delegate`; only the mailbox read is lifted.
+    #[test]
+    fn a_worktree_session_takes_its_delivery_lines_even_though_the_hook_still_delegates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = worktree_fixture(tmp.path());
+
+        // Recorded against MAIN's store — the one store both checkouts share.
+        let id = ask(&main, "advisor-nudge", "sess-wt", "retry-loop", "Would an advisor read help here?");
+        assert_eq!(
+            pending_ids(&wt, "sess-wt"),
+            vec![id.clone()],
+            "the worktree resolves the same mailbox as main"
+        );
+
+        let payload = parse_payload(&prompt_payload(&wt, "sess-wt"));
+        assert_eq!(
+            worktree_delivery(&wt, &payload),
+            vec!["bee supervisor: Would an advisor read help here?".to_string()],
+            "the worktree turn boundary renders the row's one line"
+        );
+        assert!(
+            pending_ids(&wt, "sess-wt").is_empty(),
+            "and stamps it, so the point is never repeated (c80debd7)"
+        );
+
+        // The hook's other worktree behavior is untouched: still undecidable.
+        let outcome = run(&[], &prompt_payload(&wt, "sess-wt"));
+        assert!(
+            matches!(outcome, Outcome::Delegate),
+            "a linked worktree still delegates everything but the delivery"
+        );
+        assert!(
+            pending_ids(&wt, "sess-wt").is_empty(),
+            "a delivered row never surfaces again, worktree or not"
+        );
+    }
+
+    /// The lift adds NOTHING when there is nothing: no session id, or an empty
+    /// mailbox, writes no event and returns no line.
+    #[test]
+    fn the_worktree_lift_is_silent_when_there_is_nothing_to_deliver() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = worktree_fixture(tmp.path());
+
+        let no_session = parse_payload(&json!({ "cwd": wt.to_string_lossy() }).to_string());
+        assert!(worktree_delivery(&wt, &no_session).is_empty(), "no session id, no delivery");
+
+        let payload = parse_payload(&prompt_payload(&wt, "sess-wt"));
+        assert!(worktree_delivery(&wt, &payload).is_empty(), "an empty mailbox adds nothing");
+        assert!(
+            !crate::verbs::supervisor::interventions_store_path(&main).exists(),
+            "and writes no event at all"
+        );
+
+        // A row for ANOTHER session never leaks into this worktree's turn.
+        let other = ask(&main, "advisor-nudge", "sess-other", "retry-loop", "Would an advisor help?");
+        assert!(worktree_delivery(&wt, &payload).is_empty(), "sess-wt sees nothing addressed elsewhere");
+        assert_eq!(pending_ids(&wt, "sess-other"), vec![other], "and never stamps it either");
     }
 }

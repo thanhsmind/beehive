@@ -1,0 +1,256 @@
+{
+  "id": "pib-1",
+  "feature": "pi-beehive",
+  "title": "Wire the missing advisory rows onto the Pi belt: activity, tools-logger, PreCompact",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "1edd8a90",
+    "b1a26071",
+    "8650ca7b"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-beehive/plan.md",
+    "docs/history/pi-beehive/CONTEXT.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "packages/bee-rs/crates/bee/src/hooks/tools_logger.rs",
+    "packages/bee/hooks/claude-hooks.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "The Pi belt wires four advisory rules today and the Claude belt fires more. Add the missing ones. FIRST, activity: the Claude manifest fires it on eight events (UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop, Notification, SessionEnd) — derive that list yourself from packages/bee/hooks/claude-hooks.json, never from this prose. Map each one onto the Pi event that carries the same meaning and call it through the belt's existing runAdvisoryHook helper, passing the CLAUDE event name in hook_event_name, because activity is a state machine keyed on Claude names (read its map_event and sticky_suppresses before choosing). Record the chosen mapping as a comment block in the belt so a later reader can audit it; a Claude row with no honest Pi carrier is named in that comment instead of forced onto a wrong event. SECOND, tools-logger: call it from the tool_result handler. Pi's tool_result carries toolName, toolCallId, input, content, details, isError and usage — pass what maps, and OMIT the Claude-shaped fields Pi does not carry rather than guessing values for them. THIRD, PreCompact per b1a26071: register pi.on(\"session_before_compact\") and call session-close with hook_event_name PreCompact. That handler MUST return nothing — Pi treats a returned object there as a cancel or a custom compaction, so a stray return would silently kill the user's /compact. All three rows are ADVISORY and fail OPEN: each owns its own try/catch, none throws, none returns a value to Pi that could block, and the passivity check still short-circuits when no .bee directory is present. Do not touch runBlockingHook, mapToolCall, or anything on the tool_call path. Then extend the parity test: the pinned advisory-name list must grow to cover the new rules, the derived event set must include the new pi.on registration, and add probes for a correct activity state transition per mapped event, for a well-formed tools-logger line built only from fields Pi actually carries, for the PreCompact handler returning nothing, and for the BEE_HERDING_WORKER case where activity is the one hook that does not short-circuit while every other belt call still does.",
+  "must_haves": {
+    "truths": [
+      "activity is called for every Claude row the manifest fires it on, or that row is named in the belt's mapping comment as having no honest Pi carrier",
+      "activity receives the Claude event name in hook_event_name, and a probe asserts the resulting state transition is the correct one, not merely that the call exited 0",
+      "tools-logger appends one well-formed line built only from fields Pi's tool_result carries; the Claude-shaped optionals are absent, never invented",
+      "the session_before_compact handler returns nothing, and a probe proves a compaction is never cancelled by bee",
+      "under BEE_HERDING_WORKER activity still runs and every other belt call short-circuits",
+      "every new handler is advisory and fail-open: a deny, crash, missing binary or unparseable verdict is swallowed and logged, never thrown",
+      "the blocking path is untouched: deny, crash, missing binary and unparseable still block on tool_call"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "new runAdvisoryHook calls for activity and tools-logger, a pi.on session_before_compact handler returning nothing, and a comment block recording the Claude-row to Pi-event mapping; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "pinned advisory-name list grown, plus the transition, tools-logger field-shape, PreCompact-returns-nothing and herded-pane probes"
+      }
+    ],
+    "key_links": [
+      "the parity test's derived advisory-hook set sees the new runAdvisoryHook literals",
+      "the parity test's derived event set sees the new pi.on registration"
+    ],
+    "prohibitions": [
+      "No change to runBlockingHook, mapToolCall, PI_BUILTIN_TOOLS or any tool_call behavior",
+      "No value returned from the session_before_compact handler",
+      "No invented values for tools-logger fields Pi does not carry",
+      "No new user-facing Pi surface (per D2): no command, dialog, widget or message renderer"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts",
+  "trace": {
+    "worker": "w-pib-1b",
+    "outcome": "activity now fires on the Pi session shutdown with a Claude-shaped exit reason, so a quitting Pi session is marked exited instead of staying alive in the record",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "Pi reasons are normalised to a Claude-shaped exit word before activity sees them, rather than passed through, because activity.rs deliberately ignores the word resume, which means the opposite thing on Pi — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T13:57:40.526Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b59cfe73-6f95-4182-b7f8-f8a2c362922d",
+    "claimed_at": "2026-09-02T13:47:50.551Z",
+    "mistakes": [
+      {
+        "wrong": "The first pass wrote a mapping comment claiming SessionEnd was carried while never calling activity there, and that comment hid the gap from four later cells",
+        "better": "a mapping comment must be written from the calls in the file, never from the intent"
+      }
+    ],
+    "report": {
+      "outcome": "Closed the judge finding: activity is called on session_shutdown beside session-close, with Pi reasons normalised to Claude vocabulary",
+      "commit": "3d673632",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts — green:unit — 33 passed pi and 6 passed opencode, 0 failed; re-run by the orchestrator and again by an independent judge that also checked the probes are mutation-sensitive",
+      "deviations": [
+        "Pi reasons are normalised to a Claude-shaped exit word before activity sees them, rather than passed through, because activity.rs deliberately ignores the word resume, which means the opposite thing on Pi — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "The first pass wrote a mapping comment claiming SessionEnd was carried while never calling activity there, and that comment hid the gap from four later cells — a mapping comment must be written from the calls in the file, never from the intent"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "activity covers every Claude row or names the gap",
+            "status": "FAIL",
+            "evidence": "Claude fires activity on SessionEnd; the belt comment at bee-guard.ts:78 claims session_shutdown carries it, but that handler calls only session-close"
+          },
+          {
+            "id": "activity transition probe non-vacuous",
+            "status": "PASS",
+            "evidence": "drives the real bee binary and asserts state, event and the activity.jsonl sidecar per transition"
+          },
+          {
+            "id": "tools-logger line uses Pi-carried fields only",
+            "status": "PASS",
+            "evidence": "real-binary probe asserts agent_id and agent_type null, duration_ms and status absent"
+          },
+          {
+            "id": "session_before_compact returns nothing",
+            "status": "PASS",
+            "evidence": "asserts no result across six stub behaviours including Deny, Ask and Crash"
+          },
+          {
+            "id": "BEE_HERDING_WORKER split",
+            "status": "PASS",
+            "evidence": "asserts the mailbox activity file is written and the other sinks are not"
+          },
+          {
+            "id": "blocking path untouched",
+            "status": "PASS",
+            "evidence": "runBlockingHook, mapToolCall, PI_BUILTIN_TOOLS and the tool_call handler are unchanged across the slice"
+          }
+        ],
+        "failure_signature": "activity on the Claude SessionEnd row is neither called in the session_shutdown handler nor named as a no-carrier exclusion, while the mapping comment claims a wiring the code does not have",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T13:47:01.400Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "activity covers every Claude row or names the gap",
+            "status": "FAIL",
+            "evidence": "Claude fires activity on SessionEnd; the belt comment at bee-guard.ts:78 claims session_shutdown carries it, but that handler calls only session-close"
+          },
+          {
+            "id": "activity transition probe non-vacuous",
+            "status": "PASS",
+            "evidence": "drives the real bee binary and asserts state, event and the activity.jsonl sidecar per transition"
+          },
+          {
+            "id": "tools-logger line uses Pi-carried fields only",
+            "status": "PASS",
+            "evidence": "real-binary probe asserts agent_id and agent_type null, duration_ms and status absent"
+          },
+          {
+            "id": "session_before_compact returns nothing",
+            "status": "PASS",
+            "evidence": "asserts no result across six stub behaviours including Deny, Ask and Crash"
+          },
+          {
+            "id": "BEE_HERDING_WORKER split",
+            "status": "PASS",
+            "evidence": "asserts the mailbox activity file is written and the other sinks are not"
+          },
+          {
+            "id": "blocking path untouched",
+            "status": "PASS",
+            "evidence": "runBlockingHook, mapToolCall, PI_BUILTIN_TOOLS and the tool_call handler are unchanged across the slice"
+          }
+        ],
+        "failure_signature": "activity on the Claude SessionEnd row is neither called in the session_shutdown handler nor named as a no-carrier exclusion, while the mapping comment claims a wiring the code does not have",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T13:47:05.916Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "activity-called-on-shutdown",
+            "status": "PASS",
+            "evidence": "bee-guard.ts:1138-1143 calls runAdvisoryHook(activity, SessionEnd) inside pi.on(session_shutdown), beside the untouched session-close call at :1129"
+          },
+          {
+            "id": "reason-trap-normalised",
+            "status": "PASS",
+            "evidence": "the belt sends a hardcoded Claude-shaped reason so Pi's resume avoids activity.rs:139's None branch, and it partitions the reason space identically to the session-close call in the same handler"
+          },
+          {
+            "id": "no-information-lost-by-normalisation",
+            "status": "PASS",
+            "evidence": "activity.rs persists state, event, tool_name and tool_use_id only; the reason is read for the event mapping and never stored"
+          },
+          {
+            "id": "sticky-suppression-does-not-swallow-exit",
+            "status": "PASS",
+            "evidence": "activity.rs sticky_suppresses blocks only the tool-use events under a prior Blocked state and explicitly permits the exited target"
+          },
+          {
+            "id": "probe-per-reason-mutation-sensitive",
+            "status": "PASS",
+            "evidence": "the probe loops every Pi reason; deleting the belt call, passing Pi's raw reason through, or inverting the mapping each red a different row"
+          },
+          {
+            "id": "negative-reason-proved",
+            "status": "PASS",
+            "evidence": "the reload row asserts the session stays working against a seeded working record"
+          },
+          {
+            "id": "mapping-comment-true",
+            "status": "PASS",
+            "evidence": "row 8 now matches the call and the other rows were verified line by line against their calls"
+          },
+          {
+            "id": "blocking-path-untouched",
+            "status": "PASS",
+            "evidence": "the fix commit touches a single belt hunk inside the shutdown handler; no change to runBlockingHook, mapToolCall, PI_BUILTIN_TOOLS or the tool_call path, and no user-facing surface"
+          },
+          {
+            "id": "verify-command-green",
+            "status": "PASS",
+            "evidence": "the cell's own verify command re-run by the judge: 33 passed pi and 6 passed opencode, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T13:57:29.860Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-09-02T13:47:01.400Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  }
+}

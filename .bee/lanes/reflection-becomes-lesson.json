@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "feature": "reflection-becomes-lesson",
+  "mode": "standard",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"reflection-becomes-lesson\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"reflection-becomes-lesson\" — feature is closed.",
+  "created_at": "2026-08-31T14:13:16.880Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "✓ Release in dòng cuối: `OK  bee 2.31.0 is live`. Kiểm tra cảnh báo \"uncommitted changes\":",
+    "asked_at": "2026-08-31T15:43:03.720Z",
+    "session": "42e9abd1-7a36-4512-a5e3-cb7fa626dea9"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "data-model",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 8,
+    "rationale": "Reality touch dropped the proof-weakening flag: mailbox_digest.rs:710-728 excludes reflections structurally, by omission, and no test asserts that exclusion — D3 replaces no existing proof. Four flags remain.",
+    "updated_at": "2026-08-31T14:19:30.560Z",
+    "feature": "reflection-becomes-lesson"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-31T14:31:41.521Z",
+    "feature": "reflection-becomes-lesson",
+    "newest_decision_id": "7760339d-26da-4f29-a29b-db209f9cb71b",
+    "plan_sha256": "44b7dafefab837103f022e55e13456f41d1599f372c401081680499591cda307",
+    "advisor": "fable (hat wave, five seats)",
+    "digest_head": "# reflection-becomes-lesson — plan-step hat wave\n\n**Date:** 2026-08-31 · **Seats:** five (high-risk) · **Quorum:** all five\nreturned inside the ceiling · **Synthesis:** the leader.\n\nThe wave was the plan check and the high-risk advisor consult, per the\nabsorption rule. It changed the plan in four material ways.\n\n## What the wave changed\n\n| Seat | Finding | Disposition |\n|---|---|---|\n| facts-gaps | **B1 BLOCKER** — reflections are stored per run; `bee close` resolves its own session's run, which"
+  }
+}

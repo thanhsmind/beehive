@@ -88,6 +88,33 @@ const TERM_STOPWORDS: [&str; 24] = [
     "such", "only",
 ];
 
+/// D2's cut: a term the ACTIVE decision store carries in more than this
+/// share of its rows is saturating vocabulary, not plan surface, so it never
+/// reaches the scorer. Measured on this repo's live store (2589 active
+/// decisions, the 31 terms one 9-file feature's cells produce): today's
+/// `hits >= 2` rule alone yields 694 candidates; dropping terms above 10%
+/// leaves 442, above 5% leaves 252, above 3% leaves 36, and above 2% starts
+/// discarding genuinely specific terms. 3% is the knee. No single term
+/// dominates -- the worst is `name` at 15.9% -- so the flood is the SIZE of
+/// an unbounded term set meeting a fixed threshold, not one bad word, which
+/// is why the cut is corpus-derived instead of a second hand-written stop
+/// list that would go stale per repo.
+const TERM_DF_MAX_PERCENT: usize = 3;
+
+/// D3's floor. Below this many active decisions, document frequency is
+/// noise -- one hit in a two-decision fixture reads as 50% -- so the D2 cut
+/// is not armed at all and the term set stays byte-identical to what it was
+/// before D2. Measured: a freshly onboarded host repo and every fixture in
+/// this suite hold single digits; this repo's live store holds 2589.
+const TERM_DF_MIN_DECISIONS: usize = 200;
+
+/// D4's rail on the DECISION half of the candidate list (rule homes are
+/// bounded by `ownership.yml` and are not counted here). 3% happens to yield
+/// 36 candidates on this repo's live store, but nothing bounds that in a
+/// repo ten times the size, and every candidate costs the user one `verdict`
+/// call before `gate --merge` opens.
+const MAX_DECISION_CANDIDATES: usize = 50;
+
 // ─── the term set and the touched-path set ──────────────────────────────────
 
 /// The feature's plan surface: every OPEN or CAPPED cell record.
@@ -195,6 +222,43 @@ pub(crate) fn plan_terms(cells: &[Value]) -> Vec<String> {
     out
 }
 
+/// D2/D3: drops every term the active decision store carries in more than
+/// `TERM_DF_MAX_PERCENT` of its rows, and only from `TERM_DF_MIN_DECISIONS`
+/// active decisions up -- under the floor the input is returned untouched.
+///
+/// A term's frequency is counted with `count_term_hits`'s OWN matching rule
+/// (a lowercased substring of any searchable field), so what is measured
+/// here is exactly the frequency with which the term would score. This is
+/// the corpus-derived half of the same filter `normalize_term` applies by
+/// hand above: a property of BUILDING the term set, never of the scoring
+/// rule, which D1 leaves untouched.
+fn drop_saturating_terms(terms: Vec<String>, active: &[Value]) -> Vec<String> {
+    let total = active.len();
+    if total < TERM_DF_MIN_DECISIONS {
+        return terms;
+    }
+    let corpus: Vec<Vec<String>> = active
+        .iter()
+        .map(|e| {
+            text_haystacks(e, true)
+                .into_iter()
+                .map(|h| h.to_lowercase())
+                .collect()
+        })
+        .collect();
+    terms
+        .into_iter()
+        .filter(|t| {
+            let df = corpus
+                .iter()
+                .filter(|hs| hs.iter().any(|h| h.contains(t.as_str())))
+                .count();
+            // `df / total > TERM_DF_MAX_PERCENT` without floating point.
+            df * 100 <= total * TERM_DF_MAX_PERCENT
+        })
+        .collect()
+}
+
 // ─── the candidates ─────────────────────────────────────────────────────────
 
 fn candidate(id: &str, kind: &str, title: &str) -> Value {
@@ -243,44 +307,85 @@ fn rule_intersects(rule: &RuleHome, plan_paths: &[String]) -> bool {
 /// select, then rule homes the plan's paths touch. Ids are unique — the first
 /// occurrence wins — so a rule declared in two homes contributes one row.
 pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>, Err2> {
+    Ok(derive_candidates_reported(root, feature)?.0)
+}
+
+/// `derive_candidates` plus D4's second half: how many decision candidates
+/// the cap dropped (0 when nothing was truncated). Returned rather than
+/// swallowed, because a list that silently hides a real conflict is worse
+/// than a long one — `conflict_review`'s stored shape is frozen by D5, so
+/// the notice rides the verb's own output line.
+pub(crate) fn derive_candidates_reported(
+    root: &Path,
+    feature: &str,
+) -> Result<(Vec<Value>, usize), Err2> {
     let cells = plan_cells(root, feature)?;
     let terms = plan_terms(&cells);
     let paths = plan_paths(&cells);
     let mut out: Vec<Value> = Vec::new();
     let mut seen: Vec<String> = Vec::new();
+    let mut capped_away = 0usize;
 
     if !terms.is_empty() {
         let active = active_decisions(root, false)?;
-        let text = terms.join(" ");
-        // (1a) the ranked hints `decisions log` itself would print, in its
-        // own order — no tags to share here, so this is the top-3 slice of
-        // the same >= 2 term-hit rule the loop below completes.
-        for c in conflict_candidates(&active, &text, &[], None) {
-            let id = js_disp_opt(jget(&c, "id"));
-            if id.is_empty() || seen.contains(&id) {
-                continue;
+        // D2/D3: the corpus-derived half of the term filter. `active` is
+        // already in hand for the scoring below, so the frequency count
+        // costs no second read of the store.
+        let terms = drop_saturating_terms(terms, &active);
+        if !terms.is_empty() {
+            let text = terms.join(" ");
+            // Each decision candidate is carried with its term-hit count, so
+            // D4's cap below keeps the strongest matches instead of an
+            // arbitrary prefix. The counts come from the SAME scorers as
+            // before — neither is modified (D1).
+            let mut scored: Vec<(Value, usize)> = Vec::new();
+            // (1a) the ranked hints `decisions log` itself would print, in its
+            // own order — no tags to share here, so this is the top-3 slice of
+            // the same >= 2 term-hit rule the loop below completes.
+            for c in conflict_candidates(&active, &text, &[], None) {
+                let id = js_disp_opt(jget(&c, "id"));
+                if id.is_empty() || seen.contains(&id) {
+                    continue;
+                }
+                seen.push(id.clone());
+                let hits = jget(&c, "hits").and_then(Value::as_u64).unwrap_or(0) as usize;
+                scored.push((
+                    candidate(&id, "decision", &js_disp_opt(jget(&c, "excerpt"))),
+                    hits,
+                ));
             }
-            seen.push(id.clone());
-            out.push(candidate(&id, "decision", &js_disp_opt(jget(&c, "excerpt"))));
-        }
-        // (1b) every OTHER active decision scoring >= 2 on the same terms.
-        let term_refs: Vec<&str> = terms.iter().map(String::as_str).collect();
-        for e in &active {
-            let id = js_disp_opt(jget(e, "id"));
-            if id.is_empty() || seen.contains(&id) {
-                continue;
+            // (1b) every OTHER active decision scoring >= 2 on the same terms.
+            let term_refs: Vec<&str> = terms.iter().map(String::as_str).collect();
+            for e in &active {
+                let id = js_disp_opt(jget(e, "id"));
+                if id.is_empty() || seen.contains(&id) {
+                    continue;
+                }
+                let haystacks: Vec<String> = text_haystacks(e, true)
+                    .into_iter()
+                    .map(|h| h.to_lowercase())
+                    .collect();
+                let hits = count_term_hits(&haystacks, &term_refs);
+                if hits < 2 {
+                    continue;
+                }
+                seen.push(id.clone());
+                let title =
+                    crate::textutil::truncate_chars_head(&js_disp_opt(jget(e, "decision")), 90);
+                scored.push((candidate(&id, "decision", &title), hits));
             }
-            let haystacks: Vec<String> = text_haystacks(e, true)
-                .into_iter()
-                .map(|h| h.to_lowercase())
-                .collect();
-            if count_term_hits(&haystacks, &term_refs) < 2 {
-                continue;
+            // D4: the rail. The ranking is what decides WHO survives the cap,
+            // so it is applied when the cap actually bites; an uncapped list
+            // keeps the order derive has always produced (hints first, then
+            // the active store's own order), which is what keeps a store
+            // under D3's floor identical to today row for row. The sort is
+            // stable, so equal hit counts hold that same order.
+            if scored.len() > MAX_DECISION_CANDIDATES {
+                scored.sort_by(|a, b| b.1.cmp(&a.1));
+                capped_away = scored.len() - MAX_DECISION_CANDIDATES;
+                scored.truncate(MAX_DECISION_CANDIDATES);
             }
-            seen.push(id.clone());
-            let title =
-                crate::textutil::truncate_chars_head(&js_disp_opt(jget(e, "decision")), 90);
-            out.push(candidate(&id, "decision", &title));
+            out.extend(scored.into_iter().map(|(c, _)| c));
         }
     }
 
@@ -299,7 +404,7 @@ pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>
         }
     }
 
-    Ok(out)
+    Ok((out, capped_away))
 }
 
 // ─── the record field ───────────────────────────────────────────────────────
@@ -449,12 +554,12 @@ pub(crate) fn run_plan_conflicts_derive(flags: Flags, use_json: bool, t0: Instan
     let out = (|| -> R2<Out> {
         with_lane_workflow(&ctx, &flags, "state plan-conflicts derive", |current, lane| {
             let plan_rev = current.get("plan_rev").cloned().unwrap_or(json!(0));
-            let candidates = derive_candidates(&ctx.root, lane)?;
+            let (candidates, capped_away) = derive_candidates_reported(&ctx.root, lane)?;
             let count = candidates.len();
             let review = build_conflict_review(plan_rev.clone(), candidates, &now_iso());
             let mut patch = Map::new();
             patch.insert("conflict_review".into(), review.clone());
-            let text = if count == 0 {
+            let mut text = if count == 0 {
                 format!(
                     "Derived 0 conflict candidates for lane \"{lane}\" (plan_rev {}) \u{2014} \"0 conflicts\" is true for this plan revision.",
                     js_disp(&plan_rev)
@@ -465,6 +570,11 @@ pub(crate) fn run_plan_conflicts_derive(flags: Flags, use_json: bool, t0: Instan
                     js_disp(&plan_rev)
                 )
             };
+            if capped_away > 0 {
+                text.push_str(&format!(
+                    " {capped_away} further decision(s) also scored >= 2 and were DROPPED by the {MAX_DECISION_CANDIDATES}-candidate cap \u{2014} the list holds the highest-scoring ones. FIX: narrow the plan's cells, or verdict these and re-derive."
+                ));
+            }
             Ok(Ok((patch, review, text)))
         })
     })();

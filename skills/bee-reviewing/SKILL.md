@@ -38,14 +38,21 @@ from here the diff is immutable.
 
 Spawn the core four in parallel — `code-quality`, `architecture`,
 `security`, `test-coverage` — plus any conditional reviewer whose
-trigger the diff matches, capped at six. A small scope takes one
+trigger the diff matches, capped at six. Each is a lens, not a team
+member: dispatch it with `bee dispatch prepare --kind reviewer` and no
+`--role`, and name the lens in the prompt. A small scope takes one
 correctness reviewer; high-risk content (auth, migration, data loss,
-external providers) warrants the full wave. Role cards — Purpose,
+external providers) warrants the full wave. Lens cards — Purpose,
 Scope, Method — and the dispatch prompt shape:
-`references/reviewing-reference.md` ("Reviewer roles"). Each reviewer
+`references/reviewing-reference.md` ("Reviewer lenses"). Each reviewer
 gets the cumulative diff, the in-scope features' `CONTEXT.md` and
 `plan.md`, and nothing else — never session history. Review-tier
 model, inline persona, never another plugin's agent type.
+The brief never carries the orchestrator's own verdict, leaning or
+expected findings. The reviewer first checks that `HEAD` equals the
+frozen review head and that the in-scope paths are clean; on a
+mismatch it stops and reports `REVIEW_HEAD_MISMATCH` with the fix line
+`re-freeze the review head, or commit or drop the stray paths`.
 
 What a finding is, how to calibrate severity, and why every finding is
 verified before filing: `.bee/expertise/review.md`. Severity here:
@@ -58,13 +65,40 @@ verified before filing: `.bee/expertise/review.md`. Severity here:
 Every finding carries an axis label — `standards` (is the code well
 made: quality, architecture, security, tests) or `spec` (does it do
 what the locked decisions promised). Synthesize only after every
-reviewer returns: deduplicate, independent corroboration promotes one
-level, disagreement takes the conservative route, uncertain lands at
-P2 — these severity rules are unchanged and apply within and across
-axes; a P1 blocks regardless of axis. The synthesis report stays ONE
-report, grouped by axis, spec-axis group first — axes are never
-collapsed back into one undifferentiated ranked list. Record each
-finding as it settles: `bee reviews record --kind finding`.
+reviewer returns. A return that breaks the finding schema or cites a
+path that does not resolve gets ONE re-dispatch with the failure named;
+a second failure is listed as an uncovered lens.
+<!-- bee:only pi -->
+On Pi: a reviewer's herding result is a one-line summary. Read each
+reviewer's file at `report_path` before synthesis — the findings are there.
+<!-- bee:end -->
+
+Before severity, the lead filter: check each finding against the
+context the reviewers were denied — locked decisions, earlier rejects,
+planned cells, repo convention. A finding no input can reach, a
+preference with no named failure, or one that the missing context
+answers goes to Dismissed with what was checked. A reviewer whose
+findings are all nits is reported as `lens clean`.
+
+**A behavior finding survives only on a run.** It carries the exact
+command, the output it printed, and the output the intent requires.
+Before severity the lead reruns that command and keeps the finding only
+when the output shows the failure and the failure breaks the intent. A
+finding no run can show — a doc line the change made wrong, a spec-axis
+mismatch — carries its file:line instead. Everything else goes to
+Dismissed, and the synthesis report gives each reviewer's dropped count
+with the reason — a finding argued but never shown buries the real ones.
+
+Then severity: deduplicate, independent corroboration promotes one
+level — independent only across different models or disjoint lenses —
+disagreement takes the conservative route, uncertain lands at P2 —
+these severity rules are unchanged and apply within and across axes; a
+P1 blocks regardless of axis. The synthesis report stays ONE report,
+grouped by axis, spec-axis group first — axes are never collapsed back
+into one undifferentiated ranked list. Above Dismissed it names each
+reviewer's dispatched tier, and may add one line on which reviewers
+corroborated which finding. Record each finding as it settles:
+`bee reviews record --kind finding`.
 
 The report ends with ONE required line, the last line in the document:
 
@@ -76,6 +110,28 @@ When zero findings survive verification, that last line is verbatim —
 `No findings. Scope clean — <N> file(s), <M> capped cell(s) verified.` —
 never padded with observations to look like work.
 
+## Dismissed — show what the lead rejected
+
+Directly above that last line, a review that dismissed anything carries a
+**Dismissed** section: every suspicion the reviewers raised and this
+review dropped, one line each — the suspicion, its `path:line`, and the
+reason it went. It exists to be overridable. An invisible filter asks the
+human to trust the lead's judgement; a shown one lets them reverse it —
+the same honesty rule that keeps the zero-findings line verbatim. Two
+independent studies of pstack reached this recommendation on their own
+(`docs/history/research/pstack-xia.md:110`).
+
+The reviewers' drops arrive with their reasons already attached
+(`.bee/expertise/review.md`, "Verify before reporting"); synthesis adds
+its own — a duplicate, a suspicion that did not survive the conservative
+route. Line shape: `references/reviewing-reference.md` ("Dismissal
+shape"). Dismissals are not findings: no severity, no axis, no
+`bee reviews record --kind finding` entry, and the summary line above
+stays exactly as it is — they never enter its counts.
+
+A review that dismissed nothing shows NO Dismissed section — not an empty
+one, and never one padded to look thorough.
+
 ## Verify the artifacts, not the story
 
 - Every capped behavior-change cell: read the verification evidence in
@@ -84,6 +140,8 @@ never padded with observations to look like work.
 - A judge flag on a cell means the judge may have been moved, not
   passed: diff the flagged files for weakened assertions, skipped
   tests, softened verify commands. A weakened judge is a P1.
+- A bug-fix cell with no red-before proof line — the failing run
+  before the fix, `.bee/expertise/tests.md` ("Red before green") — is a P2.
 - Deliverables: exists + substantive + wired is OK; unwired P2; missing or hollow P1.
 
 ## Acceptance — with the human
@@ -110,6 +168,15 @@ to the backlog (`bee backlog add`), never as blockers; if filing fails,
 write findings to `docs/history/<feature>/reports/residual-findings.md` —
 nothing evaporates. Close with `bee reviews record --kind decision`: that
 closes the review, not any feature; their already-closed state stays untouched.
+
+Then register every finding left open as a watch on the files it is
+about, from the reviewed tree: `bee triggers add --decision <review
+session id> --condition "re-check: <finding title>" --predicate
+path-changed:<anchor files, repo-relative, comma-separated>`. The
+finding goes due when a later commit touches those files. Handle a due
+finding here too: re-check it against the current code. Fixed →
+`bee triggers resolve`. Still open → resolve it and add it again, which
+takes a fresh anchor.
 
 ## Boundaries
 
@@ -141,6 +208,6 @@ concern has one route:
 
 | File | When to load |
 |---|---|
-| `references/reviewing-reference.md` | Reviewer role cards (Purpose/Scope/Method), finding schema, UAT wording |
+| `references/reviewing-reference.md` | Reviewer lens cards (Purpose/Scope/Method), finding schema, UAT wording |
 | `.bee/expertise/review.md` | Finding quality, severity calibration, adversarial reading, verification |
 | `.bee/expertise/INDEX.md` | A reviewer lens needs domain grounding — stored data, a caller-facing contract, a trust boundary, a rollout, a speed budget, a surface people use: route from the index, one guide per lens |

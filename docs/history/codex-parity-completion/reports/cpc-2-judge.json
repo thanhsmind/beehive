@@ -1,0 +1,28 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "unsupported native dispatch refusal",
+      "status": "PASS",
+      "evidence": "/var/tmp/bee-codex-canary-ZPuEAI/evidence/report.json:16-55 records collaborationspawn_agent selection and installed guard status 2; lines 117-118 name opaque-role refusal. packages/bee-rs/crates/bee/src/hooks/model_guard.rs:731-734 implements codex-spawn-unmarked denial."
+    },
+    {
+      "id": "honest model reporting",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:758-779 asserts native requested/effective null and CLI unverified reporting; skills/bee-swarming/references/swarming-reference.md:436 states the same contract without a pinned native-model claim."
+    },
+    {
+      "id": "live read-only execution boundary",
+      "status": "PASS",
+      "evidence": "docs/history/codex-parity-completion/cpc-2-recovery-green.log:2471-2555 records actual prepared patch and shell denials with identical hashes and no continuation file. /var/tmp/bee-verify/evidence/20260913-112318-3463334/003-bash-c-codex-exec-sandbox-read-only-ephemeral.err:38-46 records both shell writes denied with status 1 and unchanged content."
+    },
+    {
+      "id": "configured external transport preservation",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs:808-811 directs herding roles to their configured transport; packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:9275-9322 checks herding, declared, pinned, and inherited reporting."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

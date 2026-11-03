@@ -47,6 +47,15 @@ pub(crate) struct Staged {
     /// second time. `None` only when the worktree's feature could not be
     /// resolved — matches `proof`'s own `None` condition exactly.
     pub(crate) feature: Option<String>,
+    /// D4 (docs/history/proof-strength-and-expiry/CONTEXT.md): the capped
+    /// cells whose recorded proof is OLDER than the tree this merge lands —
+    /// computed pre-merge (the merge base only exists before the merge) and
+    /// carried across the released lock exactly like `proof`, so P3 can
+    /// report it. Empty on every ordinary merge; an ADVISORY, never a
+    /// refusal — this door checks recorded proof and runs nothing
+    /// (verbs/cells/proof.rs), and D4 adds no new door.
+    pub(crate) proof_stale: Vec<String>,
+    pub(crate) proof_carried: Vec<String>,
     /// uat-stop-placement D4.1: the placement `uat_stop_config` already
     /// resolved for the merge precondition above, carried across the
     /// released lock so P3's lane write (D4.2) and cleanup suppression
@@ -58,6 +67,158 @@ pub(crate) enum StageOut {
     /// A TERMINAL outcome already fully resolved inside the P1 lock.
     Done(MergeAnswer),
     Staged(Box<Staged>),
+}
+
+/// D4: the capped cells of this feature whose recorded proof predates the
+/// tree being merged — the rows the `proof-stale` advisory names.
+///
+/// A cap records the commit its proof was taken at (`ProofCheck.commits`,
+/// verbs/cells/proof.rs). The merge base is where `branch` and main last
+/// agreed, so it is the newest state both sides of this merge already
+/// contain: a cap whose commit DESCENDS from the base was proven against
+/// that state, and one that does not was proven before it — main moved (or
+/// the branch was rewritten) after the proof was taken, which is the exact
+/// event D4 exists to make visible.
+///
+/// It FAILS OPEN in every uncertain case, because a warning that is wrong
+/// is worse than no warning: no merge base, a git call that did not run, or
+/// a recorded sha this repo does not have (`--is-ancestor` exits 128, not
+/// 1) all say nothing. Only a definite "not a descendant" — exit 1 — is
+/// reported stale. Caps with no recorded commit never reach here at all;
+/// `feature_proof_check` drops the `"none"` sentinel at the read.
+///
+/// The merge base is computed HERE rather than taken from
+/// `branch_changed_files` (merge.rs): that helper's own base is a local,
+/// and its only call site runs far below this one.
+fn stale_proof_cells(
+    main_root: &Path,
+    branch: &str,
+    proof: &crate::verbs::cells::ProofCheck,
+) -> Vec<String> {
+    if proof.commits.is_empty() {
+        return Vec::new();
+    }
+    let base = run_git(main_root, &["merge-base", "HEAD", branch]);
+    if base.status != Some(0) {
+        return Vec::new();
+    }
+    let base = js_trim(&base.stdout.unwrap_or_default()).to_string();
+    if base.is_empty() {
+        return Vec::new();
+    }
+    proof
+        .commits
+        .iter()
+        .filter(|(_, commit)| {
+            run_git(main_root, &["merge-base", "--is-ancestor", &base, commit]).status == Some(1)
+        })
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+
+fn commit_patch_id(main_root: &Path, commit: &str) -> Option<String> {
+    let shown = run_git(main_root, &["show", commit]);
+    if shown.status != Some(0) {
+        return None;
+    }
+    let diff = shown.stdout.unwrap_or_default();
+    if diff.is_empty() {
+        return None;
+    }
+    let filtered = run_git_stdin(main_root, &["patch-id", "--stable"], diff.as_bytes());
+    if filtered.status != Some(0) {
+        return None;
+    }
+    let out = filtered.stdout.unwrap_or_default();
+    let id = out.split_whitespace().next().unwrap_or("").to_string();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
+}
+
+type PatchIdPair = (String, String);
+
+fn branch_patch_ids(main_root: &Path, base: &str, branch: &str) -> Option<Vec<PatchIdPair>> {
+    let range = format!("{base}..{branch}");
+    let logged = run_git(main_root, &["log", "-p", "--format=%H", &range]);
+    if logged.status != Some(0) {
+        return None;
+    }
+    let stream = logged.stdout.unwrap_or_default();
+    if stream.trim().is_empty() {
+        return None;
+    }
+    let filtered = run_git_stdin(main_root, &["patch-id", "--stable"], stream.as_bytes());
+    if filtered.status != Some(0) {
+        return None;
+    }
+    let out = filtered.stdout.unwrap_or_default();
+    let pairs: Vec<PatchIdPair> = out
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let id = fields.next()?;
+            let commit = fields.next()?;
+            if id.is_empty() || commit.is_empty() {
+                None
+            } else {
+                Some((id.to_string(), commit.to_string()))
+            }
+        })
+        .collect();
+    if pairs.is_empty() {
+        None
+    } else {
+        Some(pairs)
+    }
+}
+
+fn split_carried_proof(
+    main_root: &Path,
+    branch: &str,
+    proof: &crate::verbs::cells::ProofCheck,
+    first_pass: Vec<String>,
+) -> (Vec<String>, Vec<String>) {
+    if first_pass.is_empty() {
+        return (first_pass, Vec::new());
+    }
+    let base = run_git(main_root, &["merge-base", "HEAD", branch]);
+    if base.status != Some(0) {
+        return (first_pass, Vec::new());
+    }
+    let base = js_trim(&base.stdout.unwrap_or_default()).to_string();
+    if base.is_empty() {
+        return (first_pass, Vec::new());
+    }
+    let Some(branch_ids) = branch_patch_ids(main_root, &base, branch) else {
+        return (first_pass, Vec::new());
+    };
+    let mut stale = Vec::new();
+    let mut carried = Vec::new();
+    for id in first_pass {
+        let commit = proof
+            .commits
+            .iter()
+            .find(|(cell, _)| cell == &id)
+            .map(|(_, commit)| commit.clone());
+        let matched = commit
+            .as_deref()
+            .and_then(|commit| commit_patch_id(main_root, commit).map(|pid| (pid, commit)))
+            .map(|(pid, commit)| {
+                branch_ids
+                    .iter()
+                    .any(|(branch_pid, branch_commit)| branch_pid == &pid && branch_commit != commit)
+            })
+            .unwrap_or(false);
+        if matched {
+            carried.push(id);
+        } else {
+            stale.push(id);
+        }
+    }
+    (stale, carried)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -172,6 +333,121 @@ pub(crate) fn merge_stage(
         }
     }
 
+    // slp-dissent-stop-and-ask sd-5 (a2affcba, 4b7aa303): the merge door's
+    // OWN dissent precondition. a2affcba names BOTH doors — the branch must
+    // not land while a worker's blocker question is unanswered — and merge
+    // had no cell-debt precondition but proof debt, so this is new code
+    // rather than a copied close-door arm.
+    //
+    // Both readers are the SAME two functions `bee close`'s dissent-debt
+    // door calls (verbs/cells/dissent.rs, sd-4), never a second reading of
+    // the rule: one obligation, two doors. The escape is consulted ONLY
+    // when there is debt to escape, exactly as the close door consults it.
+    //
+    // Placed HERE — after the proof door, before the main-dirty bookkeeping
+    // auto-commit below — because everything above that auto-commit is the
+    // zero-mutation zone: a dissent-debt merge is refused, never staged. A
+    // proof-debt refusal therefore MASKS a dissent refusal on the same
+    // feature; that matches the close door's own ordering (its judge arm
+    // precedes its dissent arm) and is deliberate.
+    //
+    // A worktree whose feature cannot be resolved has no cell record to
+    // check, so the helper is never called at all — the same `None` posture
+    // the proof door above and `uat_merge_precheck` below both take.
+    if let Some(feature) = identity.feature.as_deref() {
+        let dissent = crate::verbs::cells::feature_dissent_debt(main_root, feature)
+            .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+        if dissent.count > 0 {
+            let deferred = crate::verbs::cells::has_dissent_deferral_decision(main_root, feature)
+                .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+            if !deferred {
+                // `DebtSummary.ids` is `Vec<Value>`, not `Vec<String>` — the
+                // close door renders it through `js_join` and so does this.
+                return Err(refuse_merge(
+                    "WORKTREE_MERGE_DISSENT_DEBT",
+                    format!(
+                        "worktree {id}'s feature \"{feature}\" has {} cell(s) carrying a dissent with no recorded verdict ({}) — \"bee worktree merge\" refuses until each one is answered: bee cells dissent-verdict --id <id> --verdict accept|reject|escalate --reason \"<why>\". To defer instead, log a decision tagged dissent-deferral naming \"{feature}\" — the same escape \"bee close\"'s dissent-debt door reads.",
+                        dissent.count,
+                        crate::verbs::drivers::js_join(&dissent.ids, ", "),
+                    ),
+                ));
+            }
+        }
+    }
+
+    // leader-check-door lcd-3 (a38dc4bd): the merge door's leader-check
+    // precondition — a branch must not land while a capped cell has no
+    // leader check recorded. Both readers are the SAME two functions
+    // `bee close`'s leader-check door calls (verbs/cells/leader_check.rs),
+    // never a second reading of the rule: one obligation, two doors (the
+    // comment at :236-238 names that rule). The escape is consulted ONLY
+    // when there is debt to escape, exactly as the close door consults it.
+    //
+    // Placed HERE — after the dissent arm and before the advisor-nudge arm —
+    // in the zero-mutation zone above the bookkeeping auto-commit, so a
+    // leader-check-debt merge is refused, never staged. A dissent-debt
+    // refusal therefore MASKS this one on the same feature, matching the
+    // close door's own ordering.
+    //
+    // A worktree whose feature cannot be resolved has no cell record to
+    // check, so the helper is never called at all — the same `None` posture
+    // every door here takes.
+    if let Some(feature) = identity.feature.as_deref() {
+        let leader_check = crate::verbs::cells::feature_leader_check_debt(main_root, feature)
+            .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+        if leader_check.count > 0 {
+            let deferred = crate::verbs::cells::has_leader_check_deferral_decision(main_root, feature)
+                .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+            if !deferred {
+                // `DebtSummary.ids` is `Vec<Value>`, not `Vec<String>` — the
+                // close door renders it through `js_join` and so does this.
+                return Err(refuse_merge(
+                    "WORKTREE_MERGE_LEADER_CHECK_DEBT",
+                    format!(
+                        "worktree {id}'s feature \"{feature}\" has {} cell(s) capped with no leader check ({}) — \"bee worktree merge\" refuses until each one is checked: bee cells leader-check. To defer instead, log a decision tagged leader-check-deferral naming \"{feature}\" — the same escape \"bee close\"'s leader-check door reads.",
+                        leader_check.count,
+                        crate::verbs::drivers::js_join(&leader_check.ids, ", "),
+                    ),
+                ));
+            }
+        }
+    }
+
+    // slp-advisor-nudge an-3 (9e5eda5b): the merge door's advisor-nudge
+    // precondition — a branch must not land while the supervisor's advisor
+    // recommendation about that work is unanswered.
+    //
+    // Copied from the dissent precondition right above, including its two
+    // structural choices: the SAME function the close door and the cap path
+    // both call (verbs/supervisor.rs `feature_advisor_nudge_debt`) — one
+    // obligation, three doors, never a second reading of the rule — and the
+    // placement in the zero-mutation zone above the bookkeeping auto-commit,
+    // so a nudged merge is refused, never staged. A dissent-debt refusal
+    // therefore MASKS this one on the same feature, matching the close
+    // door's own ordering.
+    //
+    // Two differences from the dissent arm, both because 9e5eda5b puts the
+    // obligation on each nudge rather than on the feature: there is no
+    // feature-level escape to consult (a cleared row simply stops being
+    // counted), and the ids named are MAILBOX ROW ids, not cell ids.
+    //
+    // A worktree whose feature cannot be resolved has no row to check, so the
+    // helper is never called — the same `None` posture every door here takes.
+    if let Some(feature) = identity.feature.as_deref() {
+        let nudge = crate::verbs::supervisor::feature_advisor_nudge_debt(main_root, feature)
+            .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+        if nudge.count > 0 {
+            return Err(refuse_merge(
+                "WORKTREE_MERGE_ADVISOR_NUDGE_DEBT",
+                format!(
+                    "worktree {id}'s feature \"{feature}\" has {} advisor nudge(s) with no consult and no recorded decline ({}) — \"bee worktree merge\" refuses until each one is answered: run the consult, then record what came of it with bee decisions log --tags advisor-nudge, naming that row id in the text. A reasoned decline is the same record. One decision answers ONE row — the same per-row escape \"bee close\"'s advisor-nudge door reads.",
+                    nudge.count,
+                    crate::verbs::drivers::js_join(&nudge.ids, ", "),
+                ),
+            ));
+        }
+    }
+
     // trun-4: `bee worktree merge` used to refuse on ANY dirty path in main,
     // but the dirt is routinely bee's OWN bookkeeping (cell traces,
     // decisions, backlog under .bee/, and this feature's own
@@ -182,8 +458,9 @@ pub(crate) fn merge_stage(
     // bee-store bookkeeping auto-commit (drivers/close.rs,
     // commit_close_bookkeeping): before the refusal fires, auto-commit ONLY
     // the two allowed roots (merge.rs's main_bookkeeping_roots — never
-    // wider) and proceed; any dirt OUTSIDE them still refuses, named by
-    // path, exactly as before.
+    // wider) and proceed; dirt OUTSIDE them still refuses, named by path —
+    // narrowed by mdp-1 to the dirt this merge can actually collide with
+    // (see the split right below).
     let mut bookkeeping_commit: Option<Value> = None;
     if is_tree_dirty(main_root).map_err(MErr::Thrown)? {
         if !worktree_merge_commit_bookkeeping_enabled(main_root) {
@@ -196,16 +473,51 @@ pub(crate) fn merge_stage(
             ));
         }
         let roots = main_bookkeeping_roots(main_root, identity.feature.as_deref());
-        if is_tree_dirty_excluding(main_root, &roots).map_err(MErr::Thrown)? {
-            let offending = git_status_porcelain_excluding_untracked_all(main_root, &roots).map_err(MErr::Thrown)?;
+        let dirt = main_dirt_excluding(main_root, &roots).map_err(MErr::Thrown)?;
+        // mdp-1: the leftover dirt is no longer one undifferentiated pile.
+        //
+        // A TRACKED modification outside the bookkeeping roots refuses
+        // exactly as it always did — this narrowing never reaches it. An
+        // UNTRACKED path is different: the merge can only harm it by
+        // WRITING it, so it blocks only when it is in the merging branch's
+        // own changed-file set (`branch_changed_files`, read against the
+        // MERGE BASE — main's HEAD would name a file main deleted after the
+        // fork as "changed" and refuse for a collision that cannot happen).
+        // Anything else is a peer session's in-flight file this merge will
+        // never touch; refusing on it made the steady state with several
+        // live sessions "nobody merges until everybody commits" — a
+        // coordination cost paid daily, four refusals in two days, for a
+        // collision that cannot happen. A detached HEAD or an unresolvable
+        // merge base leaves the collision question unanswerable, so every
+        // untracked path blocks, exactly as before the narrowing.
+        let branch_changed = current_branch(&worktree_root)
+            .and_then(|b| branch_changed_files(main_root, &b));
+        let collides = |path: &String| branch_changed.as_ref().map_or(true, |c| c.contains(path));
+        let unsweepable: Vec<String> = main_untracked_under(main_root, &roots)
+            .map_err(MErr::Thrown)?
+            .into_iter()
+            .filter(|u| collides(u))
+            .collect();
+        let mut blocking_untracked: Vec<String> =
+            dirt.untracked.iter().filter(|u| collides(u)).cloned().collect();
+        blocking_untracked.extend(unsweepable.iter().cloned());
+        if !dirt.tracked.is_empty() || !blocking_untracked.is_empty() {
+            let offending = dirt
+                .tracked
+                .iter()
+                .cloned()
+                .chain(blocking_untracked.iter().map(|u| format!("?? {u}")))
+                .collect::<Vec<String>>()
+                .join("\n");
+            let stamps = skills_version_stamp_paths().join(", ");
             let scope = match &identity.feature {
-                Some(f) => format!(".bee/, docs/decisions/, docs/knowledge/ paths this feature recorded, or docs/history/{f}/"),
-                None => ".bee/ or docs/decisions/".to_string(),
+                Some(f) => format!(".bee/, docs/decisions/, the skills version stamps ({stamps}), docs/knowledge/ paths this feature recorded, or docs/history/{f}/"),
+                None => format!(".bee/, docs/decisions/, or the skills version stamps ({stamps})"),
             };
             return Err(refuse_merge(
                 "WORKTREE_MERGE_MAIN_DIRTY",
                 format!(
-                    "the MAIN checkout at {} has uncommitted changes outside {scope} that \"bee worktree merge\" will not auto-commit — commit or stash them before merging:\n{offending}",
+                    "the MAIN checkout at {} has uncommitted changes that \"bee worktree merge\" will not auto-commit — commit or stash them before merging:\n{offending}\nWhat still blocks: any TRACKED change outside {scope}, plus any UNTRACKED file this branch itself writes (the merge would overwrite it). An untracked file the branch never touches cannot collide, so it no longer blocks — it is left uncommitted and untouched.",
                     p(main_root)
                 ),
             ));
@@ -216,11 +528,15 @@ pub(crate) fn merge_stage(
         // keep refusing forever.
         let message = match &identity.feature {
             Some(f) => format!(
-                "Auto-commit .bee, docs/decisions, {f}'s recorded docs/knowledge, and docs/history/{f} bookkeeping before merging worktree {id}"
+                "Auto-commit .bee, docs/decisions, the skills version stamps, {f}'s recorded docs/knowledge, and docs/history/{f} bookkeeping before merging worktree {id}"
             ),
-            None => format!("Auto-commit .bee and docs/decisions bookkeeping before merging worktree {id}"),
+            None => format!(
+                "Auto-commit .bee, docs/decisions, and the skills version stamps before merging worktree {id}"
+            ),
         };
-        bookkeeping_commit = Some(commit_main_bookkeeping(main_root, &message, &roots).value());
+        let mut specs = roots.clone();
+        specs.extend(unsweepable.iter().map(|u| format!(":(exclude){u}")));
+        bookkeeping_commit = Some(commit_main_bookkeeping(main_root, &message, &specs).value());
     }
     // A present companion mount AND its marker file are both untracked (and
     // the marker, unlike the rest of a bootstrapped `.bee` store, is not
@@ -332,6 +648,22 @@ pub(crate) fn merge_stage(
             ));
         }
     }
+
+    // D4: the staleness advisory's own read — still inside the zero-mutation
+    // zone, and read-only git. It cannot sit beside the proof check further
+    // up (which is where the merge door READS proof) because `branch` is not
+    // resolved until the detached-HEAD/branch-mismatch checks above, and the
+    // merge base needs it; it cannot sit after the merge either, because the
+    // merge is what destroys the base. Nothing here can refuse — the rows
+    // are carried to P3 and reported beside the merge that landed.
+    let first_pass = proof
+        .as_ref()
+        .map(|p| stale_proof_cells(main_root, &branch, p))
+        .unwrap_or_default();
+    let (proof_stale, proof_carried) = proof
+        .as_ref()
+        .map(|p| split_carried_proof(main_root, &branch, p, first_pass))
+        .unwrap_or((Vec::new(), Vec::new()));
 
     // worktree-companion-hook: every zero-mutation refusal above (both
     // dirty-tree checks, detached-HEAD, branch-mismatch) has now cleared, so
@@ -455,6 +787,8 @@ pub(crate) fn merge_stage(
         companion,
         bookkeeping_commit,
         proof,
+        proof_stale,
+        proof_carried,
         feature: identity.feature.clone(),
         uat_stop,
     })))
@@ -613,6 +947,8 @@ pub(crate) fn merge_finish(
         companion,
         bookkeeping_commit,
         proof,
+        proof_stale,
+        proof_carried,
         feature,
         uat_stop,
     } = state;
@@ -679,6 +1015,32 @@ pub(crate) fn merge_finish(
         result.insert("worktreeRoot".into(), json!(p(worktree_root)));
         let verify_field = proof_report_field(proof.as_ref());
         result.insert("verify".into(), json!(verify_field));
+        // D4: the `proof-stale` advisory, beside the `verify` field it
+        // qualifies. Present only when there is something to say, and the
+        // merge it rides on has already landed — this names an age, never a
+        // fault, and refuses nothing.
+        if !proof_stale.is_empty() {
+            result.insert("proof_stale".into(), json!({
+                "code": "proof_stale",
+                "cells": proof_stale,
+                "message": format!(
+                    "{} capped cell(s) recorded their proof before the merge base this branch is landing against ({}) — the tree moved after those proofs were taken, so they were never run against what is merging now. The merge is NOT refused (bee worktree merge checks recorded proof and runs nothing); re-run their proof if the change is one main could have broken.",
+                    proof_stale.len(),
+                    proof_stale.join(", "),
+                ),
+            }));
+        }
+        if !proof_carried.is_empty() {
+            result.insert("proof_carried".into(), json!({
+                "code": "proof_carried",
+                "cells": proof_carried,
+                "message": format!(
+                    "{} capped cell(s) ({}) were proven at a commit the rebase rewrote; the patch is unchanged, so the recorded proof still describes this code. Nothing to re-run.",
+                    proof_carried.len(),
+                    proof_carried.join(", "),
+                ),
+            }));
+        }
         // `...(companion ? { companion } : {})` — after `verify`, BEFORE the
         // post-commit `warning` and the cleanup keys.
         if let Some(companion) = companion {
@@ -762,6 +1124,16 @@ pub(crate) fn merge_finish(
         let uat_wait_set =
             *uat_stop == UatStop::Close && precheck.lane_applies && !precheck.gate_approved;
         if let Some(feature) = feature.as_deref() {
+            if let Err(reason) = crate::verbs::state_group::reconcile_capped_workers(main_root) {
+                let reason_disp = match &reason {
+                    crate::verbs::reservations::Err2::Msg(m) => m.as_str(),
+                    crate::verbs::reservations::Err2::Ex => "internal error",
+                };
+                eprintln!(
+                    "bee worktree merge: could not reconcile worker receipts ({reason_disp}) — worker statuses may be stale until the next merge."
+                );
+                result.insert("reconcile_warning".into(), json!(reason_disp));
+            }
             match close_the_lane_on_merge(main_root, feature, &merge_commit_sha, *uat_stop) {
                 // mrf-2: `|| outcome.changed` is the second door into this
                 // same commit — a lane whose ONLY change was the

@@ -1,0 +1,130 @@
+{
+  "id": "ld-1",
+  "feature": "letter-digest",
+  "title": "File the close letter at the moment of close",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "aedb5be9-1dda-40e1-8edd-63e9e29219d4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "docs/history/letter-digest/CONTEXT.md",
+    "docs/history/letter-digest/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D2 (store id aedb5be9): every bee close files its close letter immediately, attended sessions included. In mailbox.rs, split file_run_letter's compose-and-file core from its armed gate (anchor mailbox.rs:1754 'if !armed(root) {' / 1755 'return RunEnd::NotArmed;') and add pub(crate) fn file_close_letter(root: &Path, run: &str) -> RunEnd that runs the same core WITHOUT the armed gate. Also change file_run_letter so an EXISTING letter re-composes regardless of arming (advisor P1: check letter_files_for_run before the armed early-return; the existence check is names-only so an unarmed checkout with no letter still pays ~zero). Extend D12 recovery candidacy: a lettered run whose entries file mtime is newer than its letter file mtime is a candidate too (two stats, no opens; candidacy today is 'entries and NO letter', see silent_run_candidates / the lettered set near mailbox.rs:1992-2038). In drivers/close.rs, call file_close_letter fail-open INSIDE record_feature_close_in_mailbox (anchor close.rs:3075 'fn record_feature_close_in_mailbox', 3099 'mailbox::record_close_stop(') right after record_close_stop, using the SAME control root already resolved there — never the worktree root (advisor P2). A Failed outcome warns on stderr like record_run_end (mailbox.rs:1800-1808) and never refuses the close. Write tests per the plan's ld-1 triad; judge existing coverage in mailbox.rs and work.rs tests first and author only the gap.",
+  "must_haves": {
+    "truths": [
+      "An attended (unarmed) bee close leaves a filed letter with close sections in .bee/human-mailbox/",
+      "A later run end re-composes that same file: one letter, filed_at and read status preserved, post-close entries included",
+      "A close-lettered run that goes silent with newer entries is still recovered by the D12 pass"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "substantive": "file_close_letter plus unarmed re-compose of existing letters plus mtime-based recovery candidacy, with tests"
+      }
+    ],
+    "key_links": [
+      "record_feature_close_in_mailbox calls file_close_letter at the control root after record_close_stop"
+    ],
+    "prohibitions": [
+      "No second letter file for one run (D11)",
+      "Run-end filing for a run with NO letter stays gated on armed() (D9)",
+      "Close is never refused because of a letter failure (fail-open, D10)"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "trace": {
+    "worker": "w-ld-1",
+    "outcome": "Every bee close now files its close letter at the moment of close; an existing letter re-composes unarmed, and a close-lettered run that goes silent is recovered",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T14:29:07.110Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c9eb2d43-4dec-4d2a-8ea5-f7438226e33d",
+    "claimed_at": "2026-08-30T14:21:25.193Z",
+    "report": {
+      "outcome": "Every bee close now files its close letter at the moment of close; an existing letter re-composes unarmed, and a close-lettered run that goes silent is recovered",
+      "commit": "db775259be553b4636706abe7d9737f0ae657c2a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox — green — 152 passed, 0 failed, including the four new D2 tests; cargo test ... close also green (216 passed) for the close.rs call site",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 326 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:1806",
+            "id": "unarmed close files a close-section letter"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:3115",
+            "id": "close.rs calls it at the control root"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:1829",
+            "id": "run end re-composes same file, filed_at+status kept"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:2152",
+            "id": "D12 candidacy for a lettered run with newer entries"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:1786",
+            "id": "letterless run end still armed-gated"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:3082",
+            "id": "close never refuses on letter failure"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:4283",
+            "id": "tests green for all four truths"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-30T15:00:47.236Z"
+      }
+    ]
+  }
+}

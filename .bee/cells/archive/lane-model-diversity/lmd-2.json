@@ -1,0 +1,78 @@
+{
+  "id": "lmd-2",
+  "feature": "lane-model-diversity",
+  "title": "Guard parity contract tests for seat-role markers",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "lmd-1"
+  ],
+  "decisions": [
+    "D4",
+    "3c9d6262",
+    "23de5362"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/lane-model-diversity/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "action": "Contract tests (test module or hook fixtures beside existing marker tests): a configured seat name inside [bee-tier: ...] admits through model_guard; an unconfigured seat marker denies; a fallen-through advisor dispatch stamps marker advisor (not the seat); --kind cell with a cell-declared seat role keeps the cell_role_list path unchanged. Judge existing coverage first and author only the gap (cite existing fixtures by name in the cap report).",
+  "must_haves": {
+    "truths": [
+      "every new test names the (rule, shape) it pins and is green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "substantive": "seat-marker parity tests present and green"
+      }
+    ],
+    "key_links": [
+      "tests derive seat names from SEAT_ROLES, never a hand list"
+    ],
+    "prohibitions": [
+      "No production-code change in this cell"
+    ]
+  },
+  "trace": {
+    "worker": "lmd-w2",
+    "outcome": "Seat-role parity pinned across the dispatch door and the marker guard, with both refusal and admit arms falsified by reverted mutations",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [
+      "Added a fifth row (cell_role_list over every seat) inside model_guard.rs rather than beside cell_role_list — the cell scopes writes to this one file, and the row is the same parity claim from the other side — hit an unforeseen obstacle",
+      "Ran two temporary mutations of the guard's known_role_named wrapper and reverted both, because a contract test that has never failed proves only that the guard agrees with itself — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T14:32:20.344Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T14:22:07.618Z",
+    "report": {
+      "outcome": "Seat-role parity pinned across the dispatch door and the marker guard, with both refusal and admit arms falsified by reverted mutations",
+      "commit": "8160a818",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml model_guard — green — 57/57 in the guard module, the only module this test-only cell touches; the cell's own verify command",
+      "deviations": [
+        "Added a fifth row (cell_role_list over every seat) inside model_guard.rs rather than beside cell_role_list — the cell scopes writes to this one file, and the row is the same parity claim from the other side — hit an unforeseen obstacle",
+        "Ran two temporary mutations of the guard's known_role_named wrapper and reverted both, because a contract test that has never failed proves only that the guard agrees with itself — found a better route"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 237 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

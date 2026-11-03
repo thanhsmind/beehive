@@ -82,6 +82,20 @@ A port is only as good as the instrument that says it is faithful. This is the h
 - **Reviewers falsify rather than reason where they can.** The strongest verdicts in this port came from reintroducing a defect in a scratch copy and observing the specific test go red; a scratch area inside the working tree exists for this, because writes outside it are refused.
 - **A fixture generator has consumers.** Growing the shared fixture can break another cell's proof; fixture changes are checked against every proof that reads them.
 
+
+**A parity fence that reads only the SOURCE tree cannot see that the artifact
+never ships.** `expertise-principles` shipped 14 principle skills behind a green
+3628-test suite and a four-check parity fence while `.claude-plugin/skills/` and
+`.codex-plugin/skills/` held **zero** of them. Both discovery pipes — the skill
+tree lister and the onboarding renderer — filter directories on a literal `bee-`
+name prefix, and that same prefix is the locked host-repo deletion domain, so a
+skill named outside the namespace was invisible to the shipping path and to
+every check that read the source. Two rules come out of it: name into the `bee-`
+namespace, and give the fence a check that reads the **shipped** trees rather
+than the source. The wider rule generalises past skills: when a claim is about
+*what a pipeline discovers*, the filter expression settles it — seeing a
+directory walk proves a directory is read, never which entries survive.
+
 ## Open Gaps
 
 - **Delegate exits still read as argument errors.** A handler that declines by returning "not handled" — the shape that used to hand work to the reference implementation — now reaches a dispatcher with nowhere to send it, and the user is told the argument shape was wrong. Three commands have been found this way and one was repaired at the handler; the dispatcher message itself is unchanged, so the next one will present the same way (filed 2026-08-14).

@@ -1,0 +1,282 @@
+{
+  "id": "dob-2",
+  "feature": "design-os-in-bee",
+  "title": "Add the design role and the bee-design agent, pinned for design cells",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [
+    "dob-1"
+  ],
+  "decisions": [
+    "961426b5-5f85-419a-a25f-5a4fdf9e72f8",
+    "b99dde04-7232-4139-b09b-a409034e0464",
+    "c86c235c-9a7f-418f-9827-e16a8fef6946"
+  ],
+  "files": [
+    "packages/bee/agents/bee-design.md.tmpl",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    ".bee/config-sample.json",
+    ".claude/agents/bee-design.md",
+    ".opencode/agent/bee-design.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/design-os-in-bee/CONTEXT.md",
+    "docs/history/design-os-in-bee/plan.md",
+    "packages/bee/agents/bee-build.md.tmpl",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "RED FIRST: write the failing tests before the code and watch each fail for its own reason.\n\n(1) ROLE (per D3). Add `design` to the seeded team table in onboard/templates.rs `default_config()` (the `\"team\": { \"claude\": {` literal; anchor line `\"code\": { \"model\": \"sonnet\", \"description\": \"write the cell's code and its tests\" },`) with model sonnet and the description `build and critique rendered UI with the bee-design taste; proves with the design gate`. team.pi derives from team.claude, so it follows. Mirror the row in .bee/config-sample.json with its teaching line.\n\n(2) AGENT. Add packages/bee/agents/bee-design.md.tmpl modelled on bee-build.md.tmpl: it executes exactly one claimed cell like bee-build (reserve, write, commit, cap), and additionally loads the bee-design skill and any installed bee-design-* pack before writing UI, follows its workflow, and records the design check as its proof, saying plainly when Node is missing and the check did not run. Register it everywhere bee-build is registered: AGENT_ROLES_BY_NAME in templates.rs (anchor `(\"bee-build\", &[\"generation\"]),`) as (\"bee-design\", &[\"design\", \"generation\"]); the opencode permission deny row (same list as bee-build); prompt.rs `AGENT_*` include_str! and the `embedded_agent_body` match arm; agent_job_summary in guard.rs; and the PINNED_AGENT_TYPE mirror in hooks/model_guard.rs if it lists agent names. ALSO add (\"design\", \"bee-design\") to ROLE_AGENTS in guard.rs (`pub(crate) const ROLE_AGENTS: [(&str, &str); 4] = [` — the array length changes) so role_for_agent and the model guard accept the pin. The template says what the worker does when no bee-design skill is installed in the host: it reports that the taste is absent and works as a plain cell executor.\n\n(3) PIN. In prepare.rs at `let pinned_type = if kind == \"cell\" {` a cell dispatch pins bee-build unconditionally. Make it pin bee-design when the cell's role (the resolved marker_role or the cell record's role) is `design`, and bee-build for every other role. The herding path (`kind == \"cell\" && is_herding`) sends the bare prompt body with no agent body, so for a design cell also put a short design preamble (load bee-design and installed packs, prove with the design check, say so when Node is missing) into the prompt body itself; both transports then carry it.\n\n(4) Run `bee dev regen` (dob-1 has capped, so packages/bee/design is complete) so .claude/agents/bee-design.md, the opencode agent and the release manifest are written. Confirm afterwards that `fd -t d bee-design .claude-plugin .codex-plugin skills` prints nothing.\n\nTests: a --kind cell dispatch for a cell with role design returns subagent_type bee-design and the model-guard check accepts that payload; the same with role code returns bee-build; a herding design cell's prompt carries the preamble; the seeded config lists design under team.claude and team.pi; onboard renders .claude/agents/bee-design.md.",
+  "verify": ".bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "each new test fails first for its own reason",
+      "a cell with role design dispatches as bee-design",
+      "a cell with role code still dispatches as bee-build",
+      "the model guard accepts a bee-design pin for a design cell",
+      "a herding design cell's prompt body carries the design preamble",
+      "bee team show on a freshly onboarded host lists design",
+      "onboard renders .claude/agents/bee-design.md"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/agents/bee-design.md.tmpl",
+        "substantive": "one-cell executor contract plus the load-bee-design and design-proof rules"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "role-aware cell pin"
+      }
+    ],
+    "key_links": [
+      "AGENT_ROLES_BY_NAME, prompt.rs embedding and the opencode deny row all name bee-design",
+      "the pin reads the cell role, not only the dispatch kind"
+    ],
+    "prohibitions": [
+      "Do not change the pin for any role other than design",
+      "Do not add design to SEAT_ROLES or the hat list",
+      "Do not touch skills/ or packages/bee/design/ in this cell"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-dob-2",
+    "outcome": "Design cells dispatch as the new bee-design agent; every other role keeps bee-build",
+    "files_changed": [
+      "packages/bee/agents/bee-design.md.tmpl",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      ".bee/config-sample.json",
+      ".claude/agents/bee-design.md",
+      ".opencode/agent/bee-design.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Pinned on tier_token (the cell's declared or approved-plan role, or an explicit --role) rather than marker_role — marker_role can only be design when tier_token is, and tier_token also covers an escalated or fallen-through design cell — found a better route",
+      "Made every_rendered_agent_is_reachable_through_the_one_door in prepare.rs also dispatch a design cell and deleted its comment that said the cell pin is never role-driven — adding bee-design to ROLE_AGENTS makes that test demand the door return it, and the comment became false — hit an unforeseen obstacle",
+      "Updated existing expectations: drivers/tests.rs pinned_types_match_the_rendered_bee_agents now expects agent_for_role(design) to be bee-design, templates.rs seeded-name list gains design, onboard/tests.rs pi table count 18 to 19, model_guard.rs repo_config and the migrated fixture carry design — each asserted the old table — hit an unforeseen obstacle",
+      "Left onboard/agents.rs, status_full/store.rs, status_full/tests.rs, cells/tests.rs and tests/opencode_plugin_contracts.rs untouched — they read AGENT_ROLES_BY_NAME or ROLE_AGENTS generically or use fixed fixtures and stayed green — found a better route",
+      "Reverted the .gitattributes BEE block and the .bee/onboarding.json rewrite that bee dev regen produced — both lie outside the cell's files and the gitattributes block is unrelated pending onboard drift — hit an unforeseen obstacle",
+      "Ran bee dev regen with the freshly built binary from the cargo target dir instead of .bee/bin/bee — the vendored binary does not know bee-design and would not render it — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-24T06:39:23.704Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify run in full: release manifest 562 files match; workspace 4899 passed, 0 failed, 28 ignored; the four new tests ran and passed (drivers a_design_cell_pins_bee_design_and_every_other_role_keeps_bee_build, a_herding_design_cell_carries_the_design_preamble_in_its_prompt_body, model_guard a_design_cell_payload_from_the_door_passes_the_guard_as_bee_design, onboard a_fresh_apply_seeds_the_design_role_and_renders_the_bee_design_agent), each red first on base; run with PATH spelled out (host guard refuses shell variable expansion) and BEE_OPENCODE_SUITE_ALLOW_SKIP=1 (opencode on PATH is a wrapper); also driven live: the new binary onboarded a scratch host under .bee/tmp, wrote .claude/agents/bee-design.md, and bee team show listed design under claude and pi; fd -t d bee-design .claude-plugin .codex-plugin skills printed nothing after regen",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7968f1f7-8ca3-4827-964e-84b204e4fcdf",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-10-24T06:25:45.668Z",
+    "verified_at": null,
+    "baseline": "On base c004f6eb5 the four new tests failed, each for its own reason: a design cell got subagent_type bee-build; the herding stdin had no design preamble; the guard round trip saw bee-build; the onboard test found no bee-design.md.tmpl",
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": [
+      "agent_for_role(design) now answers bee-design, so a non-cell dispatch naming --role design (gather or reviewer) also pins bee-design, an execution agent whose contract is one cell, and the model guard repairs [bee-tier: design] with general-purpose onto it; no approved stage does that today, but slice 2 or 3 may want non-cell kinds to keep a read-only type",
+      "bee dev regen in this repo also appends a BEE block to .gitattributes and rewrites .bee/onboarding.json (including the opencode bee-design record); not committed here, the next regen on main writes them"
+    ],
+    "stopped": null,
+    "escalation_reason": "the code-role flash worker went idle twice with no edits on this 17-file cross-table change (paseo job-1792822693518-2578197-1); rescue ladder rung 2",
+    "mistakes": [
+      {
+        "wrong": "cp of the built bee binary to /tmp/w-dob-2-bin was refused by the write guard as outside the worktree",
+        "better": "run the binary straight from the cargo target dir from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "A cell with role design now dispatches as the new bee-design agent (templates role row, AGENT_ROLES_BY_NAME, opencode deny row, prompt.rs embedding, guard.rs ROLE_AGENTS and job summary, role-aware pin plus design preamble in prepare.rs); code and every other role still pin bee-build; regen rendered .claude/agents/bee-design.md, .opencode/agent/bee-design.md and the release manifest",
+      "commit": "cc60ee99b506db7e273b4cffc02a1111f5b3ec8f",
+      "files": [
+        "packages/bee/agents/bee-design.md.tmpl",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        ".bee/config-sample.json",
+        ".claude/agents/bee-design.md",
+        ".opencode/agent/bee-design.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the cell verify run in full: release manifest 562 files match; workspace 4899 passed, 0 failed, 28 ignored; the four new tests ran and passed (drivers a_design_cell_pins_bee_design_and_every_other_role_keeps_bee_build, a_herding_design_cell_carries_the_design_preamble_in_its_prompt_body, model_guard a_design_cell_payload_from_the_door_passes_the_guard_as_bee_design, onboard a_fresh_apply_seeds_the_design_role_and_renders_the_bee_design_agent), each red first on base; run with PATH spelled out (host guard refuses shell variable expansion) and BEE_OPENCODE_SUITE_ALLOW_SKIP=1 (opencode on PATH is a wrapper); also driven live: the new binary onboarded a scratch host under .bee/tmp, wrote .claude/agents/bee-design.md, and bee team show listed design under claude and pi; fd -t d bee-design .claude-plugin .codex-plugin skills printed nothing after regen",
+      "deviations": [
+        "Pinned on tier_token (the cell's declared or approved-plan role, or an explicit --role) rather than marker_role — marker_role can only be design when tier_token is, and tier_token also covers an escalated or fallen-through design cell — found a better route",
+        "Made every_rendered_agent_is_reachable_through_the_one_door in prepare.rs also dispatch a design cell and deleted its comment that said the cell pin is never role-driven — adding bee-design to ROLE_AGENTS makes that test demand the door return it, and the comment became false — hit an unforeseen obstacle",
+        "Updated existing expectations: drivers/tests.rs pinned_types_match_the_rendered_bee_agents now expects agent_for_role(design) to be bee-design, templates.rs seeded-name list gains design, onboard/tests.rs pi table count 18 to 19, model_guard.rs repo_config and the migrated fixture carry design — each asserted the old table — hit an unforeseen obstacle",
+        "Left onboard/agents.rs, status_full/store.rs, status_full/tests.rs, cells/tests.rs and tests/opencode_plugin_contracts.rs untouched — they read AGENT_ROLES_BY_NAME or ROLE_AGENTS generically or use fixed fixtures and stayed green — found a better route",
+        "Reverted the .gitattributes BEE block and the .bee/onboarding.json rewrite that bee dev regen produced — both lie outside the cell's files and the gitattributes block is unrelated pending onboard drift — hit an unforeseen obstacle",
+        "Ran bee dev regen with the freshly built binary from the cargo target dir instead of .bee/bin/bee — the vendored binary does not know bee-design and would not render it — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "cp of the built bee binary to /tmp/w-dob-2-bin was refused by the write guard as outside the worktree — run the binary straight from the cargo target dir from the start — none"
+      ],
+      "baseline": "On base c004f6eb5 the four new tests failed, each for its own reason: a design cell got subagent_type bee-build; the herding stdin had no design preamble; the guard round trip saw bee-build; the onboard test found no bee-design.md.tmpl",
+      "found": [
+        "agent_for_role(design) now answers bee-design, so a non-cell dispatch naming --role design (gather or reviewer) also pins bee-design, an execution agent whose contract is one cell, and the model guard repairs [bee-tier: design] with general-purpose onto it; no approved stage does that today, but slice 2 or 3 may want non-cell kinds to keep a read-only type",
+        "bee dev regen in this repo also appends a BEE block to .gitattributes and rewrites .bee/onboarding.json (including the opencode bee-design record); not committed here, the next regen on main writes them"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "each new test fails first for its own reason",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "a cell with role design dispatches as bee-design",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a cell with role code still dispatches as bee-build",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "the model guard accepts a bee-design pin for a design cell",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+          },
+          {
+            "requirement": "a herding design cell's prompt body carries the design preamble",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "bee team show on a freshly onboarded host lists design",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+          },
+          {
+            "requirement": "onboard renders .claude/agents/bee-design.md",
+            "artifact": ".claude/agents/bee-design.md"
+          },
+          {
+            "requirement": "packages/bee/agents/bee-design.md.tmpl",
+            "artifact": "packages/bee/agents/bee-design.md.tmpl"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "AGENT_ROLES_BY_NAME, prompt.rs embedding and the opencode deny row all name bee-design",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+          },
+          {
+            "requirement": "the pin reads the cell role, not only the dispatch kind",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          }
+        ],
+        "recorded_at": "2026-10-24T06:40:00.586Z",
+        "recorded_by": "7968f1f7-8ca3-4827-964e-84b204e4fcdf",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "design-cell-pins-bee-design",
+            "status": "PASS",
+            "evidence": "prepare.rs:2458; drivers test ok"
+          },
+          {
+            "id": "code-cell-keeps-bee-build",
+            "status": "PASS",
+            "evidence": "prepare.rs:2459"
+          },
+          {
+            "id": "model-guard-accepts",
+            "status": "PASS",
+            "evidence": "model_guard test a_design_cell_payload_from_the_door_passes_the_guard_as_bee_design ok"
+          },
+          {
+            "id": "herding-preamble",
+            "status": "PASS",
+            "evidence": "prepare.rs:2455-2456, :2475-2476; test ok"
+          },
+          {
+            "id": "team-show-lists-design",
+            "status": "PASS",
+            "evidence": "onboard test asserts team.claude.design and team.pi.design"
+          },
+          {
+            "id": "onboard-renders-agent",
+            "status": "PASS",
+            "evidence": ".claude/agents/bee-design.md committed; onboard test ok"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "no skills/, packages/bee/design, SEAT_ROLES or hat list touched"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-24T07:50:08.540Z"
+      }
+    ]
+  },
+  "escalate": true,
+  "role_reroutes": [
+    {
+      "from": "code",
+      "to": "test",
+      "decision": "db4d5464-40da-40e5-9a7a-eaa39e567334",
+      "at": "2026-10-24T06:25:17.627Z",
+      "plan_sha256": "6341af544380304d0458a6c5084fee2e8d5f4540ddb7af2b1b73c5d71c478f22"
+    }
+  ]
+}

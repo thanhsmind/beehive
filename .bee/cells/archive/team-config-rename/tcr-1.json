@@ -1,0 +1,103 @@
+{
+  "id": "tcr-1",
+  "feature": "team-config-rename",
+  "title": "Fold models into team once, at config load",
+  "lane": "standard",
+  "role": "code",
+  "action": "Add ONE helper in `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs`:\n\n```rust\n/// team-config-rename D2: the roster block is `team`; `models` is a read alias.\n/// Returns true when the legacy key served (folded or dropped), false otherwise.\npub(crate) fn fold_team_key(map: &mut Map<String, Value>) -> bool\n```\n\nSemantics, exactly: `team` absent + `models` present → move `models` to `team`, return true. Both present → remove `models` (team wins), return true. `team` present but NOT an object → do nothing, return false (leave every site's existing handling alone — no new refusal). Neither → false.\n\nCall it from the three config loaders, right beside their existing `shift_remove(\"advisor\")` normalization: `state.rs:161 read_config_raw` (the shift_remove is at :185), `hooks/session_preamble/state.rs:50 read_config_raw_open` (:61), `hooks/compaction.rs:124 read_config_failopen`. Also call it in `onboard/agents.rs:73` `agent_models`, which reads the file directly via `read_json_if_exists` and bypasses all three loaders.\n\nThen change every production reader of the loaded map from `\"models\"` to `\"team\"`: `doctor.rs:297`, `verbs/models_group.rs:149`, `verbs/status_full/build.rs:343`, `store.rs:448`, `store.rs:535`, `store.rs:853`, `hooks/model_guard.rs:80`, `herding/wave.rs:358`, and the `dispatch_door_lines` callers. For `dispatch_door_lines` (`hooks/model_guard.rs:520`): change its signature to take the whole loaded map (or root) and read `\"team\"` itself, so `session_preamble/budget.rs:650` and `compaction.rs:1525` stop reading the key at all — one reader, not three. `read_models` (`models.rs:286`) reads `\"team\"` too.\n\nDO NOT touch: `hooks/session_close/perf.rs:576` (a session usage record, not config); `verbs/status_full/build.rs:339-344` (the PUBLIC `bee status --json` output key named `models` — it stays, and so do its tests at `status_full/tests.rs`). The three `model_guard.rs` test fixtures (:2015, :2549, :2582) become `team`-keyed.\n\nTests, in `models.rs`'s test module: the four fold cases plus the non-object case. And the guard's existing role tests must pass against `team`-keyed fixtures.\n\nThe regression gate this cell must leave EMPTY:\n```\nrg -n 'get\\(\"models\"\\)' packages/bee-rs/crates/bee/src --glob '*.rs' | grep -v 'hooks/session_close/perf.rs' | grep -v 'verbs/status_full/build.rs:3[34][0-9]' | grep -v '/tests\\|tests.rs\\|#\\[cfg(test)\\]'\n```",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers::models model_guard status_full && ! rg -n 'get\\(\"models\"\\)' packages/bee-rs/crates/bee/src --glob '*.rs' | grep -v 'hooks/session_close/perf.rs' | grep -v 'verbs/status_full/build.rs:3[34][0-9]' | grep -v '/tests\\|tests.rs\\|#\\[cfg(test)\\]' | grep -q .",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/state.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/state.rs",
+    "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "read_first": [
+    "docs/history/team-config-rename/plan.md",
+    "docs/history/team-config-rename/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/state.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "must_haves": {
+    "truths": [
+      "one helper, fold_team_key, in the drivers module, with a test per case: team-only, models-only, both, neither, team-non-object",
+      "all three loaders and onboard/agents.rs call it; no other site carries fallback logic",
+      "dispatch_door_lines reads the key itself; budget.rs and compaction.rs no longer read it",
+      "the exact regression gate prints nothing",
+      "perf.rs:576 and the status --json output key are untouched",
+      "the guard's existing role tests pass on team-keyed fixtures"
+    ]
+  },
+  "change_class": "api",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "team-w1",
+    "outcome": "models folds into team once at config load; every production reader now reads team; the regression gate is empty",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/state.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/state.rs",
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+    ],
+    "deviations": [
+      "Touched onboard/templates.rs (one test assertion, rewritten from get(\"models\") to contains_key so the regression gate stays empty) — tcr-2 file, edited after tcr-2 committed, no clobber.",
+      "Capped with --sync-ack: wave.rs is bee-herding-owned code and its two-line key rename touches no bee-herding skill; the skill prose sweep is slice 2.",
+      "sync-ack: wave.rs change is a two-line key rename (models to team) with behaviour preserved; no bee-herding skill text depends on the JSON key name, and the skill-side prose sweep of models.<runtime> is slice 2 (docs lane) per plan.md revision 2"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T03:57:15.125Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-09T03:40:00.519Z",
+    "sync_ack": "wave.rs change is a two-line key rename (models to team) with behaviour preserved; no bee-herding skill text depends on the JSON key name, and the skill-side prose sweep of models.<runtime> is slice 2 (docs lane) per plan.md revision 2",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "fold_team_key in drivers/models.rs:284 with five tests (team-only, models-only, both, neither, team-non-object); called from the three loaders (state.rs:186, session_preamble/state.rs:61, compaction.rs:146) and onboard/agents.rs:76; dispatch_door_lines now takes the whole loaded map so budget.rs and compaction.rs no longer read the key; doctor, models_group, status build/store, model_guard, wave and the three guard fixtures read team. perf.rs:576 and the status --json output key untouched.",
+      "commit": "3bd423e6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/state.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/state.rs",
+        "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers::models model_guard status_full, plus the exact regression gate rg — green:unit — 174 passed 0 failed on the worker commit, run by the orchestrator; the gate printed nothing",
+      "deviations": [
+        "Touched onboard/templates.rs (one test assertion, rewritten from get(\"models\") to contains_key so the regression gate stays empty) — tcr-2 file, edited after tcr-2 committed, no clobber.",
+        "Capped with --sync-ack: wave.rs is bee-herding-owned code and its two-line key rename touches no bee-herding skill; the skill prose sweep is slice 2."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

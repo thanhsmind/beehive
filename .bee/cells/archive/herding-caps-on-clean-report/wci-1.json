@@ -1,0 +1,159 @@
+{
+  "id": "wci-1",
+  "feature": "herding-caps-on-clean-report",
+  "title": "Give a worker one runnable finish instruction, last",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "7152ebab-5933-4af4-ae9e-2480656c49e7"
+  ],
+  "files": [
+    "packages/bee/agents/bee-build.md.tmpl",
+    "packages/bee/prompts/worker-cell.md",
+    ".claude/agents/bee-build.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee/agents/bee-build.md.tmpl",
+    "packages/bee/prompts/worker-cell.md",
+    "docs/history/herding-caps-on-clean-report/hat-synthesis.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "A dispatched worker is currently handed TWO finish instructions and meets the broken one first. packages/bee/agents/bee-build.md.tmpl:15 says `then bee cells finish --report`, which has no --id and no .bee/bin/ prefix and therefore refuses; packages/bee/prompts/worker-cell.md:49 carries the correct full command. Fix it so the worker is told ONCE, runnably, and last. In the tmpl: stop stating the command. That file's job is to say what the agent is FOR, so it should name the step in words and point at the one home that owns the command — it must not carry a second, competing spelling (one-fact-one-home). In worker-cell.md: keep the command as the single home, and make it the LAST thing the prompt asks of the worker. Today the Result form block comes after it, so the final instruction a worker reads is to emit a JSON block, and it emits that block and stops. Reorder so the cap is terminal and the status token plus JSON reads as the ECHO of having capped, not as the finishing act. Do not weaken or drop anything the existing text requires: the proof line, the red-refuses-the-cap rule, the mistakes answer, and the report keys all stay exactly as they are — this cell changes WHERE and HOW MANY TIMES the instruction appears, never what it demands. Then run the regen chain, because these files render into trees the release manifest hashes: bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order), and commit the refreshed manifest and rendered agent file with the change. Prove it by composing what a worker would actually receive rather than by reading either file alone: run `.bee/bin/bee dispatch prepare --runtime claude --kind cell` for a real claimed cell and assert the returned task text contains exactly one `cells finish` command and that it carries both `--id` and the `.bee/bin/` prefix.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee onboard && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "The composed worker task text contains exactly one cells finish command",
+      "That command carries --id and the .bee/bin/ prefix, so it runs as written",
+      "The cap is the last thing the prompt asks of the worker",
+      "Nothing the existing instruction demands is weakened or dropped",
+      "The rendered trees and the release manifest match the source"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/agents/bee-build.md.tmpl",
+        "substantive": "names the step and points at its one home; carries no competing command spelling"
+      },
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "the single home for the command, reordered so the cap is terminal"
+      },
+      {
+        "path": ".claude/agents/bee-build.md",
+        "substantive": "regenerated from the template"
+      }
+    ],
+    "key_links": [
+      "the proof is taken from the COMPOSED dispatch text, not from either file read alone"
+    ],
+    "prohibitions": [
+      "No second spelling of the finish command anywhere in the composed text",
+      "No weakening of the proof line, the red rule, the mistakes answer or the report keys",
+      "No change to the runner: it still does not cap for the worker"
+    ]
+  },
+  "trace": {
+    "worker": "worker-prompt",
+    "outcome": "Made finish instruction runnable, single, and terminal at the end of worker-cell prompt",
+    "files_changed": [
+      "packages/bee/agents/bee-build.md.tmpl",
+      "packages/bee/prompts/worker-cell.md",
+      ".claude/agents/bee-build.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "deviations": [
+      "checked worktree root for prompt skew in prepare.rs — dispatch prepare in a granted worktree would otherwise compare against main — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-19T05:20:52.975Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify passed onboard unit tests and release manifest check",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee onboard && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-19T05:11:00.093Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": null,
+        "owner_bypassed": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+        "at": "2026-09-19T05:20:52.974Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Made finish instruction runnable, single, and terminal at the end of worker-cell prompt",
+      "commit": "5db55c515",
+      "files": [
+        "packages/bee/agents/bee-build.md.tmpl",
+        "packages/bee/prompts/worker-cell.md",
+        ".claude/agents/bee-build.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee onboard && .bee/bin/bee dev release-manifest --check — green:unit — cell verify passed onboard unit tests and release manifest check",
+      "deviations": [
+        "checked worktree root for prompt skew in prepare.rs — dispatch prepare in a granted worktree would otherwise compare against main — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "wci-1-c1",
+            "name": "the composed dispatch text carries exactly one finish instruction",
+            "status": "PASS",
+            "evidence": "leader composed a real cell dispatch with the rebuilt binary from the worktree: 1 mention, down from 3"
+          },
+          {
+            "id": "wci-1-c2",
+            "name": "that instruction is runnable as written",
+            "status": "PASS",
+            "evidence": "the single mention carries --id and the .bee/bin/ prefix; before the change the first mention had neither"
+          },
+          {
+            "id": "wci-1-c3",
+            "name": "it is effectively last",
+            "status": "PASS",
+            "evidence": "measured at 11891 of 12753 chars, 93% through the prompt; it was at 70% before"
+          },
+          {
+            "id": "wci-1-c4",
+            "name": "nothing the instruction demands was weakened",
+            "status": "PASS",
+            "evidence": "leader read the diff: proof line, red-refuses-cap, mistakes and report keys all still required; the edit moved and de-duplicated text"
+          },
+          {
+            "id": "wci-1-c5",
+            "name": "rendered trees and manifest match source",
+            "status": "PASS",
+            "evidence": "cell verify ran onboard tests plus release-manifest --check"
+          },
+          {
+            "id": "wci-1-c6",
+            "name": "an unlisted change to prepare.rs rode along",
+            "status": "PASS",
+            "evidence": "accepted knowingly: the skew guard is a refusal, so without it every dispatch from a worktree with an edited prompt fails. Both directions verified by the leader — refused from main, accepted from the worktree. Unit test owed and filed as P2 debt"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-19T05:37:49.663Z"
+      }
+    ]
+  }
+}

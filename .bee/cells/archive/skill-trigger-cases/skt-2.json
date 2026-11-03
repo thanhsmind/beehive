@@ -1,0 +1,117 @@
+{
+  "id": "skt-2",
+  "feature": "skill-trigger-cases",
+  "title": "Tell skill authors to add trigger cases",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "516b603e-6110-4b08-adb4-5d9662d7e452"
+  ],
+  "files": [
+    "skills/bee-writing-skills/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/skill-trigger-cases/CONTEXT.md",
+    "skills/bee-writing-skills/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-writing-skills/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "In skills/bee-writing-skills/SKILL.md, in the `## SKILL.md checklist (bee conventions)` list, directly after the `description:` row (the line starting `- [ ] \\`description\\`: one purpose clause, then \"Use when...\" triggers`), add one row: `- [ ] Trigger cases: a new or renamed skill adds at least 3 briefs that open it and 2 near misses that must not to \\`packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json\\` (\\`brief\\`/\\`expect\\`/\\`near\\`; a brief never names its skill) — the suite's \\`skill_triggers\\` test refuses a skill with none; \\`BEE_SKILL_TRIGGER_EVAL=\"claude -p\" cargo test --test skill_triggers -- --ignored\\` asks a real agent (per skill-trigger-cases D7)`. Change nothing else in the file. Then run `.bee/bin/bee dev regen` so the rendered copies under .claude/, .agents/ and .opencode/ match, and commit the refreshed copies plus docs/history/codex-harness-hardening/release-manifest.json with the rest. Prove: `.bee/bin/bee dev release-manifest --check` green. One commit, subject in imperative mood, trailer `cell: skt-2`.",
+  "must_haves": {
+    "truths": [
+      "the checklist has one trigger-cases row naming the fixture path and the eval command",
+      "bee dev release-manifest --check is green after regen"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-writing-skills/SKILL.md",
+        "substantive": "the trigger-cases checklist row"
+      }
+    ],
+    "key_links": [
+      "skt-1's fixture path is the path the row names"
+    ],
+    "prohibitions": [
+      "No hand edit under .claude/, .agents/ or .opencode/",
+      "No other change to the skill"
+    ]
+  },
+  "verify": ".bee/bin/bee dev release-manifest --check",
+  "status": "capped",
+  "trace": {
+    "worker": "skt-2-w1",
+    "outcome": "bee-writing-skills checklist now requires trigger cases in the shared fixture",
+    "files_changed": [
+      "skills/bee-writing-skills/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Wrote the row with a comma (near misses that must not, to packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json) — the cell action text read must not to path, which is not a sentence — found a better route",
+      "Left .bee/onboarding.json dirty (updated_at timestamp only) instead of restoring it — the concurrent-worker guard refuses a tree-wide revert while a sibling worker is live in this checkout — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T23:38:10.800Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only row plus regen parity of the rendered copies; the cell verify command",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b3005d2a-e5d3-46c3-9a25-c7a61dc164f3",
+    "verify_command": ".bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-22T23:35:45.255Z",
+    "verified_at": null,
+    "baseline": "release-manifest --check was green on the base commit; it goes red when regen is skipped after a skill edit",
+    "mistakes": [
+      {
+        "wrong": "Tried a tree-wide revert of .bee/onboarding.json while skt-1 was live in the same worktree and the guard refused it",
+        "better": "a path-scoped commit from the start, leaving sibling state untouched, was the right move",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Added one trigger-cases row after the description row in skills/bee-writing-skills/SKILL.md; bee dev regen refreshed the 4 rendered copies and the release manifest",
+      "commit": "eabe155eb",
+      "files": [
+        "skills/bee-writing-skills/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude/skills/bee-writing-skills/SKILL.md",
+        ".agents/skills/bee-writing-skills/SKILL.md",
+        ".opencode/skills/bee-writing-skills/SKILL.md",
+        ".claude-plugin/skills/bee-writing-skills/SKILL.md",
+        ".codex-plugin/skills/bee-writing-skills/SKILL.md"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check — green:static — docs-only row plus regen parity of the rendered copies; the cell verify command",
+      "deviations": [
+        "Wrote the row with a comma (near misses that must not, to packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json) — the cell action text read must not to path, which is not a sentence — found a better route",
+        "Left .bee/onboarding.json dirty (updated_at timestamp only) instead of restoring it — the concurrent-worker guard refuses a tree-wide revert while a sibling worker is live in this checkout — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "Tried a tree-wide revert of .bee/onboarding.json while skt-1 was live in the same worktree and the guard refused it — a path-scoped commit from the start, leaving sibling state untouched, was the right move — doctrine"
+      ],
+      "baseline": "release-manifest --check was green on the base commit; it goes red when regen is skipped after a skill edit"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the checklist has one trigger-cases row naming the fixture path and the eval command",
+            "artifact": "skills/bee-writing-skills/SKILL.md"
+          },
+          {
+            "requirement": "bee dev release-manifest --check is green after regen",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-09-22T23:40:38.456Z",
+        "recorded_by": "b3005d2a-e5d3-46c3-9a25-c7a61dc164f3",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

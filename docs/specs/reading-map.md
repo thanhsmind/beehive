@@ -180,7 +180,7 @@ before this file when you do not yet know which area you are in.
 - [`docs/knowledge/areas/verify-pipeline/`](../knowledge/areas/verify-pipeline/index.md) — test
   topology & discovery, migrated into the knowledge bundle (okf-foundation D20/D29;
   okf-migration-f2 F9): per-module suites (the monolith is deleted; 430-check conservation),
-  convention-based suite discovery in `scripts/run_verify.mjs` (zero-registration; serial by
+  convention-based suite discovery in the retired Node runner (zero-registration; serial by
   filename convention), the floor+existence manifest guard, and the shared fixture helper
   (`scripts/lib/test-fixture.mjs`) split by TOPIC into `suite-topology-and-discovery.md`; the
   lock+tmp-swap plugin-tree render, multi-worker checkout etiquette, and hermetic session-id

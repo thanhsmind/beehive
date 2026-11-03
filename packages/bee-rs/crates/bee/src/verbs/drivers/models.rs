@@ -26,17 +26,58 @@ use std::time::Instant;
 
 pub(crate) const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
-// opencode-support E4/S4: opencode joins claude/codex as a real `models.<rt>`
+pub(crate) const EFFORT_LADDER: [(&str, &str, i64); 8] = [
+    ("cell", "high-risk", 1),
+    ("cell", "tiny", -1),
+    ("cell", "small", 0),
+    ("cell", "standard", 0),
+    ("cell", "spike", 0),
+    ("gather", "", -2),
+    ("advisor", "", -1),
+    ("reviewer", "", 0),
+];
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EffortChoice {
+    pub effort: Option<String>,
+    pub base: Option<String>,
+    pub step: i64,
+    pub reason: String,
+}
+
+pub(crate) fn effort_for_dispatch(base: Option<&str>, kind: &str, lane: Option<&str>) -> EffortChoice {
+    let base_owned = base.map(str::to_string);
+    let Some(index) = base.and_then(|b| EFFORT_LEVELS.iter().position(|l| *l == b)) else {
+        return EffortChoice { effort: None, base: base_owned, step: 0, reason: "no-base".into() };
+    };
+    let lane_key = if kind == "cell" { lane.unwrap_or("") } else { "" };
+    let label = format!("{kind}/{}", lane.filter(|_| kind == "cell").unwrap_or("-"));
+    let (step, reason) = match EFFORT_LADDER.iter().find(|(k, l, _)| *k == kind && *l == lane_key) {
+        Some((_, _, step)) => (*step, label),
+        None => (0, format!("unmapped:{label}")),
+    };
+    let moved = (index as i64 + step).clamp(0, EFFORT_LEVELS.len() as i64 - 1) as usize;
+    EffortChoice { effort: Some(EFFORT_LEVELS[moved].to_string()), base: base_owned, step, reason }
+}
+
+// opencode-support E4/S4: opencode joins claude/codex as a real `team.<rt>`
 // key (docs/config-reference.md) rather than the silently-ignored third key
 // it used to be — every function below is already keyed generically off this
 // list (`models.get(rt)`, no struct field per runtime), so widening it is the
 // whole fix for this reader.
-pub(crate) const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
+// pi-support D5/D6: `pi` joins them for the same reason and with the same one
+// line of change — `team.pi` is a real role table in the ONE config home,
+// read generically like every other key. What is pi-specific lives at the
+// dispatch door (`prepare::pi_requires_herding_refusal`), never here: this
+// reader's job is "does the operator's config name this runtime", and a
+// runtime absent from this list would silently resolve the CLAUDE table
+// instead (see the `RUNTIMES.contains` fallbacks below).
+pub(crate) const RUNTIMES: [&str; 4] = ["claude", "codex", "opencode", "pi"];
 
 /// The names bee itself ships a built-in default for.
 ///
 /// model-role-split D2 (store 06e49368) RETIRED this list as a membership
-/// test: a role name is legal because `models.<runtime>` carries it, never
+/// test: a role name is legal because `team.<runtime>` carries it, never
 /// because it appears here. It gates neither normalization nor resolution any
 /// more — `normalize_models` carries every key the config names, and
 /// `resolve_role` asks "is this name configured", not "is this name one of
@@ -244,7 +285,7 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
 ///
 /// model-role-split D2 (store 06e49368): the overlay used to walk
 /// MODEL_NORMALIZE_SLOTS, so a config naming any other role
-/// (`models.claude.test`) was read and then silently DROPPED — the role could
+/// (`team.claude.test`) was read and then silently DROPPED — the role could
 /// never resolve, and nothing said why. The open role set starts here: every
 /// key whose value normalizes into a documented leaf shape is carried, and a
 /// key whose value is junk is dropped exactly as a junk `generation` was.
@@ -272,6 +313,25 @@ pub(crate) fn normalize_models(raw: Option<&Value>) -> Map<String, Value> {
     out
 }
 
+/// team-config-rename D2: the roster block is `team`; `models` is a read alias.
+/// Returns true when the legacy key served (folded or dropped), false otherwise.
+pub(crate) fn fold_team_key(map: &mut Map<String, Value>) -> bool {
+    if let Some(team_val) = map.get("team") {
+        if !team_val.is_object() {
+            return false;
+        }
+        if map.remove("models").is_some() {
+            return true;
+        }
+        false
+    } else if let Some(models_val) = map.remove("models") {
+        map.insert("team".to_string(), models_val);
+        true
+    } else {
+        false
+    }
+}
+
 /// The `models` slice of readConfig(root). Delegates on the ONE readConfig
 /// side effect this port still does not reproduce: normalizeDogfoodRepos'
 /// per-dead-repo console.warn. (A corrupt config no longer delegates — it
@@ -283,7 +343,7 @@ pub(crate) fn read_models(root: &Path) -> D<Map<String, Value>> {
             return Err(Delegate); // normalizeDogfoodRepos may warn to stderr
         }
     }
-    Ok(normalize_models(config.get("models")))
+    Ok(normalize_models(config.get("team")))
 }
 
 /// provenance: state.mjs resolveTier / resolveAdvisor return shapes.
@@ -432,7 +492,7 @@ fn resolve_configured(value: &Value, name: &str, kind: &str) -> Option<Resolved>
     None
 }
 
-/// A name bee has never heard of — absent from `models.<runtime>` AND from
+/// A name bee has never heard of — absent from `team.<runtime>` AND from
 /// the built-in defaults — is the typo case, and the ONE thing it must never
 /// do is quietly hand back some other role's model. It says so, on stderr,
 /// naming what it fell through to.
@@ -443,7 +503,7 @@ fn resolve_configured(value: &Value, name: &str, kind: &str) -> Option<Resolved>
 /// per-dispatch warning storm on an unconfigured runtime while leaving the
 /// misspelling loud.
 /// The exact question `resolve_role_named` asks before it warns — a name
-/// nothing has heard of: absent from `models.<runtime>` and absent from the
+/// nothing has heard of: absent from `team.<runtime>` and absent from the
 /// built-in defaults, with ONE bounded exception.
 ///
 /// Public because the warn itself goes to stderr, which an in-process test
@@ -479,7 +539,7 @@ fn warn_unknown_role(name: &str, runtime: &str, next: Option<&str>) {
         None => " — nothing after it in the list, so no model is selected".to_string(),
     };
     eprintln!(
-        "bee: model role \"{name}\" is not configured in models.{runtime} of .bee/config.json{tail}"
+        "bee: model role \"{name}\" is not configured in team.{runtime} of .bee/config.json{tail}"
     );
 }
 
@@ -493,7 +553,7 @@ fn warn_unknown_role(name: &str, runtime: &str, next: Option<&str>) {
 /// halves naming one word instead of two literals drifting apart.
 pub(crate) const ESCALATION_WORD: &str = "ceiling";
 
-/// Resolve an ORDERED LIST of role names against `models.<runtime>`.
+/// Resolve an ORDERED LIST of role names against `team.<runtime>`.
 ///
 /// model-role-split D2 (store 06e49368). The consumer names the roles it will
 /// accept, best first; the first name that carries a resolvable configuration
@@ -524,6 +584,121 @@ pub(crate) fn resolve_role(
 ) -> Resolved {
     resolve_role_named(models, roles, runtime, kind).1
 }
+
+/// Scans argv tokens for `--model X`, `--model=X`, or `-m X`.
+///
+/// If more than one model token is present, the first one wins (named guess).
+fn scan_model_tokens<I, S>(tokens: I) -> Option<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let tokens: Vec<S> = tokens.into_iter().collect();
+    let mut i = 0;
+    while i < tokens.len() {
+        let tok = tokens[i].as_ref();
+        if tok == "--model" || tok == "-m" {
+            if i + 1 < tokens.len() {
+                return Some(tokens[i + 1].as_ref().to_string());
+            }
+        } else if let Some(stripped) = tok.strip_prefix("--model=") {
+            return Some(stripped.to_string());
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Splits a CLI command string into argv tokens with quote awareness
+/// (supports single quotes `'` and double quotes `"`).
+fn tokenize_command(cmd: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+    let mut has_token = false;
+
+    for c in cmd.chars() {
+        if escaped {
+            current.push(c);
+            has_token = true;
+            escaped = false;
+            continue;
+        }
+
+        if c == '\\' && !in_single {
+            escaped = true;
+            continue;
+        }
+
+        if in_single {
+            if c == '\'' {
+                in_single = false;
+            } else {
+                current.push(c);
+            }
+            has_token = true;
+        } else if in_double {
+            if c == '"' {
+                in_double = false;
+            } else {
+                current.push(c);
+            }
+            has_token = true;
+        } else {
+            match c {
+                '\'' => {
+                    in_single = true;
+                    has_token = true;
+                }
+                '"' => {
+                    in_double = true;
+                    has_token = true;
+                }
+                c if c.is_whitespace() => {
+                    if has_token {
+                        tokens.push(std::mem::take(&mut current));
+                        has_token = false;
+                    }
+                }
+                _ => {
+                    current.push(c);
+                    has_token = true;
+                }
+            }
+        }
+    }
+
+    if has_token {
+        tokens.push(current);
+    }
+
+    tokens
+}
+
+/// leader-sees-team D2: the model an external program was ASKED for, read from the argv bee built.
+///
+/// If more than one model token is present, the first one wins (named guess).
+pub(crate) fn declared_model_for(cfg: &Value, resolved: &Resolved, runtime: &str) -> Option<String> {
+    match resolved {
+        Resolved::Herding { agent, .. } => {
+            let (kind, args, _, _) =
+                crate::herding::wave::resolve_agent_command_for_runtime(cfg, agent.as_deref(), runtime).ok()?;
+            scan_model_tokens(std::iter::once(&kind).chain(args.iter()))
+        }
+        Resolved::Cli { command } => {
+            scan_command_model(command)
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn scan_command_model(cmd: &str) -> Option<String> {
+    let tokens = tokenize_command(cmd);
+    scan_model_tokens(&tokens)
+}
+
 
 /// `resolve_role` plus the ONE fact its caller cannot recompute afterwards:
 /// WHICH name in the list actually won.
@@ -644,11 +819,107 @@ pub(crate) fn resolve_tier(
 /// names this list for the review consumer: `[review, generation]`. A second
 /// hand-written copy beside this one is exactly the drift D1 collapsed the
 /// two parsers to remove.
+///
+/// gather-reads-the-read-slot D1 (decision 295f3d03) adds the SECOND rule:
+/// `read` — the slot `--kind gather` resolves — walks `[read, generation]`.
+/// NOT through `extraction`. Extraction was the tier era's cheapest slot and
+/// never the gather slot, so a legacy host that configures `extraction` +
+/// `generation` and no `read` must keep its gathers on `generation` byte for
+/// byte; a walk through `extraction` would move every one of them onto the
+/// cheapest model silently — the exact defect 561e1bda's tail rule exists to
+/// prevent. The read-shaped CELL list (`prepare::cell_role_list("read")`) DOES
+/// pass through `extraction`, because a read-shaped cell is a backfilled
+/// `tier: extraction` record; the two lists differ on purpose and each says
+/// why at its own door.
 pub(crate) fn tier_role_list(slot: &str) -> Vec<&str> {
-    if slot == "review" {
+    if slot == "review" || slot == "read" {
         return vec![slot, "generation"];
     }
     vec![slot]
+}
+
+/// The parallel-advisor SEATS, as role names — lane-model-diversity D1
+/// (store `23de5362`).
+///
+/// A blind-lane run fires 2–3 lanes at once and a hat wave fires five hats at
+/// once; before this they all resolved the ONE `advisor` slot, so every
+/// parallel brainstorm agent ran the same model and the diversity the fan-out
+/// exists for was thrown away at the door. Each seat now has its own name in
+/// the ONE `team.<runtime>` table (D1 keeps the single config home,
+/// `4a6e38be`), so an operator can point lane-2 at a different model from
+/// lane-1 by writing one key.
+///
+/// It lives HERE, beside `tier_role_list`, for the same reason that list does:
+/// the names a consumer asks for belong with the resolver that answers them,
+/// never hand-copied at each door. `skills/bee-hive/references/
+/// gates-and-delegation.md` cites this constant as the list of record (D5).
+///
+/// CLOSED on purpose, and that is the whole safety of D2's fall-through
+/// below: only these eight names may resolve the advisor's model when their
+/// own slot is empty. A typo (`hat-risk`) is not a seat, so it keeps T012a's
+/// refusal rather than silently running on the advisor model.
+pub(crate) const SEAT_ROLES: [&str; 8] = [
+    "lane-1",
+    "lane-2",
+    "lane-3",
+    "hat-facts-gaps",
+    "hat-risks",
+    "hat-value",
+    "hat-alternatives",
+    "hat-user-impact",
+];
+
+/// The prefix that marks a seat as a HAT rather than a lane.
+///
+/// D3 asks a hat slot — and only a hat slot — to carry a `description`: the
+/// five hats have distinct purposes an operator has to be able to read back,
+/// while lanes are interchangeable seats with no per-seat purpose to state.
+/// One home for the prefix so `bee doctor`'s advisory and this list cannot
+/// drift on what counts as a hat.
+pub(crate) const HAT_ROLE_PREFIX: &str = "hat-";
+
+/// The SEAT this name spells, in `SEAT_ROLES`' own spelling — `None` when the
+/// name is no seat at all.
+///
+/// Case-folded, because every other role door in this codebase already is:
+/// `known_role_named` and `role_is_declarable` both match a role name with
+/// `eq_ignore_ascii_case`, so an exact-match test here would make `--role
+/// Lane-2` a seat at one door and a stranger at the next — the one-question-
+/// two-answers shape `3c9d6262` and `role-edge-hardening` D1 each closed once
+/// already.
+pub(crate) fn seat_role_named(name: &str) -> Option<&'static str> {
+    SEAT_ROLES.iter().copied().find(|seat| seat.eq_ignore_ascii_case(name))
+}
+
+/// Does this role's own slot carry ANYTHING a dispatch could resolve?
+///
+/// The exact question D2's fall-through turns on, and it is deliberately not
+/// "is the key present". Three configurations mean the same thing to a
+/// dispatch — the key is absent, the key is explicitly `null`, or the value is
+/// an object matching no documented shape — and all three leave the seat with
+/// no model of its own. `resolve_role_named` would answer the last two with
+/// its `Resolved::Budget` FLOOR (the last entry in a walk always resolves), so
+/// a seat spelled `"lane-3": null` would have inherited the session model
+/// instead of falling through to the advisor: the fall-through would have had
+/// a hole in exactly the spelling `.bee/config-sample.json` teaches for "off".
+///
+/// Asking `resolve_configured` — the one leaf parser — rather than re-testing
+/// the value here is what keeps this door's answer identical to the door that
+/// resolves. The key is found case-insensitively for the reason
+/// `resolve_advisor` finds its own key that way.
+pub(crate) fn role_slot_resolves(
+    models: &Map<String, Value>,
+    runtime: &str,
+    name: &str,
+    kind: &str,
+) -> bool {
+    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
+    models
+        .get(rt)
+        .and_then(Value::as_object)
+        .and_then(|t| t.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)))
+        .and_then(|(k, v)| resolve_configured(v, k, kind))
+        .is_some()
 }
 
 /// provenance: state.mjs resolveAdvisor — NEVER budget, NEVER a tier fallback;
@@ -805,7 +1076,7 @@ pub(crate) fn read_fallback_chains(root: &Path) -> Map<String, Value> {
     // The chain still publishes (junk-drop stays for structural junk only);
     // the operator just hears about it instead of nothing.
     if !chains.is_empty() {
-        let models = normalize_models(config.get("models"));
+        let models = normalize_models(config.get("team"));
         for key in dead_chain_keys(&chains, &models) {
             warn_fallback_chain(
                 &key,
@@ -914,4 +1185,73 @@ pub(crate) fn fallback_chain_payload(key: &str, steps: &[String]) -> Value {
     out.insert("advance_on".into(), chain_class_list(&CHAIN_ADVANCE_ON));
     out.insert("never_advance_on".into(), chain_class_list(&CHAIN_NEVER_ADVANCE_ON));
     Value::Object(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn fold_team_key_team_only() {
+        let team_obj = json!({"claude": {"generation": "sonnet"}});
+        let mut map = Map::new();
+        map.insert("team".to_string(), team_obj.clone());
+
+        assert!(!fold_team_key(&mut map));
+        assert_eq!(map.get("team"), Some(&team_obj));
+        assert!(!map.contains_key("models"));
+    }
+
+    #[test]
+    fn fold_team_key_models_only() {
+        let models_obj = json!({"claude": {"generation": "sonnet"}});
+        let mut map = Map::new();
+        map.insert("models".to_string(), models_obj.clone());
+
+        assert!(fold_team_key(&mut map));
+        assert_eq!(map.get("team"), Some(&models_obj));
+        assert!(!map.contains_key("models"));
+    }
+
+    #[test]
+    fn fold_team_key_both_present() {
+        let team_obj = json!({"claude": {"generation": "sonnet"}});
+        let models_obj = json!({"claude": {"generation": "haiku"}});
+        let mut map = Map::new();
+        map.insert("team".to_string(), team_obj.clone());
+        map.insert("models".to_string(), models_obj);
+
+        assert!(fold_team_key(&mut map));
+        assert_eq!(map.get("team"), Some(&team_obj));
+        assert!(!map.contains_key("models"));
+    }
+
+    #[test]
+    fn fold_team_key_neither_present() {
+        let mut map = Map::new();
+        map.insert("unrelated".to_string(), json!(true));
+
+        assert!(!fold_team_key(&mut map));
+        assert!(!map.contains_key("team"));
+        assert!(!map.contains_key("models"));
+    }
+
+    #[test]
+    fn fold_team_key_team_non_object() {
+        let models_obj = json!({"claude": {"generation": "sonnet"}});
+        let mut map = Map::new();
+        map.insert("team".to_string(), json!("not an object"));
+        map.insert("models".to_string(), models_obj.clone());
+
+        assert!(!fold_team_key(&mut map));
+        assert_eq!(map.get("team"), Some(&json!("not an object")));
+        assert_eq!(map["models"], models_obj);
+
+        // Also test non-object without models
+        let mut map2 = Map::new();
+        map2.insert("team".to_string(), json!(12345));
+        assert!(!fold_team_key(&mut map2));
+        assert_eq!(map2.get("team"), Some(&json!(12345)));
+    }
 }

@@ -107,7 +107,7 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    Agent/Bash payload to run (per D1). `--role <name>` names the JOB the
    dispatch is and overrides the slot the kind would have resolved —
    `--kind gather --role extraction` is how a read-only gather reaches the
-   cheap reader. Any name `models.<runtime>` carries is legal; a `--role`
+   cheap reader. Any name `team.<runtime>` carries is legal; a `--role`
    naming a name nothing configures is refused by name, with a FIX listing
    the roles this runtime resolves and ending "Any role name you configure
    is legal; bee holds no fixed list" — never silently resolved.
@@ -127,11 +127,18 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    habit.
 <!-- bee:end -->
 <!-- bee:only codex -->
-   Codex has no per-agent `subagent_type` equivalent — its role is
-   enforced as a read budget + output cap only.
+   Codex has no per-agent `subagent_type` equivalent and no native
+   filesystem sandbox field — read-only roles require an enforced
+   filesystem boundary via the CLI read-only sandbox (`codex exec
+   --sandbox read-only --ephemeral -`), while write-capable roles enforce
+   via write-guard hooks or configured herding/CLI transports.
 <!-- bee:end -->
    Default: bee's own agent types only. A same-named type from another plugin
    carries a different contract and makes the run depend on what is installed.
+   **Pilot a same-pattern wave.** When a wave holds several cells of one
+   role that follow one pattern, dispatch one first and fan out the rest
+   only after its `[DONE]` passes goal-check (step 7) — a flaw in the
+   shared pattern then costs one rerun, not a wave of them.
 4. **The cell already names the job — read it, override only with a reason,
    escalate only where the work earns it.** `role` is REQUIRED on every cell
    (`bee cells add` refuses without it) and it is the cell's sole model
@@ -151,7 +158,7 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    - **`read`** — the work only reads: retrieval, tracing a call path,
      mining a transcript, an evidence digest.
    - **`test`, `docs`, `design`, `review`, or a name this repo invented** —
-     the work is that job, and `models.<runtime>` decides which model is
+     the work is that job, and `team.<runtime>` decides which model is
      good at it.
 
    The dispatch asks for an ORDERED LIST headed by the cell's own role and
@@ -160,7 +167,7 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    for a read job. **An unconfigured role never fails**: it yields to the
    next name in the list and WARNS on stderr, naming what it fell through
    to — silent only for `code` or `read` on a runtime whose
-   `models.<runtime>` configures neither of them, the pre-roles window.
+   `team.<runtime>` configures neither of them, the pre-roles window.
    That tail is why this costs no host its current model.
 
    **Escalation is a separate lever, not a role name.** Integration across
@@ -180,24 +187,21 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    Full resolution semantics, marker anchoring, and dispatch economics:
    "Model Roles — Config-Driven, Runtime-Keyed" below.
 
-   **After the role resolves, resolve the advisor slot for this dispatch**:
-   `resolveAdvisor(root, runtime)`. The configured advisor IS the
-   advisor — no family test, no strength test, no self-judged skip;
-   the orchestrator's only judgment is the one honest no-op below, never a
-   hardcoded strength ladder. Add an `Advisor` line to the dispatch
-   (template below) **only** when the advisor resolves AND passes that
-   check:
-   - No advisor configured → skip, no `Advisor` line.
-   - The advisor resolves to **literally the same model name** as the
-     worker's resolved model → skip (the one honest no-op; a `cli`-shaped
-     advisor is never the same model, so it is always consulted).
-   - Otherwise → **always** add the `Advisor` line, escalated workers
-     included — config is the authority, the orchestrator does not
-     second-guess it.
-   - When it passes, the `Advisor` line names the advisor identity and
-     states its proven transport verbatim (model-shaped vs cli-shaped, per
-     the Worker Prompt Template below) — this must match what
-     the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run.
+    **The `Advisor` line is rendered by the dispatch door, not added by hand.**
+    `bee dispatch prepare --kind cell` resolves the advisor slot and renders
+    the `Advisor:` line into the dispatch payload automatically (applying the
+    one honest no-op inside the verb):
+    - No advisor configured → skip, no `Advisor` line.
+    - The advisor resolves to **literally the same model name** as the
+      worker's resolved model → skip (the one honest no-op; a `cli`-shaped
+      advisor is never the same model, so it is always consulted).
+    - Otherwise → **always** render the `Advisor` line, escalated workers
+      included — config is the authority, and resolution does not
+      second-guess it.
+    - When rendered, the `Advisor` line names the advisor identity and
+      states its proven transport verbatim (model-shaped vs cli-shaped, per
+      the Worker Prompt Template below) — this must match what
+      the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run.
 5. **Record workers** before results arrive. `bee dispatch prepare --kind
    cell` registers its worker automatically — with `--claim`, on the fresh
    claim it just took (cell dpr-1); without it, on a cell `--worker`
@@ -211,8 +215,15 @@ steps for its single worker — never wave analysis or multi-cell assignment.
 6. **Tend** the swarm: collect status tokens, update cells and state, verify
    reservations were released. Silence is not failure — inspect cell status
    and `.bee/bin/bee reservations list --active-only` before
-   assuming a worker is stuck. Default: no routine mid-flight pings — interrupt
-   for an explicit user abort or a confirmed deadlock.
+   assuming a worker is stuck. **Stuck** means no side effect — a commit, a
+   reservation renewal, a trace write — past the runtime you expected when
+   you dispatched it. Status probes stay read-only (`bee cells list`,
+   `bee reservations list`, `git log`); no routine mid-flight pings. A stuck
+   worker: stop it, `bee cells unclaim --id <id>`, `bee reservations release
+   --agent <nickname> --cell <id>`, then re-dispatch ("Failure responses",
+   below). **On the user's stop word**, stop every live worker, keep the
+   claims, and write a `pause` handoff ("Handoff JSON", below); the resume
+   triage picks the claims back up.
 <!-- bee:only codex -->
    Native Codex empty waits require a progress interval before the next
    wait: the full ordered rule lives in `bee-hive` → `references/gates-and-delegation.md` ("Native Codex subagent tending").
@@ -222,13 +233,29 @@ steps for its single worker — never wave analysis or multi-cell assignment.
 7. **Goal-check every `[DONE]` yourself — miss reruns, hit ships.** A
    worker's word is never the evidence; the orchestrator
    measures before the cell counts:
-   - **Read the recorded proof; re-run only on smell.** The worker's cap
-     carries the proof line it chose and ran (`<command> — <result> —
+   - **Leader completeness check — the routine step, every cap, every
+     lane.** Before accepting, compare every approved requirement (the
+     cell's `must_haves`, the plan's acceptance criteria, the locked
+     decisions it cites) against the actual artifacts: the diff, the
+     wiring it claims, and the recorded proof. The worker's Result form
+     is a navigation aid — it names where each requirement landed so you
+     can look, and is never the evidence that it did. A requirement with
+     no artifact behind it → the cell is NOT done. Depth is risk-based:
+     a low-risk mechanical cell needs direct artifact spot-checks; high
+     risk, missing evidence, or a contradiction between report and diff
+     earns the full diff read and wiring trace. Record with `bee cells leader-check`
+     — the cap is not the end of the cell; the recorded mark is. No new report
+     schema, no mandatory full-suite rerun — the single home of this rule is
+     `bee-hive/references/routing-and-contracts.md` ("Leader completeness
+     check").
+   - **Read the recorded proof; re-run tests only on smell.** The worker's
+     cap carries the proof line it chose and ran (`<command> — <result> —
      <scope reason>`); reading it satisfies the fresh-output rule. Re-run
      `bee test` yourself on a smell — a missing/garbled report, a
      `[DONE]` with no diff, a `high-risk`/hard-gate cell, or a proof scope
-     that looks too narrow for the diff. Orchestrator judgment, not a
-     routine step. Failure on a spot-check → the cell is NOT done:
+     that looks too narrow for the diff. The re-run is orchestrator
+     judgment; the completeness check above is not. Failure on a
+     spot-check → the cell is NOT done:
      re-dispatch on the same role with the failing excerpt (a task miss is
      a rerun, never a silent escalation onto the session model — provider
      errors, not task errors, are what the rescue ladder's escalation rung
@@ -245,12 +272,19 @@ steps for its single worker — never wave analysis or multi-cell assignment.
      slice. `high-risk`: every slice. `standard`: selective — dispatch on
      smell, on a worker's/model's first slice of the feature, or on the
      ~1-in-3 sample (choice stated in the slice-close tick, never a silent
-     skip); any `NEEDS_REVISION` escalates that worker to judge-every-slice
+     skip). The slice-close tick also names the judge — `judged by <model>`
+     from the judge-record's recorded judge model and `model_independence`,
+     or `frozen judge only` on tiny/small — so the human sees who verified
+     without asking; this is the goal-check judge, never the user-invoked
+     review. Any `NEEDS_REVISION` escalates that worker to judge-every-slice
      for the feature's remainder (tier table in
      `bee-hive/references/gates-and-delegation.md`, "Goal-check judge
-     tier"). The judge returns one verdict per cell and each verdict is
-     recorded with `cells judge-record` — per-cell records and cap teeth
-     unchanged; a single-cell slice is identical to the old per-cell shape.
+     tier"). The judge returns one verdict per cell. The leader records
+     each verdict with `cells judge-record` or records all verdicts from
+     the judge answer with `bee cells judge-record --from-text <path|->`
+     (herding-leader-toil D3, store `6824f849`, contract store `e7509db5`) —
+     per-cell records and cap teeth unchanged; a single-cell slice is
+     identical to the old per-cell shape.
      This is goal-check verification, distinct from the no-auto-reviewer
      stance above and from any user-invoked review session (Gate 3 and the
      candidates ledger are separate) —
@@ -267,6 +301,32 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    capped cell's recorded proof line instead of running tests themselves
    ("Proof at finish and close, in full", below).
 
+## Failure responses
+
+Each failed result takes one fixed response. The `[BLOCKED]` rescue ladder
+in `bee-swarming/SKILL.md` keeps the blocks a fresh dispatch cannot fix: an
+authority call, a dissent, a plan conflict.
+
+| Signal | Response |
+|---|---|
+| `[BLOCKED]` for missing context | Re-dispatch the same cell fresh, with the missing context added. |
+| `[HANDOFF]` | Dispatch a fresh worker from the handoff record ("Handoff JSON"). |
+| Provider error — quota, auth, empty response, stall, 5xx | Take the next step of the payload's `fallback_chain`. |
+| Red proof or task miss | Re-dispatch on the same role with the failing excerpt (step 7). Never another model — the fallback-chain gate in "Model Roles — Config-Driven, Runtime-Keyed" is that rule. |
+| Silent death — stuck, per step 6 | `bee cells unclaim`, `bee reservations release`, then re-dispatch. |
+| Silent worker, unsure if stuck | Probe read-only: `bee cells list`, `bee reservations list`, the pane or job record. Never resume or re-prompt it to find out — a resume restarts an idle worker. |
+| Context or budget cap hit | Re-dispatch with a smaller scope: split the cell or narrow its files. The same brief hits the same cap. |
+| Transport drop — pane died, connection lost | Re-dispatch the same brief once. |
+| Tool error the worker could not route around | Re-dispatch on a different configured role or transport, with a logged `role-reroute` decision. |
+| Unknown failure | Retry once, then apply the two-retries rule below. |
+| Late return — a worker reports after its cell was re-dispatched or capped | Reconcile against the current cell state first. A unique finding is salvaged through a fresh cell, never a blind accept — the late report was written against a base that has moved. |
+
+A second failed re-dispatch of the same cell ends the retries: abandon the
+dispatch, write one postmortem line (`bee mailbox reflect`, or the cap's
+`deviations`), replan around it, and surface it to the user with both
+diagnoses. Two workers failing on one root cause is
+the systemic stop in `bee-swarming/SKILL.md` ("Hard rules (both roles)").
+
 ## Proof at finish and close, in full
 
 The agent owns test scope end to end — it picks the proof each cap needs,
@@ -278,10 +338,9 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
 
 > The agent owns test scope: pick proof, record on cap, doors check and run nothing (rule: agents-proof-at-cap).
 
-- **Declaration:** `.bee/config.json` `commands.test` still names the
+- **Declaration:** `.bee/config.json` `commands.test` names the
   project's one declared suite — what CI runs on every push, and the
-  default a code-change proof reaches for. It no longer obliges any
-  boundary door to run anything.
+  default a code-change proof reaches for. No boundary door runs it.
 - **Runner:** `bee test` runs the declared commands in order and writes
   ONE normalized record, `.bee/logs/test-results.json` — `{ran_at, green,
   commands: [{command, exit, duration_ms, failure_excerpt, failure_log}]}`.
@@ -308,6 +367,12 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
   staged merge's capped cells — the last local net before CI, which runs
   the full declared command on every push.
 - **Never build on red** (rule: agents-never-build-on-red).
+- **When CI goes red after merge:** name the kind of red before you act.
+  A flake gets one re-run; red again, it is not a flake. A stale base —
+  main moved under the merge — gets a sync with main and a fresh proof. A
+  failure in the diff's own code is a fix-first cell, plus the captured
+  learning on why the proof scope missed it (`AGENTS.md`, "Prove, then say
+  so").
 
 <!-- bee:only claude -->
 ## Native worktree integration
@@ -327,7 +392,7 @@ that acceptance, not on an ordinary wave.
 | | Claude Code |
 |---|---|
 | Spawn | `Agent` tool, one call per worker; put the worker prompt in `prompt`; set `run_in_background: true` so the whole wave runs in parallel (send all spawns of a wave in one message) |
-| Model | `model` parameter per Agent call = the model `config.models.claude` maps the dispatch's resolved ROLE to (a fresh config seeds `code`/`read` beside the historical `extraction`/`generation`); an ESCALATED cell carries no `model` param at all — it inherits the session model, kept scarce |
+| Model | `model` parameter per Agent call = the model `config.team.claude` maps the dispatch's resolved ROLE to (a fresh config seeds `code`/`read` beside the historical `extraction`/`generation`); an ESCALATED cell carries no `model` param at all — it inherits the session model, kept scarce |
 | Result collection | You are notified when each background agent completes; its final message is the worker report — parse the leading status token |
 | Follow-up / rescue | `SendMessage` to the same agent id continues it with context intact; a new `Agent` call starts fresh |
 | Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
@@ -337,13 +402,27 @@ that acceptance, not on an ordinary wave.
 <!-- bee:only codex -->
 | | Codex |
 |---|---|
-| Spawn | `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none"})` — the codex 0.145.0 schema: `task_name` + `message` required, no `agent_type` field; `bee dispatch prepare --runtime codex` emits exactly this shape, and the guard judges the `[bee-tier: <role>]` marker at the START of `message` for every `spawn_agent` payload — a marker naming a role nothing configures is refused BY NAME |
-| Model | `config.models.codex[<role>]` if set; today Codex cannot select a per-agent model → the role is enforced as a read budget + output cap in the prompt |
+| Spawn | **Native cell refusal on Codex 0.154.0**: native `spawn_agent` delivers opaque messages to hooks, hiding the role marker; `bee dispatch prepare` classifies the client as `native_hook_input_opaque` and refuses native cell dispatch, while `bee hook model-guard` denies unmarked native spawns as transport `codex-spawn-unmarked` (exit 2). Both direct callers to configured herding or CLI routes. For supported capability-probed environments, the callable schema is `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none", model?: "<model>", reasoning_effort?: "<effort>"})`: `task_name` and `message` are required; `fork_turns` is a STRING ("none", "all", or positive integer string, e.g. "1", not integer); `model` and `reasoning_effort` are optional; no `agent_type` or `sandbox` field exists. For non-cell read-only jobs (gather, reviewer, advisor), configured herding and CLI routes stay explicit; model-shaped or prompt-budget non-cell roles (including Model, Native and null/budget resolutions) route through an explicit read-only CLI sandbox (`codex exec --sandbox read-only --ephemeral -`) because native spawn provides no filesystem sandbox boundary. Explicit unknown `--role` is refused, never granted fallback. |
+| Model | `config.team.codex[<role>]` if set; Codex 0.154.0 attaches configured model and reasoning_effort for supported dispatches. Full-history forks cannot carry overrides; escalated cells preserve the parent model without overrides. Unverifiable native dispatches with opaque hook messages are refused. |
 | Result collection | Status tokens arrive in the parent thread; use `wait_agent(..., timeout_ms=60000)` only when a specific result is needed |
 | Follow-up / rescue | `followup_task({target: "<agent id or task name>", message: "..."})` to continue the same agent; a fresh `spawn_agent` only for a genuinely new task — no routine `send_input(...)` mid-flight |
 | Harness assist | None — the tend loop in this skill is the nudge |
 | Isolation guarantee | `fork_turns: "none"`; never fork the parent history for routine cells |
-| Subagent type | No per-agent subagent type — the role is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
+| Subagent type | No per-agent subagent type or native sandbox field — read-only roles enforce filesystem boundaries via the CLI read-only sandbox (`codex exec --sandbox read-only --ephemeral -`); write roles enforce via write-guard hooks or herding/CLI |
+<!-- bee:end -->
+<!-- bee:only pi -->
+
+On Pi: every worker runs through `bee herding run`, never a native spawn.
+
+| | Pi |
+|---|---|
+| Spawn | n/a (native spawn) — every worker runs through `bee herding run` in a dedicated terminal pane |
+| Model | Resolved from `config.team.pi[<role>]` in `.bee/config.json`; `bee dispatch prepare` passes the configured model or agent to `bee herding run` |
+| Result collection | A detached run (`--inbox-session "$PI_SESSION_ID"`) is injected by the drain; a foreground run prints its JSON. Either way the summary is one line — read the file at `report_path` for the full answer, never the summary alone |
+| Follow-up / rescue | The herding pane verbs (`bee herding pane …`) send input and commands to the worker's open pane; no native session resume |
+| Harness assist | The `bee-guard` extension's result drain monitors `.bee/result-inbox/` and injects completed worker results into the Pi leader session |
+| Isolation guarantee | n/a (native session isolation) — isolation is at process level: each worker runs in an independent terminal pane with its own context and environment |
+| Subagent type | n/a — every Pi worker runs through `bee herding run`, never a native spawn |
 <!-- bee:end -->
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee close`/`bee worktree merge` refuse while a capped cell's recorded proof is missing, malformed, or red — and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
@@ -359,14 +438,14 @@ On both runtimes the integrity rails are identical because they live in the help
 }
 ```
 
-A role value may also be `{ "model": "opus", "effort": "xhigh" }` (per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` role is consumed by bee-reviewing's specialists, exploring's fresh-eyes, and bee-planning's merged reviewer (the review wave — Structure + cold-pickup cell review); `null` review falls back to generation. bee ships a config default for `code`, `read`, `extraction` and `generation` only — `review` and `advisor` resolve without a key, and publishing a value for either would decide a product question for every host. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
+A role value may also be `{ "model": "opus", "effort": "xhigh" }` (per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` role is consumed by bee-reviewing's specialists and exploring's fresh-eyes; `null` review falls back to generation. Planning's plan check no longer rides this tier — it is the plan-step hat wave, dispatched `--kind advisor` on the `hat-*` seats, and only its Structure mandate moved there (cold-pickup cell review stays with the leader; home: `bee-hive/references/gates-and-delegation.md` ("Hat wave")). bee ships a config default for `code`, `read`, `extraction` and `generation` only — `review` and `advisor` resolve without a key, and publishing a value for either would decide a product question for every host. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
 
 - **`code`** = the work writes: implementation, wiring, test authoring. Where the bulk of dispatches go.
 - **`read`** = the work only reads: retrieval, call-path tracing, evidence digests.
 - **`extraction` / `generation`** = the historical names every ordered role list ENDS with. They resolve on every host that ever onboarded, which is why the move to roles took nobody's model away. Leave them set.
 - **Any other name is legal** — `test`, `docs`, `design`, `migrate`, whatever this repo's work actually is. bee asks "is this name configured", never "is it one of four words", so a new job role needs no bee code and no new dispatch kind.
 - **Escalation is not a role.** Running on the session model is the cell's `escalate` FLAG (`bee cells escalate --id <id>`): that dispatch omits the `model` param and carries the `[bee-tier: ceiling]` marker, anchored to the first non-whitespace token of the prompt or the start of the description (a marker anywhere else never counts). Keep it scarce: planning, integration, architecture, final review only.
-- A **null** role means the runtime cannot switch per-agent models (Codex today) → state the role in the worker prompt and enforce it as a read budget + output cap. Set real ids (e.g. `"code": "gpt-5"`) only if your runtime supports per-agent selection.
+- A **null** role means no requested model (it does not guarantee that a CLI retains parent settings). Set real ids (e.g. `"code": "gpt-5"`, or `{ "model": "gpt-5", "effort": "high" }`) when your runtime configuration specifies per-agent selection.
 
 Read the configured roles for the active runtime before spawning:
 
@@ -374,7 +453,7 @@ Read the configured roles for the active runtime before spawning:
 .bee/bin/bee status --json    # .models shows both runtime maps
 ```
 
-**Resolution is a walk down an ordered list, and the walk is ONE function.** `resolve_role(models, roles, runtime, kind)` (`verbs/drivers/models.rs` — the single parser the dispatcher, the model guard and onboarding's agent renderer all call) takes the names the consumer will accept, best first, and returns a typed dispatch for the first that carries a resolvable configuration: a model, a prompt budget (anchored `[bee-tier: <role>]` marker), a cli executor (external, below — gather purposes only), or a refusal for a cli-shaped role asked for cell execution (`cli_tier_gather_only`). An unset or unresolvable name YIELDS to the next; a name nothing has heard of also **warns on stderr**, naming what it fell through to. The last entry always resolves, so the walk cannot dead-end. No name resolves a model the config does not carry for it, and the ONE unknown name that resolves silently is `code` or `read` on a runtime whose `models.<runtime>` configures NEITHER of them — the pre-roles window, where falling through to the historical name is the intended no-op and a warning would fire on every dispatch. The window is per runtime, because the table is, and the first of the two keys an operator configures shuts it, so a half-migrated config is loud about the sibling it missed. Every other unrecognized slot quietly reading as `generation` is exactly what this feature deleted.
+**Resolution is a walk down an ordered list, and the walk is ONE function.** `resolve_role(models, roles, runtime, kind)` (`verbs/drivers/models.rs` — the single parser the dispatcher, the model guard and onboarding's agent renderer all call) takes the names the consumer will accept, best first, and returns a typed dispatch for the first that carries a resolvable configuration: a model, a prompt budget (anchored `[bee-tier: <role>]` marker), a cli executor (external, below — gather purposes only), or a refusal for a cli-shaped role asked for cell execution (`cli_tier_gather_only`). An unset or unresolvable name YIELDS to the next; a name nothing has heard of also **warns on stderr**, naming what it fell through to. The last entry always resolves, so the walk cannot dead-end. No name resolves a model the config does not carry for it, and the ONE unknown name that resolves silently is `code` or `read` on a runtime whose `team.<runtime>` configures NEITHER of them — the pre-roles window, where falling through to the historical name is the intended no-op and a warning would fire on every dispatch. The window is per runtime, because the table is, and the first of the two keys an operator configures shuts it, so a half-migrated config is loud about the sibling it missed. Every other unrecognized slot quietly reading as `generation` is exactly what this feature deleted.
 
 Two doors ask the same question and answer it differently, on purpose:
 - a **cell's** declared role heads an ordered list → an unconfigured name falls through and warns (silent only inside the pre-roles window above), and the work still runs;
@@ -384,7 +463,7 @@ Every dispatch still carries an explicit marker: an escalated dispatch needs the
 
 **Runtime fallback chains are PUBLISHED, never walked by bee.** `retry.fallbackChains` maps a role name, a concrete model selector, or a `provider/*` wildcard to an ordered list of models a FAILED dispatch may move along (most specific key wins: model, then wildcard, then role). It is explicit-only — no built-in chain for any role, and a `default` key is refused out loud, so with nothing configured every payload is byte-identical to a bee that never heard of chains. `bee dispatch prepare` resolves the chain that applies and publishes it on the payload as `fallback_chain: {key, chain, fallback_when, advance_on, never_advance_on}`. **bee does not execute dispatches, so bee never retries** (decision `51341f84`): advancing a step, and recording the step taken, belong to whoever runs the payload. The gate travels with the chain — a step may fire ONLY on quota or rate limit, provider auth or policy rejection, empty response, replay-safe malformed tool call, stream stall or connection reset, or a 5xx; it may NEVER fire on a tool error, a wrong or unwanted result, a failed proof, or a red test. A red test moving the work to another model would hide the defect. Distinct from the resolution fall-through above: fall-through answers an unconfigured NAME before anything runs; a chain answers a model that was reached and FAILED.
 
-**Dispatch economics:** `.bee/config.json` names the **requested** model for a role — what should run, never a guarantee of what did. Every dispatch the guard evaluates (allowed or denied) logs the honest split in `.bee/logs/dispatch.jsonl`: `logical_tier` (the declared ROLE — the field keeps its historical key), `requested_model` (what config names, when resolvable), `effective_model` + `effective_model_status`, `channel` (the transport family), and `enforcement` (the mechanism). A real structural `model` param on a claude Agent/Task dispatch is `pinned` — `effective_model` equals that param, because the param is something we actually watched the caller pass. A claude dispatch carrying only the `[bee-tier: <role>]` marker (no param — the prompt-budget style) is `unverified` — `requested_model` may still name the role's configured model, informationally, but nothing pins the dispatch to it. On **codex-native** transport (`spawn_agent`), the effective model is `inherited-or-unknown` **always** — codex-cli 0.145.0 has no per-agent model selection at all, so this status never flips to `pinned` no matter what the role resolves to; only a future capability probe proving per-agent selection would justify moving it. A **cli-exec** dispatch (external executor, below) is `unverified` too — the command names its own model in its own argv, outside this vocabulary, so `requested_model` is always `null` there.
+**Dispatch economics:** `.bee/config.json` names the **requested** model for a role — what should run, never a guarantee of what did. Every dispatch the guard evaluates (allowed or denied) logs the honest split in `.bee/logs/dispatch.jsonl`: `logical_tier` (the declared ROLE — the field keeps its historical key), `requested_model` (what config names, when resolvable), `effective_model` + `effective_model_status`, `channel` (the transport family), and `enforcement` (the mechanism). A real structural `model` param on a claude Agent/Task dispatch is `pinned` — `effective_model` equals that param, because the param is something we actually watched the caller pass. A claude dispatch carrying only the `[bee-tier: <role>]` marker (no param — the prompt-budget style) is `unverified` — `requested_model` may still name the role's configured model, informationally, but nothing pins the dispatch to it. On **codex-native** transport (`spawn_agent`), `effective_model` is always null: `effective_model_status` reports `native-requested` when a structured model parameter is supplied, and `inherited-or-unknown` without it (full-history forks and escalated roles preserve parent settings without overrides). A **cli-exec** dispatch (external executor, below) carries `declared` status — the model the command names in its own argv, read back by bee; null only when the command names none (falling back to `unverified`).
 
 ## External Executors — Multi-Provider Workers
 
@@ -448,17 +527,34 @@ The orchestrator's loop for one herding cell:
    idle-timeout + ceiling, D5) already does the waiting at zero token
    cost; the orchestrator does not poll it itself.
 3. **Read the result.** `bee herding run` prints the validated
-   `result-N.json` JSON on completion (`status: done|blocked`, `summary`,
-   `files_changed[]`, `proof`) — read that, never re-derive it by
-   screen-scraping the pane.
-4. **Do the bookkeeping the worker never could:** verify per the cell's
-   own proof type (re-run the declared test/parity check against the
-   `files_changed` diff), then `.bee/bin/bee cells finish --id <id>
-   --report <proof line>` carrying the worker's evidence, confirm
-   reservations released, and run goal-check/judge exactly as step 7 of
-   the Operating Contract already requires for any `[DONE]`. A `status:
-   blocked` result is never force-capped — treat it as a `[BLOCKED]`
-   report and re-triage.
+   `result-N.json` JSON on completion (`outcome: done|blocked` — the
+   envelope carries no `status` key — plus `summary`, `files_changed[]`,
+   `proof`, and, only when the worker offered them, `options[]` and
+   `leaning`) — read that, never re-derive it by screen-scraping the pane.
+   The worker's FULL report rides the same envelope as a PATH, under the
+   same additive-key law (pi-result-mailbox D1/D2): `report_path` appears
+   only when a report is on disk — never the body, at any size, because a
+   long line read back through a tool truncates and a truncated envelope
+   is unparseable — and `report_note` appears only when a report was
+   expected but is missing or stale (a resumed round's leftover). A result
+   with neither keeps the exact key set it had before this pair existed,
+   so a legacy worker stays legal. Read the file at `report_path` yourself
+   when you want the digest; `summary` and `proof` stay one line each.
+4. **Do the bookkeeping the worker never could:** verify the work.
+   Re-run the declared test or parity check against the `files_changed` diff.
+   Check the work.
+   Then cap the cell with:
+   `bee cells finish --id <cell> --from-job <job> --proof-result <green:unit|green:static|green:live> [--proof-reason <text>]`
+   (herding-leader-toil D1, store `cb3dc85d`, contract store `d248942f`).
+   Pass the mistakes answer (`--no-mistakes` or `--mistake <text> --fix-at <layer>`).
+   This command builds the cap report from `result-N.json` and git changes in the job directory.
+   A manual cap can also use `.bee/bin/bee cells finish --id <cell> --report <proof line>`.
+   Confirm reservations are released.
+   Run goal-check and judge steps as step 7 requires for each `[DONE]`.
+   Record the slice judge's answer with `bee cells judge-record --from-text <path|->`
+   (herding-leader-toil D3, store `6824f849`, contract store `e7509db5`).
+   Never force-cap a `status: blocked` result.
+   Treat it as a `[BLOCKED]` report and re-triage.
 5. **Blocked → `--continue`, not a fresh spawn.** When the result (or the
    orchestrator's own verify) surfaces something the same agent should
    retry — a failing test, a narrower ask — send the next round through
@@ -522,7 +618,61 @@ Default: no session history, no other cells, no orchestrator reasoning. A worker
 
 ## Result Formats (expected back from workers)
 
-Native subagents return these token-markdown reports as their final message. Cli executors deliver the **same four outcomes** as `.bee/workers/<cell-id>.result.json` (External Executors, step 2) — one contract, two transports.
+This section is the one home of the Result form; `bee-swarming/SKILL.md`
+and `bee-swarming/references/worker-details.md` point here. A worker's
+final message opens with exactly one status token. Beside it — never in
+place of it — goes one fenced JSON block, the same object
+`bee cells finish --report` validates key-for-key onto the trace:
+
+```json
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>"], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>"], "mistakes": ["<what went wrong> — <what would have been better>"]}
+```
+
+- `tests` — the proof line ("Proof at finish and close, in full"). Its
+  result segment is `green:live` (the real product was driven and its
+  result inspected), `green:unit` (automated tests passed) or
+  `green:static` (a compile, lint or parity check, nothing executed); a
+  bare `green` is refused.
+- The four layers — a final report for work that ships something
+  runnable states source (committed), artifact (built), installed
+  (copied or onboarded) and live (the running bytes observed), each with
+  its own verdict or `not checked`; when nothing runnable ships, omit
+  them. The proof-line tag set above is unchanged. Example: `source:
+  committed abc123 · artifact: built, cargo build green · installed: not
+  checked · live: not checked`.
+- `deviations` — one departure line each, or one line reading
+  `followed the plan` (the departure line, below).
+- `mistakes` — one `<what went wrong> — <what would have been better>`
+  entry each; the first part names a concrete file, command or
+  observation. `[]` says the cell hit none; leaving the key out records
+  no answer, and `bee close` refuses the feature naming that cell.
+
+Five keys are optional. Send them when they carry an answer:
+
+```json
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>"], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>"], "mistakes": [], "reaction": "partial", "skipped": ["<check not run> — <reason>"], "unknowns": ["<assumption not proven>"], "found": ["<discovery outside the cell>"], "stopped": "<part not done> — <evidence the premise is false>"}
+```
+
+- `reaction` — your stance toward the brief, one of `confirm`,
+  `partial`, `challenge` or `blocked`.
+- `skipped` — each check you did not run, with its reason.
+- `unknowns` — each assumption you could not prove.
+- `found` — each incidental discovery outside the cell.
+- `stopped` — the part you did not do and the evidence that stopped it
+  (the partial stop, below).
+
+For each optional key, `[]` means none; an absent key means no answer.
+
+**Partial stop.** When a false premise touches only part of the cell,
+finish the part that does not depend on it, return `[DONE]` with
+`reaction` `partial`, and name the stopped part with its evidence in
+`stopped`. `[BLOCKED]` stays for a cell with no safe part.
+
+**Dissent once.** Dissent once per point, with evidence. After the
+verdict, follow it. A second dissent on the same point needs new
+evidence (`bee cells dissent --new-evidence <text>`).
+
+Native subagents also return these token-markdown reports as their final message. Cli executors deliver the **same four outcomes** as `.bee/workers/<cell-id>.result.json` (External Executors, step 2) — one contract, two transports.
 
 ```text
 [DONE] <cell-id>: <title>
@@ -540,8 +690,15 @@ Next action: <suggestion for the orchestrator>
 Requested files: <paths>
 Blocker: <conflict | failing verification | ambiguity | locked-decision conflict>
 What happened: <description + diagnosis>
+Options: <one self-contained sentence per way forward, one per line>
+Leaning: <the option you would pick, repeated word for word>
 What I need next: <specific parent action>
 ```
+
+`Options:` and `Leaning:` are the StopAndAsk half of this form: a blocked
+worker hands the orchestrator a CHOICE instead of prose. Fill both when the
+block leaves a decision to make, omit both when it does not. `Leaning:`
+repeats one option verbatim — never an index, never a new proposal.
 
 ```text
 [HANDOFF] <cell-id or none>
@@ -559,22 +716,27 @@ Suggested next action: <re-check ready set, fix assignment, respawn later>
 
 On each result: update the cell if the worker could not (`block` with reason), clear the worker from `.bee/state.json`, and confirm with `.bee/bin/bee reservations list --active-only` that nothing leaked.
 
-**The departure line** (decisions D5/D8/D10, `docs/history/human-mailbox/CONTEXT.md`). The `Departure:` line of a `[DONE]` result and the `deviations` entries of the same worker's `--report` carry one thing in THREE required parts — what was done differently, why, and which kind — on the same ` — ` separator the proof line uses (first separator ends `what`, last starts `kind`, so a `why` may carry the separator itself). A report entry may also spell those parts structurally, as `{what, why, kind}`.
+A `[BLOCKED]` whose worker recorded a dissent owes its `.bee/bin/bee cells dissent-verdict --id <cell> --verdict accept|reject|escalate --reason "<why>"` before the related work resumes — the verdict is the orchestrator's, and 4b7aa303 makes it an obligation, not a courtesy; `bee close` and `bee worktree merge` both refuse while one is unanswered.
 
-The kind comes from a CLOSED set of four, quoted here as the code spells them:
-
-- `hit an unforeseen obstacle`
-- `found a better route`
-- `the plan was wrong about a fact`
-- `something else had to be fixed first`
-
-A fifth kind is a new locked decision, never a worker's choice of words at 3am. A cell that FOLLOWED its plan states that explicitly — a line reading `followed the plan` — rather than leaving the field empty: silence and nothing-happened must not read alike. Each sentence is written in plain language AT THE MOMENT of the event; the pass that composes the human's letter may reorder, group and drop, and may never state a fact no recorded entry carries, so a sentence not written at the stop is a sentence the human never reads.
-
-The requirement is ARMED-ONLY. In a run that files a letter for the human, a cap that states neither a departure nor its absence is refused, a `--deviation` value that is neither statement is refused, and a structured entry that reaches for those parts and misses one — or names a kind outside the four — is refused. Every other run caps byte-identically to before this contract: the same lines are recorded, and nothing is refused. A free-form note stays a free-form note in both — the contract narrowed what a DEPARTURE is, not what may be written down.
+**The departure line.** The `Departure:` line of a `[DONE]` result and the `deviations` entries of the same worker's `--report` carry one departure in three parts. Its rule — the parts, the closed set of four kinds, `followed the plan`, and when a cap is refused — has one home: `bee-swarming/references/worker-details.md` ("The departure line").
 
 ## Handoff JSON
 
-Near 65% context, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, written_at }`. Include the resume commands:
+Near 65% context, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
+
+- `verified` — the proof lines run so far, each `<command> — <result> — <scope reason>`; work with no line here is unproven.
+- `tree` — `clean`, or `dirty:<paths>` naming each uncommitted path.
+- `key_files` — the files the next session reads first.
+- `gotchas` — what surprised you: a trap, a false lead, a command that misleads.
+
+`bee state handoff write` has flags for the older fields only. Until it has flags for these four, write them into `--next-action` as `verified: …; tree: …; key_files: …; gotchas: …`.
+
+Two rules make the pause safe:
+
+- **Stop at a safe boundary.** Finish the atomic edit in hand, or back it out, before you write the handoff — never pause mid-edit.
+- **No `wip:` commit survives a cap.** A worker with dirty edits commits them as `wip: <subject>`, the `cell: <id>` trailer on the last line, then returns `[HANDOFF]`. Whoever finishes the cell amends that commit into the one cell commit before the cap, so the history keeps one commit per cell.
+
+Include the resume commands:
 
 ```text
 .bee/bin/bee status --json
@@ -597,6 +759,21 @@ the next fresh session (a `/clear` or a fresh start) adopts the carried
 claim automatically and opens straight into the next cell, no confirmation
 asked. Never stop to suggest `/clear`, never wait for
 one, and never issue `/clear` yourself.
+
+**Resume triage.** A session that picks up a handoff — a `pause` record
+after the user's word, a `planned-next` at adoption — sorts each
+`cells_in_flight` entry before it dispatches anything. `bee cells show
+--id <id>` and `git log --grep 'cell: <id>'` answer each row:
+
+- capped since the handoff → run the leader completeness check
+  (`bee cells leader-check`, step 7) as for any `[DONE]` — the recorded
+  mark ends the cell;
+- claimed, with no live worker and no commit → `bee cells unclaim --id
+  <id>`, `bee reservations release --agent <nickname> --cell <id>`, then
+  re-dispatch;
+- a `cell:` or `wip:` commit exists, but the cell is not capped →
+  dispatch a fresh worker to finish it from that commit, amending any
+  `wip:` commit per "Handoff JSON" above.
 
 ## Red Flags
 

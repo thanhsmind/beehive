@@ -1,0 +1,90 @@
+{
+  "id": "nc-1",
+  "feature": "nudge-consult",
+  "lane": "small",
+  "role": "code",
+  "title": "Render the Advisor line into the cell dispatch payload",
+  "action": "P27's worker advisor consult only fires when the dispatch prompt carries an `Advisor` line, but nothing renders one: packages/bee/prompts/worker-cell.md has zero advisor mentions, and skills/bee-swarming/references/swarming-reference.md:183 still tells the orchestrator to call `resolveAdvisor(root, runtime)` — a retired JS-era name with no CLI surface. Wire it at the ONE dispatch door instead of leaving a hand step. (1) In packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, for `kind == \"cell\"` only, resolve the advisor slot with the existing `resolve_advisor` and add an `advisor` render key. Apply the one honest no-op exactly as swarming-reference.md:186-196 states it: no advisor configured -> no key; advisor resolves to LITERALLY the same model name as the worker's resolved model -> no key (a cli-shaped advisor is never the same model, so it is always consulted); otherwise always set it, escalated workers included. The key's value names the advisor identity AND its transport verbatim (model-shaped vs cli-shaped) so it matches what skills/bee-swarming/references/worker-details.md tells the worker to run. (2) In packages/bee/prompts/worker-cell.md add a `{{#if advisor}}` block rendering that line, placed with the other dispatcher-supplied blocks (near `expertise`). (3) Update the affected payload assertions in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs. Do NOT touch the advisor's resolution semantics: decision 4faf1de9 keeps one name and no fall-through, and this cell only decides whether a resolved advisor is NAMED in the payload.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/nudge-consult/CONTEXT.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/references/worker-details.md"
+  ],
+  "decisions": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml drivers && bee dev regen && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A `bee dispatch prepare --kind cell` payload for a runtime whose configured advisor differs from the worker's resolved model contains an Advisor line naming the advisor identity and its transport.",
+      "The same call with no advisor configured contains no Advisor line.",
+      "The same call where the advisor resolves to literally the worker's own model name contains no Advisor line.",
+      "A cli-shaped advisor always yields an Advisor line, never suppressed by the same-model no-op.",
+      "--kind gather, reviewer and advisor payloads are unchanged."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "depends_on": [],
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "nudge-consult-w1",
+    "outcome": "Advisor line rendered into cell dispatch payloads, with the same-model no-op in the verb",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      ".bee/bin/prompts/worker-cell.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The orchestrator committed and capped this cell instead of the dispatched worker — the herding worker returned outcome=done with a proof string but had run neither git commit nor bee cells finish, leaving six modified files and a claimed cell — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T09:53:40.095Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "34a24bf4-5655-4cff-84e1-d02eaf823966",
+    "claimed_at": "2026-09-04T09:28:19.735Z",
+    "mistakes": [
+      {
+        "wrong": "The nc-1 herding worker returned outcome=done without committing or capping, so the cell sat claimed with a dirty worktree",
+        "better": "the orchestrator should verify cell status and git log after every herding run instead of trusting the run's own outcome token"
+      },
+      {
+        "wrong": "The orchestrator backgrounded the verify run piped through tail -12, which truncated the file to the last 12 lines and cut off the lib target's 340-passed summary, forcing a second full run",
+        "better": "capture verify output whole and filter when reading, never filter at capture time"
+      }
+    ],
+    "report": {
+      "outcome": "bee dispatch prepare --kind cell renders an Advisor line from resolve_advisor, with the same-model no-op applied inside the verb; four tests pin the render and the three skip rules",
+      "commit": "4272efad",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        ".bee/bin/prompts/worker-cell.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml drivers — green:unit — 340 passed 0 failed; touched prepare.rs render path and the worker-cell template, re-run by the orchestrator after the commit rather than trusted from the worker's own claim",
+      "deviations": [
+        "The orchestrator committed and capped this cell instead of the dispatched worker — the herding worker returned outcome=done with a proof string but had run neither git commit nor bee cells finish, leaving six modified files and a claimed cell — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "The nc-1 herding worker returned outcome=done without committing or capping, so the cell sat claimed with a dirty worktree — the orchestrator should verify cell status and git log after every herding run instead of trusting the run's own outcome token",
+        "The orchestrator backgrounded the verify run piped through tail -12, which truncated the file to the last 12 lines and cut off the lib target's 340-passed summary, forcing a second full run — capture verify output whole and filter when reading, never filter at capture time"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

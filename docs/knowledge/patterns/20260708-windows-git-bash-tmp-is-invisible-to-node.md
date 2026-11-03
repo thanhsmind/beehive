@@ -7,6 +7,7 @@ timestamp: 2026-07-08
 bee:
   id: pattern-20260708-windows-git-bash-tmp-is-invisible-to-node
   lifecycle: active
+  areas: [hook-runtime]
   sources: ["docs/history/learnings/critical-patterns.md#PAT8", "original feature: harness09", docs/history/learnings/20260708-harness09.md]
   polarity: pitfall
   critical: false

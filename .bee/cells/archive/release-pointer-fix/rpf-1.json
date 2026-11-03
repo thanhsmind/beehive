@@ -1,0 +1,85 @@
+{
+  "id": "rpf-1",
+  "feature": "release-pointer-fix",
+  "title": "Repair the two pointers that turned the release test suite red",
+  "action": "In skills/bee-swarming/SKILL.md step 5 and swarming-reference.md step 7 write the cross-skill pointer as bee-hive/references/routing-and-contracts.md (the qualified form pointer_integrity resolves against skills/); in docs/knowledge/areas/bee-herding/overview.md replace the two markdown links that leave the bundle with bare docs/history/... paths; run bee dev regen; prove with cargo test -p bee --test pointer_integrity and the knowledge dangling-link test.",
+  "role": "docs",
+  "lane": "tiny",
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "behavior_change": false,
+  "must_haves": [
+    "pointer_integrity test green",
+    "repo_docs_knowledge_bundle_carries_no_dangling_body_links green",
+    "bee dev release-manifest --check green"
+  ],
+  "verify": "bee dev release-manifest --check — green:static — regenerated skill copies and manifest match",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "leader-inline",
+    "outcome": "Cross-skill pointer now bee-hive/references/routing-and-contracts.md; overview.md links are bare paths; regen green",
+    "files_changed": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/bee-herding/overview.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: skills/bee-swarming/SKILL.md changed only in pointer form; regen copies refreshed"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T16:43:29.688Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f1ec668d-fc40-4702-8eae-c0be9f8854cc",
+    "claimed_at": "2026-09-06T16:43:03.763Z",
+    "sync_ack": "skills/bee-swarming/SKILL.md changed only in pointer form; regen copies refreshed",
+    "plan_followed": true,
+    "mistakes": [
+      {
+        "wrong": "lcc-2 wrote the pointer as `bee-hive` → `references/...`, a form pointer_integrity cannot resolve",
+        "better": "run cargo test --test pointer_integrity before capping any skill-pointer edit"
+      },
+      {
+        "wrong": "the capture flush wrote markdown links from docs/knowledge into docs/history, which the bundle test refuses",
+        "better": "write history citations as bare paths"
+      }
+    ],
+    "inline_reason": "tiny lane, leader ran the cell inline",
+    "report": {
+      "outcome": "pointer fixed in SKILL.md:69 and swarming-reference.md:237; overview.md:238,244 links made bare paths; regen ran",
+      "commit": "HEAD",
+      "files": [
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/knowledge/areas/bee-herding/overview.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test -p bee --test pointer_integrity; cargo test -p bee --bin bee repo_docs_knowledge_bundle_carries_no_dangling_body_links; bee dev release-manifest --check — green:unit — the two red targets from the release run plus the regen parity check",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "lcc-2 wrote the pointer as `bee-hive` → `references/...`, a form pointer_integrity cannot resolve — run cargo test --test pointer_integrity before capping any skill-pointer edit",
+        "the capture flush wrote markdown links from docs/knowledge into docs/history, which the bundle test refuses — write history citations as bare paths"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 151 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

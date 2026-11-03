@@ -1,0 +1,224 @@
+{
+  "id": "cpc-2",
+  "feature": "codex-parity-completion",
+  "title": "Enforce native dispatch settings and read-only work",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "ee16df03-e88d-4f5e-9f64-400114d9d234"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee/prompts/gather.md",
+    "packages/bee/prompts/reviewer.md"
+  ],
+  "read_first": [
+    "docs/history/codex-parity-completion/CONTEXT.md",
+    "docs/history/codex-parity-completion/plan.md",
+    "docs/knowledge/areas/hook-runtime/overview.md",
+    "docs/knowledge/areas/hook-runtime/native-spawn-and-transport-classification.md",
+    "docs/knowledge/areas/hook-runtime/codex-spawn-agent-dispatch-payload-schema-and-schema-agnosti.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "action": "Per D1, use cpc-1 live evidence and the current callable spawn schema to govern model, reasoning_effort and fork_turns through the same role resolver used by preparation. Replace the known mismatched-override acceptance with red-first regression proof. Prepared model-shaped Codex cell dispatches must carry supported configured settings; full-history forks cannot carry overrides. Refuse wrong direct-call overrides with a named remedy if live Codex cannot apply corrected input. Escalated roles preserve the parent model without overrides; herding/CLI roles cannot escape their selected transport via a native marker. Repair the obsolete native capability delegate path only from observed version-scoped evidence, never by a blanket version guess. Native read-only gather/reviewer/advisor jobs need enforced filesystem restrictions: current spawn has no sandbox field, so use an explicit Codex CLI read-only sandbox for model-shaped non-cell slots when no verified native restriction exists; preserve configured herding/CLI transports and refuse any unenforceable native read-only request by name. Quote argv safely and preserve stdin. Prove a read succeeds and patch/shell writes fail in that sandbox, including attempted continuation. Do not invent custom-agent selection fields absent from the callable schema. Commit assigned source once; leader records cap.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee verbs::drivers",
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "Native model/effort/fork mismatches are rejected or repaired by a live-proven host mechanism.",
+      "Prepared supported model-shaped dispatches carry the selected settings and retain honest effective-model reporting.",
+      "Model-shaped Codex read-only jobs have a real read-only execution boundary; unsupported native requests fail explicitly.",
+      "Configured herding/CLI slots and escalation retain their intended transports."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      }
+    ],
+    "key_links": [
+      "Installed bee commands reach the updated production behavior."
+    ],
+    "prohibitions": [
+      "Do not weaken Claude guards, alter real credentials, or claim unobserved platform support."
+    ]
+  },
+  "trace": {
+    "worker": "Bob",
+    "outcome": "Enforce configured Codex dispatch settings, bounded hermetic probes, exact observed native refusal, and actual prepared read-only filesystem boundary.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/Cargo.toml",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Existing windows-sys Pipes feature added under decision 7741c278; no new crate. Separate recovery commit retained until wave-close consolidation because sibling commits intervene.",
+      "Observed Codex 0.154.0 opaque native messages require named refusal; explicit configured external routes retained; no full native parity claim."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T03:35:47.273Z",
+    "behavior_change": true,
+    "verification_evidence": "Leader ran exact groups under TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false: 70 and 382 passed, 8 ignored. Final amendment comment-only. Additional green:live actual prepared command/stdin in cpc-2-recovery-green.log proves patch/shell/continuation denial and unchanged hash. Frozen judge hits[]. Windows live behavior unverified.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee verbs::drivers",
+    "claimed_at": "2026-09-13T03:07:06.080Z",
+    "verified_at": null,
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-12T16:17:08.226Z",
+        "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+        "claimed_at": "2026-09-12T15:55:18.481Z",
+        "acquired_at": "2026-09-12T15:55:18.481Z",
+        "worker": "Bob",
+        "verdict": "blocked",
+        "failure_signature": "5ad523254196",
+        "note": "Leader completeness rejected commit 237fef89. Exact trace: (1) prepare.rs Resolved::Native arm precedes non-cell sandbox arm; a confirmed native read/advisor role still emits spawn_agent without readonly boundary, while guard then refuses it. Route ALL model-shaped non-cell jobs including Native through real readonly CLI; preserve only explicitly configured external transports. (2) prepare.rs concatenates model and worktree path into shell double quotes without escaping; models.rs accepts arbitrary nonempty model text, so dollar substitutions/backticks/quotes execute as shell. Reuse a safe argv quoting helper and test harmless hostile selectors without executing anything harmful. (3) model_guard.rs recognizes fork_turns full only; actual callable schema uses all, none, or positive integer string, and omitted defaults all. Reject overrides with all/omitted; test none and numeric valid cases; do not invent fields. (4) configured Model/Native allows absent model/effort then inherits a different parent despite role settings; enforce required configured settings, while null/budget and escalation inherit without overrides. (5) native_transport_classification accepts classification when repo_identity or codex_version is absent and ignores original freshness legs; invented incomplete records are not proof. Keep incomplete/unverified records budget-only and reject stale identity/version/config/features according to the recorded contract, with bounded version probing. (6) report lists no live sandbox proof or raw RED output paths; drive the actual PREPARED command and capture read success, patch and shell write rejection, attempted continuation, and unchanged bytes; preserve evidence paths and report all. Add behavioral RED regressions for these concrete defects before fixes. Prefix tests TMPDIR=/var/tmp. Amend only cpc-2 commit, preserve eight dirty cpc-1 files; no unrelated edits. Original scope remains unchanged."
+      },
+      {
+        "n": 2,
+        "at": "2026-09-13T02:22:39.424Z",
+        "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+        "claimed_at": "2026-09-13T02:09:23.147Z",
+        "acquired_at": "2026-09-13T02:09:23.147Z",
+        "worker": "Bob",
+        "verdict": "blocked",
+        "failure_signature": "de5035ea1670",
+        "note": "Second completeness revision required on 3119b823. The prior attempt fixed routing and basic quoting but left explicit requirements incomplete: (1) prepare.rs native_transport_classification runs both codex --version and codex features list via unbounded Command.output. Add bounded process execution and kill/reap on timeout. A failed, absent, malformed, or unavailable features probe MUST return native_budget_only, not fall through to the recorded classification; missing/wrong-type config_scope must not hash as an empty valid object. Exercise each actual validity leg with subprocess boundary stubs and failed-probe/time-limit RED tests. (2) tests.rs codex_readonly_cli_safely_quotes_hostile_selectors_and_worktree still ONLY checks string shape and never tests a worktree path. Execute the PREPARED command against a harmless stub codex executable and assert exact argv and stdin plus absence of side effects for dollar substitution, backticks, single/double quotes, whitespace and an actual hostile worktree path. (3) /var/tmp/cpc-sandbox-evidence/read-only-sandbox.cmd is an ad-hoc command with appended settings and no prepared payload evidence. It proves Codex sandbox behavior but not the bee route. Capture actual bee dispatch prepare JSON from an isolated onboarded fixture using the candidate binary, execute precisely payload.command with payload.stdin (a crafted fixture prompt may request only harmless sandbox probes), preserve raw outputs/exit/hash checks; no handwritten claim that a manual command was prepared. If host trust setup is necessary record it separately in the isolated fixture before prepare, not by modifying emitted command. (4) Preserve raw RED and GREEN command outputs for new tests, not prose counts. Main is running the full suite; do not overlap Cargo until that process exits. All eight cpc-1 dirty files must remain untouched. Amend cpc-2 only; leader owns cap. This is the second completeness revision; the earlier interrupted first revision did not exhaust retries."
+      },
+      {
+        "n": 3,
+        "at": "2026-09-13T02:55:59.970Z",
+        "claim_session": null,
+        "claimed_at": null,
+        "acquired_at": null,
+        "worker": null,
+        "verdict": "blocked",
+        "failure_signature": "dbecaa3041f5",
+        "note": "Second completeness revision 33695671 remains incomplete. Reproduced: BEE_CODEX_PROBE_BIN=/bin/false TMPDIR=/var/tmp cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee probe_record_parsing_returns_recorded_classification_without_delegation fails because test depends on actual installed Codex version/features; raw docs/history/codex-parity-completion/cpc-2-no-codex-check.log. Exact timeout trace: prepare.rs run_probe_command_bounded kills direct process on Windows, then unconditionally joins wait_with_output thread; a descendant retaining stdout/stderr keeps that join blocked beyond the stated timeout. Unix detached descendants can retain pipes too. Test subprocesses must be explicit and isolated, including success cases, no global PATH mutation; bounded termination must also bound output-reader completion with portable child handling. Hostile worktree test includes characters illegal on Windows and unconditionally invokes /bin/sh. Real sandbox proof exists but previous worker changed global Codex/mise config; require isolated repeat and no real-home writes. Await user direction for session-model recovery under retry limit; no new worker until direction."
+      }
+    ],
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-09-13T03:06:03.302Z",
+    "reopened_reason": "Bounded session-model recovery; exact failures retained in prior blocked reason. User-approved scope unchanged, named retry-form deviation recorded.",
+    "escalation_reason": "Session-model recovery after two incomplete delegated revisions, within user-approved high-risk completion scope; diagnose and fix recorded probe portability/timeout defects and actual opaque native spawn routing.",
+    "budget_resets": [
+      {
+        "reset_at": "2026-09-13T03:07:05.953Z",
+        "reason": "Bounded session-model recovery authorized within existing completion scope, decision 32b3ac45; retain all previous failures and address only the verified portability/time-limit gaps and new installed-hook opacity evidence.",
+        "by_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+        "by_actor": "Codex"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "Log captured before reservation",
+        "better": "reserve evidence paths first"
+      },
+      {
+        "wrong": "Wrong fallback fixture config",
+        "better": "use primary and explicit-only fallback"
+      },
+      {
+        "wrong": "Confused force_ownership with escalation",
+        "better": "inspect helper signature and assert actual resolved role"
+      },
+      {
+        "wrong": "Required unavailable direct tools",
+        "better": "use observed interface and retain actual output"
+      }
+    ],
+    "report": {
+      "outcome": "Enforce configured Codex dispatch settings, bounded hermetic probes, exact observed native refusal, and actual prepared read-only filesystem boundary.",
+      "commit": "a8f94c0f6f79b0f657db4230760ec4f012f3ac8c",
+      "files": [
+        "packages/bee-rs/crates/bee/Cargo.toml",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee verbs::drivers — green:unit — Leader ran exact groups under TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false: 70 and 382 passed, 8 ignored. Final amendment comment-only. Additional green:live actual prepared command/stdin in cpc-2-recovery-green.log proves patch/shell/continuation denial and unchanged hash. Frozen judge hits[]. Windows live behavior unverified.",
+      "deviations": [
+        "Existing windows-sys Pipes feature added under decision 7741c278; no new crate. Separate recovery commit retained until wave-close consolidation because sibling commits intervene.",
+        "Observed Codex 0.154.0 opaque native messages require named refusal; explicit configured external routes retained; no full native parity claim."
+      ],
+      "mistakes": [
+        "Log captured before reservation — reserve evidence paths first",
+        "Wrong fallback fixture config — use primary and explicit-only fallback",
+        "Confused force_ownership with escalation — inspect helper signature and assert actual resolved role",
+        "Required unavailable direct tools — use observed interface and retain actual output"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "unsupported native dispatch refusal",
+            "status": "PASS",
+            "evidence": "/var/tmp/bee-codex-canary-ZPuEAI/evidence/report.json:16-55 records collaborationspawn_agent selection and installed guard status 2; lines 117-118 name opaque-role refusal. packages/bee-rs/crates/bee/src/hooks/model_guard.rs:731-734 implements codex-spawn-unmarked denial."
+          },
+          {
+            "id": "honest model reporting",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:758-779 asserts native requested/effective null and CLI unverified reporting; skills/bee-swarming/references/swarming-reference.md:436 states the same contract without a pinned native-model claim."
+          },
+          {
+            "id": "live read-only execution boundary",
+            "status": "PASS",
+            "evidence": "docs/history/codex-parity-completion/cpc-2-recovery-green.log:2471-2555 records actual prepared patch and shell denials with identical hashes and no continuation file. /var/tmp/bee-verify/evidence/20260913-112318-3463334/003-bash-c-codex-exec-sandbox-read-only-ephemeral.err:38-46 records both shell writes denied with status 1 and unchanged content."
+          },
+          {
+            "id": "configured external transport preservation",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs:808-811 directs herding roles to their configured transport; packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:9275-9322 checks herding, declared, pinned, and inherited reporting."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T04:31:09.137Z"
+      }
+    ]
+  },
+  "escalate": true
+}

@@ -1,0 +1,164 @@
+{
+  "id": "pbr-3",
+  "feature": "piggery-borrow",
+  "title": "Check a contract version between the pi and opencode belts and the binary",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "pbr-2",
+    "pbr-7"
+  ],
+  "decisions": [
+    "d79958fd-9e3c-44a8-ae99-069baa00d1da"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/hooks.ts",
+    ".opencode/plugins/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    ".pi/extensions/bee-guard/tool-steer.ts"
+  ],
+  "read_first": [
+    "docs/history/piggery-borrow/CONTEXT.md",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/hooks.ts",
+    ".opencode/plugins/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "action": "Per piggery-borrow D4 (revised). Add BELT_CONTRACT_VERSION = 1 to the pi belt and the opencode plugin and send belt_contract: {belt: \"pi\"|\"opencode\", version: 1} inside the session-init stdin payload (no argv change to runAdvisoryHook). In hooks/session_init.rs read it, compare with the binary's BELT_CONTRACT (the pub(crate) const pbr-7 defines in doctor.rs), and on mismatch return one line naming the side to update (belt older: bee onboard --apply; binary older: the binary_freshness remedy). Absent field = unknown, silent. The belts show that line to the human: ctx.ui.notify on pi, a toast on opencode, as well as in the preamble. Red first: session_init tests for equal, belt older, binary older and absent; belt tests asserting the payload carries belt_contract and that a mismatch line is notified. Also make tool-steer.ts:102 (the leader's bee herding steer spawn) pass env: beltEnv() from state.ts, as pbr-2 did for the other belt spawns (piggery-borrow D5), with a belt test that the steer spawn receives PASEO_AGENT_ID for the leader.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::session_init && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "Each belt sends its contract version in the session-init payload",
+      "A mismatch returns one line naming the side to update and the belt shows it to the human",
+      "A payload without a contract is accepted silently"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "substantive": "compares belt_contract with BELT_CONTRACT"
+      }
+    ],
+    "key_links": [
+      "implements piggery-borrow D4 as revised after the hat wave (docs/history/piggery-borrow/CONTEXT.md)"
+    ],
+    "prohibitions": [
+      "No new code comments in any language (no_code_comments is on)",
+      "No behavior change outside this cell's decision"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pbr-3",
+    "outcome": "Belts send belt_contract at session-init; the binary returns one fix line on mismatch that pi notifies and opencode toasts; steer spawn gets beltEnv()",
+    "files_changed": [
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/tool-steer.ts",
+      ".opencode/plugins/bee-guard.ts",
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Made doctor.rs belt_contract_check pub(crate) and take Option<u32> instead of the source list, and reserved doctor.rs — the binary_freshness remedy strings are private to doctor.rs and copying them would drift — found a better route",
+      "hooks.ts unchanged: runAdvisoryHook already passes the payload through, so belt_contract rides the payload from events.ts — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T03:03:50.469Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify run with PATH=$HOME/.cargo/bin (pi 121 ok, opencode 9 ok, session_init 23 ok, manifest 419 match); plus --bin bee doctor 62 ok because doctor.rs changed; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::session_init && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-10-07T02:54:48.609Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Belts send belt_contract in the session-init payload; session_init.rs belt_contract_line compares it with doctor::BELT_CONTRACT and leads the output with one fix line that pi notifies and opencode toasts; steer spawn gets beltEnv()",
+      "commit": "2debf52938a654916c6a7618cd0666b8a3a0e3be",
+      "files": [
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/tool-steer.ts",
+        ".opencode/plugins/bee-guard.ts",
+        "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::session_init && .bee/bin/bee dev release-manifest --check — green:unit — cell verify run with PATH=$HOME/.cargo/bin (pi 121 ok, opencode 9 ok, session_init 23 ok, manifest 419 match); plus --bin bee doctor 62 ok because doctor.rs changed; full suite not run",
+      "deviations": [
+        "Made doctor.rs belt_contract_check pub(crate) and take Option<u32> instead of the source list, and reserved doctor.rs — the binary_freshness remedy strings are private to doctor.rs and copying them would drift — found a better route",
+        "hooks.ts unchanged: runAdvisoryHook already passes the payload through, so belt_contract rides the payload from events.ts — found a better route"
+      ],
+      "mistakes": [],
+      "baseline": "new tests red before the change: session_init older-belt/older-binary unwrap None, pi payload missing belt_contract and steer paseo_agent_id null, opencode payload missing belt_contract"
+    },
+    "baseline": "new tests red before the change: session_init older-belt/older-binary unwrap None, pi payload missing belt_contract and steer paseo_agent_id null, opencode payload missing belt_contract",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Each belt sends its contract version in the session-init payload",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "A mismatch returns one line naming the side to update and the belt shows it to the human",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+          },
+          {
+            "requirement": "A payload without a contract is accepted silently",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T03:05:17.913Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "belt-sends-contract",
+            "status": "PASS",
+            "evidence": "events.ts and opencode bee-guard.ts send belt_contract in the session-init payload; contract tests assert captured stdin"
+          },
+          {
+            "id": "mismatch-one-line-shown",
+            "status": "PASS",
+            "evidence": "session_init.rs belt_contract_line via doctor::belt_contract_check; unit tests for older belt and older binary; pi notify and opencode toast asserted"
+          },
+          {
+            "id": "absent-silent",
+            "status": "PASS",
+            "evidence": "unit test an_absent_or_malformed_contract_is_silent"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-07T03:18:04.950Z"
+      }
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier"
+}

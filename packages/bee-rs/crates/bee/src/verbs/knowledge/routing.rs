@@ -39,6 +39,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "promote" => run_promote(flags, json, pre_json, t0),
         "bootstrap" => run_bootstrap(flags, json, pre_json, t0),
         "report" => run_report(flags, json, pre_json, t0),
+        "show" => run_show(flags, json, pre_json, t0),
+        "new" => run_new(flags, json, pre_json, t0),
         _ => None, // unknown verbs (group-usage fallback) → Node
     }
 }
@@ -94,11 +96,13 @@ pub(crate) fn run_check(flags: Flags, json: bool, pre_json: bool, t0: Instant) -
     counts.insert("errors".into(), Value::from(report.okf_errors.len()));
     counts.insert("profile_errors".into(), Value::from(report.profile_errors.len()));
     counts.insert("warnings".into(), Value::from(report.warnings.len()));
+    counts.insert("orphans".into(), Value::from(report.orphans.len()));
     let mut okf = Map::new();
     okf.insert("errors".into(), Value::Array(report.okf_errors));
     let mut profile = Map::new();
     profile.insert("errors".into(), Value::Array(report.profile_errors));
     profile.insert("warnings".into(), Value::Array(report.warnings));
+    profile.insert("orphans".into(), Value::Array(report.orphans.iter().map(|s| Value::String(s.clone())).collect()));
     let mut result = Map::new();
     result.insert("okf".into(), Value::Object(okf));
     result.insert("profile".into(), Value::Object(profile));

@@ -16,11 +16,13 @@ use std::process::ExitCode;
 
 pub(crate) const GENERIC_CONTAINMENT_MESSAGE: &str =
     "bee write guard denied this target: it could not be canonically contained inside the physical worktree. \
-FIX: use a plain in-worktree path without traversal, outside absolute paths, or symlink escapes.";
+FIX: use a plain in-worktree path without traversal, outside absolute paths, or symlink escapes. \
+A path outside this project belongs to the user — ask them to change it, never write it through another tool.";
 
 pub(crate) const GENERIC_BASH_CONTAINMENT_MESSAGE: &str =
     "bee write guard denied Bash: one or more extracted targets could not be canonically contained inside the physical worktree. \
-FIX: use plain in-worktree paths without traversal, outside absolute paths, or symlink escapes.";
+FIX: use plain in-worktree paths without traversal, outside absolute paths, or symlink escapes. \
+A path outside this project belongs to the user — ask them to change it, never write it through another tool.";
 
 // ─── unresolvable shell syntax (guard-refusal-wording D1/D2) ─────────────
 
@@ -546,12 +548,22 @@ pub(crate) fn describe_cross_worktree_target(root: &str, cwd: &str, raw: &Value)
             None => return Ok(None),
         },
     };
+    let canonical_root = realpath_any(root).unwrap_or_else(|| root.to_string());
     if current.is_some() && is_under_root(&main_root, &target_real)? {
-        return Ok(Some(
+        let rel = np_relative(&main_root, &target_real)?;
+        let rel_norm = rel.replace('\\', "/");
+        if rel_norm == ".bee" || rel_norm.starts_with(".bee/") {
+            return Ok(Some(
+                "bee write guard denied this target: it could not be canonically contained inside the physical worktree — \
+this path belongs to the main checkout, not this worktree. FIX: bee state changes only through `bee` verbs run from main (see `bee --help --json`)."
+                    .to_string(),
+            ));
+        }
+        let in_worktree_path = np_resolve2(&canonical_root, &rel)?;
+        return Ok(Some(format!(
             "bee write guard denied this target: it could not be canonically contained inside the physical worktree — \
-this path belongs to the main checkout, not this worktree. FIX: run this from a session rooted there."
-                .to_string(),
-        ));
+this path belongs to the main checkout, not this worktree. FIX: write {in_worktree_path} instead."
+        )));
     }
     for id in read_granted_worktree_ids(&main_root) {
         if let Some((_, cur_id)) = &current {
@@ -563,8 +575,7 @@ this path belongs to the main checkout, not this worktree. FIX: run this from a 
             if is_under_root(&worktree_root, &target_real)? {
                 return Ok(Some(format!(
                     "bee write guard denied this target: it could not be canonically contained inside the physical worktree — \
-it resolves inside worktree \"{id}\". FIX: open a session with cwd={worktree_root} to work there, or merge it \
-back from main via `bee worktree merge --id {id}`."
+it resolves inside worktree \"{id}\". FIX: the file belongs to worktree {id}; leave it, and write only inside your own worktree ({canonical_root})."
                 )));
             }
         }
@@ -716,10 +727,12 @@ pub(crate) fn worktree_first_exempt_rel(rel: &str, other_live_session: bool) -> 
 ///
 /// The granted-worktree arm below is phase-independent — byte-for-byte the
 /// pre-existing refusal (git show 96db1a33^), which predates the "swarming"
-/// phase gate entirely. Only the NEW no-grant arm is phase-gated: it exists
-/// for the live swarming lane alone, so a phase other than "swarming" never
-/// takes it — everywhere else (reviewing, planning, scribing) the
-/// pre-existing granted refusal keeps firing exactly as it always did.
+/// phase gate entirely. The no-grant arm applies in every active code phase
+/// (exploring, planning, swarming, reviewing, scribing, compounding) — D2
+/// (pi-harness-workflow-parity cell pihp-5) — so code-touching feature work
+/// branches at feature start (worktree-first) rather than leaking early edits
+/// into main. A non-active phase (idle, compounding-complete, grooming) or
+/// absent phase never takes it.
 ///
 /// `session_id` is the acting session's own id (main.rs's
 /// `session_id.as_deref()`, the same value `resolve_write_record` already
@@ -762,10 +775,24 @@ pub(crate) fn check_worktree_first(
     // The single liveness fact both the docs gate (immediately below) and
     // the tiny gate (further down, unchanged) share — computed once here,
     // never reimplemented, never called twice. Self-excluding via
-    // `session_id`; any session-store read error fails OPEN (`false`),
-    // matching hook_local.rs:630-639's discipline: an unreadable store must
-    // never turn a permitted solo write into a refusal.
-    let other_live_session = is_concurrent_mode(&main_root, session_id, false).unwrap_or(false);
+    // `session_id`.
+    //
+    // CORRECTED at sfg-5 (this comment claimed a fail-open the code stopped
+    // performing at sfg-4). The non-strict reader answers in two directions,
+    // and they are not the same direction:
+    //
+    // - a MISSING or unreadable sessions DIRECTORY, and a session file whose
+    //   JSON does not parse, both contribute no record — so they read as
+    //   `false`, "no other live session", and the docs/tiny exemptions
+    //   survive. That is the old fail-open, and it still holds.
+    // - a session record that DOES parse but carries a `last_heartbeat` the
+    //   reader cannot parse reads as a LIVE peer (sfg-4), so it removes those
+    //   exemptions and CAN turn a permitted solo write into a refusal. That
+    //   is deliberate: an unreadable byte is evidence about the byte, never
+    //   that the session went away, and a guard never falls open on data it
+    //   merely read. `heartbeat_stale` names the offending file and its
+    //   remedy on stderr, so the refusal is never silent.
+    let other_live_session = is_concurrent_mode(&main_root, session_id);
     // "docs" is exempt on BOTH arms — but only while no other live session
     // is present (cell dll-1, same condition as tiny's below). With a live
     // peer, docs work routes into a worktree like any other feature.
@@ -789,7 +816,7 @@ pub(crate) fn check_worktree_first(
                 "bee worktree-first guard: \"{offender}\" is a feature source write in the MAIN checkout, but the active \
 feature \"{feature}\" (lane \"{lane}\") holds granted worktree \"{grant_id}\" — code-touching feature work \
 lives in its worktree from the start; main stays clean for integration, docs-lane, and release work \
-(docs/specs/worktree-first.md). FIX: open your session at {grant_root} and make this edit there, \
+(docs/specs/worktree-first.md). FIX: run `bee worktree enter --id {grant_id}` and make this edit in {grant_root} after it, \
 then land it from main with `bee worktree merge --id {grant_id}`. Deliberate override: set \
 worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded, visible choice)."
             )));
@@ -834,19 +861,30 @@ worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded,
     // `other_live_session` is the same fact computed once, above, for the
     // docs gate (cell dll-1) — reused here, never recomputed: `session_id`
     // excludes the acting session itself, so a lone session never counts
-    // its own heartbeat as "another live session"; any read error
-    // (missing/corrupt sessions dir, an unparseable heartbeat) reads as
-    // `false` — fails OPEN, same discipline as the read-error handling at
-    // this function's other arms: an unreadable session store must never
-    // turn a permitted solo tiny fix into a refusal.
+    // its own heartbeat as "another live session".
+    //
+    // CORRECTED at sfg-5, same correction as the docs gate above: a missing
+    // or corrupt sessions store still reads as `false` and still leaves this
+    // tiny exemption standing, but an UNPARSEABLE HEARTBEAT in a record that
+    // otherwise parses reads as a live peer and takes the exemption away
+    // (sfg-4). The exemption's own source rule is "while no other session is
+    // live", and a session the reader cannot date is not a session the reader
+    // can call dead — so the narrow read is the honest one here too. The
+    // warning `heartbeat_stale` queues names the file that caused it.
     if lane == "tiny" && !other_live_session {
         return Ok(None);
     }
+    // D2 (pi-harness-workflow-parity cell pihp-5): the no-grant refusal
+    // applies in every active code phase, not only during "swarming" — a code
+    // feature branches into its worktree from the start (worktree-first).
     let phase = match record.get("phase") {
-        Some(Value::String(p)) => p.clone(),
-        _ => String::new(),
+        Some(Value::String(p)) => p.as_str(),
+        _ => "",
     };
-    if phase != "swarming" {
+    if !matches!(
+        phase,
+        "exploring" | "planning" | "swarming" | "reviewing" | "scribing" | "compounding"
+    ) {
         return Ok(None);
     }
     if worktree_grants_registry_corrupt(&main_root) {
@@ -868,9 +906,56 @@ worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded,
         "bee worktree-first guard: \"{offender}\" is a feature source write in the MAIN checkout, but the \
 active feature \"{feature}\" (lane \"{lane}\") holds no granted worktree — lane \"{lane}\" is code-touching and \
 this is the MAIN checkout — feature work branches at feature start (worktree-first). \
-FIX: run `bee worktree new --feature {feature}`, then open your session at the printed worktree path and make \
-this edit there. Deliberate override: set worktree_first: \"off\" in .bee/config.json to disable this refusal \
+FIX: run `bee worktree new --feature {feature}`, then `bee worktree enter --id <the id it prints>`. \
+Deliberate override: set worktree_first: \"off\" in .bee/config.json to disable this refusal \
 (a recorded, visible choice)."
+    )))
+}
+
+pub(crate) fn is_pi_leader(payload: &Map<String, Value>) -> bool {
+    payload.get("bee_runtime").and_then(Value::as_str) == Some("pi")
+        && payload.get("tools_reopened") != Some(&Value::Bool(true))
+        && std::env::var("BEE_HERDING_WORKER").as_deref() != Ok("1")
+}
+
+fn runs_herding_run(command: &str) -> bool {
+    tokenize_deep(command).tokens.windows(3).any(|w| {
+        let base = w[0].rsplit(['/', '\\']).next().unwrap_or("");
+        matches!(base, "bee" | "bee.exe") && w[1] == "herding" && w[2] == "run"
+    })
+}
+
+pub(crate) fn check_pi_leader_write_lock(
+    store_root: &Path,
+    record: &Map<String, Value>,
+    rel_paths: &[String],
+    command: &str,
+) -> R<Option<String>> {
+    let lane = record
+        .get("route")
+        .and_then(|r| r.get("lane"))
+        .and_then(Value::as_str);
+    if !matches!(lane, Some("small" | "standard" | "high-risk"))
+        || record.get("phase").and_then(Value::as_str) != Some("swarming")
+        || record.get("approved_gates").and_then(|g| g.get("execution")) != Some(&Value::Bool(true))
+    {
+        return Ok(None);
+    }
+    let what = if let Some(rel) = rel_paths.iter().find(|rel| !under_allowed_prefix_gated(rel)) {
+        format!("writing \"{rel}\"")
+    } else if runs_herding_run(command) {
+        "running `bee herding run` by hand".to_string()
+    } else {
+        return Ok(None);
+    };
+    if read_config(store_root)?.get("pi_harness_workflow") == Some(&Value::Bool(false)) {
+        return Ok(None);
+    }
+    Ok(Some(format!(
+        "bee Pi leader lock: {what} is refused — the Pi leader does not write source in the execute phase of a \
+\"{}\" lane; workers do. FIX: hand the cell to a worker with the bee_dispatch tool. To write here yourself \
+anyway, run /bee-tools-reopen first.",
+        lane.unwrap_or_default()
     )))
 }
 
@@ -981,56 +1066,138 @@ pub(crate) fn resolve_existing_realpath_f2(abs: &str) -> R<Option<String>> {
     }
 }
 
+/// What `.bee/companion-session.json` says about this checkout.
+///
+/// sfg-6 turned the old `Option<String>` into three answers. The third one is
+/// the point: this read has always had three outcomes, and the reader used to
+/// fold the third into `Err(Nd)` — a DELEGATION, i.e. the whole write guard
+/// falling open. See `resolve_companion_mount`.
+pub(crate) enum CompanionMount {
+    /// No usable marker: absent, not a JSON object, no non-empty
+    /// `worktreePath` / `mountPath`, or a declared path that does not verify
+    /// against the live mount.
+    None,
+    /// A marker-verified live mount, realpath-resolved.
+    Verified(String),
+    /// The marker file is PRESENT but could not be read or parsed.
+    Unreadable(PathBuf),
+}
+
 /// pub(crate) since the wcg-3 port (`crate::nested_checkout`): guards.mjs's
 /// own comment says this verification "lives in exactly one place", shared by
 /// the point-check (`target_inside_verified_companion_mount`) and the
 /// directory-scan (`hasAnySharedNestedCheckout`). Widening it is what keeps
 /// that true across the two Rust modules.
-pub(crate) fn resolve_verified_companion_mount_real(root: &str) -> R<Option<String>> {
+///
+/// sfg-6: the LAST fail-OPEN of this feature's sweep. The marker was read
+/// with a bare `std::fs::read` plus `serde_json::from_str`, and BOTH error
+/// arms answered `Err(Nd)`. That error walked
+/// `target_inside_verified_companion_mount` ->
+/// `is_shared_nested_checkout_target` -> the hook's own `?` ->
+/// `Outcome::Delegate` -> `emit_undecidable`: exit 0, "the guard did NOT run
+/// on it". Its preconditions are exactly the ones sfg-5 closed one line
+/// above — a resolvable Edit/Write target plus one other live session — so a
+/// present-but-corrupt `.bee/companion-session.json` switched the whole guard
+/// off on ordinary work.
+///
+/// It is a third ANSWER now, never an error, and the answer is deliberately
+/// not `None`. `read_json_g` is this module's usual reader for corrupt JSON,
+/// and it is the WRONG reader here: its contract is "take the same fallback
+/// an absent file would", and the absent-file fallback on this marker is
+/// `None` — a positive claim that no verified companion mount exists, which
+/// is precisely the claim that lets a write through. Bytes the reader could
+/// not parse are evidence about the bytes and about nothing else, so this
+/// reader says exactly that and leaves the verdict to the caller. Same reason
+/// sfg-5 kept `read_session_strict` off `read_json_g`.
+pub(crate) fn resolve_companion_mount(root: &str) -> R<CompanionMount> {
     let marker_file = Path::new(root).join(".bee").join("companion-session.json");
     let raw = match std::fs::read(&marker_file) {
         Ok(b) => String::from_utf8_lossy(&b).into_owned(),
-        Err(e) if io_err_is_enoent(&e) => return Ok(None),
-        Err(_) => return Err(Nd), // F2: propagates in Node
+        Err(e) if io_err_is_enoent(&e) => return Ok(CompanionMount::None),
+        // sfg-6: was `Err(Nd)` ("F2: propagates in Node"). A marker the reader
+        // cannot OPEN is unreadable in exactly the sense one it cannot PARSE
+        // is, so the two arms close the same way and neither escapes.
+        Err(_) => return Ok(CompanionMount::Unreadable(marker_file)),
     };
-    let marker: Value = serde_json::from_str(&raw).map_err(|_| Nd)?; // F2: corrupt marker throws
+    let Ok(marker) = serde_json::from_str::<Value>(&raw) else {
+        // sfg-6: was `Err(Nd)` ("F2: corrupt marker throws").
+        return Ok(CompanionMount::Unreadable(marker_file));
+    };
     let obj = match &marker {
         Value::Object(m) => m,
-        _ => return Ok(None),
+        _ => return Ok(CompanionMount::None),
     };
     let declared = match obj.get("worktreePath") {
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
-        _ => return Ok(None),
+        _ => return Ok(CompanionMount::None),
     };
     let mount = match obj.get("mountPath") {
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
-        _ => return Ok(None),
+        _ => return Ok(CompanionMount::None),
     };
     let declared_real = match realpath_f2(&declared)? {
         Some(d) => d,
-        None => return Ok(None),
+        None => return Ok(CompanionMount::None),
     };
     let live = Path::new(root).join(&mount).to_string_lossy().into_owned();
     let live_mount_real = match realpath_f2(&live)? {
         Some(l) => l,
-        None => return Ok(None),
+        None => return Ok(CompanionMount::None),
     };
     if declared_real != live_mount_real {
-        return Ok(None);
+        return Ok(CompanionMount::None);
     }
-    Ok(Some(live_mount_real))
+    Ok(CompanionMount::Verified(live_mount_real))
 }
 
-pub(crate) fn target_inside_verified_companion_mount(root: &str, abs_target: &str) -> R<bool> {
-    let live = match resolve_verified_companion_mount_real(root)? {
-        Some(l) => l,
-        None => return Ok(false),
+/// The `R<Option<String>>` spelling `crate::nested_checkout` consumes.
+///
+/// sfg-6: an unreadable marker is STILL an error on this side, and that is
+/// the same direction rather than an exception to it. `crate::nested_checkout`
+/// maps `Nd` onto a native fail-CLOSED refusal that already names this exact
+/// marker file (see that module's header); it never delegates. So no read of
+/// this marker can switch a guard off, on either side of the shared
+/// verification.
+pub(crate) fn resolve_verified_companion_mount_real(root: &str) -> R<Option<String>> {
+    match resolve_companion_mount(root)? {
+        CompanionMount::None => Ok(None),
+        CompanionMount::Verified(mount) => Ok(Some(mount)),
+        CompanionMount::Unreadable(_) => Err(Nd),
+    }
+}
+
+/// Where a target sits relative to a marker-verified companion mount.
+pub(crate) enum CompanionContainment {
+    /// Not inside one — "there is no verified mount at all" included.
+    Outside,
+    /// Inside one.
+    Inside,
+    /// `.bee/companion-session.json` is present but unreadable, so the
+    /// question has no honest answer. See `is_shared_nested_checkout_target`
+    /// for why that is REFUSED rather than answered `Outside`.
+    UnreadableMarker(PathBuf),
+}
+
+pub(crate) fn target_inside_verified_companion_mount(
+    root: &str,
+    abs_target: &str,
+) -> R<CompanionContainment> {
+    let live = match resolve_companion_mount(root)? {
+        CompanionMount::Verified(live) => live,
+        CompanionMount::None => return Ok(CompanionContainment::Outside),
+        CompanionMount::Unreadable(file) => {
+            return Ok(CompanionContainment::UnreadableMarker(file))
+        }
     };
     let target_real = match resolve_existing_realpath_f2(abs_target)? {
         Some(t) => t,
-        None => return Ok(false),
+        None => return Ok(CompanionContainment::Outside),
     };
-    is_under_root(&live, &target_real)
+    Ok(if is_under_root(&live, &target_real)? {
+        CompanionContainment::Inside
+    } else {
+        CompanionContainment::Outside
+    })
 }
 
 pub(crate) fn find_nested_checkout_dir(root_real: &str, abs_target: &str) -> R<Option<String>> {
@@ -1092,6 +1259,26 @@ pub(crate) fn is_registered_submodule(root_real: &str, nested_real: &str) -> R<b
     Ok(false)
 }
 
+/// What `is_shared_nested_checkout_target` found.
+///
+/// sfg-5 turned the old `bool` into three answers, and sfg-6 into four. The
+/// last two are the point: this primitive reads two `.bee` records that can be
+/// present but unreadable — a session file on the strict concurrency scan, and
+/// the companion marker on the mount check — and each used to be `Err(Nd)`, a
+/// DELEGATION, i.e. the whole write guard falling open on a real Edit or
+/// Write. Both are refusals now, and each carries its file so the refusal can
+/// name it.
+pub(crate) enum SharedNested {
+    /// Not a shared nested checkout (or no other live session).
+    No,
+    /// A shared nested checkout another live session can also reach.
+    Yes,
+    /// A session record on the strict concurrency path could not be read.
+    UnreadableSession(PathBuf),
+    /// `.bee/companion-session.json` is present but could not be read.
+    UnreadableCompanionMarker(PathBuf),
+}
+
 /// provenance: guards.mjs isSharedNestedCheckoutTarget (wcg-1/wcg-2,
 /// Port-D4 controlRoot).
 pub(crate) fn is_shared_nested_checkout_target(
@@ -1099,24 +1286,96 @@ pub(crate) fn is_shared_nested_checkout_target(
     abs_target: &str,
     exclude_session: Option<&str>,
     control_root: Option<&str>,
-) -> R<bool> {
+) -> R<SharedNested> {
     let concurrency_root = control_root.filter(|s| !s.is_empty()).unwrap_or(root);
-    if !is_concurrent_mode(concurrency_root, exclude_session, true)? {
-        return Ok(false);
+    match is_concurrent_mode_strict(concurrency_root, exclude_session) {
+        Ok(false) => return Ok(SharedNested::No),
+        Ok(true) => {}
+        Err(file) => return Ok(SharedNested::UnreadableSession(file)),
     }
     let root_real = match realpath_f2(root)? {
         Some(r) => r,
-        None => return Ok(false),
+        None => return Ok(SharedNested::No),
     };
-    if target_inside_verified_companion_mount(root, abs_target)? {
-        return Ok(true);
+    // sfg-6: three answers here too, and the third one is REFUSED — never
+    // read as `Outside`.
+    //
+    // The choice was between refusing outright and treating the mount as
+    // unverified, and only one of them cannot open a door. "Unverified" is a
+    // positive claim: it says this target is not inside a companion mount, and
+    // the guard spends that claim by dropping the shared-checkout deny and
+    // falling through to the plain nested-`.git` scan below — which cannot
+    // cover a companion mount at all, because the mount is a SYMLINK whose
+    // realpath lands outside `root_real` and `find_nested_checkout_dir` stops
+    // there (pinned by `rows74_77_verified_companion_mount_exclusions`, row
+    // 77). So granting that claim off bytes the reader could not parse would
+    // let a write land inside another live session's checkout — the exact
+    // STR65 overwrite this primitive exists to prevent. It is the same
+    // fail-open, one layer down, spelled `No` instead of `Delegate`.
+    //
+    // Refusing states only what is true — the guard cannot tell — and closes
+    // every door while it is true. Same direction sfg-5 took for an unreadable
+    // session record, on this same primitive, one branch above; the cost is
+    // the same single refusal, cleared by repairing or deleting the file the
+    // refusal names.
+    match target_inside_verified_companion_mount(root, abs_target)? {
+        CompanionContainment::Inside => return Ok(SharedNested::Yes),
+        CompanionContainment::UnreadableMarker(file) => {
+            return Ok(SharedNested::UnreadableCompanionMarker(file))
+        }
+        CompanionContainment::Outside => {}
     }
     if let Some(nested) = find_nested_checkout_dir(&root_real, abs_target)? {
         if !is_registered_submodule(&root_real, &nested)? {
-            return Ok(true);
+            return Ok(SharedNested::Yes);
         }
     }
-    Ok(false)
+    Ok(SharedNested::No)
+}
+
+/// The refusal for a session record the strict scan cannot read (sfg-5).
+///
+/// DELIBERATE DEPARTURE from Node parity, and it is the whole reason this
+/// function exists. Node's `readSession(strict)` throws, and the hook's typed
+/// detection-error deny quotes a V8-worded crash log this port cannot
+/// reproduce byte-for-byte. sfg-4 therefore left the branch DELEGATING rather
+/// than approximate that wording — which meant one truncated
+/// `.bee/sessions/<id>.json` switched the entire write guard off on a real
+/// write. Matching a crash log is not worth a hole: a guard never falls open
+/// on data it merely read. So bee refuses in its own words, and the words
+/// carry what Node's crash log never did — the file, and how to clear it.
+pub(crate) fn unreadable_session_refusal(rel: &str, file: &Path) -> String {
+    format!(
+        "bee shared-checkout guard: the session record \"{}\" is present but could not be read or \
+parsed, so this guard cannot tell whether another live session can also reach \"{rel}\" — and a \
+guard never falls open on data it merely read. Refusing this write instead of guessing. \
+FIX: repair or delete that session file (`bee state session release` writes a clean record for a \
+session that is finished), then retry.",
+        file.display()
+    )
+}
+
+/// The refusal for a companion marker the mount check cannot read (sfg-6).
+///
+/// Sibling of `unreadable_session_refusal`, same reason and same shape, and
+/// the same DELIBERATE DEPARTURE from Node parity: Node's read of
+/// `.bee/companion-session.json` throws, and the hook's typed detection-error
+/// deny quotes a V8-worded crash log this port cannot reproduce byte for byte.
+/// sfg-4's sweep and sfg-5's both passed over this one read; it was the last
+/// place in the module where a record the guard merely READ could switch the
+/// guard off. Matching a crash log is not worth a hole, so bee refuses in its
+/// own words, and the words carry what the crash log never did — the file, and
+/// how to clear it.
+pub(crate) fn unreadable_companion_marker_refusal(rel: &str, file: &Path) -> String {
+    format!(
+        "bee shared-checkout guard: the companion marker \"{}\" is present but could not be read \
+or parsed, so this guard cannot tell whether \"{rel}\" sits inside a verified companion mount that \
+another live session also writes to — and a guard never falls open on data it merely read. \
+Refusing this write instead of guessing. \
+FIX: repair or delete that marker file (the companion lifecycle writes it; `bee worktree new \
+--with-companion` creates a fresh worktree with a clean one), then retry.",
+        file.display()
+    )
 }
 
 /// provenance: bee-write-guard.mjs sharedNestedCheckoutRefusal (wcg-2 D3/D4).

@@ -695,6 +695,32 @@ use std::time::Instant;
     /// `create_feature_worktree` call needed) so a `Created` whose bootstrap
     /// map carries `cellsSync` is enough to prove it.
     #[test]
+    fn new_result_and_text_shows_the_paseo_workspace_only_when_registered() {
+        let base = |paseo: Option<Value>| Created {
+            id: "wt-demo".to_string(),
+            worktree_root: PathBuf::from("/tmp/wt-demo"),
+            branch: "wt/demo".to_string(),
+            base_ref: None,
+            base_ref_sha: None,
+            bootstrap: map_of(&[("created", json!(true)), ("worktreeStoreRoot", json!("/tmp/wt-demo/.bee"))]),
+            companion: Value::Null,
+            skills_sync: json!({ "applied": true }),
+            paseo_workspace: paseo,
+        };
+        let (result, text) = new_result_and_text("demo", &base(None), "next");
+        assert!(result.get("paseoWorkspace").is_none());
+        assert!(!text.contains("paseo:"), "{text}");
+
+        let (result, text) = new_result_and_text("demo", &base(Some(json!({ "id": "wks_1" }))), "next");
+        assert_eq!(result["paseoWorkspace"], json!({ "id": "wks_1" }));
+        assert!(text.contains("  paseo:       workspace wks_1"), "{text}");
+
+        let (result, text) = new_result_and_text("demo", &base(Some(json!({ "error": "daemon down" }))), "next");
+        assert_eq!(result["paseoWorkspace"], json!({ "error": "daemon down" }));
+        assert!(text.contains("  paseo:       workspace not registered — daemon down"), "{text}");
+    }
+
+    #[test]
     fn new_result_and_text_carries_the_cells_sync_skip_note() {
         let created = Created {
             id: "wt-demo".to_string(),
@@ -716,6 +742,7 @@ use std::time::Instant;
             ]),
             companion: Value::Null,
             skills_sync: json!({ "applied": true }),
+            paseo_workspace: None,
         };
         let (result, text) = new_result_and_text("demo", &created, "next step text");
 
@@ -742,6 +769,7 @@ use std::time::Instant;
             bootstrap: map_of(&[("created", json!(true)), ("worktreeStoreRoot", json!("/tmp/wt-demo/.bee"))]),
             companion: Value::Null,
             skills_sync: json!({ "applied": true }),
+            paseo_workspace: None,
         };
         let (result, text) = new_result_and_text("demo", &created, "next step text");
         assert!(result.get("cellsSync").is_none());
@@ -884,6 +912,173 @@ use std::time::Instant;
         assert_eq!(answer.result["verify"], json!("proven (1 cell(s))"));
     }
 
+    /// D4 (docs/history/proof-strength-and-expiry/CONTEXT.md): a cap whose
+    /// recorded proof was taken before the merge base — main moved and the
+    /// branch took it in afterwards — is NAMED by the `proof-stale`
+    /// advisory, in the JSON result and in the printed text, and the merge
+    /// lands anyway. The two silent shapes ride the same setup, because
+    /// they are only meaningful beside a row that DID fire: a cap recording
+    /// the `"none"` commit sentinel, and one recording a sha this repo does
+    /// not have (a git call that cannot answer). Fail open: a warning that
+    /// is wrong is worse than no warning.
+    #[test]
+    fn a_proof_taken_before_the_merge_base_is_named_and_the_merge_still_lands() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "aged", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["commit", "-qam", "work"]);
+        let proved_at = head_sha(&wt);
+
+        // Main moves on, and the branch takes main in — which is what walks
+        // the merge base forward, past the commit the cap was proven at.
+        std::fs::write(main.join("m.txt"), "m").unwrap();
+        git_ok(&main, &["add", "m.txt"]);
+        git_ok(&main, &["commit", "-qm", "main moves"]);
+        git_ok(&wt, &["merge", "--no-edit", "main"]);
+
+        let report_at = |commit: &str| {
+            json!({
+                "outcome": "did the thing",
+                "commit": commit,
+                "files": ["src/a.rs"],
+                "tests": "cargo test -p bee — green:unit — touched a.rs",
+                "deviations": [],
+            })
+        };
+        write_capped_cell(&main, "aged-1", "aged", Some(report_at(&proved_at)));
+        write_capped_cell(&main, "aged-2", "aged", Some(report_at("none")));
+        write_capped_cell(&main, "aged-3", "aged", Some(report_at("abc123")));
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the advisory must never refuse a merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true), "the merge lands anyway");
+        let stale = &answer.result["proof_stale"];
+        assert_eq!(stale["cells"], json!(["aged-1"]), "{:?}", answer.result);
+        assert!(
+            jsjson::js_to_string(&stale["message"]).contains("aged-1"),
+            "the advisory names the cell: {stale:?}"
+        );
+        // It is PRINTED, not just carried in the JSON result.
+        let printed = merge_text_lines(&created.id, &main, &answer).join("\n");
+        assert!(printed.contains("proof-stale: "), "{printed}");
+        assert!(printed.contains("aged-1"), "{printed}");
+    }
+
+    #[test]
+    fn a_proof_carried_across_a_rebase_is_named_and_the_merge_still_lands() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created = create_feature_worktree(
+            &main,
+            "rebased",
+            None,
+            CompanionSpec::default(),
+            &mut lock_busy,
+        )
+        .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["commit", "-qam", "work"]);
+        let proved_at = head_sha(&wt);
+
+        std::fs::write(main.join("m.txt"), "m").unwrap();
+        git_ok(&main, &["add", "m.txt"]);
+        git_ok(&main, &["commit", "-qm", "main moves"]);
+        git_ok(&wt, &["rebase", "main"]);
+
+        write_capped_cell(
+            &main,
+            "rebased-1",
+            "rebased",
+            Some(json!({
+                "outcome": "did the thing",
+                "commit": proved_at,
+                "files": ["src/a.rs"],
+                "tests": "cargo test -p bee — green:unit — touched a.rs",
+                "deviations": [],
+            })),
+        );
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the advisory must never refuse a merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true), "the merge lands anyway");
+        let carried = &answer.result["proof_carried"];
+        assert_eq!(carried["cells"], json!(["rebased-1"]), "{:?}", answer.result);
+        let stale_names_it = answer
+            .result
+            .get("proof_stale")
+            .map(|s| jsjson::js_to_string(&s["cells"]).contains("rebased-1"))
+            .unwrap_or(false);
+        assert!(!stale_names_it, "a carried cap is not stale: {:?}", answer.result);
+        let printed = merge_text_lines(&created.id, &main, &answer).join("\n");
+        assert!(printed.contains("proof-carried: "), "{printed}");
+        assert!(!printed.contains("proof-stale"), "{printed}");
+    }
+
+    /// D4: the ordinary merge — every cap was proven on the line that
+    /// descends from the merge base — says nothing at all. An advisory that
+    /// fires on a clean merge is noise, so this is the case that matters
+    /// most: no key in the result, no line in the text.
+    #[test]
+    fn a_proof_that_descends_from_the_merge_base_is_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "fresh", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        write_capped_cell(
+            &main,
+            "fresh-1",
+            "fresh",
+            Some(json!({
+                "outcome": "did the thing",
+                "commit": head_sha(&wt),
+                "files": ["src/a.rs"],
+                "tests": "cargo test -p bee — green:unit — touched a.rs",
+                "deviations": [],
+            })),
+        );
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert!(
+            answer.result.get("proof_stale").is_none(),
+            "a fresh proof must say nothing: {:?}",
+            answer.result
+        );
+        let printed = merge_text_lines(&created.id, &main, &answer).join("\n");
+        assert!(!printed.contains("proof-stale"), "{printed}");
+    }
+
     /// D7/D8: a capped cell that carries a `trace.report` but no VALID D8
     /// proof line (here: an empty `tests` string) refuses the merge —
     /// zero-mutation, naming the cell — before `git merge` ever runs.
@@ -966,6 +1161,599 @@ use std::time::Instant;
             answer.result["verify"],
             json!("unchecked (1 legacy cap(s), no proof line)")
         );
+    }
+
+    // ── slp-dissent-stop-and-ask sd-5: the merge door's dissent precondition ──
+    //
+    // a2affcba names BOTH doors, and `bee worktree merge` had no cell-debt
+    // precondition but proof debt. These cases sit beside the proof cases
+    // above on purpose: same slot, same zero-mutation posture, same feature.
+    //
+    // Two of them invert the proof twins deliberately — the dissent helper
+    // counts a cell in ANY status (a blocker dissent parks its cell as
+    // `blocked`, never `capped`), and the refusal carries a named escape
+    // that the escape-less proof refusal does not have.
+
+    /// A cell of `feature` carrying ONE dissent entry, written straight into
+    /// the MAIN checkout's live `.bee/cells/` the same way `bee cells
+    /// dissent` leaves it — `feature_dissent_debt`'s own read path
+    /// (verbs/cells/dissent.rs), not a fixture-only shape. `status` is a
+    /// parameter on purpose: the helper counts every status.
+    ///
+    /// A `capped` cell also gets a VALID proof report, because the proof
+    /// door sits above the dissent door and would otherwise mask it.
+    fn write_dissenting_cell(
+        main: &Path,
+        id: &str,
+        feature: &str,
+        status: &str,
+        verdict: Option<&str>,
+    ) {
+        let mut entry = json!({
+            "target": id,
+            "claim": "the cell's shape is wrong",
+            "alternative": "do it the other way",
+            "severity": "blocker",
+            "recorded_at": "2026-08-28T00:00:00.000Z",
+        });
+        if let Some(v) = verdict {
+            let m = entry.as_object_mut().unwrap();
+            m.insert("verdict".into(), json!(v));
+            m.insert("verdict_reason".into(), json!("because"));
+            m.insert("answered_at".into(), json!("2026-08-28T01:00:00.000Z"));
+        }
+        let mut trace = json!({ "dissent": [entry] });
+        if status == "capped" {
+            trace["report"] = valid_proof_report();
+        }
+        let cell = json!({
+            "id": id,
+            "feature": feature,
+            "status": status,
+            "trace": trace,
+        });
+        let dir = main.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
+    /// The named escape: one `decisions.jsonl` row tagged `dissent-deferral`
+    /// whose text names `named` — the same row shape the close door's own
+    /// deferral case writes (verbs/cells/tests.rs).
+    fn write_dissent_deferral(main: &Path, named: &str) {
+        std::fs::write(
+            main.join(".bee").join("decisions.jsonl"),
+            format!(
+                "{{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-28T00:00:00.000Z\",\"decision\":\"defer the dissent for {named}\",\"rationale\":\"r\",\"tags\":[\"dissent-deferral\"],\"scope\":\"repo\"}}\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    /// sd-5: an unanswered dissent on ANY cell of the merging feature refuses
+    /// the merge, zero-mutation, naming EVERY offending cell — including a
+    /// cell that was never capped, which is the normal state of a cell a
+    /// blocker dissent just parked.
+    #[test]
+    fn an_unanswered_dissent_refuses_the_merge_naming_every_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "dissenting");
+        let wt = created.worktree_root.clone();
+
+        // NOT capped: the helper counts every status on purpose.
+        write_dissenting_cell(&main, "dissenting-1", "dissenting", "blocked", None);
+        // Capped AND fully proven: proves the proof door is not what refuses.
+        write_dissenting_cell(&main, "dissenting-2", "dissenting", "capped", None);
+
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "an unanswered dissent must refuse, never merge silently: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_DISSENT_DEBT] "), "{message}");
+        assert!(message.contains("dissenting-1"), "the uncapped offender is named: {message}");
+        assert!(message.contains("dissenting-2"), "every offender is named: {message}");
+        assert!(
+            message.contains("bee cells dissent-verdict"),
+            "the refusal carries its own remedy: {message}"
+        );
+        assert!(message.contains("dissent-deferral"), "the refusal names its escape: {message}");
+        // Zero mutation: HEAD on main never moved, and the worktree stands.
+        let head_after =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(head_after, pre_merge_head, "a refused merge must never touch main");
+        assert!(wt.exists(), "the worktree stands — nothing was torn down");
+    }
+
+    /// sd-5: recording the verdict clears the precondition with NO other
+    /// change to the fixture — same cell, same status, one `verdict` key.
+    #[test]
+    fn a_recorded_dissent_verdict_lets_the_same_merge_proceed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "answered");
+        write_dissenting_cell(&main, "answered-1", "answered", "blocked", Some("accept"));
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an answered dissent must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// sd-5: the named escape. A logged `dissent-deferral` decision naming
+    /// THIS feature lets the merge through; the same tag naming a different
+    /// feature never does.
+    #[test]
+    fn a_logged_dissent_deferral_naming_this_feature_lets_the_merge_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "deferred");
+        write_dissenting_cell(&main, "deferred-1", "deferred", "blocked", None);
+
+        // The same tag naming SOMEONE ELSE never lifts this block.
+        write_dissent_deferral(&main, "elsewhere");
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "a deferral naming another feature must not clear this door: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_DISSENT_DEBT] "), "{message}");
+
+        // Naming THIS feature does.
+        write_dissent_deferral(&main, "deferred");
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a logged deferral must clear the door: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// sd-5: a worktree whose identity carries NO feature merges exactly as
+    /// it does today — the dissent helper is never called at all, so cells
+    /// carrying unanswered dissents under some other feature slug cannot
+    /// reach it. The same posture the proof door's `None` arm takes.
+    #[test]
+    fn a_worktree_with_no_resolvable_feature_merges_past_the_dissent_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "nofeat");
+        let wt = created.worktree_root.clone();
+
+        // Both identity sources removed: `resolve_worktree_feature` reads
+        // `None`, and the branch check falls back to the `wt/<slug>` shape.
+        let _ =
+            std::fs::remove_file(wt.join(".bee").join("runtime").join("worktree-identity.json"));
+        let _ = std::fs::remove_file(wt.join(".bee").join("state.json"));
+
+        write_dissenting_cell(&main, "nofeat-1", "nofeat", "blocked", None);
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an unresolved feature must merge ungated: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// sd-5: a `WORKTREE_MERGE_DISSENT_DEBT` refusal is a zero-mutation
+    /// precondition too — it writes nothing to the merging feature's lane
+    /// either. The twin of
+    /// `a_proof_debt_refusal_leaves_the_lane_record_byte_identical`.
+    #[test]
+    fn a_dissent_debt_refusal_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "dissenting");
+        write_dissenting_cell(&main, "dissenting-1", "dissenting", "blocked", None);
+        write_stranded_lane(&main, "dissenting", "scribing");
+        let lane_path = main.join(".bee").join("lanes").join("dissenting.json");
+        let before = std::fs::read(&lane_path).unwrap();
+
+        let result = merge_feature_worktree(&main, &created.id, false, None, true, None);
+        let Err(err) = result else { panic!("an unanswered dissent must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_DISSENT_DEBT"), "{msg}");
+
+        let after = std::fs::read(&lane_path).unwrap();
+        assert_eq!(before, after, "a dissent-debt refusal must not touch the lane record at all");
+    }
+
+    /// sd-5, THE POINT OF THE PHASE: ONE fixture state — a cell carrying an
+    /// unanswered dissent plus ONE `dissent-deferral` row naming the feature
+    /// — clears BOTH doors. `bee close`'s dissent-debt door reads
+    /// NON-BLOCKING and `bee worktree merge` proceeds past its precondition,
+    /// because both read the SAME two functions. An escape that worked at
+    /// one door and not the other is the defect this pins.
+    #[test]
+    fn one_dissent_deferral_clears_both_the_close_door_and_the_merge_precondition() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "bothdoors");
+        write_dissenting_cell(&main, "bothdoors-1", "bothdoors", "blocked", None);
+
+        // Before the escape: BOTH doors say no.
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "bothdoors").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(door.blocking, "the close door blocks first: {}", door.detail);
+
+        write_dissent_deferral(&main, "bothdoors");
+
+        // After it: the close door reads non-blocking...
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "bothdoors").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(!door.blocking, "one escape, close door: {}", door.detail);
+        assert!(door.detail.contains("bothdoors-1"), "the count is untouched: {}", door.detail);
+
+        // ...and the merge walks past its precondition on the SAME state.
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("one escape must clear the merge door too: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    // ── leader-check-door lcd-3: leader-check debt at the merge door ───────
+    //
+    // Placed beside the dissent-debt merge tests above: same slot, same
+    // zero-mutation posture.
+
+    fn write_leader_check_cell(
+        main: &Path,
+        id: &str,
+        feature: &str,
+        status: &str,
+        capped_at: Option<&str>,
+        leader_check_verdicts: &[&str],
+    ) {
+        let mut trace = json!({
+            "files_changed": ["src/lib.rs"],
+        });
+        if status == "capped" {
+            trace["report"] = valid_proof_report();
+            trace["capped_at"] = json!(capped_at.unwrap_or("2026-09-21T01:00:00.000Z"));
+        }
+        if !leader_check_verdicts.is_empty() {
+            let checks: Vec<Value> = leader_check_verdicts
+                .iter()
+                .map(|v| {
+                    json!({
+                        "verdict": v,
+                        "answers": [{"requirement": "req", "artifact": "src/lib.rs"}],
+                        "recorded_at": "2026-09-21T01:00:00.000Z",
+                    })
+                })
+                .collect();
+            trace["leader_check"] = Value::Array(checks);
+        }
+        let cell = json!({
+            "id": id,
+            "feature": feature,
+            "status": status,
+            "trace": trace,
+        });
+        let dir = main.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
+    fn write_leader_check_deferral(main: &Path, named: &str) {
+        std::fs::write(
+            main.join(".bee").join("decisions.jsonl"),
+            format!(
+                "{{\"id\":\"d-lcd\",\"type\":\"decide\",\"date\":\"2026-09-21T00:00:00.000Z\",\"decision\":\"defer leader check for {named}\",\"rationale\":\"r\",\"tags\":[\"leader-check-deferral\"],\"scope\":\"repo\"}}\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    /// lcd-3: an unmarked capped cell on the merging feature refuses the merge,
+    /// zero-mutation, naming every offending cell.
+    #[test]
+    fn an_unmarked_capped_cell_refuses_the_merge_naming_every_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "unmarked");
+        let wt = created.worktree_root.clone();
+
+        write_leader_check_cell(&main, "unmarked-1", "unmarked", "capped", None, &[]);
+        write_leader_check_cell(&main, "unmarked-2", "unmarked", "capped", None, &[]);
+
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "an unmarked capped cell must refuse, never merge silently: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_LEADER_CHECK_DEBT] "), "{message}");
+        assert!(message.contains("unmarked-1"), "every offender is named: {message}");
+        assert!(message.contains("unmarked-2"), "every offender is named: {message}");
+        assert!(
+            message.contains("bee cells leader-check"),
+            "the refusal carries its own remedy: {message}"
+        );
+        assert!(message.contains("leader-check-deferral"), "the refusal names its escape: {message}");
+        // Zero mutation: HEAD on main never moved, and the worktree stands.
+        let head_after =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(head_after, pre_merge_head, "a refused merge must never touch main");
+        assert!(wt.exists(), "the worktree stands — nothing was torn down");
+    }
+
+    /// lcd-3: recording an ok leader check lets the merge proceed.
+    #[test]
+    fn a_recorded_leader_check_ok_lets_the_same_merge_proceed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "checked");
+        write_leader_check_cell(&main, "checked-1", "checked", "capped", None, &["ok"]);
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a checked cell must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// lcd-3: recording a gap leader check still refuses the merge.
+    #[test]
+    fn a_recorded_gap_leader_check_still_refuses_the_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "gapfeat");
+        write_leader_check_cell(&main, "gapfeat-1", "gapfeat", "capped", None, &["gap"]);
+
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "a gap leader check must refuse, never merge silently: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_LEADER_CHECK_DEBT] "), "{message}");
+    }
+
+    /// lcd-3: a logged leader-check-deferral decision naming this feature clears the merge door.
+    #[test]
+    fn a_logged_leader_check_deferral_naming_this_feature_lets_the_merge_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "lcdeferred");
+        write_leader_check_cell(&main, "lcdeferred-1", "lcdeferred", "capped", None, &[]);
+
+        // Naming someone else never lifts this block.
+        write_leader_check_deferral(&main, "elsewhere");
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "a deferral naming another feature must not clear this door: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_LEADER_CHECK_DEBT] "), "{message}");
+
+        // Naming this feature does.
+        write_leader_check_deferral(&main, "lcdeferred");
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a logged deferral must clear the door: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// lcd-3: a WORKTREE_MERGE_LEADER_CHECK_DEBT refusal is zero-mutation —
+    /// leaves lane record byte-identical.
+    #[test]
+    fn a_leader_check_debt_refusal_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "unmarked");
+        write_leader_check_cell(&main, "unmarked-1", "unmarked", "capped", None, &[]);
+        write_stranded_lane(&main, "unmarked", "scribing");
+        let lane_path = main.join(".bee").join("lanes").join("unmarked.json");
+        let before = std::fs::read(&lane_path).unwrap();
+
+        let result = merge_feature_worktree(&main, &created.id, false, None, true, None);
+        let Err(err) = result else { panic!("an unmarked cell must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_LEADER_CHECK_DEBT"), "{msg}");
+
+        let after = std::fs::read(&lane_path).unwrap();
+        assert_eq!(before, after, "a leader-check-debt refusal must not touch the lane record at all");
+    }
+
+    // ── slp-advisor-nudge an-3: the advisor-nudge debt at the merge door ───
+    //
+    // Placed beside the dissent-debt merge tests above for the same reason
+    // they sit beside the proof ones: same slot, same zero-mutation posture.
+
+    /// One `advisor-nudge` mailbox row in the MAIN checkout's live store —
+    /// the record-event shape `bee supervisor record` appends, read by
+    /// `feature_advisor_nudge_debt` (verbs/supervisor.rs). The `feature` is
+    /// the one DERIVED onto the row at record time.
+    fn write_advisor_nudge_row(main: &Path, id: &str, feature: Option<&str>) {
+        let dir = main.join(".bee").join("supervisor");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut row = json!({
+            "event": "record",
+            "id": id,
+            "ts": "2026-08-29T00:00:00.000Z",
+            "kind": "advisor-nudge",
+            "signal": "struggling-loop",
+            "point_key": id,
+            "question": "Would an advisor read help here?",
+            "target_session": "sess-1",
+        });
+        if let Some(feature) = feature {
+            row.as_object_mut().unwrap().insert("feature".into(), json!(feature));
+        }
+        let path = dir.join("interventions.jsonl");
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{row}\n"));
+        std::fs::write(&path, text).unwrap();
+    }
+
+    /// The per-row escape: one decision tagged `advisor-nudge` naming the row.
+    fn write_advisor_nudge_clearing(main: &Path, decision_id: &str, row_id: &str) {
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        let event = json!({
+            "id": decision_id,
+            "type": "decide",
+            "date": "2026-08-29T01:00:00.000Z",
+            "decision": format!("declined the advisor consult for {row_id}: the loop already broke"),
+            "rationale": "r",
+            "tags": ["advisor-nudge"],
+            "scope": "repo",
+        });
+        let path = main.join(".bee").join("decisions.jsonl");
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{event}\n"));
+        std::fs::write(&path, text).unwrap();
+    }
+
+    /// an-3: an unanswered advisor nudge for the merging feature refuses the
+    /// merge, zero-mutation, naming every offending row — and the SAME
+    /// fixture merges once one clearing decision lands. One test, because the
+    /// second half is the only proof the refusal has a working remedy.
+    #[test]
+    fn an_unanswered_advisor_nudge_refuses_the_merge_until_a_decision_clears_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "nudged");
+        let wt = created.worktree_root.clone();
+
+        write_advisor_nudge_row(&main, "nud-1", Some("nudged"));
+        write_advisor_nudge_row(&main, "nud-2", Some("nudged"));
+        // Neither of these is this feature's debt.
+        write_advisor_nudge_row(&main, "nud-3", Some("elsewhere"));
+        write_advisor_nudge_row(&main, "nud-4", None);
+
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "an unanswered advisor nudge must refuse, never merge silently: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_ADVISOR_NUDGE_DEBT] "), "{message}");
+        assert!(message.contains("nud-1"), "every offender is named: {message}");
+        assert!(message.contains("nud-2"), "every offender is named: {message}");
+        assert!(!message.contains("nud-3"), "another feature's nudge is not named: {message}");
+        assert!(!message.contains("nud-4"), "a feature-less nudge is not named: {message}");
+        assert!(
+            message.contains("bee decisions log"),
+            "the refusal carries its own remedy: {message}"
+        );
+        assert!(message.contains("advisor-nudge"), "the refusal names its tag: {message}");
+
+        // Zero mutation: HEAD on main never moved, and the worktree stands.
+        let head_after =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(head_after, pre_merge_head, "a refused merge must never touch main");
+        assert!(wt.exists(), "the worktree stands — nothing was torn down");
+
+        // One row answered is not enough — the escape is PER ROW.
+        write_advisor_nudge_clearing(&main, "d1", "nud-1");
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!("one row of two answered must still refuse: {:?}", answer.result),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.contains("nud-2"), "the row still owed is named: {message}");
+        assert!(!message.contains("nud-1"), "the answered row is gone: {message}");
+
+        // Both answered — the same merge goes through.
+        write_advisor_nudge_clearing(&main, "d2", "nud-2");
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an answered nudge must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// an-3: ONE fixture state — an unanswered nudge for the feature — is
+    /// read the SAME way by `bee close`'s door and the merge precondition,
+    /// and ONE clearing decision opens BOTH. A door that answers differently
+    /// from its twin is the defect this pins.
+    #[test]
+    fn one_advisor_nudge_decision_clears_both_the_close_door_and_the_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "bothnudge");
+        write_advisor_nudge_row(&main, "nud-1", Some("bothnudge"));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "bothnudge").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(door.blocking, "the close door blocks first: {}", door.detail);
+
+        write_advisor_nudge_clearing(&main, "d1", "nud-1");
+
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "bothnudge").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(!door.blocking, "one escape, close door: {}", door.detail);
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("one escape must clear the merge door too: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// an-3: a worktree whose identity carries NO feature merges ungated —
+    /// the nudge helper is never called at all. The same `None` posture the
+    /// proof and dissent doors above both take.
+    #[test]
+    fn a_worktree_with_no_resolvable_feature_merges_past_the_advisor_nudge_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "nonudgefeat");
+        let wt = created.worktree_root.clone();
+        let _ =
+            std::fs::remove_file(wt.join(".bee").join("runtime").join("worktree-identity.json"));
+        let _ = std::fs::remove_file(wt.join(".bee").join("state.json"));
+
+        write_advisor_nudge_row(&main, "nud-1", Some("nonudgefeat"));
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an unresolved feature must merge ungated: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
     }
 
     /// performCleanup's refusal shapes carry Node's exact key ORDER — the
@@ -1590,6 +2378,50 @@ use std::time::Instant;
         git_status_porcelain(dir).unwrap()
     }
 
+    /// `git status --porcelain --untracked-files=all` as one string — the
+    /// spelling that NAMES an untracked file inside an otherwise-untracked
+    /// directory instead of collapsing it to `?? docs/`.
+    fn git_status_untracked_all_str(dir: &Path) -> String {
+        git_stdout(dir, &["status", "--porcelain", "--untracked-files=all"])
+    }
+
+    /// `git ls-files -- <path>`, trimmed: empty means the path is UNTRACKED
+    /// — nothing added it to the index or to a commit.
+    fn git_ls_files_str(dir: &Path, rel: &str) -> String {
+        git_stdout(dir, &["ls-files", "--", rel]).trim().to_string()
+    }
+
+    /// Seed a file in main and COMMIT it, so a later `std::fs::write` to the
+    /// same path leaves TRACKED-and-modified dirt instead of a brand-new
+    /// untracked file. (mdp-1) That is what a peer's dirt really looks like —
+    /// a capture sync dirties an existing tracked doc, it does not conjure an
+    /// untracked one — and tracked dirt outside the swept roots is what this
+    /// door still refuses on, unconditionally. Call it BEFORE the worktree is
+    /// created: main is then clean at creation, and the branch never carries
+    /// a change to this path, so the refusal cannot come from a collision.
+    fn seed_tracked_file(main: &Path, rel: &str) {
+        let path = main.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "seeded, already tracked\n").unwrap();
+        git_ok(main, &["add", "-A"]);
+        git_ok(main, &["commit", "-qm", "seed a tracked fixture file"]);
+    }
+
+    /// A read-only `git` call whose stdout an assertion needs verbatim.
+    fn git_stdout(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?} could not run in {dir:?}: {e}"));
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }
+
     /// A real worktree with one new commit on its branch — the smallest
     /// fixture that reaches the STAGED path (not ALREADY_UP_TO_DATE) in
     /// every test below.
@@ -1663,11 +2495,15 @@ use std::time::Instant;
 
     /// Truth 2: a dirty path OUTSIDE `.bee/` (and outside this feature's own
     /// `docs/history/<feature>/`) still refuses, and the message names it —
-    /// the auto-commit never widens past its two allowed roots.
+    /// the auto-commit never widens past its two allowed roots. (mdp-1) The
+    /// fixture is TRACKED-and-modified: tracked dirt refuses whether or not
+    /// the merging branch touches it, and the untracked narrowing never
+    /// reaches it.
     #[test]
     fn dirt_outside_bee_still_refuses_and_names_the_offending_path() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "unrelated.txt");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
@@ -1693,6 +2529,7 @@ use std::time::Instant;
     fn refusal_scope_string_names_the_widened_roots() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "unrelated.txt");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
@@ -1828,15 +2665,17 @@ use std::time::Instant;
     /// on `another_features_docs_history_dirt_still_refuses_and_is_named`.
     /// Only the exact paths THIS feature's own capped cells recorded are
     /// ever in scope; anything else under `docs/knowledge/` still refuses
-    /// and is named.
+    /// and is named. (mdp-1) The peer's file is TRACKED-and-modified, which
+    /// is what the 7429dfda incident actually was: a capture sync dirties an
+    /// existing tracked doc. Tracked dirt refuses unconditionally.
     #[test]
     fn another_features_docs_knowledge_dirt_still_refuses_and_is_named() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "docs/knowledge/areas/gates.md");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
-        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
         std::fs::write(
             main.join("docs").join("knowledge").join("areas").join("gates.md"),
             "a peer's in-flight capture sync\n",
@@ -1850,10 +2689,10 @@ use std::time::Instant;
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
         assert!(msg.contains("gates.md"), "{msg}");
         // Nothing committed, nothing merged: the peer's file is left exactly
-        // as dirtied (plain porcelain collapses an all-untracked `docs/` to
-        // one summary line, per D8a — `--untracked-files=all` is what names
-        // it, already proven above via `msg`).
-        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        // as dirtied. (mdp-1) A TRACKED modification is never collapsed by
+        // porcelain the way an untracked directory is, so plain porcelain
+        // names it here.
+        let after = git_status_porcelain_str(&main);
         assert!(
             after.contains("docs/knowledge/areas/gates.md"),
             "the peer's docs/knowledge file must be left untouched: {after}"
@@ -1864,17 +2703,20 @@ use std::time::Instant;
     /// recorded by no cell of THIS feature stays uncommitted even though the
     /// feature has other capped cells that recorded a DIFFERENT knowledge
     /// path — only the exact recorded paths are ever swept, never the whole
-    /// root just because the feature touched some part of it.
+    /// root just because the feature touched some part of it. (mdp-1) The
+    /// unrecorded file is TRACKED-and-modified, the dirt a capture sync
+    /// really leaves; tracked dirt outside the swept roots refuses
+    /// unconditionally.
     #[test]
     fn docs_knowledge_dirt_unrecorded_by_any_of_this_features_cells_stays_uncommitted() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "docs/knowledge/areas/unrecorded.md");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         write_capped_cell_with_files(&main, "demo-1", "demo", &["docs/knowledge/areas/recorded.md"]);
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
-        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
         std::fs::write(
             main.join("docs").join("knowledge").join("areas").join("unrecorded.md"),
             "dirt this feature never recorded touching\n",
@@ -1959,16 +2801,18 @@ use std::time::Instant;
     /// dirty-main refusal names it, the same mechanism that already names
     /// an unscoped `docs/history` file today. Modelled on
     /// `another_features_docs_knowledge_dirt_still_refuses_and_is_named`.
+    /// (mdp-1) The file is TRACKED-and-modified, the dirt a capture sync
+    /// really leaves; tracked dirt refuses unconditionally.
     #[test]
     fn feature_less_merge_docs_knowledge_dirt_stays_uncommitted_and_is_named() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "docs/knowledge/areas/example.md");
         let created = worktree_with_a_real_commit(&main, "demo");
         make_feature_unresolvable(&created.worktree_root);
         assert_eq!(resolve_worktree_feature(&created.worktree_root).feature, None);
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
-        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
         std::fs::write(
             main.join("docs").join("knowledge").join("areas").join("example.md"),
             "captured, but nobody can name whose feature this is\n",
@@ -1985,48 +2829,351 @@ use std::time::Instant;
         assert!(msg.contains("example.md"), "{msg}");
         // Nothing committed, nothing merged: the file is left exactly as
         // dirtied, same as an unscoped docs/history file is today.
-        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        let after = git_status_porcelain_str(&main);
         assert!(
             after.contains("docs/knowledge/areas/example.md"),
             "the unscoped docs/knowledge file must be left untouched: {after}"
         );
     }
 
-    /// The sharper half of this cell: another feature's OWN
-    /// `docs/history/<other>/` must never be swept into THIS merge's
-    /// auto-commit — a sibling session can be writing it at the same
-    /// moment, and sweeping it would land a peer's uncommitted work without
-    /// their say-so. Only `docs/history/<the-merging-feature>/` is ever in
-    /// scope; anything under a DIFFERENT feature's history dir still
-    /// refuses and is named.
     #[test]
-    fn another_features_docs_history_dirt_still_refuses_and_is_named() {
+    fn skills_version_stamp_paths_are_one_per_repo_skill_target() {
+        assert_eq!(
+            skills_version_stamp_paths(),
+            vec![
+                ".claude/skills/.bee-skills-version.json".to_string(),
+                ".agents/skills/.bee-skills-version.json".to_string(),
+                ".opencode/skills/.bee-skills-version.json".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn skills_version_stamp_dirt_in_main_auto_commits_and_merge_succeeds() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        for rel in skills_version_stamp_paths() {
+            seed_tracked_file(&main, &rel);
+        }
         let created = worktree_with_a_real_commit(&main, "demo");
 
-        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
-        std::fs::create_dir_all(main.join("docs").join("history").join("other-feature")).unwrap();
+        for rel in skills_version_stamp_paths() {
+            std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
+        }
+        assert!(is_tree_dirty(&main).unwrap(), "main must start dirty for this test to mean anything");
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => {
+                    panic!("merge refused instead of auto-committing the skills version stamps: {m}")
+                }
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "{}",
+            answer.result["bookkeeping_commit"]
+        );
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
+    #[test]
+    fn skills_version_stamp_dirt_in_main_auto_commits_on_a_feature_less_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        for rel in skills_version_stamp_paths() {
+            seed_tracked_file(&main, &rel);
+        }
+        let created = worktree_with_a_real_commit(&main, "demo");
+        make_feature_unresolvable(&created.worktree_root);
+        assert_eq!(resolve_worktree_feature(&created.worktree_root).feature, None);
+
+        for rel in skills_version_stamp_paths() {
+            std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
+        }
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => {
+                    panic!("a feature-less merge must still auto-commit the skills version stamps: {m}")
+                }
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
+    #[test]
+    fn skills_version_stamp_sibling_under_a_skills_root_still_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        for rel in skills_version_stamp_paths() {
+            seed_tracked_file(&main, &rel);
+        }
+        seed_tracked_file(&main, ".claude/skills/bee-build/SKILL.md");
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        for rel in skills_version_stamp_paths() {
+            std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
+        }
+        std::fs::write(main.join(".claude/skills/bee-build/SKILL.md"), "edited by hand\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else {
+            panic!("a modified file under a skills root other than the stamp must still refuse")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains(".claude/skills/bee-build/SKILL.md"), "{msg}");
+    }
+
+    #[test]
+    fn skills_version_stamp_name_outside_a_skills_root_still_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        for rel in skills_version_stamp_paths() {
+            seed_tracked_file(&main, &rel);
+        }
+        seed_tracked_file(&main, ".claude/skills/bee-build/.bee-skills-version.json");
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        for rel in skills_version_stamp_paths() {
+            std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
+        }
         std::fs::write(
-            main.join("docs").join("history").join("other-feature").join("plan.md"),
-            "a peer's in-flight work\n",
+            main.join(".claude/skills/bee-build/.bee-skills-version.json"),
+            "{\"version\": \"9.9.9\"}\n",
         )
         .unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
-        let Err(err) = result else { panic!("another feature's docs/history dirt must still refuse") };
+        let Err(err) = result else {
+            panic!("a stamp-named file NOT directly under a skills root must still refuse")
+        };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
-        assert!(msg.contains("other-feature"), "{msg}");
-        // Nothing committed, nothing merged: the peer's file is left exactly
-        // as dirtied (plain porcelain collapses an all-untracked `docs/` to
-        // one summary line, per D8a — `--untracked-files=all` is what names
-        // it, already proven above via `msg`).
-        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        assert!(msg.contains(".claude/skills/bee-build/.bee-skills-version.json"), "{msg}");
+    }
+
+    // ── mdp-1: an untracked path in main blocks the merge only where the
+    //    merging branch actually writes it ─────────────────────────────────
+    //
+    // These two replace `another_features_docs_history_dirt_still_refuses_
+    // and_is_named`, whose fixture was an untracked
+    // `docs/history/<other>/plan.md`. That test argued the REFUSAL was a
+    // safety property because sweeping a peer's `docs/history/<other>/` into
+    // this merge's bookkeeping commit would land their work without their
+    // say-so. The argument is sound, but it is about the AUTO-COMMIT, and
+    // the two are separable: do-not-commit is kept (and now PROVEN three
+    // ways in the first test below, instead of assumed from the refusal),
+    // while do-not-refuse is dropped, because refusing on a path this merge
+    // can never write bought nothing and cost every parallel session a
+    // merge. `main_bookkeeping_roots` is untouched, so the peer's file is
+    // exempted from the REFUSAL and from nothing else.
+
+    /// mdp-1, the half this cell FREES. A peer session's untracked
+    /// `docs/history/<other>/` file is not something this merge can touch:
+    /// the merging branch never writes that path, so no collision is
+    /// possible. Refusing on it made the steady state with several live
+    /// sessions "nobody merges until everybody commits" — a coordination
+    /// cost paid daily for a collision that cannot happen. The merge must
+    /// PROCEED, and the peer's file must still be there afterwards,
+    /// untracked and uncommitted: "stop refusing" must never quietly become
+    /// "sweep it into my commit".
+    #[test]
+    fn an_untracked_path_the_branch_never_touches_no_longer_blocks_the_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        let peer = main.join("docs").join("history").join("other-feature").join("plan.md");
+        std::fs::create_dir_all(peer.parent().unwrap()).unwrap();
+        std::fs::write(&peer, "a peer's in-flight work\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => {
+                    panic!("an untracked path the branch never writes must not refuse the merge: {m}")
+                }
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+
+        // The do-not-commit half, proven rather than assumed — three ways.
+        // Still on disk, byte-identical:
+        assert!(peer.exists(), "the peer's file must survive the merge");
+        assert_eq!(
+            std::fs::read_to_string(&peer).unwrap(),
+            "a peer's in-flight work\n",
+            "the peer's file must be left byte-untouched"
+        );
+        // still UNTRACKED (nothing added it to the index or to a commit):
+        assert!(
+            git_ls_files_str(&main, "docs/history/other-feature/plan.md").is_empty(),
+            "the peer's file must still be untracked after the merge"
+        );
+        // and still reported as uncommitted dirt by git itself:
+        let after = git_status_untracked_all_str(&main);
         assert!(
             after.contains("docs/history/other-feature/plan.md"),
-            "the peer's docs/history dir must be left untouched: {after}"
+            "the peer's file must still be uncommitted: {after}"
+        );
+    }
+
+    /// mdp-1, the half this cell KEEPS. The narrowing is a collision test,
+    /// never a blanket pardon for untracked files: when the merging branch
+    /// itself writes the path, the merge WOULD overwrite whatever is sitting
+    /// there, so it still refuses and still names it. Without this arm the
+    /// narrowing would be a way to clobber.
+    #[test]
+    fn an_untracked_path_the_branch_does_write_still_refuses_and_is_named() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        // The branch's own history adds exactly this path.
+        let on_branch = created
+            .worktree_root
+            .join("docs")
+            .join("history")
+            .join("other-feature")
+            .join("plan.md");
+        std::fs::create_dir_all(on_branch.parent().unwrap()).unwrap();
+        std::fs::write(&on_branch, "the branch's own version\n").unwrap();
+        git_ok(&created.worktree_root, &["add", "-A"]);
+        git_ok(&created.worktree_root, &["commit", "-qm", "the branch writes that path"]);
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        let collides = main.join("docs").join("history").join("other-feature").join("plan.md");
+        std::fs::create_dir_all(collides.parent().unwrap()).unwrap();
+        std::fs::write(&collides, "uncommitted work the merge would clobber\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else {
+            panic!("an untracked path the branch itself writes must still refuse")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains("docs/history/other-feature/plan.md"), "{msg}");
+        // Nothing merged, nothing clobbered: the file is left exactly as it was.
+        assert_eq!(
+            std::fs::read_to_string(&collides).unwrap(),
+            "uncommitted work the merge would clobber\n"
+        );
+    }
+
+    #[test]
+    fn an_untracked_history_file_the_branch_also_adds_refuses_and_is_named() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        let on_branch = created
+            .worktree_root
+            .join("docs")
+            .join("history")
+            .join("demo")
+            .join("CONTEXT.md");
+        std::fs::create_dir_all(on_branch.parent().unwrap()).unwrap();
+        std::fs::write(&on_branch, "the branch's own context\n").unwrap();
+        git_ok(&created.worktree_root, &["add", "-A"]);
+        git_ok(&created.worktree_root, &["commit", "-qm", "the branch adds CONTEXT.md"]);
+
+        let collides = main.join("docs").join("history").join("demo").join("CONTEXT.md");
+        std::fs::create_dir_all(collides.parent().unwrap()).unwrap();
+        std::fs::write(&collides, "already sitting in main, untracked\n").unwrap();
+        let head_before = git_stdout(&main, &["rev-parse", "HEAD"]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else {
+            panic!("an untracked history file the branch also writes must refuse up front")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains("docs/history/demo/CONTEXT.md"), "{msg}");
+
+        assert_eq!(
+            git_stdout(&main, &["rev-parse", "HEAD"]),
+            head_before,
+            "a refusal must not move main's HEAD"
+        );
+        let status = git_status_untracked_all_str(&main);
+        assert!(
+            status.lines().all(|line| line.starts_with("??")),
+            "nothing may be staged or committed by a refused merge: {status}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&collides).unwrap(),
+            "already sitting in main, untracked\n",
+            "the untracked file must be left byte-untouched"
+        );
+    }
+
+    /// mdp-1's sharp edge: the changed-file set is read against the branch's
+    /// MERGE BASE with main, never against main's HEAD. This fixture is the
+    /// one where the two spellings DISAGREE — main has moved on since the
+    /// fork and DELETED `stale.txt`, which the branch still carries
+    /// untouched. `git diff HEAD wt/demo` therefore names `stale.txt` (the
+    /// merge RESULT differs from HEAD there), but the branch never wrote it,
+    /// so an untracked `stale.txt` in main cannot be clobbered and must not
+    /// refuse. Without a fixture where main moved on since the fork, both
+    /// spellings agree and the test proves nothing.
+    #[test]
+    fn the_changed_file_set_is_read_against_the_merge_base_not_mains_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        std::fs::write(main.join("stale.txt"), "seeded before the fork\n").unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "seed stale.txt"]);
+
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        // Main moves on AFTER the fork: it deletes the file and commits.
+        git_ok(&main, &["rm", "-q", "stale.txt"]);
+        git_ok(&main, &["commit", "-qm", "main deletes stale.txt"]);
+        // …and an untracked file of the same name is left sitting in main.
+        std::fs::write(main.join("stale.txt"), "a peer's fresh scratch file\n").unwrap();
+
+        // The two spellings disagree — the whole reason this fixture exists.
+        let base = git_stdout(&main, &["merge-base", "HEAD", "wt/demo"]);
+        let base_spelling =
+            git_stdout(&main, &["diff", "--no-renames", "--name-only", base.trim(), "wt/demo"]);
+        assert!(
+            !base_spelling.contains("stale.txt"),
+            "the branch never wrote stale.txt: {base_spelling}"
+        );
+        let head_spelling =
+            git_stdout(&main, &["diff", "--no-renames", "--name-only", "HEAD", "wt/demo"]);
+        assert!(
+            head_spelling.contains("stale.txt"),
+            "the HEAD spelling must name stale.txt, or this fixture proves nothing: {head_spelling}"
+        );
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the merge-base spelling must let this merge through: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            std::fs::read_to_string(main.join("stale.txt")).unwrap(),
+            "a peer's fresh scratch file\n",
+            "the untracked file must be left byte-untouched"
         );
     }
 
@@ -2966,6 +4113,114 @@ use std::time::Instant;
         assert!(verdict.is_dead(), "{}", verdict.reason());
     }
 
+    fn queue_verdict(main_queue: Option<&str>, worktree_queue: &str) -> Verdict {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        if let Some(text) = main_queue {
+            std::fs::write(main.join(".bee").join("capture-queue.jsonl"), text).unwrap();
+        }
+        std::fs::write(created.worktree_root.join(".bee").join("capture-queue.jsonl"), worktree_queue)
+            .unwrap();
+        classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        })
+    }
+
+    const MAIN_QUEUE: &str = "{\"kind\":\"stub\",\"id\":\"a\"}\n{\"kind\":\"stub\",\"id\":\"b\"}\n{\"kind\":\"flush\",\"id\":\"a\"}\n";
+
+    #[test]
+    fn a_capture_queue_copied_from_main_does_not_keep() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), MAIN_QUEUE);
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_crlf_copy_of_the_main_queue_does_not_keep() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), &MAIN_QUEUE.replace('\n', "\r\n"));
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_pending_stub_main_never_names_keeps_and_names_it() {
+        let worktree = format!("{MAIN_QUEUE}{{\"kind\":\"stub\",\"id\":\"only-here\"}}\n");
+        let verdict = queue_verdict(Some(MAIN_QUEUE), &worktree);
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("1 pending"), "{}", verdict.reason());
+        assert!(verdict.reason().contains("only-here"), "{}", verdict.reason());
+        assert!(verdict.reason().contains("bee capture flush"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_stub_pending_in_the_worktree_but_flushed_in_main_does_not_keep() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), "{\"kind\":\"stub\",\"id\":\"a\"}\n");
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_stub_main_names_only_in_a_flush_line_does_not_keep() {
+        let verdict = queue_verdict(
+            Some("{\"kind\":\"flush\",\"id\":\"c\"}\n"),
+            "{\"kind\":\"stub\",\"id\":\"c\"}\n",
+        );
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_worktree_flush_of_a_stub_main_holds_pending_does_not_keep() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), "{\"kind\":\"flush\",\"id\":\"b\"}\n");
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_unique_stub_flushed_in_the_worktree_does_not_keep() {
+        let verdict = queue_verdict(
+            Some(MAIN_QUEUE),
+            "{\"kind\":\"stub\",\"id\":\"u\"}\n{\"kind\":\"flush\",\"id\":\"u\"}\n",
+        );
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_flush_line_before_its_stub_counts_as_flushed() {
+        let verdict = queue_verdict(
+            Some(MAIN_QUEUE),
+            "{\"kind\":\"flush\",\"id\":\"u\"}\n{\"kind\":\"stub\",\"id\":\"u\"}\n",
+        );
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn an_unparseable_queue_line_keeps() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), &format!("{MAIN_QUEUE}not json\n"));
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("capture-queue.jsonl"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_numeric_stub_id_keeps() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), "{\"kind\":\"stub\",\"id\":7}\n");
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+    }
+
+    #[test]
+    fn an_unparseable_main_queue_line_keeps() {
+        let verdict = queue_verdict(Some("not json\n"), MAIN_QUEUE);
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+    }
+
+    #[test]
+    fn a_missing_main_queue_with_a_pending_worktree_stub_keeps() {
+        let verdict = queue_verdict(None, MAIN_QUEUE);
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("1 pending"), "{}", verdict.reason());
+    }
+
     #[test]
     fn an_interrupted_rebase_keeps() {
         let tmp = tempfile::tempdir().unwrap();
@@ -3806,6 +5061,25 @@ use std::time::Instant;
 
         let after = std::fs::read(&lane_path).unwrap();
         assert_eq!(before, after, "a lane write that could not even be read must leave the file untouched");
+    }
+
+    #[test]
+    fn reconcile_failure_leaves_merge_green() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let state_path = main.join(".bee").join("state.json");
+        std::fs::write(&state_path, "not json at all").unwrap();
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a failing reconcile must warn, not refuse the merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        let warning = answer.result["reconcile_warning"].as_str().unwrap_or_default();
+        assert!(warning.contains("not valid JSON"), "{warning}");
     }
 
     /// mcl-2 (R2): the regression the semantic judge caught. `main_repo`'s
@@ -5157,4 +6431,1044 @@ use std::time::Instant;
             !clear_merge_ready_for_worktree(&main, "wt-does-not-exist"),
             "an unresolvable id is silence, never a throw"
         );
+    }
+
+    // ─── pwsr-1 (pi-worktree-session-relocation) ───────────────────────────
+    //    CLI session transition emission: builder, enter, linked merge, and Pi marker
+
+    #[test]
+    fn build_session_transition_shape_and_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("source");
+        let dst = tmp.path().join("target");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dst).unwrap();
+
+        // 1. Enter transition shape (without PI_SESSION_ID)
+        let enter = build_session_transition_with_session_id(
+            "enter-worktree",
+            &src,
+            &dst,
+            "wt-demo",
+            Some("demo"),
+            None,
+            None,
+        ).expect("build_session_transition must succeed for valid paths");
+        assert_eq!(enter["schemaVersion"], json!(1));
+        assert_eq!(enter["operation"], json!("enter-worktree"));
+        assert_eq!(enter["worktreeId"], json!("wt-demo"));
+        assert_eq!(enter["feature"], json!("demo"));
+        assert_eq!(enter["continuation"], Value::Null);
+        assert_eq!(enter["piSessionId"], Value::Null);
+        assert_eq!(enter["sourceCwd"], json!(canonical_path_str(&src).unwrap()));
+        assert_eq!(enter["targetCwd"], json!(canonical_path_str(&dst).unwrap()));
+
+        // 2. Exit transition shape with typed continuation
+        let cont = build_merge_continuation(true, true, Some(4500.0));
+        assert_eq!(cont["operation"], json!("merge-worktree"));
+        assert_eq!(cont["noCleanup"], json!(true));
+        assert_eq!(cont["skipUat"], json!(true));
+        assert_eq!(cont["queueWaitMs"], json!(4500));
+
+        let exit = build_session_transition_with_session_id(
+            "exit-worktree-before-merge",
+            &dst,
+            &src,
+            "wt-demo",
+            None,
+            Some(cont),
+            None,
+        ).expect("build_session_transition must succeed for valid paths");
+        assert_eq!(exit["schemaVersion"], json!(1));
+        assert_eq!(exit["operation"], json!("exit-worktree-before-merge"));
+        assert_eq!(exit["feature"], Value::Null);
+        assert_eq!(exit["continuation"]["operation"], json!("merge-worktree"));
+        assert_eq!(exit["continuation"]["noCleanup"], json!(true));
+        assert_eq!(exit["continuation"]["skipUat"], json!(true));
+        assert_eq!(exit["continuation"]["queueWaitMs"], json!(4500));
+    }
+
+    #[test]
+    fn build_session_transition_refuses_uncanonicalizable_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let existing = tmp.path().join("existing");
+        let non_existent = tmp.path().join("does-not-exist");
+        std::fs::create_dir_all(&existing).unwrap();
+
+        // Target path does not exist: must refuse rather than silently falling back
+        let err1 = build_session_transition_with_session_id(
+            "enter-worktree",
+            &existing,
+            &non_existent,
+            "wt-1",
+            None,
+            None,
+            None,
+        ).unwrap_err();
+        assert!(err1.contains("cannot canonicalize path"), "{err1}");
+
+        // Source path does not exist: must refuse
+        let err2 = build_session_transition_with_session_id(
+            "enter-worktree",
+            &non_existent,
+            &existing,
+            "wt-1",
+            None,
+            None,
+            None,
+        ).unwrap_err();
+        assert!(err2.contains("cannot canonicalize path"), "{err2}");
+    }
+
+    #[test]
+    fn build_merge_continuation_preserves_fractional_queue_wait_ms() {
+        // Fractional milliseconds must not be truncated to integer
+        let cont_frac = build_merge_continuation(false, false, Some(1234.5));
+        assert_eq!(cont_frac["queueWaitMs"], json!(1234.5));
+
+        // Exact whole milliseconds serialize as integer
+        let cont_whole = build_merge_continuation(false, false, Some(5000.0));
+        assert_eq!(cont_whole["queueWaitMs"], json!(5000));
+
+        // None serializes as null
+        let cont_none = build_merge_continuation(false, false, None);
+        assert_eq!(cont_none["queueWaitMs"], Value::Null);
+    }
+
+    #[test]
+    fn enter_worktree_core_verifies_grant_and_git_link_with_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-enter");
+
+        // Record states before enter
+        let main_status_before = git_status_porcelain_str(&main);
+        let wt_status_before = git_status_porcelain_str(&created.worktree_root);
+        let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
+
+        let (result, text) = enter_worktree_core(&main, &main, &created.id, None)
+            .expect("enter_worktree_core must succeed for valid granted worktree");
+
+        // Verify result and transition
+        assert_eq!(result["id"], json!(created.id));
+        assert_eq!(
+            dunce::canonicalize(result["worktreeRoot"].as_str().unwrap()).unwrap(),
+            dunce::canonicalize(&created.worktree_root).unwrap()
+        );
+        assert_eq!(result["feature"], json!("demo-enter"));
+
+        let trans = &result["sessionTransition"];
+        assert_eq!(trans["schemaVersion"], json!(1));
+        assert_eq!(trans["operation"], json!("enter-worktree"));
+        assert_eq!(trans["worktreeId"], json!(created.id));
+        assert_eq!(trans["feature"], json!("demo-enter"));
+        assert_eq!(trans["sourceCwd"], json!(canonical_path_str(&main).unwrap()));
+        assert_eq!(trans["targetCwd"], json!(canonical_path_str(&created.worktree_root).unwrap()));
+        assert_eq!(trans["continuation"], Value::Null);
+
+        // User text must not claim that the session entered before Pi acts
+        assert!(!text.contains("Entered"), "text must not claim entered before Pi acts: {text}");
+        assert!(!text.contains("Exiting"), "text must not claim exiting: {text}");
+        assert!(text.contains("Session transition intent emitted"), "{text}");
+        assert!(text.contains("stays on main until relocated"), "{text}");
+        assert!(text.contains(&created.id));
+        assert!(text.contains(result["worktreeRoot"].as_str().unwrap()));
+
+        // Verify ZERO mutations
+        assert_eq!(git_status_porcelain_str(&main), main_status_before);
+        assert_eq!(git_status_porcelain_str(&created.worktree_root), wt_status_before);
+        assert_eq!(read_grants_strict(&main.join(".bee")).unwrap(), grants_before);
+    }
+
+    #[test]
+    fn enter_worktree_core_supports_linked_to_linked_transition() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created_a = worktree_with_a_real_commit(&main, "demo-a");
+        let created_b = worktree_with_a_real_commit(&main, "demo-b");
+
+        let main_status_before = git_status_porcelain_str(&main);
+        let wt_a_status_before = git_status_porcelain_str(&created_a.worktree_root);
+        let wt_b_status_before = git_status_porcelain_str(&created_b.worktree_root);
+        let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
+
+        let (result, text) = enter_worktree_core(&main, &created_a.worktree_root, &created_b.id, None)
+            .expect("enter_worktree_core must succeed for linked-to-linked enter");
+
+        assert_eq!(result["id"], json!(created_b.id));
+        assert_eq!(
+            dunce::canonicalize(result["worktreeRoot"].as_str().unwrap()).unwrap(),
+            dunce::canonicalize(&created_b.worktree_root).unwrap()
+        );
+        assert_eq!(result["feature"], json!("demo-b"));
+
+        let trans = &result["sessionTransition"];
+        assert_eq!(trans["schemaVersion"], json!(1));
+        assert_eq!(trans["operation"], json!("enter-worktree"));
+        assert_eq!(trans["worktreeId"], json!(created_b.id));
+        assert_eq!(trans["feature"], json!("demo-b"));
+        assert_eq!(trans["sourceCwd"], json!(canonical_path_str(&created_a.worktree_root).unwrap()));
+        assert_eq!(trans["targetCwd"], json!(canonical_path_str(&created_b.worktree_root).unwrap()));
+        assert_eq!(trans["continuation"], Value::Null);
+
+        assert!(!text.contains("Entered"), "text must not claim entered before Pi acts: {text}");
+        assert!(!text.contains("stays on main until relocated"), "{text}");
+        assert!(text.contains("Session transition intent emitted"), "{text}");
+        assert!(text.contains("stays in the worktree until relocated"), "{text}");
+        assert!(text.contains(&created_b.id));
+        assert!(text.contains(result["worktreeRoot"].as_str().unwrap()));
+
+        // Zero mutations
+        assert_eq!(git_status_porcelain_str(&main), main_status_before);
+        assert_eq!(git_status_porcelain_str(&created_a.worktree_root), wt_a_status_before);
+        assert_eq!(git_status_porcelain_str(&created_b.worktree_root), wt_b_status_before);
+        assert_eq!(read_grants_strict(&main.join(".bee")).unwrap(), grants_before);
+    }
+
+    #[test]
+    fn enter_worktree_core_refuses_same_worktree_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-same");
+
+        let err = enter_worktree_core(&main, &created.worktree_root, &created.id, None).unwrap_err();
+        assert!(
+            err.contains("target directory is identical to source directory"),
+            "expected same-worktree rejection: {err}"
+        );
+    }
+
+    #[test]
+    fn enter_worktree_core_refuses_ungranted_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let err = enter_worktree_core(&main, &main, "nonexistent-id", None).unwrap_err();
+        assert!(err.contains("no granted worktree found for id \"nonexistent-id\""), "{err}");
+    }
+
+    #[test]
+    fn enter_worktree_core_and_linked_merge_refuse_false_valued_grants() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-false-grant");
+
+        // Overwrite grant value with boolean false
+        let mut grants = read_grants_strict(&main.join(".bee")).unwrap();
+        grants.insert(created.id.clone(), json!(false));
+        write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
+
+        // 1. enter_worktree_core must refuse false-valued grant
+        let enter_err = enter_worktree_core(&main, &main, &created.id, None).unwrap_err();
+        assert!(
+            enter_err.contains(&format!("no granted worktree found for id \"{}\"", created.id)),
+            "enter must refuse false-valued grant: {enter_err}"
+        );
+
+        // 2. linked_worktree_merge_core must refuse false-valued grant
+        let merge_err = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            None,
+            false,
+            false,
+            None,
+            None,
+        ).unwrap_err();
+        assert!(
+            merge_err.contains(&format!("no granted worktree found for id \"{}\"", created.id)),
+            "merge must refuse false-valued grant: {merge_err}"
+        );
+    }
+
+    #[test]
+    fn enter_worktree_core_refuses_broken_git_link() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        // Manually insert a grant with no matching git worktree
+        let mut grants = read_grants_strict(&main.join(".bee")).unwrap();
+        grants.insert("ghost-id".to_string(), json!(true));
+        write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
+
+        let err = enter_worktree_core(&main, &main, "ghost-id", None).unwrap_err();
+        assert!(err.contains("no matching, bidirectionally-valid git worktree link was found"), "{err}");
+    }
+
+    #[test]
+    fn enter_worktree_core_linked_entry_refuses_ungranted_and_broken_git_link() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created_a = worktree_with_a_real_commit(&main, "demo-a");
+
+        // Ungranted ID
+        let err1 = enter_worktree_core(&main, &created_a.worktree_root, "nonexistent-id", None).unwrap_err();
+        assert!(err1.contains("no granted worktree found for id \"nonexistent-id\""), "{err1}");
+
+        // Broken git link
+        let mut grants = read_grants_strict(&main.join(".bee")).unwrap();
+        grants.insert("ghost-id".to_string(), json!(true));
+        write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
+
+        let err2 = enter_worktree_core(&main, &created_a.worktree_root, "ghost-id", None).unwrap_err();
+        assert!(err2.contains("no matching, bidirectionally-valid git worktree link was found"), "{err2}");
+    }
+
+    #[test]
+    fn linked_worktree_merge_core_emits_exit_intent_and_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-exit");
+
+        let main_status_before = git_status_porcelain_str(&main);
+        let wt_status_before = git_status_porcelain_str(&created.worktree_root);
+        let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
+
+        // 1. Omitted id defaults to current_id
+        let (result, text) = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            None, // omitted id
+            false,
+            false,
+            None,
+            None,
+        ).expect("linked_worktree_merge_core must succeed with omitted id");
+
+        assert_eq!(result["ok"], json!(true));
+        assert_eq!(result["id"], json!(created.id));
+        assert_eq!(result["worktreeRoot"], json!(p(&created.worktree_root)));
+        assert_eq!(result["mainRoot"], json!(p(&main)));
+        assert_eq!(result["feature"], json!("demo-exit"));
+
+        let trans = &result["sessionTransition"];
+        assert_eq!(trans["schemaVersion"], json!(1));
+        assert_eq!(trans["operation"], json!("exit-worktree-before-merge"));
+        assert_eq!(trans["worktreeId"], json!(created.id));
+        assert_eq!(trans["feature"], json!("demo-exit"));
+        assert_eq!(trans["sourceCwd"], json!(canonical_path_str(&created.worktree_root).unwrap()));
+        assert_eq!(trans["targetCwd"], json!(canonical_path_str(&main).unwrap()));
+
+        let cont = &trans["continuation"];
+        assert_eq!(cont["operation"], json!("merge-worktree"));
+        assert_eq!(cont["noCleanup"], json!(false));
+        assert_eq!(cont["skipUat"], json!(false));
+        assert_eq!(cont["queueWaitMs"], Value::Null);
+
+        // User text must not claim exiting before Pi acts
+        assert!(!text.contains("Exiting"), "text must not claim exiting before Pi acts: {text}");
+        assert!(!text.contains("Entered"), "text must not claim entered: {text}");
+        assert!(text.contains("Session transition intent emitted"), "{text}");
+        assert!(text.contains("stays in the worktree until relocated"), "{text}");
+        assert!(text.contains(&created.id));
+        assert!(text.contains(&p(&main)));
+
+        // Verify ZERO side effects
+        assert_eq!(git_status_porcelain_str(&main), main_status_before);
+        assert_eq!(git_status_porcelain_str(&created.worktree_root), wt_status_before);
+        assert_eq!(read_grants_strict(&main.join(".bee")).unwrap(), grants_before);
+        assert!(!main.join(".bee/runtime/integration/queue").exists());
+    }
+
+    #[test]
+    fn linked_worktree_merge_core_passes_typed_flags_to_continuation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-exit-flags");
+
+        let (result, _text) = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            Some(&created.id), // matching id
+            true, // noCleanup
+            true, // skipUat
+            Some(7500.5), // fractional queueWaitMs preserved
+            None,
+        ).expect("linked_worktree_merge_core must succeed with matching id");
+
+        let cont = &result["sessionTransition"]["continuation"];
+        assert_eq!(cont["operation"], json!("merge-worktree"));
+        assert_eq!(cont["noCleanup"], json!(true));
+        assert_eq!(cont["skipUat"], json!(true));
+        assert_eq!(cont["queueWaitMs"], json!(7500.5));
+    }
+
+    #[test]
+    fn linked_worktree_merge_core_rejects_id_mismatch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-mismatch");
+
+        let err = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            Some("other-id"),
+            false,
+            false,
+            None,
+            None,
+        ).unwrap_err();
+
+        assert!(err.contains("cannot merge worktree \"other-id\" from inside worktree"), "{err}");
+    }
+
+    #[test]
+    fn linked_worktree_merge_core_rejects_absent_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-no-grant");
+
+        // Remove grant from main store
+        let mut grants = read_grants_strict(&main.join(".bee")).unwrap();
+        grants.remove(&created.id);
+        write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
+
+        let err = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            None,
+            false,
+            false,
+            None,
+            None,
+        ).unwrap_err();
+
+        assert!(err.contains(&format!("no granted worktree found for id \"{}\"", created.id)), "{err}");
+    }
+
+    #[test]
+    fn new_result_and_text_and_transition_builder_compose() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "compose-test");
+
+        let next_step = "Open next session";
+        let (mut result, text) = new_result_and_text("compose-test", &created, next_step);
+        assert!(!text.is_empty());
+
+        let transition = build_session_transition_with_session_id(
+            "enter-worktree",
+            &main,
+            &created.worktree_root,
+            &created.id,
+            Some("compose-test"),
+            None,
+            None,
+        ).expect("transition must build");
+        result.insert("sessionTransition".into(), transition.clone());
+
+        assert_eq!(result["sessionTransition"]["operation"], json!("enter-worktree"));
+        assert_eq!(result["sessionTransition"]["sourceCwd"], json!(canonical_path_str(&main).unwrap()));
+        assert_eq!(result["sessionTransition"]["targetCwd"], json!(canonical_path_str(&created.worktree_root).unwrap()));
+        assert_eq!(result["sessionTransition"]["worktreeId"], json!(created.id));
+        assert_eq!(result["sessionTransition"]["feature"], json!("compose-test"));
+        assert_eq!(result["sessionTransition"]["continuation"], Value::Null);
+    }
+
+    #[test]
+    fn pi_marker_formatting_and_hermetic_session_handling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let wt = tmp.path().join("wt");
+        std::fs::create_dir_all(&main).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+
+        // 1. Without PI_SESSION_ID: no marker formatted, piSessionId is null
+        let trans1 = build_session_transition_with_session_id(
+            "enter-worktree",
+            &main,
+            &wt,
+            "wt-1",
+            Some("f1"),
+            None,
+            None,
+        ).unwrap();
+        assert_eq!(trans1["piSessionId"], Value::Null);
+        assert_eq!(format_pi_transition_marker(&trans1), None);
+
+        // 2. With PI_SESSION_ID: marker is formatted as @@BEE_SESSION_TRANSITION@@ {json}
+        let session_id = "pi-test-session-999";
+        let trans2 = build_session_transition_with_session_id(
+            "enter-worktree",
+            &main,
+            &wt,
+            "wt-1",
+            Some("f1"),
+            None,
+            Some(session_id),
+        ).unwrap();
+        assert_eq!(trans2["piSessionId"], json!(session_id));
+
+        let marker = format_pi_transition_marker(&trans2)
+            .expect("must format marker when piSessionId is present");
+        assert!(marker.starts_with("@@BEE_SESSION_TRANSITION@@ "), "must have expected prefix: {marker}");
+        assert!(!marker.contains('\n'), "marker must be a single compact line on stderr");
+
+        let json_str = marker.strip_prefix("@@BEE_SESSION_TRANSITION@@ ").unwrap();
+        let parsed: Value = serde_json::from_str(json_str).expect("marker must contain valid JSON");
+        assert_eq!(parsed, trans2);
+    }
+
+    #[test]
+    fn run_enter_flag_validation_is_hermetic() {
+        // Unknown flag returns None before calling prelude
+        let (flags1, use_json1) = parse_flags(&["--id", "any-id", "--bogus", "val"]).unwrap();
+        assert_eq!(run_enter(flags1, use_json1, Instant::now()), None);
+
+        // Missing required --id returns None before calling prelude
+        let (flags2, use_json2) = parse_flags(&[]).unwrap();
+        assert_eq!(run_enter(flags2, use_json2, Instant::now()), None);
+
+        // Empty --id returns None before calling prelude
+        let (flags3, use_json3) = parse_flags(&["--id", ""]).unwrap();
+        assert_eq!(run_enter(flags3, use_json3, Instant::now()), None);
+    }
+
+    #[test]
+    fn worktree_registry_payload_help_accurately_describes_transitions() {
+        let raw = include_str!("../../generated/registry_payload.json");
+        let payload: Value = serde_json::from_str(raw).expect("registry payload must parse");
+        let cmds = payload["commands"].as_array().expect("commands must be an array");
+
+        let merge = cmds
+            .iter()
+            .find(|c| c["name"] == "worktree.merge")
+            .expect("worktree.merge must exist in registry payload");
+        let merge_desc = merge["description"].as_str().unwrap();
+        assert!(
+            !merge_desc.contains("running it from inside ANY linked worktree, including the one being merged, is refused"),
+            "worktree.merge description must not claim linked worktree is refused: {merge_desc}"
+        );
+        assert!(
+            !merge_desc.contains("a worktree cannot merge itself"),
+            "worktree.merge description must not claim worktree cannot merge itself: {merge_desc}"
+        );
+        assert!(
+            merge_desc.contains("linked worktree") && merge_desc.contains("exit"),
+            "worktree.merge description must explain linked worktree exit transition: {merge_desc}"
+        );
+
+        let new_cmd = cmds
+            .iter()
+            .find(|c| c["name"] == "worktree.new")
+            .expect("worktree.new must exist in registry payload");
+        let new_desc = new_cmd["description"].as_str().unwrap();
+        assert!(
+            new_desc.contains("transition") && new_desc.contains("enter"),
+            "worktree.new description must describe enter session transition: {new_desc}"
+        );
+
+        let enter_cmd = cmds
+            .iter()
+            .find(|c| c["name"] == "worktree.enter")
+            .expect("worktree.enter must exist in registry payload");
+        let enter_desc = enter_cmd["description"].as_str().unwrap();
+        assert!(
+            enter_desc.contains("transition") && enter_desc.to_ascii_lowercase().contains("enter"),
+            "worktree.enter description must describe enter session transition: {enter_desc}"
+        );
+    }
+
+    #[test]
+    fn instruction_builder_cases_per_runtime_and_operation() {
+        let target = "/target/path";
+        let wt_id = "wt-123";
+
+        // 1. pi: moves session when turn settles for all operations
+        assert_eq!(
+            build_instruction_for_runtime(Some("pi"), "enter-worktree", target, Some(wt_id)),
+            "Pi moves this session to /target/path when this turn settles."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("pi"), "exit-worktree", target, Some(wt_id)),
+            "Pi moves this session to /target/path when this turn settles."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("pi"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Pi moves this session to /target/path when this turn settles."
+        );
+
+        // 2. claude: EnterWorktree for enter-worktree, ExitWorktree keep for exit-worktree, ExitWorktree + merge for exit-worktree-before-merge
+        assert_eq!(
+            build_instruction_for_runtime(Some("claude"), "enter-worktree", target, Some(wt_id)),
+            "Call EnterWorktree with path=/target/path."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("claude"), "exit-worktree", target, Some(wt_id)),
+            "Call ExitWorktree with action=keep."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("claude"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Call ExitWorktree with action=keep, then run bee worktree merge --id wt-123 from /target/path."
+        );
+
+        // 3. codex: Ask user to type /cd <target>, then send any message to continue
+        assert_eq!(
+            build_instruction_for_runtime(Some("codex"), "enter-worktree", target, Some(wt_id)),
+            "Ask the user to type /cd /target/path, then send any message to continue."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("codex"), "exit-worktree", target, Some(wt_id)),
+            "Ask the user to type /cd /target/path, then send any message to continue."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("codex"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Ask the user to type /cd /target/path, then send any message to continue."
+        );
+
+        // 4. opencode: Ask user to type /move <target>, then send any message to continue
+        assert_eq!(
+            build_instruction_for_runtime(Some("opencode"), "enter-worktree", target, Some(wt_id)),
+            "Ask the user to type /move /target/path, then send any message to continue."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("opencode"), "exit-worktree", target, Some(wt_id)),
+            "Ask the user to type /move /target/path, then send any message to continue."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("opencode"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Ask the user to type /move /target/path, then send any message to continue."
+        );
+
+        // 5. none / other: Open a session at <target>.
+        assert_eq!(
+            build_instruction_for_runtime(None, "enter-worktree", target, Some(wt_id)),
+            "Open a session at /target/path."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("custom-other"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Open a session at /target/path."
+        );
+    }
+
+    #[test]
+    fn enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-test-caller");
+
+        // 1. enter_worktree_core with Claude caller
+        let claude_caller = crate::session_identity::CallerSession {
+            id: "claude-sess-1".into(),
+            runtime: "claude".into(),
+        };
+        let (enter_res, enter_text) = enter_worktree_core(&main, &main, &created.id, Some(&claude_caller))
+            .expect("enter_worktree_core succeeds");
+        assert_eq!(enter_res["sessionRuntime"], json!("claude"));
+        let target_str = canonical_path_str(&created.worktree_root).unwrap();
+        let expected_enter_inst = format!("Call EnterWorktree with path={target_str}.");
+        assert_eq!(enter_res["instruction"], json!(expected_enter_inst));
+        assert!(enter_text.contains(&expected_enter_inst));
+
+        // 2. linked_worktree_merge_core with Codex caller
+        let codex_caller = crate::session_identity::CallerSession {
+            id: "codex-thread-1".into(),
+            runtime: "codex".into(),
+        };
+        let (merge_res, merge_text) = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            None,
+            false,
+            false,
+            None,
+            Some(&codex_caller),
+        ).expect("linked_worktree_merge_core succeeds");
+        assert_eq!(merge_res["sessionRuntime"], json!("codex"));
+        let main_str = p(&main);
+        let expected_merge_inst = format!("Ask the user to type /cd {main_str}, then send any message to continue.");
+        assert_eq!(merge_res["instruction"], json!(expected_merge_inst));
+        assert!(merge_text.contains(&expected_merge_inst));
+
+        // 3. new_worktree_transition_result_and_text with OpenCode caller
+        let opencode_caller = crate::session_identity::CallerSession {
+            id: "opencode-sess-1".into(),
+            runtime: "opencode".into(),
+        };
+        let next_step = "next step text";
+        let (new_res, new_text) = new_worktree_transition_result_and_text(
+            "hwr-test-caller",
+            &created,
+            next_step,
+            &main,
+            Some(&opencode_caller),
+        ).expect("new_worktree_transition_result_and_text succeeds");
+        assert_eq!(new_res["sessionRuntime"], json!("opencode"));
+        let expected_new_inst = format!("Ask the user to type /move {}, then send any message to continue.", p(&created.worktree_root));
+        assert_eq!(new_res["instruction"], json!(expected_new_inst));
+        assert!(new_text.contains(&expected_new_inst));
+
+        // 4. none caller: sessionRuntime is null, instruction is Open a session at <target>.
+        let (none_res, none_text) = enter_worktree_core(&main, &main, &created.id, None)
+            .expect("enter_worktree_core succeeds with none caller");
+        assert_eq!(none_res["sessionRuntime"], Value::Null);
+        let expected_none_inst = format!("Open a session at {target_str}.");
+        assert_eq!(none_res["instruction"], json!(expected_none_inst));
+        assert!(none_text.contains(&expected_none_inst));
+    }
+
+    #[test]
+    fn schema_version_and_no_marker_remain_unaffected_under_claude_or_codex_env() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let wt = tmp.path().join("wt");
+        std::fs::create_dir_all(&wt).unwrap();
+
+        // Ensure transition built has schemaVersion 1 and no marker even when other env is present
+        let trans = build_session_transition_with_session_id(
+            "enter-worktree",
+            &main,
+            &wt,
+            "wt-hermetic",
+            Some("f-hermetic"),
+            None,
+            None,
+        ).unwrap();
+        assert_eq!(trans["schemaVersion"], json!(1));
+        assert_eq!(trans["piSessionId"], Value::Null);
+        assert_eq!(format_pi_transition_marker(&trans), None);
+    }
+
+    #[test]
+    fn exit_inside_a_worktree_emits_exit_worktree_and_changes_nothing_on_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-exit-inside");
+        let wt = created.worktree_root.clone();
+
+        let claude_caller = crate::session_identity::CallerSession {
+            id: "claude-sess-exit".into(),
+            runtime: "claude".into(),
+        };
+        let head_before = git_stdout(&wt, &["rev-parse", "HEAD"]);
+        let status_before = git_status_porcelain_str(&wt);
+
+        let (res, text) = linked_worktree_exit_core(
+            &wt,
+            &created.id,
+            &main,
+            None,
+            Some(&claude_caller),
+        )
+        .expect("linked_worktree_exit_core succeeds");
+
+        assert_eq!(res["ok"], json!(true));
+        assert_eq!(res["sessionTransition"]["operation"], json!("exit-worktree"));
+        let wt_canon = dunce::canonicalize(&wt).unwrap();
+        let main_canon = dunce::canonicalize(&main).unwrap();
+        assert_eq!(res["sessionTransition"]["sourceCwd"], json!(p(&wt_canon)));
+        assert_eq!(res["sessionTransition"]["targetCwd"], json!(p(&main_canon)));
+        assert_eq!(res["sessionTransition"]["continuation"], Value::Null);
+        assert_eq!(res["sessionRuntime"], json!("claude"));
+        assert!(text.contains("Call ExitWorktree with action=keep."));
+
+        // Passing a different --id refuses
+        let err = linked_worktree_exit_core(
+            &wt,
+            &created.id,
+            &main,
+            Some("other-id"),
+            Some(&claude_caller),
+        )
+        .expect_err("different id must refuse");
+        assert!(err.contains("cannot exit worktree \"other-id\" from inside worktree"));
+
+        // Changes nothing on disk
+        let head_after = git_stdout(&wt, &["rev-parse", "HEAD"]);
+        let status_after = git_status_porcelain_str(&wt);
+        assert_eq!(head_before, head_after);
+        assert_eq!(status_before, status_after);
+    }
+
+    #[test]
+    fn exit_from_main_with_caller_in_worktree_and_with_no_such_caller() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-exit-main");
+        let wt = created.worktree_root.clone();
+        let main_canon = dunce::canonicalize(&main).unwrap();
+
+        let sessions_dir = main.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+
+        // 1. Caller cwd sits inside the worktree -> emits exit-worktree with sourceCwd = that cwd
+        let caller_inside = crate::session_identity::CallerSession {
+            id: "sess-inside".into(),
+            runtime: "claude".into(),
+        };
+        let sub_path = wt.join("some-dir");
+        std::fs::create_dir_all(&sub_path).unwrap();
+        let sub_canon = dunce::canonicalize(&sub_path).unwrap();
+
+        let rec_inside = json!({
+            "id": "sess-inside",
+            "activity": {
+                "cwd": p(&sub_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-inside.json"),
+            jsjson::stringify(&rec_inside),
+        )
+        .unwrap();
+
+        let (res, text) = main_checkout_worktree_exit_core(
+            &main,
+            &created.id,
+            Some(&caller_inside),
+        )
+        .expect("main_checkout_worktree_exit_core succeeds");
+
+        assert_eq!(res["ok"], json!(true));
+        assert_eq!(res["sessionTransition"]["operation"], json!("exit-worktree"));
+        assert_eq!(res["sessionTransition"]["sourceCwd"], json!(p(&sub_canon)));
+        assert_eq!(res["sessionTransition"]["targetCwd"], json!(p(&main_canon)));
+        assert_eq!(res["sessionTransition"]["continuation"], Value::Null);
+        assert!(text.contains("Call ExitWorktree with action=keep."));
+
+        // 2. Caller cwd sits in main (outside worktree) -> refuses with typed error
+        let caller_outside = crate::session_identity::CallerSession {
+            id: "sess-outside".into(),
+            runtime: "claude".into(),
+        };
+        let rec_outside = json!({
+            "id": "sess-outside",
+            "activity": {
+                "cwd": p(&main_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-outside.json"),
+            jsjson::stringify(&rec_outside),
+        )
+        .unwrap();
+
+        let err_outside = main_checkout_worktree_exit_core(
+            &main,
+            &created.id,
+            Some(&caller_outside),
+        )
+        .expect_err("caller outside worktree must refuse");
+        assert!(err_outside.contains("no calling session sits in worktree"));
+
+        // 3. No caller (None) -> refuses with typed error
+        let err_none = main_checkout_worktree_exit_core(
+            &main,
+            &created.id,
+            None,
+        )
+        .expect_err("none caller must refuse");
+        assert!(err_none.contains("no calling session sits in worktree"));
+    }
+
+    #[test]
+    fn merge_from_main_with_caller_in_worktree_emits_exit_before_merge_and_main_head_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-merge-interception");
+        let wt = created.worktree_root.clone();
+        let wt_canon = dunce::canonicalize(&wt).unwrap();
+        let main_canon = dunce::canonicalize(&main).unwrap();
+
+        let sessions_dir = main.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+
+        let caller_in_wt = crate::session_identity::CallerSession {
+            id: "sess-in-wt".into(),
+            runtime: "claude".into(),
+        };
+        let rec_in_wt = json!({
+            "id": "sess-in-wt",
+            "activity": {
+                "cwd": p(&wt_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-in-wt.json"),
+            jsjson::stringify(&rec_in_wt),
+        )
+        .unwrap();
+
+        let head_before = git_stdout(&main, &["rev-parse", "HEAD"]);
+
+        // check_merge_exit_before_merge triggers
+        let check = check_merge_exit_before_merge(
+            &main,
+            &created.id,
+            false,
+            false,
+            None,
+            Some(&caller_in_wt),
+        )
+        .expect("check_merge_exit_before_merge succeeds");
+
+        let (res, text) = check.expect("interception should trigger");
+        assert_eq!(res["ok"], json!(true));
+        assert_eq!(
+            res["sessionTransition"]["operation"],
+            json!("exit-worktree-before-merge")
+        );
+        assert_eq!(res["sessionTransition"]["sourceCwd"], json!(p(&wt_canon)));
+        assert_eq!(res["sessionTransition"]["targetCwd"], json!(p(&main_canon)));
+        assert!(res["sessionTransition"]["continuation"].is_object());
+        assert!(text.contains("The merge did NOT run yet."));
+
+        let head_after = git_stdout(&main, &["rev-parse", "HEAD"]);
+        assert_eq!(head_before, head_after);
+    }
+
+    #[test]
+    fn merge_with_detached_or_caller_in_main_or_no_caller_merges_directly() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-merge-direct");
+        let wt = created.worktree_root.clone();
+        let wt_canon = dunce::canonicalize(&wt).unwrap();
+        let main_canon = dunce::canonicalize(&main).unwrap();
+
+        let sessions_dir = main.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+
+        // 1. Caller in main -> check_merge_exit_before_merge returns Ok(None) -> merges
+        let caller_in_main = crate::session_identity::CallerSession {
+            id: "sess-in-main".into(),
+            runtime: "claude".into(),
+        };
+        let rec_in_main = json!({
+            "id": "sess-in-main",
+            "activity": {
+                "cwd": p(&main_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-in-main.json"),
+            jsjson::stringify(&rec_in_main),
+        )
+        .unwrap();
+
+        let check_in_main = check_merge_exit_before_merge(
+            &main,
+            &created.id,
+            false,
+            false,
+            None,
+            Some(&caller_in_main),
+        )
+        .expect("check_merge_exit_before_merge succeeds");
+        assert!(check_in_main.is_none(), "caller in main must not intercept merge");
+
+        // 2. No caller env (None) -> check_merge_exit_before_merge returns Ok(None) -> merges
+        let check_none = check_merge_exit_before_merge(
+            &main,
+            &created.id,
+            false,
+            false,
+            None,
+            None,
+        )
+        .expect("check_merge_exit_before_merge succeeds");
+        assert!(check_none.is_none(), "no caller must not intercept merge");
+
+        // 3. Caller in worktree, but detached is used:
+        let caller_in_wt = crate::session_identity::CallerSession {
+            id: "sess-wt-detached".into(),
+            runtime: "claude".into(),
+        };
+        let rec_in_wt = json!({
+            "id": "sess-wt-detached",
+            "activity": {
+                "cwd": p(&wt_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-wt-detached.json"),
+            jsjson::stringify(&rec_in_wt),
+        )
+        .unwrap();
+
+        // Verify that with caller in worktree, non-detached check intercepts
+        let check_intercept = check_merge_exit_before_merge(
+            &main,
+            &created.id,
+            false,
+            false,
+            None,
+            Some(&caller_in_wt),
+        )
+        .expect("check succeeds");
+        assert!(check_intercept.is_some(), "non-detached must intercept");
+
+        // Now perform the direct merge (as detached would do)
+        let head_before = git_stdout(&main, &["rev-parse", "HEAD"]);
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = match merge_feature_worktree(&main, &created.id, cleanup, None, true, None) {
+            Ok(a) => a,
+            Err(_) => panic!("merge failed"),
+        };
+        assert!(answer.ok);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        let head_after = git_stdout(&main, &["rev-parse", "HEAD"]);
+        assert_ne!(head_before, head_after, "direct merge advances HEAD");
+    }
+
+    #[test]
+    fn codex_and_opencode_callers_get_waiting_on_mark() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let feature = "hwr-waiting-feature";
+
+        // Create a live workflow for this feature
+        let wf = crate::verbs::workflow_store::create_workflow(
+            &main,
+            crate::verbs::workflow_store::NewWorkflow::for_feature(feature),
+        )
+        .expect("create_workflow succeeds");
+        let wf_id = crate::verbs::workflow_store::wf_id(&wf);
+
+        // 1. Codex caller gets the waiting-on question mark
+        let codex_caller = crate::session_identity::CallerSession {
+            id: "codex-caller-sess".into(),
+            runtime: "codex".into(),
+        };
+        maybe_record_waiting_on(&main, Some(feature), &main, Some(&codex_caller));
+
+        let rec = crate::verbs::workflow_store::read_workflow_record(&main, &wf_id)
+            .map_err(|e| e.0)
+            .expect("read_workflow_record succeeds");
+        let wait = &rec["waiting_on"];
+        assert_eq!(wait["kind"], json!("question"));
+        assert_eq!(wait["session"], json!("codex-caller-sess"));
+        assert_eq!(wait["subject"], json!(p(&main)));
+
+        // 2. OpenCode caller also gets the waiting-on mark
+        let opencode_caller = crate::session_identity::CallerSession {
+            id: "opencode-caller-sess".into(),
+            runtime: "opencode".into(),
+        };
+        maybe_record_waiting_on(&main, Some(feature), &main, Some(&opencode_caller));
+
+        let rec = crate::verbs::workflow_store::read_workflow_record(&main, &wf_id)
+            .map_err(|e| e.0)
+            .expect("read_workflow_record succeeds");
+        let wait = &rec["waiting_on"];
+        assert_eq!(wait["kind"], json!("question"));
+        assert_eq!(wait["session"], json!("opencode-caller-sess"));
+
+        // 3. Claude caller does NOT write a waiting-on mark
+        // Clear first
+        let _ = crate::verbs::workflow_store::clear_workflow_waiting_on(&main, &wf_id);
+        let claude_caller = crate::session_identity::CallerSession {
+            id: "claude-caller-sess".into(),
+            runtime: "claude".into(),
+        };
+        maybe_record_waiting_on(&main, Some(feature), &main, Some(&claude_caller));
+
+        let rec = crate::verbs::workflow_store::read_workflow_record(&main, &wf_id)
+            .map_err(|e| e.0)
+            .expect("read_workflow_record succeeds");
+        assert!(rec.get("waiting_on").map_or(true, |v| v.is_null()));
     }

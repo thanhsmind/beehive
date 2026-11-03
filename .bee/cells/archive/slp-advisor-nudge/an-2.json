@@ -1,0 +1,66 @@
+{
+  "id": "an-2",
+  "feature": "slp-advisor-nudge",
+  "lane": "standard",
+  "role": "code",
+  "title": "per-feature advisor-nudge debt counter and per-row clearing",
+  "action": "Per 9e5eda5b (plan S2). In packages/bee-rs/crates/bee/src/verbs/supervisor.rs add a debt fn mirroring feature_dissent_debt's shape: count advisor-nudge rows whose derived feature matches AND that have no clearing decision. Clearing DIVERGES from the dissent-deferral tag+feature escape (packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs ~:536-552) on purpose: a clearing decision is tagged advisor-nudge AND carries the row id in its decision text (DecisionFilters.text matching, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs DecisionFilters ~:475-483) so one decision clears exactly one row — feature-level clearing is the rejected alternative, per plan. A decision missing the row id clears nothing. The fn is pure read over the two stores (423871d7: records alone). TDD inline tests: two unanswered rows, clear one, the other still counts; feature-less rows count against nothing.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-advisor-nudge/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"
+  ],
+  "decisions": [
+    "9e5eda5b-01fd-4c91-b663-1190e11142a8"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A decision tagged advisor-nudge naming a row id clears exactly that row's debt",
+      "Two unanswered rows with one cleared leaves one counting",
+      "A row with no derived feature counts against no feature"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "depends_on": [
+    "an-1"
+  ],
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "slp-advisor-nudge-w2",
+    "outcome": "per-feature advisor-nudge debt counter with a per-row, id-naming decision escape",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T10:20:09.560Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f41a8a9c-99da-4110-9f84-26e014cc3785",
+    "claimed_at": "2026-08-29T10:13:53.161Z",
+    "report": {
+      "outcome": "per-feature advisor-nudge debt counter with a per-row, id-naming decision escape",
+      "commit": "8748f255ed8b5a2f3ad6d63dc161a7a68118327b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — the cell's own verify: full crate suite, 3404 passed / 0 failed, including the two new debt tests",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 213 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

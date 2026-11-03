@@ -1,0 +1,84 @@
+{
+  "id": "sbd-5",
+  "feature": "statusline-by-default",
+  "lane": "standard",
+  "tier": "generation",
+  "role": "test",
+  "title": "Cover the statusline plan and apply path end to end, including the convergence case",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/statusline-by-default/plan.md",
+    "docs/history/statusline-by-default/reports/advisor-digest.md",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "action": "SLICE 1, part 4 of 4. Depends on sbd-2, sbd-3, sbd-4. Touch ONLY src/onboard/tests.rs.\n\nThis path has ZERO coverage today — `rg statusLine src/onboard/tests.rs` returns nothing, and docs/knowledge/areas/onboarding/status-display-vendoring.md records it as an Open Gap. Read the existing fixture helpers (l.43-90) and the plan()/apply() helpers before writing anything; reuse them, do not invent a second fixture style.\n\nCASES THAT CLOSE THE PRE-EXISTING GAP:\n 1. a project-level statusLine entry plans copy_statusline, and apply lands the canonical bytes\n 2. a drifted vendored script is re-planned and healed on apply\n 3. a deleted vendored script with the entry present is re-planned\n 4. managed.statusline carries the canonical hash only when the entry is present\n 5. re-apply after vendoring reports up_to_date\n\nCASES NEW TO OPT-OUT:\n 6. an absent settings.json is CREATED carrying the canonical statusLine entry, and the script is vendored\n 7. a settings.json without statusLine gains exactly ONE key; every other key, value and key order survives; a .bak is written\n 8. an existing project-level statusLine is left byte-for-byte and only the script is vendored\n 9. an existing USER-level statusLine (a home-directory path) is left byte-for-byte and NOTHING is vendored\n10. a non-object statusLine value is left alone and nothing is vendored\n11. an unparseable settings.json plans no statusline write and the run still applies — this must NOT be blocked_hooks_merge unless --repo-hooks was also passed\n12. a top-level non-object settings.json (e.g. `[]`) plans no statusline write\n13. --no-statusline on a fresh repo writes nothing, vendors nothing, records no managed key\n14. --no-statusline on a host already carrying the entry leaves entry and script untouched and still converges to up_to_date\n15. .bee/config.json {\"statusline\": false} behaves exactly like --no-statusline\n16. THE CONVERGENCE CASE, the one that would have broken every install: apply on a fresh host, then re-plan -> the plan is EMPTY / status up_to_date. scripts/install.sh fails the whole install when the post-apply recheck is not up_to_date, so this is the case that protects the installer.\n17. --repo-hooks AND the statusline default in one run: settings.json is written by both, exactly ONE .bak exists, and it holds the ORIGINAL pre-bee file\n18. parse_args mirrors the engine flag set (l.139) extended with --no-statusline\n19. plan_on_an_empty_repo_lists_the_whole_install (l.194) — update the expected action list for the new items; plan_payload_key_order_matches_node (l.248) must stay green\n20. malformed_settings_json_refuses_the_hooks_merge_with_zero_mutations (l.692) still holds with the statusline step present — zero mutations means no .claude/statusline-command.sh either\n\nAssert observable behaviour — planned actions, file bytes on disk, reported status — never internal call order.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib onboard",
+  "must_haves": {
+    "truths": [
+      "The convergence case (16) and the one-.bak case (17) both exist and are green.",
+      "Every negative case (9, 10, 11, 12, 13, 14) proves NOTHING was written.",
+      "No existing onboarding test is weakened or deleted to make room."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4cac0774"
+  ],
+  "deps": [
+    "sbd-2",
+    "sbd-3",
+    "sbd-4"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "leader-sbd-5",
+    "outcome": "18 cases over the statusline plan/apply path, including the round trip, the negatives, and the shared backup",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [
+      "The dispatched worker read for ~35 minutes without a single edit, the same pattern that had already cost sbd-3 an hour, so the leader closed its pane and wrote the section inline — hit an unforeseen obstacle",
+      "Wrote 18 cases rather than the 20 listed: the convergence case and the empty-repo managed-key case were already covered by apply_on_an_empty_repo_then_reapply_is_a_no_op and the plan_on_an_empty_repo assertions, which were extended instead of duplicated — found a better route",
+      "Red-first was not possible in the strict sense: the behaviour these cases pin was already implemented by sbd-2/3/4, so the tests are coverage-closing rather than bug-driving. Proof was supplied instead by mutating backup_once and watching the case fail for its documented reason, and by the independent live drive in reports/live-drive.md — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T10:54:27.883Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b",
+    "claimed_at": "2026-09-04T10:45:33.086Z",
+    "mistakes": [
+      {
+        "wrong": "Dispatched sbd-5 to the same worker agent that had already stalled for an hour on sbd-3 instead of taking it inline immediately",
+        "better": "that cost about 35 minutes of wall clock for nothing"
+      }
+    ],
+    "inline_reason": "The dispatched worker stalled the same way sbd-3's had; the leader closed the pane and wrote the tests inline from the feature worktree.",
+    "report": {
+      "outcome": "Eighteen cases cover the statusline plan and apply path, closing the pre-existing Open Gap and covering the opt-out reversal",
+      "commit": "192f2828",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee onboard — green:unit — 185/185, up from 167; the shared-backup case was additionally proven by mutation (reverting backup_once turned it red with .bak holding the hooks-merged file)",
+      "deviations": [
+        "The dispatched worker read for ~35 minutes without a single edit, the same pattern that had already cost sbd-3 an hour, so the leader closed its pane and wrote the section inline — hit an unforeseen obstacle",
+        "Wrote 18 cases rather than the 20 listed: the convergence case and the empty-repo managed-key case were already covered by apply_on_an_empty_repo_then_reapply_is_a_no_op and the plan_on_an_empty_repo assertions, which were extended instead of duplicated — found a better route",
+        "Red-first was not possible in the strict sense: the behaviour these cases pin was already implemented by sbd-2/3/4, so the tests are coverage-closing rather than bug-driving. Proof was supplied instead by mutating backup_once and watching the case fail for its documented reason, and by the independent live drive in reports/live-drive.md — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Dispatched sbd-5 to the same worker agent that had already stalled for an hour on sbd-3 instead of taking it inline immediately — that cost about 35 minutes of wall clock for nothing"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

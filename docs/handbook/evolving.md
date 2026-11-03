@@ -21,7 +21,7 @@ discipline -> Suites green -> Gate B (human reviews diff) -> Push (named, manual
 Before anything else, run the guard:
 
 ```bash
-test -f packages/bee-rs/Cargo.toml && test -f docs/handbook/writing-skills.md
+test -f packages/bee/AGENTS.block.md && test -f packages/bee-rs/crates/bee/Cargo.toml && test -f skills/bee-writing-skills/SKILL.md
 ```
 
 Only the repo that *develops* bee has the runtime crate and this handbook — a host repo's

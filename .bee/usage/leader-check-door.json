@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "leader-check-door",
+  "closed_at": "2026-09-21T06:23:02.588Z",
+  "sessions": [
+    {
+      "session_id": "695ef661-d172-4f5a-b000-fd74bf610bff",
+      "models": {
+        "claude-opus-5": {
+          "input": 296,
+          "output": 112657,
+          "cache_write": 646656,
+          "cache_read": 31873879,
+          "new": 759609,
+          "cached": 31873879,
+          "total": 32633488
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5": {
+          "input": 64,
+          "output": 34645,
+          "cache_write": 166332,
+          "cache_read": 2115259,
+          "new": 201041,
+          "cached": 2115259,
+          "total": 2316300
+        }
+      },
+      "subagent_count": 2,
+      "started_ms": 1789946814935,
+      "ended_ms": 1789971781836,
+      "totals": {
+        "new": 960650,
+        "cached": 33989138,
+        "total": 34949788
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 759609,
+      "cached": 31873879,
+      "total": 32633488
+    },
+    "subagents": {
+      "new": 201041,
+      "cached": 2115259,
+      "total": 2316300
+    },
+    "total": {
+      "new": 960650,
+      "cached": 33989138,
+      "total": 34949788
+    }
+  }
+}

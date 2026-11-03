@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "usage-in-bee-store",
+  "mode": "small",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"usage-in-bee-store\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"usage-in-bee-store\" — feature is closed.",
+  "created_at": "2026-08-30T12:40:35.010Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The release runs again. First try stopped early because of leftover bookkeeping files — I committed them; nothing was lost. Now the script r",
+    "asked_at": "2026-08-30T12:54:13.146Z",
+    "session": "b3245841-d406-4c7d-a62e-3f8fda66b632"
+  },
+  "route": {
+    "class": "refactor",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "relocate usage.json write from docs/history to .bee/usage; close.rs + tests",
+    "updated_at": "2026-08-30T12:40:35.026Z",
+    "feature": "usage-in-bee-store"
+  }
+}

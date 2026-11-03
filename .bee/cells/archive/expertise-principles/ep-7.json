@@ -1,0 +1,73 @@
+{
+  "id": "ep-7",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Ship the debugging and merges principles",
+  "action": "Add THREE principles, same procedure and grammar as cells ep-5 and ep-6 (read what they left and match it). The names, guide anchors and classes are FIXED: (1) principle-reproduce-first, expertise/debugging.md § Reproduce first, classes: bugfix. (2) principle-crash-site-versus-fault-site, expertise/debugging.md § Crash site versus fault site, classes: bugfix. (3) principle-never-invent-behavior-neither-side-has, expertise/merges.md § Never invent behavior neither side has, classes: refactor, feature, release. Rows append to the '## Principle homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md; pages go to skills/principle-<slug>/SKILL.md. Read each guide section before writing its page. Do NOT edit any file under expertise/ (CONTEXT.md D1). Run .bee/bin/bee dev release-manifest --write after the files land.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+  "affects_skills": [
+    "skills/principle-reproduce-first/SKILL.md",
+    "skills/principle-crash-site-versus-fault-site/SKILL.md",
+    "skills/principle-never-invent-behavior-neither-side-has/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "Exactly the three named principles land — no rename, no extra, no omission.",
+      "principle-reproduce-first and principle-red-before-green are neighbours, not duplicates: one is about getting the bug to happen at all, the other about watching a test fail for the reported reason before the fix. Each page says its own thing.",
+      "No file under expertise/ is edited (CONTEXT.md D1).",
+      "bee dev release-manifest --write runs before the cap."
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "ep-6"
+  ],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-8",
+    "outcome": "Three craft principles shipped: reproduce-first, crash-site-versus-fault-site, never-invent-behavior-neither-side-has",
+    "files_changed": [
+      "skills/principle-reproduce-first/SKILL.md",
+      "skills/principle-crash-site-versus-fault-site/SKILL.md",
+      "skills/principle-never-invent-behavior-neither-side-has/SKILL.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T18:39:28.565Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T18:36:57.197Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Three craft principles shipped: reproduce-first, crash-site-versus-fault-site, never-invent-behavior-neither-side-has",
+      "commit": "a7c3f244",
+      "files": [
+        "skills/principle-reproduce-first/SKILL.md",
+        "skills/principle-crash-site-versus-fault-site/SKILL.md",
+        "skills/principle-never-invent-behavior-neither-side-has/SKILL.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --test principle_index_parity && bee dev release-manifest --check && bee knowledge check — green:unit — the cell verify chain: the fence that pins skill dir, index row and guide anchor, plus manifest and knowledge parity",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

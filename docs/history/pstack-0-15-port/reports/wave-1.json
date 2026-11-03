@@ -1,0 +1,1 @@
+{"error":"bee dispatch wave: refused inside a granted feature worktree — this command reads the shared control plane (sessions, claims, workers, workflows, handoff), which lives in the main checkout. FIX: run it from /mnt/data/Projects/goglbe/beehive."}

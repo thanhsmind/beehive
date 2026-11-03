@@ -52,7 +52,7 @@ effect and should not ship.
 
 The structural half of this ticket is answered. Roles fall through (a
 consumer names an ordered list; an unset name yields to the next) and
-the role set is open (any name in `models.<runtime>` is legal; the
+the role set is open (any name in `team.<runtime>` is legal; the
 guard asks "is this configured", not "is this one of four words"). The
 cost of publishing a role therefore falls to roughly one name.
 
@@ -180,7 +180,7 @@ asks for an ordered list starting with that role. So the answer to
   suggestion nobody reads.
 - **Every job name beyond those is the user's to invent** — `test`,
   `design`, `docs`, `migrate`. No bee code is needed for any of them:
-  name it on a cell, configure it in `models.<runtime>`, done.
+  name it on a cell, configure it in `team.<runtime>`, done.
 
 Against the four candidates this ticket opened with:
 

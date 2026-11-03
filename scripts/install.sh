@@ -17,6 +17,12 @@ set -euo pipefail
 # supported: onboarding merges via BEE:START/END markers, never touches content
 # outside them, never overwrites existing state, and is idempotent.
 
+# A mise shim writes its activation banner ("mise <config> tools: codex@X.Y.Z")
+# to STDOUT before the real tool's own output, so it lands INSIDE the plugin
+# probe files below and makes them unparseable JSON. Silencing it once here
+# beats wrapping every call site.
+export MISE_QUIET=1
+
 REPO_URL="https://github.com/thanhsmind/beehive.git"
 RAW_BASE="https://raw.githubusercontent.com/thanhsmind/beehive/main"
 
@@ -29,8 +35,9 @@ Install bee into a target project directory (greenfield or brownfield).
 Options:
   -d, --directory <path>  Target project directory. Defaults to the current
                           directory. Created if missing (greenfield).
-      --runtime <which>   Which runtime skills to install: claude, codex, or
-                          both. Default: both.
+      --runtime <which>   Which runtime skills to install: claude, codex, pi,
+                          or both. Default: both. pi skips the Claude/Codex
+                          plugin steps and needs --distribution repo-copy.
       --distribution <mode>
                           plugin-first or repo-copy. Default: repo-copy.
       --plugin-state-file <path>
@@ -60,6 +67,14 @@ Options:
       --claude-md         Accepted for compatibility; a no-op alias of the
                           default (CLAUDE.md is written unless --no-claude-md
                           is passed).
+      --no-statusline     Skip vendoring the status-display script and adding
+                          the project-level statusLine entry to .claude/settings.json.
+                          By default onboarding writes both when the key is absent.
+      --design-packs <list|none>
+                          Design skill packs to install: a comma list of web,
+                          charts, motion, apple, figma, or none. Passed through
+                          to onboarding. Without it, a project with UI files is
+                          offered the packs at the end of the install.
       --no-git-init       Greenfield: do not run `git init` in a non-git target.
   -y, --yes               Non-interactive; accept defaults, skip prompts.
       --dry-run           Show the runtime copies and the exact onboarding plan
@@ -72,6 +87,9 @@ Safety (brownfield):
   - .bee/state.json, decisions.jsonl, cells/ are never overwritten.
   - .claude/settings.json hook merge creates a .bak backup; re-runs never
     duplicate entries.
+  - Status display: vendored by default with the project-level statusLine entry
+    in .claude/settings.json; add-only and never overwrites a present entry.
+    Pass --no-statusline to skip it.
   - Skills: onboarding syncs the bee skills per-project by default into
     <repo>/.claude/skills (Claude Code) and <repo>/.agents/skills (Codex);
     these trees are committed, not gitignored. Pass --global-skills to also
@@ -118,6 +136,8 @@ BUILD_FROM_SOURCE=0
 REPO_HOOKS=1
 GLOBAL_SKILLS=0
 NO_CLAUDE_MD=0
+NO_STATUSLINE=0
+DESIGN_PACKS=""
 GIT_INIT=1
 ASSUME_YES=0
 DRY_RUN=0
@@ -136,6 +156,8 @@ while [ $# -gt 0 ]; do
     --global-skills) GLOBAL_SKILLS=1; shift ;;
     --no-claude-md) NO_CLAUDE_MD=1; shift ;;
     --claude-md)    shift ;;
+    --no-statusline) NO_STATUSLINE=1; shift ;;
+    --design-packs) DESIGN_PACKS="$2"; shift 2 ;;
     --no-git-init)  GIT_INIT=0; shift ;;
     -y|--yes)       ASSUME_YES=1; shift ;;
     --dry-run)      DRY_RUN=1; shift ;;
@@ -145,8 +167,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-case "$RUNTIME" in claude|codex|both) ;; *) fail "--runtime must be claude, codex, or both" ;; esac
+case "$RUNTIME" in claude|codex|pi|both) ;; *) fail "--runtime must be claude, codex, pi, or both" ;; esac
 case "$DISTRIBUTION_MODE" in plugin-first|repo-copy) ;; *) fail "--distribution must be plugin-first or repo-copy" ;; esac
+# Pi has no plugin marketplace, and plugin-first writes no repo skills or hooks
+# — the pair would install nothing Pi can load. Refused before any write.
+if [ "$RUNTIME" = "pi" ] && [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then
+  fail "--runtime pi needs --distribution repo-copy: Pi has no plugin, and plugin-first writes no repo skills or hooks."
+fi
 
 # ---------- prerequisites ----------
 
@@ -177,14 +204,62 @@ RELEASES="https://github.com/thanhsmind/beehive/releases"
 PREBUILT_ASSET=""
 case "$(uname -s 2>/dev/null || echo unknown)/$(uname -m 2>/dev/null || echo unknown)" in
   Linux/x86_64)                          PREBUILT_ASSET="bee-x86_64-unknown-linux-gnu" ;;
+  Linux/aarch64|Linux/arm64)             PREBUILT_ASSET="bee-aarch64-unknown-linux-gnu" ;;
+  Darwin/arm64)                          PREBUILT_ASSET="bee-aarch64-apple-darwin" ;;
+  Darwin/x86_64)                         PREBUILT_ASSET="bee-x86_64-apple-darwin" ;;
   MINGW*/x86_64|MSYS*/x86_64|CYGWIN*/x86_64) PREBUILT_ASSET="bee-x86_64-pc-windows-msvc.exe" ;;
 esac
 
+# The transport's own words, from the last fetch. NAME THE REASON: this used to
+# be discarded, so both fallback lines below printed one reasonless sentence and
+# then compiled for minutes — a TLS failure, a corporate proxy, a rate limit and
+# a genuinely absent asset were indistinguishable in the log, and the single
+# datum that tells a user what to fix was the one thing the installer threw
+# away. install.ps1 has named its reason since it was written; this is the POSIX
+# half of that same contract, and it was missing because the test that pinned it
+# asserted only the Windows half.
+FETCH_ERR=""
+FETCH_WHY=""
+
+# Render FETCH_ERR as a log parenthetical, or nothing when there is no reason —
+# a genuinely absent asset must not read as "asset missing ()". Written as a
+# function because `[ -n "$x" ] && y=z` returns 1 on the empty case and `set -e`
+# would take the whole installer down over a successful no-op.
+# ONE LINE. curl writes multi-line diagnostics, and pasting them raw split the
+# log entry across lines with its closing paren and "building from source" tail
+# stranded below — the reader loses which line is the verdict at the exact
+# moment the installer is telling them why it is about to compile for minutes.
+fetch_why() {
+  FETCH_WHY=""
+  if [ -n "$FETCH_ERR" ]; then
+    FETCH_WHY=" ($(printf '%s' "$FETCH_ERR" | tr '\n\r\t' '   ' | sed 's/  */ /g; s/^ //; s/ *$//'))"
+  fi
+}
+
+# Stock macOS ships `shasum`, not `sha256sum`. Neither present is a verify
+# failure: the caller builds from source rather than run an unchecked binary.
+sha256_check() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum -c "$1"
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 -c "$1"
+  else return 1
+  fi
+}
+
 fetch() {
   # $1 url, $2 dest. curl or wget, whichever the host has.
-  if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"
-  elif command -v wget >/dev/null 2>&1; then wget -qO "$2" "$1"
-  else return 1
+  #
+  # RETRY BEFORE GIVING UP. What waits below this is not "try again later", it
+  # is a full cargo build of the crate graph. Three retries and a connect
+  # deadline cost seconds against the minutes that fallback costs, and a hung
+  # connection now fails instead of hanging forever with no deadline at all.
+  FETCH_ERR=""
+  if command -v curl >/dev/null 2>&1; then
+    FETCH_ERR="$(curl -fsSL --retry 3 --retry-connrefused --connect-timeout 10 "$1" -o "$2" 2>&1)"
+  elif command -v wget >/dev/null 2>&1; then
+    FETCH_ERR="$(wget -q --tries=3 --timeout=10 -O "$2" "$1" 2>&1)"
+  else
+    FETCH_ERR="neither curl nor wget is on PATH"
+    return 1
   fi
 }
 
@@ -207,25 +282,47 @@ else
   # and the instruction layer it vendors can never come from different commits.
   case "$REF" in
     v[0-9]*) PREBUILT_TAG="$REF" ;;
-    *) PREBUILT_TAG="$(fetch "$RELEASES/latest" /dev/stdout 2>/dev/null | sed -n 's|.*/releases/tag/\(v[0-9][^"]*\)".*|\1|p' | head -1 || true)" ;;
+    *)
+      # Fetch to a FILE, never down a pipe. A pipeline runs fetch in a subshell
+      # and FETCH_ERR dies with it, which would silently reintroduce the very
+      # reasonless line this block exists to fix.
+      STATE_TMP_TAG="$(mktemp -d)"
+      if fetch "$RELEASES/latest" "$STATE_TMP_TAG/latest.html"; then
+        PREBUILT_TAG="$(sed -n 's|.*/releases/tag/\(v[0-9][^"]*\)".*|\1|p' "$STATE_TMP_TAG/latest.html" | head -1 || true)"
+        if [ -z "$PREBUILT_TAG" ]; then
+          FETCH_ERR="no release tag in the redirect from /releases/latest"
+        fi
+      fi
+      rm -rf "$STATE_TMP_TAG"
+      ;;
   esac
   if [ -z "$PREBUILT_TAG" ]; then
-    log "binary   could not resolve a published release — building from source"
+    fetch_why
+    log "binary   could not resolve a published release$FETCH_WHY — building from source"
   else
     STATE_TMP_BIN="$(mktemp -d)"
-    if fetch "$RELEASES/download/$PREBUILT_TAG/$PREBUILT_ASSET" "$STATE_TMP_BIN/$PREBUILT_ASSET"        && fetch "$RELEASES/download/$PREBUILT_TAG/SHA256SUMS" "$STATE_TMP_BIN/SHA256SUMS"; then
+    if fetch "$RELEASES/download/$PREBUILT_TAG/$PREBUILT_ASSET" "$STATE_TMP_BIN/$PREBUILT_ASSET" \
+      && fetch "$RELEASES/download/$PREBUILT_TAG/SHA256SUMS" "$STATE_TMP_BIN/SHA256SUMS"; then
       # Verified, never trusted: this binary is about to be copied into the
       # target repo and executed by every hook.
-      if ( cd "$STATE_TMP_BIN" && grep " $PREBUILT_ASSET\$" SHA256SUMS > want.txt            && sha256sum -c want.txt >/dev/null 2>&1 ); then
+      if ( cd "$STATE_TMP_BIN" && grep " $PREBUILT_ASSET\$" SHA256SUMS > want.txt \
+           && sha256_check want.txt >/dev/null 2>&1 ); then
         chmod +x "$STATE_TMP_BIN/$PREBUILT_ASSET"
-        BEE_BIN="$STATE_TMP_BIN/$PREBUILT_ASSET"
-        log "binary   $PREBUILT_TAG $PREBUILT_ASSET (checksum verified) — no build needed"
+        # Verified is not runnable: an old glibc on ARM Linux loads nothing.
+        if "$STATE_TMP_BIN/$PREBUILT_ASSET" rs-info >/dev/null 2>&1; then
+          BEE_BIN="$STATE_TMP_BIN/$PREBUILT_ASSET"
+          log "binary   $PREBUILT_TAG $PREBUILT_ASSET (checksum verified) — no build needed"
+        else
+          log "binary   $PREBUILT_ASSET at $PREBUILT_TAG does not run on this host (too old a libc?) — building from source"
+          rm -rf "$STATE_TMP_BIN"
+        fi
       else
-        log "binary   CHECKSUM MISMATCH for $PREBUILT_ASSET at $PREBUILT_TAG — refusing it, building from source"
+        log "binary   CHECKSUM MISMATCH (or no sha256sum/shasum) for $PREBUILT_ASSET at $PREBUILT_TAG — refusing it, building from source"
         rm -rf "$STATE_TMP_BIN"
       fi
     else
-      log "binary   no downloadable asset at $PREBUILT_TAG — building from source"
+      fetch_why
+      log "binary   no downloadable asset at $PREBUILT_TAG$FETCH_WHY — building from source"
       rm -rf "$STATE_TMP_BIN"
     fi
   fi
@@ -289,7 +386,13 @@ if [ -z "$BEE_BIN" ]; then
   # found for `rlib` dependency <crate>" plus a cascade that reads as a broken
   # toolchain and is not one (rust-lang/cargo#16790). A cold one-shot install
   # build gains almost nothing from pipelining and cannot afford a coin flip.
-  CARGO_BUILD_PIPELINING=false cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Run \`rustup update stable\` first — bee needs a current toolchain. If the errors mention a metadata stub or a missing .rmeta, delete $BEE_SRC/packages/bee-rs/target and re-run."
+  # TARGET DIR PINNED, deliberately — the binary check below looks at
+  # packages/bee-rs/target/release, but a host with CARGO_TARGET_DIR set (or a
+  # config.toml build.target-dir) builds somewhere else entirely, the check
+  # finds nothing, and a green build reads as "produced no binary". The env
+  # var outranks every config file, so pinning it here makes the output path
+  # the one the check reads on every host.
+  CARGO_BUILD_PIPELINING=false CARGO_TARGET_DIR="$BEE_SRC/packages/bee-rs/target" cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Run \`rustup update stable\` first — bee needs a current toolchain. If the errors mention a metadata stub or a missing .rmeta, delete $BEE_SRC/packages/bee-rs/target and re-run."
   BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee"
   [ -x "$BEE_BIN" ] || BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee.exe"
   [ -x "$BEE_BIN" ] || fail "cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]"
@@ -374,6 +477,12 @@ fi
 if [ "$NO_CLAUDE_MD" -eq 1 ]; then
   ONBOARD_FLAGS+=("--no-claude-md")
 fi
+if [ "$NO_STATUSLINE" -eq 1 ]; then
+  ONBOARD_FLAGS+=("--no-statusline")
+fi
+if [ -n "$DESIGN_PACKS" ]; then
+  ONBOARD_FLAGS+=("--design-packs" "$DESIGN_PACKS")
+fi
 if [ "$GLOBAL_SKILLS" -eq 1 ]; then
   ONBOARD_FLAGS+=("--global-skills")
 fi
@@ -427,7 +536,7 @@ probe_plugin_state() {
   fi
   "$BEE_BIN" dev install-support merge-plugin-state \
       --claude "$claude_json" --codex "$codex_json" --out "$dest" \
-    || fail "Plugin status probe returned unreadable data (package-list shape drift)"
+    || fail "Plugin status probe returned unreadable data — either a probe file is not valid JSON (a tool wrapper such as a mise shim writing its own banner to stdout lands inside it; check $claude_json and $codex_json) or the runtime's package-list shape has drifted"
 }
 
 # Whether the bee plugin was installed for <runtime> in the pre-run snapshot.
@@ -553,13 +662,34 @@ plan_field() {
 #    before any confirmation, transition, or target/home write. onboard_bee reports
 #    a refusal as a non-`changes_needed`/`up_to_date` status (and may still exit 0),
 #    so status — not exit code alone — is the gate.
-log "plan     bee onboard ${ONBOARD_FLAGS[*]:-} (preview, writes nothing)"
-PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed. $(onboard_plan_stderr)"
-PREVIEW_STATUS="$(plan_field "$PREVIEW_JSON" status)"
-case "$PREVIEW_STATUS" in
-  up_to_date|changes_needed) log "plan     status: $PREVIEW_STATUS" ;;
-  *) fail "Onboarding refused before any change [$PREVIEW_STATUS]: $(plan_field "$PREVIEW_JSON" reason)" ;;
-esac
+preview_plan() {
+  log "plan     bee onboard ${ONBOARD_FLAGS[*]:-} (preview, writes nothing)"
+  PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed. $(onboard_plan_stderr)$PREVIEW_JSON"
+  PREVIEW_STATUS="$(plan_field "$PREVIEW_JSON" status)"
+  case "$PREVIEW_STATUS" in
+    up_to_date|changes_needed) log "plan     status: $PREVIEW_STATUS" ;;
+    *) fail "Onboarding refused before any change [$PREVIEW_STATUS]: $(plan_field "$PREVIEW_JSON" reason)" ;;
+  esac
+}
+preview_plan
+
+if [ -z "$DESIGN_PACKS" ] && [ "$(plan_field "$PREVIEW_JSON" design_offer)" = "true" ]; then
+  if [ "$ASSUME_YES" -eq 1 ] || [ "$DRY_RUN" -eq 1 ] || ! can_prompt; then
+    log "design   this project has interface files; re-run with --design-packs web (or charts,motion,apple,figma, or none) to add design skills"
+  else
+    printf 'Design skill packs for this project? web, charts, motion, apple, figma (comma list) — none stops the offer, Enter skips: ' > /dev/tty
+    DESIGN_ANSWER=""
+    IFS= read -r DESIGN_ANSWER < /dev/tty || true
+    if [ -n "$DESIGN_ANSWER" ]; then
+      DESIGN_PACKS="$DESIGN_ANSWER"
+      ONBOARD_FLAGS+=("--design-packs" "$DESIGN_PACKS")
+      log "design   packs: $DESIGN_PACKS"
+      preview_plan
+    else
+      log "design   this project has interface files; re-run with --design-packs web (or charts,motion,apple,figma, or none) to add design skills"
+    fi
+  fi
+fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
   log "dry-run  nothing written, no plugin changes. Re-run without --dry-run to apply."
@@ -622,10 +752,16 @@ apply_failure_fix_options() {
 }
 
 probe_plugin_state "$STATE_FILE"
-"$BEE_BIN" dev plugin-distribution "${DIST_ARGS[@]}" || {
-  apply_failure_fix_options
-  handle_transition_failure "Distribution preflight refused after transition"
-}
+# plugin-distribution knows claude and codex only; pi with plugin-first was
+# refused above, so this is the one call a pi run has to skip.
+if [ "$RUNTIME" = "pi" ]; then
+  log "plugin   Pi has no plugin marketplace — skipping the plugin distribution step"
+else
+  "$BEE_BIN" dev plugin-distribution "${DIST_ARGS[@]}" || {
+    apply_failure_fix_options
+    handle_transition_failure "Distribution preflight refused after transition"
+  }
+fi
 
 # 5. apply onboarding, but ONLY when the plan has work. A repeat install that is
 #    already current must not rewrite managed files (no timestamp-only churn).
@@ -668,7 +804,8 @@ printf '%s' "$STATUS" | "$BEE_BIN" dev install-support assert-parity \
 # will actually use.
 RECHECK="$( cd "$BEE_SRC" && "$HOST_BEE" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>"$CLEANUP_DIR/recheck.err" )" \
   || fail "Verification failed: onboarding recheck did not run. $(sed -n '1,6p' "$CLEANUP_DIR/recheck.err" 2>/dev/null)"
-printf '%s' "$RECHECK" | "$BEE_BIN" dev install-support assert-recheck \n  || fail "Verification failed: onboarding is not up_to_date immediately after apply."
+printf '%s' "$RECHECK" | "$BEE_BIN" dev install-support assert-recheck \
+  || fail "Verification failed: onboarding is not up_to_date immediately after apply."
 
 # Plugin-first: the distribution recheck must also report nothing left to clean.
 if [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then
@@ -681,4 +818,8 @@ log "bee installed."
 log "  next: open an agent session in $TARGET_DIR"
 log "  - Claude Code: the session preamble appears via hooks; or say \"Route this through bee: <task>\""
 log "  - Codex: the AGENTS.md BEE block bootstraps; first step is bee status"
+if [ "$RUNTIME" = "pi" ]; then
+  log "  - Pi: the bee extension and skills are in place; set a Pi default model first (bee runs plain \`pi\`)"
+fi
 log "  - scout any time: .bee/bin/bee status --json"
+printf '%s\n' "${APPLY_OUTPUT:-}" | grep '^notice: ' || true

@@ -1,0 +1,108 @@
+{
+  "id": "dcm-1",
+  "feature": "design-check-motion-frames",
+  "title": "Run the frame scripts in the bee-design Check step when a page moves",
+  "lane": "tiny",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "741aef06-2440-48af-895b-adbea52665cd"
+  ],
+  "files": [
+    "packages/bee/design/bee-design/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee/design/bee-design/SKILL.md",
+    "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In the Check step of packages/bee/design/bee-design/SKILL.md, add a rule: when the page has motion (animation, transition, scroll or hover states), and bee-design-motion is installed with a browser and playwright-core present, run its sheet.mjs and jumps.mjs on the page, look at the sheet, and fix every jump; when any of those is missing, list motion under NOT_VERIFIED with the reason. Add a MOTION field to the hand-over block. Then run bee dev regen.",
+  "verify": "rg -n \"jumps.mjs\" packages/bee/design/bee-design/SKILL.md && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "The Check step names sheet.mjs and jumps.mjs for a page with motion",
+      "The hand-over block has a MOTION field"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/design/bee-design/SKILL.md",
+        "substantive": "motion rule and MOTION field"
+      }
+    ],
+    "key_links": [
+      "Check step links the motion pack frame-rehearsal.md"
+    ],
+    "prohibitions": [
+      "No edit under packages/bee/design/*/references/"
+    ]
+  },
+  "trace": {
+    "worker": "leader",
+    "outcome": "bee-design Check step runs sheet and jumps on a moving page, hand-over gains MOTION",
+    "files_changed": [
+      "packages/bee/design/bee-design/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-02T09:54:06.295Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change; rg hit line 108, manifest 593 files match",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "dab040c2-2713-4466-9404-80365ecb2aae",
+    "verify_command": "rg -n \"jumps.mjs\" packages/bee/design/bee-design/SKILL.md && bee dev release-manifest --check",
+    "claimed_at": "2026-11-02T09:53:47.120Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Check step motion rule at SKILL.md lines 105-111, MOTION field in the hand-over block",
+      "commit": "fb74ac2da",
+      "files": [
+        "packages/bee/design/bee-design/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "rg -n \"jumps.mjs\" packages/bee/design/bee-design/SKILL.md && bee dev release-manifest --check — green:static — docs-only change; rg hit line 108, manifest 593 files match",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The Check step names sheet.mjs and jumps.mjs for a page with motion",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "The hand-over block has a MOTION field",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "Check step links the motion pack frame-rehearsal.md",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/SKILL.md",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-02T09:54:15.947Z",
+        "recorded_by": "dab040c2-2713-4466-9404-80365ecb2aae",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

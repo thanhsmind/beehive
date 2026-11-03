@@ -1,0 +1,117 @@
+{
+  "id": "vif-4",
+  "feature": "verification-in-the-flow",
+  "title": "Make the feature map read-first in doctrine and give the drive its home on the cap proof line",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "vif-3"
+  ],
+  "decisions": [
+    "c93a6948-ca40-4a03-9693-4e2ad6f14489",
+    "036e8a79-3aa8-4e69-b1b5-6b43e6729447",
+    "cb7b14b7-a6d0-4e9d-81dc-5fd8273317a2"
+  ],
+  "files": [],
+  "read_first": [
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-swarming/SKILL.md",
+    "docs/history/verification-in-the-flow/plan.md"
+  ],
+  "affects_skills": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "The doctrine half. vif-3 has already fixed the skill name and path to `verify-app` and `.bee/verify/verify-app/`; use those exact strings. Edit ONLY sources, then `bee dev regen`.\n\nA fence added in slice 1 guards you: `packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs` pins `AGENTS.md`'s bee block byte-for-byte to `packages/bee/AGENTS.block.md`. Edit the block source and skip the regen and that test goes RED. Never hand-edit `AGENTS.md`.\n\nPART A — the feature map joins the read-first rule (per D4 c93a6948).\n\n`packages/bee/AGENTS.block.md` carries the read-first sentence; find it with `rg -n 'is the state layer' packages/bee/AGENTS.block.md` — one hit, `\\`docs/knowledge/\\` is the state layer: read it first, sync it when` / `behavior changes.` Name the feature map beside it as the SECOND state layer: `.bee/verify/verify-app/features/` — a README index plus one file per user-facing feature, each answering what the feature is, how a user reaches it, how to drive it, and its gotchas.\n\nTwo tiers, and say which is which: the index is read at shaping; the ONE matching feature file is read at planning and travels into the execution worker's brief.\n\nThe rule must check its own premise. Most repos have no verification skill, so the path names nothing there. AGENTS.md already states the general form of this ('a rule that presupposes an environment fact checks that fact first') — find it with `rg -n 'presupposes an environment fact' packages/bee/AGENTS.block.md` and lean on it rather than inventing a second phrasing. Absent or empty map: proceed, silently, treating the ask as new. Stale map: NOT silent trust — per plan.md Decisions taken 7 the feature file travels with its last-modified date so a reader can judge it.\n\nPART B — the drive's home on the cap proof line (per D5 036e8a79).\n\nFind the proof-by-change-type rule with `rg -n 'agent owns test scope' packages/bee/AGENTS.block.md` — one hit. It is ONE bullet carrying three parenthesised cases: `(code -> related tests green; docs -> parity/pointer checks; behavior -> judge verdict)`. Add a FOURTH case, not a new bullet: a user-facing surface is proven by driving its mapped feature with its evidence attached. No new vocabulary is needed — decision cb7b14b7 already pins `green:live` to 'the real product was driven and its result inspected', which is exactly this. No new door, no new proof tier.\n\nPART C — the three load points.\n\n  - `skills/bee-shaping/SKILL.md` — at the scout/triage step, read the feature map INDEX to answer one question: is this ask a new feature, or a change to one already mapped? This is what stops an agent building a second door to a room that exists.\n  - `skills/bee-planning/SKILL.md` — at the Research step, read the ONE matching feature file. Its 'How to get to it' seeds the cell file list; its 'Gotchas' seed the plan risks.\n  - `skills/bee-swarming/SKILL.md` — the execution worker's brief carries that feature file, and the cap step names the drive as the proof a user-facing cell runs. Per plan.md Decisions taken 8 this pointer is the half that actually fires: a case in the middle of a long always-loaded contract is text that rots, so the cap step must name it where the proof line is written.\n\nKeep every addition short. These are pointer lines into an existing flow, not new sections.\n\nFINALLY: run `.bee/bin/bee dev regen`, then `.bee/bin/bee dev release-manifest --check`. Confirm the slice-1 fence is green — it is the direct test of whether the regen happened.",
+  "must_haves": {
+    "truths": [
+      "AGENTS.md names the feature map as a read-first state layer beside docs/knowledge/, with its absent-map behavior stated",
+      "The proof-by-change-type rule carries a fourth case for a user-facing surface, inside the existing bullet",
+      "bee-shaping reads the index, bee-planning reads the matching feature file, bee-swarming carries it into the worker brief and names the drive at the cap step",
+      "agents_block_render_parity is green, which proves AGENTS.md was regenerated from its edited source"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "the read-first mention and the fourth proof case, both inside existing rules; no new rule marker"
+      },
+      {
+        "path": "skills/bee-swarming/SKILL.md",
+        "substantive": "the worker-brief carry and the cap-step drive pointer"
+      }
+    ],
+    "key_links": [
+      "the doctrine and the skills all name the same literal path .bee/verify/verify-app/features/",
+      "AGENTS.md is regenerated, never hand-edited"
+    ],
+    "prohibitions": [
+      "No hand edit to AGENTS.md or to any rendered skill copy",
+      "No new rule marker in AGENTS.block.md - both additions land inside rules that already exist",
+      "No new proof tier, no new close door, no new config key",
+      "No change to commands.test anywhere"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test agents_block_render_parity --test rule_index_parity --test pointer_integrity --test specs_fence && .bee/bin/bee dev release-manifest --check",
+  "trace": {
+    "worker": "w-vif-4",
+    "outcome": "Feature map named as a read-first state layer in AGENTS.md, fourth proof case added, and the three skill load points pointed at it",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-swarming/SKILL.md",
+      "AGENTS.md"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: The edit inside agents-capture-line-at-close adds the feature map as a second read-first state layer, not a change to the capture line; its single home is AGENTS.md plus the three load-point skills (bee-shaping, bee-planning, bee-swarming), which this cell touched. bee-capturing owns docs/knowledge sync, not .bee/verify/verify-app/features/, so mirroring the fact there would duplicate it into a skill that does not own the artifact. bee-hive's rows cite the capture-line rule, which is unchanged."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T02:17:48.437Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e2b06a7d-ba76-42eb-848e-bd3b0cd118c3",
+    "claimed_at": "2026-09-02T02:13:25.359Z",
+    "sync_ack": "The edit inside agents-capture-line-at-close adds the feature map as a second read-first state layer, not a change to the capture line; its single home is AGENTS.md plus the three load-point skills (bee-shaping, bee-planning, bee-swarming), which this cell touched. bee-capturing owns docs/knowledge sync, not .bee/verify/verify-app/features/, so mirroring the fact there would duplicate it into a skill that does not own the artifact. bee-hive's rows cite the capture-line rule, which is unchanged.",
+    "mistakes": [
+      {
+        "wrong": "First python heredoc for skills/bee-swarming/SKILL.md asserted a cap-step string with the wrong line wrap and died after the first replace",
+        "better": "I should have grepped the exact wrapped bytes before writing the assert, not typed them from the earlier read"
+      },
+      {
+        "wrong": "The first AGENTS.block.md proof-case edit left an over-wide line that broke the file wrap and needed a second regen",
+        "better": "I should have rewrapped the whole bullet in the first edit"
+      }
+    ],
+    "report": {
+      "outcome": "Feature map named as a read-first state layer in AGENTS.md, fourth proof case added, and the three skill load points pointed at it",
+      "commit": "be68f725",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "skills/bee-shaping/SKILL.md",
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-swarming/SKILL.md",
+        "AGENTS.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test agents_block_render_parity --test rule_index_parity --test pointer_integrity --test specs_fence — green:unit — the cell verify set: the parity fence proves AGENTS.md was regenerated from the edited block, plus rule-marker and pointer parity over the doctrine and skill text touched; release-manifest --check green",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "First python heredoc for skills/bee-swarming/SKILL.md asserted a cap-step string with the wrong line wrap and died after the first replace — I should have grepped the exact wrapped bytes before writing the assert, not typed them from the earlier read",
+        "The first AGENTS.block.md proof-case edit left an over-wide line that broke the file wrap and needed a second regen — I should have rewrapped the whole bullet in the first edit"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 236 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

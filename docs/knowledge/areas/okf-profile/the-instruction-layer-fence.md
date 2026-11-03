@@ -117,8 +117,10 @@ stopped by another. The logic was migrated and the message was not, and nothing 
 
 - `scripts/okf_instructions_fence.mjs` — classifier, exemptions with their reasons, `--check`,
   `--selftest`, `--json`.
-- Wired as two chain entries in `scripts/run_verify.mjs` `EXTRA_SUITES`, pinned in
-  `scripts/tests/test_verify_manifest.mjs` (`MANDATORY_SUITES`, `MANDATORY_SUITE_ARGS`).
+- Was wired as two chain entries in the retired Node runner, pinned in its manifest guard;
+  both were deleted with the Rust port. The live chain is the declared `commands.test`
+  (`.bee/bin/bee test`), which runs `packages/bee-rs/crates/bee/tests/*.rs` — cargo discovers
+  them, so there is no suite registry to pin a check in.
 - The nudge it caught: `packages/bee/hooks/bee-session-close.mjs`, asserted end-to-end in
   `hooks/test_hook_contracts.mjs`.
 - Its sibling: `scripts/okf_specs_fence.mjs` (`specs-read-only-fence.md`).

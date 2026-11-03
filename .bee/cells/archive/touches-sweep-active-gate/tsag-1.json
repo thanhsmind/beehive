@@ -1,0 +1,131 @@
+{
+  "id": "tsag-1",
+  "feature": "touches-sweep-active-gate",
+  "title": "Queue a touches-sweep citation stub only when the cited decision has left the active set",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "00595ba4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "docs/history/touches-sweep-active-gate/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Gate the log-time touches-sweep on active-set membership (D1). The sweep is the `if let Some(ids) = &touches` block at verbs_read.rs:818-843, which today calls sweep_decision_citations and add_capture_stub for EVERY touched id. Hoist the existing `let active = active_decisions(root, false)?;` read from :845 to just above that block and reuse it — do not add a second read. Both the sweep and that read already sit after the append_jsonl at :802, so hoisting keeps the property its comment at :805-806 names: it reads the same active-set shape every other active_decisions() caller sees. Then, for each touched_id, skip the whole per-id sweep when that id IS present in the active set — a touches: relation whose target is still active queues nothing at all. When the id is absent, behave exactly as today: walk sweep_decision_citations, apply touches_sweep_excluded unchanged (D3), and enqueue a stub per surviving hit. Do NOT touch do_supersede's own sweep (D2), the impact door, the close-time sweep, or any already-queued stub (D4). Author inline tests in this file's test module covering: a touches: on a live decision queues NOTHING; a touches: on a retired decision still queues one stub per citing doc; the existing file exclusions still apply on that retired path; and a decision carrying both relations keeps its retiring-path behaviour.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee decisions",
+  "must_haves": {
+    "truths": [
+      "Logging a decision whose touches: target is still active queues no capture stub",
+      "Logging a decision whose touches: target has been retired still queues one stub per citing document",
+      "The sweep on the retiring relation behaves exactly as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+        "substantive": "the hoisted active-set read reused by the touches-sweep, the per-id membership skip, and inline tests for live, retired, excluded and both-relations; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the gate reuses the same active_decisions read the conflict-candidate scan already performs"
+    ],
+    "prohibitions": [
+      "No second active_decisions read added",
+      "No change to do_supersede's sweep",
+      "No change to touches_sweep_excluded",
+      "No change to the impact door or to stubs already queued"
+    ]
+  },
+  "trace": {
+    "worker": "tsag-worker",
+    "outcome": "Gated log-time touches citation sweep on active-set membership",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+    ],
+    "deviations": [
+      "updated tests.rs to align touches tests with D1 active-set gate — existing tests asserted pre-gate sweep behavior on live decisions and broke the verify command — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T15:09:32.322Z",
+    "behavior_change": true,
+    "verification_evidence": "touches sweep active-set gate unit tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "044a7c9a-a928-4ed5-bee9-4718396ee427",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee decisions",
+    "claimed_at": "2026-09-20T14:58:58.238Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Gated log-time touches citation sweep on active-set membership",
+      "commit": "35b6525621465e92f2ed1d6e510ae585395ff511",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee decisions — green:unit — touches sweep active-set gate unit tests",
+      "deviations": [
+        "updated tests.rs to align touches tests with D1 active-set gate — existing tests asserted pre-gate sweep behavior on live decisions and broke the verify command — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "D1-gate-on-active-set",
+            "status": "PASS",
+            "evidence": "sweep_touches_citations takes &active and skips the per-id sweep when the touched id is present in it. Test touches_on_live_decision_queues_nothing (verbs_read.rs:942) pins the live case at zero stubs; touches_on_retired_decision_queues_stubs (:982) pins the retired case at one."
+          },
+          {
+            "id": "D1-loop-ended",
+            "status": "PASS",
+            "evidence": "A decision settling a citation batch cites a LIVE decision by construction, so under this gate it queues nothing. That is the loop's termination, achieved by the same predicate rather than a separate exemption."
+          },
+          {
+            "id": "D2-retiring-sweep-untouched",
+            "status": "PASS",
+            "evidence": "git show HEAD --stat lists only verbs_read.rs and decisions/tests.rs; do_supersede's own sweep is not among the changed hunks."
+          },
+          {
+            "id": "D3-exclusions-untouched",
+            "status": "PASS",
+            "evidence": "Zero +/- lines touch fn touches_sweep_excluded, and touches_on_retired_decision_respects_file_exclusions (verbs_read.rs:1012) proves the exclusions still apply on the path that still produces stubs."
+          },
+          {
+            "id": "P1-no-second-active-read",
+            "status": "PASS",
+            "evidence": "One `active_decisions(root, false)` line added and one removed — the existing read was HOISTED above the sweep and reused, not duplicated, exactly as the cell required. Both it and the sweep remain after append_jsonl, preserving the property the comment at :805-806 names."
+          },
+          {
+            "id": "R1-proof-moved-not-weakened",
+            "status": "PASS",
+            "evidence": "The worker deleted rich assertions from the OLD live-path tests (stub file list, kind, source, dids, outcome) and recorded the deviation honestly: those tests asserted pre-gate behaviour and broke the verify. The same assertions are re-pinned on the retired path at :982-1011 — kind, source, dids and files all asserted — so the stub SHAPE is still covered, now on the path that actually produces one. This is the covered-contract-change flag the route named, resolved by relocating proof rather than dropping it."
+          },
+          {
+            "id": "T-suite-green",
+            "status": "PASS",
+            "evidence": "Leader re-ran the cell's declared verify independently after the commit: cargo test --release -p bee --bin bee decisions -> 'test result: ok. 102 passed; 0 failed'."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-20T15:11:01.072Z"
+      }
+    ]
+  }
+}

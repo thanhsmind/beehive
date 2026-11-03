@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Hook Runtime — governed paths, the always-writable set, and the intake gate"
-description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, how a value left by a retired phase is translated rather than left to trip that refusal, why an approved plan document stops accepting direct edits until a revision is stamped, and why the always-writable set is now two lists — a gated-phase list without blanket docs/, and an unchanged intake list — instead of one shared constant."
+description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, how a value left by a retired phase is translated rather than left to trip that refusal, why an approved plan document stops accepting direct edits until a revision is stamped, and why the always-writable set is now two lists — a gated-phase list without blanket docs/, and an unchanged intake list — instead of one shared constant, why a session bound to no lane is now judged against the lane record its own live claim names instead of the control-root default, and why an intake refusal aimed at such a session names binding it as the remedy, and why no store or config record the guard merely READS can switch the guard off any more — every such reader is infallible by signature or answers with a native deny naming the file it could not read, an unreadable value is read restrictively at every site, and the one restrictive read with no self-heal warns instead of locking a human out in silence."
 timestamp: 2026-08-14
 bee:
   id: hook-runtime-governed-paths-and-the-intake-gate
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)", "traceable-runs D1/D6 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a file-touching request is gated at every lane including docs, and the mandatory flow scopes to writes, code and docs alike; trun-5 splits the always-writable set so a gated-phase docs/ write outside docs/history/ actually refuses, closing the accidental hole D1/D6 named)"]
-  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)", "traceable-runs cell trun-5 (trace .bee/cells/trun-5.json, capped 2026-08-14 — guards.rs/checks.rs/paths.rs/hook_local.rs/tests.rs, red-first retargeting two pre-existing tests that pinned the old shared-list behavior)"]
+  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)", "traceable-runs D1/D6 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a file-touching request is gated at every lane including docs, and the mandatory flow scopes to writes, code and docs alike; trun-5 splits the always-writable set so a gated-phase docs/ write outside docs/history/ actually refuses, closing the accidental hole D1/D6 named)", "edd92ac9 (slp-followup-gaps D1/D2, 2026-08-29 — an unbound session's acting write record is resolved from its own live claim before the control-root default answers, and the intake refusal aimed at such a session names binding it as the remedy)", "pi-harness-workflow-parity D1/D2 (docs/history/pi-harness-workflow-parity/CONTEXT.md, 2026-09-11 — deny source writes from the main checkout across every active code phase before execution approval and outside the feature worktree)", "f1cc3f63 (stage-gate-phase-parity, 2026-09-20 — the per-turn tool narrowing follows the guard's four phase groups instead of a second list; supersedes the earlier two-group reading, which was false)"]
+  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/archive/hook-teeth/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)", "traceable-runs cell trun-5 (trace .bee/cells/archive/traceable-runs/trun-5.json, capped 2026-08-14 — guards.rs/checks.rs/paths.rs/hook_local.rs/tests.rs, red-first retargeting two pre-existing tests that pinned the old shared-list behavior)", "slp-followup-gaps cell sfg-1 (commit 9809d34e, 2026-08-29 — write_guard/checks.rs claim-derived record plus the shared lane_record_from helper, store.rs session_claimed_features, paths.rs session_bind_remedy_line, write_guard/tests.rs)", "slp-followup-gaps cell sfg-3 (commit 113093a1, 2026-08-29 — write_guard/store.rs claim readers made infallible by signature, checks.rs claim_derived_lane_record, and the ownership guard's claim-derived phase pinned in both directions)", "slp-followup-gaps cell sfg-4 (commit b98f03ab, 2026-08-29 — store.rs heartbeat_stale and control_root_for_state made infallible, the product_root check deleted, checks.rs check_workspace_ownership)", "slp-followup-gaps cell sfg-5 (commit 77fbdfd5, 2026-08-29 — store.rs lease/hold expiry readers, hook_local.rs unreadable_session_refusal and the SharedNested answers, jspath.rs queue_guard_warning_once, the corrected docs/tiny gate comments)", "slp-followup-gaps cell sfg-6 (commits d502e845 and 85ead065, 2026-08-29 — hook_local.rs CompanionMount and unreadable_companion_marker_refusal, and mod.rs's header carrying the rule, the two answer shapes, and the completed delegate list)"]
   authoritative_for: "hook-runtime: which write targets are governed and which are always writable"
   applied_at: [skills/bee-hive/references/routing-and-contracts.md]
 ---
@@ -152,6 +152,227 @@ named: the docs lane escaped the gate boundary by accident (the constant
 was shared, not by any considered exemption for docs work specifically),
 not by design.
 
+**B34 — An unbound session's acting record is resolved from its own live
+claim before the control-root default record answers (slp-followup-gaps D1,
+cell sfg-1, 2026-08-29).** Trigger: any governed write, or any git command the
+guard evaluates, from a session that HAS a record of its own and carries no
+non-empty lane binding. What changed: before the default record answers, the
+guard asks that session's own live claims which feature it is working under — a
+claim names a cell, the cell names a feature, and that feature's lane record
+becomes the acting record, carried under a third provenance value (`claim`)
+beside `default` and `lane`. The merge that builds a lane record out of the
+lane file now lives in one helper both arms call, so a record resolved by
+declaration and a record resolved by claim are byte-identical. Why this is not
+a guess: a claim is a fact the store already holds, written by the claim verb
+under this same session id. Why it was needed: a dispatched worker that was
+never bound was judged against a record about some other feature, and at a
+terminal phase it lost every source write and every commit it legitimately
+owed its own lane. What is deliberately narrow — every one of these conditions
+only ever removes the derivation, never widens it: it fires only for a session
+that has a record and no lane (a call with no session id, and a session the
+store has no record of, both fall straight to the default, the latter because
+the bind verb itself refuses such a session); it reads only claims THIS session
+owns; it needs exactly ONE distinct claimed feature, so two or more are
+ambiguous and resolve to nothing; an expired claim, an unreadable or non-object
+claim, a claim whose cell record is missing, and a cell naming no feature each
+contribute nothing (a claim carrying no usable ttl or no parseable timestamp
+reads as active, never as expired); the feature name must be a plain id, and its
+`.bee/lanes/<feature>.json` must exist, parse as an object, and carry a matching
+`feature` key — missing, corrupt, or naming a different feature resolves to
+nothing. Every one of those failures is SILENT: the derived path never raises
+the declared-lane path's typed lane refusals, because those belong to a session
+that declared a lane and got it wrong. What actors observe: a worker holding
+exactly one claim writes and commits under the lane it was actually handed; a
+lane-bound session, a sessionless call, and a session holding no claim behave
+byte-identically to before. One consumer groups `claim` with `default` on
+purpose — the workspace-ownership check: the derivation says WHICH LANE the
+session works under, never who owns the checkout, so a claim-derived session stays subject to that
+check exactly as an unbound one always was. **Corrected at cell sfg-3:** what
+the derivation DID move is the phase that check reads — the phase comes from
+the ACTING record, so a claim-derived session is judged on its claimed lane's
+phase and not on the control-root default's, and the trigger set shifts both
+ways: an unbound session whose claimed lane is `swarming` now skips a deny an
+`idle` default record used to reach, and one whose claimed lane is not
+`swarming` now reaches a deny a `swarming` default record used to skip.
+
+**B35 — An intake refusal aimed at an unbound session names binding it, beside
+the standing FIX line (slp-followup-gaps D2, cell sfg-1, 2026-08-29).**
+Trigger: an intake-gate refusal — a governed write, `git push`, a bookkeeping
+git verb reaching outside its allowed paths, or an unrecognised git
+subcommand — where the acting record came from the DEFAULT record AND the
+refusing session has a record of its own carrying no lane. What changed: the
+refusal keeps everything it said (the phase, the blocked action, the
+per-call-site extra sentence, the standing FIX line) and adds one more remedy
+line: this session is bound to no lane, so the gate judged it against the
+control-root default record rather than the lane it is working under — bind it
+to that lane, or claim its cell, and retry. Why the standing line was the wrong
+remedy for this caller: it tells them to route the request through the
+workflow, but the work IS routed; only the session is unattached to it. Who
+never sees the line: a lane-bound session, a claim-derived one (B34), a call
+with no session id, and a session the store has no record of — each already has
+its own correct answer, and the last could not act on the advice anyway.
+
+**B36 — A read error can no longer BE the guard's answer: every store and
+config reader is infallible by signature, or denies natively (slp-followup-gaps
+cells sfg-3/sfg-4/sfg-5/sfg-6, 2026-08-29).** Trigger: any record or config
+value the write guard merely READS on its way to a verdict — a claim, the cell
+record it names, a session record's `last_heartbeat`, the resolved control
+root, `product_root`, a path lease, a mirrored cross-worktree hold, a session
+record on the strict concurrency scan, the companion marker. What used to
+happen: any of those reads could answer with an error, and that error travelled
+out of record resolution or the write check to the hook's undecidable path,
+which fails open loudly — exit 0, "the guard did NOT run on it", for every
+check, every path and every `.bee` mutation in that call. One malformed
+`claimed_at` in the session's OWN claim, one unparseable `last_heartbeat` in a
+record the acting session neither owns nor can see, one broken `.git` line, two
+lines of config, one lease carrying an unreadable `expires_at`, one truncated
+`.bee/sessions/<id>.json`, or one corrupt `.bee/companion-session.json` each
+switched the WHOLE guard off on ordinary work. What changed: the rule those
+cells settled — a guard never falls open on data it merely read — is enforced
+structurally. Every reader reachable from record resolution or the write check
+is infallible by signature, with no error left to propagate, or it answers with
+a native deny naming the file it could not read (B37); no reader turns
+unreadable data into a delegation. One reader was deleted rather than made
+infallible: the `product_root` check existed only to reproduce a warning, and
+`product_root` names where product docs live — this guard never reads it for
+containment, for the acting record, or for any refusal it can utter — so it
+decides nothing. The config READ beside it stays, because that read is what
+prints bee's own corrupt-config line. What still delegates: only SHAPES of the
+request — an inline-eval command, a Windows drive-relative or UNC target
+spelling, a declared `guards.memory_root` (read perfectly well, delegating on
+what it SAYS), a bash command whose tokenizer walk hit the nesting cap, a
+non-ASCII AskUserQuestion header, and a small set of typed-refusal edges on
+non-ENOENT filesystem errors — never a record the guard could not read. Even
+the one delegate that still mentions the companion marker turns on its mere
+PRESENCE, so a perfect marker and a corrupt one delegate identically.
+
+**B37 — A record that is present but unreadable has exactly two answer shapes,
+and the fallback's own claim picks which (cells sfg-5/sfg-6, 2026-08-29).**
+Trigger: a `.bee` record the guard reads that exists on disk and cannot be read
+or parsed. Shape one — where the absent-file fallback claims nothing the guard
+spends: the reader warns in bee's own words and takes that fallback, exactly as
+a missing file would. Shape two — where the absent-file fallback would be a
+POSITIVE claim the reader cannot back: a native DENY naming the file and its
+remedy. Exactly two records are read the second way: `.bee/sessions/<id>.json`
+on the strict concurrency scan, where "absent" means "no live peer", and
+`.bee/companion-session.json` on the companion-mount check, where "absent"
+means "no verified mount". Each of those claims is what lets a write through,
+so neither is granted off bytes the reader could not parse. Why "treat the
+mount as unverified" was not good enough for the marker: unverified drops the
+shared-checkout deny and falls through to the plain nested-`.git` scan, which
+cannot cover a companion mount at all — the mount is a symlink whose realpath
+lands outside the checkout root, so the scan stops there — and the write could
+then land inside another live session's checkout, the very overwrite the
+primitive exists to prevent. What the refusals say: each names the file, states
+plainly that the guard cannot tell, and gives the repair — for a session
+record, repair or delete it (`bee state session release` writes a clean record
+for a finished session); for the marker, repair or delete it (the companion
+lifecycle writes it). Both are a deliberate departure from the ported original,
+whose typed detection-error deny quoted a runtime-worded crash log this port
+cannot reproduce byte-for-byte; matching that wording was judged not worth a
+hole. Warnings ride the same buffered channel as the corrupt-JSON warning, so
+the delegate contract still holds byte-for-byte: nothing reaches stderr before
+the verdict is final, and a delegate still carries zero output. The marker is
+read by one other caller — the directory-scan side of the same shared
+verification — and there an unreadable marker stays an error, because that
+caller maps it onto a native fail-CLOSED refusal that already names the marker
+file; the class is closed on both sides, never delegated on either.
+
+**B38 — Where an unreadable value is read rather than refused, it is read
+RESTRICTIVELY, at every site and in the same direction (cells
+sfg-3/sfg-4/sfg-5, 2026-08-29).** Trigger: a timestamp or field that is present
+but that the reader cannot turn into a value. Three readings, one direction: an
+unparseable claim stamp reads ACTIVE, never expired — which is what
+`claim_active` always promised and what the code stopped doing; an unparseable
+lease `expires_at`, or a mirrored hold's `mirrored_at`, reads NOT expired, so
+the lease or hold still conflicts and its deny still fires; an unparseable
+`last_heartbeat` reads NOT stale, so that session reads live. Why that
+direction: an unreadable byte is evidence about the byte — never that a session
+went away, that a hold lapsed, or that a claim ended — and at every call site
+the restrictive reading is the one that ADDS teeth. A live owner is what makes
+the workspace-ownership check refuse; a live session is what turns concurrent
+mode on and what counts the worker for the whole-tree git deny; a live hold is
+what keeps the reservation conflict and the cross-worktree foreign-hold deny.
+An unreadable value therefore costs the guard teeth nowhere; its worst case is
+one refusal a human clears by fixing the file the refusal names. The same
+direction covers the two non-timestamp reads: a context the guard cannot
+resolve answers with the root already in hand, and a root that finds neither
+session nor claim falls back to the control-root default record, which keeps
+provenance `default` and so keeps the intake gate and the workspace-ownership
+deny in front of that session — the fallback can only ever be as restrictive as
+the resolved answer, never more permissive. The one clause that is DISPLAY and
+not verdict says what it knows instead of guessing: a hold's expiry the reader
+cannot render now reads "expiry unknown — the timestamp on the record could not
+be read" rather than claiming "no expiry".
+
+**B39 — The one restrictive read with no self-heal names itself, so a lockout
+is never silent (cell sfg-5, 2026-08-29).** Trigger: a session record that
+parses and whose `last_heartbeat` does not. What follows from B38: that record
+reads live forever — nothing about it times out — so it can hold a workspace
+and refuse every other session in that checkout until a human touches the file.
+What was NOT done: the door was not reopened; reopening it restores the
+fail-open. What was done instead: the reader queues one warning naming the
+unreadable file, saying that session counts as live and will not time out on
+its own, and giving the fix (repair or delete the file; `bee state session
+release` writes a clean record for a session that is finished) — once per file
+per evaluation, on the same buffered channel the corrupt-JSON warning uses, so
+a human who is refused sees WHY instead of guessing. Second observable
+consequence, and the correction of two comments that claimed otherwise: the
+worktree-first docs-lane and tiny-lane exemptions both read "no other live
+session" from this same reader, so an unparseable heartbeat in a record that
+otherwise parses reads as a live peer and takes those exemptions away, turning
+a write those lanes would have permitted solo into a refusal. A missing or
+unreadable sessions directory, and a session file whose JSON does not parse,
+still contribute no record at all — they read as "no other live session" and
+both exemptions stand, exactly as before.
+
+**B40 — Pre-gate main-checkout source writes are denied across all active code
+phases (pi-harness-workflow-parity D2, cell pihp-5, 2026-09-11).** Trigger: any
+feature source write in the main checkout when the active feature holds no
+granted worktree. What changed: previously the no-grant refusal arm in
+`hook_local.rs` evaluated only when `phase == "swarming"`, allowing ungranted
+source writes on main during exploring and planning if the gate was approved or
+bypassed. The refusal now applies across every active code phase (`exploring`,
+`planning`, `swarming`, `reviewing`, `scribing`, `compounding`). Claude-shaped
+(`Edit`, `Write`) and Pi-shaped (`Write`, `MultiEdit`) hook inputs produce the
+identical refusal message directing work to `bee worktree new`. What remains
+preserved: named exemptions for solo `docs` lane, solo `tiny` lane, explicit
+`worktree_first: "off"` config, non-git directories, and corrupt grant
+registries continue to pass.
+
+**B41 — The per-turn tool narrowing on the extension-belt runtime reads the
+guard's own phase groups instead of keeping a second list
+(stage-gate-phase-parity, cell sgpp-1, 2026-09-20).** Trigger: every turn on the
+runtime that narrows the model's active tool list from a stage policy. What
+changed: that policy used to name four phases as write-open in a list of its
+own, which had drifted from the guard. The consequence was the tech-debt phase
+coming back read-only although the guard allows a source write in it, so the
+one phase whose purpose is changing code could not change code. The policy now
+asks the guard, and follows all four phase groups the guard actually has rather
+than the two the first reading assumed:
+
+| Guard group | Tool policy | Why |
+|---|---|---|
+| a phase that requires approval before a source write | narrow to the read pair | the guard refuses the write anyway |
+| a terminal state | keep the write tools | the guard's allowance here is path-shaped, and a tool list cannot express "only under these paths" |
+| a phase value the workflow does not recognize | narrow to the read pair | the guard refuses EVERY write there, so a write tool only spends turns on calls that deny |
+| every remaining phase | keep the write tools | the guard allows the write |
+
+An approved execution approval opens the full set in every group. What remains
+preserved: the narrowing stays advisory — the before-tool checkpoint is still
+the only surface that blocks — and it still fails open and silent on any
+missing precondition.
+
+How the two-group misreading happened, and what makes a derived rule like this
+one safe to write, is
+[The predicate you found first is not the rule](../../patterns/20260919-the-predicate-you-found-first-is-not-the-rule-read-its-siblings-before-you-derive-from-it.md).
+
+The terminal-state row is a trade taken with its cost stated, not an oversight.
+Narrowing there would block the docs-lane write the guard permits in a terminal
+state; keeping the tools lets a source write earn the intake refusal of B12,
+which names its own remedy. The narrower choice was rejected because the
+permitted write is the commoner one.
+
 ## Business Rules
 
 <!-- rule: hook-runtime-docs-lane-allowlist -->
@@ -216,6 +437,96 @@ not by design.
   per-user temporary area needs no identifier at all (cell hsa-1, measured
   2026-08-06).
 
+- R34 — A session that has its own record but no non-empty `lane` resolves its
+  acting write record from its OWN live claims before the control-root default
+  record: exactly one distinct claimed feature, whose `.bee/lanes/<feature>.json`
+  exists, parses as an object, and carries a matching `feature` key, yields that
+  lane record under provenance `claim`. Another session's claim, an expired
+  claim, an unreadable or non-object claim, a claim whose cell record is missing
+  or names no feature, two or more distinct features, a feature name that is not
+  a plain id, and a missing, corrupt or mismatched lane record each resolve to
+  nothing, and the default record answers exactly as before. The derived path is
+  silent by construction — it never raises the declared-lane path's typed lane
+  refusals — so it is neither more permissive nor more restrictive than the lane
+  the worker was legitimately handed; a lane-bound session, a sessionless call,
+  and a session holding no claim are unchanged to the byte. The
+  workspace-ownership check reads `claim` exactly as it reads `default`: the
+  derivation names a lane, never a checkout owner (slp-followup-gaps D1, cell
+  sfg-1, 2026-08-29) — but it takes its PHASE from the acting record, so a
+  claim-derived session is judged on its claimed lane's phase, which moves that
+  check's trigger set in both directions (corrected at cell sfg-3, 2026-08-29).
+
+- R35 — The intake refusal names binding the session as a remedy exactly when
+  the acting record came from the default record AND the refusing session has a
+  record carrying no lane. A lane-bound session, a claim-derived one, a call
+  with no session id, and a session the store has no record of never see that
+  line — the last because the bind verb refuses a session it has no record of,
+  which would make the advice a dead end (slp-followup-gaps D2, cell sfg-1,
+  2026-08-29).
+
+- R36 — No store or config value the write guard merely READS may produce the
+  guard's undecidable outcome. Every reader reachable from record resolution or
+  the write check is infallible by signature or answers with a native deny
+  naming the file; a reader whose value the guard never consults for a verdict
+  is deleted rather than kept as an error source (`product_root`), while the
+  config read beside it stays for its corrupt-config warning. What may still
+  delegate is a SHAPE of the request — an inline-eval command, a Windows
+  drive-relative/UNC spelling, a declared `guards.memory_root`, a truncated
+  tokenizer walk, a non-ASCII AskUserQuestion header, non-ENOENT filesystem
+  errors — never a record the guard could not read (slp-followup-gaps cells
+  sfg-3/sfg-4/sfg-5/sfg-6, 2026-08-29).
+
+- R37 — A present-but-unreadable `.bee` record is answered in one of two
+  shapes, never delegated: warn and take the absent-file fallback where that
+  fallback claims nothing the guard spends; deny natively, naming the file and
+  its remedy, where the fallback would be a positive claim the reader cannot
+  back. Two records take the deny: `.bee/sessions/<id>.json` on the strict
+  concurrency scan ("absent" would mean no live peer) and
+  `.bee/companion-session.json` on the companion-mount check ("absent" would
+  mean no verified mount). Both refusals are a deliberate departure from the
+  ported crash-log wording, and both are queued on the buffered channel, so a
+  delegate still carries zero output (cells sfg-5/sfg-6, 2026-08-29).
+
+- R38 — An unreadable value is read in the restrictive direction at every site:
+  an unparseable claim stamp is ACTIVE, an unparseable lease or hold expiry is
+  NOT expired, an unparseable heartbeat is NOT stale. An unreadable byte is
+  evidence about the byte and about nothing else, and each of those readings is
+  the one that keeps a deny available rather than dropping another session's
+  claim. An unresolvable context answers with the root in hand, whose worst
+  case is the control-root default record — provenance `default`, so the intake
+  gate and the workspace-ownership deny both stay in front of that session. A
+  display-only expiry clause that cannot render says "expiry unknown" instead
+  of "no expiry" (cells sfg-3/sfg-4/sfg-5, 2026-08-29).
+
+- R39 — A restrictive read with no time-based self-heal may not refuse in
+  silence: an unparseable `last_heartbeat` keeps its record live indefinitely,
+  so the reader names that file, the reason, and the repair once per file per
+  evaluation on the buffered warning channel. The same read removes the
+  worktree-first docs-lane and tiny-lane solo exemptions, because a session the
+  reader cannot date is not a session it may call dead; a missing or corrupt
+  sessions store still reads as "no other live session" and leaves both
+  exemptions standing (cell sfg-5, 2026-08-29).
+
+- R40 — A code-touching feature holding no granted worktree cannot write source
+  in the main checkout during any active code phase (`exploring`, `planning`,
+  `swarming`, `reviewing`, `scribing`, `compounding`). Both Claude and Pi hook
+  inputs return the identical worktree-first denial. Named solo docs, solo tiny,
+  explicit-off, non-git, and corrupt-grant exemptions remain preserved
+  (pi-harness-workflow-parity D2, cell pihp-5, 2026-09-11).
+
+- R41 — Which model a role runs is enforced as the user's choice, not left to
+  doctrine, and the arm that enforces it carries three properties the first
+  attempt lacked. **It covers its own off-switch**: `hooks.write-guard: false`
+  sits in the very file the arm guards, so an arm that left that key writable
+  would have guarded nothing — a self-governance guard that cannot protect the
+  switch that disables it is decorative. **It compares the MERGED view**, the
+  one `read_config_raw` builds, never a single file: `.bee/config.local.json`
+  deep-merges over `.bee/config.json`, and a per-file projection cannot tell a
+  masked change from a removal. **It compares the dispatcher's own normalized
+  projection** rather than a hand-picked key list, which is what picks up
+  `kind: cli` slots whose model rides inside `command`, and drops
+  `description` for free.
+
 ## Pointers (implementation)
 
 - Always-writable set (B33/R33): `GATE_ALLOWED_PREFIXES_GATED` and
@@ -231,6 +542,13 @@ not by design.
 - Gated set, unrecognized-phase refusal, and legacy-phase translation:
   `is_gated_phase` and the phase dispatch's final branch in
   `packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs` and `paths.rs`.
+- Per-turn tool narrowing (B41): `allowed_tools_for` in
+  `packages/bee-rs/crates/bee/src/hooks/stage_tools.rs`, which calls
+  `write_guard::is_gated_phase` and `write_guard::is_known_phase` rather than
+  naming phases itself; the belt side is the `turn_start` handler in
+  `.pi/extensions/bee-guard/` (`events.ts`, entry `index.ts`). The tests import `write_guard::KNOWN_PHASES`
+  so a phase added to the guard and not to the tool table fails
+  `stage_tools_table_covers_every_phase_the_write_guard_knows`.
 
 - Harness allowlist (R27): `HarnessRoots::from_bases` in
   `packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs` — the memory
@@ -248,8 +566,34 @@ not by design.
   the hold checks. Lane precedence mirrors `resolve_write_record`'s own. The
   deny text names `bee state plan-rev bump --lane <feature>` as the reopen.
   Red-first per hook-teeth D7: the path-resolution tests landed failing before
-  the deny wired in. Evidence: trace `.bee/cells/bh-1.json` (write_guard slice
+  the deny wired in. Evidence: trace `.bee/cells/archive/hook-teeth/bh-1.json` (write_guard slice
   93 passed, 0 failed, 2026-08-04).
+
+- The fail-open rule (B36-B39/R36-R39):
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs`'s module header
+  states it and carries the two answer shapes plus the full delegate list.
+  Infallible readers: `claim_active`, `session_claimed_features`,
+  `heartbeat_stale`, `control_root_for_state`, `lease_record_expired`,
+  `lease_to_reservation`, `find_foreign_holds`, `hold_expiry`,
+  `foreign_hold_expiry` in `write_guard/store.rs`;
+  `claim_derived_lane_record` in `write_guard/checks.rs`. Native denies:
+  `unreadable_session_refusal` and `unreadable_companion_marker_refusal` with
+  the `SharedNested` / `CompanionMount` answers in `write_guard/hook_local.rs`,
+  emitted from `write_guard/main.rs`. Lockout warning:
+  `warn_unreadable_heartbeat` (store.rs) through `queue_guard_warning_once`
+  (`write_guard/jspath.rs`). Tests: the `sfg3_*`/`sfg4_*`/`sfg5_*`/`sfg6_*`
+  cases in `write_guard/tests.rs`, every one of them red first on "expected a
+  native verdict, got Delegate".
+
+- Pre-gate main source denial across active phases (B40/R40):
+  `check_worktree_first` in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs` evaluates
+  every active code phase (`exploring`, `planning`, `swarming`, `reviewing`,
+  `scribing`, `compounding`) on the no-grant arm. Tests:
+  `pre_gate_main_write_denied_for_code_features_on_main_during_exploring_and_planning`
+  in `write_guard/tests.rs` and
+  `pre_gate_main_write_pi_extension_blocks_early_source_writes` in
+  `tests/pi_plugin_contracts.rs`.
 
 ## Open Gaps
 

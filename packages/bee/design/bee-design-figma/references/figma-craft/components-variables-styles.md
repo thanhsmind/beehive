@@ -1,0 +1,543 @@
+# Components, Variables & Styles — construction-time systems craft
+
+How to build Figma files that behave like a design SYSTEM, not a picture of one.
+Every rule: (a) principle, (b) when it applies, (c) exact Plugin API / CLI realization,
+(d) provenance. All snippets are `figma-agent exec-js` ready (async body, `figma` global,
+`return` = reply). Manifest is `documentAccess: "dynamic-page"` → **always the `*Async`
+getters/setters**; load ALL fonts before any text edit (see `figma-agent-hand.md`).
+
+Companion: `structure-hygiene.md` (naming, pages, lints). This file is the CONSTRUCTION
+side of the checks `figma-craft.md`'s construction lints validate (L6 unbound-fills,
+L7 lookalike-frames, L11 radius-scale) — build so the lints pass, don't fix after.
+
+---
+
+## 1. Components
+
+### 1.1 When to componentize
+
+- **Principle:** a repeated visual pattern with a stable role gets ONE source of truth.
+  Copies drift; components propagate.
+- **When:** the same subtree appears **≥2 times** AND you can name its variation axes
+  (state, size, tone…). One-off hero art: don't. Buttons/badges/cards/rows/inputs: always.
+  Converter output never emits instances ("Component instances 0/10" in a canvas-proven
+  audit) — so after `html-to-figma`, component extraction is YOUR job, round 1.
+- **Also componentize at 1 occurrence** when the element is a known DS primitive (button,
+  chip, avatar): the second use is coming.
+- **Don't componentize** layout scaffolding (page shells, one-off section wrappers) —
+  wrapper frames are structure, not vocabulary.
+
+### 1.2 Creating components
+
+```js
+// Brand new (empty) component:
+const c = figma.createComponent();               // ComponentNode, 100x100 default
+// From an existing, already-styled frame (the normal path after a build):
+const frame = await figma.getNodeByIdAsync('12:34');
+const comp = figma.createComponentFromNode(frame); // keeps children, size, position
+comp.name = 'Button/Primary';
+```
+
+- `createComponentFromNode(node)` is the workhorse: build the frame with auto-layout
+  first, promote it after it's right. The node is consumed (becomes the component).
+- Position components on a dedicated `[components]` section/page, not scattered in the
+  artboard (see `structure-hygiene.md` §2).
+- Provenance: https://developers.figma.com/docs/plugins/api/figma/ (`createComponent`,
+  `createComponentFromNode`).
+
+### 1.3 Variants — combineAsVariants + naming contract
+
+- **Principle:** variation axes live in ONE component set, not sibling components named
+  "Button 2 hover final".
+- **When:** ≥2 components differ only along enumerable axes (State, Size, Tone…).
+- **How:**
+
+```js
+// Signature: combineAsVariants(nodes: ReadonlyArray<ComponentNode>,
+//            parent: BaseNode & ChildrenMixin, index?: number): ComponentSetNode
+const set = figma.combineAsVariants([compDefault, compHover, compDisabled], figma.currentPage);
+set.name = 'Button/Primary';
+// Variant NAMING CONTRACT: each child component's name = comma-separated
+// "Property=Value" pairs. This IS the data model — the set parses names into properties.
+compDefault.name  = 'State=Default';
+compHover.name    = 'State=Hover';
+compDisabled.name = 'State=Disabled';
+// Multi-axis: 'State=Default, Size=Large'
+```
+
+- There is no `createComponentSet()` — empty sets are illegal; you always combine
+  existing components.
+- Renaming a variant child to a non-`Prop=Value` shape silently creates a property
+  named after the whole string — lint for `=` in every child name of a `COMPONENT_SET`.
+- **Post-combine geometry (B4):** immediately after `combineAsVariants` the variant
+  children all stack at `(0, 0)` overlapping. Size the set from the ACTUAL child bounds —
+  walk the children for `max(x + width)` / `max(y + height)` and `resize()` the set to that
+  (Figma's own auto-layout on the set will then space them). NEVER size it from a formula
+  like `cols * cardWidth + gaps`: variant children differ in size and the formula clips or
+  leaves dead space.
+
+```js
+const maxX = Math.max(...set.children.map(c => c.x + c.width));
+const maxY = Math.max(...set.children.map(c => c.y + c.height));
+set.resize(maxX, maxY);   // from real bounds, never a formula
+```
+- Provenance: https://developers.figma.com/docs/plugins/api/figma/#combineasvariants ·
+  naming convention: https://help.figma.com/hc/en-us/articles/360056440594 (Create and
+  use variants).
+
+### 1.4 Component properties — definitions
+
+`componentPropertyDefinitions` (readonly map) + three mutators. Types:
+`'VARIANT' | 'BOOLEAN' | 'TEXT' | 'INSTANCE_SWAP'` (+ newer `'SLOT'` — build via
+`createSlot()`, see §1.6).
+
+```js
+const set = await figma.getNodeByIdAsync('<COMPONENT_SET_ID>');
+// Add — returns the ACTUAL property name (BOOLEAN/TEXT/INSTANCE_SWAP get a '#id' suffix):
+const showIconProp = set.addComponentProperty('showIcon', 'BOOLEAN', true);
+const labelProp    = set.addComponentProperty('label', 'TEXT', 'Button');
+const iconProp     = set.addComponentProperty('icon', 'INSTANCE_SWAP', iconComponent.id,
+  { preferredValues: [{ type: 'COMPONENT', key: iconComponent.key }] });
+// Edit (rename / change default):
+set.editComponentProperty(labelProp, { defaultValue: 'Submit' });
+// Inspect:
+return set.componentPropertyDefinitions; // { 'State': {type:'VARIANT', variantOptions:[…]}, 'label#12:3': {…} }
+```
+
+Rules that bite:
+- **VARIANT properties are only creatable on `ComponentSetNode`** (they come from child
+  names, §1.3); `addComponentProperty('X','VARIANT',…)` on a plain `ComponentNode` throws.
+  BOOLEAN/TEXT/INSTANCE_SWAP work on a standalone `ComponentNode` and on a `ComponentSetNode`.
+- **But NOT on a variant child of a set (B3):** once a component is combined into a set,
+  calling `addComponentProperty` on that individual variant `ComponentNode` throws. Two legal
+  orders: add the BOOLEAN/TEXT/INSTANCE_SWAP props on each component BEFORE
+  `combineAsVariants`, or add them on the parent `COMPONENT_SET` AFTER combining. Never on a
+  variant child post-combine.
+- **`addComponentProperty` RETURNS the property key as a plain STRING (B1)** — e.g.
+  `"label#4:0"`. Use that return value directly. `Object.keys(result)[0]` is a BUG (the
+  return is a string, not a map — indexing its keys yields `"0"`/a character, not the key).
+- **Keep the returned name** (with `#suffix`) — you need it verbatim for
+  `componentPropertyReferences` and `setProperties`. Never hand-type the suffix.
+- `deleteComponentProperty(name)` works for BOOLEAN/TEXT/INSTANCE_SWAP; VARIANT props are
+  removed by renaming/removing variant children.
+- Provenance: https://developers.figma.com/docs/plugins/api/ComponentSetNode/
+  (`addComponentProperty`, `editComponentProperty`, `componentPropertyDefinitions`).
+
+**Wiring properties to layers** — a definition does nothing until a layer references it:
+
+```js
+const label = set.defaultVariant.findOne(n => n.type === 'TEXT');
+label.componentPropertyReferences = { characters: labelProp };   // TEXT prop → text layer
+const icon = set.defaultVariant.findOne(n => n.name === 'icon'); // an InstanceNode
+icon.componentPropertyReferences = { mainComponent: iconProp,    // INSTANCE_SWAP → instance
+                                     visible: showIconProp };    // BOOLEAN → visibility
+```
+
+Wire the SAME references in every variant child (walk all children of the set), or the
+property silently stops working on the unwired variants.
+
+**The reference key is fixed by property type (B2)** — `componentPropertyReferences` only
+accepts these keys, one per capability: **`characters`** (a TEXT prop → the text layer's
+content), **`visible`** (a BOOLEAN prop → the layer's visibility), **`mainComponent`** (an
+INSTANCE_SWAP prop → which component an inner INSTANCE renders). A TEXT prop wired to
+anything but `characters`, or a BOOLEAN wired to anything but `visible`, does nothing.
+Until this wiring exists the property is completely inert — the definition alone changes
+nothing on the canvas.
+Provenance: https://developers.figma.com/docs/plugins/api/node-properties/ →
+`componentPropertyReferences`.
+
+### 1.5 Nested components + exposed instances
+
+- **Principle:** compose big components from small ones (Card contains Button instance);
+  expose the nested instance so consumers can flip its variant without drilling.
+- **When:** the nested part has its own useful properties (button state inside a card).
+- **How:**
+
+```js
+// Inside the MAIN component: mark the nested instance as exposed
+const nested = mainComponent.findOne(n => n.type === 'INSTANCE' && n.name === 'Button');
+nested.isExposedInstance = true;    // writable only on instances INSIDE a component
+// Consumers then see it under instance.exposedInstances:
+const card = component.createInstance();
+card.exposedInstances[0].setProperties({ State: 'Hover' });
+```
+
+- Provenance: https://developers.figma.com/docs/plugins/api/InstanceNode/
+  (`isExposedInstance`, `exposedInstances`).
+
+### 1.6 Property-count discipline & slots
+
+- **Swappable content = ONE INSTANCE_SWAP prop, never a variant-per-icon (B5).** An icon,
+  avatar, or badge that varies by *which* glyph shows is an INSTANCE_SWAP property whose
+  `preferredValues` list the candidate components — NOT a `Icon=Home | Icon=Search | …`
+  variant axis. Variant-per-icon explodes the matrix and can't grow without editing the set.
+- **Cap the variant matrix at ~30 (B5).** `Size × Style × State` multiplies fast
+  (3 × 4 × 3 = 36 already over). When the product of axes exceeds ~30, factor a dimension
+  OUT into a nested sub-component (e.g. the icon becomes an INSTANCE_SWAP, the size becomes
+  a token-driven prop) rather than enumerating every combination. Huge sets are slow, hard
+  to wire consistently (§1.4), and usually mean an axis wants to be a property, not a variant.
+- **Enhance, don't duplicate — extend a component that almost fits (B9).** When an existing component
+  covers all but one need, ADD to it — a new variant value, a TEXT/BOOLEAN property, or a new axis —
+  rather than minting a sibling master ("Button 2"). A new master is justified ONLY by a genuinely new
+  reuse scope, never by one missing state. This is the counter-pressure to B5's ~30-variant cap:
+  extend within the set until an axis truly wants to be a property or a nested sub-component. When you
+  build only the variants today's data needs and deliberately DEFER an axis (YAGNI), **record the
+  deferred axis in the component's registry/inventory entry** so it reads as a decision, not an
+  omission the next agent has to rediscover.
+- **Turn a platform limitation into a design decision that lives INSIDE the component (B10).** When the
+  Plugin API can't express something per-instance, encode the workaround as component STRUCTURE, not a
+  rule humans must remember. Canonical case: Figma cannot override an instance's SUBLAYER geometry (no
+  API, no UI) — so a data-driven bar/meter width becomes a stepped variant axis (`Pct=0|10|…|100`),
+  built by cloning a real on-canvas meter and stepping the fill width; the "limitation" is now a
+  variant a consumer just picks. Same move for any "you can't tweak X per instance" gap: make X an
+  enumerated axis or a property, and the constraint stops being tribal knowledge. (B8–B10 distilled
+  from a confidential client-portal rebuild field skill, dogfood 2026-07-13 — principles only.)
+- **Slots (B6)** — for "put arbitrary consumer content here" regions (card body, dialog
+  content):
+  - Prefer **`component.createSlot()`**: it creates the slot node AND auto-wires the SLOT
+    property for you. Hand-adding a `'SLOT'` property is the error-prone path.
+  - **GRID `layoutMode` is banned on a slot node** — use HORIZONTAL/VERTICAL auto-layout
+    (or NONE); setting GRID on a slot throws.
+  - **`instance.setProperties()` THROWS for slot content** — a slot is not a value you set.
+    Populate a slot on an instance by APPENDING children into the slot node
+    (`slotNode.appendChild(...)`), not via the properties API.
+
+---
+
+## 2. Instances
+
+### 2.1 Creating
+
+```js
+// Local component (same file — the ONLY path on Figma Free, see §3.7):
+const inst = component.createInstance();       // parent it, then let auto-layout place it
+parentFrame.appendChild(inst);
+// Published library component (paid-plan team libraries only):
+const comp = await figma.importComponentByKeyAsync('<key>'); // key from scan / library
+const inst2 = comp.createInstance();
+```
+
+- `importComponentByKeyAsync` **only resolves published components** — the `key` exists
+  on local components too, but import fails until published (typings note on
+  `ComponentNode.key`). On Free files: use `figma-agent scan-design-system --out ds.json`
+  to inventory local components, then instantiate by node id.
+- CLI shortcut: `figma-agent create-instance --component <key|id> --parent <id>`.
+- Provenance: https://developers.figma.com/docs/plugins/api/figma/#importcomponentbykeyasync ·
+  https://developers.figma.com/docs/plugins/api/ComponentNode/#createinstance
+
+### 2.2 setProperties
+
+```js
+inst.setProperties({
+  'State': 'Hover',            // VARIANT: plain name, value must be an existing option
+  'label#12:3': 'Save',        // TEXT: MUST use the '#suffix' name from definitions
+  'showIcon#12:4': false,      // BOOLEAN
+  'icon#12:5': otherComp.id,   // INSTANCE_SWAP: component id
+});
+// Read back: inst.componentProperties  (readonly)
+```
+
+Get exact property names first: `(await inst.getMainComponentAsync()).parent
+.componentPropertyDefinitions` (set) or `mainComponent.componentPropertyDefinitions`.
+CLI: `figma-agent set-variant --node <id> --props State=Hover`.
+Provenance: https://developers.figma.com/docs/plugins/api/InstanceNode/#setproperties
+
+### 2.3 The overrides model — what survives a swap
+
+- Overrides = per-instance deltas (text, fills, visibility…) recorded against layers of
+  the main component. `inst.overrides` lists `{id, overriddenFields}`; `removeOverrides()`
+  resets (the old `resetOverrides()` is deprecated).
+- **`resetOverrides()`/`removeOverrides()` reverts a `swapComponent` too, not just text/props
+  (canvas-verified 2026-07-29).** If a slot instance was swapped to a different component and
+  you reset it meaning to clear a stray text/variant delta, the reset ALSO reverts the swap
+  back to the instance's original `mainComponent` — the slot collapses to the generic
+  placeholder ("Slot / Page content"). The very next `setProperties({...})` then fails
+  confusingly because the placeholder's `componentPropertyDefinitions` is empty — reads like a
+  missing-variant bug, not a reset bug. There is no selective reset in the Plugin API (no
+  "keep the swap, clear the rest" option). **Rule: never call resetOverrides/removeOverrides on
+  a slot instance that has been swapped.** Clone a fresh instance from a source that already
+  has the correct swap + overrides instead of resetting one in place.
+- `inst.swapComponent(otherComponent)` **preserves overrides "using the same heuristics
+  as instance swap in the Figma UI" — matching is by layer NAME (and structure)**. An
+  override on a layer named `label` survives a swap only if the target component also
+  has a layer named `label`. This is the systems reason for disciplined layer naming
+  (`structure-hygiene.md` §1): sloppy names silently drop user customizations on swap.
+- **Set a nested instance's VARIANT before its TEXT overrides (B8).** `setProperties({ Variant: … })`
+  can RESET the instance's text overrides to the variant's default; a text override written AFTER the
+  variant switch survives. Order is always **variant first, then text** (`characters` or the managed
+  TEXT prop, §2.2) — reverse it and the text silently reverts. Same root cause as the swap heuristic
+  above: a variant change re-applies master defaults, so any content you want to keep must be
+  (re-)applied *after* it (capture-before-destroy, `canvas-operations.md` R14).
+- Under dynamic-page, `inst.mainComponent` is write-only — READ via
+  `await inst.getMainComponentAsync()`.
+- Provenance: https://developers.figma.com/docs/plugins/api/InstanceNode/
+  (`swapComponent`, `overrides`, `getMainComponentAsync`).
+
+### 2.4 Detach = last resort
+
+```js
+const frame = inst.detachInstance(); // returns FrameNode; the link is GONE
+```
+
+- Detaching severs propagation forever and **also detaches ancestor instances** in nested
+  setups — one careless detach deep in a card can detach the card. Only detach when the
+  design has genuinely diverged from the component's role AND no variant/property can
+  express it. Prefer: add a variant, add a BOOLEAN/TEXT prop, or expose a nested instance.
+- Detached frames are a lint target: `frame.detachedInfo !== null`
+  (see `structure-hygiene.md` §5, lint L4).
+- Provenance: https://developers.figma.com/docs/plugins/api/InstanceNode/#detachinstance
+
+---
+
+## 3. Variables
+
+### 3.1 Collections & modes
+
+```js
+const collection = figma.variables.createVariableCollection('tokens');
+const darkModeId = collection.addMode('dark');       // returns modeId; throws at plan cap:
+                                                     // "in addMode: Limited to N modes only"
+collection.renameMode(collection.modes[0].modeId, 'light');
+const all = await figma.variables.getLocalVariableCollectionsAsync();
+```
+
+- Mode limits are PLAN-gated: Starter = 1 mode; Professional = 10; Organization = 20
+  (raised at Schema 2025); Enterprise = 40. Up to 5,000 variables per collection on any
+  plan. A canvas-proven smoke probe (2026-07-02) saw 9 modes OK in a file likely sitting
+  in a paid org — on a personal Free draft assume **1 mode**; design token architecture
+  accordingly (theme = separate semantic collections if stuck on Free, modes when the
+  plan allows).
+- Published Figma design-system skill guidance quotes a coarser tiering
+  (**Free = 1 / Pro = 4 / Org = 40+**), which differs from the Schema-2025 numbers above —
+  Figma has changed these over time. Treat the exact cap as **plan- AND date-dependent**:
+  the authoritative check is `addMode`'s throw message (*"Limited to N modes only"*), not a
+  memorized number. Design for 1 mode on Free regardless.
+- **Rename the default mode immediately (C3).** A new collection's first mode is named
+  `'Mode 1'` — rename it (`renameMode(modes[0].modeId, 'Light')` or `'Value'`) before adding
+  variables. Leaving `'Mode 1'` is a hygiene smell and produces confusing codegen/column
+  headers.
+- Provenance: https://help.figma.com/hc/en-us/articles/35794667554839 (Schema 2025 mode
+  limits) · https://help.figma.com/hc/en-us/articles/15145852043927 (5,000/collection) ·
+  plan matrix: https://help.figma.com/hc/en-us/articles/360040328273
+
+### 3.2 Types & creation
+
+```js
+// createVariable(name, collection: VariableCollection, resolvedType) — collection OBJECT,
+// the old collectionId-string overload is deprecated.
+const v = figma.variables.createVariable('color/bg/surface', collection, 'COLOR');
+v.setValueForMode(collection.modes[0].modeId, { r: 1, g: 1, b: 1, a: 1 });
+```
+
+Types: `'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN'`. FLOAT carries every numeric token
+(spacing, radius, size, opacity); STRING carries font family/style names and content.
+Provenance: https://developers.figma.com/docs/plugins/api/figma-variables/
+
+### 3.3 Tier architecture — primitive → semantic → component
+
+- **Principle:** raw values live ONCE in primitives; meaning is added by aliasing, not by
+  re-entering hex codes. Nodes bind to the semantic (or component) tier — never to
+  primitives directly.
+- **When:** any file that will outlive one screen. For a one-shot mock, a single semantic
+  tier is acceptable; never zero tiers (naked hex everywhere is a hard-cap taste-gate
+  failure).
+- **How:**
+
+```js
+// tier 1: primitive            color/blue/600 = #4F46E5
+// tier 2: semantic (alias)     color/bg/action → color/blue/600
+// tier 3: component (alias)    button/bg       → color/bg/action
+const semantic = figma.variables.createVariable('color/bg/action', collection, 'COLOR');
+semantic.setValueForMode(modeId, figma.variables.createVariableAlias(primitiveVar));
+// resolve what a consumer node will actually get:
+return semantic.resolveForConsumer(someNode); // {value, resolvedType}
+```
+
+- **Semantic tokens ALWAYS alias primitives via `VARIABLE_ALIAS` (C3)** — never re-enter a
+  raw hex/number at the semantic tier; the alias is the whole point (change the primitive,
+  every semantic follows). Duplicated raw values are a systems defect.
+- **Architecture scales with token count (C3):**
+  - **< ~50 tokens** → ONE collection, 2 modes (Light/Dark) is plenty.
+  - **~50–200 tokens** → split into collections by concern: **Primitives** (scopes `[]`,
+    §3.5) + **Color** (Light/Dark modes, aliases into Primitives) + **Spacing** +
+    **Typography**. Keeping primitives in their own collection is what makes the semantic
+    collections readable.
+- Slash names (`color/bg/action`) render as a folder tree in the Figma variables UI —
+  the naming IS the taxonomy.
+- Provenance: https://developers.figma.com/docs/plugins/api/figma-variables/#createvariablealias ·
+  guide: https://developers.figma.com/docs/plugins/working-with-variables/
+
+### 3.4 Binding — the field map
+
+Two distinct mechanisms; using the wrong one is the #1 binding bug.
+
+**A. Direct node fields → `node.setBoundVariable(field, variable)`** (pass the Variable
+OBJECT; the string-id overload is deprecated and throws under dynamic-page):
+
+| Field group | Exact field names (verified against plugin-typings `VariableBindableNodeField`) |
+|---|---|
+| Size | `width`, `height`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight` |
+| Auto-layout | `itemSpacing`, `counterAxisSpacing`, `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft` |
+| Shape | `cornerRadius`, `topLeftRadius`, `topRightRadius`, `bottomLeftRadius`, `bottomRightRadius`, `strokeWeight` (+ per-side) |
+| Misc | `opacity`, `visible`, `characters` |
+| Text (FLOAT/STRING vars) | `fontFamily`, `fontStyle`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, `paragraphSpacing`, `paragraphIndent` |
+
+```js
+node.setBoundVariable('cornerRadius', radiusVar);
+node.setBoundVariable('itemSpacing', gapVar);
+```
+
+**B. Paints (fills/strokes) → immutable-copy pattern via `setBoundVariableForPaint`.**
+Paint arrays are readonly; you must clone, rebind the paint, reassign:
+
+```js
+const paints = [...node.fills];   // clone — fills is readonly
+paints[0] = figma.variables.setBoundVariableForPaint(paints[0], 'color', colorVar);
+node.fills = paints;              // reassign triggers the update
+```
+
+This exact pattern is what the figma-agent CLI's `bind-variable` command implements
+under the hood — it even creates a black solid first if the node has no paint to bind
+onto. Effects analog: `setBoundVariableForEffect(effect, field, v)` with fields
+`color | radius | spread | offsetX | offsetY`.
+
+**CLI:** `figma-agent bind-variable --node <id> --field fills|strokes|cornerRadius|itemSpacing|padding*|width|height|opacity --variable <id|name>`.
+
+**Read side (lints):** `node.boundVariables` — `{ fills: VariableAlias[], cornerRadius:
+VariableAlias, … }` — this is what `figma-craft.md`'s L6 unbound-fills lint walks.
+Provenance: https://developers.figma.com/docs/plugins/working-with-variables/ ·
+typings `VariableBindableNodeField`/`VariableBindablePaintField`
+(https://github.com/figma/plugin-typings/blob/master/plugin-api.d.ts).
+
+### 3.5 Scopes — steer the UI pickers
+
+```js
+radiusVar.scopes = ['CORNER_RADIUS'];
+gapVar.scopes    = ['GAP'];
+bgVar.scopes     = ['FRAME_FILL', 'SHAPE_FILL'];
+textColorVar.scopes = ['TEXT_FILL'];
+```
+
+Full enum (verified in plugin-typings): `ALL_SCOPES`, `TEXT_CONTENT`, `CORNER_RADIUS`,
+`WIDTH_HEIGHT`, `GAP`, `ALL_FILLS`, `FRAME_FILL`, `SHAPE_FILL`, `TEXT_FILL`,
+`STROKE_COLOR`, `STROKE_FLOAT`, `EFFECT_FLOAT`, `EFFECT_COLOR`, `OPACITY`,
+`FONT_FAMILY`, `FONT_STYLE`, `FONT_WEIGHT`, `FONT_SIZE`, `LINE_HEIGHT`,
+`LETTER_SPACING`, `PARAGRAPH_SPACING`, `PARAGRAPH_INDENT`.
+
+Two facts that matter:
+- **Scopes filter the Figma UI pickers only — the API ignores them.** `setBoundVariable`
+  will happily bind a `CORNER_RADIUS`-scoped var to `itemSpacing`. Discipline is on you;
+  set scopes anyway so human collaborators get clean pickers.
+- **Never ship a variable at `['ALL_SCOPES']` (C1)** — a file where every color offers
+  itself for every fill is a hygiene smell. Set an explicit scope by role:
+  - background fills → `['FRAME_FILL', 'SHAPE_FILL']`
+  - text color → `['TEXT_FILL']`
+  - spacing / gap → `['GAP']`
+  - corner radius → `['CORNER_RADIUS']`
+  - **primitives you want HIDDEN from every picker → `[]`** (empty array): the semantic tier
+    aliases them (§3.3), so raw primitives should never be pickable directly — an empty
+    `scopes` removes them from the UI while leaving them bindable by alias.
+Provenance: https://developers.figma.com/docs/plugins/api/Variable/ (`scopes`).
+
+#### 3.5.1 Code syntax — the dev-mode / codegen name (C2)
+
+Scopes steer the design picker; **`setVariableCodeSyntax` steers what developers copy.** Set
+it per variable so Dev Mode and codegen emit the real token name instead of `var-12-3`.
+
+```js
+v.setVariableCodeSyntax('WEB', 'var(--color-bg-action)');  // WEB: wrap in var()
+v.setVariableCodeSyntax('ANDROID', 'color_bg_action');
+v.setVariableCodeSyntax('iOS', 'colorBgAction');
+```
+
+- **WEB uses the `var(--…)` wrapper**, not a bare custom-property name — that's what pastes
+  straight into CSS.
+- **Deriving the CSS name from a slash path: replace BOTH `/` AND spaces with `-`** (and
+  lowercase). `color/bg/action` → `--color-bg-action`; `Color/Bg Action` → `--color-bg-action`.
+  A common bug replaces only slashes, leaving a space that's illegal in a custom property.
+- If your token source already carries a `cssVar` field, **reuse it verbatim** rather than
+  re-deriving — the source is authoritative and avoids drift.
+Provenance: https://developers.figma.com/docs/plugins/api/Variable/
+(`setVariableCodeSyntax`, `codeSyntax`).
+
+### 3.6 NO getVariableByName → resolve-or-create (the load-bearing pattern)
+
+**The API has no name lookup** — only `getVariableByIdAsync` and
+`getLocalVariablesAsync(type?)` (verified: https://developers.figma.com/docs/plugins/api/figma-variables/).
+Naive "create on every run" floods the file with duplicate tokens. The proven fix is a
+resolve-or-create routine:
+
+1. `findOrCreateCollection(name)` — list collections, match by name, else create.
+2. `findReusableVariable(collection, type, value)` — `getLocalVariablesAsync(type)`,
+   filter to the collection, compare default-mode value (**colors with epsilon 1/512**
+   for hex→RGBA round-trip tolerance; skip alias values), reuse on match.
+3. Else `createVariable` + `setValueForMode`.
+
+Exposed as `figma-agent create-variable …` → returns `{id, name, reused}` — live-verified
+`reused:true` on second run (canvas-proven smoke test, 2026-07-02). In raw exec-js,
+replicate the same lookup before ANY `createVariable`; matching by NAME instead of value
+is also valid when your token registry owns naming (name = identity, then update the
+value). Never create blind.
+
+**"Empty local" ≠ "none exist" (C4).** `getLocalVariableCollectionsAsync()` /
+`getLocalVariablesAsync()` see **LOCAL variables only** — variables that live in a
+team/published LIBRARY (remote) do NOT appear. The official `use_figma` runtime exposes
+`search_design_system({ includeVariables: true })`, which DOES see library/remote assets;
+our figma-agent analog is `scan-design-system`. So before concluding "this file has no
+tokens, I'll create fresh ones," check the library surface too — otherwise you duplicate a
+design system that already exists remotely.
+
+### 3.7 Publish limits on Free
+
+**Starter (Free) cannot publish libraries at all** — no styles, components, or variables
+across files ("Libraries are only available on paid plans",
+https://help.figma.com/hc/en-us/articles/360025508373). Consequences for this stack
+(which targets Figma Free — see `figma-agent-hand.md`):
+- Everything is LOCAL: build components + variables in the working file itself.
+- `importComponentByKeyAsync` / `importVariableByKeyAsync` / `importStyleByKeyAsync`
+  will fail — inventory local assets with `scan-design-system` instead.
+- The plugin can never publish even on paid plans (no publish API) — the user does it.
+- Wrap variable creation in try/catch so plan caps degrade to warnings, not aborted
+  imports.
+
+---
+
+## 4. Styles vs Variables — decision table
+
+Variables superseded color/number styles for TOKENS; styles remain the only carrier for
+COMPOSITES. (Styles can themselves consume variables — best of both.)
+
+| Need | Use | API |
+|---|---|---|
+| Single color token (bg, text, border) | **Variable** (COLOR) | §3.2 + bind §3.4B |
+| Spacing / radius / size / opacity token | **Variable** (FLOAT) | §3.4A |
+| Full text ramp entry (family+size+weight+lineHeight as ONE named thing) | **Text style** — still style-only; no "text variable" composite exists | `figma.createTextStyle()`, apply `await textNode.setTextStyleIdAsync(style.id)` (dynamic-page: the async setter, `textStyleId` is read-only) |
+| Individual type primitives feeding the ramp | Variables (`fontSize`, `fontFamily`… §3.4A) bound INTO the text style via `setBoundVariable` on the style, or per-node | typings `VariableBindableTextField` |
+| Shadow / blur recipe (multi-effect) | **Effect style** | `figma.createEffectStyle()`, `await node.setEffectStyleIdAsync(id)`; bind its color/radius to variables via `setBoundVariableForEffect` |
+| Multi-stop gradient / image fill | **Paint style** (variables only bind solid-paint color + gradient stop colors) | `figma.createPaintStyle()`, `await node.setFillStyleIdAsync(id)` |
+| Theming (light/dark, brand A/B) | Variables + modes (plan-gated §3.1) | `setValueForMode` per mode |
+| Layout grids | Grid style or per-node `layoutGrids` (+ `setBoundVariableForLayoutGrid`) | `setGridStyleIdAsync` |
+
+Rules of thumb:
+- If a value should FLIP with a mode → variable. If it's a bundle of properties applied
+  as one → style. If both: style whose internals are variable-bound.
+- Local styles: `getLocalTextStylesAsync()` / `getLocalPaintStylesAsync()` etc. — sync
+  variants throw under dynamic-page (typings). Reuse-before-create applies to styles
+  exactly like §3.6 (match by name).
+- Provenance: https://developers.figma.com/docs/plugins/api/figma/ (create*Style) ·
+  typings `setTextStyleIdAsync`/`setFillStyleIdAsync`/`setEffectStyleIdAsync`.
+
+---
+
+## 5. Construction checklist (before handing to critique)
+
+1. Repeated subtree ≥2 → component + variants named `Prop=Value` (§1.1–1.3).
+2. Every fill/stroke on a token-colored element bound (`boundVariables.fills` set) —
+   `figma-craft.md`'s L6 unbound-fills lint walks this; bind at build time (§3.4B).
+3. Radius/gap/padding bound to FLOAT vars where a token exists (§3.4A).
+4. Variables created ONLY via resolve-or-create (§3.6) — second run must report reuse.
+5. Semantic tier aliases primitives (§3.3); nodes never bind primitives directly.
+6. Scopes set on every semantic variable (§3.5).
+7. Text uses text styles (or bound text fields), fonts that exist in Figma (Google fonts
+   are pixel-true; unmatched fonts drift → truncation — live lesson 2026-07-02).
+8. Zero detached instances (`detachedInfo === null` everywhere) (§2.4).

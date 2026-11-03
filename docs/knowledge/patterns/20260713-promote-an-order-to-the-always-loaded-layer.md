@@ -7,6 +7,7 @@ timestamp: 2026-07-13
 bee:
   id: pattern-20260713-promote-an-order-to-the-always-loaded-layer
   lifecycle: active
+  areas: [doctrine-layer]
   decisions: [0023]
   sources: ["docs/history/learnings/critical-patterns.md#PAT30", "original feature: tier-transport-doctrine"]
   polarity: pitfall

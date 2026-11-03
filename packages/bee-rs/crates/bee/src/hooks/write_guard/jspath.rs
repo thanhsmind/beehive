@@ -509,6 +509,26 @@ pub(crate) fn clear_corrupt_json_warnings() {
     CORRUPT_JSON_WARNINGS.with(|q| q.borrow_mut().clear());
 }
 
+/// Queue one of bee's OWN warning lines onto the same buffered channel
+/// `read_json_g` uses — at most once per evaluation for an identical line.
+///
+/// sfg-5 added this door. A guard that reads store data it cannot understand
+/// now takes the RESTRICTIVE answer (see `heartbeat_stale`), and a
+/// restrictive answer can refuse a write for a reason that is nowhere in the
+/// refusal — a silent lockout. The reader says what it saw and how to clear
+/// it. Same queue, so the delegate contract still holds byte-for-byte:
+/// nothing reaches stderr until the verdict is final, and a Delegate carries
+/// zero output. The dedupe is what keeps one bad file to one line, however
+/// many readers walk past it in one evaluation.
+pub(crate) fn queue_guard_warning_once(line: String) {
+    CORRUPT_JSON_WARNINGS.with(|q| {
+        let mut q = q.borrow_mut();
+        if !q.iter().any(|queued| *queued == line) {
+            q.push(line);
+        }
+    });
+}
+
 pub(crate) fn read_json_g(file: &Path) -> R<Option<Value>> {
     match crate::fsutil::read_json(file) {
         crate::fsutil::ReadJson::Missing => Ok(None),

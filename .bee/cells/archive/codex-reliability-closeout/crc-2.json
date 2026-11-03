@@ -1,0 +1,160 @@
+{
+  "id": "crc-2",
+  "title": "Retain retrospective transcript regression evidence",
+  "role": "test",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "docs/history/codex-reliability-closeout/regressions.md",
+    "docs/history/codex-reliability-closeout/regression-red.log",
+    "docs/history/codex-reliability-closeout/regression-green.log",
+    "docs/history/codex-reliability-closeout/test-transplant.patch",
+    "docs/history/codex-reliability-closeout/test-transplant-token-order.patch",
+    "docs/history/codex-reliability-closeout/synthetic-claude-mutation.patch",
+    "docs/history/codex-reliability-closeout/regression-token-order.log",
+    "docs/history/codex-reliability-closeout/regression-synthetic.log"
+  ],
+  "action": "Resolve F2 and F4 without rewriting history. Use current tests codex_repeated_token_count_dedup_and_multiple_requests_in_turn, claude_turn_end_subject_preserves_assistant_text_across_tool_result, codex_rollup_does_not_use_response_item_payload_id_as_session_id and codex_rollup_preserves_full_uuid_when_session_meta_missing against pre-fix production source 0690c1eb1ff72302033dfa5be4b11f753abf471f in a disposable isolated source tree under the worktree's .bee/tmp. Preserve only the exact current test functions plus necessary existing helpers if the complete current tests require new APIs; compilation failure is not regression evidence. Record source identities and test transplantation explicitly. Retain actual assertion failures and corresponding current-source successes. Do not change production transcript behavior or weaken tests. Remove extra EOF blank line in current session_close/tests.rs. Reserve all evidence paths before output. Label new evidence retrospective, never original RED sequence. Use TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false and direct Cargo PATH; do not invoke codex wrapper.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests && git diff --check c4122d41 HEAD -- packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+  "feature": "codex-reliability-closeout",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "b0e62deb-c093-462a-9944-d43011cf2e6d",
+    "255ec53b-9952-4274-ae0c-0361a9f33c5f"
+  ],
+  "read_first": [
+    "docs/history/codex-reliability-closeout/CONTEXT.md",
+    "docs/history/codex-reliability-closeout/plan.md",
+    "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+    ".bee/verify/verify-app/features/codex-runtime.md",
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "hook-runtime"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "Retain the observed three historical failures and one pass on 0690c1eb, with direct duplicate-token failure evidence and any synthetic Claude mutation clearly separated from history.",
+      "The same four tests pass on current production source.",
+      "The report distinguishes retrospective proof from original test order.",
+      "Explicit committed source range has no EOF whitespace error."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "substantive": "Retain retrospective transcript regression evidence"
+      }
+    ],
+    "key_links": [
+      "Production behavior and evidence agree with D1."
+    ],
+    "prohibitions": [
+      "No guard bypass, real credential reads, or changes to unrelated settings."
+    ]
+  },
+  "trace": {
+    "worker": "crc-2-worker",
+    "outcome": "Retain truthful transcript regression history and direct token failure",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+      "docs/history/codex-reliability-closeout/regressions.md",
+      "docs/history/codex-reliability-closeout/regression-red.log",
+      "docs/history/codex-reliability-closeout/regression-green.log",
+      "docs/history/codex-reliability-closeout/test-transplant.patch",
+      "docs/history/codex-reliability-closeout/test-transplant-token-order.patch",
+      "docs/history/codex-reliability-closeout/synthetic-claude-mutation.patch",
+      "docs/history/codex-reliability-closeout/regression-token-order.log",
+      "docs/history/codex-reliability-closeout/regression-synthetic.log"
+    ],
+    "deviations": [
+      "Corrected verify field to an executable command — original mixed prose with shell and could not match proof parser; decision a8464d1c — the plan was wrong about a fact",
+      "Retained three historical failures and one pass with separately labeled synthetic mutation — saved 0690c1eb lacks Claude failure; decision 255ec53b — the plan was wrong about a fact",
+      "sync-ack: Owner behavior checked; Codex map and hook-runtime knowledge synchronized; bee dev regen completed at integration."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T07:34:13.551Z",
+    "behavior_change": true,
+    "verification_evidence": "43 transcript tests passed; committed whitespace check passed; full-suite 3929 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09911-9b86-7a30-8a6f-b22a78347d98",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests && git diff --check c4122d41 HEAD -- packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "claimed_at": "2026-09-13T07:33:28.003Z",
+    "verified_at": null,
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truthful-historical-baseline",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/regressions.md:51-62 records three Codex failures and one Claude pass for saved commit 0690c1eb, consistent with amendment 255ec53b."
+          },
+          {
+            "id": "direct-duplicate-token-failure",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/regression-token-order.log:1-14 directly records the duplicate-token assertion failure: left 7000.0, right 500.0."
+          },
+          {
+            "id": "synthetic-claude-evidence-labeled",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/regressions.md:90-116 explicitly labels the Claude mutation as synthetic and not historical; regression-synthetic.log:1-17 records its expected failure."
+          },
+          {
+            "id": "current-regressions-green",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/regression-green.log:119-125 records all four current regression tests passing; lines 127-140 record the full 43-test module passing."
+          },
+          {
+            "id": "production-diff-limited",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:1632-1643 only reorders the model assertion after token assertions, while lines 1913-1915 remove trailing EOF blanks; git diff --check produced no output."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T07:31:34.576Z"
+      }
+    ],
+    "sync_ack": "Owner behavior checked; Codex map and hook-runtime knowledge synchronized; bee dev regen completed at integration.",
+    "mistakes": [
+      {
+        "wrong": "Plan expected four historical failures without testing saved source",
+        "better": "distinguish measured history from synthetic mutation"
+      }
+    ],
+    "report": {
+      "outcome": "Retain truthful transcript regression history and direct token failure",
+      "commit": "df18588772ab5180848b1dc17696e67263d99130",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "docs/history/codex-reliability-closeout/regressions.md",
+        "docs/history/codex-reliability-closeout/regression-red.log",
+        "docs/history/codex-reliability-closeout/regression-green.log",
+        "docs/history/codex-reliability-closeout/test-transplant.patch",
+        "docs/history/codex-reliability-closeout/test-transplant-token-order.patch",
+        "docs/history/codex-reliability-closeout/synthetic-claude-mutation.patch",
+        "docs/history/codex-reliability-closeout/regression-token-order.log",
+        "docs/history/codex-reliability-closeout/regression-synthetic.log"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests && git diff --check c4122d41 HEAD -- packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs — green:unit — 43 transcript tests passed; committed whitespace check passed; full-suite 3929 passed",
+      "deviations": [
+        "Corrected verify field to an executable command — original mixed prose with shell and could not match proof parser; decision a8464d1c — the plan was wrong about a fact",
+        "Retained three historical failures and one pass with separately labeled synthetic mutation — saved 0690c1eb lacks Claude failure; decision 255ec53b — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Plan expected four historical failures without testing saved source — distinguish measured history from synthetic mutation"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

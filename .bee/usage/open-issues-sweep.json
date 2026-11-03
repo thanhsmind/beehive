@@ -1,0 +1,81 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "open-issues-sweep",
+  "closed_at": "2026-10-18T03:53:32.936Z",
+  "sessions": [
+    {
+      "session_id": "01fc7e88-ee78-4580-92d5-74abbc5d9aa8",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 8,
+          "output": 984,
+          "cache_write": 41923,
+          "cache_read": 160481,
+          "new": 42915,
+          "cached": 160481,
+          "total": 203396
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1792295588046,
+      "ended_ms": 1792295608985,
+      "totals": {
+        "new": 42915,
+        "cached": 160481,
+        "total": 203396
+      }
+    },
+    {
+      "session_id": "33b80c7b-a699-4752-bb0a-0a47312d5c44",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 592,
+          "output": 155192,
+          "cache_write": 428524,
+          "cache_read": 75435304,
+          "new": 584308,
+          "cached": 75435304,
+          "total": 76019612
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5-5": {
+          "input": 206,
+          "output": 56570,
+          "cache_write": 342228,
+          "cache_read": 9270857,
+          "new": 399004,
+          "cached": 9270857,
+          "total": 9669861
+        }
+      },
+      "subagent_count": 3,
+      "started_ms": 1792284343800,
+      "ended_ms": 1792294708638,
+      "totals": {
+        "new": 983312,
+        "cached": 84706161,
+        "total": 85689473
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 627223,
+      "cached": 75595785,
+      "total": 76223008
+    },
+    "subagents": {
+      "new": 399004,
+      "cached": 9270857,
+      "total": 9669861
+    },
+    "total": {
+      "new": 1026227,
+      "cached": 84866642,
+      "total": 85892869
+    }
+  }
+}

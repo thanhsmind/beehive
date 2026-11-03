@@ -21,7 +21,9 @@ User: "/go [feature]"
 [STEP 2] bee-planning (shape) → plan.md (frozen at Gate 2 once approved); discovery.md/approach.md
                                  only for L2+ discovery or high-risk, else plan.md sections
          bee-shaping (Brief)   → implement-plan.md  (high-risk always; standard/small on-demand)
-         SMALLER PATH check + review wave run inline before the gate below
+         SMALLER PATH check inline + the plan-step hat wave (the plan check;
+         `--kind advisor` hat seats, procedure home gates-and-delegation.md)
+         run before the gate below
        ▼
 [GATE 2] ← HARD STOP — approves `shape` AND `execution` together in one call (`bee gate
           --merge`); review the implement plan, or plan.md when no brief was rendered
@@ -112,17 +114,19 @@ Fix cells created for P1s run through swarming, then reviewing re-runs (targeted
 
 After each slice's swarm completes: later approved work remains → return to Step 3 (planning prep for the next slice), which hands straight to Step 4 (swarming) — the merged Gate 2 already covers execution for the rest of the feature, so it is never re-asked per slice. Final slice done → Step 5 (bee-capturing, Scribe) directly. `bee-reviewing` is never part of this loop — it is a separate flow the user invokes on demand, over whatever scope they choose, independent of slice boundaries.
 
+When the context budget nears its handoff point with slices still left, land first: cap and close the current slice, open no new slice, then write the handoff (rule: agents-context-handoff-65).
+
 ## Fallback Paths
 
 - **Spike returns NO** (opt-in by change class — migration, security, external side effect, or no in-repo precedent): STOP before Gate 2. Present "Spike [id] failed: [reason]. Current work is blocked." Options: revise approach / descope the risky part / change mode or boundaries. A workaround that "probably works" is not a path — plausibility is not evidence.
 - **SMALLER PATH check fails:** default is to redraft the shape before presenting Gate 2, rather than persist-then-preview.
-- **Review-wave BLOCKER still open after the second pass** (bee-planning's Review Wave): escalate — present both positions to the user and ask "Return to planning with these specific concerns?". A third pass needs a recorded reason.
-- **Context hits ~65% mid-swarm** (rule: agents-context-handoff-65)**:** write `.bee/HANDOFF.json`, present "[X] cells capped, [Y] in flight. Resume in a new session." End gracefully.
+- **A hat-wave BLOCKER still open after its one permitted re-run** (`gates-and-delegation.md`, "Hat wave" — Idempotence): escalate — present both positions to the user and ask "Return to planning with these specific concerns?".
+- **Context hits ~65% mid-swarm** (rule: agents-context-handoff-65)**:** write `.bee/HANDOFF.json`, present "[X] cells capped, [Y] in flight. Resume in a new session." End gracefully. The next session triages each in-flight cell per `bee-swarming/references/swarming-reference.md` ("Fresh-session handoff in full").
 - **User rejects at any gate:** identify what feels wrong, return to the owning stage, update the artifact in place, re-present the same gate.
 
 ## Close-out
 
-After compounding: set state `phase: idle`, `feature: null`, `mode: null`, summary "Go mode complete for <feature>", and delete `.bee/HANDOFF.json` if present. Report the completion line from `bee_status` (verified/unreviewed candidate count) — never state or imply the feature was reviewed unless a review session actually ran and approved it.
+After compounding: set state `phase: idle`, `feature: null`, `mode: null`, summary "Go mode complete for <feature>", and delete `.bee/HANDOFF.json` if present. Report the completion line from `bee status` (verified/unreviewed candidate count) — never state or imply the feature was reviewed unless a review session actually ran and approved it.
 
 ## Headless Go Mode
 

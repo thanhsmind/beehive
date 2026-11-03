@@ -1,0 +1,186 @@
+{
+  "id": "ep-8",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "code",
+  "title": "Rename the principle skills into the bee- namespace and prove the layer ships",
+  "action": "The dissent on this cell was ACCEPTED: rename first, then close slice 2. (1) RENAME all 14 skills/principle-*/ directories to skills/bee-principle-*/ with git mv, and update each page's frontmatter `name:` to the new slug. Both distribution pipes discover skill dirs by a literal bee- name prefix — devtools/skill_trees.rs:448 and onboard/render.rs:379 — so a principle-* dir reaches ZERO host repos. Do NOT widen either filter: onboard/skills.rs:245 locks the host-repo skill DELETION domain to the same prefix, and that is a locked safety decision. (2) Update every row in the '## Principle homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md to the new backticked slug and the new applied_at path. (3) Update the slug prefix constant in packages/bee-rs/crates/bee/tests/principle_index_parity.rs, and grow the fence a FOURTH check: every principle skill directory must ALSO exist in BOTH .claude-plugin/skills/ and .codex-plugin/skills/. This check is the whole point — a green suite hid a layer that shipped nowhere, and only a fence that reads the SHIPPED trees catches that. Drive the new check red once before accepting its green. (4) Grep the tree for any remaining reference to the old principle- slugs outside expertise/ and fix it; do NOT edit any file under expertise/ (CONTEXT.md D1). (5) Run .bee/bin/bee dev regen in its declared order, then confirm both plugin trees now hold all 14 dirs. (6) Run the FULL declared suite green. (7) Drive the real binary once per route class (bee hook session-init against a scratch root carrying the real committed index and a controlled route) and confirm each class lists exactly the principles whose classes: line names it, and that an unclaimed class renders NO block. Record that live output as evidence.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "affects_skills": [
+    "skills/principle-chestertons-fence/SKILL.md",
+    "skills/principle-crash-site-versus-fault-site/SKILL.md",
+    "skills/principle-never-invent-behavior-neither-side-has/SKILL.md",
+    "skills/principle-one-fact-one-home/SKILL.md",
+    "skills/principle-record-at-the-moment-of-settlement/SKILL.md",
+    "skills/principle-red-before-green/SKILL.md",
+    "skills/principle-reproduce-first/SKILL.md",
+    "skills/principle-single-source-of-truth/SKILL.md",
+    "skills/principle-smallest-honest-shape/SKILL.md",
+    "skills/principle-split-never-shrink/SKILL.md",
+    "skills/principle-test-behavior-not-structure/SKILL.md",
+    "skills/principle-the-deletion-test/SKILL.md",
+    "skills/principle-the-rebuild-test/SKILL.md",
+    "skills/principle-verify-before-reporting/SKILL.md",
+    "skills/bee-principle-chestertons-fence/SKILL.md",
+    "skills/bee-principle-crash-site-versus-fault-site/SKILL.md",
+    "skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
+    "skills/bee-principle-one-fact-one-home/SKILL.md",
+    "skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md",
+    "skills/bee-principle-red-before-green/SKILL.md",
+    "skills/bee-principle-reproduce-first/SKILL.md",
+    "skills/bee-principle-single-source-of-truth/SKILL.md",
+    "skills/bee-principle-smallest-honest-shape/SKILL.md",
+    "skills/bee-principle-split-never-shrink/SKILL.md",
+    "skills/bee-principle-test-behavior-not-structure/SKILL.md",
+    "skills/bee-principle-the-deletion-test/SKILL.md",
+    "skills/bee-principle-the-rebuild-test/SKILL.md",
+    "skills/bee-principle-verify-before-reporting/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "All 14 dirs end as skills/bee-principle-*, and each page's frontmatter name: matches its new directory.",
+      "Neither prefix filter is widened — skill_trees.rs:448, onboard/render.rs:379 and onboard/skills.rs:245 keep the bee- domain they have.",
+      "The fence's new fourth check is driven RED once before its green: remove one dir from a plugin tree, watch it fail by name, restore.",
+      "After regen, .claude-plugin/skills/ and .codex-plugin/skills/ each hold all 14 principle dirs — count them, do not assume.",
+      "The full declared suite is green before the cap; this cell certifies the whole layer.",
+      "No file under expertise/ is edited (CONTEXT.md D1)."
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "ep-7"
+  ],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-10",
+    "outcome": "Renamed the 14 principle skills into the bee- namespace so both distribution pipes ship them, repointed the index rows, and grew the parity fence a check that reads the shipped plugin trees",
+    "files_changed": [
+      "skills/bee-principle-red-before-green/SKILL.md",
+      "skills/bee-principle-chestertons-fence/SKILL.md",
+      "skills/bee-principle-smallest-honest-shape/SKILL.md",
+      "skills/bee-principle-split-never-shrink/SKILL.md",
+      "skills/bee-principle-the-deletion-test/SKILL.md",
+      "skills/bee-principle-single-source-of-truth/SKILL.md",
+      "skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md",
+      "skills/bee-principle-test-behavior-not-structure/SKILL.md",
+      "skills/bee-principle-verify-before-reporting/SKILL.md",
+      "skills/bee-principle-the-rebuild-test/SKILL.md",
+      "skills/bee-principle-one-fact-one-home/SKILL.md",
+      "skills/bee-principle-reproduce-first/SKILL.md",
+      "skills/bee-principle-crash-site-versus-fault-site/SKILL.md",
+      "skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "packages/bee-rs/crates/bee/tests/principle_index_parity.rs",
+      "packages/bee-rs/crates/bee/src/principles.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Renamed all 14 skills to bee-principle-* and repointed the index, the fence prefix, principles.rs and its two caller fixtures rather than shipping principle-* — plan.md load-bearing claim 1 said both pipelines scan skills/ with no prefix filter, but skill_trees.rs list_bee_skill_dirs and onboard/render.rs list_bee_skill_entries both filter on a literal bee- name prefix, so the layer reached zero host repos while the suite stayed green — the plan was wrong about a fact",
+      "Landed the new fence check as the FIFTH pinned item, not the fourth the cell named — the file already pinned four (skills against rows both directions, class values, spoken line, guide anchor), so a fourth check had no free slot — the plan was wrong about a fact",
+      "Also namespaced the synthetic slugs in principles.rs TEST_INDEX and the two caller test fixtures — the assertion over this repo own index now requires the bee-principle- prefix, so a fixture left in the old shape would model a slug the product rejects — found a better route",
+      "Left docs/history/** references to old principle- slugs alone (plan.md line 93; research notes describing the pstack reference tree skills) and let bee dev regen rewrite the generated release-manifest.json itself — history records are archaeology, not live pointers, and hand-editing a generated manifest would fight the regen chain — found a better route",
+      "sync-ack: affects_skills deliberately listed BOTH sides of the rename (14 old principle-* paths plus 14 new bee-principle-* paths). A git mv leaves only the new paths touched, so the 14 old ones can never be touched by the cell that removes them - the prediction is satisfied, not missed."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T19:02:55.022Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T18:49:40.764Z",
+    "dissent": [
+      {
+        "target": "ep-8",
+        "claim": "The cell's stated outcome — all 14 principle skills reaching .claude-plugin/skills/ and .codex-plugin/skills/ via bee dev regen — is unreachable. Both distribution pipes discover skill directories by a literal bee- name prefix: devtools/skill_trees.rs:448 and onboard/render.rs:379. After a fully green regen, skills/ holds 14 principle dirs and both plugin trees hold 0, so the session preamble names skills no host repo can open. plan.md claim 1 asserted the opposite and was wrong.",
+        "alternative": "Rename the 14 dirs to the bee-principle- prefix so both pipes carry them with zero Rust change, update the index rows and the fence's slug prefix, and grow the fence a fourth check: every principle skill dir must also be present in BOTH plugin trees. Widening the bee- namespace in the pipes instead would also widen the host-repo deletion domain that onboard/skills.rs:245 locks to the same prefix, which is a locked decision that would have to be reopened first.",
+        "severity": "blocker",
+        "worker": "ep-worker-9",
+        "recorded_at": "2026-09-01T18:48:54.083Z",
+        "verdict": "accept",
+        "verdict_reason": "The worker is right and the plan was wrong. plan.md claim 1 was labeled 'read' from a module docstring without opening the discovery predicate; both pipes filter on a literal bee- prefix, so the layer shipped to zero host repos. Taking the rename: bee-principle- prefix, zero Rust change, no locked decision reopened. The proposed fourth fence check is adopted too — a green suite hid a layer that does not ship, and that gap is the finding, not the rename.",
+        "answered_at": "2026-09-01T18:49:09.879Z"
+      }
+    ],
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-01T18:48:54.083Z",
+        "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+        "claimed_at": "2026-09-01T18:47:18.314Z",
+        "acquired_at": "2026-09-01T18:39:42.448Z",
+        "worker": "ep-worker-9",
+        "verdict": "blocked",
+        "failure_signature": "c12b99b76a2a",
+        "note": "blocker dissent on ep-8: The cell's stated outcome — all 14 principle skills reaching .claude-plugin/skills/ and .codex-plugin/skills/ via bee dev regen — is unreachable. Both distribution pipes discover skill directories by a literal bee- name prefix: devtools/skill_trees.rs:448 and onboard/render.rs:379. After a fully green regen, skills/ holds 14 principle dirs and both plugin trees hold 0, so the session preamble names skills no host repo can open. plan.md claim 1 asserted the opposite and was wrong. — alternative: Rename the 14 dirs to the bee-principle- prefix so both pipes carry them with zero Rust change, update the index rows and the fence's slug prefix, and grow the fence a fourth check: every principle skill dir must also be present in BOTH plugin trees. Widening the bee- namespace in the pipes instead would also widen the host-repo deletion domain that onboard/skills.rs:245 locks to the same prefix, which is a locked decision that would have to be reopened first."
+      }
+    ],
+    "blocked_reason": null,
+    "verify_command": null,
+    "verified_at": null,
+    "reopened_at": "2026-09-01T18:49:09.879Z",
+    "reopened_reason": "dissent answered: accept — The worker is right and the plan was wrong. plan.md claim 1 was labeled 'read' from a module docstring without opening the discovery predicate; both pipes filter on a literal bee- prefix, so the layer shipped to zero host repos. Taking the rename: bee-principle- prefix, zero Rust change, no locked decision reopened. The proposed fourth fence check is adopted too — a green suite hid a layer that does not ship, and that gap is the finding, not the rename.",
+    "sync_ack": "affects_skills deliberately listed BOTH sides of the rename (14 old principle-* paths plus 14 new bee-principle-* paths). A git mv leaves only the new paths touched, so the 14 old ones can never be touched by the cell that removes them - the prediction is satisfied, not missed.",
+    "mistakes": [
+      {
+        "wrong": "The first version of the new fence check used a flat_map closure that moved root into it, and cargo failed it with E0507 at principle_index_parity.rs before it could ever run red for the right reason",
+        "better": "a plain nested for loop was shorter and compiled first try; I should have written the loop instead of reaching for the iterator chain."
+      },
+      {
+        "wrong": "I reserved .claude-plugin and .codex-plugin before running bee dev regen, but the same chain also wrote .claude/skills, .agents/skills and .opencode/skills, which I only reserved after the write had landed",
+        "better": "I should have read the three regen steps (render-skill-trees, onboard --apply, release-manifest --write) and reserved every tree they touch before invoking it."
+      }
+    ],
+    "report": {
+      "outcome": "Renamed the 14 principle skills into the bee- namespace so both distribution pipes ship them, repointed the index rows, and grew the parity fence a check that reads the shipped plugin trees",
+      "commit": "cf79400bd40a6162c809d7217558435137427160",
+      "files": [
+        "skills/bee-principle-red-before-green/SKILL.md",
+        "skills/bee-principle-chestertons-fence/SKILL.md",
+        "skills/bee-principle-smallest-honest-shape/SKILL.md",
+        "skills/bee-principle-split-never-shrink/SKILL.md",
+        "skills/bee-principle-the-deletion-test/SKILL.md",
+        "skills/bee-principle-single-source-of-truth/SKILL.md",
+        "skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md",
+        "skills/bee-principle-test-behavior-not-structure/SKILL.md",
+        "skills/bee-principle-verify-before-reporting/SKILL.md",
+        "skills/bee-principle-the-rebuild-test/SKILL.md",
+        "skills/bee-principle-one-fact-one-home/SKILL.md",
+        "skills/bee-principle-reproduce-first/SKILL.md",
+        "skills/bee-principle-crash-site-versus-fault-site/SKILL.md",
+        "skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "packages/bee-rs/crates/bee/tests/principle_index_parity.rs",
+        "packages/bee-rs/crates/bee/src/principles.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude-plugin/skills",
+        ".codex-plugin/skills",
+        ".claude/skills",
+        ".agents/skills",
+        ".opencode/skills"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && bee dev release-manifest --check && bee hook session-init over 8 route classes — green:live — full declared suite green (3309 unit + 22 test binaries, 0 failed) and the manifest check green; the built release binary was then driven once per route class against a scratch root carrying the real index, and each class listed exactly the principles whose classes line names it (feature 11, refactor 10, bugfix 6, docs 5, release 3, research 2, spike 1, perf 1) while an unclaimed class and a routeless state each rendered NO block; both plugin trees counted at 14 principle dirs after regen",
+      "deviations": [
+        "Renamed all 14 skills to bee-principle-* and repointed the index, the fence prefix, principles.rs and its two caller fixtures rather than shipping principle-* — plan.md load-bearing claim 1 said both pipelines scan skills/ with no prefix filter, but skill_trees.rs list_bee_skill_dirs and onboard/render.rs list_bee_skill_entries both filter on a literal bee- name prefix, so the layer reached zero host repos while the suite stayed green — the plan was wrong about a fact",
+        "Landed the new fence check as the FIFTH pinned item, not the fourth the cell named — the file already pinned four (skills against rows both directions, class values, spoken line, guide anchor), so a fourth check had no free slot — the plan was wrong about a fact",
+        "Also namespaced the synthetic slugs in principles.rs TEST_INDEX and the two caller test fixtures — the assertion over this repo own index now requires the bee-principle- prefix, so a fixture left in the old shape would model a slug the product rejects — found a better route",
+        "Left docs/history/** references to old principle- slugs alone (plan.md line 93; research notes describing the pstack reference tree skills) and let bee dev regen rewrite the generated release-manifest.json itself — history records are archaeology, not live pointers, and hand-editing a generated manifest would fight the regen chain — found a better route"
+      ],
+      "mistakes": [
+        "The first version of the new fence check used a flat_map closure that moved root into it, and cargo failed it with E0507 at principle_index_parity.rs before it could ever run red for the right reason — a plain nested for loop was shorter and compiled first try; I should have written the loop instead of reaching for the iterator chain.",
+        "I reserved .claude-plugin and .codex-plugin before running bee dev regen, but the same chain also wrote .claude/skills, .agents/skills and .opencode/skills, which I only reserved after the write had landed — I should have read the three regen steps (render-skill-trees, onboard --apply, release-manifest --write) and reserved every tree they touch before invoking it."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

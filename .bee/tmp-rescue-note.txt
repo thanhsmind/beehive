@@ -1,0 +1,12 @@
+
+
+RESCUE NOTE (added by the leader beside the prompt above, not replacing it):
+A first worker for this cell ran out of time at the ceiling. Its edits to your cell's files are already on disk in the worktree, uncommitted, and the shared index also holds sibling cells' edits. Right now the crate builds and your verify command passes. Your job:
+1. Read the existing edits: git diff HEAD -- <each file in your files list>.
+2. Check them against every must_haves truth, key_link and prohibition of your cell and against its action. Complete or correct what is missing. Confirm the red-first test really fails without the fix (revert only the fix lines in a scratch edit, run that one test, restore).
+3. Remove any code comment the first worker added (only the exceptions AGENTS.md names are allowed).
+4. Run your cell's verify command exactly.
+5. Commit ONLY your files, path-scoped: git commit -m "<imperative subject>" -m "cell: <id>" -- <your files>. Do not stage anything else.
+6. Cap with bee finish (--report required).
+NEVER run git stash, git reset, git checkout, git restore, git clean, git add -A or git commit -a: three sibling workers hold uncommitted work in this same tree. Never edit a file outside your files list. If cargo fails to compile in a file outside your list, a sibling is mid-edit: wait 60 seconds and re-run.
+For ois-1 only: docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md also has an uncommitted edit; include it in your commit only if it states D1 correctly, else leave it untouched.

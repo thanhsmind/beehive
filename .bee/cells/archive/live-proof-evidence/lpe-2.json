@@ -1,0 +1,172 @@
+{
+  "id": "lpe-2",
+  "feature": "live-proof-evidence",
+  "title": "Keep verify-app evidence out of /tmp and name the rule in the map and doctrine",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "bb51c581-6ed5-45a5-ab7c-88541c0089ee",
+    "d56826ef-77c2-40bf-aa54-e03c0f21aca1"
+  ],
+  "files": [
+    ".bee/verify/verify-app/control-bee",
+    ".bee/verify/verify-app/SKILL.md",
+    ".bee/verify/verify-app/features/cells-and-proof.md",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+    "skills/bee-swarming/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/live-proof-evidence/CONTEXT.md",
+    ".bee/verify/verify-app/control-bee",
+    ".bee/verify/verify-app/features/cells-and-proof.md",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "action": "Five edits, then the regen chain. (1) .bee/verify/verify-app/control-bee:43 — change the default to `VERIFY_HOME=\"${VERIFY_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify}\"`; edit the existing header line :33 to read `(default ${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify)`. Edit existing comment lines only; add NO new comment line anywhere (the comment ratchet reds the suite if the count rises). (2) .bee/verify/verify-app/SKILL.md:66-68 — the three paths-table rows use `${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify/...`; keep every other sentence. (3) .bee/verify/verify-app/features/cells-and-proof.md — under `## Sub-features` add `- \\`cell-cap-live-evidence\\` refuses a \\`green:live\\` cap whose scope reason names no evidence locator (a run URL, an absolute path, or a path containing \\`evidence/\\`); the refusal names the three shapes.` and under `## Driving it with control-bee` add two labeled bullets after the green cap bullet: one that caps demo-note-1 with `tests` = `test -f NOTE.md — green:live — checked` and expects a refusal whose error contains `names no evidence locator` with a non-zero .exit, and one that caps with the reason naming the run's evidence dir (`$VERIFY_HOME/evidence/<run-id>`) and expects status capped. Keep the file's four-section contract. (4) docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md — inside R16c-a, extend the `green:live` bullet (:216) with one sentence: the scope reason must name an evidence locator — a run URL, an absolute path, or a path containing `evidence/` — checked on the write path only (live-proof-evidence D1, decision `d56826ef`, 2026-09-22). One home, no second copy. (5) skills/bee-swarming/SKILL.md:197 — replace `evidence attached,` with `the evidence locator named in the scope reason,`. Do NOT edit AGENTS.md (claim 10: the parity test pins only `user-facing` and `green:live`, and R16c-a is the rule's home). Write every edited sentence through bee-technical-writing. Then run `.bee/bin/bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) so the .claude/.agents/.opencode copies of verify-app and bee-swarming match their sources, and commit the refreshed copies plus docs/history/codex-harness-hardening/release-manifest.json with the rest. Prove: `.bee/bin/bee dev release-manifest --check` green and `bash .bee/verify/verify-app/control-bee paths` printing a root under $HOME/.local/state. One commit, subject in imperative mood, trailer `cell: lpe-2`.",
+  "must_haves": {
+    "truths": [
+      "control-bee's VERIFY_HOME default is ${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify and TMPDIR appears nowhere in the script",
+      "the SKILL.md paths table shows the same root",
+      "features/cells-and-proof.md lists cell-cap-live-evidence and drives both the refusal and the accepted cap",
+      "R16c-a's green:live bullet names the locator rule and cites decision d56826ef",
+      "bee-swarming/SKILL.md step 5 names the evidence locator in the scope reason",
+      "AGENTS.md is unchanged",
+      "the rendered copies match their sources and bee dev release-manifest --check is green"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/control-bee",
+        "substantive": "the VERIFY_HOME default line"
+      },
+      {
+        "path": ".bee/verify/verify-app/features/cells-and-proof.md",
+        "substantive": "the cell-cap-live-evidence sub-feature and its two drive bullets"
+      },
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+        "substantive": "the locator sentence in R16c-a"
+      }
+    ],
+    "key_links": [
+      "docs/history/live-proof-evidence/CONTEXT.md D2 and D3 are the locked decisions",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs (lpe-1) is the behaviour the words must match"
+    ],
+    "prohibitions": [
+      "No edit to AGENTS.md",
+      "No new comment line in control-bee",
+      "No Rust source change",
+      "No hand edit under .claude/, .agents/ or .opencode/ — those come from bee dev regen"
+    ]
+  },
+  "verify": ".bee/bin/bee dev release-manifest --check && bash .bee/verify/verify-app/control-bee paths",
+  "status": "capped",
+  "trace": {
+    "worker": "lpe-w2",
+    "outcome": "Move verify-app evidence out of /tmp and name the live-proof locator rule in the map and doctrine",
+    "files_changed": [
+      ".bee/verify/verify-app/control-bee",
+      ".bee/verify/verify-app/SKILL.md",
+      ".bee/verify/verify-app/features/cells-and-proof.md",
+      "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+      "skills/bee-swarming/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "Included .bee/onboarding.json in the commit although the cell did not list it — bee onboard --apply inside the ordered regen chain rewrote its updated_at, and both ways back to the old bytes are guard-refused, so the honest end state is to reserve the path and land it — hit an unforeseen obstacle",
+      "Rewrapped the bee-swarming step 5 sentence over three lines — the replacement text pushed that line past the wrap width used in the file — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T14:55:04.184Z",
+    "behavior_change": false,
+    "verification_evidence": "drove both: the manifest check matched 376 files, and paths printed evidence /home/thanhsmind/.local/state/bee-verify/evidence/probe, a root under the home state dir",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "b65d59c2-0be2-4aa1-858f-1f6b2ba30ee9",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && bash .bee/verify/verify-app/control-bee paths",
+    "claimed_at": "2026-09-22T14:44:23.593Z",
+    "mistakes": [
+      {
+        "wrong": "Tried twice to put .bee/onboarding.json back to its old bytes after the regen chain; the concurrent-worker guard and the direct-edit guard both refused",
+        "better": "should have read that file as CLI-owned regen output from the start and landed it",
+        "fix_at": "none"
+      },
+      {
+        "wrong": "Cell lpe-2 verify is a two-part command joined by a shell AND whose second part runs a script with bash; the host worktree-isolation hook refuses every Bash command carrying that text as an argument, so the cap could not be recorded from the worktree",
+        "better": "a single-command verify would have capped",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "verify-app evidence root moved out of /tmp and the green:live locator rule named in the map, R16c-a and bee-swarming step 5",
+      "commit": "b2c2befb7d1e3ed43f53762c93b78e159076bdcc",
+      "files": [
+        ".bee/verify/verify-app/control-bee",
+        ".bee/verify/verify-app/SKILL.md",
+        ".bee/verify/verify-app/features/cells-and-proof.md",
+        "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+        "skills/bee-swarming/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && bash .bee/verify/verify-app/control-bee paths — green:live — drove both: the manifest check matched 376 files, and paths printed evidence /home/thanhsmind/.local/state/bee-verify/evidence/probe, a root under the home state dir",
+      "deviations": [
+        "Included .bee/onboarding.json in the commit although the cell did not list it — bee onboard --apply inside the ordered regen chain rewrote its updated_at, and both ways back to the old bytes are guard-refused, so the honest end state is to reserve the path and land it — hit an unforeseen obstacle",
+        "Rewrapped the bee-swarming step 5 sentence over three lines — the replacement text pushed that line past the wrap width used in the file — found a better route"
+      ],
+      "mistakes": [
+        "Tried twice to put .bee/onboarding.json back to its old bytes after the regen chain; the concurrent-worker guard and the direct-edit guard both refused — should have read that file as CLI-owned regen output from the start and landed it — none",
+        "Cell lpe-2 verify is a two-part command joined by a shell AND whose second part runs a script with bash; the host worktree-isolation hook refuses every Bash command carrying that text as an argument, so the cap could not be recorded from the worktree — a single-command verify would have capped — doctrine"
+      ],
+      "baseline": "On the base commit both commands were green too: release-manifest --check matched 376 files and control-bee paths printed the old /tmp/bee-verify root — the change is which root it prints"
+    },
+    "baseline": "On the base commit both commands were green too: release-manifest --check matched 376 files and control-bee paths printed the old /tmp/bee-verify root — the change is which root it prints",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "control-bee's VERIFY_HOME default is ${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify and TMPDIR appears nowhere in the script",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "the SKILL.md paths table shows the same root",
+            "artifact": ".bee/verify/verify-app/SKILL.md"
+          },
+          {
+            "requirement": "features/cells-and-proof.md lists cell-cap-live-evidence and drives both the refusal and the accepted cap",
+            "artifact": ".bee/verify/verify-app/features/cells-and-proof.md"
+          },
+          {
+            "requirement": "R16c-a's green:live bullet names the locator rule and cites decision d56826ef",
+            "artifact": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+          },
+          {
+            "requirement": "bee-swarming/SKILL.md step 5 names the evidence locator in the scope reason",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "AGENTS.md is unchanged",
+            "artifact": "AGENTS.md"
+          },
+          {
+            "requirement": "the rendered copies match their sources and bee dev release-manifest --check is green",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-09-22T14:55:31.200Z",
+        "recorded_by": "b65d59c2-0be2-4aa1-858f-1f6b2ba30ee9",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

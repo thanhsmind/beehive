@@ -7,6 +7,7 @@ timestamp: 2026-07-16
 bee:
   id: pattern-20260716-a-cell-dependency-in-the-wrong-field-name
   lifecycle: active
+  areas: [workflow-state]
   sources: ["docs/history/learnings/critical-patterns.md#PAT41", "original feature: perf-log"]
   polarity: pitfall
   critical: false

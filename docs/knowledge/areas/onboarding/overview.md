@@ -19,7 +19,7 @@ bee:
 
 Onboarding installs and keeps current everything bee manages inside a host project:
 the agent-instructions block, the runtime state files, the vendored helper commands,
-and — for projects that opted in — the workspace status-display scripts. Re-running it
+and — by default — the workspace status-display script. Re-running it
 is always safe: it reports what would change before changing anything, and an
 up-to-date project reports "nothing to do".
 
@@ -49,13 +49,14 @@ run installs from, and are owned by
 
 | Concept | What it owns |
 |---|---|
-| [`status-display-vendoring.md`](status-display-vendoring.md) | The opt-in status-display pair: detecting the opt-in, vendoring the pair, healing drift, staying out otherwise, what the line renders, and the second runtime's machine-level status block |
+| [`status-display-vendoring.md`](status-display-vendoring.md) | The default status display: detecting the settings entry, vendoring by default, respecting preference and --no-statusline, what the line renders, and the second runtime's machine-level status block |
 | [`managed-ignore-section.md`](managed-ignore-section.md) | The delimited block onboarding owns inside the project's ignore list: what it silences, what it must never silence, and how it is created, appended, or rewritten |
 | [`distribution-source-exclusivity.md`](distribution-source-exclusivity.md) | Selecting and proving exactly one distribution source, the fenced cleanup in both directions, and the whole-run snapshot revalidated before the first mutation |
 | [`installer-entrypoints-and-source-staging.md`](installer-entrypoints-and-source-staging.md) | The installer entry points themselves: fetching the source without a full working tree, staging the complete release identity, and tolerating a runtime whose tool is present but broken |
 | [`release-identity-and-version-parity.md`](release-identity-and-version-parity.md) | One release version across every projection, the downgrade refusal, honest drift reporting, source-origin classification, and the blast radius a forceable refusal must name |
 | [`repo-local-guardrails.md`](repo-local-guardrails.md) | The remembered opt-in that keeps a project's local guardrails current, and the second runtime's lifecycle hook wiring |
 | [`host-project-artifacts.md`](host-project-artifacts.md) | The artifacts a host project receives and keeps: the instructions import, the unified command surface, the state-layer landing pages, and the annotated configuration sample |
+| [`onboarding-design-packs-the-design-role-and-the-design-gate.md`](onboarding-design-packs-the-design-role-and-the-design-gate.md) | The design-os taste picked per project as packs, the design team role, and the design gate's baseline ratchet that UI work must pass before it closes |
 
 ## Open Gaps
 
@@ -66,3 +67,17 @@ run installs from, and are owned by
   broader force-override reporting and per-skill-target sync details remain to
   harvest. Until then the authoritative description of the unspecced parts is the
   code and its test suites.
+
+## Concepts in this area
+
+- [Onboarding — hook vendoring import-closure completeness](hook-vendoring-import-closure-completeness-for-repo-local-gu.md) — Why a fresh repo-hooks onboard must vendor every module a vendored hook imports, transitively, not merely the hook entrypoints themselves, and the regression suite that guards the class of bug rather than the one instance.
+
+## Patterns in this area
+
+- [Agent-runtime discovery paths are version-moving targets — probe the binary, not memory](../../patterns/20260714-agent-runtime-discovery-paths-are-version-moving-targets.md) — Probe the binary, not memory
+- [Non-ASCII in a .ps1 without BOM is a parse-time bomb on Windows PowerShell 5.1](../../patterns/20260714-non-ascii-in-a-ps1-without-bom-is.md) — Non-ASCII in a .ps1 without BOM is a parse-time bomb on Windows PowerShell 5.1
+- [A guard scoped inside a skippable loop is absent on the path that skips it](../../patterns/20260715-a-guard-scoped-inside-a-skippable-loop-is.md) — A guard scoped inside a skippable loop is absent on the path that skips it
+- [A test that runs the canonical source can never catch vendoring drift — only a fresh-install subprocess can](../../patterns/20260724-canonical-source-tests-cannot-see-vendoring-drift.md) — A guard crashed fail-open on every fresh install for a whole release cycle: its sibling import was never vendored, node --check passes on missing imports, and every suite ran the canonical file where the import always resolves. The only detector was a live canary spawning the actually-vendored copy from a freshly-onboarded fixture.
+- [A managed-file ledger needs a removal path derived from its own diff, not a hand-maintained retired list](../../patterns/20260724-ledger-diff-derived-removal.md) — A managed-file ledger needs a removal path derived from its own diff, not a hand-maintained retired list
+- [A guard comparing a value against its own derivation can never fail — anchor on independently derived evidence](../../patterns/20260726-a-guard-compared-to-its-own-derivation-never-fails.md) — A proposed identity anchor compared realpath(PLUGIN_ROOT/packages/bee/scripts) with SCRIPTS_DIR — but PLUGIN_ROOT is computed from SCRIPTS_DIR, so the check is true by construction and the live guard it replaced would have become a no-op. The repaired anchor asserts facts from an independent derivation: the skills tree exists under the package root and the payload file is readable. Same family: one variable (HIVE_DIR) silently carried three semantics — engine geometry, a shared function's input, and the tree sync copies — and a wholesale rename would have pointed sync at the wrong tree.
+- [A migration's own regen and proof tooling is a consumer of the migration — inventory it before the move](../../patterns/20260726-migration-tooling-is-a-consumer-of-the-migration.md) — The first mandatory regen command of the move cell statically imported from the tree being moved; unfixed, the cell's own regen obligation would have crashed at its first step. ESM static imports resolve at load time, so a generator that proves a move can itself be broken by the move — and the companion rule: what a manifest enumerates must change in the same cell as the move, because every cell boundary is a potential ship point.

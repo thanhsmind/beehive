@@ -443,7 +443,7 @@ pub(crate) fn maybe_bypass_block(
         // the working record instead; the registry marker on
         // `state.advisor-ref.record` carries the same fix.
         "High-risk execution requires a live advisor consult first: resolve the advisor from \
-config (models.<runtime>.advisor), run it read-only with the evidence bundle on stdin, then \
+config (team.<runtime>.advisor), run it read-only with the evidence bundle on stdin, then \
 record it with bee decisions log --decision \"advisor consult: <identity>\" \
 --rationale \"<the digest, or the path holding it>\" --relation none — do this BEFORE \
 setting the gate. "

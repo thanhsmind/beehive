@@ -7,6 +7,7 @@ timestamp: 2026-07-12
 bee:
   id: pattern-20260712-enumerated-move-trap-in-migration-cells
   lifecycle: active
+  areas: [workflow-state]
   sources: ["docs/history/learnings/critical-patterns.md#PAT24", "original feature: bee-footprint"]
   polarity: pitfall
   critical: false

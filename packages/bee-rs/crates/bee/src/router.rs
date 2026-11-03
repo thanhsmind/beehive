@@ -61,13 +61,20 @@ pub const PORTED: &[&str] = &[
     "backlog pbi status",
     "backlog pbi amend",
     "backlog pbi list",
+    "backlog briefs",
     "feedback count",
+    "report usage --transcript <path>|--session <id> [--corr <t-hex>] [--since/--until] [--task] [--json]",
     // R3 wave 2
     "--help (all forms, incl. group-scoped)",
     "test",
     // model-role-split D4 — `cells tier` retired with the selector it wrote;
     // `cells escalate` is the escalation half of it, under its own name.
     "cells add|update|claim|unclaim|cap|finish|block|drop|reopen|escalate",
+    // slp-dissent-stop-and-ask — a worker's recorded disagreement with the
+    // cell it was handed, and the orchestrator's obligated answer to it.
+    // `escalate` above keeps its model-tier meaning; the verdict's own
+    // `escalate` means escalate A RUNG and never touches the tier.
+    "cells dissent|dissent-verdict",
     "cells judge|judge-record|reset-budget|schedule|archive|unarchive",
     // model-role-split D9 — the one-time role backfill over the stored cells.
     "cells backfill-roles [--dry-run]",
@@ -77,11 +84,12 @@ pub const PORTED: &[&str] = &[
     "state set|gate|scribing-run|compounding-run|plan-rev bump|handoff (no-lane/no-workflow repos)",
     "intent set|show|advance|clear",
     "work show|set",
-    // models-show-verb D1 — the raw models role table, descriptions intact
-    "models show [--runtime claude|codex|opencode]",
+    // models-show-verb D1 — the raw team role table, descriptions intact
+    "team show [--runtime claude|codex|opencode]",
     "reviews create|list|show|record|candidate add|candidates|status (--file shapes)",
     "knowledge check|index|list|context",
     "tmp sweep",
+    "design gate [--write] [--json]",
     // R3 wave 3
     "close (incl. --dry-run; lane and non-lane features alike)",
     "dispatch prepare (all kinds; --claim still delegated)",
@@ -91,7 +99,9 @@ pub const PORTED: &[&str] = &[
     "worktree list|register|unregister",
     // R4 dev surface
     "onboard [--repo-root R] [--apply] [--json] [--repo-hooks] [--plugin-source] \
-     [--runtime R] [--claude-md|--no-claude-md] [--global-skills] [--force-downgrade]",
+     [--runtime R] [--claude-md|--no-claude-md] [--global-skills] [--skillstation] \
+     [--force-downgrade] \
+     [--no-statusline] [--design-packs <list|none>]",
     "dev render-skill-trees",
     "dev render-prompt <name> [--var K=V]",
     "dev statusline",
@@ -131,6 +141,12 @@ pub const PORTED: &[&str] = &[
     // wayfinding-flow — the discovery map registry (D2, D4, D6.3)
     "discovery list [--json]",
     "discovery stub --effort <slug> --from <text> [--json]",
+    // slp-blind-lanes — the convergence door over a blind-lane dossier
+    "blind check --dossier <path> [--json]",
+    // version-verb — release identity, rootless, in the spelling every CLI
+    // teaches. `--version`/`-V` are argv aliases of the one verb, not
+    // registry entries of their own.
+    "version | --version | -V [--json]",
 ];
 
 // ── the front door's two namespaces ────────────────────────────────────────
@@ -162,6 +178,7 @@ pub const FLOW_VERBS: &[(&str, &[&str])] = &[
     ("shape", &["intent", "set"]),
     ("gate", &["state", "gate"]),
     ("finish", &["cells", "finish"]),
+    ("models", &["team"]),
 ];
 
 pub const INTERNAL: &str = "internal";
@@ -203,8 +220,16 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if let Some(code) = crate::verbs::help::try_native(args, t0) {
         return Some(code);
     }
+    let is_models_alias = args.first().and_then(|a| a.to_str()) == Some("models");
     match rewrite_front_door(args) {
-        Some(rewritten) => dispatch(&rewritten, t0),
+        Some(rewritten) => {
+            if is_models_alias {
+                eprintln!(
+                    "bee models show is now bee team show — the config block is team.<runtime>.<role>; models is a read alias."
+                );
+            }
+            dispatch(&rewritten, t0)
+        }
         None => dispatch(args, t0),
     }
 }
@@ -231,6 +256,9 @@ fn internal_namespace(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 fn dispatch(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first().and_then(|a| a.to_str()) == Some("rs-info") {
         return Some(rs_info());
+    }
+    if let Some(code) = try_version(args) {
+        return Some(code);
     }
     if let Some(code) = crate::hooks::try_native(args) {
         return Some(code);
@@ -610,6 +638,17 @@ mod tests {
     #[test]
     fn a_flow_verb_expands_to_its_proven_target() {
         for (name, target) in FLOW_VERBS {
+            if *name == "models" {
+                let rewritten = rewrite_front_door(&strs(&[name, "show", "--json"])).expect("{name} rewrites");
+                let got: Vec<String> =
+                    rewritten.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+                assert_eq!(got, vec!["team", "show", "--json"]);
+                assert!(
+                    crate::catalog::resolve(&["team", "show"]).is_some(),
+                    "team.show is in the registry"
+                );
+                continue;
+            }
             let rewritten = rewrite_front_door(&strs(&[name, "--json"])).expect("{name} rewrites");
             let got: Vec<String> =
                 rewritten.iter().map(|a| a.to_string_lossy().into_owned()).collect();
@@ -666,6 +705,15 @@ mod tests {
     #[test]
     fn every_flow_verb_is_declared_porcelain_in_the_registry() {
         for (name, _) in FLOW_VERBS {
+            if *name == "models" {
+                let (entry, rest) = crate::catalog::resolve(&["models", "show"]).unwrap_or_else(|| {
+                    panic!("{name}.show is not in the command registry")
+                });
+                assert!(rest.is_empty());
+                assert_eq!(entry.invoke, "bee models show");
+                assert!(entry.unavailable.is_none(), "{name} must be callable");
+                continue;
+            }
             let (entry, rest) = crate::catalog::resolve(&[name]).unwrap_or_else(|| {
                 panic!("{name} is not in the command registry")
             });
@@ -673,6 +721,66 @@ mod tests {
             assert_eq!(entry.invoke, format!("bee {name}"));
             assert!(entry.unavailable.is_none(), "{name} must be callable");
         }
+    }
+
+    #[test]
+    fn models_show_alias_matches_team_show_and_warns_on_stderr() {
+        let bin = {
+            let mut dir = std::env::current_exe().expect("test binary path");
+            dir.pop();
+            if dir.ends_with("deps") {
+                dir.pop();
+            }
+            dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX))
+        };
+        if !bin.is_file() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        std::fs::create_dir_all(repo.join(".bee")).unwrap();
+        std::fs::write(repo.join(".bee/onboarding.json"), r#"{"completed":true}"#).unwrap();
+        std::fs::write(
+            repo.join(".bee/config.json"),
+            r#"{"team":{"claude":{"code":"opus"}}}"#,
+        )
+        .unwrap();
+
+        // 1. Text mode equality
+        let out_team = std::process::Command::new(&bin)
+            .args(["team", "show"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let out_models = std::process::Command::new(&bin)
+            .args(["models", "show"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        assert_eq!(out_team.stdout, out_models.stdout, "stdout must be byte-identical");
+        let stderr_models = String::from_utf8_lossy(&out_models.stderr);
+        let stderr_team = String::from_utf8_lossy(&out_team.stderr);
+        let notice = "bee models show is now bee team show — the config block is team.<runtime>.<role>; models is a read alias.";
+        assert!(stderr_models.contains(notice), "alias stderr must contain notice: {stderr_models}");
+        assert!(!stderr_team.contains(notice), "canonical team show must not contain notice: {stderr_team}");
+        assert_eq!(
+            stderr_models.lines().filter(|l| *l == notice).count(),
+            1,
+            "exactly one warning line to stderr"
+        );
+
+        // 2. JSON mode equality
+        let out_team_json = std::process::Command::new(&bin)
+            .args(["team", "show", "--json"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let out_models_json = std::process::Command::new(&bin)
+            .args(["models", "show", "--json"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        assert_eq!(out_team_json.stdout, out_models_json.stdout, "JSON stdout must be byte-identical");
     }
 
     /// The regression this cell exists for: `state route --lane-value` used
@@ -714,6 +822,25 @@ mod tests {
         );
     }
 
+    /// The three spellings serve; anything more on the argv falls through so
+    /// the dispatcher can refuse it against the `version` registry entry.
+    #[test]
+    fn the_version_probe_claims_its_three_spellings_and_nothing_more() {
+        for argv in [&["version"][..], &["--version"], &["-V"], &["version", "--json"]] {
+            assert!(try_version(&strs(argv)).is_some(), "{argv:?} must serve");
+        }
+        for argv in [&["version", "wat"][..], &["--version", "--verbose"], &["versions"]] {
+            assert!(try_version(&strs(argv)).is_none(), "{argv:?} must fall through");
+        }
+    }
+
+    #[test]
+    fn a_stray_positional_after_version_refuses_against_the_version_entry() {
+        let (kind, msg) = classify_argv(&["version", "wat"]);
+        assert_eq!(kind, "unexpected_argument");
+        assert!(msg.contains("bee version"), "{msg}");
+    }
+
     /// The black-box suites detect "the front door refused" by these five
     /// leading phrases. If a message is reworded without updating
     /// REFUSAL_HEADLINES, `tests/concurrency.rs` stops recognising an unserved
@@ -742,6 +869,43 @@ mod tests {
         assert_eq!(kind, "unsupported_argument_shape");
         assert!(msg.starts_with(REFUSAL_HEADLINES[4]), "{msg}");
     }
+}
+
+/// `bee version` — the release identity, in the spelling every CLI teaches
+/// (`--version` and `-V` are aliases of the same probe). Rootless like
+/// `rs-info`: the answer is compiled in, so it must work in an empty
+/// directory, before onboarding, on a broken store. Prints
+/// `crate::version::BEE_VERSION` — the plugin-manifest release version, the
+/// number `scripts/release.sh` bumps — with the crate version beside it only
+/// in `--json`, where `rs-info` already taught callers that the two differ.
+///
+/// The probe claims exactly `version|--version|-V` plus an optional `--json`.
+/// Anything else returns None untouched, so a stray positional still gets the
+/// dispatcher's named refusal against the `version` registry entry.
+fn try_version(args: &[OsString]) -> Option<ExitCode> {
+    let head = args.first()?.to_str()?;
+    if !matches!(head, "version" | "--version" | "-V") {
+        return None;
+    }
+    let mut json = false;
+    for arg in &args[1..] {
+        match arg.to_str() {
+            Some("--json") => json = true,
+            _ => return None,
+        }
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "version": crate::version::BEE_VERSION,
+                "binary": env!("CARGO_PKG_VERSION"),
+            })
+        );
+    } else {
+        println!("bee {}", crate::version::BEE_VERSION);
+    }
+    Some(ExitCode::SUCCESS)
 }
 
 fn rs_info() -> ExitCode {

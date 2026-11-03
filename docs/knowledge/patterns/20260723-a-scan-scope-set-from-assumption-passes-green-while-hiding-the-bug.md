@@ -7,6 +7,7 @@ timestamp: 2026-07-23
 bee:
   id: pattern-20260723-a-scan-scope-set-from-assumption-passes-green
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["okf-integration-close-f4 (an instruction-layer audit whose own grep omitted hooks/, where the P1 was; trace in `.bee/cells/`, 2026-07-22)", "judge-record-tags cells jrt-1, jrt-2 (a tagless-decision census scoped to lib/** that passed green while bee.mjs carried a live instance; traces in `.bee/cells/`, 2026-07-23)"]
   polarity: pitfall
   critical: true

@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-red-fixes",
+  "closed_at": "2026-09-15T06:58:24.733Z",
+  "sessions": [
+    {
+      "session_id": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f",
+      "models": {
+        "claude-opus-5": {
+          "input": 5406,
+          "output": 209059,
+          "cache_write": 688074,
+          "cache_read": 53312714,
+          "new": 902539,
+          "cached": 53312714,
+          "total": 54215253
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1789437707332,
+      "ended_ms": 1789455503634,
+      "totals": {
+        "new": 902539,
+        "cached": 53312714,
+        "total": 54215253
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 902539,
+      "cached": 53312714,
+      "total": 54215253
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 902539,
+      "cached": 53312714,
+      "total": 54215253
+    }
+  }
+}

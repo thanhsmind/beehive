@@ -7,6 +7,7 @@ timestamp: 2026-07-10
 bee:
   id: pattern-20260710-evidence-is-checkpointed-to-disk-per-step-never
   lifecycle: active
+  areas: [workflow-state]
   sources: ["docs/history/learnings/critical-patterns.md#PAT12", "original feature: evolving-loop"]
   polarity: pitfall
   critical: false

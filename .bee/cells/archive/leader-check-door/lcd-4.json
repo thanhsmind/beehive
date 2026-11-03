@@ -1,0 +1,156 @@
+{
+  "id": "lcd-4",
+  "feature": "leader-check-door",
+  "title": "Name the verb and both doors in the leader-completeness-check doctrine",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "lcd-1",
+    "lcd-2",
+    "lcd-3"
+  ],
+  "decisions": [
+    "a38dc4bd-a94e-4ae5-91e8-2bfb0bf6a0b1"
+  ],
+  "files": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "docs/history/leader-check-door/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [],
+  "action": "The leader completeness check now has teeth. Update its doctrine text so it stops reading as an honour-system step, at these four sites and nowhere else. (1) skills/bee-hive/references/routing-and-contracts.md:172-179, the rule's ONE home: keep the four existing bullets, and add that the check is RECORDED with `bee cells leader-check --id <cell> --verdict ok|gap --file <answers.json>`, that the payload answers every derived requirement with an artifact and the verb verifies those artifacts exist (an artifact that looks like a repo path must be on disk; at least one answer must name a path from the cell's trace.files_changed), that a `gap` verdict records without reopening the cell so the door stays red, and that BOTH `bee close` and `bee worktree merge` refuse a feature whose capped cells carry no `ok` mark, at every lane, grandfathered by LEADER_CHECK_DOOR_INTRODUCED_AT, with a logged decision tagged `leader-check-deferral` as the one named escape. (2) skills/bee-hive/SKILL.md:48 (the bee-swarming routing row) and :112 (the hard rule): each gains a short clause that the check is recorded and that both exits check it — pointers only, never a second copy of the rule. (3) skills/bee-swarming/SKILL.md:76-81, step 5: after 'Run the leader completeness check before accepting', name the recording verb and say the cap is not the end of the cell — the recorded mark is. (4) skills/bee-swarming/references/swarming-reference.md:234-258 (step 7's first bullet) and :713: same, one pointer line each. Then run the skill regen chain: `bee dev regen` (it renders the .claude/.agents/plugin skill mirrors). ONE-FACT-ONE-HOME: AGENTS.md is deliberately NOT edited — it carries no copy of this rule today (only an unrelated proof-reporting line at :140), and adding one would duplicate routing-and-contracts.md:172. ENVIRONMENT-FACT CHECK: the registry payload has no regen chain in this repo (decision 3358743e) — that is lcd-1's concern and nothing here touches it. Write every edited sentence through the bee-technical-writing standard. REGEN: this cell owns the regen chain for its own skill edits — run bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) and commit the refreshed docs/history/codex-harness-hardening/release-manifest.json with the rest.",
+  "must_haves": {
+    "truths": [
+      "routing-and-contracts.md names the verb, the artifact verification, the gap-does-not-reopen rule, both doors, the grandfather stamp and the leader-check-deferral escape",
+      "bee-hive/SKILL.md:48 and :112 point at the recorded mark without restating the rule",
+      "bee-swarming/SKILL.md step 5 names the recording verb",
+      "swarming-reference.md step 7 and the handoff line at :713 name it too",
+      "AGENTS.md is unchanged",
+      "the rendered skill mirrors match their sources after bee dev regen",
+      "docs/history/codex-harness-hardening/release-manifest.json is refreshed in the same commit and bee dev release-manifest --check is green"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/routing-and-contracts.md",
+        "substantive": "the Leader completeness check section, now naming the verb and both doors"
+      },
+      {
+        "path": "skills/bee-swarming/SKILL.md",
+        "substantive": "step 5's pointer to the recording verb"
+      }
+    ],
+    "key_links": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs is the behaviour this text must match",
+      "docs/history/leader-check-door/CONTEXT.md D3, D3a, D5, D6, D7, D8 are the locked decisions the text may not reinterpret"
+    ],
+    "prohibitions": [
+      "No edit to AGENTS.md",
+      "No second copy of the rule outside routing-and-contracts.md — the other three sites carry pointers only",
+      "No change to any Rust source",
+      "No new claim the code does not implement"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee skill && .bee/bin/bee dev release-manifest --check",
+  "status": "capped",
+  "trace": {
+    "worker": "lcd-w4",
+    "outcome": "The doctrine names the recording verb and both doors; the rule keeps one home",
+    "files_changed": [
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The regen chain rewrote 26 generated mirror files the cell's files list did not name (.claude/skills/**, .agents/skills/**, .claude-plugin/**, .codex-plugin/**, .opencode/skills/**, .bee/onboarding.json). They are derived from the four edited skill sources, which is what the cell's REGEN instruction asked for. bee cells judge reports no hits."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T02:58:59.435Z",
+    "behavior_change": false,
+    "verification_evidence": "52 skill tests passed 0 failed; bee dev release-manifest --check reports 376 file(s) match stored manifest",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "695ef661-d172-4f5a-b000-fd74bf610bff",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee skill && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-21T02:54:02.983Z",
+    "mistakes": [
+      {
+        "wrong": "Checking must-have 2 I grepped skills/bee-hive/SKILL.md for the string 'leader-check', got nothing, and read that as a missed requirement",
+        "better": "but the cell asked those two lines for a POINTER, not the verb name, and both lines had in fact been edited. Better: run the completeness check against the must-have's own words, not against a keyword I picked myself; a grep is evidence only when the truth is about that literal string."
+      }
+    ],
+    "report": {
+      "outcome": "The leader-completeness-check doctrine names the recording verb and both doors; the rule keeps its one home in routing-and-contracts.md and the other three sites carry pointers",
+      "commit": "77bf19656381e8bc6ce18390de7ce0c39b8572fe",
+      "files": [
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-hive/SKILL.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee skill && .bee/bin/bee dev release-manifest --check — green:static — 52 skill tests passed 0 failed; bee dev release-manifest --check reports 376 file(s) match stored manifest",
+      "deviations": [
+        "The regen chain rewrote 26 generated mirror files the cell's files list did not name (.claude/skills/**, .agents/skills/**, .claude-plugin/**, .codex-plugin/**, .opencode/skills/**, .bee/onboarding.json). They are derived from the four edited skill sources, which is what the cell's REGEN instruction asked for. bee cells judge reports no hits."
+      ],
+      "mistakes": [
+        "Checking must-have 2 I grepped skills/bee-hive/SKILL.md for the string 'leader-check', got nothing, and read that as a missed requirement — but the cell asked those two lines for a POINTER, not the verb name, and both lines had in fact been edited. Better: run the completeness check against the must-have's own words, not against a keyword I picked myself; a grep is evidence only when the truth is about that literal string."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 164 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "routing-and-contracts.md names the verb, the artifact verification, the gap-does-not-reopen rule, both doors, the grandfather stamp and the leader-check-deferral escape",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "bee-hive/SKILL.md:48 and :112 point at the recorded mark without restating the rule",
+            "artifact": "skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": "bee-swarming/SKILL.md step 5 names the recording verb",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "swarming-reference.md step 7 and the handoff line at :713 name it too",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "AGENTS.md is unchanged",
+            "artifact": "AGENTS.md"
+          },
+          {
+            "requirement": "the rendered skill mirrors match their sources after bee dev regen",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json is refreshed in the same commit and bee dev release-manifest --check is green",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-09-21T03:01:43.013Z",
+        "recorded_by": "695ef661-d172-4f5a-b000-fd74bf610bff"
+      }
+    ]
+  }
+}

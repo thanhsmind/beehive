@@ -1,0 +1,80 @@
+{
+  "id": "pcs-2",
+  "feature": "plan-conflicts-scope",
+  "lane": "small",
+  "role": "code",
+  "title": "Drop saturating terms from the plan-conflict term set and cap the candidate list",
+  "action": "Turn pcs-1 green. In packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs: (D1) change ONLY the term set — count_term_hits, conflict_candidates, the >=2 threshold and the rule-home half of derive_candidates stay exactly as they are. (D2) drop any term whose document frequency across the active decision store exceeds 3%. (D3) apply that cut ONLY when the store holds 200 or more active decisions; below the floor the behavior must be byte-identical to today, which is what keeps the existing small-fixture tests green. (D4) rank the resulting decision candidates by hit count and cap them at 50, and make a truncated list say so in its own output rather than truncating silently. derive_candidates already calls active_decisions(root, false) at line ~254 — thread that set into the term filter instead of loading it twice; change plan_terms's signature if that is the clean way. Put each constant next to a comment carrying its measured justification, the way PLAN_CELL_STATUSES and TERM_STOPWORDS already do: on this repo's live store (2589 active decisions, 31 terms) the >=2 rule yields 694 candidates and the 3% cut yields 36.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "pcs-1's test passes. Every pre-existing derive test passes unchanged. The scoring functions are untouched — git diff shows no edit to count_term_hits or conflict_candidates.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "pcs-1"
+  ],
+  "decisions": [
+    "99b8003a-8ad4-4b58-b0ad-45fb3d14714b"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+    "docs/history/plan-conflicts-scope/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "pcs-1's test passes and every pre-existing plan-conflicts test still passes",
+      "git diff touches no scoring function — count_term_hits and conflict_candidates are unedited",
+      "each new constant carries a comment with the measured number that justifies it",
+      "with fewer than 200 active decisions the derived candidate list is identical to today's"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pcs-2",
+    "outcome": "The plan term set now drops terms above 3 percent document frequency once the store holds 200 active decisions, and the decision candidate list is ranked by hit count and capped at 50",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs"
+    ],
+    "deviations": [
+      "D4 ranking is applied only when the 50-candidate cap actually truncates — an unconditional sort would reorder an under-cap list and break must_have 4, which promises an under-floor list identical to today — found a better route",
+      "plan_terms keeps its one-argument signature and the filter runs as drop_saturating_terms inside derive_candidates, with a new derive_candidates_reported carrying the truncation count — the already-green fixture test calls plan_terms with one argument and asserts the UNFILTERED term set, so a signature change would have broken it — the plan was wrong about a fact",
+      "sync-ack: No owned skill of area workflow-state describes the derive term filter or its thresholds; the change is internal to how the term set is built, the cell declares affects_skills empty by plan, and pcs-1 already pinned the new behavior in tests.rs"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T13:37:06.462Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T13:28:11.208Z",
+    "sync_ack": "No owned skill of area workflow-state describes the derive term filter or its thresholds; the change is internal to how the term set is built, the cell declares affects_skills empty by plan, and pcs-1 already pinned the new behavior in tests.rs",
+    "mistakes": [
+      {
+        "wrong": "The edit script emitted a doubled-brace unicode escape for the em dash inside a format! string, so the first cargo run failed to compile",
+        "better": "should have checked the escape level of the generator string before running cargo"
+      }
+    ],
+    "report": {
+      "outcome": "The plan term set now drops terms above 3 percent document frequency once the store holds 200 active decisions, and the decision candidate list is ranked by hit count and capped at 50",
+      "commit": "3f1044a919bc95519b4719cc5bc473670c371c80",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — the cell verify, the full workspace suite, because derive_candidates sits on the gate path",
+      "deviations": [
+        "D4 ranking is applied only when the 50-candidate cap actually truncates — an unconditional sort would reorder an under-cap list and break must_have 4, which promises an under-floor list identical to today — found a better route",
+        "plan_terms keeps its one-argument signature and the filter runs as drop_saturating_terms inside derive_candidates, with a new derive_candidates_reported carrying the truncation count — the already-green fixture test calls plan_terms with one argument and asserts the UNFILTERED term set, so a signature change would have broken it — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "The edit script emitted a doubled-brace unicode escape for the em dash inside a format! string, so the first cargo run failed to compile — should have checked the escape level of the generator string before running cargo"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 170 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -64,7 +64,11 @@ best-effort guess: recovery no longer has to already know, or successfully
 infer, where a second runtime's transcripts live in order to find one that
 was actually reported at session start. A runtime that hands no transcript
 path leaves the field absent, and lookup falls back to layout math exactly as
-it did before this behavior existed (hardening-1-7-10).
+it did before this behavior existed (hardening-1-7-10). The session-close
+checkpoint reads a Codex-shaped transcript the same way: it tries the stored
+path first, then the runtime's own sessions directory, and reads the session's
+token usage, its identity, and the final assistant text into the same close
+record a Claude transcript produces (codex-parity-completion cpc-3).
 
 ## Business Rules
 

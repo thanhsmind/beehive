@@ -8,7 +8,7 @@ bee:
   id: pattern-20260818-a-write-placed-before-a-self-check-makes-the
   lifecycle: active
   areas: [worktree-parallelism]
-  sources: [".bee/cells/mcl-2.json", "original feature: merge-closes-the-lane"]
+  sources: [".bee/cells/archive/merge-closes-the-lane/mcl-2.json", "original feature: merge-closes-the-lane"]
   polarity: pitfall
   critical: true
   evidence: wired

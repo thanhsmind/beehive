@@ -1,0 +1,159 @@
+{
+  "id": "hlt-6",
+  "feature": "herding-leader-toil",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Catch the AppImage paseo CLI and a broken isolated Pi folder in doctor",
+  "deps": [],
+  "decisions": [
+    "D6",
+    "a79e3edc-6f03-453f-aae7-489c422aa7df"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-leader-toil/CONTEXT.md",
+    "docs/history/herding-leader-toil/plan.md",
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "action": "Red first. Per D6, in doctor.rs paseo_ready_row_with_env_and_cli (search paseo_ready): after the --version call, fail with FIX 'set herding.paseo.command to the npm @getpaseo/cli paseo' when the first non-blank stdout line is not a bare x.y.z version, or when the command resolved on PATH (or given as a path) is a text script containing 'AppImage'. For each herding agent whose raw config paseo block has provider pi and isolated_config true, when <root>/.bee/runtime/pi-agent/<agent>/ exists, check its settings.json has defaultProjectTrust always and its auth.json is a symlink that resolves (a real file or a broken link fails); when the folder does not exist yet, only check that ~/.pi/agent/auth.json exists; fail with a FIX naming the agent otherwise (read the raw config keys; do not depend on new structs). Tests in doctor/tests.rs with the fake CLI and temp files: AppImage-style version output fails; an AppImage wrapper script fails; the npm style passes; a broken isolated folder fails; a replaced (non-link) auth.json fails; a missing folder with the home auth present passes; a good one passes. Cite decision a79e3edc (contract:doctor-paseo-cli). No code comments.",
+  "must_haves": {
+    "truths": [
+      "paseo_ready fails with the npm FIX when --version's first line is not a bare version or the command is an AppImage wrapper script",
+      "paseo_ready fails when an existing isolated_config folder lacks trust-always settings or an auth.json that is a working link, and only checks the home auth when the folder does not exist yet",
+      "the npm CLI with good folders still passes and the existing doctor tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+        "substantive": "AppImage and isolated-folder checks"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        "substantive": "tests for both"
+      }
+    ],
+    "key_links": [
+      "paseo_ready runs the new checks"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No state-changing call from doctor"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hlt-6",
+    "outcome": "doctor paseo_ready catches the AppImage CLI and broken isolated Pi folders",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T08:42:25.418Z",
+    "behavior_change": false,
+    "verification_evidence": "57 doctor tests green incl. AppImage version output, wrapper script and isolated-folder checks; run by the leader",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+    "claimed_at": "2026-10-06T07:25:25.693Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T08:42:25.418Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T09:19:22.785Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:02:22.337Z"
+      }
+    ],
+    "sync_ack": "herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "doctor paseo_ready catches the AppImage CLI and broken isolated Pi folders",
+      "commit": "1b8a6b327",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor — green:unit — 57 doctor tests green incl. AppImage version output, wrapper script and isolated-folder checks; run by the leader",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "AppImage version line or wrapper script fails with the npm FIX",
+            "status": "PASS",
+            "evidence": "doctor.rs:743 is_bare_version, :753 is_appimage_wrapper_script; tests"
+          },
+          {
+            "id": "isolated folder checks only when the folder exists",
+            "status": "PASS",
+            "evidence": "doctor.rs:895-930; five tests"
+          },
+          {
+            "id": "npm passes; no state change; no comments",
+            "status": "PASS",
+            "evidence": "npm_style_passes; reads only"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T09:19:22.785Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "paseo_ready fails with the npm FIX when --version's first line is not a bare version or the command is an AppImage wrapper script",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "paseo_ready fails when an existing isolated_config folder lacks trust-always settings or an auth.json that is a working link, and only checks the home auth when the folder does not exist yet",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          },
+          {
+            "requirement": "the npm CLI with good folders still passes and the existing doctor tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T10:02:22.337Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

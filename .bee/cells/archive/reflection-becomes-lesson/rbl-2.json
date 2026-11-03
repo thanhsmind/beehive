@@ -1,0 +1,78 @@
+{
+  "id": "rbl-2",
+  "feature": "reflection-becomes-lesson",
+  "title": "Mine reflections as a trouble source, and measure the clean-run collapse",
+  "role": "code",
+  "lane": "high-risk",
+  "slice": 2,
+  "deps": [
+    "rbl-1"
+  ],
+  "action": "Turn a recorded reflection into a mined lesson (D3 0872f328, superseding letter-reflection LR4 bb73e821), and make the collapse of the clean-run answer visible (D6 7760339d).\n\nRED FIRST. Before touching the miner, write the test that proves a reflection appearing in two distinct runs' letters becomes exactly one lesson decision. Run it. SEE IT RED against today's trouble_lines and say so in the cap proof. Only then widen the source set. A green count is not evidence that your new test ran (docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md) — name the new test by function name in the proof line.\n\n(1) THE SOURCE SET — packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs. `trouble_lines` (lines 710-728) walks the SECTION_BROKEN bullets and the three MINED_DEPARTURE_KINDS (lines 631-635). Add the letter's reflection items as a third trouble source.\n\n(2) THE TOKENIZED TEXT IS THE REFLECTION ITEM'S `what` FIELD, NEVER THE RENDERED BULLET. The bullet is `<what> — better: <better>` (mailbox.rs:1767-1774); tokenizing the joined line would make the same mistake with a differently worded counterfactual fail to match, and re-parsing rendered prose is what this file's own doc forbids for departures (see the comment at 705-709). compose_letter maps every entry to an item, so `item.what` is available structurally — use it, exactly as the departure branch already uses `departure.what`.\n\n(3) REUSE, DO NOT RE-DERIVE. normalize_shape (659-675) and shape_token (680-685) stay the single derivation, and the existing spent-token dedup (the walk at 781) still refuses a token any earlier lesson row spent, active or superseded. No second hashing path.\n\n(4) THE CLEAN-RUN ANSWER IS NEVER MINED. rbl-1 added its entry kind; exclude it here by the same predicate family, never by string match. A line meaning nothing-went-wrong must not teach a lesson, exactly as the plan-followed statement does not.\n\n(5) THE COLLAPSE IS MEASURED (D6). The feedback digest gains the clean-run-to-reflection ratio — how many caps answered clean against how many recorded a real reflection — so a reflexive clean answer on every close shows up as a visible number instead of as silence nobody notices. Locate the feedback digest yourself (`bee feedback digest`), reserve its file before writing, and keep the addition to a counted line: it is a witness, not a guard, and it must never refuse anything.\n\nDo NOT touch the close door, the cap, or the doctrine files: those are rbl-1, already capped.",
+  "acceptance": "A reflection whose `what` appears in the letters of two distinct runs produces exactly one lesson-tagged decision citing both letters; the same reflection with a differently worded `better` still matches, because only `what` is tokenized; a clean-run answer never produces a lesson; a shape any earlier lesson row already spent is never logged again; and the feedback digest reports the clean-run-to-reflection ratio.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox_digest && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee feedback",
+  "decisions": [
+    "0872f328-ff4c-4e3f-8c09-fa9519315887",
+    "7760339d-26da-4f29-a29b-db209f9cb71b"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "the new mining test was seen RED against the unmodified trouble_lines before the source set widened, and the cap proof names that test by function name",
+      "one reflection shape across two distinct runs yields exactly one lesson-tagged decision citing both letters",
+      "the tokenized text is the reflection item's what field, so a differently worded better still matches",
+      "a clean-run answer never produces a lesson",
+      "a shape an earlier lesson row already spent is never logged again, superseded rows included",
+      "the feedback digest reports the clean-run-to-reflection ratio and refuses nothing"
+    ]
+  },
+  "status": "capped",
+  "read_first": [],
+  "trace": {
+    "worker": "rbl-worker-2",
+    "outcome": "Reflections join the miner's trouble sources by their what alone, the clean-run answer is excluded by shape, and the feedback digest reports the clean-run-to-reflection ratio",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+      "docs/knowledge/areas/human-mailbox/overview.md"
+    ],
+    "deviations": [
+      "Restored CRLF line endings in feedback.rs after my scripted edit flattened them to LF and rewrote all 2695 lines — the file ships CRLF and a whole-file rewrite would have buried the 176-line change — hit an unforeseen obstacle",
+      "Added docs/knowledge/areas/human-mailbox/overview.md beside the two code files — the cell named it in affects_specs and it still said lesson mining does not read reflections (LR4), which this cell supersedes — something else had to be fixed first",
+      "sync-ack: The feedback-digest change is one additive counted key plus a printed suffix; it emits no candidate, drops nothing and refuses nothing, so no behaviour bee-evolving drives has changed. The skill line that teaches bee-evolving to READ the new clean-run ratio is real work and is filed as its own backlog row rather than smuggled into this cap."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-31T15:19:27.097Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "42e9abd1-7a36-4512-a5e3-cb7fa626dea9",
+    "claimed_at": "2026-08-31T15:03:37.653Z",
+    "sync_ack": "The feedback-digest change is one additive counted key plus a printed suffix; it emits no candidate, drops nothing and refuses nothing, so no behaviour bee-evolving drives has changed. The skill line that teaches bee-evolving to READ the new clean-run ratio is real work and is filed as its own backlog row rather than smuggled into this cap.",
+    "report": {
+      "outcome": "Reflections join the miner's trouble sources by their `what` alone, the clean-run answer is excluded by shape, and the feedback digest reports the clean-run-to-reflection ratio",
+      "commit": "a625db22",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+        "docs/knowledge/areas/human-mailbox/overview.md"
+      ],
+      "tests": "cargo test --release -p bee mailbox_digest && cargo test --release -p bee feedback — green — the cell's own verify: 23 mailbox_digest + 26 feedback tests over the two files touched; the new one_reflection_shape_in_two_runs_becomes_exactly_one_cited_lesson was seen RED first against the unmodified trouble_lines (\"one reflection shape, one lesson: [] left: 0 right: 1\") and is green now, and the full bin run leaves only the pre-filed hooks::cli_shape red",
+      "deviations": [
+        "Restored CRLF line endings in feedback.rs after my scripted edit flattened them to LF and rewrote all 2695 lines — the file ships CRLF and a whole-file rewrite would have buried the 176-line change — hit an unforeseen obstacle",
+        "Added docs/knowledge/areas/human-mailbox/overview.md beside the two code files — the cell named it in affects_specs and it still said lesson mining does not read reflections (LR4), which this cell supersedes — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 462 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

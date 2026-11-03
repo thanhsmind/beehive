@@ -1,0 +1,184 @@
+{
+  "id": "pl-4",
+  "feature": "paseo-leverage",
+  "title": "Add bee herding fork for Paseo pi agents",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "pl-1"
+  ],
+  "decisions": [
+    "D6",
+    "12211a7d",
+    "6fc537f6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/fork.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "skills/bee-herding/references/supervisor-prompt.md",
+    ".agents/skills/bee-herding/references/supervisor-prompt.md",
+    ".claude/skills/bee-herding/references/supervisor-prompt.md",
+    ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+    ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+    ".opencode/skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-leverage/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo_state.rs",
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+    "/home/thanhsmind/Projects/refs/slp/paseo-pi-team/scripts/team-fork.mjs"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Per D6 and its refinement, add verb `bee herding fork --job <id> | --agent <paseo id> [--force] [--json]` in a new herding/fork.rs. Register it in the herding.rs match table beside `\"steer\" => Some(job_verbs::steer(rest)),`, add its entry to generated/registry_payload.json in the same shape as the `bee herding steer` entry, and extend the catalog.rs test that asserts `bee herding steer` to also assert `bee herding fork`. Resolve the source (job.json paseo_agent_id, or the id) through paseo_state. Refuse with a FIX line when: the provider is not pi; nativeHandle is missing or the file does not exist; the file is not under the default pi sessions root (<home dir>/.pi/agent/sessions/); a live `paseo inspect` says the source is Working and --force is absent. Copy: the first line must be a JSON object with type session; set id to a new UUIDv7, timestamp to now, and add parentSession = source path; copy every later line byte for byte; write `<target>.tmp-<pid>` then rename; target `<ISO time with : and . as ->_<new id>.jsonl` in the same directory. Then run `paseo import <new id> --provider pi --cwd <source cwd> --label bee_fork_of=<source id> --json` through the PaseoCli seam. On import failure remove the copied file and report. On success print (and in --json carry) the new agent id, the source agent id, the new session file, `undo: paseo archive <new id>; rm <new file>`, `model: provider default (not copied)`, and the next step `paseo send <new id> --prompt <text>`. Never stop, archive or send to the source. In skills/bee-herding/references/supervisor-prompt.md's dead-lead paragraph, add that when the dead lead is a Paseo agent the resume line also names `bee herding fork --agent <id>` for a human to run, keeping `You never start that session yourself.`; then run `bee dev regen` so the five generated copies update. Tests: header rewrite and byte-identical tail on a fixture; each refusal; import argv on the fake CLI; cleanup on import failure; no stop/archive/send call recorded.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee fork && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "A fork writes a new session file whose first line has a new id and parentSession and whose other lines match the source",
+      "A fork calls paseo import with --provider pi, --cwd and the bee_fork_of label",
+      "A non-pi source, a missing file, a file outside the pi sessions root, and a Working source without --force each refuse with a FIX line",
+      "A failed import leaves no copied file",
+      "Success output names the undo command and the model note",
+      "The source agent gets no stop, archive or send call"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/fork.rs",
+        "substantive": "fork verb with tests"
+      }
+    ],
+    "key_links": [
+      "herding.rs routes fork",
+      "registry_payload.json lists bee herding fork",
+      "the supervisor prompt names the fork command for a Paseo dead lead"
+    ],
+    "prohibitions": [
+      "No automatic fork from the supervisor or any loop",
+      "No write to the source session file"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-pl-4",
+    "outcome": "bee herding fork copies a pi session under a new header, imports it with paseo import, and refuses non-pi, missing, out-of-root and Working sources",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/fork.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "skills/bee-herding/references/supervisor-prompt.md",
+      ".agents/skills/bee-herding/references/supervisor-prompt.md",
+      ".claude/skills/bee-herding/references/supervisor-prompt.md",
+      ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+      ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+      ".opencode/skills/bee-herding/references/supervisor-prompt.md"
+    ],
+    "deviations": [
+      "Ran the verify commands in a scratch copy of HEAD plus this cell files, not in the worktree — sibling uncommitted run.rs/tests.rs edits make the worktree test build fail with E0063 missing read_only — hit an unforeseen obstacle",
+      "Committed only the five generated supervisor-prompt copies; bee dev regen also rewrote five .bee-render.json files, .bee/onboarding.json and the codex-harness-hardening release-manifest.json, left uncommitted for the wave-barrier regen per regen_obligation_ack — something else had to be fixed first",
+      "A failed paseo inspect does not refuse the fork (only a confirmed Working state refuses), matching D4; parentSession records the canonicalized source path — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-12T08:42:59.823Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify; 8 fork unit tests + catalog fork test ran by name, catalog 16, registry_contracts 12, plus registry_dispatch 9 and control_loop 72; run in a scratch copy of HEAD plus this cell files because a sibling worker in-flight herding/tests.rs edit (E0063 missing read_only) breaks the shared worktree test build",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee fork && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-10-12T08:34:53.466Z",
+    "mistakes": [
+      {
+        "wrong": "first cargo test call used ${CARGO_HOME:-...} inside a cd compound and the worktree-isolation guard refused it",
+        "better": "use absolute paths and a literal PATH from the start",
+        "fix_at": "none"
+      },
+      {
+        "wrong": "first cap passed a hand-written proof command that did not match the cell verify string, so capCell refused it",
+        "better": "copy the cell verify field verbatim into the tests proof",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "bee herding fork verb in herding/fork.rs (fork_agent, copy_session, import_argv, fork) routed in herding.rs, listed in registry_payload.json, asserted in catalog.rs herding_fork_resolves_and_is_built_into_this_binary; supervisor-prompt dead-lead paragraph names bee herding fork --agent <id> for the human; five copies regenerated",
+      "commit": "9147d80b4ac18445e06160b6f5706a7d214957ea",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/fork.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "skills/bee-herding/references/supervisor-prompt.md",
+        ".agents/skills/bee-herding/references/supervisor-prompt.md",
+        ".claude/skills/bee-herding/references/supervisor-prompt.md",
+        ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+        ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+        ".opencode/skills/bee-herding/references/supervisor-prompt.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee fork && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — cell verify; 8 fork unit tests + catalog fork test ran by name, catalog 16, registry_contracts 12, plus registry_dispatch 9 and control_loop 72; run in a scratch copy of HEAD plus this cell files because a sibling worker in-flight herding/tests.rs edit (E0063 missing read_only) breaks the shared worktree test build",
+      "deviations": [
+        "Ran the verify commands in a scratch copy of HEAD plus this cell files, not in the worktree — sibling uncommitted run.rs/tests.rs edits make the worktree test build fail with E0063 missing read_only — hit an unforeseen obstacle",
+        "Committed only the five generated supervisor-prompt copies; bee dev regen also rewrote five .bee-render.json files, .bee/onboarding.json and the codex-harness-hardening release-manifest.json, left uncommitted for the wave-barrier regen per regen_obligation_ack — something else had to be fixed first",
+        "A failed paseo inspect does not refuse the fork (only a confirmed Working state refuses), matching D4; parentSession records the canonicalized source path — found a better route"
+      ],
+      "mistakes": [
+        "first cargo test call used ${CARGO_HOME:-...} inside a cd compound and the worktree-isolation guard refused it — use absolute paths and a literal PATH from the start — none",
+        "first cap passed a hand-written proof command that did not match the cell verify string, so capCell refused it — copy the cell verify field verbatim into the tests proof — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A fork writes a new session file whose first line has a new id and parentSession and whose other lines match the source",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/fork.rs"
+          },
+          {
+            "requirement": "A fork calls paseo import with --provider pi, --cwd and the bee_fork_of label",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/fork.rs"
+          },
+          {
+            "requirement": "A non-pi source, a missing file, a file outside the pi sessions root, and a Working source without --force each refuse with a FIX line",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/fork.rs"
+          },
+          {
+            "requirement": "A failed import leaves no copied file",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/fork.rs"
+          },
+          {
+            "requirement": "Success output names the undo command and the model note",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/fork.rs"
+          },
+          {
+            "requirement": "The source agent gets no stop, archive or send call",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/fork.rs"
+          },
+          {
+            "requirement": "herding.rs routes fork",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "registry_payload.json lists bee herding fork",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "the supervisor prompt names the fork command for a Paseo dead lead",
+            "artifact": "skills/bee-herding/references/supervisor-prompt.md"
+          }
+        ],
+        "recorded_at": "2026-10-12T08:43:31.937Z",
+        "recorded_by": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

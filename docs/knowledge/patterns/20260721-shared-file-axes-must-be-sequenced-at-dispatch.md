@@ -7,6 +7,7 @@ timestamp: 2026-07-21
 bee:
   id: pattern-20260721-shared-file-axes-must-be-sequenced-at-dispatch
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["docs/history/learnings/critical-patterns.md#PAT45", "original feature: hardening-1-7-9"]
   polarity: pitfall
   critical: false

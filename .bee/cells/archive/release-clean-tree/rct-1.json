@@ -1,0 +1,118 @@
+{
+  "id": "rct-1",
+  "feature": "release-clean-tree",
+  "title": "Let a dispatched release pass the clean-tree check without widening it",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "scripts/release.sh",
+    "scripts/release-dirt.sh",
+    ".gitignore",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "scripts/release.sh",
+    ".gitignore",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "docs/history/release-clean-tree/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "BUG: a pi deploy dispatch cannot finish scripts/release.sh. (1) bee dirties main before release.sh checks it: `bee herding run` appends to `.bee/wave-ledger.jsonl` (herding/run.rs `2141:    if let Err(e) = wave_ledger::append_wave(main_root, &row) {`), the session wait mark rewrites `.bee/lanes/<feature>.json`, and `release.sh:106` `dispatch authorize` writes `.bee/authorizations/<id>.json`, which .gitignore does not list. release.sh then refuses at `155:  DIRT=\"$(git status --porcelain)\"`. (2) The deploy worker ran `bee dispatch authorize` by hand and used up the one-time permit. Anchors in scripts/release.sh: `155:  DIRT=\"$(git status --porcelain)\"`; restore_tree `174:    git checkout -- . 2>/dev/null || true`; commit snapshot `224:  CHANGED=()` ... `230:  done < <(git status --porcelain -z)`; commit `258:  git add -- \"${CHANGED[@]}\"`. Brief: prepare.rs `1310:pub(crate) fn deployment_prompt(release_version: &str) -> String {`. Existing tests to mirror: tests.rs `11019:    fn test_direct_release_script_call_refuses_before_mutation() {` (runs scripts/release.sh from repo_root via Command) and the deploy stdin assert `11127:        assert!(stdin_deploy_wt.contains(\"scripts/release.sh 2.38.0\"), ...`. STEP 1 (red first), in tests.rs: (a) a test that makes a temp git repo, commits `a.txt`, `.bee/wave-ledger.jsonl` and `.bee/lanes/x.json`, dirties all three plus an untracked `b.txt`, runs `bash <repo_root>/scripts/release-dirt.sh` with cwd = that temp repo, and asserts the output names `a.txt` and `b.txt` but not the two bee paths; and with only the two bee paths dirty the output is empty; (b) a test asserting `git check-ignore -q .bee/authorizations/x.json` succeeds at repo_root (skip like 11019 if the checkout is absent); (c) extend the deploy stdin assert so the brief says the worker must not run `bee dispatch authorize` itself. Run and watch all three fail. STEP 2 (fix): add `scripts/release-dirt.sh` — reads `git status --porcelain -z` and prints the NUL-separated porcelain entries (rename/copy pairs kept together) whose path is NOT exactly `.bee/wave-ledger.jsonl` and NOT matching `.bee/lanes/*.json`; that exact two-pattern allowlist is the whole exemption. In release.sh use it at all three sites: the DIRT check (refuse when it prints anything, same message), the CHANGED snapshot (build from its output so the bee paths are never staged or committed), and restore_tree (reset only the tracked non-allowlisted paths instead of `git checkout -- .`, so an abort never discards bee's ledger row or lane record). Add `.bee/authorizations/` to .gitignore beside `.bee/claims/`. In deployment_prompt add one plain sentence: run only that command; never run `bee dispatch authorize` yourself, because release.sh runs it and the permit works one time. Keep every other release.sh precondition, message and exit unchanged. STEP 3: run the verify command.",
+  "verify": "bash -n scripts/release.sh && bash -n scripts/release-dirt.sh && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee release_ && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee deploy_",
+  "must_haves": {
+    "truths": [
+      "release.sh refuses a dirty tree exactly as before for every path except .bee/wave-ledger.jsonl and .bee/lanes/*.json",
+      "the release commit never stages .bee/wave-ledger.jsonl or .bee/lanes/*.json",
+      "an aborted release never resets .bee/wave-ledger.jsonl or .bee/lanes/*.json",
+      ".bee/authorizations/ is git-ignored",
+      "the deploy brief tells the worker never to run bee dispatch authorize itself"
+    ],
+    "artifacts": [
+      {
+        "path": "scripts/release-dirt.sh",
+        "substantive": "prints non-allowlisted porcelain entries; exact two-pattern allowlist"
+      },
+      {
+        "path": "scripts/release.sh",
+        "substantive": "DIRT check, CHANGED snapshot and restore_tree all use release-dirt.sh"
+      },
+      {
+        "path": ".gitignore",
+        "substantive": ".bee/authorizations/ listed"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "deployment_prompt forbids calling dispatch authorize"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "red-first tests for the dirt filter, the ignore rule and the brief"
+      }
+    ],
+    "key_links": [
+      "release.sh calls scripts/release-dirt.sh at the dirt check, the commit snapshot and the restore path"
+    ],
+    "prohibitions": [
+      "No change to dispatch authorize or its refusal checks",
+      "No path other than .bee/wave-ledger.jsonl and .bee/lanes/*.json is exempt from the dirt check",
+      "No other release.sh precondition, message, or exit changes"
+    ]
+  },
+  "trace": {
+    "worker": "rct-worker-1",
+    "outcome": "dispatched release passes the clean-tree check without widening it",
+    "files_changed": [
+      "scripts/release.sh",
+      "scripts/release-dirt.sh",
+      ".gitignore",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "red-before-green not observed by the worker report; red holds by base state instead: scripts/release-dirt.sh absent at base 4a162ef1, git check-ignore on main returned exit=1 for .bee/authorizations/, deployment_prompt at base lacks the sentence",
+      "the abort-path truth (restore never resets the two bee paths) is covered by code review, not by a test"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T06:29:57.899Z",
+    "behavior_change": true,
+    "verification_evidence": "touched release.sh dirt check/snapshot/restore, the new release-dirt.sh filter, .gitignore and deployment_prompt; syntax ok, release_ 40 passed incl. dirt-filter and ignore tests, deploy_ 8 passed incl. brief assert",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f",
+    "verify_command": "bash -n scripts/release.sh && bash -n scripts/release-dirt.sh && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee release_ && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee deploy_",
+    "claimed_at": "2026-09-15T06:19:31.258Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f",
+        "owner_bypassed": null,
+        "at": "2026-09-15T06:29:57.898Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "release.sh tolerates only .bee/wave-ledger.jsonl and .bee/lanes/*.json at its dirt check, commit snapshot and restore path; .bee/authorizations/ is git-ignored; the deploy brief forbids hand-running dispatch authorize",
+      "commit": "7b5ce41e",
+      "files": [
+        "scripts/release.sh",
+        "scripts/release-dirt.sh",
+        ".gitignore",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "bash -n scripts/release.sh && bash -n scripts/release-dirt.sh && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee release_ && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee deploy_ — green:unit — touched release.sh dirt check/snapshot/restore, the new release-dirt.sh filter, .gitignore and deployment_prompt; syntax ok, release_ 40 passed incl. dirt-filter and ignore tests, deploy_ 8 passed incl. brief assert",
+      "deviations": [
+        "red-before-green not observed by the worker report; red holds by base state instead: scripts/release-dirt.sh absent at base 4a162ef1, git check-ignore on main returned exit=1 for .bee/authorizations/, deployment_prompt at base lacks the sentence",
+        "the abort-path truth (restore never resets the two bee paths) is covered by code review, not by a test"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

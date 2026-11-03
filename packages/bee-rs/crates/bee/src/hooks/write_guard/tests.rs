@@ -274,7 +274,491 @@ use std::process::ExitCode;
         assert_eq!(e2.code, 0, "{}", e2.stderr);
     }
 
-    // ── check (d): CLI-shape validation, WIRED through the whole hook ──────
+    // ── config-role-key-guard tests ──────────────────────────────────────────
+
+    fn sample_config_with_pi_review() -> Value {
+        json!({
+            "hooks": {
+                "write-guard": true
+            },
+            "commands": {
+                "test": "cargo test"
+            },
+            "gate_bypass": "off",
+            "uat_stop": "close",
+            "team": {
+                "pi": {
+                    "review": {
+                        "kind": "herding",
+                        "agent": "pi-gpt-5.6-luna",
+                        "description": "independent review"
+                    }
+                }
+            },
+            "herding": {
+                "agent_command": "claude-sonnet",
+                "agents": {
+                    "pi-gpt-5.6-luna": ["pi", "-a", "--model", "openai-codex/gpt-5.6-luna:high"],
+                    "pi-opencode-free": ["pi", "-a", "--model", "opencode/x-preview-f-free:high"]
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_write_edit_multiedit_on_team_pi_review() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        let cfg_str = serde_json::to_string_pretty(&cfg).unwrap();
+        std::fs::write(fx.root.join(".bee/config.json"), &cfg_str).unwrap();
+
+        // 1. Write
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("pi-gpt-5.6-luna"), "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("pi-opencode-free"), "stderr={}", ew.stderr);
+
+        // 2. Edit
+        let edit_payload = json!({
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "old_string": "\"pi-gpt-5.6-luna\"",
+                "new_string": "\"pi-opencode-free\""
+            }
+        });
+        let ee = expect_done(edit_payload, &fx.root);
+        assert_eq!(ee.code, 2, "stderr={}", ee.stderr);
+        assert!(ee.stderr.contains("team.pi.review.agent"), "stderr={}", ee.stderr);
+        assert!(ee.stderr.contains("pi-gpt-5.6-luna"), "stderr={}", ee.stderr);
+        assert!(ee.stderr.contains("pi-opencode-free"), "stderr={}", ee.stderr);
+
+        // 3. MultiEdit
+        let multiedit_payload = json!({
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "edits": [
+                    {
+                        "old_string": "\"pi-gpt-5.6-luna\"",
+                        "new_string": "\"pi-opencode-free\""
+                    }
+                ]
+            }
+        });
+        let em = expect_done(multiedit_payload, &fx.root);
+        assert_eq!(em.code, 2, "stderr={}", em.stderr);
+        assert!(em.stderr.contains("team.pi.review.agent"), "stderr={}", em.stderr);
+        assert!(em.stderr.contains("pi-gpt-5.6-luna"), "stderr={}", em.stderr);
+        assert!(em.stderr.contains("pi-opencode-free"), "stderr={}", em.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_config_local_json() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        let cfg_str = serde_json::to_string_pretty(&cfg).unwrap();
+        std::fs::write(fx.root.join(".bee/config.local.json"), &cfg_str).unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.local.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("pi-gpt-5.6-luna"), "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("pi-opencode-free"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_legacy_models_key() {
+        let fx = build_fixture("swarming", true);
+        let legacy_cfg = json!({
+            "models": {
+                "pi": {
+                    "review": {
+                        "kind": "herding",
+                        "agent": "pi-gpt-5.6-luna"
+                    }
+                }
+            }
+        });
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&legacy_cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = legacy_cfg.clone();
+        modified_cfg["models"]["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+    }
+
+    /// `.bee/config.local.json` deep-merges over `.bee/config.json`
+    /// (state.rs:176-184) — it does not replace it. Creating the overlay with
+    /// only unrelated keys therefore removes nothing, and must pass. Judging
+    /// the overlay file on its own reads the tracked team table as deleted and
+    /// refuses a legitimate first write.
+    #[test]
+    fn config_role_key_guard_allows_creating_a_local_overlay_with_unrelated_keys() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&sample_config_with_pi_review()).unwrap(),
+        )
+        .unwrap();
+
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.local.json",
+                "content": "{\n  \"doc_viewer\": \"local-only\"\n}\n"
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    /// The overlay's other direction: the same role change written into
+    /// `.bee/config.local.json` still wins at read time, so it must still
+    /// refuse even though `.bee/config.json` is untouched.
+    #[test]
+    fn config_role_key_guard_refuses_a_role_override_added_by_the_local_overlay() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&sample_config_with_pi_review()).unwrap(),
+        )
+        .unwrap();
+
+        let overlay = json!({
+            "team": { "pi": { "review": { "kind": "herding", "agent": "pi-opencode-free" } } }
+        });
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.local.json",
+                "content": serde_json::to_string_pretty(&overlay).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+    }
+
+    /// The third config shape: neither `team` nor `models` present, so the
+    /// dispatcher reads the WHOLE config object as the role table
+    /// (hooks/model_guard.rs:532-539, `Some(&cfg_val)`). A view that projected
+    /// an empty table for this shape would leave it entirely unguarded — the
+    /// arm must see what the dispatcher sees.
+    #[test]
+    fn config_role_key_guard_refuses_bare_runtime_table_with_no_team_wrapper() {
+        let fx = build_fixture("swarming", true);
+        let bare_cfg = json!({
+            "pi": {
+                "review": {
+                    "kind": "herding",
+                    "agent": "pi-gpt-5.6-luna"
+                }
+            }
+        });
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&bare_cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = bare_cfg.clone();
+        modified_cfg["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_rewriting_herding_agents_argv() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["herding"]["agents"]["pi-gpt-5.6-luna"] = json!(["pi", "-a", "--model", "different-model"]);
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("herding.agents.pi-gpt-5.6-luna"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_disabling_write_guard_hook() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["hooks"]["write-guard"] = json!(false);
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("hooks.write-guard"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_apply_patch_and_sed_in_place() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        // 1. apply_patch
+        let patch_input = "*** Begin Patch\n*** Update File: .bee/config.json\n@@\n- \"pi-gpt-5.6-luna\"\n+ \"pi-opencode-free\"\n*** End Patch\n";
+        let ep = expect_done(patch(patch_input), &fx.root);
+        assert_eq!(ep.code, 2, "stderr={}", ep.stderr);
+        assert!(ep.stderr.contains("Edit/Write"), "stderr={}", ep.stderr);
+
+        // 2. sed -i
+        let es = expect_done(bash("sed -i 's/pi-gpt-5.6-luna/pi-opencode-free/' .bee/config.json"), &fx.root);
+        assert_eq!(es.code, 2, "stderr={}", es.stderr);
+        assert!(es.stderr.contains("Edit/Write"), "stderr={}", es.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_removing_existing_role_slot() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"].as_object_mut().unwrap().remove("review");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_allows_adding_role_slot() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"].as_object_mut().unwrap().insert(
+            "deploy".to_string(),
+            json!({
+                "kind": "herding",
+                "agent": "pi-deploy-bot"
+            }),
+        );
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_allows_changing_non_governed_keys() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["gate_bypass"] = json!("full");
+        modified_cfg["uat_stop"] = json!("merge");
+        modified_cfg["commands"]["test"] = json!("cargo test --all");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_allows_reindent_description_edit_and_dropped_null_slot() {
+        let fx = build_fixture("swarming", true);
+        let mut cfg = sample_config_with_pi_review();
+        cfg["team"]["pi"].as_object_mut().unwrap().insert("temp_slot".into(), Value::Null);
+        let cfg_str = serde_json::to_string(&cfg).unwrap(); // compact
+        std::fs::write(fx.root.join(".bee/config.json"), &cfg_str).unwrap();
+
+        // 1. Re-indent and 2. change description and 3. drop temp_slot (null slot)
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"]["review"]["description"] = json!("completely new description");
+        modified_cfg["team"]["pi"].as_object_mut().unwrap().remove("temp_slot");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap() // pretty indent
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_allows_first_write_and_corrupt_repair() {
+        let fx = build_fixture("swarming", true);
+
+        // 1. First write with no config file on disk
+        let cfg = sample_config_with_pi_review();
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+
+        // 2. Corrupt config repair
+        std::fs::write(fx.root.join(".bee/config.json"), "{ corrupt json ...").unwrap();
+        let repair_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&cfg).unwrap()
+            }
+        });
+        let er = expect_done(repair_payload, &fx.root);
+        assert_eq!(er.code, 0, "stderr={}", er.stderr);
+    }
+
+
+    #[test]
+    fn issue_135_staging_and_committing_bee_config_json_is_not_refused() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        std::fs::create_dir_all(wtf.wt_root.join(".bee")).unwrap();
+        std::fs::write(
+            wtf.wt_root.join(".bee").join("config.json"),
+            "{\"commands\":{\"test\":\"cargo test\"}}\n",
+        )
+        .unwrap();
+        for cmd in [
+            "git add .bee/config.json",
+            "git add -- .bee/config.json",
+            "git add -A .bee/config.json",
+            "git add .bee/config.json && git commit -m wip",
+            "git commit -m wip -- .bee/config.json",
+            "git commit -m wip",
+            "git checkout somebranch",
+            "git checkout wt/some-feature",
+            "git switch somebranch",
+        ] {
+            let e = expect_done(bash(cmd), &wtf.wt_root);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn issue_135_shell_content_writes_to_bee_config_json_stay_refused() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        std::fs::create_dir_all(wtf.wt_root.join(".bee")).unwrap();
+        std::fs::write(wtf.wt_root.join(".bee").join("config.json"), "{}\n").unwrap();
+        for cmd in [
+            "echo x > .bee/config.json",
+            "echo x >> .bee/config.json",
+            "sed -i s/a/b/ .bee/config.json",
+            "tee .bee/config.json < payload.json",
+            "cp payload.json .bee/config.json",
+            "mv payload.json .bee/config.json",
+            "git checkout -- .bee/config.json",
+            "git checkout HEAD .bee/config.json",
+            "git checkout .bee/config.json",
+            "git restore .bee/config.json",
+            "git rm .bee/config.json",
+            "git mv .bee/config.json .bee/config.old.json",
+            "git add .bee/config.json && echo x > .bee/config.json",
+            "git add .bee/config.json; sed -i s/a/b/ .bee/config.json",
+        ] {
+            let e = expect_done(bash(cmd), &wtf.wt_root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+        }
+    }
+
     // The pure decision table lives in hooks/cli_shape.rs; these rows prove
     // the wiring — that a denial reaches exit 2 on stderr, that a well-formed
     // call still exits 0, and that check (d) never overwrites an earlier deny.
@@ -318,8 +802,8 @@ use std::process::ExitCode;
     fn a_well_formed_bee_cli_call_reaches_the_ordinary_verdict() {
         let fx = build_fixture("swarming", true);
         for command in [
-            "node .bee/bin/bee.mjs cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green — touched close.rs\"",
-            ".bee/bin/bee cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green — touched close.rs\"",
+            "node .bee/bin/bee.mjs cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green:unit — touched close.rs\"",
+            ".bee/bin/bee cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green:unit — touched close.rs\"",
             "bee status --json",
         ] {
             let e = expect_done(bash(command), &fx.root);
@@ -637,6 +1121,105 @@ use std::process::ExitCode;
             &fx.root,
         );
         assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn apply_patch_command_field_denies_state_and_allows_safe() {
+        let fx = build_fixture("swarming", true);
+        // Live Codex passes the patch text in `tool_input.command`
+        let deny = expect_done(
+            json!({
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "command": "*** Begin Patch\n*** Update File: .bee/state.json\n@@\n-old\n+new\n*** End Patch"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee state"));
+
+        let ok = expect_done(
+            json!({
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "command": "*** Begin Patch\n*** Add File: src/safe.txt\n+hello\n*** End Patch"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(ok.code, 0, "{}", ok.stderr);
+    }
+
+    #[test]
+    fn apply_patch_patch_field_denies_state_and_allows_safe() {
+        let fx = build_fixture("swarming", true);
+        let deny = expect_done(
+            json!({
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "patch": "*** Begin Patch\n*** Update File: .bee/state.json\n@@\n-old\n+new\n*** End Patch"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee state"));
+
+        let ok = expect_done(
+            json!({
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "patch": "*** Begin Patch\n*** Add File: src/safe.txt\n+hello\n*** End Patch"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(ok.code, 0, "{}", ok.stderr);
+    }
+
+    #[test]
+    fn exec_shell_command_denies_state_and_allows_safe() {
+        let fx = build_fixture("swarming", true);
+        // Exercise the supported `exec` alias with a synthetic payload.
+        let deny = expect_done(
+            json!({
+                "tool_name": "exec",
+                "tool_input": {
+                    "command": "echo corrupt > .bee/state.json"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee state"));
+
+        let ok = expect_done(
+            json!({
+                "tool_name": "exec",
+                "tool_input": {
+                    "command": "echo safe > src/safe.txt"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(ok.code, 0, "{}", ok.stderr);
+    }
+
+    #[test]
+    fn exec_shell_cmd_field_denies_state() {
+        let fx = build_fixture("swarming", true);
+        let deny = expect_done(
+            json!({
+                "tool_name": "exec",
+                "tool_input": {
+                    "cmd": "rm -rf .bee/state.json"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee state"));
     }
 
     // ── reservations via Bash + intent advisory ────────────────────────────
@@ -1074,6 +1657,8 @@ use std::process::ExitCode;
         let traversal = expect_done(edit("../outside.txt"), &lx.work_root);
         assert_eq!(traversal.code, 2);
         assert_eq!(traversal.stderr, GENERIC_CONTAINMENT_MESSAGE);
+        assert!(traversal.stderr.contains("A path outside this project belongs to the user \u{2014} ask them to change it, never write it through another tool."));
+        assert!(!traversal.stderr.contains("open your session at"));
         let win_traversal = expect_done(edit("..\\outside-win.txt"), &lx.work_root);
         assert_eq!(win_traversal.code, 2);
         let absolute_main = expect_done(
@@ -1112,6 +1697,206 @@ use std::process::ExitCode;
         let lx = build_linked(true);
         let e = expect_done(bash("rm -rf ~"), &lx.work_root);
         assert!(!e.stderr.contains("could not be canonically contained"), "{}", e.stderr);
+    }
+
+    fn write_main_config(lx: &Linked, config: &Value) {
+        std::fs::write(
+            lx.main_root.join(".bee").join("config.json"),
+            format!("{}\n", serde_json::to_string_pretty(config).unwrap()),
+        )
+        .unwrap();
+    }
+
+    fn outward_deny(lx: &Linked, cmd: &str) -> Emit {
+        let e = expect_done(bash(cmd), &lx.work_root);
+        assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+        assert!(
+            e.stderr.contains("bee worker-outward guard denied"),
+            "expected the outward text for {cmd:?}: {}",
+            e.stderr
+        );
+        e
+    }
+
+    fn outward_allow(lx: &Linked, cmd: &str) {
+        let e = expect_done(bash(cmd), &lx.work_root);
+        assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+    }
+
+    #[test]
+    fn worker_outward_refuses_push_github_writes_and_agent_launches() {
+        let lx = build_linked(true);
+        for cmd in [
+            "git push origin main",
+            "git push --dry-run",
+            "git -C /tmp/x push",
+            "git status && git push",
+            "sh -c \"git push\"",
+            "echo git push",
+            "gh pr create --fill",
+            "gh pr merge 12",
+            "gh pr checkout 12",
+            "gh api -X POST repos/o/r/issues",
+            "gh api -XPOST repos/o/r/issues",
+            "gh api --method=POST repos/o/r/issues",
+            "gh api repos/o/r/issues -f title=x",
+            "gh api graphql -f query='mutation { x }'",
+            "gh api --input body.json repos/o/r",
+            "gh auth token",
+            "gh v",
+            "claude -p \"hi\"",
+            "codex exec x",
+            "pi --mode rpc",
+            "opencode run",
+            "npx claude -p x",
+            "npx -y claude -p x",
+            "env FOO=1 claude -p x",
+            "sudo claude",
+            "timeout 60 claude -p x",
+            "( gh pr create )",
+        ] {
+            outward_deny(&lx, cmd);
+        }
+
+        let push = outward_deny(&lx, "git push origin main");
+        assert!(push.stderr.contains("bee worktree merge --id fixture"), "{}", push.stderr);
+        assert!(push.stderr.contains("scripts/release.sh"), "{}", push.stderr);
+        assert!(push.stderr.contains("guards.worker_outward"), "{}", push.stderr);
+        assert!(
+            push.stderr.contains("MAIN checkout's .bee/config.json"),
+            "{}",
+            push.stderr
+        );
+
+        let write = outward_deny(&lx, "gh pr create --fill");
+        assert!(write.stderr.contains("`gh pr create`"), "{}", write.stderr);
+        assert!(write.stderr.contains("Reads still run here"), "{}", write.stderr);
+        assert!(write.stderr.contains("bee worktree merge --id fixture"), "{}", write.stderr);
+        assert!(write.stderr.contains("guards.worker_outward"), "{}", write.stderr);
+
+        let launch = outward_deny(&lx, "claude -p \"hi\"");
+        assert!(launch.stderr.contains("bee dispatch prepare"), "{}", launch.stderr);
+        assert!(launch.stderr.contains("fixture"), "{}", launch.stderr);
+        assert!(launch.stderr.contains("guards.worker_outward"), "{}", launch.stderr);
+    }
+
+    #[test]
+    fn worker_outward_judges_a_codex_exec_payload_like_a_bash_one() {
+        let lx = build_linked(true);
+        let e = expect_done(
+            json!({"tool_name":"exec","tool_input":{"cmd":"git push"}}),
+            &lx.work_root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee worker-outward guard denied"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn worker_outward_allows_reads_the_dispatch_door_and_ordinary_work() {
+        let lx = build_linked(true);
+        for cmd in [
+            "gh pr view 12",
+            "gh -R o/r pr list",
+            "gh pr list --search \"x\"",
+            "gh run list",
+            "gh run download 5",
+            "gh workflow view ci.yml",
+            "gh search prs x",
+            "gh api repos/o/r",
+            "gh api -X GET search/issues -f q=x",
+            "gh api --method GET search/issues -F q=x",
+            "gh api graphql -f query='query { x }'",
+            "gh auth status",
+            "bee dispatch prepare --runtime claude --kind cell --json",
+            "bee herding run --role x",
+            "bash scripts/release.sh 1.0.0",
+            "git status",
+            "pip install x",
+            "python pi.py",
+            "echo gh pr create",
+            "cat <<EOF\ngit push\nEOF",
+            "codex exec --sandbox read-only --ephemeral --cd /x -",
+            "codex exec -s read-only -",
+        ] {
+            outward_allow(&lx, cmd);
+        }
+    }
+
+    #[test]
+    fn worker_outward_allows_a_configured_cli_command_prefix() {
+        let lx = build_linked(true);
+        outward_deny(&lx, "opencode run --quiet extra args");
+        write_main_config(
+            &lx,
+            &json!({"models":{"claude":{"cli-x":{"kind":"cli","command":"opencode run --quiet"}}}}),
+        );
+        outward_allow(&lx, "opencode run --quiet extra args");
+        outward_deny(&lx, "opencode run --loud extra args");
+    }
+
+    #[test]
+    fn worker_outward_opt_out_is_read_from_the_main_checkout_only() {
+        let lx = build_linked(true);
+        write_main_config(&lx, &json!({"guards":{"worker_outward":false}}));
+        for cmd in ["git push origin main", "gh pr create --fill", "claude -p x"] {
+            outward_allow(&lx, cmd);
+        }
+
+        let wt = build_linked(true);
+        std::fs::create_dir_all(wt.work_root.join(".bee")).unwrap();
+        std::fs::write(
+            wt.work_root.join(".bee").join("config.json"),
+            "{\"guards\":{\"worker_outward\":false}}\n",
+        )
+        .unwrap();
+        for cmd in ["git push origin main", "gh pr create --fill", "claude -p x"] {
+            outward_deny(&wt, cmd);
+        }
+    }
+
+    #[test]
+    fn worker_outward_scans_an_opaque_wrapper_instead_of_allowing_it() {
+        let lx = build_linked(true);
+        outward_deny(&lx, &wrap_bash_c(5, "git push"));
+        outward_deny(&lx, &wrap_bash_c(5, "gh pr create"));
+        outward_deny(&lx, &wrap_bash_c(5, "claude -p x"));
+        expect_delegate(bash(&wrap_bash_c(5, "ls")), &lx.work_root);
+    }
+
+    #[test]
+    fn worker_outward_leaves_the_main_checkout_byte_identical() {
+        let fx = build_fixture("swarming", true);
+        for cmd in ["git push origin main", "gh pr create --fill", "claude -p x"] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
+            assert_eq!(e.stderr, "", "{cmd}");
+        }
+        let idle = build_git_fixture("idle");
+        let push = expect_done(bash("git push origin other"), &idle.root);
+        assert_eq!(push.code, 2, "{}", push.stderr);
+        assert!(push.stderr.contains("never exempted"), "{}", push.stderr);
+    }
+
+    #[test]
+    fn worker_outward_text_precedes_the_idle_intake_text() {
+        let lx = build_linked(true);
+        write_state(
+            &lx.main_root,
+            &json!({
+                "phase": "idle", "mode": "high-risk", "feature": "worktree-isolation",
+                "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+            }),
+        );
+        let e = outward_deny(&lx, "git push origin main");
+        assert!(!e.stderr.contains("bee intake gate"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn worker_outward_keeps_the_linked_invalid_text() {
+        let lx = build_linked(false);
+        let e = expect_done(bash("git push origin main"), &lx.work_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("WORKTREE_LINK_INVALID"), "{}", e.stderr);
     }
 
     // ── worktree-first (docs/specs/worktree-first.md §2) ───────────────────
@@ -1184,11 +1969,15 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("worktree-first"));
         assert!(e.stderr.contains(&*wtf.wt_root.file_name().unwrap().to_string_lossy()));
         assert!(e.stderr.contains(&format!("bee worktree merge --id {}", wtf.id)));
+        assert!(e.stderr.contains(&format!("bee worktree enter --id {}", wtf.id)));
+        assert!(!e.stderr.contains("open your session at"));
         assert!(e.stderr.contains("worktree_first: \"off\""));
         assert!(e.stderr.contains("\"demo\"") && e.stderr.contains("\"standard\""));
         // Bash-extracted target too.
         let eb = expect_done(bash("printf x > src/app.js"), &wtf.root);
         assert_eq!(eb.code, 2);
+        assert!(eb.stderr.contains(&format!("bee worktree enter --id {}", wtf.id)));
+        assert!(!eb.stderr.contains("open your session at"));
     }
 
     #[test]
@@ -1359,12 +2148,16 @@ use std::process::ExitCode;
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
         assert!(e.stderr.contains("bee worktree new --feature demo"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee worktree enter --id"), "{}", e.stderr);
+        assert!(!e.stderr.contains("open your session at"), "{}", e.stderr);
         assert!(e.stderr.contains("MAIN checkout"), "{}", e.stderr);
         assert!(e.stderr.contains("\"demo\"") && e.stderr.contains("\"standard\""), "{}", e.stderr);
         assert!(e.stderr.contains("worktree_first: \"off\""), "{}", e.stderr);
         // Bash-extracted target too.
         let eb = expect_done(bash("printf x > src/app.js"), &wtf.root);
         assert_eq!(eb.code, 2, "{}", eb.stderr);
+        assert!(eb.stderr.contains("bee worktree enter --id"), "{}", eb.stderr);
+        assert!(!eb.stderr.contains("open your session at"), "{}", eb.stderr);
     }
 
     #[test]
@@ -1377,14 +2170,111 @@ use std::process::ExitCode;
         // lane "docs" never fires.
         let docs = build_worktree_first_no_grant("swarming", Some("docs"));
         assert_eq!(expect_done(edit("src/app.js"), &docs.root).code, 0);
-        // a phase other than "swarming" never fires ("idle" is skipped here:
-        // it trips the unrelated intake gate before reaching this check at
-        // all, which would prove nothing about worktree-first itself).
-        let planning = build_worktree_first_no_grant("planning", Some("standard"));
-        assert_eq!(expect_done(edit("src/app.js"), &planning.root).code, 0);
         // a missing/empty route on the acting record is "no opinion".
         let no_route = build_worktree_first_no_grant("swarming", None);
         assert_eq!(expect_done(edit("src/app.js"), &no_route.root).code, 0);
+    }
+
+    /// pihp-5: A code-touching feature (standard, high-risk) on the main
+    /// checkout holding no granted worktree cannot write source during exploring
+    /// or planning. Both Claude-shaped (Edit, Write) and Pi-shaped (Write, MultiEdit)
+    /// hook inputs return the exact same worktree-first denial. Named exemptions
+    /// (docs, solo tiny, explicit-off, non-git, corrupt-grant, markdown) still pass.
+    #[test]
+    fn pre_gate_main_write_denied_for_code_features_on_main_during_exploring_and_planning() {
+        for phase in ["exploring", "planning"] {
+            for lane in ["standard", "high-risk"] {
+                let wtf = build_worktree_first_no_grant(phase, Some(lane));
+
+                // (a) Claude-shaped Edit
+                let claude_edit = json!({"tool_name": "Edit", "tool_input": {"file_path": "src/app.js"}});
+                let ec = expect_done(claude_edit, &wtf.root);
+                assert_eq!(ec.code, 2, "phase {phase}, lane {lane}: expected code 2");
+                assert!(ec.stderr.contains("worktree-first"), "phase {phase}, lane {lane}: {}", ec.stderr);
+                assert!(ec.stderr.contains("MAIN checkout"), "phase {phase}, lane {lane}: {}", ec.stderr);
+                assert!(ec.stderr.contains("holds no granted worktree"), "phase {phase}, lane {lane}: {}", ec.stderr);
+                assert!(ec.stderr.contains(&format!("\"{lane}\"")), "phase {phase}, lane {lane}: {}", ec.stderr);
+                assert!(ec.stderr.contains("bee worktree new --feature demo"), "phase {phase}, lane {lane}: {}", ec.stderr);
+
+                // (b) Claude-shaped Write
+                let claude_write = json!({"tool_name": "Write", "tool_input": {"file_path": "src/app.js", "content": "console.log(1);"}});
+                let ecw = expect_done(claude_write, &wtf.root);
+                assert_eq!(ecw.code, 2);
+                assert_eq!(ec.stderr, ecw.stderr, "Claude Edit and Write must return identical denial");
+
+                // (c) Pi-shaped Write
+                let pi_write = json!({"tool_name": "Write", "tool_input": {"file_path": "src/app.js", "content": "console.log(2);"}});
+                let epw = expect_done(pi_write, &wtf.root);
+                assert_eq!(epw.code, 2);
+                assert_eq!(ec.stderr, epw.stderr, "Claude and Pi Write must return identical denial");
+
+                // (d) Pi-shaped MultiEdit
+                let pi_multiedit = json!({
+                    "tool_name": "MultiEdit",
+                    "tool_input": {
+                        "file_path": "src/app.js",
+                        "edits": [{"old_string": "a", "new_string": "b"}]
+                    }
+                });
+                let epm = expect_done(pi_multiedit, &wtf.root);
+                assert_eq!(epm.code, 2);
+                assert_eq!(ec.stderr, epm.stderr, "Claude and Pi MultiEdit must return identical denial");
+
+                // (e) Bash redirect command
+                let eb = expect_done(bash("printf x > src/app.js"), &wtf.root);
+                assert_eq!(eb.code, 2);
+                assert!(eb.stderr.contains("worktree-first"));
+            }
+
+            // Named exemptions preserved during exploring and planning:
+            // 1. docs lane solo
+            let docs = build_worktree_first_no_grant(phase, Some("docs"));
+            assert_eq!(expect_done(edit("src/app.js"), &docs.root).code, 0);
+
+            // 2. tiny lane solo
+            let tiny = build_worktree_first_no_grant(phase, Some("tiny"));
+            assert_eq!(expect_done(edit("src/app.js"), &tiny.root).code, 0);
+
+            // 3. explicit off
+            let off = build_worktree_first_no_grant(phase, Some("standard"));
+            std::fs::write(
+                off.root.join(".bee").join("config.json"),
+                "{\"worktree_first\":\"off\"}\n",
+            )
+            .unwrap();
+            assert_eq!(expect_done(edit("src/app.js"), &off.root).code, 0);
+
+            // 4. non-git checkout fails open
+            let nongit = build_worktree_first_no_grant(phase, Some("standard"));
+            std::fs::remove_dir_all(nongit.root.join(".git")).unwrap();
+            assert_eq!(expect_done(edit("src/app.js"), &nongit.root).code, 0);
+
+            // 5. corrupt grant registry fails open
+            let corrupt = build_worktree_first_no_grant(phase, Some("standard"));
+            std::fs::create_dir_all(corrupt.root.join(".bee").join("runtime")).unwrap();
+            std::fs::write(
+                corrupt.root.join(".bee").join("runtime").join("worktree-grants.json"),
+                "not-valid-json",
+            )
+            .unwrap();
+            assert_eq!(expect_done(edit("src/app.js"), &corrupt.root).code, 0);
+
+            // 6. markdown files are exempt solo
+            let md = build_worktree_first_no_grant(phase, Some("standard"));
+            assert_eq!(expect_done(edit("README.md"), &md.root).code, 0);
+
+            // 7. always-writable .bee paths are exempt
+            let bee_state = build_worktree_first_no_grant(phase, Some("standard"));
+            assert_eq!(expect_done(edit(".bee/notes.txt"), &bee_state.root).code, 0);
+        }
+
+        // Active code phases beyond exploring and planning also deny
+        for phase in ["swarming", "reviewing", "scribing", "compounding"] {
+            let wtf = build_worktree_first_no_grant(phase, Some("standard"));
+            let e = expect_done(edit("src/app.js"), &wtf.root);
+            assert_eq!(e.code, 2, "phase {phase}: expected denial");
+            assert!(e.stderr.contains("worktree-first"), "phase {phase}: {}", e.stderr);
+        }
     }
 
     // dmc-3: the no-grant arm's "tiny" carve-out is gated on whether another
@@ -1613,7 +2503,7 @@ use std::process::ExitCode;
         add_released_session(&fx.root, "other-released");
         let root_s = fx.root.to_string_lossy().into_owned();
         assert!(
-            !is_concurrent_mode(&root_s, None, false).unwrap(),
+            !is_concurrent_mode(&root_s, None),
             "a released session must not count toward concurrent mode"
         );
         assert!(
@@ -2016,7 +2906,7 @@ use std::process::ExitCode;
     #[test]
     fn git_push_and_unknown_subcommands_refused() {
         let fx = build_git_fixture("idle");
-        let push = expect_done(bash("git push origin main"), &fx.root);
+        let push = expect_done(bash("git push origin other"), &fx.root);
         assert_eq!(push.code, 2);
         assert!(push.stderr.contains("never exempted"));
         let unk = expect_done(bash("git bisect start"), &fx.root);
@@ -2043,6 +2933,998 @@ use std::process::ExitCode;
         stage_file(&fx.root, "src/feature.js");
         let e = expect_done(bash("git commit -m \"normal work\""), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn issue_131_fetch_and_push_main_pass_the_idle_intake_gate() {
+        let fx = build_git_fixture("idle");
+        for cmd in [
+            "git fetch",
+            "git fetch origin",
+            "git fetch -q origin",
+            "git fetch --all --prune",
+            "git fetch upstream main:refs/remotes/upstream/main",
+            "git push origin main",
+            "git push origin HEAD:main",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn issue_131_push_neighbours_and_unmodelled_git_stay_refused() {
+        let fx = build_git_fixture("idle");
+        for cmd in [
+            "git push origin main:other",
+            "git push origin HEAD~1:main",
+            "git push origin +main",
+            "git push --force origin main",
+            "git push -f origin main",
+            "git push --force-with-lease origin main",
+            "git push --mirror origin",
+            "git push --delete origin main",
+            "git push -d origin main",
+            "git push origin :main",
+            "git push -o ci.skip origin main",
+            "git push --push-option=ci.skip origin main",
+            "git push -q origin main",
+            "git push -u origin main",
+            "git -c x=y push origin main",
+            "git push",
+            "git push origin",
+            "git pull",
+            "git pull origin main",
+            "git bisect start",
+            "git submodule update --init",
+            "git fetch && git push origin other",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee intake gate"), "{cmd:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn issue_131_push_from_a_linked_worktree_is_still_refused() {
+        let lx = build_linked(true);
+        for cmd in ["git push origin main", "git push origin HEAD:main"] {
+            let e = outward_deny(&lx, cmd);
+            assert!(e.stderr.contains("never exempted"), "{cmd}: {}", e.stderr);
+        }
+        outward_allow(&lx, "git fetch -q origin");
+    }
+
+    // ── sfg-1 (slp-followup-gaps D1/D2): an unbound session's OWN live claim
+    // resolves the acting record before the control-root default record ────
+
+    fn write_claim(root: &Path, cell: &str, session: &str) {
+        write_claim_ttl(root, cell, session, 3600.0, now_ms());
+    }
+
+    fn write_claim_ttl(root: &Path, cell: &str, session: &str, ttl: f64, claimed_ms: f64) {
+        let dir = root.join(".bee").join("claims");
+        std::fs::create_dir_all(&dir).unwrap();
+        let stamp = ms_to_iso(claimed_ms).unwrap();
+        std::fs::write(
+            dir.join(format!("{cell}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "cell": cell,
+                    "session": session,
+                    "workspace_id": "main",
+                    "ttl_seconds": ttl,
+                    "claimed_at": stamp,
+                    "acquired_at": stamp,
+                    "fence_epoch": 1
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_cell_record(root: &Path, cell: &str, feature: &str) {
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{cell}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": cell, "feature": feature, "role": "code", "status": "claimed"
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    fn session_bash(command: &str, session: &str) -> Value {
+        json!({
+            "tool_name": "Bash",
+            "tool_input": { "command": command },
+            "session_id": session
+        })
+    }
+
+    /// The live incident (pattern 20260828). `.bee/state.json` says idle; the
+    /// dispatched worker was never bound to a lane; its own claim names the
+    /// cell, the cell names the feature, and that feature's lane record is
+    /// swarming. The mid-cell commit is legitimate and must not be refused.
+    #[test]
+    fn sfg1_an_unbound_session_with_one_live_claim_commits_against_its_claimed_lane() {
+        let fx = build_git_fixture("idle");
+        add_live_session(&fx.root, "sess-1");
+        write_claim(&fx.root, "cell-1", "sess-1");
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    /// The same resolution at the write check, not only at the git gate.
+    #[test]
+    fn sfg1_the_write_check_judges_the_claimed_lane_record_too() {
+        let fx = build_fixture("idle", false);
+        add_live_session(&fx.root, "sess-1");
+        write_claim(&fx.root, "cell-1", "sess-1");
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        let e = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    /// D2: no claim to derive from, so the default record answers — and the
+    /// refusal names binding the session as the remedy, beside the FIX line.
+    #[test]
+    fn sfg1_an_unbound_session_with_no_claim_is_refused_and_told_to_bind() {
+        let fx = build_git_fixture("idle");
+        add_live_session(&fx.root, "sess-1");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee state session bind --lane"), "{}", e.stderr);
+        // The existing FIX line still leads; the binding remedy sits beside it.
+        let fix = e.stderr.find("FIX: commit or write bookkeeping").unwrap();
+        let bind = e.stderr.find("bee state session bind --lane").unwrap();
+        assert!(fix < bind, "{}", e.stderr);
+    }
+
+    /// The remedy is scoped: with no session at all there is nothing to bind,
+    /// so the refusal is byte-identical to today's.
+    #[test]
+    fn sfg1_the_bind_remedy_is_absent_when_there_is_no_session_to_bind() {
+        let fx = build_git_fixture("idle");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(bash("git commit -m \"mid-cell\""), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(!e.stderr.contains("bee state session bind"), "{}", e.stderr);
+    }
+
+    /// ...and a BOUND session never sees it either: its record came from its
+    /// own lane, not from the default.
+    #[test]
+    fn sfg1_the_bind_remedy_is_absent_for_a_lane_bound_session() {
+        let fx = build_git_fixture("idle");
+        write_session_lane(&fx.root, "sess-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "idle", "docs");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+        assert!(!e.stderr.contains("bee state session bind"), "{}", e.stderr);
+    }
+
+    /// Every narrowing condition of D1, each one falling back to the default
+    /// record without inventing the bound path's typed lane refusals.
+    #[test]
+    fn sfg1_ambiguous_or_unusable_claims_fall_back_to_the_default_record() {
+        let refused = |fx: &Fx| {
+            let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+            assert_eq!(e.code, 2, "{}", e.stderr);
+            assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+            assert!(!e.stderr.contains("bee lane guard"), "{}", e.stderr);
+        };
+
+        // Two claims naming two DIFFERENT features — ambiguous.
+        let two = build_git_fixture("idle");
+        add_live_session(&two.root, "sess-1");
+        write_claim(&two.root, "cell-1", "sess-1");
+        write_cell_record(&two.root, "cell-1", "feat-a");
+        write_claim(&two.root, "cell-2", "sess-1");
+        write_cell_record(&two.root, "cell-2", "feat-b");
+        write_lane_record(&two.root, "feat-a", "swarming", "docs");
+        write_lane_record(&two.root, "feat-b", "swarming", "docs");
+        stage_file(&two.root, "src/feature.js");
+        refused(&two);
+
+        // One claim, but the feature has no lane record at all.
+        let missing = build_git_fixture("idle");
+        add_live_session(&missing.root, "sess-1");
+        write_claim(&missing.root, "cell-1", "sess-1");
+        write_cell_record(&missing.root, "cell-1", "ghost-feat");
+        stage_file(&missing.root, "src/feature.js");
+        refused(&missing);
+
+        // One claim, lane record present but corrupt.
+        let corrupt = build_git_fixture("idle");
+        add_live_session(&corrupt.root, "sess-1");
+        write_claim(&corrupt.root, "cell-1", "sess-1");
+        write_cell_record(&corrupt.root, "cell-1", "feat-a");
+        std::fs::create_dir_all(corrupt.root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            corrupt.root.join(".bee").join("lanes").join("feat-a.json"),
+            "{ not json\n",
+        )
+        .unwrap();
+        stage_file(&corrupt.root, "src/feature.js");
+        refused(&corrupt);
+
+        // One claim, lane record present but naming a DIFFERENT feature.
+        let mismatched = build_git_fixture("idle");
+        add_live_session(&mismatched.root, "sess-1");
+        write_claim(&mismatched.root, "cell-1", "sess-1");
+        write_cell_record(&mismatched.root, "cell-1", "feat-a");
+        std::fs::create_dir_all(mismatched.root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            mismatched.root.join(".bee").join("lanes").join("feat-a.json"),
+            "{\"schema_version\":\"1.0\",\"feature\":\"someone-else\",\"phase\":\"swarming\"}\n",
+        )
+        .unwrap();
+        stage_file(&mismatched.root, "src/feature.js");
+        refused(&mismatched);
+
+        // One claim whose cell record does not exist — nothing names a feature.
+        let cellless = build_git_fixture("idle");
+        add_live_session(&cellless.root, "sess-1");
+        write_claim(&cellless.root, "cell-1", "sess-1");
+        write_lane_record(&cellless.root, "demo-feat", "swarming", "docs");
+        stage_file(&cellless.root, "src/feature.js");
+        refused(&cellless);
+    }
+
+    /// A claim owned by a different session is never read — and neither is an
+    /// expired one of our own.
+    #[test]
+    fn sfg1_a_foreign_or_expired_claim_is_never_read() {
+        let foreign = build_git_fixture("idle");
+        add_live_session(&foreign.root, "sess-1");
+        write_claim(&foreign.root, "cell-1", "sess-other");
+        write_cell_record(&foreign.root, "cell-1", "demo-feat");
+        write_lane_record(&foreign.root, "demo-feat", "swarming", "docs");
+        stage_file(&foreign.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &foreign.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+
+        let expired = build_git_fixture("idle");
+        add_live_session(&expired.root, "sess-1");
+        write_claim_ttl(&expired.root, "cell-1", "sess-1", 1.0, now_ms() - 3_600_000.0);
+        write_cell_record(&expired.root, "cell-1", "demo-feat");
+        write_lane_record(&expired.root, "demo-feat", "swarming", "docs");
+        stage_file(&expired.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &expired.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+    }
+
+    /// A BOUND session is untouched by the new arm: its broken binding still
+    /// earns the typed lane refusal, claim or no claim.
+    #[test]
+    fn sfg1_a_bound_session_holding_a_claim_keeps_its_typed_lane_refusal() {
+        let fx = build_git_fixture("idle");
+        write_session_lane(&fx.root, "sess-1", "ghost");
+        write_claim(&fx.root, "cell-1", "sess-1");
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee lane guard"), "{}", e.stderr);
+        assert!(e.stderr.contains("\"ghost\""), "{}", e.stderr);
+    }
+
+    // ── sfg-3 (slp-followup-gaps): the claim reader never decides the
+    // guard's fate, and the ownership guard's trigger set is pinned ────────
+
+    /// A claim carrying an arbitrary `claimed_at` value — the shapes
+    /// `date_parse_ms` cannot turn into milliseconds.
+    fn write_claim_stamp(root: &Path, cell: &str, session: &str, claimed_at: Value) {
+        let dir = root.join(".bee").join("claims");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{cell}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "cell": cell,
+                    "session": session,
+                    "workspace_id": "main",
+                    "ttl_seconds": 3600.0,
+                    "claimed_at": claimed_at,
+                    "acquired_at": claimed_at,
+                    "fence_epoch": 1
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    /// Every `claimed_at` shape `date_parse_ms` refuses: a non-RFC3339
+    /// string, a numeric epoch, an object, a bool — `Some(_) => Err(Nd)`.
+    fn unparseable_stamps() -> Vec<Value> {
+        vec![
+            json!("yesterday"),
+            json!("2026-08-29 10:56:37"),
+            json!(1_756_400_000_000_i64),
+            json!({ "iso": "2026-08-29T10:56:37.000Z" }),
+            json!(true),
+        ]
+    }
+
+    /// The fail-OPEN hole. `claim_active` promises in its own comment that a
+    /// claim with no parseable timestamp reads as ACTIVE, but it read the
+    /// stamp through `date_parse_ms(..)?`, and that `Err(Nd)` escaped
+    /// `resolve_write_record` all the way to `emit_undecidable` — "the guard
+    /// did NOT run on it", every path, `.bee` mutations included. ONE
+    /// malformed byte in this session's OWN claim switched the whole write
+    /// guard off. The reader must swallow it and read the claim as active.
+    #[test]
+    fn sfg3_an_unparseable_claim_stamp_reads_as_active_and_never_stops_the_guard() {
+        for stamp in unparseable_stamps() {
+            let fx = build_git_fixture("idle");
+            add_live_session(&fx.root, "sess-1");
+            write_claim_stamp(&fx.root, "cell-1", "sess-1", stamp.clone());
+            write_cell_record(&fx.root, "cell-1", "demo-feat");
+            write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+            stage_file(&fx.root, "src/feature.js");
+            // expect_done panics on Delegate — the undecidable fail-open.
+            let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+            assert_eq!(e.code, 0, "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The same claim, and the guard still REFUSES what it should: reading a
+    /// claim as active is not reading it as permission. Its lane is
+    /// terminal, so the intake gate holds — proof the guard decided rather
+    /// than fell open.
+    #[test]
+    fn sfg3_an_unparseable_claim_stamp_still_lets_the_guard_refuse() {
+        for stamp in unparseable_stamps() {
+            let fx = build_git_fixture("swarming");
+            add_live_session(&fx.root, "sess-1");
+            write_claim_stamp(&fx.root, "cell-1", "sess-1", stamp.clone());
+            write_cell_record(&fx.root, "cell-1", "demo-feat");
+            write_lane_record(&fx.root, "demo-feat", "idle", "docs");
+            stage_file(&fx.root, "src/feature.js");
+            let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+            assert_eq!(e.code, 2, "stamp {stamp}: {}", e.stderr);
+            assert!(e.stderr.contains("intake gate"), "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The write check reaches the same reader, so it fell open the same
+    /// way. A source write judged against a claim-derived SWARMING lane is
+    /// allowed, and the guard decided it.
+    #[test]
+    fn sfg3_an_unparseable_claim_stamp_never_stops_the_write_check_either() {
+        let fx = build_fixture("idle", false);
+        add_live_session(&fx.root, "sess-1");
+        write_claim_stamp(&fx.root, "cell-1", "sess-1", json!("yesterday"));
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        let allowed = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(allowed.code, 0, "{}", allowed.stderr);
+    }
+
+    /// A claim the reader cannot understand contributes NOTHING — it never
+    /// takes the guard down with it. A garbage `ttl_seconds` beside a
+    /// garbage stamp still reads as active; a claim file that is not an
+    /// object is skipped and the default record answers. Neither is ever an
+    /// undecidable guard.
+    #[test]
+    fn sfg3_a_claim_the_reader_cannot_understand_never_decides_the_guards_fate() {
+        let fx = build_git_fixture("idle");
+        add_live_session(&fx.root, "sess-1");
+        std::fs::create_dir_all(fx.root.join(".bee").join("claims")).unwrap();
+        std::fs::write(
+            fx.root.join(".bee").join("claims").join("cell-1.json"),
+            "{\"cell\":\"cell-1\",\"session\":\"sess-1\",\"ttl_seconds\":\"soon\",\"claimed_at\":42}\n",
+        )
+        .unwrap();
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+
+        let arr = build_git_fixture("idle");
+        add_live_session(&arr.root, "sess-1");
+        std::fs::create_dir_all(arr.root.join(".bee").join("claims")).unwrap();
+        std::fs::write(arr.root.join(".bee").join("claims").join("cell-1.json"), "[1,2,3]\n")
+            .unwrap();
+        write_cell_record(&arr.root, "cell-1", "demo-feat");
+        write_lane_record(&arr.root, "demo-feat", "swarming", "docs");
+        stage_file(&arr.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &arr.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+    }
+
+    /// A workspace whose write ownership is held by another LIVE session —
+    /// the state msn-21's ownership deny fires on.
+    fn write_owned_workspace(root: &Path, workspace_id: &str, owner: &str) {
+        let dir = root.join(".bee").join("runtime").join("workspaces");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{workspace_id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": workspace_id,
+                    "write_owner_session": owner,
+                    "fence_epoch": 1,
+                    "attached_sessions": [owner]
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    /// msn-21's workspace-ownership guard at write_policy `isolated` (the
+    /// default), against a CLAIM-DERIVED record. The claim arm DID move this
+    /// guard's trigger set, and this pins which way: the derived lane phase
+    /// is the acting phase, read as such in both directions.
+    #[test]
+    fn sfg3_the_ownership_guard_reads_the_claim_derived_phase_not_the_default_one() {
+        // `.bee/state.json` says idle, so before the claim arm this session
+        // read `idle` and hit the deny. Its claimed lane is swarming — the
+        // phase it is really working in — and a swarming session is never
+        // told to isolate.
+        let swarming = build_fixture("idle", false);
+        add_live_session(&swarming.root, "sess-1");
+        add_live_session(&swarming.root, "sess-owner");
+        write_owned_workspace(&swarming.root, "main", "sess-owner");
+        write_claim(&swarming.root, "cell-1", "sess-1");
+        write_cell_record(&swarming.root, "cell-1", "demo-feat");
+        write_lane_record(&swarming.root, "demo-feat", "swarming", "docs");
+        let e = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &swarming.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        assert!(!e.stderr.contains("bee write-policy"), "{}", e.stderr);
+
+        // The other direction, same guard: `.bee/state.json` says swarming,
+        // the claimed lane says executing. The DERIVED phase wins, so the
+        // ownership deny fires where the default record would have skipped
+        // it — the claim arm resolves a lane, never an ownership exemption.
+        let executing = build_fixture("swarming", true);
+        add_live_session(&executing.root, "sess-1");
+        add_live_session(&executing.root, "sess-owner");
+        write_owned_workspace(&executing.root, "main", "sess-owner");
+        write_claim(&executing.root, "cell-1", "sess-1");
+        write_cell_record(&executing.root, "cell-1", "demo-feat");
+        write_lane_record(&executing.root, "demo-feat", "executing", "docs");
+        let e = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &executing.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee write-policy"), "{}", e.stderr);
+        assert!(e.stderr.contains("sess-owner"), "{}", e.stderr);
+    }
+
+    // ── sfg-4 (slp-followup-gaps): no store or config READ can switch the
+    // whole write guard off ────────────────────────────────────────────────
+
+    /// A session record carrying an arbitrary `last_heartbeat` value.
+    fn add_session_with_heartbeat(root: &Path, id: &str, last_heartbeat: Value) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": id,
+                    "started_at": ms_to_iso(now_ms()).unwrap(),
+                    "last_heartbeat": last_heartbeat
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    /// Every `last_heartbeat` shape `date_parse_ms` cannot turn into
+    /// milliseconds — the `Err(Nd)` arms, not the absent/blank ones.
+    fn unparseable_heartbeats() -> Vec<Value> {
+        vec![
+            json!("just now"),
+            json!("2026-08-29 10:56:37"),
+            json!(1_756_400_000_000_i64),
+            json!({ "iso": "2026-08-29T10:56:37.000Z" }),
+            json!(true),
+        ]
+    }
+
+    /// The residual fail-OPEN sfg-3 left one call frame away. `heartbeat_stale`
+    /// read the stamp through `date_parse_ms(..)?`, and
+    /// `check_workspace_ownership` `?`d it, so a malformed `last_heartbeat` in
+    /// the WORKSPACE OWNER's session record — a record the acting session does
+    /// not own and cannot see — reached `emit_undecidable`: exit 0, "the guard
+    /// did NOT run on it". A stamp the reader cannot parse is no evidence the
+    /// owner went away, so the owner reads LIVE and the guard REFUSES.
+    #[test]
+    fn sfg4_a_malformed_owner_heartbeat_never_stops_the_guard() {
+        for beat in unparseable_heartbeats() {
+            let fx = build_fixture("idle", false);
+            add_live_session(&fx.root, "sess-1");
+            add_session_with_heartbeat(&fx.root, "sess-owner", beat.clone());
+            write_owned_workspace(&fx.root, "main", "sess-owner");
+            let e = expect_done(
+                json!({
+                    "tool_name": "Edit",
+                    "tool_input": { "file_path": "src/app.js" },
+                    "session_id": "sess-1"
+                }),
+                &fx.root,
+            );
+            assert_eq!(e.code, 2, "beat {beat}: {}", e.stderr);
+            assert!(e.stderr.contains("bee write-policy"), "beat {beat}: {}", e.stderr);
+            assert!(e.stderr.contains("sess-owner"), "beat {beat}: {}", e.stderr);
+        }
+    }
+
+    /// The same reader, the second live call site: `active_worker_session_ids`
+    /// feeds `resolve_live_worker_count`, which `check_git_bash_command` reads
+    /// for the gc-2 whole-tree denial. One unparseable heartbeat in ANY session
+    /// file took that guard down too. Unparseable reads as live, so both
+    /// workers are counted and the bare `git commit` is REFUSED.
+    #[test]
+    fn sfg4_a_malformed_heartbeat_never_stops_the_live_worker_count() {
+        for beat in unparseable_heartbeats() {
+            let fx = build_git_fixture("swarming");
+            add_session_with_heartbeat(&fx.root, "sess-a", beat.clone());
+            add_session_with_heartbeat(&fx.root, "sess-b", beat.clone());
+            let e = expect_done(bash("git commit -m wip"), &fx.root);
+            assert_eq!(e.code, 2, "beat {beat}: {}", e.stderr);
+            assert!(
+                e.stderr.contains("bee concurrent-worker git guard"),
+                "beat {beat}: {}",
+                e.stderr
+            );
+            assert!(e.stderr.contains("2 workers are live"), "beat {beat}: {}", e.stderr);
+        }
+    }
+
+    /// The second residual: `check_product_root_silent` answered `Err(Nd)` for a
+    /// non-string `product_root`, or one naming a directory that is not there,
+    /// and that error walked out of `resolve_context` →
+    /// `control_root_for_state` → `resolve_write_record` → `emit_undecidable`.
+    /// Two lines of config switched the WHOLE guard off. `product_root` names
+    /// where PRODUCT DOCS live and this guard never reads it, so it contributes
+    /// nothing: the guard goes on allowing and refusing exactly as before.
+    #[test]
+    fn sfg4_a_product_root_the_guard_cannot_resolve_never_stops_it() {
+        for pr in [json!(42), json!("docs/nowhere-at-all"), json!(["a"]), json!(true)] {
+            let fx = build_fixture("swarming", true);
+            std::fs::write(
+                fx.root.join(".bee").join("config.json"),
+                format!("{}\n", serde_json::to_string(&json!({ "product_root": pr })).unwrap()),
+            )
+            .unwrap();
+            let allow = expect_done(edit("src/app.js"), &fx.root);
+            assert_eq!(allow.code, 0, "product_root {pr}: {}", allow.stderr);
+            let deny = expect_done(edit(".bee/state.json"), &fx.root);
+            assert_eq!(deny.code, 2, "product_root {pr}: {}", deny.stderr);
+        }
+    }
+
+    /// The third door into the same `Err(Nd)`: a `.git` FILE that does not
+    /// describe a valid linked worktree makes `resolve_context` answer `Threw`,
+    /// and `control_root_for_state` turned that into `Err(Nd)` — one broken
+    /// `.git` line, and the whole guard stopped running. A context the reader
+    /// cannot resolve is no evidence about WHERE the store is, so the root in
+    /// hand answers (JS `?? root`) and the guard keeps deciding both ways.
+    #[test]
+    fn sfg4_an_unresolvable_context_never_stops_the_guard() {
+        let fx = build_fixture("swarming", true);
+        add_live_session(&fx.root, "sess-1");
+        std::fs::write(fx.root.join(".git"), "gitdir: /nowhere/at/all\n").unwrap();
+        let allow = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(allow.code, 0, "{}", allow.stderr);
+        let deny = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": ".bee/state.json" },
+                "session_id": "sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2, "{}", deny.stderr);
+    }
+
+    // ── sfg-5 (slp-followup-gaps): the LEASE and HOLD readers, the strict
+    // session read, and the lockout warning ────────────────────────────────
+
+    /// A path lease carrying arbitrary `acquired_at` / `expires_at` values —
+    /// `seed_lease` writes only well-formed RFC3339 stamps, and the whole
+    /// point here is the stamps a reader cannot turn into milliseconds.
+    fn seed_lease_with_stamps(
+        root: &Path,
+        path: &str,
+        agent: &str,
+        cell: &str,
+        session: Option<&str>,
+        acquired_at: Value,
+        expires_at: Value,
+    ) {
+        let dir = root.join(".bee").join("runtime").join("leases").join("paths");
+        std::fs::create_dir_all(&dir).unwrap();
+        let record = json!({
+            "resource": format!("path:{}", res_normalize_path(path)),
+            "mode": "write",
+            "workflow_id": cell,
+            "session_id": session.unwrap_or(SESSIONLESS_SESSION_ID),
+            "workspace_id": format!("agent:{}", agent),
+            "epoch": 0,
+            "acquired_at": acquired_at,
+            "expires_at": expires_at,
+            "kind": "lease"
+        });
+        let n = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0);
+        std::fs::write(
+            dir.join(format!("lease-{n}.json")),
+            format!("{}\n", serde_json::to_string_pretty(&record).unwrap()),
+        )
+        .unwrap();
+    }
+
+    // The stamp table is sfg-3's `unparseable_stamps` — the same
+    // `date_parse_ms` `Err(Nd)` arms, read here off a LEASE or a HOLD instead
+    // of a claim. (The absent / null / blank arms are `Ok(None)` and were
+    // never the bug.)
+
+    /// The escape sfg-4 missed, one call frame further out: the cross-session
+    /// hold guard reads every path lease through `list_active_reservations` →
+    /// `lease_record_expired` / `lease_to_reservation`, both of which read
+    /// their stamps through `date_parse_ms(..)?`. `list_path_lease_records`
+    /// validates NO timestamp, so ONE lease file carrying
+    /// `"expires_at": "tomorrow"` reached `emit_undecidable` — exit 0, "the
+    /// guard did NOT run on it" — and turned the WHOLE write guard off. The
+    /// restrictive read: an expiry the reader cannot parse is NOT expired, so
+    /// the lease still conflicts and still denies.
+    #[test]
+    fn sfg5_a_malformed_lease_stamp_never_stops_the_guard() {
+        for stamp in unparseable_stamps() {
+            for (acquired, expires) in [
+                (json!("2026-01-01T00:00:00.000Z"), stamp.clone()),
+                (stamp.clone(), json!("2999-01-01T00:00:00.000Z")),
+                (stamp.clone(), stamp.clone()),
+            ] {
+                let fx = build_fixture("swarming", true);
+                add_live_session(&fx.root, "other");
+                seed_lease_with_stamps(
+                    &fx.root,
+                    "src/held.txt",
+                    "otto",
+                    "cell-9",
+                    Some("other"),
+                    acquired.clone(),
+                    expires.clone(),
+                );
+                let e = expect_done(
+                    json!({
+                        "tool_name": "Edit",
+                        "tool_input": { "file_path": "src/held.txt" },
+                        "session_id": "mine"
+                    }),
+                    &fx.root,
+                );
+                assert_eq!(e.code, 2, "{acquired}/{expires}: {}", e.stderr);
+                assert!(
+                    e.stderr.contains("bee cross-session hold"),
+                    "{acquired}/{expires}: {}",
+                    e.stderr
+                );
+            }
+        }
+    }
+
+    /// The second lease call site — `find_conflicts`, the agent-scoped
+    /// reservation deny in `swarming`. Same reader, same `Err(Nd)`, same
+    /// fail-OPEN; and the same restrictive answer keeps the refusal.
+    #[test]
+    fn sfg5_a_malformed_lease_stamp_still_lets_the_reservation_guard_refuse() {
+        for stamp in unparseable_stamps() {
+            let fx = build_fixture("swarming", true);
+            seed_lease_with_stamps(
+                &fx.root,
+                "src/held.txt",
+                "otto",
+                "cell-9",
+                None,
+                stamp.clone(),
+                stamp.clone(),
+            );
+            let e = expect_done(
+                json!({
+                    "tool_name": "Edit",
+                    "tool_input": { "file_path": "src/held.txt" },
+                    "agent_name": "mel"
+                }),
+                &fx.root,
+            );
+            assert_eq!(e.code, 2, "stamp {stamp}: {}", e.stderr);
+            assert!(e.stderr.contains("bee reservation conflict"), "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The third lease call site — `resolve_live_worker_count` (paths.rs),
+    /// which `check_git_bash_command` reads for the gc-2 whole-tree denial. A
+    /// lease the reader cannot date used to switch that guard off too;
+    /// unparseable-is-not-expired keeps both workers counted and the bare
+    /// `git commit` REFUSED.
+    #[test]
+    fn sfg5_a_malformed_lease_stamp_never_stops_the_live_worker_count() {
+        for stamp in unparseable_stamps() {
+            let fx = build_git_fixture("swarming");
+            for (agent, cell) in [("wk-a", "c-1"), ("wk-b", "c-2")] {
+                seed_lease_with_stamps(
+                    &fx.root,
+                    &format!("src/{cell}.txt"),
+                    agent,
+                    cell,
+                    None,
+                    stamp.clone(),
+                    stamp.clone(),
+                );
+            }
+            let e = expect_done(bash("git commit -m wip"), &fx.root);
+            assert_eq!(e.code, 2, "stamp {stamp}: {}", e.stderr);
+            assert!(
+                e.stderr.contains("bee concurrent-worker git guard"),
+                "stamp {stamp}: {}",
+                e.stderr
+            );
+            assert!(e.stderr.contains("2 workers are live"), "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The HOLD half of the same defect: `find_foreign_holds` read
+    /// `mirrored_at` through `date_parse_ms(..)?`, and `foreign_hold_expiry`
+    /// read it a second time for the refusal text. A mirrored hold row with an
+    /// unreadable stamp switched the cross-worktree guard off. Unparseable is
+    /// NOT expired, so the hold stays active and denies.
+    #[test]
+    fn sfg5_a_malformed_hold_stamp_never_stops_the_guard() {
+        for stamp in unparseable_stamps() {
+            let wtf = build_worktree_first("swarming", "standard", true);
+            let dir = wtf.root.join(".bee").join("runtime");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(
+                dir.join("cross-worktree-holds.json"),
+                format!(
+                    "{}\n",
+                    serde_json::to_string_pretty(&json!({ "holds": [{
+                        "path": "Cargo.lock",
+                        "holder": "some-other-checkout",
+                        "feature": "other",
+                        "session": "s-other",
+                        "cell": "c-1",
+                        "ttl_seconds": 3600,
+                        "mirrored_at": stamp.clone(),
+                        "released_at": Value::Null
+                    }] }))
+                    .unwrap()
+                ),
+            )
+            .unwrap();
+            // An EXCLUSIVE path (DEFAULT_EXCLUSIVE_PATHS), so the foreign hold
+            // is a hard block rather than the advisory arm — the verdict this
+            // reader used to switch off entirely.
+            let e = expect_done(edit("Cargo.lock"), &wtf.wt_root);
+            assert_eq!(e.code, 2, "stamp {stamp}: {}", e.stderr);
+            assert!(e.stderr.contains("bee cross-worktree hold"), "stamp {stamp}: {}", e.stderr);
+            // The expiry clause is a display string, never a verdict: a stamp
+            // it cannot render says so instead of claiming "no expiry".
+            assert!(e.stderr.contains("expiry unknown"), "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The escape sfg-4 deliberately LEFT, closed here.
+    /// `is_shared_nested_checkout_target` sits on the hook's own `R<..>` path
+    /// and runs for every Edit/Write with a resolvable target, so one
+    /// truncated `.bee/sessions/<id>.json` made `read_session_strict` answer
+    /// `Err(Nd)` and the whole guard fell open on a real write. A guard never
+    /// falls open on data it merely read: it DENIES, in bee's own words,
+    /// naming the file and the remedy.
+    #[test]
+    fn sfg5_an_unreadable_session_file_denies_instead_of_falling_open() {
+        for bad in ["", "{ not json", "\u{0}\u{1}\u{2}"] {
+            let fx = build_fixture("swarming", true);
+            let nested = fx.root.join("repo");
+            std::fs::create_dir_all(nested.join(".git")).unwrap();
+            std::fs::write(nested.join("foo.js"), "// nested plain\n").unwrap();
+            let sessions = fx.root.join(".bee").join("sessions");
+            std::fs::create_dir_all(&sessions).unwrap();
+            std::fs::write(sessions.join("broken.json"), bad).unwrap();
+            let e = expect_done(
+                json!({
+                    "tool_name": "Edit",
+                    "tool_input": { "file_path": "repo/foo.js" },
+                    "session_id": "me"
+                }),
+                &fx.root,
+            );
+            assert_eq!(e.code, 2, "{bad:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee shared-checkout guard"), "{bad:?}: {}", e.stderr);
+            assert!(e.stderr.contains("broken.json"), "{bad:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee state session release"), "{bad:?}: {}", e.stderr);
+        }
+    }
+
+    /// The lockout sfg-4 opened, made visible. An unparseable `last_heartbeat`
+    /// reads as a LIVE session forever with no time-based self-heal, so one
+    /// bad owner record can refuse every other session in the checkout. The
+    /// restrictive read STAYS — reopening the door would restore the
+    /// fail-open — but the refusal is never silent: the reader names the file
+    /// and the remedy on stderr, so a human sees WHY.
+    #[test]
+    fn sfg5_an_unparseable_heartbeat_lockout_is_never_silent() {
+        for beat in unparseable_stamps() {
+            let fx = build_fixture("idle", false);
+            add_live_session(&fx.root, "sess-1");
+            add_session_with_heartbeat(&fx.root, "sess-owner", beat.clone());
+            write_owned_workspace(&fx.root, "main", "sess-owner");
+            let e = expect_done(
+                json!({
+                    "tool_name": "Edit",
+                    "tool_input": { "file_path": "src/app.js" },
+                    "session_id": "sess-1"
+                }),
+                &fx.root,
+            );
+            // Queued for flush(), exactly like the corrupt-JSON warning — so
+            // it never leaks on a delegating run, and it DOES reach stderr
+            // ahead of the refusal on every native verdict.
+            let warned = take_corrupt_json_warnings();
+            assert_eq!(e.code, 2, "beat {beat}: {}", e.stderr);
+            // The refusal itself is unchanged (sfg-4 pins it); what is new is
+            // that the unreadable record is NAMED, with its remedy.
+            assert!(warned.contains("sess-owner.json"), "beat {beat}: {warned}");
+            assert!(warned.contains("last_heartbeat"), "beat {beat}: {warned}");
+            assert!(warned.contains("bee state session release"), "beat {beat}: {warned}");
+            // One line per file, not one per read.
+            assert_eq!(warned.matches("sess-owner.json").count(), 1, "beat {beat}: {warned}");
+        }
+    }
+
+    // ── sfg-6 (slp-followup-gaps): the LAST store read that could switch the
+    // whole write guard off ────────────────────────────────────────────────
+
+    /// Every `.bee/companion-session.json` body the marker reader cannot turn
+    /// into JSON. A body that PARSES but says nothing usable (`[1,2,3]`,
+    /// `{}`) is not here: that is a readable marker declaring no mount, and it
+    /// answers `CompanionMount::None` exactly as it always did.
+    fn corrupt_companion_markers() -> Vec<&'static str> {
+        vec!["", "   \n", "{ not json", "{\"worktreePath\":", "\u{0}\u{1}\u{2}", "[1,2,3"]
+    }
+
+    /// The last fail-OPEN of this feature's four-round sweep.
+    ///
+    /// `resolve_verified_companion_mount_real` read the marker with a bare
+    /// `std::fs::read` plus `serde_json::from_str`, and both error arms
+    /// answered `Err(Nd)`. That error walked
+    /// `target_inside_verified_companion_mount` ->
+    /// `is_shared_nested_checkout_target` -> the hook's own `?` -> Delegate ->
+    /// `emit_undecidable`: exit 0, "the guard did NOT run on it". The
+    /// preconditions are the ordinary ones sfg-5 closed one branch above — a
+    /// resolvable target plus one other live session — so a corrupt marker
+    /// switched the whole guard off on everyday work.
+    ///
+    /// The fixture carries the live peer that
+    /// `companion_marker_present_delegates_on_containment_failure` has no
+    /// reason to: without a peer `is_concurrent_mode_strict` answers `false`
+    /// first and the marker is never read at all.
+    #[test]
+    fn sfg6_a_corrupt_companion_marker_denies_instead_of_falling_open() {
+        for body in corrupt_companion_markers() {
+            for payload in [
+                json!({"tool_name":"Edit","tool_input":{"file_path":"src/inside.txt"},"session_id":"me"}),
+                json!({"tool_name":"Write","tool_input":{"file_path":"src/inside.txt"},"session_id":"me"}),
+                json!({"tool_name":"Bash","tool_input":{"command":"cp new.txt src/inside.txt"},"session_id":"me"}),
+            ] {
+                let fx = build_fixture("swarming", true);
+                add_live_session(&fx.root, "other-live");
+
+                // Control FIRST: the same fixture, same live peer, no marker
+                // at all is a native ALLOW — so the deny below is the marker
+                // firing, never the peer.
+                let ok = expect_done(payload.clone(), &fx.root);
+                assert_eq!(ok.code, 0, "{body:?}: {}", ok.stderr);
+
+                std::fs::write(fx.root.join(".bee").join("companion-session.json"), body).unwrap();
+                let e = expect_done(payload.clone(), &fx.root);
+                assert_eq!(e.code, 2, "{body:?}: {}", e.stderr);
+                assert!(e.stderr.contains("bee shared-checkout guard"), "{body:?}: {}", e.stderr);
+                assert!(e.stderr.contains("companion-session.json"), "{body:?}: {}", e.stderr);
+                assert!(e.stderr.contains("--with-companion"), "{body:?}: {}", e.stderr);
+            }
+        }
+    }
+
+    /// The non-ENOENT READ error closes the same way as the parse error —
+    /// neither escapes. A DIRECTORY where the marker file belongs is the
+    /// portable way to make `std::fs::read` fail without ENOENT.
+    #[test]
+    fn sfg6_an_unopenable_companion_marker_denies_too() {
+        let fx = build_fixture("swarming", true);
+        add_live_session(&fx.root, "other-live");
+        std::fs::create_dir_all(fx.root.join(".bee").join("companion-session.json")).unwrap();
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/inside.txt"},"session_id":"me"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee shared-checkout guard"), "{}", e.stderr);
+        assert!(e.stderr.contains("companion-session.json"), "{}", e.stderr);
+    }
+
+    /// The boundary of the fix, stated as a test.
+    ///
+    /// `companion_mount_rel` delegates on the MERE PRESENCE of the marker for
+    /// a target that already failed containment — the documented,
+    /// containment-gated branch in the module header. sfg-6 does not touch
+    /// it, and this pins why that is not a surviving hole of the same class: a
+    /// perfect marker and a corrupt one delegate IDENTICALLY there, so
+    /// unreadable data decides nothing. What sfg-6 closed is the other
+    /// consumer, where readability alone flipped the verdict.
+    #[test]
+    fn sfg6_the_containment_gated_delegate_never_turned_on_readability() {
+        let well_formed = "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n";
+        for body in std::iter::once(well_formed).chain(corrupt_companion_markers()) {
+            let fx = build_fixture("swarming", true);
+            add_live_session(&fx.root, "other-live");
+            std::fs::write(fx.root.join(".bee").join("companion-session.json"), body).unwrap();
+            expect_delegate(edit("../outside.txt"), &fx.root);
+        }
     }
 
     // ── staging-lane D0 teeth #2: a direct `git commit` inside the
@@ -2440,7 +4322,12 @@ use std::process::ExitCode;
         )
         .unwrap();
         expect_delegate(edit("../outside.txt"), &fx.root);
-        // A contained target never consults the marker — stays native.
+        // A contained target never consults the marker ON THIS FIXTURE —
+        // stays native. sfg-6: the reason is the missing live peer, not the
+        // marker. `is_concurrent_mode_strict` answers `false` first, so the
+        // mount check never runs. Add a peer and the marker IS read; a corrupt
+        // one denies now instead of falling open — see
+        // `sfg6_a_corrupt_companion_marker_denies_instead_of_falling_open`.
         let e = expect_done(edit("src/inside.txt"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
@@ -2682,6 +4569,24 @@ use std::process::ExitCode;
         let cmd = "cat <<< \"hello\" > out.txt";
         let t = extract_bash_targets(cmd);
         assert_eq!(t.paths, vec!["out.txt"]);
+    }
+
+    #[test]
+    fn heredoc_prose_containing_git_words_is_not_judged_as_git_verb() {
+        let fx = build_fixture("idle", false);
+        let cmd = "{ cat <<'PROMPT'\nreview the git range af..d5\nPROMPT\n} | echo hi";
+        let e = expect_done(bash(cmd), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn real_git_verb_outside_heredoc_is_still_judged() {
+        let fx = build_fixture("idle", false);
+        let cmd = "{ cat <<'PROMPT'\nreview the git range af..d5\nPROMPT\n} && git push";
+        let e = expect_done(bash(cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("`git push` is blocked"));
+        assert!(e.stderr.contains("never exempted"));
     }
 
     // ── tokenize_deep / find_git_invocations (gpd-1) ────────────────────────
@@ -3052,14 +4957,30 @@ use std::process::ExitCode;
         Fx { _dir: dir, root }
     }
 
+    /// sfg-5, then sfg-6: the primitive answers four ways now. These rows all
+    /// read the shared/not-shared verdict; the two unreadable-record answers
+    /// are their own refusals, pinned by
+    /// `sfg5_an_unreadable_session_file_denies_instead_of_falling_open` and
+    /// `sfg6_a_corrupt_companion_marker_denies_instead_of_falling_open`, and
+    /// none of these fixtures can produce either one.
     fn flagged(root: &Path, target: &Path) -> bool {
-        is_shared_nested_checkout_target(
+        match is_shared_nested_checkout_target(
             &root.to_string_lossy(),
             &target.to_string_lossy(),
             None,
             None,
         )
         .expect("primitive must decide natively")
+        {
+            SharedNested::Yes => true,
+            SharedNested::No => false,
+            SharedNested::UnreadableSession(f) => {
+                panic!("fixture wrote no unreadable session record, got {}", f.display())
+            }
+            SharedNested::UnreadableCompanionMarker(f) => {
+                panic!("fixture wrote no unreadable companion marker, got {}", f.display())
+            }
+        }
     }
 
     #[test]
@@ -3353,6 +5274,8 @@ use std::process::ExitCode;
         let e = expect_done_with_roots(edit(&target.to_string_lossy()), &hx.fx.root, &hx.roots);
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert_eq!(e.stderr, GENERIC_CONTAINMENT_MESSAGE);
+        assert!(e.stderr.contains("A path outside this project belongs to the user \u{2014} ask them to change it, never write it through another tool."));
+        assert!(!e.stderr.contains("open your session at"));
 
         // Bash shape keeps its deny too.
         let bash_target = target.to_string_lossy().replace('\\', "/");
@@ -3363,6 +5286,8 @@ use std::process::ExitCode;
         );
         assert_eq!(b.code, 2, "{}", b.stderr);
         assert_eq!(b.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
+        assert!(b.stderr.contains("A path outside this project belongs to the user \u{2014} ask them to change it, never write it through another tool."));
+        assert!(!b.stderr.contains("open your session at"));
     }
 
     #[test]
@@ -3761,6 +5686,26 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn plan_freeze_shape_approved_follows_the_control_root_state_over_a_stale_handed_projection() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_state(&root, &json!(default_state_for("demo", false)));
+        let stale = default_state_for("demo", true);
+        assert!(!plan_freeze_shape_approved(&root.to_string_lossy(), &stale, "demo").unwrap());
+    }
+
+    #[test]
+    fn plan_freeze_shape_approved_handed_state_decides_when_the_control_root_names_another_feature() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_state(&root, &json!(default_state_for("other", false)));
+        let handed = default_state_for("demo", true);
+        assert!(plan_freeze_shape_approved(&root.to_string_lossy(), &handed, "demo").unwrap());
+    }
+
+    #[test]
     fn plan_freeze_shape_approved_is_no_opinion_when_default_state_names_another_feature() {
         let dir = tempfile::tempdir().unwrap();
         let root = dunce::canonicalize(dir.path()).unwrap();
@@ -4029,4 +5974,442 @@ use std::process::ExitCode;
         let fx = build_fixture("swarming", true);
         let e = expect_done(bash("rm *.txt"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    const CRATE_FILE: &str = "packages/bee-rs/crates/bee/src/x.rs";
+
+    fn comment_fixture(key: Option<bool>) -> Fx {
+        let fx = build_fixture("swarming", true);
+        let cfg = match key {
+            Some(on) => json!({ "no_code_comments": on }),
+            None => json!({}),
+        };
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string(&cfg).unwrap(),
+        )
+        .unwrap();
+        fx
+    }
+
+    fn seed_file(root: &Path, rel: &str, body: &str) {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+
+    fn edit_strings(path: &str, old_string: &str, new_string: &str) -> Value {
+        json!({
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": path,
+                "old_string": old_string,
+                "new_string": new_string
+            }
+        })
+    }
+
+    fn write_tool(path: &str, content: &str) -> Value {
+        json!({ "tool_name": "Write", "tool_input": { "file_path": path, "content": content } })
+    }
+
+    #[test]
+    fn comment_guard_refuses_an_edit_that_adds_a_comment_and_names_every_remedy() {
+        let fx = comment_fixture(Some(true));
+        seed_file(&fx.root, CRATE_FILE, "fn f() {}\n");
+        let e = expect_done(
+            edit_strings(CRATE_FILE, "fn f() {}", "// note\nfn f() {}"),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("x.rs:1"), "{}", e.stderr);
+        assert!(e.stderr.contains("(\"// note\")"), "{}", e.stderr);
+        assert!(e.stderr.contains("/// or //!"), "{}", e.stderr);
+        assert!(e.stderr.contains("docs/knowledge concept"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee decisions log"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee backlog add"), "{}", e.stderr);
+        assert!(e.stderr.contains("FIX"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn comment_guard_is_silent_without_the_key_and_with_the_key_false() {
+        for key in [None, Some(false)] {
+            let fx = comment_fixture(key);
+            seed_file(&fx.root, CRATE_FILE, "fn f() {}\n");
+            let e = expect_done(
+                edit_strings(CRATE_FILE, "fn f() {}", "// note\nfn f() {}"),
+                &fx.root,
+            );
+            assert_eq!(e.code, 0, "key={key:?} stderr={}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn comment_guard_allows_a_moved_comment_and_a_deleted_one() {
+        let fx = comment_fixture(Some(true));
+        seed_file(&fx.root, CRATE_FILE, "// a\nfn f() {}\n");
+        let moved = expect_done(
+            edit_strings(CRATE_FILE, "// a\nfn f() {}", "fn f() {}\n// a"),
+            &fx.root,
+        );
+        assert_eq!(moved.code, 0, "{}", moved.stderr);
+        let deleted = expect_done(edit_strings(CRATE_FILE, "// a\n", ""), &fx.root);
+        assert_eq!(deleted.code, 0, "{}", deleted.stderr);
+    }
+
+    #[test]
+    fn comment_guard_allows_a_safety_line_on_unsafe() {
+        let fx = comment_fixture(Some(true));
+        seed_file(&fx.root, CRATE_FILE, "fn f() {}\n");
+        let e = expect_done(
+            edit_strings(
+                CRATE_FILE,
+                "fn f() {}",
+                "// SAFETY: the pointer is live\nfn f() {}",
+            ),
+            &fx.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn comment_guard_refuses_a_new_file_written_with_a_doc_comment() {
+        let fx = comment_fixture(Some(true));
+        let e = expect_done(
+            write_tool(
+                "packages/bee-rs/crates/bee/src/y.rs",
+                "pub fn y() {}\n/// what y is for\n",
+            ),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("y.rs:2"), "{}", e.stderr);
+        assert!(e.stderr.contains("/// what y is for"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn comment_guard_never_touches_a_non_code_file_or_a_path_outside_the_roots() {
+        let fx = comment_fixture(Some(true));
+        let md = expect_done(
+            write_tool("packages/bee-rs/crates/bee/src/notes.md", "// x\n"),
+            &fx.root,
+        );
+        assert_eq!(md.code, 0, "{}", md.stderr);
+        let docs = expect_done(write_tool("docs/notes/x.rs", "// x\n"), &fx.root);
+        assert_eq!(docs.code, 0, "{}", docs.stderr);
+    }
+
+    #[test]
+    fn comment_guard_reads_a_heredoc_body_and_leaves_an_unreadable_bash_write_alone() {
+        let fx = comment_fixture(Some(true));
+        let denied = expect_done(
+            bash("cat > scripts/x.sh <<'EOF'\n# note\necho hi\nEOF\n"),
+            &fx.root,
+        );
+        assert_eq!(denied.code, 2, "{}", denied.stderr);
+        assert!(denied.stderr.contains("scripts/x.sh:1"), "{}", denied.stderr);
+        assert!(denied.stderr.contains("(\"# note\")"), "{}", denied.stderr);
+
+        let shebang_only = expect_done(
+            bash("cat > scripts/x.sh <<'EOF'\n#!/usr/bin/env bash\nEOF\n"),
+            &fx.root,
+        );
+        assert_eq!(shebang_only.code, 0, "{}", shebang_only.stderr);
+
+        let unreadable = expect_done(bash("echo '# x' > scripts/x.sh"), &fx.root);
+        assert_eq!(unreadable.code, 0, "{}", unreadable.stderr);
+    }
+
+    #[test]
+    fn comment_guard_names_the_offending_edit_inside_a_multiedit() {
+        let fx = comment_fixture(Some(true));
+        seed_file(&fx.root, CRATE_FILE, "fn f() {}\nfn g() {}\n");
+        let payload = json!({
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": CRATE_FILE,
+                "edits": [
+                    { "old_string": "fn f() {}", "new_string": "fn f() -> u8 { 1 }" },
+                    { "old_string": "fn g() {}", "new_string": "// why g stays\nfn g() {}" }
+                ]
+            }
+        });
+        let e = expect_done(payload, &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("(\"// why g stays\")"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn comment_guard_refuses_an_apply_patch_that_adds_a_comment_by_added_line() {
+        let fx = comment_fixture(Some(true));
+        let e = expect_done(
+            patch("*** Begin Patch\n*** Add File: packages/bee-rs/crates/bee/src/z.rs\n+fn z() {}\n+// why z exists\n*** End Patch"),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("z.rs:added line 2"), "{}", e.stderr);
+        assert!(e.stderr.contains("(\"// why z exists\")"), "{}", e.stderr);
+    }
+
+    fn pi_lock_fixture(lane: &str, harness_workflow: Option<bool>) -> Fx {
+        let fx = build_fixture("swarming", true);
+        let mut st = swarming_state(true);
+        st["route"] = json!({ "class": "feature", "lane": lane });
+        write_state(&fx.root, &st);
+        if let Some(on) = harness_workflow {
+            std::fs::write(
+                fx.root.join(".bee").join("config.json"),
+                format!("{}\n", json!({ "pi_harness_workflow": on })),
+            )
+            .unwrap();
+        }
+        fx
+    }
+
+    fn pi(mut payload: Value) -> Value {
+        payload["bee_runtime"] = json!("pi");
+        payload
+    }
+
+    fn with_worker_env<T>(value: Option<&str>, f: impl FnOnce() -> T) -> T {
+        let _guard = crate::hooks::herding_env_lock();
+        let prior = std::env::var("BEE_HERDING_WORKER").ok();
+        match value {
+            // SAFETY: `herding_env_lock` serializes every test that touches this var.
+            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+            // SAFETY: see above.
+            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+        }
+        let out = f();
+        match prior {
+            // SAFETY: see above.
+            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+            // SAFETY: see above.
+            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+        }
+        out
+    }
+
+    fn pi_lock_run(fx: &Fx, payload: Value, worker: Option<&str>) -> Emit {
+        with_worker_env(worker, || expect_done(payload, &fx.root))
+    }
+
+    #[test]
+    fn pi_leader_source_write_on_a_small_lane_is_refused_naming_the_dispatch_and_reopen_paths() {
+        let fx = pi_lock_fixture("small", None);
+        let e = pi_lock_run(&fx, pi(edit("src/app.rs")), None);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee_dispatch"), "{}", e.stderr);
+        assert!(e.stderr.contains("/bee-tools-reopen"), "{}", e.stderr);
+        for lane in ["standard", "high-risk"] {
+            let fx = pi_lock_fixture(lane, Some(true));
+            assert_eq!(pi_lock_run(&fx, pi(edit("src/app.rs")), None).code, 2, "{lane}");
+        }
+    }
+
+    #[test]
+    fn pi_leader_bash_herding_run_is_refused() {
+        let fx = pi_lock_fixture("small", None);
+        for cmd in [
+            "bee herding run --role code --cell x",
+            ".bee/bin/bee herding run --role code",
+            "cd x && BEE_X=1 bee herding run",
+        ] {
+            let e = pi_lock_run(&fx, pi(bash(cmd)), None);
+            assert_eq!(e.code, 2, "{cmd}: {}", e.stderr);
+            assert!(e.stderr.contains("bee_dispatch"), "{}", e.stderr);
+        }
+        assert_eq!(pi_lock_run(&fx, pi(bash("bee herding status")), None).code, 0);
+        assert_eq!(pi_lock_run(&fx, pi(bash("git status")), None).code, 0);
+    }
+
+    #[test]
+    fn pi_worker_session_on_the_same_record_may_write() {
+        let fx = pi_lock_fixture("small", None);
+        let e = pi_lock_run(&fx, pi(edit("src/app.rs")), Some("1"));
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = pi_lock_run(&fx, pi(bash("bee herding run --role code")), Some("1"));
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn pi_leader_on_lanes_tiny_docs_and_spike_may_write() {
+        for lane in ["tiny", "docs", "spike"] {
+            let fx = pi_lock_fixture(lane, None);
+            let e = pi_lock_run(&fx, pi(edit("src/app.rs")), None);
+            assert_eq!(e.code, 0, "{lane}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn non_pi_payload_is_unchanged_by_the_pi_leader_lock() {
+        let fx = pi_lock_fixture("small", None);
+        assert_eq!(pi_lock_run(&fx, edit("src/app.rs"), None).code, 0);
+        assert_eq!(pi_lock_run(&fx, bash("bee herding run --role code"), None).code, 0);
+        let mut claude = edit("src/app.rs");
+        claude["bee_runtime"] = json!("claude");
+        assert_eq!(pi_lock_run(&fx, claude, None).code, 0);
+    }
+
+    #[test]
+    fn pi_leader_with_tools_reopened_may_write() {
+        let fx = pi_lock_fixture("small", None);
+        let mut payload = pi(edit("src/app.rs"));
+        payload["tools_reopened"] = json!(true);
+        let e = pi_lock_run(&fx, payload, None);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn pi_harness_workflow_false_restores_the_leader_write() {
+        let fx = pi_lock_fixture("small", Some(false));
+        assert_eq!(pi_lock_run(&fx, pi(edit("src/app.rs")), None).code, 0);
+        assert_eq!(pi_lock_run(&fx, pi(bash("bee herding run --role code")), None).code, 0);
+    }
+
+    #[test]
+    fn pi_leader_lock_holds_only_in_an_approved_swarming_phase_and_for_source_paths() {
+        let fx = pi_lock_fixture("small", None);
+        assert_eq!(pi_lock_run(&fx, pi(edit("docs/history/demo/notes.md")), None).code, 0);
+        let mut st = swarming_state(true);
+        st["route"] = json!({ "class": "feature", "lane": "small" });
+        st["phase"] = json!("reviewing");
+        write_state(&fx.root, &st);
+        assert_eq!(pi_lock_run(&fx, pi(edit("src/app.rs")), None).code, 0);
+    }
+
+    #[test]
+    fn cross_worktree_denials_name_runnable_or_in_worktree_fixes() {
+        let lx = build_linked(true);
+
+        let main_src = lx.main_root.join("src").join("main-only.txt");
+        let expected_wt_src = lx.work_root.join("src").join("main-only.txt");
+        let e_src = expect_done(
+            edit(&main_src.to_string_lossy()),
+            &lx.work_root,
+        );
+        assert_eq!(e_src.code, 2, "{}", e_src.stderr);
+        assert!(e_src.stderr.contains(&expected_wt_src.to_string_lossy().to_string()), "{}", e_src.stderr);
+        assert!(e_src.stderr.contains("write "), "{}", e_src.stderr);
+        assert!(e_src.stderr.contains(" instead."), "{}", e_src.stderr);
+
+        let main_bee = lx.main_root.join(".bee").join("state.json");
+        let e_bee = expect_done(
+            edit(&main_bee.to_string_lossy()),
+            &lx.work_root,
+        );
+        assert_eq!(e_bee.code, 2, "{}", e_bee.stderr);
+        assert!(e_bee.stderr.contains("bee --help --json"), "{}", e_bee.stderr);
+        assert!(!e_bee.stderr.contains(&lx.work_root.to_string_lossy().to_string()), "{}", e_bee.stderr);
+        assert!(!e_bee.stderr.contains(&lx.main_root.to_string_lossy().to_string()), "{}", e_bee.stderr);
+        assert!(!e_bee.stderr.contains(" instead."), "{}", e_bee.stderr);
+
+        let sibling = add_sibling_worktree(&lx.main_root, "other");
+        let grants_path = lx.main_root.join(".bee").join("runtime").join("worktree-grants.json");
+        std::fs::create_dir_all(grants_path.parent().unwrap()).unwrap();
+        std::fs::write(&grants_path, "{\"other\":true}\n").unwrap();
+        let sib_file = sibling.root.join("src").join("sib.txt");
+        let e_sib = expect_done(
+            edit(&sib_file.to_string_lossy()),
+            &lx.work_root,
+        );
+        assert_eq!(e_sib.code, 2, "{}", e_sib.stderr);
+        assert!(e_sib.stderr.contains(&lx.work_root.to_string_lossy().to_string()), "{}", e_sib.stderr);
+        assert!(!e_sib.stderr.contains("open a session"), "{}", e_sib.stderr);
+        assert!(!e_sib.stderr.contains("bee worktree merge"), "{}", e_sib.stderr);
+    }
+
+    fn herded(payload: Value, cwd: &Path) -> Emit {
+        let mut body = match payload {
+            Value::Object(m) => m,
+            _ => panic!("payload must be an object"),
+        };
+        body.insert("cwd".into(), Value::String(cwd.to_string_lossy().into_owned()));
+        let stdin = jsjson::stringify(&Value::Object(body));
+        with_worker_env(Some("1"), || {
+            let ctx = read_hook_context(HOOK_NAME, &[], &stdin);
+            emit_for(&ctx)
+        })
+    }
+
+    fn seed_herded_siblings(root: &Path, count: usize) {
+        for n in 0..count {
+            add_live_session(root, &format!("sib-{n}"));
+        }
+    }
+
+    #[test]
+    fn herded_worker_guard_denies_git_stash_with_two_live_workers() {
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 2);
+        let e = herded(bash("git stash push -q -m x"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee concurrent-worker git guard"), "{}", e.stderr);
+        assert!(e.stderr.contains("`git stash` is refused"), "{}", e.stderr);
+        assert!(e.stderr.contains("2 workers are live in this checkout"), "{}", e.stderr);
+        assert!(e.stderr.contains("FIX:"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn herded_worker_guard_allows_readonly_and_path_scoped_commits() {
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 2);
+        for cmd in ["git status", "git diff", "git log --oneline -3"] {
+            let e = herded(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
+        }
+        let scoped = herded(bash("git commit -m m -- a.rs"), &fx.root);
+        assert_eq!(scoped.code, 0, "{}", scoped.stderr);
+    }
+
+    #[test]
+    fn herded_worker_guard_allows_a_solo_worker_to_stash() {
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 1);
+        let e = herded(bash("git stash push -q -m x"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn herded_worker_guard_runs_no_check_but_the_whole_tree_one() {
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 2);
+        let e = herded(edit(".bee/state.json"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        assert!(e.stderr.is_empty(), "{}", e.stderr);
+        assert!(e.stdout.is_empty(), "{}", e.stdout);
+        let shell = herded(bash("printf x > .bee/state.json"), &fx.root);
+        assert_eq!(shell.code, 0, "{}", shell.stderr);
+    }
+
+    #[test]
+    fn herded_worker_guard_deny_reaches_the_real_hook_entry_point() {
+        use std::ffi::OsString;
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 2);
+        let stdin = |payload: Value| {
+            let mut body = match payload {
+                Value::Object(m) => m,
+                _ => panic!("payload must be an object"),
+            };
+            body.insert(
+                "cwd".into(),
+                Value::String(fx.root.to_string_lossy().into_owned()),
+            );
+            jsjson::stringify(&Value::Object(body))
+        };
+        with_worker_env(Some("1"), || {
+            let args = vec![OsString::from("hook"), OsString::from("write-guard")];
+            let payload = stdin(bash("git stash push -q -m x"));
+            let mut feed = || payload.clone().into_bytes();
+            let code = crate::hooks::try_native_with(&args, &mut feed)
+                .expect("bee hook write-guard is a hook invocation");
+            assert_eq!(code, ExitCode::from(2), "stash must be refused");
+
+            let allow = stdin(edit("src/app.rs"));
+            let mut feed = || allow.clone().into_bytes();
+            let code = crate::hooks::try_native_with(&args, &mut feed)
+                .expect("bee hook write-guard is a hook invocation");
+            assert_ne!(code, ExitCode::from(2), "an Edit call must stay allowed");
+        });
     }

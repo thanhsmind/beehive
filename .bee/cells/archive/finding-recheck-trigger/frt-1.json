@@ -1,0 +1,139 @@
+{
+  "id": "frt-1",
+  "feature": "finding-recheck-trigger",
+  "title": "Add a path-changed trigger predicate anchored at HEAD",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "95381603-d480-411d-9c1f-fa8ed1be8279"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per decision 95381603 (D1 rev 2). In verbs/triggers/mod.rs: (1) accept a third predicate kind `path-changed:<path>[,<path>...]` in is_valid_predicate: every comma-separated entry, trimmed, must be non-empty and repo-relative (an absolute path refuses); the add refusal text names all three kinds and says a path containing a comma cannot be watched. (2) Add an optional `anchored_at` field to TriggerRecord (from_value reads it when present, to_value writes it; records without it keep working). (3) In run_add, for a path-changed predicate, resolve HEAD of the tree where the command runs — ctx.root, NOT ctx.control — with crate::verbs::worktree::run_git(&ctx.root, [\"rev-parse\", \"HEAD\"]); a non-zero exit or empty output refuses with `bee triggers add: --predicate path-changed needs a git HEAD at <root> to anchor on.` and writes nothing; otherwise store the sha as anchored_at. Anchoring on the reviewed tree's HEAD is what keeps a finding from going due when its own feature branch merges into main. (4) Change predicate_true to also take the record's anchored_at. For path-changed: run `git log -1 --format=%H <anchored_at>..HEAD -- <paths...>` at the CONTROL root; non-empty stdout means true; a non-zero exit (unknown sha, no repo) or a missing anchored_at ALSO means true — a watched condition never sinks silently. path-exists and path-missing behave exactly as today. (5) Add `pub(crate) fn due_count_for_prompt(control: &Path) -> usize`: read the control root HEAD (run_git rev-parse HEAD); if it equals the sha stored in <control>/.bee/triggers/.last-eval-head, count predicate-tier `due` records WITHOUT evaluating (read_without_evaluating, no git log spawned); otherwise evaluate (read_and_evaluate), write the new sha to that file, and count. If HEAD cannot be read, evaluate. run_add deletes .last-eval-head after writing a trigger so the next prompt evaluates it. The file name does not end in .json, so the store reader never lists it. (6) Update the module header comment. In generated/registry_payload.json, update ONLY the triggers add `predicate` description: name path-changed, its repo-relative comma-separated paths, and that it is anchored at the HEAD of the tree where add runs. Tests (red first, in the existing tests module; real git repo fixture like leader_check.rs's diff_repo, plus `git worktree add` for the merge case): add rejects `path-changed:` with no path, with an empty entry, and with an absolute path; add in a repo records anchored_at = that tree's HEAD; add outside a git repo refuses and writes no file; no commit since anchor stays waiting; a commit touching an unrelated file stays waiting; a commit touching a watched path flips to due and persists; a bogus anchored_at reads as due; MERGE CASE — a trigger added inside a linked worktree on a feature branch whose own commits touched the watched path stays waiting after that branch is merged into main with a merge commit; due_count_for_prompt spawns no evaluation when HEAD is unchanged (observable: a trigger whose predicate became true after the cached sha was written is still counted as waiting until HEAD moves) and evaluates after HEAD moves.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee triggers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+  "must_haves": {
+    "truths": [
+      "a path-changed trigger records the HEAD sha of the tree where triggers add runs as anchored_at",
+      "a path-changed trigger flips to due once a commit after anchored_at touches one of its paths, and stays waiting otherwise",
+      "a trigger added in a feature worktree stays waiting after that feature branch merges into main",
+      "a git error or missing anchor on a path-changed trigger reads as due, never as waiting",
+      "due_count_for_prompt evaluates only when the control root HEAD moved since the last evaluation",
+      "path-exists and path-missing triggers behave exactly as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+        "substantive": "path-changed validation, anchored_at field, git-backed evaluation, due_count_for_prompt with the HEAD cache, and the new tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "predicate description names path-changed"
+      }
+    ],
+    "key_links": [
+      "read_entries passes the record's anchored_at into predicate_true",
+      "run_add deletes .last-eval-head after a write"
+    ],
+    "prohibitions": [
+      "No change to trigger ids, file names, the resolve verb, or due_and_manual_counts' signature"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-frt-1",
+    "outcome": "path-changed predicate with HEAD anchor and HEAD-cached prompt count",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "moved run_add validation, anchoring and the write into a testable add_record that returns the refusal line — run_add reads cwd so tests could not drive it — found a better route",
+      "due_count_for_prompt returns 0 and writes nothing when .bee/triggers does not exist — avoids creating the store dir on every prompt — found a better route",
+      "due_count_for_prompt has no caller yet so the build warns it is unused until the prompt-line cell wires it — the cell scope stops at the function — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T15:16:07.847Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify, 17 triggers tests including 8 new path-changed, branch-join and prompt-cache tests seen by name, registry 12 and 9",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee triggers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+    "claimed_at": "2026-09-21T15:04:23.514Z",
+    "mistakes": [
+      {
+        "wrong": "my first edit ran as one python heredoc shell command and the session isolation guard refused it",
+        "better": "write the script to the scratchpad and run it as a plain command"
+      },
+      {
+        "wrong": "my first cells finish proof line paraphrased the verify command and capCell refused it",
+        "better": "copy the cell verify command verbatim into the proof line"
+      }
+    ],
+    "report": {
+      "outcome": "path-changed predicate in is_valid_predicate, add_record stores anchored_at from head_sha of ctx.root and drops .last-eval-head, paths_changed_since called through predicate_true with the record anchored_at in read_entries, due_count_for_prompt with the .last-eval-head cache, registry predicate description names path-changed",
+      "commit": "b08fb6ec0a8d13f57dd3d220b26111abc68654f9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee triggers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch — green:unit — cell verify, 17 triggers tests including 8 new path-changed, branch-join and prompt-cache tests seen by name, registry 12 and 9",
+      "deviations": [
+        "moved run_add validation, anchoring and the write into a testable add_record that returns the refusal line — run_add reads cwd so tests could not drive it — found a better route",
+        "due_count_for_prompt returns 0 and writes nothing when .bee/triggers does not exist — avoids creating the store dir on every prompt — found a better route",
+        "due_count_for_prompt has no caller yet so the build warns it is unused until the prompt-line cell wires it — the cell scope stops at the function — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "my first edit ran as one python heredoc shell command and the session isolation guard refused it — write the script to the scratchpad and run it as a plain command",
+        "my first cells finish proof line paraphrased the verify command and capCell refused it — copy the cell verify command verbatim into the proof line"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 359 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a path-changed trigger records the HEAD sha of the tree where triggers add runs as anchored_at",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+          },
+          {
+            "requirement": "a path-changed trigger flips to due once a commit after anchored_at touches one of its paths, and stays waiting otherwise",
+            "artifact": "live run: unrelated commit -> no due; commit to src/a.rs -> [predicate/due]; test path_changed_waits_until_a_commit_touches_a_watched_path"
+          },
+          {
+            "requirement": "a trigger added in a feature worktree stays waiting after that feature branch merges into main",
+            "artifact": "test path_changed_added_in_a_feature_worktree_stays_waiting_after_its_merge"
+          },
+          {
+            "requirement": "a git error or missing anchor on a path-changed trigger reads as due, never as waiting",
+            "artifact": "paths_changed_since + test path_changed_with_a_bogus_or_missing_anchor_reads_as_due"
+          },
+          {
+            "requirement": "due_count_for_prompt evaluates only when the control root HEAD moved since the last evaluation",
+            "artifact": "due_count_for_prompt + test due_count_for_prompt_evaluates_only_when_head_moves"
+          },
+          {
+            "requirement": "path-exists and path-missing triggers behave exactly as before",
+            "artifact": "predicate_true branches unchanged; pre-existing triggers tests green (52 passed)"
+          }
+        ],
+        "recorded_at": "2026-09-21T15:21:11.184Z",
+        "recorded_by": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -8,7 +8,10 @@
 //   - parse a required `--role dispatch|merge` plus the optional
 //     `--main-root`, `--interval`, `--timeout`, `--max-iterations`,
 //     `--max-consecutive-failures`, `--turn-ceiling` and `--once`;
-//   - read the role's opening prompt from `skills/bee-herding/references`;
+//   - read the role's opening prompt from the installed bee-herding skill
+//     tree (`skills/bee-herding/references` in this source repo, or the
+//     runtime-prefixed copy every host project installs instead — see
+//     `SKILL_ROOT_PREFIXES` and `read_prompt_file` below);
 //   - build the control agent's argv (D13 — see `build_control_argv` below);
 //   - check the stop file (`<main-root>/.bee/tmp/bee-herding.stop`) BOTH
 //     before and after every iteration;
@@ -46,6 +49,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::TransportKind;
+use serde_json::Value;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // role, options, CLI parsing
@@ -55,6 +59,18 @@ use super::TransportKind;
 pub(crate) enum Role {
     Dispatch,
     Merge,
+    /// slp-supervisor-heartbeat D 322695d6 — the OBSERVER. It reads bee's
+    /// existing state surfaces on a cold tick and writes exactly one
+    /// observation record. It is NOT a router: it never dispatches, never
+    /// merges, never approves, and (see `allowed_tools_for`) carries no
+    /// write-scope tool at all.
+    Supervisor,
+    /// herding-route-role D1 (a685d557) — the ROUTER. It reads one finished
+    /// worktree per iteration, starts a reviewer on a different agent, routes
+    /// a CHANGES verdict to the coder's open pane, and stops cold on anything
+    /// it cannot classify.
+    Route,
+    Broker,
 }
 
 impl Role {
@@ -62,6 +78,9 @@ impl Role {
         match s {
             "dispatch" => Some(Role::Dispatch),
             "merge" => Some(Role::Merge),
+            "supervisor" => Some(Role::Supervisor),
+            "route" => Some(Role::Route),
+            "broker" => Some(Role::Broker),
             _ => None,
         }
     }
@@ -70,11 +89,36 @@ impl Role {
         match self {
             Role::Dispatch => "dispatch",
             Role::Merge => "merge",
+            Role::Supervisor => "supervisor",
+            Role::Route => "route",
+            Role::Broker => "broker",
+        }
+    }
+
+    /// The tick spacing this role gets when the operator names no
+    /// `--interval`. The observer wakes every 15 minutes (322695d6's
+    /// `--interval 900`); the two cockpit roles keep the 60s the bash script
+    /// shipped with, untouched. Route defaults to 300s.
+    fn default_interval(self) -> u64 {
+        match self {
+            Role::Dispatch | Role::Merge => DEFAULT_INTERVAL,
+            Role::Supervisor => SUPERVISOR_DEFAULT_INTERVAL,
+            // herding-route-role (plan.md OQ5): 300s is a STARTING GUESS,
+            // not a measurement. Nobody has measured how long a review takes
+            // in this repo; dispatch/merge run at 60s and supervisor at 900s.
+            Role::Route => ROUTE_DEFAULT_INTERVAL,
+            Role::Broker => BROKER_DEFAULT_INTERVAL,
         }
     }
 }
 
 const DEFAULT_INTERVAL: u64 = 60;
+const SUPERVISOR_DEFAULT_INTERVAL: u64 = 900;
+/// herding-route-role (plan.md OQ5): 300s is a STARTING GUESS, not a
+/// measurement: dispatch/merge run at 60s and supervisor at 900s, and nobody
+/// has measured how long a review takes in this repo.
+const ROUTE_DEFAULT_INTERVAL: u64 = 300;
+const BROKER_DEFAULT_INTERVAL: u64 = 30;
 const DEFAULT_TIMEOUT: u64 = 900;
 const DEFAULT_MAX_CONSECUTIVE_FAILURES: u64 = 20;
 const DEFAULT_TURN_CEILING: u64 = 50;
@@ -89,6 +133,10 @@ const BACKOFF_CAP: u64 = 600;
 // `timeout -k 30s`.
 const KILL_GRACE: Duration = Duration::from_secs(30);
 const DEFAULT_MODEL: &str = "sonnet";
+/// The model-role NAME the supervisor tick asks the open role set for
+/// (322695d6: "model = configured `supervisor` role (open fall-through
+/// set)"). It is a config key, never a model id.
+const SUPERVISOR_MODEL_ROLE: &str = "supervisor";
 
 #[derive(Debug)]
 pub(crate) struct Options {
@@ -106,7 +154,10 @@ impl Options {
     fn parse(flags: &[&str]) -> Result<Options, String> {
         let mut role: Option<Role> = None;
         let mut main_root: Option<String> = None;
-        let mut interval = DEFAULT_INTERVAL;
+        // Left as `None` until the role is known: the default tick spacing is
+        // per-role (`Role::default_interval`), and an explicit `--interval`
+        // always wins over it.
+        let mut interval: Option<u64> = None;
         let mut timeout = DEFAULT_TIMEOUT;
         let mut max_iterations: Option<u64> = None;
         let mut max_consecutive_failures = DEFAULT_MAX_CONSECUTIVE_FAILURES;
@@ -119,10 +170,9 @@ impl Options {
             match flag {
                 "--role" => {
                     let v = need_value(flag, flags, i)?;
-                    role = Some(
-                        Role::parse(v)
-                            .ok_or_else(|| format!("unknown role '{v}' (expected dispatch or merge)"))?,
-                    );
+                    role = Some(Role::parse(v).ok_or_else(|| {
+                        format!("unknown role '{v}' (expected dispatch, merge, supervisor, route or broker)")
+                    })?);
                     i += 2;
                 }
                 "--main-root" => {
@@ -132,7 +182,7 @@ impl Options {
                 }
                 "--interval" => {
                     let v = need_value(flag, flags, i)?;
-                    interval = positive_int(flag, v)?;
+                    interval = Some(positive_int(flag, v)?);
                     i += 2;
                 }
                 "--timeout" => {
@@ -163,11 +213,11 @@ impl Options {
             }
         }
 
-        let role = role.ok_or_else(|| "--role dispatch|merge is required".to_string())?;
+        let role = role.ok_or_else(|| "--role dispatch|merge|supervisor|route|broker is required".to_string())?;
         Ok(Options {
             role,
             main_root,
-            interval,
+            interval: interval.unwrap_or_else(|| role.default_interval()),
             timeout,
             max_iterations: max_iterations.unwrap_or(DEFAULT_MAX_ITERATIONS),
             max_consecutive_failures,
@@ -193,7 +243,7 @@ fn positive_int(flag: &str, raw: &str) -> Result<u64, String> {
 
 fn print_usage() {
     eprintln!(
-        "Usage: bee herding control-loop --role dispatch|merge [--main-root PATH] \
+        "Usage: bee herding control-loop --role dispatch|merge|supervisor|route|broker [--main-root PATH] \
          [--interval N] [--timeout N] [--max-iterations N] \
          [--max-consecutive-failures N] [--turn-ceiling N] [--once]"
     );
@@ -217,8 +267,39 @@ pub(crate) type Argv = Vec<String>;
 /// and nothing else touched. The surface stays enumerated and stays the same
 /// width: a control pane driving tmux needs the tmux client for exactly the
 /// pane work it used herdr for, and gains no other tool.
+///
+/// The `Supervisor` arm (slp-supervisor-heartbeat D 322695d6, R4) is the same
+/// idea taken to its end: an ENUMERATED READ-ONLY surface. It differs from
+/// the two cockpit arms in three deliberate ways, and each one is a rule, not
+/// a taste:
+///
+///   1. No `Write`, no `Edit`, no `Bash(git …)`, no dispatch tool. The
+///      observer reads and asks questions; it never writes product code,
+///      never dispatches work, never merges, never approves (787a9eb0 / R4).
+///   2. No `Bash(.bee/bin/bee:*)`. That wildcard is the whole bee CLI —
+///      gates, caps, merges included. The observer names the QUERY verbs one
+///      by one instead, so widening the surface takes an edit here rather
+///      than a new bee subcommand landing somewhere else.
+///   3. No raw multiplexer entry, on EITHER transport. Pane reading goes
+///      through the transport-neutral `bee herding pane list|read` verbs
+///      (tmux-herding-cockpit D2), which is why both arms are the same
+///      string — a supervisor never needs `herdr` or `tmux` directly, and a
+///      raw multiplexer client is a write surface (`send-text`, `kill-pane`)
+///      wearing a read name.
+///
+/// The one verb here that writes anything is `bee supervisor record` — the
+/// observer's own observation record, the thing a tick MUST end with (it
+/// lands with the `bee supervisor` verb). It writes into the observer's own
+/// store and nowhere else.
 fn allowed_tools_for(role: Role, kind: TransportKind) -> &'static str {
     match (role, kind) {
+        // The observer's surface does not vary by transport: it touches no
+        // multiplexer client at all (see 3. above).
+        (Role::Supervisor, TransportKind::Herdr | TransportKind::Tmux) => SUPERVISOR_ALLOWED_TOOLS,
+        // The router's surface also does not vary by transport: like the
+        // supervisor, it reaches panes only through the transport-neutral
+        // `bee herding pane` verbs.
+        (Role::Route, TransportKind::Herdr | TransportKind::Tmux) => ROUTE_ALLOWED_TOOLS,
         (Role::Dispatch, TransportKind::Herdr) => {
             "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
         }
@@ -231,6 +312,148 @@ fn allowed_tools_for(role: Role, kind: TransportKind) -> &'static str {
         (Role::Merge, TransportKind::Tmux) => {
             "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
         }
+        (Role::Broker, _) => unreachable!("Role::Broker has no allowed tools"),
+    }
+}
+
+/// The observer's whole tool surface, in one place, enumerated verb by verb.
+///
+/// Every entry is a QUERY except the last, which is the observer's own
+/// record write (the tick's required outcome). Read the arm doc on
+/// `allowed_tools_for` for why the `Bash(.bee/bin/bee:*)` wildcard the
+/// cockpit roles carry is deliberately absent here.
+const SUPERVISOR_ALLOWED_TOOLS: &str = "Bash(.bee/bin/bee status:*),\
+Bash(.bee/bin/bee state session list:*),\
+Bash(.bee/bin/bee cells list:*),\
+Bash(.bee/bin/bee herding status:*),\
+Bash(.bee/bin/bee herding occupancy:*),\
+Bash(.bee/bin/bee herding pane list:*),\
+Bash(.bee/bin/bee herding pane read:*),\
+Bash(.bee/bin/bee detector events:*),\
+Bash(.bee/bin/bee supervisor list:*),\
+Bash(.bee/bin/bee supervisor record:*),\
+Read";
+
+/// Tokens that must never appear in a supervisor's tool surface, whatever
+/// else changes about it (R4 / 787a9eb0). Kept next to the surface itself so
+/// the prohibition and the string it constrains are read together, and
+/// asserted by test rather than trusted.
+#[cfg(test)]
+const SUPERVISOR_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
+    "Write",
+    "Edit",
+    "Bash(git",
+    "Bash(herdr:*)",
+    "Bash(tmux:*)",
+    "Bash(.bee/bin/bee:*)",
+    "Task",
+];
+
+/// The router's whole tool surface for Slice 2, in one place, enumerated verb
+/// by verb.
+///
+/// Modelled on `SUPERVISOR_ALLOWED_TOOLS`: enumerated verb by verb, never the
+/// `Bash(.bee/bin/bee:*)` wildcard. Route reaches panes only through the
+/// transport-neutral `bee herding pane` verbs, so both transports get the
+/// identical string.
+///
+/// Slice 1 verbs (read-and-announce):
+/// - `Bash(.bee/bin/bee status:*)`: inspect bee state
+/// - `Bash(.bee/bin/bee orient:*)`: read phase, blockers, and orientation
+/// - `Bash(.bee/bin/bee worktree list:*)`: find granted and active worktrees
+/// - `Bash(.bee/bin/bee cells list:*)`: check whether worktree has open or claimed cells
+/// - `Bash(.bee/bin/bee herding occupancy:*)`: check cockpit slot occupancy against the 4-slot cap
+/// - `Bash(.bee/bin/bee herding pane list:*)`: list live multiplexer panes
+/// - `Bash(.bee/bin/bee herding pane read:*)`: read scrollback for announce-once dedup
+/// - `Bash(.bee/bin/bee herding pane send-text:*)`: announce status to the control pane
+/// - `Bash(git -C:*)`: verify HEAD branch and tree cleanliness
+/// - `Bash(ls:*)`: inspect marker presence
+/// - `Read`: read files without shell execution
+///
+/// Slice 2 verbs (reviewer dispatch and verdict routing):
+/// 1. Start a reviewer:
+///    - `Bash(.bee/bin/bee dispatch prepare:*)`: dispatch through the one door
+///    - `Bash(.bee/bin/bee herding run:*)`: run the reviewer worker
+/// 2. Record a verdict:
+///    - `Bash(.bee/bin/bee reviews:*)`: review store verbs (create, record, status, candidate)
+/// 3. Write the CHANGES cell:
+///    - `Bash(.bee/bin/bee cells add:*)`: write the CHANGES follow-up cell into the feature's lane
+/// 4. Markers:
+///    - `Bash(mkdir:*)` and `Bash(touch:*)`: create marker directory and touch `.bee/tmp/bee-herding.{review,blocked}.<slug>`
+///    - `Bash(rm:*)`: clear own `.bee/tmp/bee-herding.review.<slug>` marker when a verdict lands
+/// 5. Waiting-on mark:
+///    - `Bash(.bee/bin/bee state waiting-on:*)`: set waiting-on mark when routing stops cold on BLOCKED
+const ROUTE_ALLOWED_TOOLS: &str = "Bash(.bee/bin/bee status:*),\
+Bash(.bee/bin/bee orient:*),\
+Bash(.bee/bin/bee worktree list:*),\
+Bash(.bee/bin/bee cells list:*),\
+Bash(.bee/bin/bee cells add:*),\
+Bash(.bee/bin/bee dispatch prepare:*),\
+Bash(.bee/bin/bee herding occupancy:*),\
+Bash(.bee/bin/bee herding pane list:*),\
+Bash(.bee/bin/bee herding pane read:*),\
+Bash(.bee/bin/bee herding pane send-text:*),\
+Bash(.bee/bin/bee herding run:*),\
+Bash(.bee/bin/bee reviews:*),\
+Bash(.bee/bin/bee state waiting-on:*),\
+Bash(git -C:*),\
+Bash(ls:*),\
+Bash(mkdir:*),\
+Bash(rm:*),\
+Bash(touch:*),\
+Read";
+
+/// Tokens that must never appear in a router's tool surface (must-haves / plan.md).
+#[cfg(test)]
+const ROUTE_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
+    "Write",
+    "Edit",
+    "Bash(git:*)",
+    "Bash(herdr:*)",
+    "Bash(tmux:*)",
+    "Bash(.bee/bin/bee:*)",
+    "Task",
+    "Bash(.bee/bin/bee worktree merge",
+    "Bash(.bee/bin/bee gate",
+];
+
+/// The model one control-pane invocation runs on.
+///
+/// The two cockpit roles keep `DEFAULT_MODEL` exactly as the bash script had
+/// it — the D13 byte-identical crossing depends on that and nothing here
+/// touches it. The supervisor instead asks the OPEN model-role set for the
+/// name `supervisor` (322695d6; the resolver is model-role-split D2, store
+/// `06e49368`), so the operator picks the observer's model in
+/// `.bee/config.json` under `team.claude.supervisor` with zero resolver
+/// changes.
+///
+/// It can never fail the tick. `read_models` bowing out (the dogfood-repos
+/// delegate), a role nothing configures, and a slot configured into a shape
+/// this loop cannot spawn (`Cli`, `Herding`, `Inherit`, `Refused`, `Budget` —
+/// all of them mean "no plain model id for a `claude -p` argv") each fall
+/// through to `DEFAULT_MODEL`. The unconfigured case is not silent: the
+/// resolver itself prints the `model role "supervisor" is not configured…`
+/// warning to stderr on its way through (`models::warn_unknown_role`, gated
+/// on the public `models::role_is_unknown` predicate the test below asserts).
+fn model_for(main_root: &Path, role: Role) -> String {
+    match role {
+        Role::Dispatch | Role::Merge | Role::Route => DEFAULT_MODEL.to_string(),
+        Role::Supervisor => supervisor_model(main_root),
+        Role::Broker => unreachable!("Role::Broker has no model"),
+    }
+}
+
+fn supervisor_model(main_root: &Path) -> String {
+    use crate::verbs::drivers::{read_models, resolve_role, Resolved};
+
+    let Ok(models) = read_models(main_root) else {
+        return DEFAULT_MODEL.to_string();
+    };
+    // Runtime is `claude` by construction: this loop's default argv spawns
+    // `claude -p` (D13), so the table it must read is `team.claude`.
+    match resolve_role(&models, &[SUPERVISOR_MODEL_ROLE], "claude", "cell") {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => model,
+        _ => DEFAULT_MODEL.to_string(),
     }
 }
 
@@ -279,21 +502,47 @@ pub(crate) fn build_control_argv(
     }
 }
 
-/// `<main-root>/skills/bee-herding/references/<role>-prompt.md` — the same
-/// file control-loop.sh's `$SCRIPT_DIR/../references/${ROLE}-prompt.md`
-/// resolves to when `$SCRIPT_DIR` is (as it always is) `skills/bee-herding/
-/// scripts` under that same repo root: `scripts/../references` collapses to
+/// Where a bee-herding skill tree can sit under `main_root`, in search
+/// order. `skills` is the bee SOURCE repo's layout — the tree as committed
+/// here. Every other entry is a runtime's installed skill root: a host
+/// project never has a bare `skills/`, it has `.claude/skills` (or the
+/// agents/opencode/codex spelling), the same set
+/// `devtools::plugin_distribution` sweeps for repo-local skill copies.
+///
+/// `skills` leads DELIBERATELY. This repo builds bee with bee, so the source
+/// tree must keep resolving to its own committed prompt files byte-for-byte,
+/// and a checkout carrying both layouts must keep answering with the one it
+/// answered with before this search existed.
+const SKILL_ROOT_PREFIXES: [&str; 5] =
+    ["skills", ".claude/skills", ".agents/skills", ".opencode/skills", ".codex/skills"];
+
+/// `<main-root>/<skill-root>/bee-herding/references/<role>-prompt.md`, where
+/// `<skill-root>` is the FIRST entry of `SKILL_ROOT_PREFIXES` that yields a
+/// readable file. With `skills` leading, that is the same file
+/// control-loop.sh's `$SCRIPT_DIR/../references/${ROLE}-prompt.md` resolved
+/// to when `$SCRIPT_DIR` was (as it always was) `skills/bee-herding/scripts`
+/// under that same repo root: `scripts/../references` collapses to
 /// `references` under `skills/bee-herding`, exactly this path anchored at
 /// main-root instead. A compiled binary has no "the directory this script
-/// lives in" to resolve against, so this anchors at `main_root` instead —
-/// the same anchor the stop file already uses — rather than reinventing one.
+/// lives in" to resolve against, so this anchors at `main_root` — the same
+/// anchor the stop file already uses — rather than reinventing one.
+///
+/// The single join this replaced named ONLY the source-repo layout, so
+/// dispatch, merge and supervisor all died with "prompt file not found" in
+/// any host project — the one place herding is actually meant to run. When
+/// no candidate reads, the error names EVERY path tried, so a cold operator
+/// sees where bee looked instead of guessing at one path that never existed.
 fn read_prompt_file(main_root: &Path, role: Role) -> Result<String, String> {
-    let path = main_root
-        .join("skills")
-        .join("bee-herding")
-        .join("references")
-        .join(format!("{}-prompt.md", role.as_str()));
-    std::fs::read_to_string(&path).map_err(|e| format!("prompt file not found: {}: {e}", path.display()))
+    let leaf = format!("{}-prompt.md", role.as_str());
+    let mut tried: Vec<String> = Vec::with_capacity(SKILL_ROOT_PREFIXES.len());
+    for prefix in SKILL_ROOT_PREFIXES {
+        let path = main_root.join(prefix).join("bee-herding").join("references").join(&leaf);
+        match std::fs::read_to_string(&path) {
+            Ok(body) => return Ok(body),
+            Err(_) => tried.push(path.display().to_string()),
+        }
+    }
+    Err(format!("prompt file not found: tried {}", tried.join(", ")))
 }
 
 /// The ONE function that computes what a real iteration spawns: reads the
@@ -301,15 +550,142 @@ fn read_prompt_file(main_root: &Path, role: Role) -> Result<String, String> {
 /// and calls `build_control_argv`. Both the real CLI path
 /// (`RealArgvProvider`) and the D13 tests call this exact function — never a
 /// second, drifted copy.
-pub(crate) fn resolve_iteration_argv(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<Argv, String> {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SpawnSpec {
+    pub env: Vec<(String, String)>,
+    pub cwd: Option<PathBuf>,
+}
+
+pub(crate) fn resolve_iteration(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<(Argv, SpawnSpec), String> {
+    if role == Role::Broker {
+        let exe = std::env::current_exe()
+            .map_err(|e| format!("could not resolve the bee executable: {e}"))?;
+        return Ok((
+            vec![
+                exe.to_string_lossy().to_string(),
+                "herding".to_string(),
+                "broker".to_string(),
+                "tick".to_string(),
+                "--json".to_string(),
+            ],
+            SpawnSpec::default(),
+        ));
+    }
+
+    let cfg_val: Option<Value> = std::fs::read_to_string(main_root.join(".bee").join("config.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok());
+
+    if role == Role::Supervisor {
+        let supervisor_runtime_val = cfg_val
+            .as_ref()
+            .and_then(|c| c.get("herding"))
+            .and_then(|h| h.get("supervisor_runtime"));
+
+        match supervisor_runtime_val {
+            None | Some(Value::Null) => {}
+            Some(Value::String(s)) if s == "claude" => {}
+            Some(Value::String(s)) if s == "pi" => {
+                let ext_dir = main_root.join(".pi").join("extensions").join("bee-guard");
+                if !ext_dir.exists() {
+                    return Err(format!(
+                        "herding supervisor: extension directory \"{}\" does not exist. FIX: ensure .pi/extensions/bee-guard exists in the main root.",
+                        ext_dir.display()
+                    ));
+                }
+
+                let models = crate::verbs::drivers::read_models(main_root).map_err(|_| {
+                    "could not read models. FIX: set team.pi.supervisor to a pi-provider agent.".to_string()
+                })?;
+
+                let resolved = crate::verbs::drivers::resolve_role(&models, &[SUPERVISOR_MODEL_ROLE], "pi", "cell");
+                let (model, thinking) = match resolved {
+                    crate::verbs::drivers::Resolved::Herding { agent: Some(ref agent_name), .. } => {
+                        let spec = cfg_val
+                            .as_ref()
+                            .and_then(|c| crate::herding::paseo::PaseoSpec::from_config(c, agent_name))
+                            .and_then(Result::ok);
+                        match spec {
+                            Some(s) if s.provider == "pi" && s.model.as_ref().map_or(false, |m| !m.trim().is_empty()) => {
+                                (s.model.unwrap(), s.thinking)
+                            }
+                            _ => {
+                                return Err("herding supervisor: team.pi.supervisor must resolve to a pi-provider agent with a usable model. FIX: set team.pi.supervisor to a pi-provider agent.".to_string());
+                            }
+                        }
+                    }
+                    crate::verbs::drivers::Resolved::Model { model, .. } | crate::verbs::drivers::Resolved::Native { model, .. } => {
+                        if model.trim().is_empty() {
+                            return Err("herding supervisor: team.pi.supervisor has no usable model. FIX: set team.pi.supervisor to a pi-provider agent.".to_string());
+                        }
+                        (model, None)
+                    }
+                    _ => {
+                        return Err("herding supervisor: team.pi.supervisor must resolve to a pi-provider agent or a plain model. FIX: set team.pi.supervisor to a pi-provider agent.".to_string());
+                    }
+                };
+
+                let prompt = read_prompt_file(main_root, role)?;
+                let allowed_tools = allowed_tools_for(role, super::transport_kind_at(main_root)?);
+                let template = super::read_command_template_tokens(main_root, "control_command");
+
+                let argv = match template {
+                    Some(tokens) if !tokens.is_empty() => {
+                        build_control_argv(Some(&tokens), &prompt, &model, turn_ceiling, allowed_tools)
+                    }
+                    _ => {
+                        let mut pi_argv = vec![
+                            "pi".to_string(),
+                            "--print".to_string(),
+                            prompt,
+                            "--model".to_string(),
+                            model,
+                        ];
+                        if let Some(level) = thinking.as_deref().filter(|s| !s.trim().is_empty()) {
+                            pi_argv.push("--thinking".to_string());
+                            pi_argv.push(level.to_string());
+                        }
+                        pi_argv.extend([
+                            "--no-session".to_string(),
+                            "--no-extensions".to_string(),
+                            "-e".to_string(),
+                            ext_dir.to_string_lossy().to_string(),
+                            "--tools".to_string(),
+                            "read,grep,find,ls,bash".to_string(),
+                        ]);
+                        pi_argv
+                    }
+                };
+
+                let spec = SpawnSpec {
+                    env: vec![("BEE_SUPERVISOR_ALLOWED".to_string(), SUPERVISOR_ALLOWED_TOOLS.to_string())],
+                    cwd: Some(main_root.to_path_buf()),
+                };
+
+                return Ok((argv, spec));
+            }
+            Some(other) => {
+                let name = match other {
+                    Value::String(s) => s.clone(),
+                    _ => other.to_string(),
+                };
+                return Err(format!(
+                    "herding supervisor: unknown supervisor_runtime \"{name}\". FIX: set herding.supervisor_runtime to \"claude\" or \"pi\" in .bee/config.json."
+                ));
+            }
+        }
+    }
+
     let prompt = read_prompt_file(main_root, role)?;
-    // The transport picks the allowlist (tmux-herding-cockpit D1). A missing
-    // key reads as herdr, so a repo with no key spawns the byte-identical
-    // pre-tmux argv; a typo'd key is `transport_kind`'s typed refusal and
-    // stops the loop here rather than quietly arming the other multiplexer.
     let allowed_tools = allowed_tools_for(role, super::transport_kind_at(main_root)?);
     let template = super::read_command_template_tokens(main_root, "control_command");
-    Ok(build_control_argv(template.as_deref(), &prompt, DEFAULT_MODEL, turn_ceiling, allowed_tools))
+    let model = model_for(main_root, role);
+    let argv = build_control_argv(template.as_deref(), &prompt, &model, turn_ceiling, allowed_tools);
+    Ok((argv, SpawnSpec::default()))
+}
+
+pub(crate) fn resolve_iteration_argv(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<Argv, String> {
+    resolve_iteration(main_root, role, turn_ceiling).map(|(argv, _)| argv)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -338,15 +714,23 @@ pub(crate) struct IterationResult {
 /// The spawn seam tests inject through instead of a real control agent —
 /// production never needs a fake here, only `RealSpawner`.
 pub(crate) trait IterationSpawner {
-    fn spawn(&self, argv: &Argv) -> std::io::Result<Child>;
+    fn spawn(&self, argv: &Argv, spec: &SpawnSpec) -> std::io::Result<Child>;
 }
 
 pub(crate) struct RealSpawner;
 
 impl IterationSpawner for RealSpawner {
-    fn spawn(&self, argv: &Argv) -> std::io::Result<Child> {
+    fn spawn(&self, argv: &Argv, spec: &SpawnSpec) -> std::io::Result<Child> {
         let (prog, rest) = argv.split_first().expect("argv is never empty (build_control_argv always returns >=1 token)");
-        Command::new(prog).args(rest).spawn()
+        let mut cmd = Command::new(prog);
+        cmd.args(rest);
+        if let Some(cwd) = &spec.cwd {
+            cmd.current_dir(cwd);
+        }
+        for (k, v) in &spec.env {
+            cmd.env(k, v);
+        }
+        cmd.spawn()
     }
 }
 
@@ -389,10 +773,11 @@ fn status_to_outcome(status: ExitStatus) -> IterationOutcome {
 /// Reaching descendants would need that extra grouping; it is not built.
 pub(crate) fn run_iteration_with_ceiling(
     argv: &Argv,
+    spec: &SpawnSpec,
     timeout: Duration,
     spawner: &dyn IterationSpawner,
 ) -> IterationResult {
-    let mut child = match spawner.spawn(argv) {
+    let mut child = match spawner.spawn(argv, spec) {
         Ok(c) => c,
         Err(e) => return IterationResult { pid: None, outcome: IterationOutcome::Errored(e.to_string()) },
     };
@@ -482,6 +867,9 @@ pub(crate) enum LoopOutcome {
 /// binary nor a running herdr (per-cell requirement).
 pub(crate) trait ArgvProvider {
     fn argv_for(&self, iteration: u64) -> Result<Argv, String>;
+    fn spec_for(&self, iteration: u64) -> Result<(Argv, SpawnSpec), String> {
+        self.argv_for(iteration).map(|argv| (argv, SpawnSpec::default()))
+    }
 }
 
 /// The real wiring `control_loop()` (the CLI entry point) uses — a named
@@ -496,6 +884,16 @@ pub(crate) struct RealArgvProvider {
 impl ArgvProvider for RealArgvProvider {
     fn argv_for(&self, _iteration: u64) -> Result<Argv, String> {
         resolve_iteration_argv(&self.main_root, self.role, self.turn_ceiling)
+    }
+
+    fn spec_for(&self, _iteration: u64) -> Result<(Argv, SpawnSpec), String> {
+        if self.role == Role::Supervisor {
+            let fired = crate::verbs::detector::tick_quiet(&self.main_root);
+            if fired > 0 {
+                eprintln!("supervisor: detector fired {fired} event(s) this tick");
+            }
+        }
+        resolve_iteration(&self.main_root, self.role, self.turn_ceiling)
     }
 }
 
@@ -545,8 +943,8 @@ pub(crate) fn run_loop(
             return LoopOutcome::NormalStop;
         }
 
-        let outcome = match argv_provider.argv_for(count) {
-            Ok(argv) => run_iteration_with_ceiling(&argv, Duration::from_secs(opts.timeout), spawner).outcome,
+        let outcome = match argv_provider.spec_for(count) {
+            Ok((argv, spec)) => run_iteration_with_ceiling(&argv, &spec, Duration::from_secs(opts.timeout), spawner).outcome,
             Err(e) => IterationOutcome::Errored(e),
         };
 
@@ -723,6 +1121,857 @@ mod tests {
         );
     }
 
+    // ── the supervisor observer role (slp-supervisor-heartbeat) ───────────
+
+    /// Writes the supervisor prompt file a tick reads and returns the tmpdir.
+    fn supervisor_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("supervisor-prompt.md"), "PROMPT BODY supervisor\n").unwrap();
+        tmp
+    }
+
+    #[test]
+    fn supervisor_is_a_parsed_role_that_names_itself_supervisor() {
+        assert_eq!(Role::parse("supervisor"), Some(Role::Supervisor));
+        assert_eq!(Role::Supervisor.as_str(), "supervisor");
+        // The prompt file this name resolves to is the observer contract,
+        // not a cockpit role document.
+        assert!(Role::parse("observer").is_none());
+    }
+
+    #[test]
+    fn supervisor_role_parses_off_the_real_flag_line_with_the_900s_default() {
+        // 322695d6: the observer's default tick spacing is 900s. The two
+        // cockpit roles keep the 60s the bash script shipped with.
+        let opts = Options::parse(&["--role", "supervisor"]).expect("parses");
+        assert_eq!(opts.role, Role::Supervisor);
+        assert_eq!(opts.interval, 900);
+        assert_eq!(Options::parse(&["--role", "dispatch"]).unwrap().interval, 60);
+        assert_eq!(Options::parse(&["--role", "merge"]).unwrap().interval, 60);
+        // An explicit --interval still wins, for every role.
+        assert_eq!(
+            Options::parse(&["--role", "supervisor", "--interval", "30"]).unwrap().interval,
+            30
+        );
+    }
+
+    #[test]
+    fn unknown_role_names_supervisor_among_the_expected_ones() {
+        let err = Options::parse(&["--role", "observer"]).unwrap_err();
+        assert!(err.contains("supervisor"), "{err}");
+    }
+
+    #[test]
+    fn supervisor_role_gets_the_read_only_allowlist_and_prompt_file() {
+        let tmp = supervisor_root();
+        let argv = resolve_iteration_argv(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
+        assert_eq!(
+            argv,
+            vec![
+                "claude".to_string(),
+                "-p".to_string(),
+                "PROMPT BODY supervisor\n".to_string(),
+                "--model".to_string(),
+                // No `team.claude.supervisor` in this root: the resolver
+                // warns and falls through, and the loop lands on its default
+                // rather than failing the tick.
+                "sonnet".to_string(),
+                "--max-turns".to_string(),
+                "12".to_string(),
+                "--allowedTools".to_string(),
+                SUPERVISOR_ALLOWED_TOOLS.to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn supervisor_allowlist_carries_no_write_scope_tool_on_either_transport() {
+        // R4 / 787a9eb0: the observer reads. It has no Write, no Edit, no
+        // git, no raw multiplexer client, and not the whole-CLI wildcard the
+        // cockpit roles carry.
+        for kind in [TransportKind::Herdr, TransportKind::Tmux] {
+            let tools = allowed_tools_for(Role::Supervisor, kind);
+            for forbidden in SUPERVISOR_FORBIDDEN_TOOL_TOKENS {
+                assert!(!tools.contains(forbidden), "{kind:?} allowlist contains {forbidden}: {tools}");
+            }
+            // Every Bash entry is enumerated down to the subcommand — never a
+            // bare binary wildcard.
+            for entry in tools.split(',').filter(|e| e.starts_with("Bash(")) {
+                assert!(
+                    entry.starts_with("Bash(.bee/bin/bee ") && entry.ends_with(":*)"),
+                    "{kind:?}: un-enumerated Bash entry {entry}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn supervisor_allowlist_is_the_same_string_on_both_transports() {
+        // Pane reading rides `bee herding pane list|read`, which is already
+        // transport-neutral, so there is no multiplexer entry to swap.
+        assert_eq!(
+            allowed_tools_for(Role::Supervisor, TransportKind::Herdr),
+            allowed_tools_for(Role::Supervisor, TransportKind::Tmux)
+        );
+    }
+
+    #[test]
+    fn supervisor_allowlist_reaches_the_spawned_argv_even_on_tmux() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"tmux"}}"#).unwrap();
+
+        let argv = resolve_iteration_argv(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
+        assert_eq!(argv.last().unwrap(), SUPERVISOR_ALLOWED_TOOLS);
+    }
+
+    #[test]
+    fn supervisor_allowlist_carries_the_detector_events_read() {
+        for kind in [TransportKind::Herdr, TransportKind::Tmux] {
+            let tools = allowed_tools_for(Role::Supervisor, kind);
+            assert!(
+                tools.contains("Bash(.bee/bin/bee detector events:*)"),
+                "{kind:?}: the detector events read is missing: {tools}"
+            );
+            let detector = tools.find("Bash(.bee/bin/bee detector events:*)").unwrap();
+            let supervisor = tools.find("Bash(.bee/bin/bee supervisor list:*)").unwrap();
+            assert!(detector < supervisor, "{kind:?}: detector events must sit before supervisor list");
+        }
+    }
+
+    #[test]
+    fn supervisor_spec_for_ticks_the_detector_and_leaves_no_events_on_an_empty_mailbox() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(bee_dir.join("mailbox")).unwrap();
+        let provider =
+            RealArgvProvider { main_root: tmp.path().to_path_buf(), role: Role::Supervisor, turn_ceiling: 12 };
+        let (argv, _spec) = provider.spec_for(0).expect("a supervisor spec resolves");
+        assert_eq!(argv.last().unwrap(), SUPERVISOR_ALLOWED_TOOLS);
+        assert!(
+            !bee_dir.join("supervisor").join("events.jsonl").exists(),
+            "an empty mailbox must leave no events file"
+        );
+    }
+
+    #[test]
+    fn resolve_iteration_alone_never_ticks_the_detector() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(bee_dir.join("mailbox")).unwrap();
+        resolve_iteration(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
+        assert!(
+            !bee_dir.join("supervisor").exists(),
+            "resolve_iteration alone must write nothing under .bee/supervisor"
+        );
+    }
+
+    #[test]
+    fn an_unconfigured_supervisor_model_role_warns_and_falls_through() {
+        use crate::verbs::drivers::{normalize_models, role_is_unknown};
+
+        // The warn itself goes to stderr, which an in-process test cannot
+        // read — so assert the exact predicate the resolver warns on, the way
+        // models.rs documents it being provable.
+        let empty = normalize_models(None);
+        assert!(
+            role_is_unknown(&empty, "claude", "supervisor"),
+            "an unconfigured `supervisor` role must be the loud kind, not the silent one"
+        );
+        // …and the fall-through is a value, never an error: the tick runs.
+        let tmp = supervisor_root();
+        assert_eq!(supervisor_model(tmp.path()), DEFAULT_MODEL);
+    }
+
+    #[test]
+    fn a_configured_supervisor_model_role_reaches_the_spawned_argv() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"models":{"claude":{"supervisor":"haiku"}}}"#,
+        )
+        .unwrap();
+
+        let argv = resolve_iteration_argv(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
+        let model_at = argv.iter().position(|t| t == "--model").expect("--model is in the argv");
+        assert_eq!(argv[model_at + 1], "haiku");
+    }
+
+    #[test]
+    fn the_cockpit_roles_keep_the_hardcoded_default_model() {
+        // The supervisor's config-driven model must not leak into the D13
+        // crossing: a root that configures `supervisor` changes nothing for
+        // dispatch or merge.
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"models":{"claude":{"supervisor":"haiku"}}}"#,
+        )
+        .unwrap();
+        for role in [Role::Dispatch, Role::Merge, Role::Route] {
+            assert_eq!(model_for(tmp.path(), role), DEFAULT_MODEL, "{role:?}");
+        }
+    }
+
+    #[test]
+    fn the_supervisor_prompt_file_shipped_in_this_repo_carries_the_observer_contract() {
+        // `read_prompt_file` resolves `<root>/skills/bee-herding/references/
+        // supervisor-prompt.md`; this asserts the real one exists and is the
+        // OBSERVER contract, not a stub.
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..");
+        let body = read_prompt_file(&repo_root, Role::Supervisor).expect("the shipped prompt file reads");
+        for needle in [
+            "observer",
+            "struggling-loop",
+            "big-decision",
+            "danger-op",
+            "bee supervisor record",
+            "silence",
+        ] {
+            assert!(body.contains(needle), "supervisor-prompt.md is missing {needle:?}");
+        }
+    }
+
+    /// The prompt tells the model which words to use; `verbs::supervisor`
+    /// REFUSES every other word. Those are two copies of one vocabulary, and
+    /// a guard plus a prompt that drift apart fail in the worst possible
+    /// way — the tick burns its turns on a record the verb rejects, and a
+    /// cold tick has no memory to learn from the rejection. This ties them:
+    /// widen the verb's closed sets and this test demands the prompt learn
+    /// the new word too.
+    #[test]
+    fn the_shipped_prompt_pins_the_record_verbs_own_closed_sets() {
+        use crate::verbs::supervisor::{KNOWN_KINDS, KNOWN_SIGNALS};
+
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..");
+        let body = read_prompt_file(&repo_root, Role::Supervisor).expect("the shipped prompt file reads");
+
+        for kind in KNOWN_KINDS {
+            assert!(body.contains(kind), "supervisor-prompt.md never names the record kind {kind:?}");
+        }
+        for signal in KNOWN_SIGNALS {
+            assert!(body.contains(signal), "supervisor-prompt.md never names the signal {signal:?}");
+        }
+        // The two required flags of the one write a tick makes, and the
+        // silence row's reason obligation (da7cb49b: "reviewed and chose
+        // silence" is a LOGGED outcome, never an absent one).
+        for needle in ["--kind", "--signal", "--note", "Record the silence, with its reason"] {
+            assert!(body.contains(needle), "supervisor-prompt.md is missing {needle:?}");
+        }
+    }
+
+    /// The end-to-end tick (this cell's whole point): the REAL flag line
+    /// `--role supervisor --once`, parsed by the real parser, wired into the
+    /// real `RealArgvProvider` exactly the way the CLI entry point wires it,
+    /// driven by the real `run_loop` — and the argv that reaches the spawner
+    /// carries the supervisor prompt body, the enumerated read-only surface,
+    /// and the model the `supervisor` role resolved to. The tests above prove
+    /// each piece against `resolve_iteration_argv`; this proves the pieces are
+    /// actually joined, and that `--once` spawns exactly ONE tick.
+    #[test]
+    fn a_supervisor_once_run_spawns_exactly_one_tick_with_prompt_tools_and_role_model() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"models":{"claude":{"supervisor":"haiku"}}}"#).unwrap();
+
+        // The real flag line, through the real parser.
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        assert!(parsed.once);
+        assert_eq!(parsed.role, Role::Supervisor);
+
+        // Wired exactly as `control_loop()` wires it.
+        let provider =
+            RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1, "--once must spawn exactly one tick");
+        assert!(sleeper.recorded().is_empty(), "--once must not wait out the 900s interval");
+        assert_eq!(
+            counting.seen(),
+            vec![vec![
+                "claude".to_string(),
+                "-p".to_string(),
+                "PROMPT BODY supervisor\n".to_string(),
+                "--model".to_string(),
+                // the `supervisor` model role, not the cockpit default
+                "haiku".to_string(),
+                "--max-turns".to_string(),
+                DEFAULT_TURN_CEILING.to_string(),
+                "--allowedTools".to_string(),
+                SUPERVISOR_ALLOWED_TOOLS.to_string(),
+            ]],
+            "the supervisor tick's whole invocation must reach the spawner intact"
+        );
+    }
+
+    #[test]
+    fn supervisor_runtime_absent_and_claude_give_exact_current_argv() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"models":{"claude":{"supervisor":"haiku"}}}"#).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1);
+        let expected_claude_argv = vec![
+            "claude".to_string(),
+            "-p".to_string(),
+            "PROMPT BODY supervisor\n".to_string(),
+            "--model".to_string(),
+            "haiku".to_string(),
+            "--max-turns".to_string(),
+            DEFAULT_TURN_CEILING.to_string(),
+            "--allowedTools".to_string(),
+            SUPERVISOR_ALLOWED_TOOLS.to_string(),
+        ];
+        assert_eq!(counting.seen(), vec![expected_claude_argv.clone()]);
+        assert_eq!(counting.seen_specs()[0].env, Vec::<(String, String)>::new());
+        assert_eq!(counting.seen_specs()[0].cwd, None);
+
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"supervisor_runtime":"claude"},"models":{"claude":{"supervisor":"haiku"}}}"#).unwrap();
+        let counting2 = CountingSpawner::new(&real_spawner);
+        let outcome2 = run_loop(&parsed, &stop_file, &provider, &counting2, &sleeper);
+        assert_eq!(outcome2, LoopOutcome::NormalStop);
+        assert_eq!(counting2.call_count(), 1);
+        assert_eq!(counting2.seen(), vec![expected_claude_argv]);
+        assert_eq!(counting2.seen_specs()[0].env, Vec::<(String, String)>::new());
+        assert_eq!(counting2.seen_specs()[0].cwd, None);
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_pi_provider_slot_spawns_pi_argv_and_carries_env_and_cwd() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let guard_ext = tmp.path().join(".pi").join("extensions").join("bee-guard");
+        std::fs::create_dir_all(&guard_ext).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi",
+                "agents": {
+                    "sup-agent": {
+                        "paseo": {
+                            "provider": "pi",
+                            "model": "deepseek-r1",
+                            "thinking": "high"
+                        }
+                    }
+                }
+            },
+            "team": {
+                "pi": {
+                    "supervisor": {
+                        "kind": "herding",
+                        "agent": "sup-agent"
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1);
+        let expected_pi_argv = vec![
+            "pi".to_string(),
+            "--print".to_string(),
+            "PROMPT BODY supervisor\n".to_string(),
+            "--model".to_string(),
+            "deepseek-r1".to_string(),
+            "--thinking".to_string(),
+            "high".to_string(),
+            "--no-session".to_string(),
+            "--no-extensions".to_string(),
+            "-e".to_string(),
+            guard_ext.to_string_lossy().to_string(),
+            "--tools".to_string(),
+            "read,grep,find,ls,bash".to_string(),
+        ];
+        assert_eq!(counting.seen(), vec![expected_pi_argv]);
+        assert_eq!(
+            counting.seen_specs()[0].env,
+            vec![("BEE_SUPERVISOR_ALLOWED".to_string(), SUPERVISOR_ALLOWED_TOOLS.to_string())]
+        );
+        assert_eq!(counting.seen_specs()[0].cwd, Some(tmp.path().to_path_buf()));
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_plain_model_slot_spawns_pi_argv() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let guard_ext = tmp.path().join(".pi").join("extensions").join("bee-guard");
+        std::fs::create_dir_all(&guard_ext).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi"
+            },
+            "team": {
+                "pi": {
+                    "supervisor": "qwen2.5-coder"
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1);
+        let expected_pi_argv = vec![
+            "pi".to_string(),
+            "--print".to_string(),
+            "PROMPT BODY supervisor\n".to_string(),
+            "--model".to_string(),
+            "qwen2.5-coder".to_string(),
+            "--no-session".to_string(),
+            "--no-extensions".to_string(),
+            "-e".to_string(),
+            guard_ext.to_string_lossy().to_string(),
+            "--tools".to_string(),
+            "read,grep,find,ls,bash".to_string(),
+        ];
+        assert_eq!(counting.seen(), vec![expected_pi_argv]);
+        assert_eq!(
+            counting.seen_specs()[0].env,
+            vec![("BEE_SUPERVISOR_ALLOWED".to_string(), SUPERVISOR_ALLOWED_TOOLS.to_string())]
+        );
+        assert_eq!(counting.seen_specs()[0].cwd, Some(tmp.path().to_path_buf()));
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_claude_provider_slot_refuses() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let guard_ext = tmp.path().join(".pi").join("extensions").join("bee-guard");
+        std::fs::create_dir_all(&guard_ext).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi",
+                "agents": {
+                    "sup-agent": {
+                        "paseo": {
+                            "provider": "claude",
+                            "model": "claude-3-7-sonnet"
+                        }
+                    }
+                }
+            },
+            "team": {
+                "pi": {
+                    "supervisor": {
+                        "kind": "herding",
+                        "agent": "sup-agent"
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let err = provider.spec_for(0).unwrap_err();
+        assert!(err.contains("FIX: set team.pi.supervisor to a pi-provider agent"), "{err}");
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 0);
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_missing_extension_directory_refuses() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi",
+                "agents": {
+                    "sup-agent": {
+                        "paseo": {
+                            "provider": "pi",
+                            "model": "deepseek-r1"
+                        }
+                    }
+                }
+            },
+            "team": {
+                "pi": {
+                    "supervisor": {
+                        "kind": "herding",
+                        "agent": "sup-agent"
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let err = provider.spec_for(0).unwrap_err();
+        assert!(err.contains("extension directory"), "{err}");
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 0);
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_control_command_uses_template() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let guard_ext = tmp.path().join(".pi").join("extensions").join("bee-guard");
+        std::fs::create_dir_all(&guard_ext).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi",
+                "control_command": ["custom-pi", "--m", "{MODEL}", "--p", "{PROMPT}"],
+                "agents": {
+                    "sup-agent": {
+                        "paseo": {
+                            "provider": "pi",
+                            "model": "deepseek-r1"
+                        }
+                    }
+                }
+            },
+            "team": {
+                "pi": {
+                    "supervisor": {
+                        "kind": "herding",
+                        "agent": "sup-agent"
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1);
+        let expected_custom_argv = vec![
+            "custom-pi".to_string(),
+            "--m".to_string(),
+            "deepseek-r1".to_string(),
+            "--p".to_string(),
+            "PROMPT BODY supervisor\n".to_string(),
+        ];
+        assert_eq!(counting.seen(), vec![expected_custom_argv]);
+        assert_eq!(
+            counting.seen_specs()[0].env,
+            vec![("BEE_SUPERVISOR_ALLOWED".to_string(), SUPERVISOR_ALLOWED_TOOLS.to_string())]
+        );
+        assert_eq!(counting.seen_specs()[0].cwd, Some(tmp.path().to_path_buf()));
+    }
+
+    #[test]
+    fn supervisor_runtime_illegal_value_refuses_with_no_spawn() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "gemini"
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let err = provider.spec_for(0).unwrap_err();
+        assert!(err.contains("claude") && err.contains("pi") && err.contains("FIX:"), "{err}");
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 0);
+    }
+
+    // ── the router role (herding-route-role hrr-1) ─────────────────────────
+
+    /// Writes the route prompt file a tick reads and returns the tmpdir.
+    fn route_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("route-prompt.md"), "PROMPT BODY route\n").unwrap();
+        tmp
+    }
+
+    #[test]
+    fn route_is_a_parsed_role_that_names_itself_route() {
+        assert_eq!(Role::parse("route"), Some(Role::Route));
+        assert_eq!(Role::Route.as_str(), "route");
+    }
+
+    #[test]
+    fn route_role_parses_off_the_real_flag_line_with_the_300s_default() {
+        let opts = Options::parse(&["--role", "route"]).expect("parses");
+        assert_eq!(opts.role, Role::Route);
+        assert_eq!(opts.interval, 300);
+        assert_eq!(Options::parse(&["--role", "dispatch"]).unwrap().interval, 60);
+        assert_eq!(Options::parse(&["--role", "merge"]).unwrap().interval, 60);
+        assert_eq!(Options::parse(&["--role", "supervisor"]).unwrap().interval, 900);
+        assert_eq!(
+            Options::parse(&["--role", "route", "--interval", "45"]).unwrap().interval,
+            45
+        );
+    }
+
+    #[test]
+    fn unknown_role_names_all_four_expected_roles() {
+        let err = Options::parse(&["--role", "rout"]).unwrap_err();
+        for expected in ["dispatch", "merge", "supervisor", "route"] {
+            assert!(err.contains(expected), "error '{err}' missing '{expected}'");
+        }
+    }
+
+    #[test]
+    fn missing_role_and_usage_name_all_four_expected_roles() {
+        let err = Options::parse(&[]).unwrap_err();
+        for expected in ["dispatch", "merge", "supervisor", "route"] {
+            assert!(err.contains(expected), "missing-role message '{err}' missing '{expected}'");
+        }
+    }
+
+    #[test]
+    fn route_role_gets_the_read_and_announce_allowlist_and_prompt_file() {
+        let tmp = route_root();
+        let argv = resolve_iteration_argv(tmp.path(), Role::Route, 12).expect("argv resolves");
+        assert_eq!(
+            argv,
+            vec![
+                "claude".to_string(),
+                "-p".to_string(),
+                "PROMPT BODY route\n".to_string(),
+                "--model".to_string(),
+                "sonnet".to_string(),
+                "--max-turns".to_string(),
+                "12".to_string(),
+                "--allowedTools".to_string(),
+                ROUTE_ALLOWED_TOOLS.to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn route_allowlist_carries_no_forbidden_tool_tokens_on_either_transport() {
+        for kind in [TransportKind::Herdr, TransportKind::Tmux] {
+            let tools = allowed_tools_for(Role::Route, kind);
+            for forbidden in ROUTE_FORBIDDEN_TOOL_TOKENS {
+                assert!(!tools.contains(forbidden), "{kind:?} allowlist contains forbidden token {forbidden}: {tools}");
+            }
+        }
+    }
+
+    #[test]
+    fn route_allowlist_is_the_same_string_on_both_transports() {
+        assert_eq!(
+            allowed_tools_for(Role::Route, TransportKind::Herdr),
+            allowed_tools_for(Role::Route, TransportKind::Tmux)
+        );
+    }
+
+    #[test]
+    fn route_allowlist_reaches_the_spawned_argv_even_on_tmux() {
+        let tmp = route_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"tmux"}}"#).unwrap();
+
+        let argv = resolve_iteration_argv(tmp.path(), Role::Route, 12).expect("argv resolves");
+        assert_eq!(argv.last().unwrap(), ROUTE_ALLOWED_TOOLS);
+    }
+
+    #[test]
+    fn three_existing_roles_tool_surfaces_remain_byte_unchanged() {
+        assert_eq!(
+            allowed_tools_for(Role::Dispatch, TransportKind::Herdr),
+            "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Merge, TransportKind::Herdr),
+            "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Dispatch, TransportKind::Tmux),
+            "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Merge, TransportKind::Tmux),
+            "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Supervisor, TransportKind::Herdr),
+            SUPERVISOR_ALLOWED_TOOLS
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Supervisor, TransportKind::Tmux),
+            SUPERVISOR_ALLOWED_TOOLS
+        );
+    }
+
+    #[test]
+    fn the_route_prompt_file_shipped_in_this_repo_carries_the_router_contract() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..");
+        let body = read_prompt_file(&repo_root, Role::Route).expect("the shipped prompt file reads");
+        for needle in [
+            "scrollback dedup",
+            "bee herding interlock",
+            "gate_bypass_level",
+            "bee herding occupancy",
+            "bee worktree list",
+        ] {
+            assert!(body.contains(needle), "route-prompt.md is missing {needle:?}");
+        }
+    }
+
+    #[test]
+    fn broker_is_a_parsed_role_that_names_itself_broker() {
+        assert_eq!(Role::parse("broker"), Some(Role::Broker));
+        assert_eq!(Role::Broker.as_str(), "broker");
+        let err = Options::parse(&["--role", "nope"]).unwrap_err();
+        assert!(err.contains("broker"), "{err}");
+        let missing = Options::parse(&[]).unwrap_err();
+        assert!(missing.contains("broker"), "{missing}");
+    }
+
+    #[test]
+    fn broker_role_parses_off_the_real_flag_line_with_the_30s_default() {
+        let opts = Options::parse(&["--role", "broker"]).expect("parses");
+        assert_eq!(opts.role, Role::Broker);
+        assert_eq!(opts.interval, 30);
+        assert_eq!(
+            Options::parse(&["--role", "broker", "--interval", "15"]).unwrap().interval,
+            15
+        );
+    }
+
+    #[test]
+    fn broker_iteration_argv_is_the_bee_binary_with_herding_broker_tick_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let argv = resolve_iteration_argv(tmp.path(), Role::Broker, 50).expect("argv resolves");
+        let exe = std::env::current_exe().expect("current exe");
+        assert_eq!(
+            argv,
+            vec![
+                exe.to_string_lossy().to_string(),
+                "herding".to_string(),
+                "broker".to_string(),
+                "tick".to_string(),
+                "--json".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn broker_iteration_needs_no_broker_prompt_file_and_ignores_template() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"herding":{"control_command":["custom","template"]}}"#,
+        )
+        .unwrap();
+        let argv = resolve_iteration_argv(tmp.path(), Role::Broker, 50).expect("argv resolves");
+        let exe = std::env::current_exe().expect("current exe");
+        assert_eq!(
+            argv,
+            vec![
+                exe.to_string_lossy().to_string(),
+                "herding".to_string(),
+                "broker".to_string(),
+                "tick".to_string(),
+                "--json".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn stop_file_ends_a_broker_loop_like_any_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let parsed = Options::parse(&["--role", "broker"]).expect("parses");
+        let provider = RealArgvProvider {
+            main_root: tmp.path().to_path_buf(),
+            role: parsed.role,
+            turn_ceiling: parsed.turn_ceiling,
+        };
+        let stop_file = tmp.path().join("stop");
+        std::fs::write(&stop_file, b"").unwrap();
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 0);
+    }
+
     // ── the transport swaps exactly one allowlist entry ───────────────────
 
     #[test]
@@ -785,6 +2034,85 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let err = resolve_iteration_argv(tmp.path(), Role::Dispatch, 50).unwrap_err();
         assert!(err.contains("prompt file not found"), "{err}");
+        // The reader searches several skill roots now, so the error reports
+        // the SEARCH — never one path that was only ever one guess of five.
+        assert!(err.contains("tried"), "{err}");
+    }
+
+    // ── the prompt lives wherever the skill tree was installed ───────────
+
+    #[test]
+    fn host_repo_layout_under_dot_claude_skills_resolves_the_prompt() {
+        // The bug this fixes: a host project has NO bare `skills/` tree, so
+        // the old single join found no prompt anywhere and every role died
+        // before it could spawn.
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join(".claude").join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("supervisor-prompt.md"), "host prompt").unwrap();
+
+        let body = read_prompt_file(tmp.path(), Role::Supervisor).expect("the installed prompt reads");
+        assert_eq!(body, "host prompt");
+    }
+
+    #[test]
+    fn every_role_resolves_through_the_one_installed_skill_root_reader() {
+        // All four roles go through the same reader; none keeps a private
+        // path of its own.
+        for (prefix, role) in [
+            (".claude/skills", Role::Dispatch),
+            (".agents/skills", Role::Merge),
+            (".opencode/skills", Role::Supervisor),
+            (".codex/skills", Role::Route),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let refs = tmp.path().join(prefix).join("bee-herding").join("references");
+            std::fs::create_dir_all(&refs).unwrap();
+            std::fs::write(refs.join(format!("{}-prompt.md", role.as_str())), "p").unwrap();
+
+            assert_eq!(read_prompt_file(tmp.path(), role).expect("resolves"), "p", "{prefix} {role:?}");
+        }
+        // `.codex/skills` is the last candidate — reached only when nothing
+        // ahead of it reads.
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join(".codex").join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("dispatch-prompt.md"), "last").unwrap();
+        assert_eq!(read_prompt_file(tmp.path(), Role::Dispatch).expect("resolves"), "last");
+    }
+
+    #[test]
+    fn source_repo_skills_layout_still_resolves_and_still_wins() {
+        // `skills/` stays FIRST: this repo builds bee with bee, so a checkout
+        // carrying both layouts must answer with the committed source tree —
+        // byte-identical to the behaviour before the search existed.
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("dispatch-prompt.md"), "source tree").unwrap();
+
+        assert_eq!(read_prompt_file(tmp.path(), Role::Dispatch).expect("resolves"), "source tree");
+
+        let installed = tmp.path().join(".claude").join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&installed).unwrap();
+        std::fs::write(installed.join("dispatch-prompt.md"), "installed copy").unwrap();
+
+        assert_eq!(
+            read_prompt_file(tmp.path(), Role::Dispatch).expect("resolves"),
+            "source tree",
+            "skills/ must win when both layouts are present"
+        );
+    }
+
+    #[test]
+    fn no_prompt_anywhere_names_every_candidate_path_tried() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = read_prompt_file(tmp.path(), Role::Merge).unwrap_err();
+        for prefix in SKILL_ROOT_PREFIXES {
+            let expected =
+                tmp.path().join(prefix).join("bee-herding").join("references").join("merge-prompt.md");
+            assert!(err.contains(&expected.display().to_string()), "{prefix} missing from: {err}");
+        }
     }
 
     // ── config-driven substitution: per-token, never join-then-split ──────
@@ -888,29 +2216,43 @@ mod tests {
         env_var: &'static str,
         env_value: &'static str,
         received: Mutex<Vec<Argv>>,
+        received_specs: Mutex<Vec<SpawnSpec>>,
     }
 
     impl SelfExecSpawner {
         fn new(test_name: &'static str, env_var: &'static str, env_value: &'static str) -> Self {
-            SelfExecSpawner { test_name, env_var, env_value, received: Mutex::new(Vec::new()) }
+            SelfExecSpawner {
+                test_name,
+                env_var,
+                env_value,
+                received: Mutex::new(Vec::new()),
+                received_specs: Mutex::new(Vec::new()),
+            }
         }
         fn received(&self) -> Vec<Argv> {
             self.received.lock().unwrap().clone()
         }
+        #[allow(dead_code)]
+        fn received_specs(&self) -> Vec<SpawnSpec> {
+            self.received_specs.lock().unwrap().clone()
+        }
     }
 
     impl IterationSpawner for SelfExecSpawner {
-        fn spawn(&self, argv: &Argv) -> std::io::Result<Child> {
+        fn spawn(&self, argv: &Argv, spec: &SpawnSpec) -> std::io::Result<Child> {
             self.received.lock().unwrap().push(argv.clone());
+            self.received_specs.lock().unwrap().push(spec.clone());
             let exe = std::env::current_exe().expect("test binary path");
-            // Null the child's stdio: the child is a full libtest harness, and a
-            // deliberately FAILING child would otherwise print its own
-            // "test ... FAILED" report into THIS suite's inherited output stream,
-            // where it reads as a failure of the parent suite.
-            Command::new(exe)
-                .args([self.test_name, "--exact"])
-                .env(self.env_var, self.env_value)
-                .stdout(std::process::Stdio::null())
+            let mut cmd = Command::new(exe);
+            cmd.args([self.test_name, "--exact"])
+                .env(self.env_var, self.env_value);
+            if let Some(cwd) = &spec.cwd {
+                cmd.current_dir(cwd);
+            }
+            for (k, v) in &spec.env {
+                cmd.env(k, v);
+            }
+            cmd.stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .spawn()
         }
@@ -932,7 +2274,7 @@ mod tests {
         // OBSERVED unaltered — asserted below via `spawner.received()`.
         let argv: Argv = vec!["placeholder".to_string()];
 
-        let result = run_iteration_with_ceiling(&argv, Duration::from_millis(250), &spawner);
+        let result = run_iteration_with_ceiling(&argv, &SpawnSpec::default(), Duration::from_millis(250), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::TimedOut), "{:?}", result.outcome);
         assert_eq!(
             spawner.received(),
@@ -961,7 +2303,7 @@ mod tests {
         let spawner =
             SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
         let argv: Argv = vec!["placeholder".to_string()];
-        let result = run_iteration_with_ceiling(&argv, Duration::from_secs(30), &spawner);
+        let result = run_iteration_with_ceiling(&argv, &SpawnSpec::default(), Duration::from_secs(30), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::Success), "{:?}", result.outcome);
         assert_eq!(spawner.received(), vec![argv.clone()]);
     }
@@ -970,7 +2312,7 @@ mod tests {
     fn a_failing_iteration_reports_failed_not_timed_out() {
         let spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "fail");
         let argv: Argv = vec!["placeholder".to_string()];
-        let result = run_iteration_with_ceiling(&argv, Duration::from_secs(30), &spawner);
+        let result = run_iteration_with_ceiling(&argv, &SpawnSpec::default(), Duration::from_secs(30), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::Failed(_)), "{:?}", result.outcome);
         assert_eq!(spawner.received(), vec![argv.clone()]);
     }
@@ -1000,11 +2342,17 @@ mod tests {
         inner: &'a dyn IterationSpawner,
         calls: AtomicUsize,
         seen: Mutex<Vec<Argv>>,
+        seen_specs: Mutex<Vec<SpawnSpec>>,
     }
 
     impl<'a> CountingSpawner<'a> {
         fn new(inner: &'a dyn IterationSpawner) -> Self {
-            CountingSpawner { inner, calls: AtomicUsize::new(0), seen: Mutex::new(Vec::new()) }
+            CountingSpawner {
+                inner,
+                calls: AtomicUsize::new(0),
+                seen: Mutex::new(Vec::new()),
+                seen_specs: Mutex::new(Vec::new()),
+            }
         }
         fn call_count(&self) -> usize {
             self.calls.load(Ordering::SeqCst)
@@ -1012,13 +2360,17 @@ mod tests {
         fn seen(&self) -> Vec<Argv> {
             self.seen.lock().unwrap().clone()
         }
+        fn seen_specs(&self) -> Vec<SpawnSpec> {
+            self.seen_specs.lock().unwrap().clone()
+        }
     }
 
     impl<'a> IterationSpawner for CountingSpawner<'a> {
-        fn spawn(&self, argv: &Argv) -> std::io::Result<Child> {
+        fn spawn(&self, argv: &Argv, spec: &SpawnSpec) -> std::io::Result<Child> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.seen.lock().unwrap().push(argv.clone());
-            self.inner.spawn(argv)
+            self.seen_specs.lock().unwrap().push(spec.clone());
+            self.inner.spawn(argv, spec)
         }
     }
 
@@ -1233,7 +2585,7 @@ mod tests {
             "herding::control_loop::tests::quick_exit_helper".to_string(),
             "--exact".to_string(),
         ];
-        let mut child = RealSpawner.spawn(&argv).expect("RealSpawner must be able to spawn a real program");
+        let mut child = RealSpawner.spawn(&argv, &SpawnSpec::default()).expect("RealSpawner must be able to spawn a real program");
         let status = child.wait().expect("spawned child must be waitable");
         assert!(status.success(), "{status:?}");
     }
@@ -1333,6 +2685,7 @@ mod tests {
             task: "do task".to_string(),
             outcome: None,
             evidence: None,
+            retryable: None,
         };
         let row = super::super::wave_ledger::WaveRow {
             wave_id: "job-paused-1".to_string(),

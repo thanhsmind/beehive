@@ -1,0 +1,87 @@
+{
+  "id": "ep-5",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Ship the thinking, planning and architecture principles",
+  "action": "Add FIVE principles, each as one index row plus one skill page. The names, guide anchors and classes are FIXED — do not rename, add, or drop one: (1) principle-chestertons-fence, expertise/thinking.md § Chesterton's Fence, classes: refactor, bugfix, feature. (2) principle-smallest-honest-shape, expertise/planning.md § The smallest honest shape, classes: feature, refactor, research, spike. (3) principle-split-never-shrink, expertise/planning.md § Scope integrity: split, never shrink, classes: feature, refactor, release. (4) principle-the-deletion-test, expertise/architecture.md § The Deletion Test, classes: refactor, feature. (5) principle-single-source-of-truth, expertise/architecture.md § Single Source of Truth, classes: feature, refactor, docs. ROWS: append to the '## Principle homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, copying the grammar of the principle-red-before-green row already there — spoken: and classes: both ABOVE the applied_at: block. The spoken line is one sentence a human can say out loud to steer work; write it from the guide section, never from the heading alone. PAGES: skills/principle-<slug>/SKILL.md, modelled on skills/principle-red-before-green/SKILL.md for shape and length — frontmatter name and a description saying WHEN the principle fires, an H1, the rule in its own words, a short **Why:**, and a closing **Depth:** line pointing at .bee/expertise/<guide>.md and its heading. Read each guide section before writing its page; the page states the rule, it does not summarise the guide. Do NOT edit any file under expertise/ (CONTEXT.md D1). After the files land run .bee/bin/bee dev release-manifest --write so the new skill files carry their manifest rows — ep-1 skipped this and left the base red.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+  "affects_skills": [
+    "skills/principle-chestertons-fence/SKILL.md",
+    "skills/principle-smallest-honest-shape/SKILL.md",
+    "skills/principle-split-never-shrink/SKILL.md",
+    "skills/principle-the-deletion-test/SKILL.md",
+    "skills/principle-single-source-of-truth/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "Exactly the five named principles land — no rename, no extra, no omission (the names are the design, locked by the orchestrator).",
+      "Every classes: value is one of feature, bugfix, docs, refactor, research, release, spike, perf — the fence reads the real enum and refuses anything else.",
+      "Each spoken: line is written from the guide SECTION, not from its heading, and reads as something a person can say out loud.",
+      "No file under expertise/ is edited (CONTEXT.md D1).",
+      "bee dev release-manifest --write runs so the new skill files carry manifest rows and the base stays green for the next cell."
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-6",
+    "outcome": "Five craft principles ship as index rows plus thin skill pages; parity fence, manifest and knowledge check all green",
+    "files_changed": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "skills/principle-chestertons-fence/SKILL.md",
+      "skills/principle-smallest-honest-shape/SKILL.md",
+      "skills/principle-split-never-shrink/SKILL.md",
+      "skills/principle-the-deletion-test/SKILL.md",
+      "skills/principle-single-source-of-truth/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T18:32:43.625Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T18:29:10.326Z",
+    "mistakes": [
+      {
+        "wrong": "the heredoc batch that wrote the five skills/principle-*/SKILL.md files ran without the BEE_AGENT_NAME=ep-worker-6 prefix the worker contract requires for write-heavy shell commands",
+        "better": "set BEE_AGENT_NAME on the very first write command, before any file was created, the way the later release-manifest --write call did"
+      }
+    ],
+    "report": {
+      "outcome": "Five craft principles ship as index rows plus thin skill pages; parity fence, manifest and knowledge check all green",
+      "commit": "0f1cd388",
+      "files": [
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "skills/principle-chestertons-fence/SKILL.md",
+        "skills/principle-smallest-honest-shape/SKILL.md",
+        "skills/principle-split-never-shrink/SKILL.md",
+        "skills/principle-the-deletion-test/SKILL.md",
+        "skills/principle-single-source-of-truth/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --test principle_index_parity && bee dev release-manifest --check && bee knowledge check — green:unit — the cell verify chain: the fence that reads the new rows, skills and guide anchors, plus the manifest and knowledge doors the new files touch",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "the heredoc batch that wrote the five skills/principle-*/SKILL.md files ran without the BEE_AGENT_NAME=ep-worker-6 prefix the worker contract requires for write-heavy shell commands — set BEE_AGENT_NAME on the very first write command, before any file was created, the way the later release-manifest --write call did"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 171 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

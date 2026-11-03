@@ -1,0 +1,7 @@
+{"schema":"judge-verdict/1","verdict":"PASS","checks":[
+{"id":"c1","name":"a: ladder line from constants + idle suffix","status":"PASS","evidence":"models_group.rs ladder_line maps EFFORT_LADDER and EFFORT_LEVELS; built binary prints the line with the idle suffix; test the_ladder_line_says_idle_when_no_role_sets_effort"},
+{"id":"c2","name":"b: model/effort in the existing column","status":"PASS","evidence":"model_cell() returns '<model>/<effort>'; no new column; test a_role_with_effort_shows_model_slash_effort_and_the_ladder_is_live; models_group 18 passed"},
+{"id":"c3","name":"c: JSON effort_ladder (8) + effort_ladder_idle","status":"PASS","evidence":"build_table inserts both keys; test the_json_carries_the_ladder_and_its_idle_state; live --json prints effort_ladder and effort_ladder_idle true"},
+{"id":"c4","name":"d: B24 content, cites, Pointers, Open Gap","status":"PASS","evidence":"model-roles-and-escalation.md:350-370: every ladder row, leader passes none, tokens, repair vs deny, four keys, audit grep, idle condition, herding gap; cites D2, D4, D4a, D5, D7, D10; Open Gaps bullet; Pointers section"},
+{"id":"c5","name":"e: no code comments","status":"PASS","evidence":"rg over git show df86d3a39 -- packages/ empty; comment-baseline --check clean"}
+],"fixability":"automatic","confidence":"high"}

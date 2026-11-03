@@ -41,6 +41,9 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 
 Record: `bee route --set --class <c> --lane <l> --flags <f> --files <n>`;
 re-route upward on new evidence any time, de-escalate only on cited evidence.
+That same step cites the matched class playbook into plan.md by name and
+anchor — `references/planning-reference.md` ("Playbooks") — never by
+copying its steps.
 A code-touching route's next action includes creating the feature worktree
 and opening the session there (rule: agents-worktree-first). Code truth changes only in the feature worktree, the
 user tests at staging once the slice is ready, and main receives the branch
@@ -53,6 +56,20 @@ Reading scales with the lane: tiny keeps its two targeted reads; small adds
 patterns, decisions, and prior learnings — precedent beats research. Remove
 uncertainty at the lowest cost: cite a pattern or verify one fact; unfamiliar
 territory or competing approaches dispatch `bee-researching`, findings merged in.
+When `.bee/verify/verify-app/features/` maps the ask, read the ONE matching
+feature file: its "How to get to it" seeds the cell file lists, its
+"Gotchas" seed the risk map. Note its last-modified date — a stale map is
+judged against the code, never trusted blind.
+
+**One reality touch per novel surface, every lane, before the gate.** A
+surface the plan leans on and nobody here has opened yet gets touched once,
+cheaply: open the real file at the real line, or run the real path and keep
+the output. Existence is not evidence — that a file, flag, or table is named
+somewhere proves nothing about what it holds. Record the touch where the lane
+keeps its evidence: `## Discovery` and the claims table in plan.md
+(`references/planning-reference.md` ("The load-bearing claims table")), the
+gate message itself on `tiny`/`small`. A touch that contradicts the draft is
+the cheapest finding of the whole feature.
 
 ## Shape
 
@@ -68,7 +85,16 @@ work endangers (decomposition, walking skeleton, dependency thinking:
 
 Once drafted, the SMALLER PATH check — every lane, one inline question, one
 line of evidence: *is there a cheaper shape that still honors every locked
-decision?* FAIL → redraft. Standard/high-risk add the review wave before the gate.
+decision?* FAIL → redraft. That inline check is the ONE home for the SMALLER
+PATH question — the `hat-alternatives` seat cites it, never copies it.
+Standard/high-risk add the hat wave before the gate: the plan-step wave IS
+the plan check now (procedure home:
+`bee-hive/references/gates-and-delegation.md` ("Hat wave"); what planning
+consumes: `references/planning-reference.md` ("Plan check — the hat wave")).
+When new code has an open shape on standard or high-risk work — several
+whole shapes viable and no pattern in the repo to copy — load
+`references/design-sketch.md` before the gate; the sketch lands in the plan,
+and the hat wave still runs as the plan check.
 
 ## Gate
 
@@ -77,13 +103,24 @@ Before the question, on a lane: `bee state plan-conflicts derive`, then one
 execution approval while any candidate is unverdicted or the review is stale
 by `plan_rev` (see `docs/knowledge/areas/workflow-state/gates.md` R138).
 
-Standard/high-risk: present the shape in plain language — what will be built,
-why this size, cost if the shape is wrong — link the plan, then ask verbatim:
+**Pre-flight the claims table yourself, before you present anything.** The
+leader walks the same checklist the binary runs: the `## Load-bearing claims`
+table exists, every row carries label, anchor, and evidence, every label is
+`read`/`ran`/`guessed`, no row is still `guessed`, and no load-bearing claim
+sits only in the prose. Fix what the walk finds — upgrade the label with a
+real read or run, or move the claim to `## Open Questions`. The mechanical
+refusal is the net under that walk, never the way you find out: a gate that
+refuses after the human already said yes spends their approval on your
+homework.
+
+Standard/high-risk: run `bee gate --preview` first to parse the cell packet from `plan.md`, validate required execution fields (`action`, `files`, `read_first`, `must_haves`, `verify`), and record the preview hash. Shape approval refuses without a fresh preview matching `plan.md`. Open with the plan's `## Summary`, then the "you see"
+line of each cells-preview row — never the full preview table. Then say why
+this size and the cost if the shape is wrong, link the plan, and ask verbatim:
 "Work shape is ready. Approve before current-work preparation?" and stop. On
 approval, `bee gate --name shape --approved true`; `plan.md` freezes —
 a stamp may follow, a content edit may not.
 
-Tiny/small merge shape and execution: draft the cell(s), preview them in the
+Tiny/small merge shape and execution: draft the cell(s), run `bee gate --preview` (or include valid preview packets), preview them in the
 gate message — never persist-then-preview — then ask: "Work shape + execution:
 I'm about to do [X] via [Y], verified by [Z]. Approve?" One yes records both
 (`bee gate --merge --approved true`); cells persist only after it —
@@ -98,6 +135,13 @@ later slices keep one-line headlines, not cells
 quality rules")). A user-visible surface makes slice 1 a walking skeleton:
 end-to-end, real behavior, no stubs.
 
+A cell that writes tests against an interface cites that interface's contract
+decision by its STORE id in `cell.decisions` — the mint trap refuses a
+test-writing cell that cites none. Know its limit: the trap only sees a
+test-shaped path in `files` or `role: test`, so a `code`-role cell adding an
+inline test module to a source file it already touches is NOT caught — citing
+is on the author (`docs/knowledge/areas/workflow-state/dispatch.md`).
+
 The writer owns tests TDD-style as part of each cell — coverage judgment
 first: cite existing tests by file and case, author only the gap
 (`.bee/expertise/tests.md`). The agent owns test scope (rule: agents-proof-at-cap) —
@@ -109,6 +153,9 @@ scoping detail in `references/planning-reference.md` ("Test scoping"). Then
 When the shape cannot fit the budget, never quietly shrink a locked decision
 or drop a must-have. Answer SPLIT RECOMMENDED — slice boundaries honoring
 every decision, the user choosing what waits; a cheaper swap needs a supersede.
+Scope that moves out of the plan into the backlog goes through `bee backlog
+pbi add --brief-file <draft>`, its cost paragraph naming why it moved and what
+waiting costs (`docs/knowledge/areas/decision-memory/owner-brief-contract.md`).
 
 ## Headless
 
@@ -126,7 +173,8 @@ at the gate — never self-approved.
 
 | File | When to load |
 |---|---|
-| `references/planning-reference.md` | plan.md/approach.md templates, cell quality rules + example JSON, merged-gate protocol, review wave, verify scoping, greenfield init lane |
+| `references/planning-reference.md` | plan.md/approach.md templates, cell quality rules + example JSON, merged-gate protocol, the hat wave as the plan check, verify scoping, greenfield init lane |
+| `docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md` ("Principle homes") | The routed principles for this class, and what each one's spoken line is |
 | `references/edge-dimensions.md` | 12 edge-case dimensions — high-risk/hard-gate test matrix only; standard and below use the triad |
 | `.bee/expertise/planning.md`, `.bee/expertise/tests.md` | Decomposition, walking skeleton, smaller path, cold pickup; coverage judgment, case selection, red-first |
 | `.bee/expertise/INDEX.md` | The work is domain-shaped — data and migrations, a contract callers depend on, a trust boundary, a rollout, a speed budget, a surface people use: route from the index for the ordering and reversibility constraints before slicing |

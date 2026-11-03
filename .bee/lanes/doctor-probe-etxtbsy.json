@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "feature": "doctor-probe-etxtbsy",
+  "mode": "standard",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"doctor-probe-etxtbsy\" started at phase \"planning\" (lane).",
+  "next_action": "bee close finished \"doctor-probe-etxtbsy\" — feature is closed.",
+  "created_at": "2026-08-30T08:18:57.325Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Untracked docs there belong to other work — the installer does not need a clean tree, so I am leaving them alone.",
+    "asked_at": "2026-08-30T09:55:24.024Z",
+    "session": "9edcd966-07e8-402f-89f0-a1ec504f42c1"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": "One probe function plus a regression test; the flag is the doctor row detail string that existing tests assert",
+    "updated_at": "2026-08-30T08:18:57.400Z",
+    "feature": "doctor-probe-etxtbsy"
+  },
+  "last_scribing_run": {
+    "feature": "doctor-probe-etxtbsy",
+    "date": "2026-08-30",
+    "at": "2026-08-30T08:24:00.909Z",
+    "areas_synced": [
+      "rust-runtime"
+    ],
+    "next_action": "Ships in the next release."
+  }
+}

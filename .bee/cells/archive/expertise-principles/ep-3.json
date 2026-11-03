@@ -1,0 +1,58 @@
+{
+  "id": "ep-3",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "test",
+  "title": "Fence the principle index against the skill dirs and the class vocabulary",
+  "action": "Add packages/bee-rs/crates/bee/tests/principle_index_parity.rs, modelled on packages/bee-rs/crates/bee/tests/rule_index_parity.rs: pure filesystem, std only, nothing imported from the bee crate, and NO private copy of any list it guards. Pin four things. (1) Every skills/principle-*/ directory has exactly one row in the '## Principle homes' section, and every row names a directory that exists — both directions. (2) Every value on a row's `classes:` line appears in ROUTE_CLASS_VALUES, read as TEXT from packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs (the route_class_parity.rs technique). (3) Every row carries a non-empty `spoken:` line, and it sits BEFORE the row's `applied_at:` line. (4) Every row's guide anchor names a file under expertise/ that exists and a heading that appears in it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "The fence declares no list of its own — class values are read from workflows.rs as text, principle names from the skills/ directory listing.",
+      "Dir-without-row and row-without-dir both go red.",
+      "A classes: value outside ROUTE_CLASS_VALUES goes red and names the offending value."
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "ep-1"
+  ],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-4",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/principle_index_parity.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T18:18:38.834Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T18:13:45.105Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added the principle-index parity fence: skills and rows both ways, classes read from ROUTE_CLASS_VALUES as text, spoken before applied_at, and guide anchors that resolve",
+      "commit": "46b5af33",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/principle_index_parity.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity — green:unit — the cell own verify; the only test touched, and a mutation probe drove all four asserts red before the green",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -119,8 +119,11 @@ use std::time::Instant;
         assert_eq!(normalize_template("a\r\nb\r\n"), "a\nb");
         assert_eq!(normalize_template("a\nb\n\n"), "a\nb\n");
         assert_eq!(normalize_template("a\nb"), "a\nb");
-        // The real worker-cell template ends with `{{/if}}\n` -> `{{/if}}`.
-        assert!(load_prompt("worker-cell").unwrap().ends_with("{{/if}}"));
+        // The invariant is the normalization, not which line happens to be last:
+        // exactly one trailing newline is stripped from every real template.
+        // (This used to assert the worker-cell tail was `{{/if}}`, which pinned
+        // the prompt's running order rather than loadPrompt's behavior.)
+        assert!(!load_prompt("worker-cell").unwrap().ends_with('\n'));
         assert!(!load_prompt("gather").unwrap().ends_with('\n'));
     }
 
@@ -740,22 +743,74 @@ use std::time::Instant;
         assert_eq!(resolve_tier(&m, "generation", "codex", "cell"), Resolved::Budget);
     }
 
+    #[test]
+    fn effort_for_dispatch_moves_every_ladder_row() {
+        let row = |base: &str, kind: &str, lane: Option<&str>| {
+            let c = effort_for_dispatch(Some(base), kind, lane);
+            (c.effort, c.step, c.reason)
+        };
+        for (kind, lane, effort, step, reason) in [
+            ("cell", Some("high-risk"), "xhigh", 1, "cell/high-risk"),
+            ("cell", Some("tiny"), "medium", -1, "cell/tiny"),
+            ("cell", Some("small"), "high", 0, "cell/small"),
+            ("cell", Some("standard"), "high", 0, "cell/standard"),
+            ("cell", Some("spike"), "high", 0, "cell/spike"),
+            ("gather", None, "low", -2, "gather/-"),
+            ("advisor", None, "medium", -1, "advisor/-"),
+            ("reviewer", None, "high", 0, "reviewer/-"),
+        ] {
+            assert_eq!(
+                row("high", kind, lane),
+                (Some(effort.to_string()), step, reason.to_string()),
+                "{kind}/{lane:?}"
+            );
+        }
+
+        assert_eq!(
+            row("max", "cell", Some("high-risk")),
+            (Some("max".to_string()), 1, "cell/high-risk".to_string()),
+            "a raised max clamps at the top"
+        );
+        assert_eq!(
+            row("low", "gather", None),
+            (Some("low".to_string()), -2, "gather/-".to_string()),
+            "a lowered low clamps at the bottom"
+        );
+
+        let none = effort_for_dispatch(None, "cell", Some("high-risk"));
+        assert_eq!(none.effort, None);
+        assert_eq!(none.base, None);
+        assert_eq!(none.step, 0);
+        assert_eq!(none.reason, "no-base");
+
+        let off_scale = effort_for_dispatch(Some("turbo"), "gather", None);
+        assert_eq!(off_scale.effort, None);
+        assert_eq!(off_scale.base, Some("turbo".to_string()));
+        assert_eq!(off_scale.step, 0);
+        assert_eq!(off_scale.reason, "no-base");
+
+        let unknown = effort_for_dispatch(Some("high"), "cell", Some("weird"));
+        assert_eq!(unknown.effort, Some("high".to_string()));
+        assert_eq!(unknown.step, 0);
+        assert_eq!(unknown.reason, "unmapped:cell/weird");
+    }
+
     // ── economics ──────────────────────────────────────────────────────────
 
     #[test]
     fn derive_economics_matches_the_honest_mapping() {
         let model = Resolved::Model { model: "sonnet".into(), effort: None };
-        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false);
+        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param"}"#
+            r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
         // codex-native without a confirmed override is ALWAYS
         // inherited-or-unknown, whatever the tier resolves to.
-        let e = derive_economics("codex-native", "generation", None, &Resolved::Budget, false);
+        let e = derive_economics("codex-native", "generation", None, &Resolved::Budget, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"codex-native","enforcement":"prompt-budget"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"codex-native","enforcement":"prompt-budget","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
         // A confirmed native override: native-requested, effective_model still
         // null (catalog-accepted is not runtime-confirmed, D7).
@@ -766,23 +821,35 @@ use std::time::Instant;
             agent_type: "worker".into(),
             fallback: None,
         };
-        let e = derive_economics("codex-native", "generation", None, &native, true);
+        let e = derive_economics("codex-native", "generation", None, &native, true, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":"gpt-5","effective_model":null,"effective_model_status":"native-requested","channel":"codex-native","enforcement":"native-model-param"}"#
+            r#"{"logical_tier":"generation","requested_model":"gpt-5","effective_model":null,"effective_model_status":"native-requested","channel":"codex-native","enforcement":"native-model-param","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
         // cli-exec never reports a requested_model.
         let cli = Resolved::Cli { command: "glm run".into() };
-        let e = derive_economics("cli-exec", "generation", None, &cli, false);
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"cli-exec","enforcement":"cli-command"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"cli-exec","enforcement":"cli-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
         // herding-exec mirrors cli-exec, never prompt-budget.
-        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false);
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
+        );
+        let raised = effort_for_dispatch(Some("high"), "cell", Some("high-risk"));
+        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None, Some(&raised));
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param","effort":"xhigh","effort_base":"high","effort_step":1,"effort_reason":"cell/high-risk"}"#
+        );
+        let bare = effort_for_dispatch(None, "gather", None);
+        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None, Some(&bare));
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"no-base"}"#
         );
     }
 
@@ -807,7 +874,7 @@ use std::time::Instant;
         // no rendered agent for an operator-invented job, and inventing one
         // would name a file that does not exist.
         assert_eq!(agent_for_role("test"), None);
-        assert_eq!(agent_for_role("design"), None);
+        assert_eq!(agent_for_role("design"), Some("bee-design"));
         assert_eq!(canonical_role("test"), "test");
         // The inverse lookup is deliberately NOT aliased: its answer is
         // resolved against `models.<runtime>`, so it must name the role the
@@ -916,7 +983,7 @@ use std::time::Instant;
         assert_eq!(p.get("description"), Some(&json!("gather (sonnet)")));
         // The marker anchors at the very start of the prompt.
         let prompt = p.get("prompt").unwrap().as_str().unwrap();
-        assert!(prompt.starts_with("[bee-tier: generation]\nGather: locate and digest"));
+        assert!(prompt.starts_with("[bee-tier: generation] [bee-kind: gather]\nGather: locate and digest"));
         // The prepare-time record is NOT written on a non-recording pass.
         assert!(!root.join(".bee/logs/dispatch.jsonl").exists());
     }
@@ -948,6 +1015,109 @@ use std::time::Instant;
         // The economics record still names the tier, not the agent, as the
         // generation-tier model authority (must-have 4).
         assert_eq!(v.get("economics").and_then(|e| e.get("logical_tier")), Some(&json!("generation")));
+    }
+
+    #[test]
+    fn a_design_cell_pins_bee_design_and_every_other_role_keeps_bee_build() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"code":"sonnet","design":"sonnet","generation":"sonnet"}}}"#,
+        );
+        for (id, role, agent) in
+            [("c-d", "design", "bee-design"), ("c-c", "code", "bee-build"), ("c-t", "test", "bee-build")]
+        {
+            w(
+                &root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f","role":"{role}","status":"claimed","trace":{{"worker":"w"}}}}"#
+                ),
+            );
+            let Prepared::Value(v) =
+                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None)
+                    .unwrap()
+            else {
+                panic!("expected an envelope")
+            };
+            let p = v.get("payload").unwrap();
+            assert_eq!(p.get("subagent_type"), Some(&json!(agent)), "{role}: {v}");
+            let prompt = p.get("prompt").and_then(Value::as_str).unwrap();
+            assert_eq!(
+                prompt.contains("load the `bee-design` skill"),
+                role == "design",
+                "{role}: only a design cell carries the design preamble: {prompt}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_herding_design_cell_carries_the_design_preamble_in_its_prompt_body() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"design":{"kind":"herding"},"code":{"kind":"herding"},"generation":{"kind":"herding"}}}}"#,
+        );
+        for (id, role) in [("c-d", "design"), ("c-c", "code")] {
+            w(
+                &root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f","role":"{role}","status":"claimed","trace":{{"worker":"w"}}}}"#
+                ),
+            );
+            let Prepared::Value(v) =
+                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None)
+                    .unwrap()
+            else {
+                panic!("expected an envelope")
+            };
+            assert_eq!(v.get("tool"), Some(&json!("Bash")), "{role}: {v}");
+            let stdin = v["payload"]["stdin"].as_str().unwrap();
+            assert!(stdin.contains(&format!("Assigned cell id: {id}")), "{stdin}");
+            for phrase in ["load the `bee-design` skill", "bee-design-*", "Node 20"] {
+                assert_eq!(stdin.contains(phrase), role == "design", "{role}: {phrase}: {stdin}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_read_only_job_asking_for_the_design_role_keeps_the_read_only_agent_of_its_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"read":"haiku","design":"sonnet","generation":"sonnet","review":"opus"}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-d.json",
+            r#"{"id":"c-d","feature":"f","title":"design a page","role":"design","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        for (kind, role, cell, agent) in [
+            ("gather", Some("design"), None, "bee-gather"),
+            ("reviewer", Some("design"), None, "bee-review"),
+            ("cell", None, Some("c-d"), "bee-design"),
+            ("gather", Some("read"), None, "bee-extract"),
+        ] {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", kind, role, cell, cell.map(|_| "w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("{kind}/{role:?}: expected an envelope")
+            };
+            let payload = v["payload"].clone();
+            assert_eq!(payload["subagent_type"], json!(agent), "{kind}/{role:?}: {v}");
+            let hook_input = json!({"tool_name": "Agent", "tool_input": payload, "cwd": root.to_string_lossy()});
+            let crate::hooks::Outcome::Done(code) = crate::hooks::model_guard::run(&[], &hook_input.to_string())
+            else {
+                panic!("{kind}/{role:?}: the guard delegated")
+            };
+            assert_eq!(code, ExitCode::SUCCESS, "{kind}/{role:?}: the guard refused {payload}");
+            let log = std::fs::read_to_string(root.join(".bee").join("logs").join("dispatch.jsonl")).unwrap();
+            let d: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+            assert_eq!(d["subagent_type"], json!(agent), "{kind}/{role:?}: {d}");
+            assert!(!d["transport"].as_str().unwrap().ends_with("-repaired"), "{kind}/{role:?}: {d}");
+        }
     }
 
     /// Measured from a live agent list: every row read `bee-build  Execute
@@ -1003,6 +1173,158 @@ use std::time::Instant;
         assert_eq!(d("c-5"), "c-5: first line second line (sonnet)");
     }
 
+    /// dispatch-label-seat-first: a seat dispatched through the advisor kind
+    /// (`--kind advisor --role hat-facts-gaps`) ran on its own seat model,
+    /// but the label read `advisor: …` — the kind — so every UI showed the
+    /// hats as the advisor even when the seat's model ran (observed live on
+    /// 2026-09-02: three hats on opus/opus/sonnet, all labelled `advisor:`).
+    /// The label leads with the ASKED role when one is given; the kind only
+    /// when none is.
+    #[test]
+    fn a_seat_role_leads_the_description_instead_of_the_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"fable","hat-facts-gaps":"opus"}}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "advisor",
+            Some("hat-facts-gaps"),
+            None,
+            None,
+            false,
+            None,
+            Some("hat wave"),
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("model"), Some(&json!("opus")));
+        assert_eq!(p.get("description"), Some(&json!("hat-facts-gaps: hat wave (opus)")));
+
+        // An explicit role on a gather leads the same way — the label names
+        // the slot that resolved, never the kind that asked.
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root, "claude", "gather", Some("hat-facts-gaps"), None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            v.get("payload").unwrap().get("description"),
+            Some(&json!("hat-facts-gaps (opus)"))
+        );
+    }
+
+    /// pi-stage-dispatch D5: a `hat-*` advisor prompt names its seat and the
+    /// Hat wave home on every runtime; the configured description is never
+    /// copied; a non-hat advisor prompt carries no seat block at all.
+    #[test]
+    fn a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","hat-risks":{"model":"opus","description":"UNIQUE-DESCRIPTION-TEXT"}}}}"#,
+        );
+        let body = |role: Option<&str>| -> String {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "advisor", role, None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            let prompt = v["payload"]["prompt"].as_str().unwrap_or_default().to_string();
+            // Drop the `[bee-tier: …]` marker line: it names the slot, not the body.
+            prompt.split_once('\n').map(|(_, rest)| rest.to_string()).unwrap_or_default()
+        };
+        let plain = body(None);
+        let hat = body(Some("hat-risks"));
+        assert!(!plain.contains("Seat:"), "{plain}");
+        let block = "\n\nSeat: hat-risks. Your perspective and instrument are the row for this role in the bee-hive skill, references/gates-and-delegation.md, section \"Hat wave\". Read that row first, and answer from that seat only.";
+        assert_eq!(hat.replacen(block, "", 1), plain, "the seat block is the only difference: {hat}");
+        assert!(!hat.contains("UNIQUE-DESCRIPTION-TEXT"), "{hat}");
+    }
+
+    /// pi-stage-dispatch D3: on pi a named role rides the herding command as
+    /// `--seat`, and a hat seat caps the ceiling at the 600-second wave
+    /// budget (a lower configured value wins). Claude herding gains neither.
+    #[test]
+    fn a_pi_hat_herding_command_carries_its_seat_and_the_wave_ceiling() {
+        let command = |runtime: &str, ceiling: &str, kind: &str, role: Option<&str>| -> String {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(
+                &tmp,
+                &format!(
+                    r#"{{{ceiling}"models":{{"{runtime}":{{"generation":{{"kind":"herding","agent":"g"}},"extraction":{{"kind":"herding","agent":"x"}},"advisor":{{"kind":"herding","agent":"a"}},"hat-risks":{{"kind":"herding","agent":"h"}}}}}}}}"#
+                ),
+            );
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, runtime, kind, role, None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            v["payload"]["command"].as_str().unwrap_or_else(|| panic!("no command: {v}")).to_string()
+        };
+        let long = r#""herding":{"ceiling_seconds":1800},"#;
+        let short = r#""herding":{"ceiling_seconds":300},"#;
+
+        let c = command("pi", long, "advisor", Some("hat-risks"));
+        assert!(c.contains(" --seat \"hat-risks\""), "{c}");
+        assert!(c.contains("--ceiling 600") && !c.contains("1800"), "{c}");
+        assert!(command("pi", short, "advisor", Some("hat-risks")).contains("--ceiling 300"));
+        assert!(command("pi", "", "advisor", Some("hat-risks")).contains("--ceiling 600"));
+
+        // A non-hat role on pi names its seat but keeps the configured ceiling.
+        let c = command("pi", long, "gather", Some("extraction"));
+        assert!(c.contains(" --seat \"extraction\"") && c.contains("--ceiling 1800"), "{c}");
+        // No role named: no seat.
+        assert!(!command("pi", long, "advisor", None).contains("--seat"));
+
+        // Claude herding: neither the seat nor the cap.
+        let c = command("claude", long, "advisor", Some("hat-risks"));
+        assert!(!c.contains("--seat") && c.contains("--ceiling 1800"), "{c}");
+        assert!(!command("claude", "", "advisor", Some("hat-risks")).contains("--ceiling"));
+    }
+
+    /// pi-stage-dispatch D3/D5 (psd-9): a hat seat with no team entry falls
+    /// through to the advisor slot for its model, yet keeps its own seat name
+    /// on `--seat`, the wave ceiling, and the prompt seat block.
+    #[test]
+    fn an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through() {
+        let envelope = |config: &str, runtime: &str| -> Value {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, runtime, "advisor", Some("hat-risks"), None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            v
+        };
+        let seat_block = "Seat: hat-risks.";
+
+        let pi = envelope(
+            r#"{"herding":{"ceiling_seconds":1800},"models":{"pi":{"generation":{"kind":"herding","agent":"g"},"advisor":{"kind":"herding","agent":"a"}}}}"#,
+            "pi",
+        );
+        let c = pi["payload"]["command"].as_str().unwrap_or_else(|| panic!("no command: {pi}"));
+        assert!(c.contains(" --seat \"hat-risks\"") && !c.contains("--seat \"advisor\""), "{c}");
+        assert!(c.contains("--ceiling 600") && !c.contains("1800"), "{c}");
+        assert!(c.contains("--agent \"a\""), "model stays on the advisor slot: {c}");
+        assert!(pi["payload"]["stdin"].as_str().unwrap_or_default().contains(seat_block), "{pi}");
+
+        let claude = envelope(r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#, "claude");
+        assert!(claude["payload"]["prompt"].as_str().unwrap_or_default().contains(seat_block), "{claude}");
+        assert!(!claude["payload"].to_string().contains("--seat"), "{claude}");
+    }
+
     /// Gap 2 of the audit (dispatch-label-chokepoint plan.md): a non-cell
     /// kind (`gather`/`reviewer`/`advisor`) had no way to say what it was FOR
     /// — `--purpose` is that way. Given, it renders; omitted, today's exact
@@ -1036,7 +1358,7 @@ use std::time::Instant;
     /// visibility D2 required a real label. `task_name` now carries the same
     /// subject as the claude Agent's `description`.
     #[test]
-    fn codex_task_name_carries_the_cell_title_not_the_bare_id() {
+    fn codex_spawn_payload_uses_callable_task_name_and_carries_the_full_subject() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"codex":{"generation":"gpt-5"}}}"#);
         w(
@@ -1052,8 +1374,12 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("spawn_agent")));
         assert_eq!(
             v.get("payload").unwrap().get("task_name"),
-            Some(&json!("c-1: cap the test scrubber"))
+            Some(&json!("c_1_cap_the_test_scrubber"))
         );
+        assert!(v["payload"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Assignment: c-1: cap the test scrubber"));
     }
 
     /// THE ANTI-RECURRENCE DEVICE (dispatch-label-chokepoint plan.md — the
@@ -1074,7 +1400,9 @@ use std::time::Instant;
                     &tmp,
                     r#"{"models":{
                         "claude":{"generation":"sonnet","advisor":"sonnet"},
-                        "codex":{"generation":"gpt-5","advisor":"gpt-5"}
+                        "codex":{"generation":"gpt-5","advisor":"gpt-5"},
+                        "pi":{"generation":{"kind":"herding","agent":"pi-opus"},
+                              "advisor":{"kind":"herding","agent":"pi-fable"}}
                     }}"#,
                 );
                 let model = if runtime == "claude" { "sonnet" } else { "gpt-5" };
@@ -1116,18 +1444,32 @@ use std::time::Instant;
                 };
 
                 // Only a pair whose payload actually carries a label field
-                // owes the assertion below — a transport with none (cli-exec,
-                // the recorded limit) is exempt by construction, never by a
-                // hand-picked skip; under this fixture (plain string models,
-                // no cli/native kind) every (runtime, kind) pair here resolves
-                // to a labelled transport, so `continue` is unreached today
-                // and only guards a future resolution shape.
+                // owes the assertion below — a transport with none (cli-exec
+                // and herding-exec, the recorded limit: an external executor
+                // call is `{command, stdin}`, with no field to carry a
+                // subject) is exempt by construction, never by a hand-picked
+                // skip. pi is the exempt runtime here: D5 makes every pi slot
+                // herding, so its payload is that Bash call and `continue`
+                // fires for it — the claude and codex rows still owe the
+                // label, which is what this device was built to hold.
                 let label = match runtime {
                     "claude" => payload.get("description").and_then(Value::as_str),
                     "codex" => payload.get("task_name").and_then(Value::as_str),
                     _ => None,
                 };
                 let Some(label) = label else { continue };
+
+                if runtime == "codex" {
+                    assert!(
+                        label.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_'),
+                        "codex/{kind}: task_name {label:?} violates the live schema"
+                    );
+                    assert!(
+                        payload["message"].as_str().unwrap().contains(&format!("Assignment: {marker}")),
+                        "codex/{kind}: message dropped the complete subject {marker:?}"
+                    );
+                    continue;
+                }
 
                 assert!(
                     label.contains(&marker),
@@ -1177,7 +1519,7 @@ use std::time::Instant;
         };
         assert_eq!(
             jsjson::stringify(&v),
-            r#"{"ok":false,"reason":"advisor_not_configured","fix":"set models.claude.advisor in .bee/config.json to enable an advisor consult (resolveAdvisor never falls back to another tier)."}"#
+            r#"{"ok":false,"reason":"advisor_not_configured","fix":"set team.claude.advisor in .bee/config.json to enable an advisor consult (resolveAdvisor never falls back to another tier)."}"#
         );
     }
 
@@ -1211,14 +1553,10 @@ use std::time::Instant;
         };
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(v.get("payload").unwrap().get("command"), Some(&json!("glm run")));
-        assert!(v
-            .get("payload")
-            .unwrap()
-            .get("stdin")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .starts_with("Gather:"));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        let gather_body = embedded_agent_body("bee-gather").unwrap();
+        assert!(stdin.starts_with(gather_body));
+        assert!(stdin.contains("Gather: locate and digest the requested paths/facts."));
     }
 
     // ── ht-3: herding-tier D4 — the herding-exec Bash payload ──────────────
@@ -1243,7 +1581,7 @@ use std::time::Instant;
         let payload = v.get("payload").unwrap();
         assert_eq!(
             payload.get("command"),
-            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+            Some(&json!(".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""))
         );
         let stdin = payload.get("stdin").unwrap().as_str().unwrap();
         assert!(!stdin.is_empty());
@@ -1277,7 +1615,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(
             v.get("payload").unwrap().get("command"),
-            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+            Some(&json!(".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""))
         );
     }
 
@@ -1314,7 +1652,7 @@ use std::time::Instant;
         assert_eq!(
             v.get("payload").unwrap().get("command"),
             Some(&json!(format!(
-                ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\""
+                ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\" --cell-id \"c-1\""
             )))
         );
     }
@@ -1344,9 +1682,56 @@ use std::time::Instant;
         assert_eq!(
             v.get("payload").unwrap().get("command"),
             Some(&json!(
-                ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\""
+                ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\" --cell-id \"c-1\""
             ))
         );
+    }
+
+    /// dispatch-cell-id-flag D1, D2: a cell herding dispatch carries --cell-id
+    /// with the cell's id, while non-cell dispatches (gather, reviewer, advisor)
+    /// never carry --cell-id and keep their commands byte-identical.
+    #[test]
+    fn herding_dispatch_carries_cell_id_only_for_cell_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding"},"review":{"kind":"herding"},"advisor":{"kind":"herding"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v_cell) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected prepared value for cell")
+        };
+        let cmd_cell = v_cell["payload"]["command"].as_str().unwrap();
+        assert_eq!(
+            cmd_cell,
+            ".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""
+        );
+
+        for (kind, role) in [("gather", "generation"), ("reviewer", "review"), ("advisor", "advisor")] {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", kind, Some(role), None, None, false, None, None, false, None,
+            )
+            .unwrap()
+            else {
+                panic!("expected prepared value for {kind}")
+            };
+            let cmd = v["payload"]["command"].as_str().unwrap();
+            assert!(!cmd.contains("--cell-id"), "{kind} command must not contain --cell-id: {cmd}");
+            let expected = if kind == "reviewer" {
+                ".bee/bin/bee herding run --task-file - --json"
+            } else {
+                ".bee/bin/bee herding run --task-file - --json --read-only"
+            };
+            assert_eq!(cmd, expected);
+        }
     }
 
     // ── hrv-3: herding-review-slots D3 — the fallback:default field ────────
@@ -1719,7 +2104,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let payload = v.get("payload").unwrap();
         assert_eq!(payload.get("model"), Some(&json!("sonnet")));
-        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation]\n"));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
         assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
@@ -1757,7 +2142,7 @@ use std::time::Instant;
         assert_eq!(payload.get("model"), None, "ceiling dispatch must have no model param");
         assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
         assert_eq!(payload.get("description"), Some(&json!("c-1: critical ceiling fix (ceiling)")));
-        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling]\n"));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("logical_tier"), Some(&json!("ceiling")));
         assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
@@ -1786,8 +2171,8 @@ use std::time::Instant;
         assert_eq!(v_codex.get("tool"), Some(&json!("spawn_agent")));
         let codex_payload = v_codex.get("payload").unwrap();
         assert_eq!(codex_payload.get("model"), None);
-        assert_eq!(codex_payload.get("task_name"), Some(&json!("c-1: critical ceiling fix")));
-        assert!(codex_payload.get("message").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling]\n"));
+        assert_eq!(codex_payload.get("task_name"), Some(&json!("c_1_critical_ceiling_fix")));
+        assert!(codex_payload.get("message").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         let codex_econ = v_codex.get("economics").unwrap();
         assert_eq!(codex_econ.get("channel"), Some(&json!("session-model")));
         assert_eq!(codex_econ.get("tier_source"), Some(&json!("cell")));
@@ -1849,7 +2234,7 @@ use std::time::Instant;
             .unwrap()
             .as_str()
             .unwrap()
-            .starts_with("[bee-tier: ceiling]\n"));
+            .starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("channel"), Some(&json!("session-model")));
         assert_eq!(econ.get("enforcement"), Some(&json!("session-model")));
@@ -1877,7 +2262,7 @@ use std::time::Instant;
             .unwrap()
             .as_str()
             .unwrap()
-            .starts_with("[bee-tier: ceiling]\n"));
+            .starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         assert_eq!(
             v_codex.get("economics").unwrap().get("channel"),
             Some(&json!("session-model"))
@@ -2023,7 +2408,7 @@ use std::time::Instant;
             if escalated {
                 assert_eq!(payload.get("model"), None, "{id}: escalated means no model param");
                 assert!(
-                    prompt.starts_with("[bee-tier: ceiling]\n"),
+                    prompt.starts_with("[bee-tier: ceiling] [bee-kind: cell]"),
                     "{id}: an escalated dispatch travels under the escalation word: {prompt}"
                 );
             } else {
@@ -2033,7 +2418,7 @@ use std::time::Instant;
                     "{id}: an uncounted cell must resolve a real model, never the session one"
                 );
                 assert!(
-                    !prompt.starts_with("[bee-tier: ceiling]\n"),
+                    !prompt.starts_with("[bee-tier: ceiling] [bee-kind: cell]"),
                     "{id}: an uncounted cell must not travel under the escalation word: {prompt}"
                 );
                 assert_eq!(econ.get("channel"), Some(&json!("claude-agent")), "{id}");
@@ -2145,7 +2530,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let payload = v.get("payload").unwrap();
         assert_eq!(payload.get("model"), Some(&json!("sonnet")));
-        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation]\n"));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
         assert_eq!(econ.get("tier_source"), Some(&json!("default")));
@@ -2181,7 +2566,7 @@ use std::time::Instant;
         assert_eq!(v.get("type"), Some(&json!("refused")));
         assert_eq!(v.get("reason"), Some(&json!("tier_not_configured")));
         assert_eq!(v.get("tier"), Some(&json!("extraction")));
-        assert!(v.get("fix").unwrap().as_str().unwrap().contains("set models.claude.extraction"));
+        assert!(v.get("fix").unwrap().as_str().unwrap().contains("set team.claude.extraction"));
 
         // Arbitrary unknown tier
         w(
@@ -2209,7 +2594,7 @@ use std::time::Instant;
         assert_eq!(v2.get("type"), Some(&json!("refused")));
         assert_eq!(v2.get("reason"), Some(&json!("tier_not_configured")));
         assert_eq!(v2.get("tier"), Some(&json!("quantum")));
-        assert!(v2.get("fix").unwrap().as_str().unwrap().contains("set models.claude.quantum"));
+        assert!(v2.get("fix").unwrap().as_str().unwrap().contains("set team.claude.quantum"));
     }
 
     // ── hrv-1: herding-review-slots D1/D2 — reviewer/advisor purposes ──────
@@ -2265,7 +2650,7 @@ use std::time::Instant;
         assert_eq!(
             v.get("payload").unwrap().get("command"),
             Some(&json!(
-                ".bee/bin/bee herding run --task-file - --json --agent \"named-herd\""
+                ".bee/bin/bee herding run --task-file - --json --agent \"named-herd\" --read-only"
             ))
         );
         assert_eq!(
@@ -2292,7 +2677,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(
             v.get("payload").unwrap().get("command"),
-            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+            Some(&json!(".bee/bin/bee herding run --task-file - --json --read-only"))
         );
         assert_eq!(
             v.get("economics").unwrap().get("channel"),
@@ -2373,19 +2758,24 @@ use std::time::Instant;
     }
 
     #[test]
-    fn native_unavailable_refuses_rather_than_downgrading() {
+    fn codex_spawn_payload_native_override_uses_the_live_schema() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(
             &tmp,
             r#"{"models":{"codex":{"generation":{"kind":"native","model":"gpt-5"}}}}"#,
         );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"implement feature","status":"claimed","trace":{"worker":"w"}}"#,
+        );
         // No confirmed override, no configured fallback -> typed refusal.
         let Prepared::Value(v) = prepare_dispatch(
             &root,
             "codex",
-            "gather",
-            None,
-            None,
+            "cell",
+            Some("c-1"),
+            Some("w"),
             false,
             Some(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
             None,
@@ -2401,9 +2791,9 @@ use std::time::Instant;
         let Prepared::Value(v) = prepare_dispatch(
             &root,
             "codex",
-            "gather",
-            None,
-            None,
+            "cell",
+            Some("c-1"),
+            Some("w"),
             false,
             Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE),
             None,
@@ -2413,7 +2803,8 @@ use std::time::Instant;
         };
         assert_eq!(v.get("transport"), Some(&json!("native-override")));
         let p = v.get("payload").unwrap();
-        assert_eq!(p.get("agent_type"), Some(&json!("worker")));
+        assert_eq!(p.get("agent_type"), None);
+        assert_eq!(p.get("task_name"), Some(&json!("c_1_implement_feature")));
         assert_eq!(p.get("model"), Some(&json!("gpt-5")));
         assert_eq!(p.get("fork_turns"), Some(&json!("none")));
     }
@@ -2468,6 +2859,89 @@ use std::time::Instant;
         )
         .unwrap();
         (main, granted)
+    }
+
+    // ── psd-1 (D6/D7): the dispatch door and advisor-ref served from a
+    //    granted worktree against main's store ─────────────────────────────
+
+    fn psd1_store_root(cwd: &Path) -> PathBuf {
+        match resolve_root_serving_granted(cwd).0 {
+            Roots::Ordinary(r) => dunce::canonicalize(&r).unwrap(),
+            _ => panic!("expected a served root for {}", cwd.display()),
+        }
+    }
+
+    #[test]
+    fn dispatch_prepare_from_a_granted_worktree_serves_mains_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        let root = psd1_store_root(&granted);
+        assert_eq!(root, psd1_store_root(&main));
+        let build = |r: &Path| match prepare_dispatch_wire(
+            r, "claude", "gather", None, None, None, false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap()
+        {
+            // dispatch_id is a fresh uuid per call; everything else must match.
+            Prepared::Value(Value::Object(mut v)) => {
+                v.remove("dispatch_id");
+                v
+            }
+            Prepared::Value(other) => panic!("expected an envelope: {other}"),
+            Prepared::Thrown(m) => panic!("{m}"),
+        };
+        assert_eq!(build(&root), build(&dunce::canonicalize(&main).unwrap()));
+    }
+
+    #[test]
+    fn non_cell_dispatch_from_a_granted_worktree_runs_in_that_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"advisor":{"kind":"herding"}}}}"#,
+        )
+        .unwrap();
+        w(&main, ".bee/state.json", r#"{"feature":"other-feat"}"#);
+        let (roots, here) = resolve_root_serving_granted(&granted);
+        let Roots::Ordinary(root) = roots else { panic!("expected a served root") };
+        let feature = granted_worktree_feature(&root, "advisor", None, here.as_deref());
+        assert_eq!(feature.as_deref(), Some("demo"));
+        // Cell dispatch resolution is unchanged: no worktree default.
+        assert_eq!(granted_worktree_feature(&root, "cell", None, here.as_deref()), None);
+        // From main the old fallback (state.json's feature) still applies.
+        assert_eq!(granted_worktree_feature(&root, "advisor", None, None), None);
+
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "advisor", None, None, None, false, None, None, false, None, None,
+            feature.as_deref(), None, None, None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let command = v["payload"]["command"].as_str().unwrap().to_string();
+        let norm = |p: &str| dunce::canonicalize(p).unwrap().to_string_lossy().into_owned();
+        let cwd = command.split("--cwd \"").nth(1).and_then(|s| s.split('"').next()).expect(&command);
+        assert_eq!(norm(cwd), norm(granted.to_str().unwrap()), "{command}");
+    }
+
+    #[test]
+    fn advisor_ref_show_from_a_granted_worktree_matches_main_and_other_verbs_still_refuse() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        w(&main, ".bee/state.json", r#"{"schema_version":"1.0","phase":"swarming","feature":"demo"}"#);
+        let show = |r: &Path| match crate::verbs::state_group::show_body(r, &Flags(Vec::new())) {
+            Ok(Out::Emit(_, text, _)) => text,
+            Ok(Out::Thrown(m)) => format!("thrown: {m}"),
+            Err(_) => panic!("unexpected Exotic result"),
+        };
+        assert_eq!(show(&psd1_store_root(&granted)), show(&psd1_store_root(&main)));
+        // Every other verb keeps the narrow door, which still refuses here.
+        assert!(matches!(
+            resolve_store_root(&granted),
+            Roots::Unsupported(crate::roots::Unsupported::GrantedWorktree { .. })
+        ));
     }
 
     /// must-have 1 + 2: when `find_granted_worktree_for_feature` resolves a
@@ -2907,6 +3381,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", DISPATCH_CLAIM_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -2959,6 +3434,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_OWNED_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3011,6 +3487,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_OTHER_OWNER_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3055,6 +3532,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_UNCLAIMED_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3074,32 +3552,1062 @@ use std::time::Instant;
         assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-8", Some("bee-w8")).unwrap());
     }
 
+    // ══ slp-contract S4 — the contract-citation tripwire at the DISPATCH door ══
+    //
+    // Coverage audit before authoring (`.bee/expertise/tests.md`):
+    //   - verbs/cells/tests.rs now pins the CLAIM door over the same rule
+    //     (four refuse cases, six allow cases, zero mutation on each
+    //     refusal).
+    //   - this file already pins prepare's typed refusal grammar for
+    //     `claim_ownership` ("claim_less_prepare_of_cell_owned_by_another…")
+    //     and for an unmapped kind.
+    //   - Gap: the dispatch door over a citation, and — the reason there
+    //     are two doors at all — the claim-then-change window the claim
+    //     door structurally cannot see.
+
+    fn cit_repo(tmp: &tempfile::TempDir) -> PathBuf {
+        let root = repo(tmp, r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/lanes/cit.json",
+            r#"{"feature":"cit","approved_gates":{"execution":true},"route":true}"#,
+        );
+        w(
+            &root,
+            ".bee/test-results.json",
+            r#"{"ran_at":"2026-01-01T00:00:00.000Z","green":true,"commands":[{"command":"cargo test","exit":0,"duration_ms":1,"failure_excerpt":null}]}"#,
+        );
+        root
+    }
+
+    const CIT_SETTLED: &str = "11111111-0000-0000-0000-000000000001";
+    const CIT_RETIRED: &str = "22222222-0000-0000-0000-000000000002";
+    const CIT_WAITING: &str = "33333333-0000-0000-0000-000000000003";
+    const CIT_REPLACEMENT: &str = "77777777-0000-0000-0000-000000000007";
+
+    fn cit_decide(id: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d","rationale":"r","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    fn cit_supersede(id: &str, target: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"supersede","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r","supersedes":"{target}","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    fn cit_write_decisions(root: &Path, lines: &[String]) {
+        w(root, ".bee/decisions.jsonl", &format!("{}\n", lines.join("\n")));
+    }
+
+    /// A cell already CLAIMED by `w` — the state every `dispatch prepare
+    /// --kind cell` sees.
+    fn cit_claimed_cell(root: &Path, id: &str, decisions: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"cit","title":"t","status":"claimed","decisions":{decisions},"trace":{{"worker":"w"}}}}"#
+            ),
+        );
+    }
+
+    /// The window that justifies a SECOND door: the cell was claimed while
+    /// its citation was settled, and the decision was superseded
+    /// afterwards. The claim door cannot see that — it already ran — so a
+    /// claim-only tripwire would dispatch this worker against a retired
+    /// contract. D3's letter names the dispatch, and this is why.
+    #[test]
+    fn dispatching_a_cell_whose_citation_went_retired_after_the_claim_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_claimed_cell(&root, "c-cit", &format!(r#"["{CIT_RETIRED}"]"#));
+        // The store as it was at claim time: the citation was ACTIVE, so
+        // the claim door had nothing to refuse on.
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED)]);
+        assert!(
+            crate::verbs::cells::contract_citation_refusal(
+                &root,
+                "c-cit",
+                Some(&read_cell(&root, "c-cit").unwrap().unwrap())
+            )
+            .is_none(),
+            "the fixture must start settled, or this test proves nothing about the window"
+        );
+
+        // Now it is superseded — the change the claim door never saw.
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)]);
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-cit"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)), "payload: {v}");
+        assert_eq!(v.get("type"), Some(&json!("refused")), "payload: {v}");
+        assert_eq!(v.get("reason"), Some(&json!("contract_retired")), "payload: {v}");
+        assert_eq!(v.get("code"), Some(&json!("CONTRACT_RETIRED")), "payload: {v}");
+        assert_eq!(v.get("cell"), Some(&json!("c-cit")), "payload: {v}");
+        let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains(CIT_RETIRED), "the fix names the decision: {v}");
+        assert!(fix.contains("bee decisions active"), "payload: {v}");
+        // No envelope leaked out beside the refusal, and nothing was written.
+        assert!(v.get("payload").is_none(), "a refusal carries no dispatch payload: {v}");
+        assert_eq!(read_cell(&root, "c-cit").unwrap().unwrap()["status"], json!("claimed"));
+        assert!(!root.join(".bee/logs/dispatch.jsonl").exists(), "a refusal records no dispatch");
+    }
+
+    /// The unsettled arm at the same door: an ACTIVE decision whose trigger
+    /// is still waiting.
+    #[test]
+    fn dispatching_a_cell_citing_an_unsettled_contract_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_claimed_cell(&root, "c-cit", &format!(r#"["{CIT_WAITING}"]"#));
+        cit_write_decisions(&root, &[cit_decide(CIT_WAITING)]);
+        w(
+            &root,
+            ".bee/triggers/upstream__33333333.json",
+            r#"{"id":"upstream__33333333","decision":"33333333","condition":"revisit when upstream lands","tier":"manual","predicate":null,"status":"waiting","created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:00:00.000Z","outcome":null}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-cit"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        assert_eq!(v.get("reason"), Some(&json!("contract_unsettled")), "payload: {v}");
+        assert_eq!(v.get("code"), Some(&json!("CONTRACT_UNSETTLED")), "payload: {v}");
+        assert!(
+            v.get("fix").and_then(Value::as_str).unwrap_or_default().contains("bee triggers list"),
+            "payload: {v}"
+        );
+    }
+
+    /// The two doors are ONE rule, not two that happen to agree today: the
+    /// same cell refused at the claim door and at the dispatch door carries
+    /// the IDENTICAL sentence, because there is one producer of it
+    /// (`cells::contract_citation_refusal`). A fixture that cannot diverge
+    /// is the only proof worth having here.
+    #[test]
+    fn the_claim_door_and_the_dispatch_door_refuse_with_the_same_sentence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)]);
+        // OPEN — the claim door's shape.
+        w(
+            &root,
+            ".bee/cells/c-both.json",
+            &format!(
+                r#"{{"id":"c-both","feature":"cit","title":"t","status":"open","decisions":["{CIT_RETIRED}"]}}"#
+            ),
+        );
+        let claim_refusal = match crate::verbs::cells::claim_cell_from_flags(
+            &root, "c-both", "w", Some("sess-1"), None,
+        ) {
+            Err(crate::verbs::cells::Fail::Thrown(m)) => m,
+            Err(crate::verbs::cells::Fail::Delegate) => panic!("unexpected delegate"),
+            Ok(_) => panic!("the claim door must refuse a retired citation"),
+        };
+        // The claim door refused, so the cell is still open — CLAIMED by
+        // hand for the dispatch door, which is the state it always sees.
+        assert_eq!(read_cell(&root, "c-both").unwrap().unwrap()["status"], json!("open"));
+        cit_claimed_cell(&root, "c-both", &format!(r#"["{CIT_RETIRED}"]"#));
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-both"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        let dispatch_sentence = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert_eq!(
+            claim_refusal,
+            format!("claim: CONTRACT_RETIRED — {dispatch_sentence}"),
+            "the two doors must speak one sentence, not two that agree by luck"
+        );
+    }
+
+    /// ALLOW — a settled citation dispatches normally, and a list of local
+    /// D-IDs dispatches normally. The dispatch door repeats the claim
+    /// door's pass-over rule exactly: an entry that resolves to no store
+    /// decision refuses nothing.
+    #[test]
+    fn a_settled_or_local_citation_dispatches_normally() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        // A store holding a retired decision, so the allow is proven to be
+        // about resolution rather than about an empty store.
+        cit_write_decisions(
+            &root,
+            &[cit_decide(CIT_SETTLED), cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)],
+        );
+
+        for decisions in [format!(r#"["{CIT_SETTLED}"]"#), r#"["D1","D2"]"#.to_string(), "[]".to_string()] {
+            cit_claimed_cell(&root, "c-ok", &decisions);
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", "cell", Some("c-ok"), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope for {decisions}")
+            };
+            assert_eq!(v.get("tool"), Some(&json!("Agent")), "{decisions} must dispatch: {v}");
+            assert!(v.get("type").is_none(), "{decisions} must not be refused: {v}");
+        }
+    }
+
+    // Every probe test owns its executable. Never invoke the installed Codex
+    // or change PATH in the test process: other tests run concurrently.
+    fn probe_fixture(root: &Path, features: &str) -> std::path::PathBuf {
+        #[cfg(unix)]
+        let (name, script) = ("probe-stub", format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then\n  echo 'codex-cli 0.154.0'\nelse\n{features}\nfi\n"
+        ));
+        #[cfg(windows)]
+        let (name, script) = ("probe-stub.cmd", format!(
+            "@echo off\r\nif \"%1\"==\"--version\" (\r\necho codex-cli 0.154.0\r\n) else (\r\n{features}\r\n)\r\n"
+        ));
+        let path = root.join(name);
+        std::fs::write(&path, script).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        path
+    }
+
+    fn fixture_classification(root: &Path) -> D<&'static str> {
+        let stub = probe_fixture(root, "echo multi_agent experimental true\necho multi_agent_v2 experimental false");
+        native_transport_classification_with_cmd(root, stub.to_str().unwrap(), std::time::Duration::from_secs(2))
+    }
+
+    #[test]
+    fn installed_opaque_native_message_refuses_cells_but_keeps_readonly_transport() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"generation":"gpt-5.5","read":"gpt-5.5"}}}"#);
+        let stub = probe_fixture(&root, "exit 1");
+        let classification = installed_native_transport_classification(
+            &root, stub.to_str().unwrap(), std::time::Duration::from_secs(1),
+        ).unwrap();
+        assert_eq!(classification, "native_hook_input_opaque");
+        w(&root, ".bee/cells/c-1.json", r#"{"id":"c-1","feature":"f","title":"t","status":"claimed","trace":{"worker":"w"}}"#);
+        for escalated in [false, true] {
+            w(&root, ".bee/cells/c-1.json", &json!({"id":"c-1","feature":"f","title":"t","status":"claimed","escalate":escalated,"trace":{"worker":"w"}}).to_string());
+            let Prepared::Value(v) = prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false,
+                Some(classification), None, false, None).unwrap() else { panic!() };
+            assert_eq!(v["reason"], "native_hook_input_opaque");
+            assert_eq!(v["slot"], if escalated { "ceiling" } else { "generation" });
+            assert!(v.get("payload").is_none());
+        }
+        w(&root, ".bee/cells/c-1.json", r#"{"id":"c-1","feature":"f","title":"t","status":"claimed","trace":{"worker":"w"}}"#);
+        let Prepared::Value(v) = prepare_dispatch(&root, "codex", "gather", None, None, false,
+            Some(classification), None, false, None).unwrap() else { panic!() };
+        assert_eq!(v["tool"], "Bash");
+        assert!(v["payload"]["command"].as_str().unwrap().contains("--sandbox read-only"));
+
+        for (slot, command) in [
+            (json!({"kind":"herding","model":"gpt-5.5","description":"code"}), "herding"),
+            (json!({"primary":{"kind":"native","model":"gpt-5.5"},"fallback_policy":"explicit-only","fallback":{"kind":"cli","command":"codex exec -"}}), "codex exec -"),
+        ] {
+            w(&root, ".bee/config.json", &json!({"models":{"codex":{"generation":slot}}}).to_string());
+            let Prepared::Value(v) = prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false,
+                Some(classification), None, false, None).unwrap() else { panic!() };
+            assert_eq!(v["tool"], "Bash", "{v}");
+            assert!(v["payload"]["command"].as_str().unwrap().contains(command), "{v}");
+        }
+    }
+
+    #[test]
+    fn native_probe_freshness_checks_each_record_leg_against_an_isolated_executable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let valid = json!({
+            "schema":"native-transport-probe/1",
+            "repo_identity":crate::verbs::reservations::sha256_hex(&root.to_string_lossy()),
+            "codex_version":"codex-cli 0.154.0",
+            "config_scope":{"multi_agent":true,"multi_agent_v2":false},
+            "config_scope_hash":"249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61",
+            "classification":"native_model_override"
+        });
+        w(&root, ".bee/native-transport-probe.json", &valid.to_string());
+        assert_eq!(fixture_classification(&root).unwrap(), NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
+        for (field, value) in [
+            ("repo_identity", json!("wrong")),
+            ("codex_version", json!("codex-cli 0.153.0")),
+            ("config_scope_hash", json!("wrong")),
+            ("config_scope", json!(null)),
+            ("config_scope", json!([])),
+        ] {
+            let mut changed = valid.clone();
+            changed[field] = value;
+            w(&root, ".bee/native-transport-probe.json", &changed.to_string());
+            assert_eq!(fixture_classification(&root).unwrap(), NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY, "{field}");
+        }
+        w(&root, ".bee/native-transport-probe.json", &valid.to_string());
+        for features in ["echo multi_agent experimental false", "echo other experimental true"] {
+            let stub = probe_fixture(&root, features);
+            assert_eq!(native_transport_classification_with_cmd(&root, stub.to_str().unwrap(),
+                std::time::Duration::from_secs(1)).unwrap(), NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+        }
+    }
+
     #[test]
     fn absent_probe_record_classifies_budget_only_without_a_subprocess() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, "{}");
         assert_eq!(
-            native_transport_classification(&root).unwrap(),
+            fixture_classification(&root).unwrap(),
             NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
         );
         // Corrupt / schema-mismatched records short-circuit the same way.
         w(&root, ".bee/native-transport-probe.json", "{not json");
         assert_eq!(
-            native_transport_classification(&root).unwrap(),
+            fixture_classification(&root).unwrap(),
             NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
         );
         w(&root, ".bee/native-transport-probe.json", r#"{"schema":"other/9"}"#);
         assert_eq!(
-            native_transport_classification(&root).unwrap(),
+            fixture_classification(&root).unwrap(),
             NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
         );
-        // A LIVE record needs codex-cli probes — delegate.
+        // A live record with no classification classifies budget only without delegation.
         w(
             &root,
             ".bee/native-transport-probe.json",
             r#"{"schema":"native-transport-probe/1"}"#,
         );
-        assert!(native_transport_classification(&root).is_err());
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
+        );
+        // A complete record requires matching output from the isolated probe.
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE
+        );
+    }
+
+    #[test]
+    fn codex_prepared_cell_with_configured_model_carries_settings_and_sets_native_requested() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"codex":{"generation":{"model":"gpt-5.5","effort":"high"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"implement feature","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "codex",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v.get("tool"), Some(&json!("spawn_agent")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), Some(&json!("gpt-5.5")));
+        assert_eq!(payload.get("reasoning_effort"), Some(&json!("high")));
+        assert_eq!(payload.get("fork_turns"), Some(&json!("none")));
+        assert_eq!(payload.get("task_name"), Some(&json!("c_1_implement_feature")));
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("codex-native")));
+        assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
+        assert_eq!(econ.get("requested_model"), Some(&json!("gpt-5.5")));
+        assert_eq!(econ.get("enforcement"), Some(&json!("native-model-param")));
+        assert_eq!(econ.get("effective_model_status"), Some(&json!("native-requested")));
+    }
+
+    #[test]
+    fn codex_prepared_non_cell_gather_uses_read_only_sandbox_cli() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"codex":{"read":{"model":"gpt-5.5","effort":"medium"}}}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "codex",
+            "gather",
+            None,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let payload = v.get("payload").unwrap();
+        let cmd = payload.get("command").unwrap().as_str().unwrap();
+        assert!(cmd.starts_with("codex exec --sandbox read-only --ephemeral"), "cmd: {cmd}");
+        assert!(cmd.contains("--model 'gpt-5.5'"), "cmd: {cmd}");
+        assert!(cmd.contains("-c model_reasoning_effort='low'"), "cmd: {cmd}");
+        assert!(cmd.ends_with(" -"), "cmd: {cmd}");
+        assert!(payload.get("stdin").is_some());
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("cli-exec")));
+        assert_eq!(econ.get("enforcement"), Some(&json!("cli-command")));
+        assert_eq!(econ.get("effective_model_status"), Some(&json!("declared")));
+        assert_eq!(econ.get("requested_model"), Some(&json!("gpt-5.5")));
+    }
+
+    #[test]
+    fn codex_gather_moves_a_high_effort_two_steps_down() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"read":{"model":"gpt-5.5","effort":"high"}}}}"#);
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "codex", "gather", None, None, false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        let cmd = v["payload"]["command"].as_str().unwrap();
+        assert!(cmd.contains("-c model_reasoning_effort='low'"), "cmd: {cmd}");
+        let econ = &v["economics"];
+        assert_eq!(econ["effort"], json!("low"));
+        assert_eq!(econ["effort_base"], json!("high"));
+        assert_eq!(econ["effort_step"], json!(-2));
+        assert_eq!(econ["effort_reason"], json!("gather/-"));
+    }
+
+    #[test]
+    fn codex_native_cell_carries_kind_and_lane_markers_and_the_moved_effort() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"generation":{"model":"gpt-5","effort":"medium"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"t","lane":"tiny","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v["tool"], json!("spawn_agent"));
+        assert_eq!(v["payload"]["reasoning_effort"], json!("low"));
+        let message = v["payload"]["message"].as_str().unwrap();
+        assert!(message.lines().next().unwrap().ends_with("[bee-kind: cell] [bee-lane: tiny]"), "{message}");
+    }
+
+    #[test]
+    fn claude_high_risk_cell_raises_effort_one_step_and_marks_kind_and_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"model":"sonnet","effort":"high"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"t","lane":"high-risk","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v["tool"], json!("Agent"));
+        assert_eq!(v["payload"]["effort"], json!("xhigh"));
+        let prompt = v["payload"]["prompt"].as_str().unwrap();
+        let marker = prompt.lines().next().unwrap();
+        assert!(marker.contains("[bee-kind: cell]"), "{marker}");
+        assert!(marker.contains("[bee-lane: high-risk]"), "{marker}");
+        let econ = &v["economics"];
+        assert_eq!(econ["effort"], json!("xhigh"));
+        assert_eq!(econ["effort_base"], json!("high"));
+        assert_eq!(econ["effort_step"], json!(1));
+        assert_eq!(econ["effort_reason"], json!("cell/high-risk"));
+    }
+
+    #[test]
+    fn claude_role_with_no_effort_sends_no_effort_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v["payload"].get("effort"), None);
+        assert!(v["payload"]["prompt"].as_str().unwrap().lines().next().unwrap().ends_with("[bee-kind: gather]"));
+        assert_eq!(v["economics"]["effort_reason"], json!("no-base"));
+    }
+
+    #[test]
+    fn probe_record_parsing_returns_recorded_classification_without_delegation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"external_cli_only"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_EXTERNAL_CLI_ONLY
+        );
+
+        // Mismatched identity falls back to native_budget_only
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            r#"{"schema":"native-transport-probe/1","repo_identity":"wrong_ident","classification":"native_model_override"}"#,
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
+        );
+    }
+
+    #[test]
+    fn codex_confirmed_native_advisor_or_gather_routes_through_readonly_cli_not_spawn_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"codex":{"advisor":{"kind":"native","model":"gpt-6-astra","effort":"high"}}}}"#,
+        );
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","classification":"native_model_override"}}"#
+            ),
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "codex",
+            "advisor",
+            None,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        // MUST route through readonly CLI Bash tool, NOT spawn_agent!
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let payload = v.get("payload").unwrap();
+        let cmd = payload.get("command").unwrap().as_str().unwrap();
+        assert!(cmd.starts_with("codex exec --sandbox read-only --ephemeral"), "cmd: {cmd}");
+    }
+
+    // This case executes a POSIX shell and uses path bytes Windows forbids.
+    #[cfg(unix)]
+    #[test]
+    fn codex_readonly_cli_safely_quotes_hostile_selectors_and_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        dp1_git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&main, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&main, &["config", "user.name", "t"]);
+        std::fs::write(main.join("README.md"), "# Main\n").unwrap();
+        dp1_git_ok(&main, &["add", "-A"]);
+        dp1_git_ok(&main, &["commit", "-qm", "init"]);
+
+        // Create a granted worktree with a hostile path containing dollar substitution, backticks,
+        // single quotes, double quotes, parentheses and whitespace.
+        let hostile_wt_name = "wt $VAR `touch hostile_wt_bt` 'single' \"double\" (parens)";
+        let hostile_wt = tmp.path().join(hostile_wt_name);
+        dp1_git_ok(&main, &["worktree", "add", "-q", hostile_wt.to_str().unwrap(), "-b", "wt/hostile"]);
+        let wt_git_id = std::fs::read_dir(main.join(".git").join("worktrees"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .to_string();
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        let mut grants_map = serde_json::Map::new();
+        grants_map.insert(wt_git_id, serde_json::Value::Bool(true));
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            serde_json::to_string(&grants_map).unwrap(),
+        )
+        .unwrap();
+        std::fs::create_dir_all(hostile_wt.join(".bee").join("runtime")).unwrap();
+        std::fs::write(hostile_wt.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            hostile_wt.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"hostile-feat\"}\n",
+        )
+        .unwrap();
+
+        // Configure models with hostile model selector containing dollar substitution,
+        // backticks, single quotes, double quotes, and whitespace.
+        let hostile_model = "$(touch hostile_model_executed) 'single' \"double\" `touch hostile_model_bt` $VAR";
+        let hostile_effort = "high";
+        w(
+            &main,
+            ".bee/config.json",
+            &format!(
+                r#"{{"models":{{"codex":{{"read":{{"model":{:?},"effort":{:?}}}}}}}}}"#,
+                hostile_model, hostile_effort
+            ),
+        );
+        w(
+            &main,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"hostile-feat","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+
+        let Prepared::Value(v) = prepare_dispatch(
+            &main,
+            "codex",
+            "gather",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+
+        let payload = v.get("payload").unwrap();
+        let cmd = payload.get("command").unwrap().as_str().unwrap();
+        let stdin_str = payload.get("stdin").unwrap().as_str().unwrap();
+
+        // Create stub codex executable to capture exact argv and stdin
+        let stub_bin_dir = tmp.path().join("stub_bin");
+        std::fs::create_dir_all(&stub_bin_dir).unwrap();
+        let capture_dir = tmp.path().join("stub_capture");
+        std::fs::create_dir_all(&capture_dir).unwrap();
+
+        let stub_codex = stub_bin_dir.join("codex");
+        std::fs::write(
+            &stub_codex,
+            format!(
+                r#"#!/bin/sh
+cat > "{}/stdin.txt"
+for arg in "$@"; do
+    printf "%s\n" "$arg" >> "{}/argv.txt"
+done
+"#,
+                capture_dir.display(),
+                capture_dir.display()
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub_codex, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let run_dir = tmp.path().join("run_workspace");
+        std::fs::create_dir_all(&run_dir).unwrap();
+
+        // Execute the PREPARED command against the stub codex executable via /bin/sh
+        let mut child = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(cmd)
+            .current_dir(&run_dir)
+            .env(
+                "PATH",
+                format!("{}:{}", stub_bin_dir.display(), std::env::var("PATH").unwrap_or_default()),
+            )
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        {
+            use std::io::Write;
+            child.stdin.as_mut().unwrap().write_all(stdin_str.as_bytes()).unwrap();
+        }
+
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "execution of prepared command failed: stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        // Assert exact argv received by the stub codex executable
+        let argv_raw = std::fs::read_to_string(capture_dir.join("argv.txt")).unwrap();
+        let argv: Vec<&str> = argv_raw.lines().collect();
+        assert_eq!(
+            argv,
+            vec![
+                "exec",
+                "--sandbox",
+                "read-only",
+                "--ephemeral",
+                "--cd",
+                hostile_wt.to_str().unwrap(),
+                "--model",
+                hostile_model,
+                "-c",
+                "model_reasoning_effort=low",
+                "-"
+            ],
+            "exact argv mismatch"
+        );
+
+        // Assert exact stdin received by the stub codex executable
+        let captured_stdin = std::fs::read_to_string(capture_dir.join("stdin.txt")).unwrap();
+        assert_eq!(captured_stdin, stdin_str, "exact stdin mismatch");
+
+        // Assert absence of side effects (no touched files created anywhere)
+        assert!(!run_dir.join("hostile_wt_bt").exists());
+        assert!(!run_dir.join("hostile_model_executed").exists());
+        assert!(!run_dir.join("hostile_model_bt").exists());
+        assert!(!run_dir.join("hostile_effort_bt").exists());
+        assert!(!std::path::Path::new("hostile_wt_bt").exists());
+        assert!(!std::path::Path::new("hostile_model_executed").exists());
+        assert!(!std::path::Path::new("hostile_model_bt").exists());
+        assert!(!std::path::Path::new("hostile_effort_bt").exists());
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("requested_model"), Some(&json!(hostile_model)));
+    }
+
+    #[test]
+    fn native_transport_classification_rejects_incomplete_and_stale_records() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+
+        // Incomplete record: missing codex_version must classify as budget_only
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "missing codex_version must be rejected"
+        );
+
+        // Incomplete record: missing repo_identity must classify as budget_only
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            r#"{"schema":"native-transport-probe/1","codex_version":"codex-cli 0.154.0","classification":"native_model_override"}"#,
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "missing repo_identity must be rejected"
+        );
+
+        // Incomplete record: missing config_scope_hash must classify as budget_only
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "missing config_scope_hash must be rejected"
+        );
+    }
+
+    #[test]
+    fn native_transport_classification_rejects_missing_or_wrong_type_config_scope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let empty_hash = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"; // sha256 of "{}"
+
+        // Missing config_scope with hash matching "{}"
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope_hash":"{empty_hash}","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "missing config_scope must not hash as an empty valid object"
+        );
+
+        // Wrong-type config_scope (string) with hash matching "{}"
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":"not-an-object","config_scope_hash":"{empty_hash}","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "wrong-type (string) config_scope must not hash as an empty valid object"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_transport_classification_failed_features_probe_must_return_budget_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+
+        // Create a stub codex that succeeds on --version but fails on features list
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub = bin_dir.join("codex");
+        std::fs::write(
+            &stub,
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.154.0"
+    exit 0
+fi
+if [ "$1" = "features" ] && [ "$2" = "list" ]; then
+    echo "failed probe" >&2
+    exit 1
+fi
+exit 0
+"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+
+        let result = native_transport_classification_with_cmd(
+            &root, stub.to_str().unwrap(), std::time::Duration::from_secs(2),
+        );
+
+        assert_eq!(
+            result.unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "failed features probe MUST return native_budget_only, not fall through to recorded classification"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_transport_classification_features_probe_timeout_returns_budget_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub = bin_dir.join("codex");
+        std::fs::write(
+            &stub,
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.154.0"
+    exit 0
+fi
+if [ "$1" = "features" ] && [ "$2" = "list" ]; then
+    sleep 3
+    echo "multi_agent true"
+    exit 0
+fi
+exit 0
+"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+
+        let t0 = std::time::Instant::now();
+        let result = native_transport_classification_with_cmd(
+            &root,
+            stub.to_str().unwrap(),
+            std::time::Duration::from_millis(150),
+        );
+        let elapsed = t0.elapsed();
+
+        assert!(
+            elapsed < std::time::Duration::from_secs(2),
+            "timed out probe took too long to terminate: {elapsed:?}"
+        );
+        assert_eq!(
+            result.unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "timed-out features probe MUST return native_budget_only, not fall through to recorded classification"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn native_transport_probe_deadline_survives_detached_pipe_holder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        w(&root, ".bee/native-transport-probe.json", &format!(
+            r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61","classification":"native_model_override"}}"#
+        ));
+        let pid_file = root.join("detached.pid");
+        let stub = probe_fixture(&root, &format!("setsid sleep 3 &\necho $! > '{}'\nwait", pid_file.display()));
+        let start = std::time::Instant::now();
+        let result = native_transport_classification_with_cmd(
+            &root, stub.to_str().unwrap(), std::time::Duration::from_millis(100),
+        ).unwrap();
+        // The fixture deliberately escapes the process group. It owns cleanup
+        // of that process; the production probe does not claim containment.
+        let elapsed = start.elapsed();
+        if let Ok(pid) = std::fs::read_to_string(pid_file) {
+            if let Ok(pid) = pid.trim().parse::<libc::pid_t>() {
+                unsafe { libc::kill(pid, libc::SIGKILL); }
+            }
+        }
+        assert_eq!(result, NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+        assert!(elapsed < std::time::Duration::from_secs(1),
+            "detached stdout holder extended the probe deadline: {elapsed:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_transport_classification_malformed_features_probe_returns_budget_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub = bin_dir.join("codex");
+        std::fs::write(
+            &stub,
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.154.0"
+    exit 0
+fi
+if [ "$1" = "features" ] && [ "$2" = "list" ]; then
+    echo "malformed features output without expected columns"
+    exit 0
+fi
+exit 0
+"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+
+        let result = native_transport_classification_with_cmd(
+            &root,
+            stub.to_str().unwrap(),
+            std::time::Duration::from_millis(500),
+        );
+
+        assert_eq!(
+            result.unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "malformed features probe MUST return native_budget_only"
+        );
+    }
+
+    #[test]
+    fn native_transport_classification_unavailable_probe_returns_budget_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+
+        let result = native_transport_classification_with_cmd(
+            &root,
+            "/nonexistent/bin/codex-probe-unavailable",
+            std::time::Duration::from_millis(500),
+        );
+
+        assert_eq!(
+            result.unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "unavailable probe binary MUST return native_budget_only"
+        );
     }
 
     // ── learned context ────────────────────────────────────────────────────
@@ -3349,6 +4857,12 @@ use std::time::Instant;
                 "door tests: open — no capped cells yet — nothing to prove\n",
                 "door scribing-debt: clear\n",
                 "door capture-queue: clear\n",
+                "door mistakes: clear\n",
+                "door dissent-debt: clear\n",
+                "door leader-check: clear\n",
+                // an-3: the advisor-nudge door joined the builder beside the
+                // dissent one; this feature carries no nudge, so it is clear.
+                "door advisor-nudge-debt: clear\n",
                 "door pattern-check: clear\n",
                 "door knowledge-freshness: clear\n",
                 "door impact: clear\n",
@@ -3707,12 +5221,12 @@ use std::time::Instant;
         w(
             &root,
             ".bee/cells/demo-1.json",
-            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched a.rs","deviations":[]}}}"#,
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"no_mistakes":true,"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched a.rs","deviations":[]}}}"#,
         );
         w(
             &root,
             ".bee/cells/demo-2.json",
-            r#"{"id":"demo-2","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched b.rs","deviations":[]}}}"#,
+            r#"{"id":"demo-2","feature":"demo","status":"capped","trace":{"no_mistakes":true,"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched b.rs","deviations":[]}}}"#,
         );
         let Out::Emit(result, text, code) =
             close_handler(&root, "demo", false, None, None, &HashMap::new()).unwrap()
@@ -3765,6 +5279,16 @@ use std::time::Instant;
             vec![
                 "door scribing-debt: BLOCKING — pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it | settle: bee-capturing",
                 "door capture-queue: open — pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing",
+                // reflection-becomes-lesson: the mistakes door joined the
+                // builder too; these cells carry no report at all, so they
+                // read as legacy caps and the door reports clear.
+                "door mistakes: clear",
+                // sd-4: the dissent-debt door joined the builder; this
+                // feature carries no dissent, so it reports clear.
+                "door dissent-debt: clear",
+                "door leader-check: clear",
+                // an-3: and the advisor-nudge door beside it, same posture.
+                "door advisor-nudge-debt: clear",
             ]
         );
 
@@ -4443,13 +5967,38 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, "{}");
         // No on-disk prompts: the embedded copy is the only one.
-        assert!(prompts_match_disk(&root, "gather"));
+        assert!(prompt_skew(&root, "gather").is_none());
         // A vendored copy that MATCHES is fine (CRLF normalization included).
         w(&root, ".bee/bin/prompts/gather.md", &PROMPT_GATHER.replace('\n', "\r\n"));
-        assert!(prompts_match_disk(&root, "gather"));
+        assert!(prompt_skew(&root, "gather").is_none());
         // A skewed vendored copy delegates.
         w(&root, ".bee/bin/prompts/gather.md", "Gather: something else\n");
-        assert!(!prompts_match_disk(&root, "gather"));
+        assert!(prompt_skew(&root, "gather").is_some());
+    }
+
+    /// Prompt skew used to `return None`, which the dispatcher turns into
+    /// the generic "unsupported argument shape" refusal — blaming the
+    /// caller's flags for a stale binary. The Node runtime that `None` used
+    /// to delegate to was deleted at R6, so the skew must name itself: which
+    /// file disagrees, and how to fix it.
+    #[test]
+    fn prompt_skew_names_the_offending_file_and_its_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        assert!(prompt_skew(&root, "gather").is_none(), "a repo with no on-disk copy is not skewed");
+
+        w(&root, ".bee/bin/prompts/gather.md", "Gather: something else\n");
+        let skew = prompt_skew(&root, "gather").expect("a skewed vendored copy is skew");
+        let PromptSkew::Disk(path) = &skew else { panic!("expected a disk skew, got {skew:?}") };
+        assert!(path.ends_with(".bee/bin/prompts/gather.md"), "names the file: {path:?}");
+
+        let msg = prompt_skew_message("dispatch prepare", "gather", &skew);
+        assert!(msg.replace('\\', "/").contains(".bee/bin/prompts/gather.md"), "{msg}");
+        assert!(msg.contains("FIX:"), "carries a remedy: {msg}");
+        assert!(
+            !msg.contains("unsupported argument shape"),
+            "must not read like the generic dispatcher refusal: {msg}"
+        );
     }
 
     #[test]
@@ -5085,6 +6634,41 @@ use std::time::Instant;
     }
 
     #[test]
+    fn doc_deferral_door_scan_set_skips_a_frozen_plan_md_with_a_deferral_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        w(root, ".bee/lanes/demo.json", r#"{"feature":"demo","approved_gates":{"shape":true}}"#);
+        w(root, "docs/history/demo/plan.md", "# Plan\n\nThis is deferred for now.\n");
+        w(root, "docs/history/demo/CONTEXT.md", "# Demo\n\nLocked decisions only.\n");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn doc_deferral_door_scan_set_skips_a_generated_knowledge_index_with_a_deferral_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        let generated = format!(
+            "---\nokf_version: 0.1\n---\n{}\n\n# Knowledge Bundle\n\n- This is deferred for now.\n",
+            crate::verbs::knowledge::KNOWLEDGE_INDEX_HEADER
+        );
+        w(root, "docs/knowledge/index.md", &generated);
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":false,"outcome":"did the thing","files_changed":["docs/knowledge/index.md","docs/knowledge/areas/demo/notes.md"],"capped_at":"2026-08-16T00:00:00.000Z"}}"#,
+        );
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(!door.detail.contains("docs/knowledge/index.md:"), "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:2"), "{}", door.detail);
+    }
+
+    #[test]
     fn doc_deferral_door_deferral_decision_demotes_to_non_blocking_with_the_reason() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
@@ -5455,7 +7039,7 @@ use std::time::Instant;
 
     #[test]
     fn run_dispatch_prepare_refuses_malformed_expertise_line() {
-        let (flags, use_json) = parse_flags(&[
+        let (flags, _use_json) = parse_flags(&[
             "--runtime",
             "claude",
             "--kind",
@@ -5605,7 +7189,10 @@ use std::time::Instant;
         w(
             &root,
             ".bee/cells/demo-1.json",
-            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
+            // reflection-becomes-lesson: the cap answered the mistakes
+            // question, so the ONE door standing here is the tests door —
+            // which is what this test is about.
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"no_mistakes":true,"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
         );
 
         let Out::Emit(_, text, code) =
@@ -5769,7 +7356,7 @@ use std::time::Instant;
             .unwrap()
             .as_str()
             .unwrap()
-            .starts_with("[bee-tier: test]\n"));
+            .starts_with("[bee-tier: test] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("logical_tier"), Some(&json!("test")));
         assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
@@ -5812,7 +7399,7 @@ use std::time::Instant;
                     .unwrap()
                     .as_str()
                     .unwrap()
-                    .starts_with("[bee-tier: generation]\n"),
+                    .starts_with("[bee-tier: generation] [bee-kind: cell]"),
                 "{id}: the marker names the role that resolved"
             );
             let econ = v.get("economics").unwrap();
@@ -5851,7 +7438,7 @@ use std::time::Instant;
             .unwrap()
             .as_str()
             .unwrap()
-            .starts_with("[bee-tier: extraction]\n"));
+            .starts_with("[bee-tier: extraction] [bee-kind: cell]"));
         assert_eq!(
             v.get("economics").unwrap().get("requested_model"),
             Some(&json!("haiku-custom")),
@@ -5894,7 +7481,7 @@ use std::time::Instant;
                     .unwrap()
                     .as_str()
                     .unwrap()
-                    .starts_with(&format!("[bee-tier: {role}]\n")),
+                    .starts_with(&format!("[bee-tier: {role}] [bee-kind: cell]")),
                 "{id}: the marker names the role that resolved"
             );
             let econ = v.get("economics").unwrap();
@@ -6214,11 +7801,18 @@ use std::time::Instant;
     /// shape of chain config that matches NOTHING (absent, empty, unmatched,
     /// junk, and the refused `default` key) leaves all four kinds on those
     /// same bytes.
+    ///
+    /// gather-reads-the-read-slot D1 (decision 295f3d03) re-cut the GATHER
+    /// golden ONCE, on purpose: `CHAIN_MODELS` configures `read: "haiku"`, and
+    /// a default gather now asks for the read job. The other three goldens are
+    /// untouched, which is the half of D1 that matters here — moving the
+    /// gather kind's slot moved nothing else.
     #[test]
     fn no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical() {
-        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: generation]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (sonnet)","model":"sonnet"}"#;
-        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
-        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"advisor (fable)","model":"fable"}"#;
+        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: read] [bee-kind: gather]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
+        // pi-run-friction-fixes prf-6 re-cut the REVIEWER golden ONCE, on purpose: reviewer.md gained the lens line.
+        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review] [bee-kind: reviewer]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\nThe dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity.\nBefore you review, check that HEAD equals the frozen review head and that the in-scope paths are clean. On a mismatch, stop and report `REVIEW_HEAD_MISMATCH` with the fix line `re-freeze the review head, or commit or drop the stray paths`.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
+        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor] [bee-kind: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\nEnd the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.","description":"advisor (fable)","model":"fable"}"#;
 
         let t0 = tempfile::tempdir().unwrap();
         let none = chain_repo(&t0, "");
@@ -6570,4 +8164,4075 @@ advance_on — falling to another model there hides the defect (D11)"
         assert_eq!(read_fallback_chains(&root).get("code"), Some(&json!(["opus"])));
         let t2 = tempfile::tempdir().unwrap();
         assert!(read_fallback_chains(&chain_repo(&t2, "")).is_empty());
+    }
+
+    // ── slp-blind-lanes: the LaneBrief carrier (E1) and its digest (E2) ────
+
+    /// A host that can resolve EVERY runtime's advisor slot, so the brief
+    /// probes below can walk `DISPATCH_RUNTIMES` without a config detour.
+    ///
+    /// pi-support D5/D6: the pi table is herding-shaped throughout, because
+    /// that is the only shape the pi door serves — a plain-string `models.pi`
+    /// slot is refused by `pi_requires_herding_refusal`, so a fixture copying
+    /// the claude table's shape here would prove nothing about the brief and
+    /// only re-prove the refusal. Its payload is the herding-exec Bash call,
+    /// which carries the rendered prompt on `stdin` (`dispatched_body` already
+    /// reads that key), so every body assertion below reads the pi row the
+    /// same way it reads the other two.
+    const BRIEF_HOST: &str = r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet","review":"opus","advisor":"opus"},"codex":{"generation":"gpt-5","code":"gpt-5","review":"gpt-5","advisor":"gpt-5-pro"},"pi":{"generation":{"kind":"herding","agent":"pi-agy-flash"},"code":{"kind":"herding","agent":"pi-opus"},"review":{"kind":"herding","agent":"pi-opus"},"advisor":{"kind":"herding","agent":"pi-fable"}}}}"#;
+
+    /// The advisor prompt EXACTLY as it read before the `{{#if brief}}` block
+    /// was added, pinned as literal bytes rather than re-derived from the
+    /// template. Re-deriving it would compare the template against itself and
+    /// pass whatever the block does; this fails the moment a falsy block
+    /// leaves one byte of residue behind — the newline around `{{/if}}` being
+    /// the byte that is easiest to get wrong.
+    const ADVISOR_BODY_WITHOUT_A_BRIEF: &str = concat!(
+        "Advisor consult: produce an independent digest/opinion on the given question. Read-only.\n",
+        "\n",
+        "Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\n",
+        "End the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run."
+    );
+
+    /// The rendered body a dispatch payload carries, whichever transport key
+    /// this runtime used (`prompt` for an Agent, `message` for spawn_agent,
+    /// `stdin` for a cli executor), with the `[bee-tier: …]` marker line
+    /// stripped so what is compared is the TEMPLATE's bytes.
+    fn dispatched_body(v: &Value) -> String {
+        let payload = v.get("payload").expect("an envelope carries a payload");
+        let raw = ["prompt", "message", "stdin"]
+            .iter()
+            .find_map(|k| payload.get(*k).and_then(Value::as_str))
+            .expect("a payload carries its rendered prompt under prompt/message/stdin");
+        match raw.strip_prefix("[bee-tier: ") {
+            Some(rest) => rest.split_once('\n').map_or_else(
+                || raw.to_string(),
+                |(_, body)| {
+                    body.strip_prefix("Assignment: ")
+                        .and_then(|with_subject| with_subject.split_once('\n').map(|(_, prompt)| prompt))
+                        .unwrap_or(body)
+                        .to_string()
+                },
+            ),
+            None => raw.to_string(),
+        }
+    }
+
+    /// hab-2: a herding or cli payload prefixes the embedded agent template body
+    /// when the kind maps to a known bee agent (bee-build, bee-gather, bee-review).
+    fn expected_dispatched_body(runtime: &str, kind: &str, body: &str) -> String {
+        if (runtime == "pi" && kind != "cell") || (runtime == "codex" && kind != "cell") {
+            let pinned_type = match kind {
+                "cell" => "bee-build",
+                "gather" => "bee-gather",
+                "reviewer" => "bee-review",
+                _ => "general-purpose",
+            };
+            if let Some(agent_body) = embedded_agent_body(pinned_type) {
+                return format!("{agent_body}\n\n{body}");
+            }
+        }
+        body.to_string()
+    }
+
+    fn brief_file(root: &Path, name: &str, body: &str) -> String {
+        let file = root.join(name);
+        std::fs::write(&file, body).unwrap();
+        file.to_string_lossy().into_owned()
+    }
+
+    fn advisor_envelope(root: &Path, runtime: &str, brief: Option<&str>) -> Value {
+        let Prepared::Value(v) = prepare_dispatch_with_brief(
+            root, runtime, "advisor", None, None, None, false, None, None, false, None, brief,
+        )
+        .unwrap() else {
+            panic!("expected an advisor envelope on {runtime}")
+        };
+        v
+    }
+
+    /// E1's integration edge: with no `--brief-file`, EVERY runtime × kind
+    /// pair renders what it rendered before the block existed, and no
+    /// envelope grows a `brief_sha256`. The non-cell kinds are compared
+    /// against `render(template, &[])` — the literal expression the carrier
+    /// replaced — so the walk pins the old behaviour, not the new code's
+    /// opinion of it.
+    #[test]
+    fn no_brief_leaves_every_runtime_and_kind_pair_exactly_as_it_was() {
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in DISPATCH_KINDS {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = repo(&tmp, BRIEF_HOST);
+                w(
+                    &root,
+                    ".bee/cells/c-1.json",
+                    r#"{"id":"c-1","feature":"f","title":"carry a brief","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+                );
+                let (cell, worker) =
+                    if kind == "cell" { (Some("c-1"), Some("w")) } else { (None, None) };
+                let Prepared::Value(v) = prepare_dispatch_with_brief(
+                    &root, runtime, kind, None, cell, worker, false, None, None, false, None, None,
+                )
+                .unwrap() else {
+                    panic!("expected an envelope for {runtime}/{kind}")
+                };
+                assert_eq!(
+                    v.get("brief_sha256"),
+                    None,
+                    "{runtime}/{kind}: a briefless dispatch must not stamp a digest"
+                );
+                let body = dispatched_body(&v);
+                assert!(
+                    !body.contains("Brief ("),
+                    "{runtime}/{kind}: a briefless payload must carry no brief block"
+                );
+                if kind != "cell" {
+                    let before = render(&load_prompt(kind).unwrap(), &[]).unwrap();
+                    let expected = expected_dispatched_body(runtime, kind, &before);
+                    assert_eq!(body, expected, "{runtime}/{kind}: payload bytes drifted");
+                }
+            }
+        }
+        // And the advisor template's own bytes, pinned literally.
+        assert_eq!(
+            render(&load_prompt("advisor").unwrap(), &[]).unwrap(),
+            ADVISOR_BODY_WITHOUT_A_BRIEF
+        );
+        assert_eq!(
+            render(&load_prompt("advisor").unwrap(), &[("brief", "")]).unwrap(),
+            ADVISOR_BODY_WITHOUT_A_BRIEF,
+            "an empty brief var must drop the block WITH its own leading newline"
+        );
+    }
+
+    /// A brief that is nothing but whitespace must reach the renderer as NO
+    /// brief. `{{#if}}` truthiness is `!v.is_empty()`, so an untrimmed
+    /// whitespace brief would splice an EMPTY block in place of today's
+    /// bytes — the one way a "no brief" call could stop being byte-identical.
+    #[test]
+    fn a_whitespace_only_brief_is_no_brief_at_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for body in ["", "   ", "\n\n", " \t \r\n  \n"] {
+            let path = brief_file(&root, "brief.md", body);
+            assert_eq!(
+                resolve_brief_file("advisor", Some(&path)).unwrap(),
+                None,
+                "a brief of {body:?} must resolve to no brief"
+            );
+        }
+        let path = brief_file(&root, "ws.md", "  \n \t\n");
+        let carried = resolve_brief_file("advisor", Some(&path)).unwrap();
+        let v = advisor_envelope(&root, "claude", carried.as_deref());
+        assert_eq!(dispatched_body(&v), ADVISOR_BODY_WITHOUT_A_BRIEF);
+        assert_eq!(v.get("brief_sha256"), None, "no brief travelled, so no digest is stamped");
+    }
+
+    /// The carrier itself: the brief's bytes reach the advisor body ONCE,
+    /// the block leaves no marker residue, and the untouched prose above it
+    /// is still there.
+    #[test]
+    fn a_carried_brief_renders_into_the_advisor_body_exactly_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        // Leading and trailing whitespace on purpose: the carrier trims, so
+        // what renders is the trimmed text and the assertion can be exact.
+        let question = "## Question\n\nWhich door enforces the read diet?\n\n## Constraints\n\n- no new store";
+        let path = brief_file(&root, "brief.md", &format!("\n{question}\n\n"));
+        let carried = resolve_brief_file("advisor", Some(&path)).unwrap();
+        assert_eq!(carried.as_deref(), Some(question), "the carried brief is the trimmed file");
+
+        for runtime in DISPATCH_RUNTIMES {
+            let v = advisor_envelope(&root, runtime, carried.as_deref());
+            let body = dispatched_body(&v);
+            assert_eq!(
+                body.matches(question).count(),
+                1,
+                "{runtime}: the brief must render exactly once, got {body}"
+            );
+            assert!(!body.contains("{{"), "{runtime}: unrendered marker left behind: {body}");
+            assert!(
+                body.starts_with(ADVISOR_BODY_WITHOUT_A_BRIEF),
+                "{runtime}: the standing advisor prose must survive above the brief"
+            );
+            assert!(body.contains("Brief (the question to answer"), "{runtime}: {body}");
+        }
+    }
+
+    /// The size guard. Over the cap is a TYPED refusal that names the cap, in
+    /// the same `{ok:false, type:"refused", reason, …, fix}` shape every
+    /// other refusal at this door takes; exactly at the cap still passes, so
+    /// the boundary is a decision rather than an off-by-one.
+    #[test]
+    fn a_brief_over_the_cap_is_refused_by_a_typed_refusal_naming_the_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+
+        let at_cap = brief_file(&root, "at-cap.md", &"x".repeat(BRIEF_MAX_BYTES));
+        assert_eq!(
+            resolve_brief_file("advisor", Some(&at_cap)).unwrap().map(|b| b.len()),
+            Some(BRIEF_MAX_BYTES),
+            "a brief of exactly {BRIEF_MAX_BYTES} bytes is carried, not refused"
+        );
+
+        let over = brief_file(&root, "over.md", &"x".repeat(BRIEF_MAX_BYTES + 1));
+        let refusal = resolve_brief_file("advisor", Some(&over)).unwrap_err();
+        assert_eq!(refusal.get("ok"), Some(&json!(false)));
+        assert_eq!(refusal.get("type"), Some(&json!("refused")));
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_too_large")));
+        assert_eq!(refusal.get("bytes"), Some(&json!(BRIEF_MAX_BYTES + 1)));
+        assert_eq!(refusal.get("max_bytes"), Some(&json!(BRIEF_MAX_BYTES)));
+        let fix = refusal.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(
+            fix.contains(&BRIEF_MAX_BYTES.to_string()),
+            "the fix must name the cap in bytes: {fix}"
+        );
+
+        // A path that names nothing is refused the same way — never a silent
+        // "no brief", which would fire a lane on an empty question.
+        let missing = root.join("nope.md").to_string_lossy().into_owned();
+        let refusal = resolve_brief_file("advisor", Some(&missing)).unwrap_err();
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_file_unreadable")));
+        assert_eq!(refusal.get("type"), Some(&json!("refused")));
+
+        // Invalid UTF-8 is refused rather than decoded lossily: a lossy
+        // decode would change the very bytes brief_sha256 exists to pin.
+        let bad = root.join("bad.md");
+        std::fs::write(&bad, [0x51u8, 0xff, 0xfe, 0x51]).unwrap();
+        let refusal = resolve_brief_file("advisor", Some(&bad.to_string_lossy())).unwrap_err();
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_not_utf8")));
+    }
+
+    /// D3 plus the silent-swallow window it leaves open. `--kind cell` is
+    /// refused because the worker-cell prompt injects shared learned_context;
+    /// `gather` and `reviewer` are refused because their templates carry no
+    /// brief block at all, so accepting a brief would swallow it with nothing
+    /// to show for it.
+    #[test]
+    fn a_brief_is_refused_for_every_kind_but_advisor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let path = brief_file(&root, "brief.md", "## Question\n\nWhat?");
+        for kind in DISPATCH_KINDS {
+            let outcome = resolve_brief_file(kind, Some(&path));
+            if kind == "advisor" {
+                assert!(outcome.is_ok(), "advisor must accept a brief");
+                continue;
+            }
+            let refusal = outcome.unwrap_err();
+            assert_eq!(refusal.get("ok"), Some(&json!(false)), "{kind}");
+            assert_eq!(refusal.get("type"), Some(&json!("refused")), "{kind}");
+            assert_eq!(
+                refusal.get("reason"),
+                Some(&json!("brief_kind_not_advisor")),
+                "{kind}: a brief must never be swallowed silently"
+            );
+            assert_eq!(refusal.get("kind"), Some(&json!(kind)), "{kind}");
+            let fix = refusal.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("--kind advisor"), "{kind}: the fix must name the way out: {fix}");
+        }
+        // The refusal fires before the file is even looked at, so a bad path
+        // on a wrong kind still says which mistake to fix first.
+        let refusal = resolve_brief_file("cell", Some("no/such/file.md")).unwrap_err();
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_kind_not_advisor")));
+    }
+
+    /// E2 (D2b): byte-identity across lanes is CHECKABLE. Two prepares over
+    /// one unchanged file stamp one digest; an edited file stamps another;
+    /// and the digest is the sha256 of the bytes the lane actually received.
+    #[test]
+    fn one_brief_file_digests_the_same_on_every_lane_and_an_edit_moves_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let question = "## Question\n\nWhere does the dossier live?";
+        let path = brief_file(&root, "brief.md", question);
+
+        let carried = resolve_brief_file("advisor", Some(&path)).unwrap();
+        let lane_a = advisor_envelope(&root, "claude", carried.as_deref());
+        let carried_again = resolve_brief_file("advisor", Some(&path)).unwrap();
+        let lane_b = advisor_envelope(&root, "codex", carried_again.as_deref());
+
+        let digest_a = lane_a.get("brief_sha256").and_then(Value::as_str).unwrap().to_string();
+        let digest_b = lane_b.get("brief_sha256").and_then(Value::as_str).unwrap();
+        assert_eq!(digest_a, digest_b, "one unchanged brief file is one digest");
+        assert_eq!(
+            digest_a,
+            crate::verbs::reservations::sha256_hex(question),
+            "the digest is over the bytes the lane received"
+        );
+        assert_ne!(
+            lane_a.get("dispatch_id"),
+            lane_b.get("dispatch_id"),
+            "two lanes are two dispatches — only the BRIEF is shared"
+        );
+
+        // The same digest reaches the prepare-time record, which is what a
+        // later convergence check reads back by dispatch_id.
+        assert!(
+            std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl"))
+                .unwrap_or_default()
+                .is_empty(),
+            "record_it=false must leave no log line behind"
+        );
+        let Prepared::Value(recorded) = prepare_dispatch_with_brief(
+            &root,
+            "claude",
+            "advisor",
+            None,
+            None,
+            None,
+            false,
+            None,
+            None,
+            true,
+            None,
+            carried.as_deref(),
+        )
+        .unwrap() else {
+            panic!("expected an advisor envelope")
+        };
+        let logged = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let line: Value = serde_json::from_str(logged.trim()).unwrap();
+        assert_eq!(line.get("brief_sha256"), Some(&json!(digest_a)));
+        assert_eq!(line.get("dispatch_id"), recorded.get("dispatch_id"));
+
+        // An EDIT of the same file moves the digest.
+        let edited = brief_file(&root, "brief.md", "## Question\n\nWhere does the DOSSIER live?");
+        let carried_edit = resolve_brief_file("advisor", Some(&edited)).unwrap();
+        let lane_c = advisor_envelope(&root, "claude", carried_edit.as_deref());
+        assert_ne!(
+            lane_c.get("brief_sha256").and_then(Value::as_str),
+            Some(digest_a.as_str()),
+            "an edited brief must report a different digest"
+        );
+    }
+
+    /// The prompt edit's OWN hazard, from the plan's risk map: a source-only
+    /// prompt edit skews the embedded template from disk, `dispatch prepare`
+    /// returns None, and the Node delegate it would fall to was deleted at
+    /// the R6 cutover — so every dispatch in this checkout would break. This
+    /// asserts the vendored copy travelled with the source one.
+    #[test]
+    fn the_advisor_template_still_matches_disk_after_the_brief_block() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        assert!(
+            prompt_skew(&repo_root, "advisor").is_none(),
+            "packages/bee/prompts/advisor.md or .bee/bin/prompts/advisor.md drifted from the \
+             compiled-in template — run `bee dev regen` and rebuild, or every dispatch prepare \
+             in this checkout resolves to nothing"
+        );
+        // The block the carrier depends on is really in the shipped bytes,
+        // and really not at byte 0 (the renderer needs a leading newline).
+        let template = load_prompt("advisor").unwrap();
+        let at = template.find("{{#if brief}}").expect("advisor.md carries a brief block");
+        assert!(at > 0, "a block at byte 0 has no leading newline for the renderer to consume");
+        assert_eq!(&template[at - 1..at], "\n");
+        assert!(template.contains("{{brief}}"), "the block must hold the brief placeholder");
+    }
+
+    /// The two ends of the flag, which live in different files and are the
+    /// pair that historically drifts: `run_dispatch_prepare`'s own
+    /// known-key list (an unlisted key makes the whole command refuse as an
+    /// unproven shape) and the embedded registry payload (an undeclared key
+    /// is rejected by the argv-shape guard before the handler ever runs). A
+    /// flag declared in one and not the other is a flag that is either
+    /// swallowed or unreachable — the "unknown flag is a refusal, never a
+    /// shrug" pattern, checked here because `dispatch prepare` itself cannot
+    /// be invoked from inside a granted worktree.
+    ///
+    /// Derived from the sources, never hand-copied: the same `include_str!`
+    /// + scan discipline `tests/registry_contracts.rs` uses for `state gate`.
+    #[test]
+    fn brief_file_is_both_accepted_by_the_handler_and_declared_in_the_registry() {
+        const PREPARE_SOURCE: &str = include_str!("prepare.rs");
+        let anchor = "pub(crate) fn run_dispatch_prepare(";
+        let at = PREPARE_SOURCE.find(anchor).expect("run_dispatch_prepare moved — re-anchor this");
+        let after = &PREPARE_SOURCE[at..];
+        let kk = after.find("keys_known(").expect("run_dispatch_prepare has a keys_known call");
+        let rest = &after[at_open(&after[kk..]) + kk..];
+        let close = rest.find(']').expect("the keys_known array literal closes");
+        let listed: Vec<&str> = rest[..close]
+            .split(',')
+            .filter_map(|e| e.trim().strip_prefix('"')?.strip_suffix('"'))
+            .collect();
+        // Not vacuous: the parse must still see the flags that were always
+        // there, or a silently-empty scan would pass on anything.
+        for known in ["runtime", "kind", "cell", "worker", "purpose", "expertise", "role"] {
+            assert!(listed.contains(&known), "the keys_known parse lost {known:?}: {listed:?}");
+        }
+        assert!(
+            listed.contains(&"brief-file"),
+            "run_dispatch_prepare does not accept --brief-file, so the whole command would \
+             refuse as an unproven shape: {listed:?}"
+        );
+
+        let payload: Value =
+            serde_json::from_str(include_str!("../../generated/registry_payload.json")).unwrap();
+        let entry = payload["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["name"] == json!("dispatch.prepare"))
+            .expect("the registry declares dispatch.prepare");
+        let props = entry["parameters"]["properties"].as_object().unwrap();
+        assert!(
+            props.contains_key("brief-file"),
+            "the registry payload does not declare --brief-file, so the argv-shape guard \
+             rejects it before the handler runs"
+        );
+        assert_eq!(props["brief-file"]["type"], json!("string"));
+        let described = props["brief-file"]["description"].as_str().unwrap_or_default();
+        assert!(
+            described.contains("8192") && described.contains("advisor"),
+            "the declaration must name the cap and the one kind that accepts it: {described}"
+        );
+    }
+
+    /// The offset of the `[` that opens a `keys_known(...)` array literal.
+    fn at_open(from_keys_known: &str) -> usize {
+        from_keys_known.find('[').expect("keys_known(...) opens an array literal") + 1
+    }
+
+    // ── slp-blind-lanes: the LaneBrief leaning guard (E1, D2a) ─────────────
+
+    /// A brief with the four required sections, so a probe can vary ONE thing
+    /// (the Question body, or one added line) and know the shape arm is not
+    /// what fired.
+    fn shaped_brief(question: &str) -> String {
+        format!(
+            "## Question\n\n{question}\n\n\
+             ## Constraints\n\nThe answer stays inside the existing dispatch door.\n\n\
+             ## Read diet\n\npackages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs\n\n\
+             ## Digest contract\n\nReturn the paths read and the facts with file:line anchors.\n"
+        )
+    }
+
+    fn refusal_of(brief: &str) -> Value {
+        lint_brief(brief).expect_err("this brief must be refused")
+    }
+
+    /// ARM 1. Every one of the seventeen FROZEN verdict stems is refused, the
+    /// refusal names the phrase that fired, and the fix says LEANING LANGUAGE
+    /// was refused — never that neutrality was certified, which a word list
+    /// cannot do.
+    #[test]
+    fn every_frozen_verdict_stem_is_refused_by_name() {
+        assert_eq!(LEANING_VERDICT_STEMS.len(), 17, "the frozen list is seventeen stems");
+        for stem in LEANING_VERDICT_STEMS {
+            // In the CONSTRAINTS section, so only the stem arm can fire.
+            let brief = shaped_brief("Where does the dossier live?")
+                .replace("The answer stays inside the existing dispatch door.", &format!("Note: {stem} the second option."));
+            let refusal = refusal_of(&brief);
+            assert_eq!(refusal.get("ok"), Some(&json!(false)), "{stem}: {refusal}");
+            assert_eq!(refusal.get("type"), Some(&json!("refused")), "{stem}: {refusal}");
+            assert_eq!(
+                refusal.get("reason"),
+                Some(&json!("brief_leaning_language")),
+                "{stem}: {refusal}"
+            );
+            assert_eq!(refusal.get("phrase"), Some(&json!(stem)), "the refusal names the phrase that fired: {refusal}");
+            let fix = refusal.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains(stem), "the fix quotes the phrase to cut: {fix}");
+            assert!(
+                fix.to_ascii_lowercase().contains("leaning language"),
+                "the refusal says leaning language was refused: {fix}"
+            );
+            assert!(
+                !fix.to_ascii_lowercase().contains("neutral"),
+                "no refusal text may use the word at all — a word list cannot certify neutrality, \
+                 and even a disclaimer beside it trains the reader to expect the claim: {fix}"
+            );
+        }
+
+        // Case-folded and word-bounded, both directions.
+        assert!(lint_brief(&shaped_brief("What is the plan? WE RECOMMEND nothing.")).is_err());
+        assert!(
+            lint_brief(&shaped_brief("Which reader wins when the preference set is empty?")).is_ok(),
+            "\"preference\" is not \"i prefer\" — the scan is word-bounded"
+        );
+        // "leaning toward" must not swallow "leaning towards": both are on the
+        // list, and the longer one reports ITSELF.
+        let towards = refusal_of(&shaped_brief("The draft was leaning towards the cache."));
+        assert_eq!(towards.get("phrase"), Some(&json!("leaning towards")), "{towards}");
+
+        // The two stems cut at the re-consult stay cut: neutral interrogative
+        // phrasing must survive the door.
+        for kept in [
+            "What is the right approach for the dossier?",
+            "What is the right answer when two lanes disagree?",
+        ] {
+            assert!(lint_brief(&shaped_brief(kept)).is_ok(), "{kept} must not fire");
+        }
+    }
+
+    /// ARM 1, honestly: a stem inside an ORDINARY fenced code sample refuses
+    /// too. Being fenced is not the exception — only the designated tag below
+    /// is, and everything else scans as it always did.
+    #[test]
+    fn a_verdict_stem_inside_a_fenced_code_sample_still_refuses() {
+        let brief = shaped_brief("Where does the dossier live?").replace(
+            "The answer stays inside the existing dispatch door.",
+            "```text\n// we should use the second reader\n```",
+        );
+        let refusal = refusal_of(&brief);
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_leaning_language")), "{refusal}");
+        assert_eq!(refusal.get("phrase"), Some(&json!("we should use")), "{refusal}");
+    }
+
+    // ── the tagged fence: the cross-critique round's ONE bounded exception ──
+    //
+    // D2(c) asks that round two hand each lane the rival proposal VERBATIM,
+    // and a real proposal carries verdict stems, its own headings and its own
+    // bullet lists. Only a fence whose opening info string is the designated
+    // tag is skipped, and it is skipped by ALL THREE scans. Every other fence
+    // scans exactly as the test above proves it does today.
+
+    /// The tag spelled as a LITERAL, not read off the constant: a test that
+    /// reads the constant it checks follows a silent rename, and this string
+    /// is what a brief author types by hand.
+    const QUOTED_FENCE_TAG_LITERAL: &str = "lane-proposal";
+
+    /// SCAN 1 — the verdict-stem arm. The same bytes pass inside a tagged
+    /// fence, refuse inside an untagged one, and refuse outside any fence.
+    #[test]
+    fn a_verdict_stem_inside_a_tagged_fence_no_longer_refuses() {
+        let quoted = format!(
+            "The rival lane returned this:\n\n```{QUOTED_FENCE_TAG_LITERAL}\n\
+             we should use the second reader.\n```"
+        );
+        let ok = shaped_brief("Where does the dossier live?")
+            .replace("The answer stays inside the existing dispatch door.", &quoted);
+        assert!(lint_brief(&ok).is_ok(), "a tagged fence may carry the rival proposal: {ok}");
+
+        // The IDENTICAL bytes, untagged, still refuse: the exception is the
+        // tag, never the fence.
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_leaning_language")), "{r}");
+        assert_eq!(r.get("phrase"), Some(&json!("we should use")), "{r}");
+
+        // And outside any fence, exactly as before.
+        let bare = shaped_brief("Where does the dossier live?").replace(
+            "The answer stays inside the existing dispatch door.",
+            "we should use the second reader.",
+        );
+        assert_eq!(refusal_of(&bare).get("phrase"), Some(&json!("we should use")));
+    }
+
+    /// SCAN 2 — the four-section shape arm. A quoted proposal carries its own
+    /// headings; inside the tag they are prose, outside it they are sections.
+    #[test]
+    fn a_heading_inside_a_tagged_fence_does_not_become_a_section() {
+        let quoted = format!(
+            "```{QUOTED_FENCE_TAG_LITERAL}\n## Recommendation\n\nTake the second reader.\n```"
+        );
+        let ok = shaped_brief("Where does the dossier live?")
+            .replace("The answer stays inside the existing dispatch door.", &quoted);
+        assert!(lint_brief(&ok).is_ok(), "a quoted heading is not a section: {ok}");
+
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Recommendation")), "{r}");
+    }
+
+    /// SCAN 3 — the Question-enumeration arm. A quoted proposal carries its
+    /// own bullet list, and the lane did that enumerating, not the brief.
+    #[test]
+    fn a_bullet_list_inside_a_tagged_fence_under_question_is_not_answer_enumeration() {
+        let quoted = format!(
+            "Lane A returned this:\n\n```{QUOTED_FENCE_TAG_LITERAL}\n\
+             ## Constraints\n\n- keep it in docs/\n- or beside the plan\n```"
+        );
+        let ok = shaped_brief(&quoted);
+        assert!(lint_brief(&ok).is_ok(), "a quoted list is the lane's, not the brief's: {ok}");
+
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+
+        // The tagged fence's own "## Constraints" must not close the Question
+        // section either: a bullet AFTER the fence, still under Question,
+        // still refuses. Were the quoted heading counted, the shape arm would
+        // have fired first and this reason would read differently.
+        let leaked = format!("{quoted}\n\n- and one the brief added itself");
+        let r = refusal_of(&shaped_brief(&leaked));
+        assert_eq!(r.get("reason"), Some(&json!("brief_question_enumerates_answers")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Question")), "{r}");
+    }
+
+    /// An opener with no closer would hide every following line from every
+    /// scan. It refuses BY NAME instead — tagged or not — so the guard never
+    /// skips material in silence.
+    #[test]
+    fn a_fence_left_open_in_a_brief_is_refused_by_name() {
+        for opener in [format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text".to_string()] {
+            let brief = shaped_brief("Where does the dossier live?").replace(
+                "The answer stays inside the existing dispatch door.",
+                &format!("{opener}\nthe rival proposal, with no closing fence"),
+            );
+            let r = refusal_of(&brief);
+            assert_eq!(r.get("reason"), Some(&json!("brief_fence_unclosed")), "{opener}: {r}");
+            assert_eq!(r.get("line"), Some(&json!(opener)), "the refusal names the opener: {r}");
+            let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("close"), "the fix says what to do: {fix}");
+        }
+    }
+
+    /// ONE fence implementation, two callers. A rule that lives in two places
+    /// drifts the first time one side is tuned — the same argument the stem
+    /// list's own both-doors test makes.
+    #[test]
+    fn one_fence_implementation_serves_the_guard_and_the_dossier() {
+        const GUARD_SOURCE: &str = include_str!("brief_lint.rs");
+        const BLIND_SOURCE: &str = include_str!("../blind/mod.rs");
+
+        assert!(
+            GUARD_SOURCE.contains("pub(crate) fn scan_fences"),
+            "the one fence scanner lives in verbs/drivers/brief_lint.rs"
+        );
+        assert!(
+            BLIND_SOURCE.contains("fence_mask(&lines)"),
+            "the dossier parser calls the shared scanner"
+        );
+        assert!(
+            !BLIND_SOURCE.contains("fn fence_mask"),
+            "verbs/blind/mod.rs defines a SECOND fence scanner — the rule lives in \
+             verbs/drivers/brief_lint.rs alone"
+        );
+        assert_eq!(
+            QUOTED_PROPOSAL_FENCE_TAG, QUOTED_FENCE_TAG_LITERAL,
+            "the tag a brief author types by hand is the tag the guard reads"
+        );
+    }
+
+    /// ARM 2, the arm that carries the real load: leaning is mostly
+    /// structural. A missing, extra or misordered section refuses BY NAME of
+    /// the offending section.
+    #[test]
+    fn a_brief_missing_adding_or_misordering_a_section_is_refused_by_that_sections_name() {
+        let good = shaped_brief("Where does the dossier live?");
+        assert!(lint_brief(&good).is_ok(), "the shaped brief is the control: {good}");
+
+        // MISSING — the name of the section that is not there.
+        let missing = good.replace("## Read diet\n\npackages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs\n\n", "");
+        let r = refusal_of(&missing);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_missing")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Read diet")), "{r}");
+        assert!(r.get("fix").and_then(Value::as_str).unwrap_or_default().contains("Read diet"));
+
+        // EXTRA — a section the contract does not name.
+        let extra = format!("{good}\n## Recommendation\n\nUse the second reader.\n");
+        let r = refusal_of(&extra);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Recommendation")), "{r}");
+
+        // REPEATED — a second copy of a required section is also extra.
+        let repeated = format!("{good}\n## Constraints\n\nAnd one more.\n");
+        let r = refusal_of(&repeated);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Constraints")), "{r}");
+
+        // MISORDERED — all four present, wrong order, named by the heading
+        // found where another was due.
+        let misordered = "## Question\n\nWhere does the dossier live?\n\n\
+                          ## Read diet\n\nprepare.rs\n\n\
+                          ## Constraints\n\nOne door.\n\n\
+                          ## Digest contract\n\nPaths read.\n";
+        let r = refusal_of(misordered);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_out_of_order")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Read diet")), "{r}");
+        assert!(
+            r.get("fix").and_then(Value::as_str).unwrap_or_default().contains("Constraints"),
+            "the fix names the section that was due: {r}"
+        );
+
+        // A brief with no headings at all is missing the FIRST section.
+        let r = refusal_of("Where does the dossier live?");
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_missing")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Question")), "{r}");
+
+        // Headings match case-insensitively on the trimmed text, and a level-3
+        // heading inside a section is not a section.
+        let folded = "##  QUESTION \n\nWhere?\n\n### A sub-heading\n\nprose\n\n\
+                      ## constraints\n\nOne door.\n\n## READ DIET\n\nprepare.rs\n\n\
+                      ## Digest Contract\n\nPaths read.\n";
+        assert!(lint_brief(folded).is_ok(), "sections fold case and ignore level-3 headings");
+    }
+
+    /// ARM 2, the enumeration rule: a brief that LISTS candidate answers has
+    /// already led the witness — lanes exist to generate the options.
+    #[test]
+    fn an_enumerated_list_under_question_is_refused_naming_that_section() {
+        for line in ["- keep it in docs/", "* keep it in docs/", "1. keep it in docs/", "  2.  keep it in docs/"] {
+            let brief = shaped_brief(&format!("Where does the dossier live?\n\n{line}\n- or beside the plan"));
+            let r = refusal_of(&brief);
+            assert_eq!(r.get("reason"), Some(&json!("brief_question_enumerates_answers")), "{line}: {r}");
+            assert_eq!(r.get("section"), Some(&json!("Question")), "{line}: {r}");
+            let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("Question"), "the fix names the offending section: {fix}");
+        }
+        // The rule is scoped to Question: the other sections may enumerate.
+        let diet = shaped_brief("Where does the dossier live?")
+            .replace("packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "- prepare.rs\n- prompt.rs");
+        assert!(lint_brief(&diet).is_ok(), "a read diet is a list by nature: {diet}");
+    }
+
+    /// THE SCOPE PROPERTY, and the highest-risk property of this feature: the
+    /// guard reads the BRIEF and nothing else. A false fire on `--purpose` or
+    /// `--expertise` would refuse the advisor consult Gate 3 itself requires
+    /// (`high_risk_advisor_refusal`), deadlocking the very workflow that
+    /// approves guards. So: every frozen stem, in both of those fields, with
+    /// no `--brief-file` at all, must prepare cleanly.
+    #[test]
+    fn a_dispatch_carrying_every_stem_in_purpose_and_expertise_prepares_cleanly() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+
+        let purpose = format!("Judge the shape — {}.", LEANING_VERDICT_STEMS.join(", "));
+        // `--expertise` MUST be newline-delimited `<path> :: <purpose> :: <read-to>`
+        // or parse_expertise refuses on PARSE before any guard is reached.
+        let expertise_raw: String = LEANING_VERDICT_STEMS
+            .iter()
+            .enumerate()
+            .map(|(i, stem)| format!("docs/note-{i}.md :: {stem} the first option :: see why {stem}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let entries = parse_expertise(&expertise_raw).expect("the fixture is well-formed expertise");
+        assert_eq!(entries.len(), LEANING_VERDICT_STEMS.len());
+        let block = entries
+            .iter()
+            .map(|e| format!("- {} — {}. Read it to {}.", e.path, e.purpose, e.read_to))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // NOT VACUOUS: this text WOULD fire, if the guard were ever handed it.
+        assert!(first_leaning_stem(&purpose).is_some(), "the purpose fixture carries real stems");
+        assert!(first_leaning_stem(&block).is_some(), "the expertise fixture carries real stems");
+
+        // No `--brief-file`: the brief door resolves to nothing at all.
+        assert_eq!(resolve_brief_file("advisor", None).unwrap(), None);
+
+        for runtime in DISPATCH_RUNTIMES {
+            let Prepared::Value(v) = prepare_dispatch_with_brief(
+                &root,
+                runtime,
+                "advisor",
+                None,
+                None,
+                None,
+                false,
+                None,
+                Some(&purpose),
+                false,
+                Some(&block),
+                None,
+            )
+            .unwrap() else {
+                panic!("{runtime}: a stem-carrying purpose/expertise must still prepare")
+            };
+            assert!(v.get("payload").is_some(), "{runtime}: {v}");
+            assert_eq!(v.get("brief_sha256"), None, "{runtime}: no brief travelled");
+        }
+    }
+
+    /// The corpus, scoped to the VERDICT-STEM ARM ONLY. The shape arm is
+    /// excluded ON PURPOSE: no prompt file carries the four required sections,
+    /// so a whole-guard corpus would fire on every one of them and force a
+    /// quiet re-scoping of the guard. That exclusion is what stops the corpus
+    /// and the stem list being co-tuned into agreement. A real fire here is
+    /// EVIDENCE about the list — the fix is a recorded reason, never a silent
+    /// trim.
+    #[test]
+    fn the_verdict_stem_arm_fires_zero_times_over_every_shipped_prompt() {
+        let prompts = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("packages")
+            .join("bee")
+            .join("prompts");
+        let mut checked = 0usize;
+        for entry in std::fs::read_dir(&prompts).expect("packages/bee/prompts exists") {
+            let path = entry.unwrap().path();
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert_eq!(
+                first_leaning_stem(&text),
+                None,
+                "{}: a shipped prompt fires the verdict-stem arm — that is evidence about the \
+                 list, and the fix is a recorded reason, never a silent trim",
+                path.display()
+            );
+            checked += 1;
+        }
+        assert!(checked >= 4, "the corpus walk found only {checked} prompt files — it went vacuous");
+    }
+
+    // ── the door calls the guard (one rule, two places, one test) ──────────
+
+    const LEANING_BRIEF_CHILD: &str = "verbs::drivers::tests::dispatch_prepare_leaning_brief_child";
+    const SHAPED_BRIEF_CHILD: &str = "verbs::drivers::tests::dispatch_prepare_shaped_brief_child";
+
+    /// Runs ONLY as a child of the test below: `run_dispatch_prepare` reads
+    /// the root off `std::env::current_dir()` and prints to the process's own
+    /// stdout, both process-global — the same isolation the `--claim` children
+    /// above use.
+    #[test]
+    #[ignore = "spawned by the_dispatch_door_refuses_a_leaning_brief_and_carries_a_shaped_one"]
+    fn dispatch_prepare_leaning_brief_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime", "claude", "--kind", "advisor", "--brief-file", "leaning.md", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// Runs ONLY as a child of the test below.
+    #[test]
+    #[ignore = "spawned by the_dispatch_door_refuses_a_leaning_brief_and_carries_a_shaped_one"]
+    fn dispatch_prepare_shaped_brief_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime", "claude", "--kind", "advisor", "--brief-file", "shaped.md", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    fn child_payload(root: &Path, name: &str) -> Value {
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = Command::new(&exe);
+        cmd.args(["--exact", name, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
+        cmd.current_dir(root);
+        let out = cmd.output().expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"))
+    }
+
+    /// The rule lives in TWO places — the guard itself and the dispatch door
+    /// that must run it — so ONE test reads both: the REAL CLI entry refuses a
+    /// leaning brief with the guard's own typed refusal, and carries a shaped
+    /// one through to a payload. Without the second half a door that refused
+    /// everything would pass the first half.
+    #[test]
+    fn the_dispatch_door_refuses_a_leaning_brief_and_carries_a_shaped_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let shaped = shaped_brief("Where does the dossier live?");
+        std::fs::write(root.join("shaped.md"), &shaped).unwrap();
+        std::fs::write(
+            root.join("leaning.md"),
+            shaped.replace(
+                "The answer stays inside the existing dispatch door.",
+                "I recommend the second reader.",
+            ),
+        )
+        .unwrap();
+
+        let refused = child_payload(&root, LEANING_BRIEF_CHILD);
+        assert_eq!(refused.get("ok"), Some(&json!(false)), "{refused}");
+        assert_eq!(refused.get("type"), Some(&json!("refused")), "{refused}");
+        assert_eq!(refused.get("reason"), Some(&json!("brief_leaning_language")), "{refused}");
+        assert_eq!(refused.get("phrase"), Some(&json!("i recommend")), "{refused}");
+        assert!(refused.get("payload").is_none(), "a refused brief never reaches a payload: {refused}");
+
+        let carried = child_payload(&root, SHAPED_BRIEF_CHILD);
+        assert!(carried.get("payload").is_some(), "a shaped brief reaches a payload: {carried}");
+        assert!(carried.get("ok").is_none(), "a prepared envelope carries no ok flag: {carried}");
+        assert_eq!(
+            carried.get("brief_sha256").and_then(Value::as_str),
+            Some(crate::verbs::reservations::sha256_hex(shaped.trim_end()).as_str()),
+            "the shaped brief travelled and stamped its digest: {carried}"
+        );
+
+        // And the door owns no second copy of the list: the stems live in
+        // brief_lint.rs alone, so the two places cannot drift apart.
+        const PREPARE_SOURCE: &str = include_str!("prepare.rs");
+        assert!(
+            PREPARE_SOURCE.contains("lint_brief("),
+            "the dispatch door must call the shared guard"
+        );
+        for stem in LEANING_VERDICT_STEMS {
+            assert!(
+                !PREPARE_SOURCE.to_ascii_lowercase().contains(stem),
+                "prepare.rs carries its own copy of {stem:?} — the list lives in brief_lint.rs alone"
+            );
+        }
+    }
+
+    // ── slp-blind-lanes-procedure P1: the reading list reaches the prompt
+    //    it was passed for, and never rides beside a brief ─────────────────
+    //
+    // `--expertise` was declared, accepted, parsed and rendered into a block
+    // for every kind, and then DROPPED for every kind but `cell`: the
+    // non-cell arm of `prompt_body_for` rendered a vars slice carrying
+    // `brief` alone. The cases below are the positive proof PER KIND,
+    // because the absent-case byte-identity walk above cannot see that
+    // defect — an `{{#if}}` over an absent variable is silently falsy, so a
+    // template twin that missed the edit would swallow the list again with
+    // every other test in this file green.
+
+    /// The `--expertise` argv value, in the flag's own
+    /// `<path> :: <purpose> :: <read-to>` shape.
+    const EXPERTISE_RAW: &str = "skills/bee-swarming/SKILL.md :: the worker contract :: follow the loop\ndocs/knowledge/index.md :: the knowledge index :: find the area concept";
+
+    /// What `run_dispatch_prepare` renders `EXPERTISE_RAW` into before it
+    /// hands the block to the prompt renderer.
+    const EXPERTISE_BLOCK: &str = concat!(
+        "- skills/bee-swarming/SKILL.md — the worker contract. Read it to follow the loop.\n",
+        "- docs/knowledge/index.md — the knowledge index. Read it to find the area concept."
+    );
+
+    /// The exact bytes the block must add to a non-cell body — heading,
+    /// blank line and all. Written out literally rather than derived from
+    /// the template, so a template edit that moves the newlines fails here.
+    const EXPERTISE_SECTION: &str = concat!(
+        "\n\nExpertise — dispatcher-picked; read/load before you start:\n",
+        "- skills/bee-swarming/SKILL.md — the worker contract. Read it to follow the loop.\n",
+        "- docs/knowledge/index.md — the knowledge index. Read it to find the area concept."
+    );
+
+    fn non_cell_body(root: &Path, runtime: &str, kind: &str, expertise: Option<&str>) -> String {
+        let Prepared::Value(v) =
+            prepare_dispatch(root, runtime, kind, None, None, false, None, None, false, expertise)
+                .unwrap()
+        else {
+            panic!("expected a {kind} envelope on {runtime}")
+        };
+        dispatched_body(&v)
+    }
+
+    #[test]
+    fn a_gather_dispatch_carrying_expertise_renders_the_reading_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for runtime in DISPATCH_RUNTIMES {
+            let plain = non_cell_body(&root, runtime, "gather", None);
+            let carried = non_cell_body(&root, runtime, "gather", Some(EXPERTISE_BLOCK));
+            assert_eq!(
+                carried,
+                format!("{plain}{EXPERTISE_SECTION}"),
+                "{runtime}: a gather dispatch dropped the reading list it was passed"
+            );
+            assert_eq!(
+                carried.matches("skills/bee-swarming/SKILL.md").count(),
+                1,
+                "{runtime}: the list must render exactly once"
+            );
+        }
+    }
+
+    #[test]
+    fn a_reviewer_dispatch_carrying_expertise_renders_the_reading_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for runtime in DISPATCH_RUNTIMES {
+            let plain = non_cell_body(&root, runtime, "reviewer", None);
+            let carried = non_cell_body(&root, runtime, "reviewer", Some(EXPERTISE_BLOCK));
+            assert_eq!(
+                carried,
+                format!("{plain}{EXPERTISE_SECTION}"),
+                "{runtime}: a reviewer dispatch dropped the reading list it was passed"
+            );
+            assert_eq!(
+                carried.matches("docs/knowledge/index.md").count(),
+                1,
+                "{runtime}: the list must render exactly once"
+            );
+        }
+    }
+
+    /// The advisor kind carries a brief block too, so this case also pins
+    /// that the two blocks stay disjoint: a briefless dispatch with a
+    /// reading list carries the list and no brief prose at all.
+    #[test]
+    fn a_briefless_advisor_dispatch_carrying_expertise_renders_the_reading_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for runtime in DISPATCH_RUNTIMES {
+            let carried = non_cell_body(&root, runtime, "advisor", Some(EXPERTISE_BLOCK));
+            assert_eq!(
+                carried,
+                format!("{ADVISOR_BODY_WITHOUT_A_BRIEF}{EXPERTISE_SECTION}"),
+                "{runtime}: a briefless advisor dispatch dropped the reading list"
+            );
+            assert!(
+                !carried.contains("Brief ("),
+                "{runtime}: no brief travelled, so no brief block may render"
+            );
+        }
+    }
+
+    /// THE EXCEPTION. A reading list may never ride beside a brief. The
+    /// leaning guard reads brief bytes and nothing else, by design, so an
+    /// `--expertise` list travelling with a brief is an unlinted channel
+    /// into a blind lane; and `brief_sha256` would keep proving the BRIEFS
+    /// were equal while the payloads diverged. It is a typed refusal, in the
+    /// same shape `brief_kind_not_advisor` takes, and it fires BEFORE the
+    /// brief file is read.
+    #[test]
+    fn a_reading_list_beside_a_brief_is_refused_before_the_brief_is_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let path = brief_file(&root, "brief.md", &shaped_brief("Where does the dossier live?"));
+
+        let refusal =
+            resolve_brief_with_expertise("advisor", Some(&path), Some(EXPERTISE_BLOCK)).unwrap_err();
+        assert_eq!(refusal.get("ok"), Some(&json!(false)), "{refusal}");
+        assert_eq!(refusal.get("type"), Some(&json!("refused")), "{refusal}");
+        assert_eq!(refusal.get("reason"), Some(&json!("expertise_beside_brief")), "{refusal}");
+        let fix = refusal.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(
+            fix.contains("## Read diet"),
+            "the fix must name the brief's own Read diet section as the one carrier: {fix}"
+        );
+
+        // Refused before ANY file is read: an unreadable path earns this
+        // refusal, never `brief_file_unreadable`.
+        let missing =
+            resolve_brief_with_expertise("advisor", Some("no/such/brief.md"), Some(EXPERTISE_BLOCK))
+                .unwrap_err();
+        assert_eq!(
+            missing.get("reason"),
+            Some(&json!("expertise_beside_brief")),
+            "the combination is refused before the read is attempted: {missing}"
+        );
+
+        // Neither half alone refuses, and an EMPTY list carries nothing, so
+        // there is nothing unlinted to refuse.
+        assert!(resolve_brief_with_expertise("advisor", Some(&path), None).is_ok());
+        assert!(resolve_brief_with_expertise("advisor", Some(&path), Some("")).is_ok());
+        assert!(resolve_brief_with_expertise("gather", None, Some(EXPERTISE_BLOCK)).is_ok());
+
+        // And the kind arm keeps its own refusal — the combination check
+        // never speaks for a kind that may not carry a brief at all.
+        let kind_refusal =
+            resolve_brief_with_expertise("cell", Some(&path), Some(EXPERTISE_BLOCK)).unwrap_err();
+        assert_eq!(
+            kind_refusal.get("reason"),
+            Some(&json!("brief_kind_not_advisor")),
+            "{kind_refusal}"
+        );
+    }
+
+    const BRIEF_WITH_EXPERTISE_CHILD: &str =
+        "verbs::drivers::tests::dispatch_prepare_brief_with_expertise_child";
+    const EXPERTISE_NO_BRIEF_CHILD: &str =
+        "verbs::drivers::tests::dispatch_prepare_expertise_without_brief_child";
+
+    /// Runs ONLY as a child of the door test below.
+    #[test]
+    #[ignore = "spawned by the_dispatch_door_refuses_a_reading_list_beside_a_brief"]
+    fn dispatch_prepare_brief_with_expertise_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime",
+            "claude",
+            "--kind",
+            "advisor",
+            "--brief-file",
+            "shaped.md",
+            "--expertise",
+            EXPERTISE_RAW,
+            "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// Runs ONLY as a child of the door test below.
+    #[test]
+    #[ignore = "spawned by the_dispatch_door_refuses_a_reading_list_beside_a_brief"]
+    fn dispatch_prepare_expertise_without_brief_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime",
+            "claude",
+            "--kind",
+            "gather",
+            "--expertise",
+            EXPERTISE_RAW,
+            "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// The door itself, through the REAL cli entry: the combination refuses
+    /// with nothing reaching a payload, and the same list WITHOUT a brief
+    /// reaches the rendered body. Without the second half a door that
+    /// refused every `--expertise` would pass the first half.
+    #[test]
+    fn the_dispatch_door_refuses_a_reading_list_beside_a_brief() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        std::fs::write(root.join("shaped.md"), shaped_brief("Where does the dossier live?"))
+            .unwrap();
+
+        let refused = child_payload(&root, BRIEF_WITH_EXPERTISE_CHILD);
+        assert_eq!(refused.get("ok"), Some(&json!(false)), "{refused}");
+        assert_eq!(refused.get("type"), Some(&json!("refused")), "{refused}");
+        assert_eq!(refused.get("reason"), Some(&json!("expertise_beside_brief")), "{refused}");
+        assert!(
+            refused.get("payload").is_none(),
+            "a refused combination never reaches a payload: {refused}"
+        );
+        assert!(
+            refused.get("brief_sha256").is_none(),
+            "nothing travelled, so nothing is digested: {refused}"
+        );
+
+        let carried = child_payload(&root, EXPERTISE_NO_BRIEF_CHILD);
+        assert!(carried.get("payload").is_some(), "a briefless list reaches a payload: {carried}");
+        assert!(
+            dispatched_body(&carried).ends_with(EXPERTISE_SECTION),
+            "the door rendered the list it was passed: {carried}"
+        );
+    }
+
+    /// The vendored half. Each of the three edited templates gets its OWN
+    /// disk probe, the same hazard the advisor brief block already carries:
+    /// a source-only prompt edit skews the embedded template from disk,
+    /// `dispatch prepare` returns None, and the Node delegate it would fall
+    /// to was deleted at the R6 cutover. A twin that missed THIS edit is
+    /// worse than loud — `{{#if}}` over an absent variable is falsy, so it
+    /// would silently swallow the reading list again.
+    #[test]
+    fn every_non_cell_template_carries_the_expertise_block_and_matches_disk() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        for name in ["gather", "reviewer", "advisor"] {
+            assert!(
+                prompt_skew(&repo_root, name).is_none(),
+                "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
+                 compiled-in template — run `bee dev regen` and rebuild, or every dispatch \
+                 prepare in this checkout resolves to nothing"
+            );
+            let template = load_prompt(name).unwrap();
+            let at = template
+                .find("{{#if expertise}}")
+                .unwrap_or_else(|| panic!("{name}.md carries no expertise block"));
+            assert!(at > 0, "{name}: a block at byte 0 has no leading newline to consume");
+            assert_eq!(&template[at - 1..at], "\n", "{name}: the marker needs its leading newline");
+            assert!(
+                template.contains("{{expertise}}"),
+                "{name}: the block must hold the expertise placeholder"
+            );
+            assert_eq!(
+                render(&template, &[]).unwrap(),
+                render(&template, &[("expertise", "")]).unwrap(),
+                "{name}: an empty list must leave zero residue bytes"
+            );
+        }
+    }
+
+    // ── slp-contract-original-request S1: the user's own words ride every
+    //    dispatch (D5, D6) ──────────────────────────────────────────────────
+    //
+    // Existing coverage judged first. `no_brief_leaves_every_runtime_and_kind_
+    // pair_exactly_as_it_was` already walks runtime × kind for byte identity,
+    // but it names the BRIEF and never writes an anchor, so it cannot tell an
+    // anchor that resolved to nothing from one that was never read. Nothing
+    // in this file writes `.bee/intent/*` at all. The cases below are that
+    // gap: the anchor resolving, the anchor deliberately NOT resolving, and
+    // what the request's own bytes may never do to the template.
+
+    /// The anchor's own framing, imported rather than retyped — a header edit
+    /// in `intent_group.rs` must move this assertion with it, not slip past.
+    use crate::verbs::intent_group::{
+        dispatch_original_request, PRECOMPACT_FOOTER, PRECOMPACT_HEADER,
+    };
+
+    /// The user's own words: punctuated, em-dashed and multi-line, so
+    /// "verbatim" means more than "a substring survived".
+    const ORIGINAL_REQUEST: &str = "Make the /orders endpoint idempotent under retries — the same Idempotency-Key must never\ncreate a second order, and please do NOT change the existing response shape.";
+
+    /// A repo with one claimed cell on feature `f`, ready for a dispatch of
+    /// any kind.
+    fn anchor_host(tmp: &tempfile::TempDir) -> PathBuf {
+        let root = repo(tmp, BRIEF_HOST);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"carry the request","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        root
+    }
+
+    /// An anchor on disk under `key`, in the shape `intent set` writes.
+    fn write_anchor(root: &Path, key: &str, request: &str) {
+        let body = serde_json::to_string(&json!({
+            "schema_version": "1.0",
+            "key": key,
+            "written_at": "2026-08-29T00:00:00.000Z",
+            "request": request,
+            "acceptance": "the user's words arrive unchanged",
+        }))
+        .unwrap();
+        w(root, &format!(".bee/intent/{key}.json"), &body);
+    }
+
+    /// Active work on `feature` — `active_feature` reads the phase first, so
+    /// an idle phase resolves to no feature no matter what the field says.
+    fn active_feature_is(root: &Path, feature: &str) {
+        w(root, ".bee/state.json", &format!(r#"{{"phase":"executing","feature":"{feature}"}}"#));
+    }
+
+    fn body_of_kind(root: &Path, runtime: &str, kind: &str) -> String {
+        let (cell, worker) = if kind == "cell" { (Some("c-1"), Some("w")) } else { (None, None) };
+        let Prepared::Value(v) =
+            prepare_dispatch(root, runtime, kind, cell, worker, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a {kind} envelope on {runtime}")
+        };
+        dispatched_body(&v)
+    }
+
+    /// The bytes the block adds, built from the anchor's own constants.
+    fn expected_block(request: &str) -> String {
+        format!("{PRECOMPACT_HEADER}\nORIGINAL REQUEST (verbatim):\n{request}\n{PRECOMPACT_FOOTER}")
+    }
+
+    /// The absent case, per runtime × kind. The non-cell kinds are compared
+    /// against `render(template, &[])` — the literal expression this door
+    /// used before any var existed — and the cell kind against a hand-written
+    /// literal of the seam the block lands in, so a stray newline on either
+    /// side of the marker is a red line rather than a silent reflow.
+    #[test]
+    fn no_resolvable_anchor_leaves_every_runtime_and_kind_pair_byte_identical() {
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in DISPATCH_KINDS {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = anchor_host(&tmp);
+                let body = body_of_kind(&root, runtime, kind);
+                assert!(
+                    !body.contains(PRECOMPACT_HEADER),
+                    "{runtime}/{kind}: no anchor resolved, so no block may render: {body}"
+                );
+                assert!(!body.contains("{{"), "{runtime}/{kind}: unrendered marker left behind");
+                if kind == "cell" {
+                    let head = "Nickname (reservation identity): w\nAssigned cell id: c-1\nFeature: f\n\nCell (authoritative — do not re-fetch):";
+                    let expected_head = expected_dispatched_body(runtime, kind, head);
+                    assert!(
+                        body.starts_with(&expected_head),
+                        "{runtime}/{kind}: the worker prompt head drifted: {body}"
+                    );
+                } else {
+                    let before = render(&load_prompt(kind).unwrap(), &[]).unwrap();
+                    let expected = expected_dispatched_body(runtime, kind, &before);
+                    assert_eq!(
+                        body,
+                        expected,
+                        "{runtime}/{kind}: payload bytes drifted"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The carrier, per kind. This is the case a missed var slice fails:
+    /// `{{#if}}` over an absent variable is silently falsy, so the
+    /// byte-identity walk above would stay green with the block swallowed for
+    /// a whole kind.
+    #[test]
+    fn a_resolvable_anchor_rides_every_dispatch_kind_verbatim() {
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in DISPATCH_KINDS {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = anchor_host(&tmp);
+                active_feature_is(&root, "f");
+                write_anchor(&root, "f", ORIGINAL_REQUEST);
+                let body = body_of_kind(&root, runtime, kind);
+                assert_eq!(
+                    body.matches(&expected_block(ORIGINAL_REQUEST)).count(),
+                    1,
+                    "{runtime}/{kind}: the request must ride exactly once, under the anchor's own header: {body}"
+                );
+                assert!(!body.contains("{{"), "{runtime}/{kind}: unrendered marker left behind");
+            }
+        }
+    }
+
+    /// THE LOAD-BEARING ONE. `read_anchor_at` applies no TTL and no staleness
+    /// check, and the default key is where a session with no feature parks its
+    /// anchor — so a featureless dispatch that walked to `default` would print
+    /// somebody else's days-old request under a DO-NOT-PARAPHRASE banner. It
+    /// renders nothing instead, by every route: no key at all, an active
+    /// feature whose own anchor is missing, and a feature slug that
+    /// `sanitize_intent_key` collapses onto the default key.
+    #[test]
+    fn a_featureless_dispatch_reads_no_default_anchor_even_when_one_exists() {
+        const STALE: &str = "four days ago, about an unrelated and already-shipped bug";
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in ["gather", "reviewer", "advisor"] {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = repo(&tmp, BRIEF_HOST);
+                write_anchor(&root, "default", STALE);
+                let body = body_of_kind(&root, runtime, kind);
+                assert!(!body.contains(STALE), "{runtime}/{kind}: read a stale default anchor");
+                let before = render(&load_prompt(kind).unwrap(), &[]).unwrap();
+                let expected = expected_dispatched_body(runtime, kind, &before);
+                assert_eq!(
+                    body,
+                    expected,
+                    "{runtime}/{kind}: payload bytes drifted"
+                );
+            }
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        write_anchor(&root, "default", STALE);
+        assert_eq!(dispatch_original_request(&root, None), None, "no key resolves to no request");
+        assert_eq!(
+            dispatch_original_request(&root, Some("default")),
+            None,
+            "the default key is refused even when it is asked for by name"
+        );
+        assert_eq!(
+            dispatch_original_request(&root, Some("***")),
+            None,
+            "a slug that sanitizes to \"default\" must not reach the default anchor"
+        );
+        assert_eq!(dispatch_original_request(&root, Some("f")), None, "no anchor at key f");
+        // An idle phase is no active feature, even with the field set.
+        w(&root, ".bee/state.json", r#"{"phase":"idle","feature":"f"}"#);
+        write_anchor(&root, "f", "the feature's own words");
+        assert_eq!(dispatch_original_request(&root, None), None, "idle resolves no feature");
+        active_feature_is(&root, "f");
+        assert_eq!(
+            dispatch_original_request(&root, None).as_deref(),
+            Some("the feature's own words"),
+            "an ACTIVE feature is the one fallback this door takes"
+        );
+    }
+
+    /// The cell's own feature is read first; under D5 explicit feature lookup
+    /// is exclusive, so a missing anchor does not fall through to the active feature.
+    #[test]
+    fn a_cell_dispatch_reads_its_own_features_anchor_before_the_active_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = anchor_host(&tmp);
+        active_feature_is(&root, "other");
+        write_anchor(&root, "f", "the cell's own feature asked for this");
+        write_anchor(&root, "other", "a different feature asked for that");
+        let body = body_of_kind(&root, "claude", "cell");
+        assert!(body.contains("the cell's own feature asked for this"), "{body}");
+        assert!(!body.contains("a different feature asked for that"), "{body}");
+
+        // …and with no anchor under the cell's feature, explicit feature lookup is exclusive (D5)
+        // so it never falls through to the active feature.
+        std::fs::remove_file(root.join(".bee").join("intent").join("f.json")).unwrap();
+        let body = body_of_kind(&root, "claude", "cell");
+        assert!(!body.contains("a different feature asked for that"), "{body}");
+    }
+
+    /// A request is DATA. It is substituted in pass 2, which walks the
+    /// pre-substitution text, so template syntax inside the user's words is
+    /// carried as characters and never interpreted — and the placeholders it
+    /// names are not re-expanded.
+    #[test]
+    fn a_request_carrying_template_syntax_is_carried_as_text() {
+        const INJECT: &str =
+            "Render {{worker}} and {{#if brief}}this{{/if}} literally — do not expand {{cell_json}}.";
+        for kind in DISPATCH_KINDS {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            write_anchor(&root, "f", INJECT);
+            let body = body_of_kind(&root, "claude", kind);
+            assert_eq!(
+                body.matches(&expected_block(INJECT)).count(),
+                1,
+                "{kind}: the request's own braces must survive verbatim: {body}"
+            );
+        }
+    }
+
+    /// Non-ASCII survives byte for byte — the renderer walks chars, and a
+    /// truncation or a re-encode would show up here first.
+    #[test]
+    fn a_non_ascii_request_survives_byte_for_byte() {
+        const VI: &str =
+            "Hãy giữ nguyên yêu cầu của tôi — đừng tóm tắt, đừng diễn giải lại. 🐝 Ünïcödé ok?";
+        let tmp = tempfile::tempdir().unwrap();
+        let root = anchor_host(&tmp);
+        active_feature_is(&root, "f");
+        write_anchor(&root, "f", VI);
+        for kind in DISPATCH_KINDS {
+            let body = body_of_kind(&root, "claude", kind);
+            assert_eq!(body.matches(&expected_block(VI)).count(), 1, "{kind}: {body}");
+        }
+        assert_eq!(dispatch_original_request(&root, Some("f")).as_deref(), Some(VI));
+    }
+
+    /// A blank request is no anchor at all: `{{#if}}` truthiness is
+    /// `!is_empty()`, so a whitespace request that reached the var would
+    /// splice an EMPTY block where today's bytes are.
+    #[test]
+    fn a_whitespace_only_request_is_no_request_at_all() {
+        for blank in ["   ", "\n\n", " \t \r\n  \n"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            write_anchor(&root, "f", blank);
+            assert_eq!(
+                dispatch_original_request(&root, Some("f")),
+                None,
+                "a request of {blank:?} must read as absent"
+            );
+            for kind in DISPATCH_KINDS {
+                let body = body_of_kind(&root, "claude", kind);
+                assert!(!body.contains(PRECOMPACT_HEADER), "{kind}: {body}");
+                if kind != "cell" {
+                    assert_eq!(body, render(&load_prompt(kind).unwrap(), &[]).unwrap(), "{kind}");
+                }
+            }
+        }
+    }
+
+    /// Error cascade: an unusable anchor degrades to "no anchor" and never
+    /// fails the dispatch. Corrupt bytes, a non-object payload, and a record
+    /// with no `request` field all land in the same place.
+    #[test]
+    fn an_unusable_anchor_degrades_to_no_block_and_never_fails_the_dispatch() {
+        for payload in ["{broken", "[]", r#""just a string""#, r#"{"acceptance":"no request"}"#] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            w(&root, ".bee/intent/f.json", payload);
+            assert_eq!(
+                dispatch_original_request(&root, Some("f")),
+                None,
+                "an anchor of {payload:?} must read as absent"
+            );
+            for kind in DISPATCH_KINDS {
+                let body = body_of_kind(&root, "claude", kind);
+                assert!(!body.contains(PRECOMPACT_HEADER), "{kind}/{payload:?}: {body}");
+                if kind != "cell" {
+                    assert_eq!(
+                        body,
+                        render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                        "{kind}/{payload:?}: payload bytes drifted"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Why the var had to join BOTH slices: pass 2 refuses a bare `{{NAME}}`
+    /// with no supplied value. Inside an `{{#if}}` the same omission is
+    /// SILENT, which is exactly why the per-kind carrier case above exists.
+    #[test]
+    fn a_template_var_missing_from_its_arms_slice_fails_loudly() {
+        let err = render("Head: {{original_request}}\n", &[("brief", "")]).unwrap_err();
+        assert!(
+            err.contains("no value supplied for placeholder {{original_request}}"),
+            "the refusal must name the placeholder: {err}"
+        );
+        assert!(render("Head: {{original_request}}\n", &[("original_request", "")]).is_ok());
+        // The silent half, stated so the asymmetry is on the record.
+        assert_eq!(
+            render("A\n{{#if original_request}}\nB\n{{/if}}\nC", &[]).unwrap(),
+            "A\nC",
+            "an absent var inside an if-block is dropped, not refused"
+        );
+    }
+
+    /// D5 / pihp-2: An explicit feature lookup never falls through to the active feature
+    /// when the requested feature has no anchor.
+    #[test]
+    fn pihp_dispatch_context_cross_feature_anchor_never_falls_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = anchor_host(&tmp);
+        active_feature_is(&root, "active-feature");
+        write_anchor(&root, "active-feature", "active feature request");
+        // No anchor for requested feature "f"
+        assert_eq!(
+            dispatch_original_request(&root, Some("f")),
+            None,
+            "missing requested-feature anchor must not fall through to active feature"
+        );
+        let body = body_of_kind(&root, "claude", "cell");
+        assert!(
+            !body.contains("active feature request"),
+            "cell with feature 'f' must not leak active-feature anchor: {body}"
+        );
+        assert!(
+            !body.contains(PRECOMPACT_HEADER),
+            "no anchor for cell's feature means no precompact block: {body}"
+        );
+    }
+
+    /// D5 / pihp-2: Non-empty purpose appears byte-for-byte in the worker prompt
+    /// for all non-cell dispatch kinds (gather, reviewer, advisor).
+    #[test]
+    fn pihp_dispatch_context_non_cell_purpose_rendered_byte_for_byte() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        const TEST_PURPOSE: &str = "Verify that order IDs match UUIDv4 format exactly — do not change schemas.";
+        for kind in ["gather", "reviewer", "advisor"] {
+            for runtime in DISPATCH_RUNTIMES {
+                let Prepared::Value(v) = prepare_dispatch(
+                    &root, runtime, kind, None, None, false, None, Some(TEST_PURPOSE), false, None,
+                )
+                .unwrap()
+                else {
+                    panic!("expected a {kind} envelope on {runtime}");
+                };
+                let body = dispatched_body(&v);
+                assert!(
+                    body.contains(TEST_PURPOSE),
+                    "{runtime}/{kind}: prompt must contain purpose byte-for-byte: {body}"
+                );
+                assert!(
+                    body.contains(&format!("Purpose:\n{TEST_PURPOSE}")),
+                    "{runtime}/{kind}: prompt must contain conditional purpose block: {body}"
+                );
+            }
+        }
+    }
+
+    /// D5 / pihp-2: An omitted purpose preserves the previous prompt bytes
+    /// and leaves zero residue bytes.
+    #[test]
+    fn pihp_dispatch_context_omitted_purpose_preserves_prompt_bytes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for kind in ["gather", "reviewer", "advisor"] {
+            for runtime in DISPATCH_RUNTIMES {
+                let Prepared::Value(v_omitted) = prepare_dispatch(
+                    &root, runtime, kind, None, None, false, None, None, false, None,
+                )
+                .unwrap()
+                else {
+                    panic!("expected a {kind} envelope on {runtime}");
+                };
+                let Prepared::Value(v_blank) = prepare_dispatch(
+                    &root, runtime, kind, None, None, false, None, Some(""), false, None,
+                )
+                .unwrap()
+                else {
+                    panic!("expected a {kind} envelope on {runtime}");
+                };
+                let body_omitted = dispatched_body(&v_omitted);
+                let body_blank = dispatched_body(&v_blank);
+                assert_eq!(
+                    body_omitted, body_blank,
+                    "{runtime}/{kind}: omitted and blank purpose must yield identical bytes"
+                );
+                assert!(
+                    !body_omitted.contains("Purpose:"),
+                    "{runtime}/{kind}: omitted purpose must leave no Purpose block"
+                );
+            }
+        }
+        let Prepared::Value(adv) = prepare_dispatch(
+            &root, "pi", "advisor", None, None, false, None, None, false, None,
+        )
+        .unwrap()
+        else {
+            panic!("expected advisor on pi");
+        };
+        let stdin = adv.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        assert_eq!(stdin, ADVISOR_BODY_WITHOUT_A_BRIEF);
+    }
+
+    /// D5 / pihp-2: Non-cell prompts resolve the bound lane feature
+    /// and use its intent anchor.
+    #[test]
+    fn pihp_dispatch_context_resolves_bound_lane_feature_for_non_cell_prompts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let sid = "pihp-session-test";
+        w(
+            &root,
+            &format!(".bee/sessions/{sid}.json"),
+            r#"{"id":"pihp-session-test","lane":"lane-alpha","updated_at":2000000000000}"#,
+        );
+        write_anchor(&root, "lane-alpha", "intent for lane alpha");
+        active_feature_is(&root, "other-active");
+        write_anchor(&root, "other-active", "intent for other active");
+
+        unsafe { std::env::set_var("BEE_SESSION_ID", sid); }
+        for kind in ["gather", "reviewer", "advisor"] {
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", kind, None, None, false, None, None, false, None,
+            )
+            .unwrap()
+            else {
+                panic!("expected {kind} on claude");
+            };
+            let body = dispatched_body(&v);
+            assert!(
+                body.contains("intent for lane alpha"),
+                "{kind}: prompt must resolve bound lane anchor: {body}"
+            );
+            assert!(
+                !body.contains("intent for other active"),
+                "{kind}: prompt must not fall through to other active feature: {body}"
+            );
+        }
+        unsafe { std::env::remove_var("BEE_SESSION_ID"); }
+    }
+
+    /// D5 / pihp-2: Advisor keeps brief-file content separate from purpose.
+    #[test]
+    fn pihp_dispatch_context_advisor_brief_file_content_kept_separate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        const ADV_PURPOSE: &str = "Evaluate risk and safety factors";
+        const ADV_BRIEF: &str = "Should we deprecate the old session identity helper?";
+        let Prepared::Value(v) = crate::verbs::drivers::prepare::prepare_dispatch_with_brief(
+            &root,
+            "claude",
+            "advisor",
+            None,
+            None,
+            None,
+            false,
+            None,
+            Some(ADV_PURPOSE),
+            false,
+            None,
+            Some(ADV_BRIEF),
+        )
+        .unwrap()
+        else {
+            panic!("expected advisor on claude");
+        };
+        let body = dispatched_body(&v);
+        assert!(body.contains(ADV_PURPOSE), "purpose must be present: {body}");
+        assert!(body.contains(ADV_BRIEF), "brief must be present: {body}");
+        assert!(
+            body.contains(&format!("Purpose:\n{ADV_PURPOSE}")),
+            "purpose block format: {body}"
+        );
+        assert!(
+            body.contains(&format!("Brief (the question to answer, verbatim — answer this one, ask for nothing more):\n\n{ADV_BRIEF}")),
+            "brief block format: {body}"
+        );
+    }
+
+    /// Every template that declares the block declares it the same way, and
+    /// the shipped copies on disk match the compiled-in bytes — a prompt edit
+    /// and a rebuilt vendored twin are one unit of work.
+    #[test]
+    fn every_template_carries_the_original_request_block_and_matches_disk() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        for name in ["worker-cell", "gather", "reviewer", "advisor"] {
+            assert!(
+                prompt_skew(&repo_root, name).is_none(),
+                "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
+                 compiled-in template — run `bee dev regen` and rebuild"
+            );
+            let template = load_prompt(name).unwrap();
+            let at = template
+                .find("{{#if original_request}}")
+                .unwrap_or_else(|| panic!("{name}.md carries no original_request block"));
+            assert!(at > 0, "{name}: a block at byte 0 has no leading newline to consume");
+            assert_eq!(&template[at - 1..at], "\n", "{name}: the marker needs its leading newline");
+            assert!(
+                template.contains("{{original_request}}"),
+                "{name}: the block must hold the placeholder"
+            );
+            // The rest of the arm's slice, so the comparison isolates the one
+            // var under test. `worker-cell` carries bare placeholders that
+            // pass 2 refuses when unsupplied, so they cannot be left out.
+            let without: Vec<(&str, &str)> = if name == "worker-cell" {
+                vec![
+                    ("worker", ""),
+                    ("cell_id", ""),
+                    ("feature", ""),
+                    ("cell_json", ""),
+                    ("learned_context", ""),
+                    ("expertise", ""),
+                    ("advisor", ""),
+                    ("prior_rounds", ""),
+                    ("worktree_root", ""),
+                    ("control_root", ""),
+                ]
+            } else {
+                vec![("brief", ""), ("expertise", "")]
+            };
+            let mut with = without.clone();
+            with.push(("original_request", ""));
+            assert_eq!(
+                render(&template, &without).unwrap(),
+                render(&template, &with).unwrap(),
+                "{name}: an empty request must leave zero residue bytes"
+            );
+        }
+    }
+
+    // ── pi-support D5/D6: the herding-only dispatch door ───────────────────
+    //
+    // Existing coverage judged first. The runtime × kind walks above now
+    // include `pi` from `DISPATCH_RUNTIMES` itself, so the HAPPY path (a
+    // herding slot renders and carries its prompt) is already held by them.
+    // What no walk can hold is the REFUSAL surface: D5 says every resolution
+    // that is not `Resolved::Herding` is refused by name, and each of those
+    // shapes needs its own config to reach. That is the gap below — one row
+    // per resolution arm, plus the D6 table's own values, plus the two gates
+    // a runtime name has to pass before the handler is even called.
+
+    /// The D6 table verbatim (settled 2026-08-29): heavy roles on an opus
+    /// herding agent, advisor on fable, cheap roles on agy-flash. Every value
+    /// is herding-SHAPED because D5 admits nothing else on pi — D6 constrains
+    /// the transport, not the model vendor, so the vendor lives inside the
+    /// named `herding.agents` entry rather than in this table.
+    const PI_D6_HOST: &str = r#"{"models":{"pi":{
+        "code":{"kind":"herding","agent":"pi-claude-opus"},
+        "test":{"kind":"herding","agent":"pi-claude-opus"},
+        "docs":{"kind":"herding","agent":"pi-claude-opus"},
+        "review":{"kind":"herding","agent":"pi-claude-opus"},
+        "advisor":{"kind":"herding","agent":"pi-claude-fable"},
+        "read":{"kind":"herding","agent":"pi-agy-flash"},
+        "extraction":{"kind":"herding","agent":"pi-agy-flash"},
+        "generation":{"kind":"herding","agent":"pi-agy-flash"},
+        "supervisor":{"kind":"herding","agent":"pi-agy-flash"}
+    }}}"#;
+
+    /// One `models.pi` table, as a config string.
+    fn pi_host(table: &str) -> String {
+        format!(r#"{{"models":{{"pi":{table}}}}}"#)
+    }
+
+    /// A claimed cell declaring `role`, ready for a `--kind cell` dispatch.
+    fn pi_cell(root: &Path, id: &str, role: &str, extra: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"f","title":"ship the pi belt","role":"{role}",{extra}"status":"claimed","trace":{{"worker":"w"}}}}"#
+            ),
+        );
+    }
+
+    fn pi_envelope(root: &Path, kind: &str, role: Option<&str>, cell: Option<&str>) -> Value {
+        let worker = cell.map(|_| "w");
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            root, "pi", kind, role, cell, worker, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope or a typed refusal on pi/{kind}")
+        };
+        v
+    }
+
+    /// THE SERVED PATH: a herding slot is the one resolution the pi door
+    /// carries, and it carries it as the ordinary herding-exec Bash payload —
+    /// the brief on stdin, the slot's own agent named on the command line.
+    #[test]
+    fn a_herding_slot_on_pi_returns_the_herding_exec_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PI_D6_HOST);
+        pi_cell(&root, "c-1", "code", "");
+        let v = pi_envelope(&root, "cell", None, Some("c-1"));
+
+        assert_eq!(v.get("tool"), Some(&json!("Bash")), "a pi dispatch is a herding pane: {v}");
+        let payload = v.get("payload").unwrap();
+        let command = payload.get("command").unwrap().as_str().unwrap();
+        assert!(
+            command.starts_with(".bee/bin/bee herding run --task-file - --json"),
+            "the herding command drifted: {command}"
+        );
+        assert!(
+            command.contains(r#"--agent "pi-claude-opus""#),
+            "the slot's own agent must ride the command: {command}"
+        );
+        assert!(
+            payload.get("stdin").unwrap().as_str().unwrap().contains("c-1"),
+            "the worker prompt travels on stdin"
+        );
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec")),
+            "{v}"
+        );
+    }
+
+    /// D6's VALUES, not only its shape: every role in the settled table
+    /// resolves to the agent the table names. A refusal-only suite would stay
+    /// green with the whole table mis-keyed.
+    #[test]
+    fn the_d6_table_values_resolve_to_their_named_agents_on_pi() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PI_D6_HOST);
+        let rows = [
+            ("code", "pi-claude-opus"),
+            ("test", "pi-claude-opus"),
+            ("docs", "pi-claude-opus"),
+            ("review", "pi-claude-opus"),
+            ("advisor", "pi-claude-fable"),
+            ("read", "pi-agy-flash"),
+            ("extraction", "pi-agy-flash"),
+            ("generation", "pi-agy-flash"),
+            ("supervisor", "pi-agy-flash"),
+        ];
+        for (role, agent) in rows {
+            // `--role` names the slot outright, so each row reads its OWN
+            // entry rather than whatever a walk fell through to.
+            let kind = if role == "advisor" { "advisor" } else { "gather" };
+            let v = pi_envelope(&root, kind, Some(role), None);
+            let command = v
+                .get("payload")
+                .and_then(|p| p.get("command"))
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("{role}: expected a herding payload, got {v}"));
+            assert!(
+                command.contains(&format!(r#"--agent "{agent}""#)),
+                "{role}: expected agent {agent}, command was {command}"
+            );
+        }
+    }
+
+    /// D5 AT FULL WIDTH. Every non-herding resolution arm — plain-string
+    /// `Model`, `Native`, `Cli` (on both a gather purpose, which resolves it,
+    /// and a non-gather purpose, which hits the cli purpose gate first) and
+    /// the `Budget` floor an empty table lands on — is refused by ONE typed
+    /// refusal that names the slot, the resolution and the herding shape to
+    /// configure. Pi ships no Agent surface, so any of these would have
+    /// dispatched nothing while the envelope read as a success.
+    #[test]
+    fn every_non_herding_slot_shape_on_pi_is_refused_by_name() {
+        let rows: [(&str, &str, &str, &str); 5] = [
+            ("plain string", r#"{"generation":"opus"}"#, "gather", "model"),
+            (
+                "native",
+                r#"{"generation":{"kind":"native","model":"gpt-5"}}"#,
+                "gather",
+                "native",
+            ),
+            (
+                "cli on a gather",
+                r#"{"generation":{"kind":"cli","command":"echo hi"}}"#,
+                "gather",
+                "cli",
+            ),
+            (
+                "cli on a reviewer purpose",
+                r#"{"review":{"kind":"cli","command":"echo hi"}}"#,
+                "reviewer",
+                "cli",
+            ),
+            ("empty table (budget floor)", r#"{}"#, "gather", "budget"),
+        ];
+        for (name, table, kind, resolution) in rows {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, &pi_host(table));
+            let v = pi_envelope(&root, kind, None, None);
+            assert_eq!(v.get("ok"), Some(&json!(false)), "{name}: must refuse — {v}");
+            assert_eq!(v.get("type"), Some(&json!("refused")), "{name}: {v}");
+            assert_eq!(
+                v.get("reason"),
+                Some(&json!(PI_HERDING_ONLY_REASON)),
+                "{name}: one reason word for the whole door — {v}"
+            );
+            assert_eq!(v.get("runtime"), Some(&json!("pi")), "{name}: {v}");
+            assert_eq!(
+                v.get("resolution"),
+                Some(&json!(resolution)),
+                "{name}: the refusal must name what the slot resolved to — {v}"
+            );
+            assert_eq!(v.get("payload"), None, "{name}: a refusal carries no payload — {v}");
+            assert_eq!(v.get("tool"), None, "{name}: a refusal names no tool — {v}");
+            let slot = v.get("slot").and_then(Value::as_str).unwrap_or_default();
+            let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(!slot.is_empty(), "{name}: the refusal must name the slot — {v}");
+            assert!(
+                fix.contains(&format!("team.pi.{slot}")),
+                "{name}: the fix must name the slot to configure: {fix}"
+            );
+            assert!(
+                fix.contains("herding"),
+                "{name}: the fix must name the herding requirement: {fix}"
+            );
+        }
+    }
+
+    /// THE ESCALATION ARM, in both of its spellings — a cell marked
+    /// `escalate: true`, and an explicit `--role ceiling` with no cell behind
+    /// it. On claude this resolves `Resolved::Inherit` and dispatches an
+    /// Agent on the session model; on pi there IS no subagent to hand the
+    /// session model to, so the refusal carries the one remedy that works:
+    /// run the escalated cell inline in the session.
+    #[test]
+    fn an_escalated_dispatch_on_pi_refuses_with_the_inline_session_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PI_D6_HOST);
+        pi_cell(&root, "c-1", "code", r#""escalate":true,"#);
+        // The control: the SAME table, unescalated, really does dispatch —
+        // so the refusal below is the escalation and not a broken fixture.
+        pi_cell(&root, "c-2", "code", "");
+        assert_eq!(
+            pi_envelope(&root, "cell", None, Some("c-2")).get("tool"),
+            Some(&json!("Bash")),
+            "the control must herd"
+        );
+
+        for v in [
+            pi_envelope(&root, "cell", None, Some("c-1")),
+            pi_envelope(&root, "gather", Some(ESCALATION_WORD), None),
+        ] {
+            assert_eq!(v.get("ok"), Some(&json!(false)), "{v}");
+            assert_eq!(v.get("reason"), Some(&json!(PI_HERDING_ONLY_REASON)), "{v}");
+            assert_eq!(v.get("resolution"), Some(&json!("escalation")), "{v}");
+            let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(
+                fix.contains(
+                    "Pi has no subagent surface, run the escalated cell inline in the session"
+                ),
+                "the escalation refusal must carry the inline-session remedy: {fix}"
+            );
+        }
+    }
+
+    /// A role nothing configures still earns the standing `role_not_configured`
+    /// refusal, which names the role and lists what this runtime CAN resolve —
+    /// pi joining the runtime set changes none of that.
+    #[test]
+    fn a_role_nothing_configures_on_pi_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PI_D6_HOST);
+        let v = pi_envelope(&root, "gather", Some("designer"), None);
+        assert_eq!(v.get("ok"), Some(&json!(false)), "{v}");
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")), "{v}");
+        assert_eq!(v.get("role"), Some(&json!("designer")), "{v}");
+        let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains("team.pi"), "the fix must name the pi table: {fix}");
+    }
+
+    /// GATE TWO of the three a runtime name passes. The argv-shape guard
+    /// reads the `runtime` enum out of the embedded registry payload and
+    /// refuses BEFORE the handler runs, so a runtime added to
+    /// `DISPATCH_RUNTIMES` alone would be refused by the front door and never
+    /// reach a line of the code above. Derived from the constant on both
+    /// sides — never a hand-typed list — for `dispatch prepare` AND
+    /// `dispatch wave`, which declare the flag separately.
+    #[test]
+    fn the_registry_enum_and_dispatch_runtimes_name_the_same_runtime_set() {
+        let payload: Value =
+            serde_json::from_str(include_str!("../../generated/registry_payload.json")).unwrap();
+        let commands = payload["commands"].as_array().unwrap();
+        for name in ["dispatch.prepare", "dispatch.wave"] {
+            let entry = commands
+                .iter()
+                .find(|c| c["name"] == json!(name))
+                .unwrap_or_else(|| panic!("the registry declares {name}"));
+            let declared: Vec<&str> = entry["parameters"]["properties"]["runtime"]["enum"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{name} declares a runtime enum"))
+                .iter()
+                .map(|v| v.as_str().unwrap())
+                .collect();
+            let mut expected: Vec<&str> = DISPATCH_RUNTIMES.to_vec();
+            let mut got = declared.clone();
+            expected.sort_unstable();
+            got.sort_unstable();
+            assert_eq!(
+                got, expected,
+                "{name}: the shape guard's enum and DISPATCH_RUNTIMES disagree — a runtime in \
+                 one and not the other is a door that half-opens"
+            );
+            assert!(declared.contains(&"pi"), "{name}: --runtime pi must pass the shape guard");
+        }
+    }
+
+    /// THE WAVE DOOR takes the same two answers: it gates `--runtime` on the
+    /// same constant, and it recognises the pi refusal by its reason word so
+    /// a refused cell's claim is UNWOUND into `skipped` instead of standing
+    /// on a cell nothing can dispatch. Read out of the handler's own source —
+    /// the same derivation the `keys_known` probe above uses — because the
+    /// wave loop needs a claimed store, a worktree topology and a live
+    /// session before it will run one line.
+    #[test]
+    fn the_wave_door_gates_on_the_same_constant_and_unwinds_a_pi_refusal() {
+        const PREPARE_SOURCE: &str = include_str!("prepare.rs");
+        let at = PREPARE_SOURCE
+            .find("pub(crate) fn run_dispatch_wave(")
+            .expect("run_dispatch_wave moved — re-anchor this");
+        let body = &PREPARE_SOURCE[at..];
+        let end = body.find("\n// ═══").unwrap_or(body.len());
+        let body = &body[..end];
+        assert!(
+            body.contains("DISPATCH_RUNTIMES.contains(&runtime.as_str())"),
+            "the wave door must gate --runtime on the one constant"
+        );
+        assert!(
+            body.contains("PI_HERDING_ONLY_REASON"),
+            "the wave loop must recognise the pi refusal by its reason word"
+        );
+        assert!(
+            body.contains("unwind_wave_claim"),
+            "and unwind the claim it took for a cell it cannot dispatch"
+        );
+    }
+
+    // ── nc-1: advisor consult prompt line ─────────────────────────────────
+
+    #[test]
+    fn cell_dispatch_renders_advisor_line_when_distinct_or_cli() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Claude runtime with distinct advisor
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body = dispatched_body(&v);
+        assert!(
+            body.contains("Advisor: opus — consult via your own Agent tool, model param opus, description starting exactly \"advisor-consult c-1: opus\" (fallback: headless claude -p --model opus)"),
+            "expected advisor line in claude cell prompt, got:\n{body}"
+        );
+
+        // Codex runtime with distinct advisor
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = repo(
+            &tmp2,
+            r#"{"models":{"codex":{"generation":"gpt-4o","advisor":"o3-mini"}}}"#,
+        );
+        w(
+            &root2,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v2) =
+            prepare_dispatch(&root2, "codex", "cell", Some("c-2"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body2 = dispatched_body(&v2);
+        assert!(
+            body2.contains("Advisor: o3-mini — consult via Codex-native subagent dispatch at model o3-mini, description starting exactly \"advisor-consult c-2: o3-mini\""),
+            "expected advisor line in codex cell prompt, got:\n{body2}"
+        );
+
+        // CLI advisor
+        let tmp3 = tempfile::tempdir().unwrap();
+        let root3 = repo(
+            &tmp3,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":{"kind":"cli","command":"bee-advisor"}}}}"#,
+        );
+        w(
+            &root3,
+            ".bee/cells/c-3.json",
+            r#"{"id":"c-3","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v3) =
+            prepare_dispatch(&root3, "claude", "cell", Some("c-3"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body3 = dispatched_body(&v3);
+        assert!(
+            body3.contains("Advisor: bee-advisor — consult via bee-advisor, evidence bundle on stdin"),
+            "expected cli advisor line, got:\n{body3}"
+        );
+    }
+
+    #[test]
+    fn cell_dispatch_skips_advisor_line_when_same_model_or_unconfigured() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Same model (honest no-op)
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"sonnet"}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-same.json",
+            r#"{"id":"c-same","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-same"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body = dispatched_body(&v);
+        assert!(!body.contains("Advisor:"), "same-model advisor must not render Advisor line, got:\n{body}");
+
+        // Unconfigured advisor
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = repo(
+            &tmp2,
+            r#"{"models":{"claude":{"generation":"sonnet"}}}"#,
+        );
+        w(
+            &root2,
+            ".bee/cells/c-none.json",
+            r#"{"id":"c-none","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v2) =
+            prepare_dispatch(&root2, "claude", "cell", Some("c-none"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body2 = dispatched_body(&v2);
+        assert!(!body2.contains("Advisor:"), "unconfigured advisor must not render Advisor line, got:\n{body2}");
+    }
+
+    #[test]
+    fn escalated_cell_renders_advisor_line_when_configured() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-esc.json",
+            r#"{"id":"c-esc","feature":"f","tier":"ceiling","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-esc"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body = dispatched_body(&v);
+        assert!(
+            body.contains("Advisor: opus — consult via your own Agent tool"),
+            "escalated cell must render configured advisor line, got:\n{body}"
+        );
+    }
+
+    #[test]
+    fn non_cell_kinds_never_render_advisor_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#,
+        );
+        for kind in ["gather", "reviewer", "advisor"] {
+            let Prepared::Value(v) =
+                prepare_dispatch(&root, "claude", kind, None, None, false, None, None, false, None)
+                    .unwrap()
+            else {
+                panic!("expected envelope for kind {kind}")
+            };
+            let body = dispatched_body(&v);
+            assert!(
+                !body.contains("Advisor:"),
+                "{kind} kind must never render Advisor line, got:\n{body}"
+            );
+        }
+    }
+
+    /// The nudge consult lives in instruction text, and instruction text is an
+    /// untested code path unless something pins it (pattern
+    /// `20260821-instruction-text-is-an-untested-code-path`). The prose tells a
+    /// lead which dispatch kind to run and which supervisor signals earn a
+    /// nudge; both are closed sets owned by code. Widen either set, or rename
+    /// the verb the prose names, and this test demands the document learn it —
+    /// the same tie `the_shipped_prompt_pins_the_record_verbs_own_closed_sets`
+    /// holds over the supervisor prompt.
+    #[test]
+    fn worker_details_nudge_consult_pins_the_kinds_and_signals_code_owns() {
+        use crate::verbs::supervisor::{ADVISOR_NUDGE_KIND, KNOWN_SIGNALS};
+
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        let doc = repo_root.join("skills/bee-swarming/references/worker-details.md");
+        let body = std::fs::read_to_string(&doc)
+            .unwrap_or_else(|e| panic!("worker-details.md reads at {}: {e}", doc.display()));
+
+        // The dispatch kind the prose tells the lead to run must be one the
+        // verb actually accepts.
+        assert!(
+            DISPATCH_KINDS.contains(&"advisor"),
+            "the nudge consult's documented door disappeared from DISPATCH_KINDS"
+        );
+        assert!(
+            body.contains("bee dispatch prepare --kind advisor"),
+            "worker-details.md no longer names the nudge consult's dispatch verb"
+        );
+        assert!(
+            body.contains(ADVISOR_NUDGE_KIND),
+            "worker-details.md never names the {ADVISOR_NUDGE_KIND:?} record that triggers the consult"
+        );
+
+        // Only the three poor-work signals earn a nudge; the other four are
+        // observations, and the prose must not advertise them as triggers.
+        for signal in ["struggling-loop", "budget-overrun", "same-region-resubmit"] {
+            assert!(
+                KNOWN_SIGNALS.contains(&signal),
+                "{signal:?} is documented as a nudge trigger but is not a signal the verb knows"
+            );
+        }
+
+        // The fixed return form: a verdict the lead can put straight into the
+        // decision text that clears the debt.
+        for needle in ["verdict:", "on-track", "redirect", "stop", "finding:", "next:"] {
+            assert!(
+                body.contains(needle),
+                "worker-details.md's nudge consult is missing the return-form token {needle:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn herding_gather_payload_stdin_starts_with_agent_body_and_ends_with_brief() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "pi", "gather", None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected a gather envelope on pi")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        let gather_body = embedded_agent_body("bee-gather").expect("bee-gather body");
+        assert!(stdin.starts_with(gather_body));
+        let prompt = render(&load_prompt("gather").unwrap(), &[]).unwrap();
+        assert!(stdin.ends_with(&prompt));
+    }
+
+    const GOLDEN_NATIVE_CELL_PROMPT: &str = r#"Nickname (reservation identity): w-golden
+Assigned cell id: c-golden
+Feature: feat-golden
+
+Location — work here, the store is in the other checkout:
+- Work in: /repo/wt-feat
+- The bee store (cells, claims, reservations) lives in: /repo/control
+
+Before any work step: self-check the effective working directory. If
+it is not inside /repo/wt-feat, stop with zero edit attempts and return
+`[BLOCKED: session cwd is not the worktree — enter it or spawn this worker
+from a session rooted there]`.
+
+Cell (authoritative — do not re-fetch):
+{
+  "id": "c-golden",
+  "feature": "feat-golden",
+  "title": "golden cell title",
+  "role": "code",
+  "status": "claimed",
+  "trace": {
+    "worker": "w-golden"
+  }
+}
+
+Inputs — read these; nothing else is provided:
+- AGENTS.md
+- docs/history/feat-golden/CONTEXT.md
+- docs/history/feat-golden/plan.md (when present)
+
+Advisor: fable
+
+Contract:
+- Load the bee-swarming skill (Execute section) for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
+- Execute only the assigned cell. Do not select or accept other work.
+- The cell's listed files are reserved under your nickname by the claim that dispatched you, and the finish command releases them at cap; reserve any ADDITIONAL path before writing: .bee/bin/bee reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"
+- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
+- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
+- Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: c-golden` (the words "cell:" then the id — a bare id alone fails the cap).
+- Your report is a navigation aid, not completion evidence: the leader compares every approved requirement against the actual artifacts before accepting. Make that check fast — in `outcome` or `deviations`, name where each requirement landed (file, function, test, or proof line), never only that it did.
+- Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
+
+Result form: beside the token, in the same message, emit exactly one fenced JSON block — never in place of the token — as the echo of having capped. `tests` is a proof string `<command> — <result> — <scope reason>` (three non-empty segments; the reason may itself contain the same separator, only the first two count) — e.g. `"cargo test -p bee — green:unit — touched close.rs"`. The result segment is closed over three values, and a bare `green` is refused:
+- `green:live` — the real product or command was driven and its observable result inspected.
+- `green:unit` — automated tests passed.
+- `green:static` — it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.
+
+A no-test-sentinel repo names the command segment `none`, with the reason naming the parity/docs proof used (e.g. `none — green:static — docs pointer check`). A `red` result segment refuses the cap: fix first, then re-run. `deviations` carries one line per departure from the plan, each in THREE parts — `<what was done differently> — <why> — <kind>` — with the kind exactly one of: hit an unforeseen obstacle / found a better route / the plan was wrong about a fact / something else had to be fixed first. Write that line in plain language at the moment the departure happens, never composed from memory at the end. Followed the plan? Say so instead: one line reading `followed the plan` — silence and nothing-happened must not read alike. In a run that files a letter for the human, a cap that states neither is refused; any other run records what you write and refuses nothing. `mistakes` carries one entry per mistake you made, each in THREE parts — `<what went wrong> — <what would have been better> — <fix-at>`. The first part names a concrete thing: a file, a command, or something you observed, never "the approach"; `<fix-at>` is the required layer that stops it coming back — `architecture` (a code change makes the mistake impossible), `check` (a test, hook, guard or doctor row catches it), `doctrine` (only prose can carry it) or `none` (a one-off nobody would guard), picking the strongest layer someone would actually build now. Write each line at the moment you notice the mistake, never composed from memory at the end. Hit none? Send `[]`: an empty array SAYS this cell hit nothing, while leaving the key out records no answer at all and `bee close` refuses the feature naming this cell. `baseline` carries what the same proof command produced on the base commit before this change — optional, but expected whenever the proof command could have passed before the change.
+```json
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "baseline": "<optional: what the same proof produced on base>"}
+```
+
+Optional keys, sent only when they carry an answer (`[]` means none; absent means no answer): `reaction` (`confirm` | `partial` | `challenge` | `blocked`, your stance toward the brief), `skipped` (checks not run, each with its reason), `unknowns` (assumptions not proven), `found` (discoveries outside the cell), `stopped` (the part not done, with its evidence). Partial stop: when a false premise touches only part of the cell, finish the safe part and return [DONE] with `reaction` `partial` and `stopped`; [BLOCKED] is for a cell with no safe part. Dissent once per point; after the verdict, follow it — a second dissent needs new evidence.
+
+Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --files <a,b> --report '<json>' — finish CAPS the cell and records the proof line you hand it; no door runs tests for you. You own the scope: run the narrowest proof this change type needs (code → the related tests, filtered to what you touched, never the whole declared suite; docs → parity/pointer checks; behavior → judge verdict), and run the cell's own `verify` when it carries one. A `red` result refuses the cap: the red is the work — fix it and re-run finish; never build on a red base. CI runs the project's declared commands.test on every push, the one deterministic net. The report also carries `mistakes` and optional `baseline` — the form and the timing are under Result form above (or record one as you go with `.bee/bin/bee mailbox reflect --wrong "<what went wrong>" --better "<what would have been better>" --fix-at <layer>`)."#;
+
+    #[test]
+    fn native_cell_prompt_render_is_byte_identical_to_golden() {
+        let cell: serde_json::Value = serde_json::json!({
+            "id": "c-golden",
+            "feature": "feat-golden",
+            "title": "golden cell title",
+            "role": "code",
+            "status": "claimed",
+            "trace": { "worker": "w-golden" }
+        });
+        let rendered = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w-golden"),
+            Some(("/repo/wt-feat", "/repo/control")),
+            None,
+            None,
+            Some("fable"),
+            None,
+            None,
+            None,
+            false,
+        ).unwrap().unwrap();
+        assert_eq!(rendered, GOLDEN_NATIVE_CELL_PROMPT);
+    }
+
+    #[test]
+    fn herding_cell_dispatch_stdin_contains_no_bee_commands_and_has_three_part_proof() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"carry agent body","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "pi", "cell", Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected a cell envelope on pi")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        assert!(!stdin.contains("cells finish"));
+        assert!(!stdin.contains(".bee/bin/bee"));
+        assert!(!stdin.contains("You are a bee execution worker"));
+        assert!(!stdin.contains("bee cells"));
+        assert!(!stdin.contains("reservations reserve"));
+        assert!(!stdin.contains("mailbox reflect"));
+        assert!(!stdin.contains("Contract:\n- Load the bee-swarming skill"));
+        assert!(stdin.contains("cell: c-1"));
+        assert!(stdin.contains("<command> — <green:unit|green:live|green:static> — <scope reason>"));
+    }
+
+    #[test]
+
+    fn herding_general_purpose_advisor_payload_stdin_is_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "pi", "advisor", None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an advisor envelope on pi")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        assert_eq!(stdin, ADVISOR_BODY_WITHOUT_A_BRIEF);
+    }
+
+    #[test]
+    fn declared_model_for_model_flag_sets_declared() {
+        let cli = Resolved::Cli { command: "foo --model gpt-4o".into() };
+        let empty_cfg = json!({});
+        assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("gpt-4o".to_string()));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("gpt-4o"), None);
+        assert_eq!(e.get("requested_model"), Some(&json!("gpt-4o")));
+        assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    #[test]
+    fn declared_model_for_model_equals_flag_sets_declared() {
+        let cli = Resolved::Cli { command: "tool --model=claude-3-5-sonnet".into() };
+        let empty_cfg = json!({});
+        assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("claude-3-5-sonnet".to_string()));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("claude-3-5-sonnet"), None);
+        assert_eq!(e.get("requested_model"), Some(&json!("claude-3-5-sonnet")));
+        assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    #[test]
+    fn declared_model_for_short_m_flag_sets_declared() {
+        let cli = Resolved::Cli { command: "tool -m mistral-large".into() };
+        let empty_cfg = json!({});
+        assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("mistral-large".to_string()));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("mistral-large"), None);
+        assert_eq!(e.get("requested_model"), Some(&json!("mistral-large")));
+        assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    #[test]
+    fn declared_model_for_multiple_tokens_picks_first() {
+        let cli = Resolved::Cli { command: "tool --model first-model -m second-model".into() };
+        let empty_cfg = json!({});
+        assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("first-model".to_string()));
+
+        let cli2 = Resolved::Cli { command: "tool -m second-model --model=first-model".into() };
+        assert_eq!(declared_model_for(&empty_cfg, &cli2, "claude"), Some("second-model".to_string()));
+    }
+
+    #[test]
+    fn declared_model_for_herding_agent_none_resolves_through_generation_slot() {
+        let cfg = json!({
+            "team": {
+                "claude": {
+                    "generation": { "kind": "herding", "agent": "gen-agent" }
+                }
+            },
+            "herding": {
+                "agents": {
+                    "gen-agent": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            }
+        });
+        let res = Resolved::Herding { agent: None, fallback: None };
+        assert_eq!(
+            declared_model_for(&cfg, &res, "claude"),
+            Some("gemini-3.8-flash-high".to_string())
+        );
+    }
+
+    #[test]
+    fn declared_model_for_registry_fixture_with_no_model_token_yields_claim_10_bytes() {
+        let cfg = json!({
+            "herding": {
+                "agents": {
+                    "no-model-agent": {
+                        "argv": ["custom-tool", "--flag", "value"]
+                    }
+                }
+            }
+        });
+        let res = Resolved::Herding { agent: Some("no-model-agent".into()), fallback: None };
+        let declared = declared_model_for(&cfg, &res, "claude");
+        assert_eq!(declared, None);
+        let e = derive_economics("herding-exec", "generation", None, &res, false, declared.as_deref(), None);
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
+        );
+    }
+
+    #[test]
+    fn native_on_cli_exec_reads_fallback_command_model_never_native_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = r#"{
+            "team": {
+                "codex": {
+                    "generation": {
+                        "primary": { "kind": "native", "model": "native-gpt-5" },
+                        "fallback_policy": "explicit-only",
+                        "fallback": {
+                            "kind": "cli",
+                            "command": "tool --model fallback-claude-3-5"
+                        }
+                    }
+                }
+            }
+        }"#;
+        let root = repo(&tmp, config);
+        w(
+            &root,
+            ".bee/cells/c-fb.json",
+            r#"{"id":"c-fb","feature":"f","title":"native fallback test","role":"generation","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "codex", "cell", Some("c-fb"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch")
+        };
+        let economics = v.get("economics").unwrap();
+        assert_eq!(economics.get("channel"), Some(&json!("cli-exec")));
+        assert_eq!(economics.get("requested_model"), Some(&json!("fallback-claude-3-5")));
+        assert_eq!(economics.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    #[test]
+    fn native_model_slot_still_pinned_and_session_model_still_inherited_or_unknown() {
+        let model = Resolved::Model { model: "sonnet".into(), effort: None };
+        let e_pinned = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None, None);
+        assert_eq!(e_pinned.get("effective_model_status"), Some(&json!("pinned")));
+        assert_eq!(e_pinned.get("requested_model"), Some(&json!("sonnet")));
+
+        let e_session = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false, None, None);
+        assert_eq!(e_session.get("effective_model_status"), Some(&json!("inherited-or-unknown")));
+        assert_eq!(e_session.get("requested_model"), Some(&Value::Null));
+    }
+
+    // ── slr-4: Semantic role routing dispatch prepare wire contract ────────
+
+    fn v2_role_plan_repo(
+        tmp: &tempfile::TempDir,
+        feature: &str,
+        runtime: &str,
+        stages: &[Value],
+        cells: &[Value],
+    ) -> (PathBuf, String, String) {
+        let config = serde_json::json!({
+            "team": {
+                runtime: {
+                    "plan": { "model": "sonnet", "description": "Planning work" },
+                    "code": { "model": "sonnet", "description": "Coding work" },
+                    "test": { "model": "haiku", "description": "Testing work" },
+                    "review": { "model": "opus", "description": "Reviewing work" },
+                    "supervisor": { "model": "opus", "description": "Supervising work" }
+                }
+            }
+        });
+        let root = repo(tmp, &config.to_string());
+        let table_val = crate::verbs::models_group::team_table(&root, Some(runtime)).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == runtime).unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": runtime,
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+
+        let packet = serde_json::json!({
+            "feature": feature,
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, &format!(".bee/lanes/{feature}.json"), &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": feature,
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        (root, roster_sha, plan_sha)
+    }
+
+    #[test]
+    fn test_v2_cell_explicit_role_mismatch_refused_before_payload_or_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, roster_sha, plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"feat-v2","title":"implement v2","role":"code","status":"claimed","trace":{"worker":"w-1"}}"#,
+        );
+
+        // 1. Mismatched role --role review: MUST be refused with planned_role_mismatch
+        let Prepared::Value(refusal) = prepare_dispatch_wire(
+            &root, "claude", "cell", Some("review"), Some("c-1"), Some("w-1"), false, None, None, true, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+
+        assert_eq!(refusal.get("ok"), Some(&json!(false)));
+        assert_eq!(refusal.get("reason"), Some(&json!("planned_role_mismatch")));
+        assert_eq!(refusal.get("cell"), Some(&json!("c-1")));
+        assert_eq!(refusal.get("planned_role"), Some(&json!("code")));
+        assert_eq!(refusal.get("declared_role"), Some(&json!("review")));
+
+        // Truth 1: refused BEFORE payload creation or logging — dispatch.jsonl must not exist!
+        assert!(!root.join(".bee").join("logs").join("dispatch.jsonl").exists(), "dispatch.jsonl must not be written on refusal");
+
+        // 2. Matching role --role code: MUST succeed
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "cell", Some("code"), Some("c-1"), Some("w-1"), false, None, None, true, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+
+        let payload = v.get("payload").unwrap();
+        let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt.starts_with("[bee-tier: code] [bee-feature: feat-v2] [bee-cell: c-1]"), "prompt was: {prompt}");
+        assert_eq!(payload.get("planned_role"), Some(&json!("code")));
+        assert_eq!(payload.get("feature"), Some(&json!("feat-v2")));
+        assert_eq!(payload.get("plan_sha256"), Some(&json!(plan_sha)));
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("planned_role"), Some(&json!("code")));
+        assert_eq!(econ.get("feature"), Some(&json!("feat-v2")));
+        assert_eq!(econ.get("plan_sha256"), Some(&json!(plan_sha)));
+        assert_eq!(econ.get("roster_sha256"), Some(&json!(roster_sha)));
+
+        // And logging succeeded
+        assert!(root.join(".bee").join("logs").join("dispatch.jsonl").exists());
+    }
+
+    #[test]
+    fn test_v2_cell_with_reroute_uses_effective_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, _roster_sha, plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        // Cell was rerouted from code to test via decision d-rr-1
+        let cell_data = serde_json::json!({
+            "id": "c-1",
+            "feature": "feat-v2",
+            "title": "implement v2",
+            "role": "test",
+            "status": "claimed",
+            "trace": { "worker": "w-1" },
+            "role_reroutes": [
+                {
+                    "from": "code",
+                    "to": "test",
+                    "decision": "d-rr-1",
+                    "at": "2026-09-14T01:00:00Z",
+                    "plan_sha256": plan_sha
+                }
+            ]
+        });
+        w(&root, ".bee/cells/c-1.json", &serde_json::to_string_pretty(&cell_data).unwrap());
+
+        // 1. Explicit old role --role code: refused with planned_role_mismatch (effective is test)
+        let Prepared::Value(refusal) = prepare_dispatch_wire(
+            &root, "claude", "cell", Some("code"), Some("c-1"), Some("w-1"), false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(refusal.get("reason"), Some(&json!("planned_role_mismatch")));
+        assert_eq!(refusal.get("planned_role"), Some(&json!("test")));
+        assert_eq!(refusal.get("declared_role"), Some(&json!("code")));
+
+        // 2. Without --role: dispatches automatically under effective role "test"
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "cell", None, Some("c-1"), Some("w-1"), false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let payload = v.get("payload").unwrap();
+        let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt.starts_with("[bee-tier: test] [bee-feature: feat-v2] [bee-cell: c-1]"), "prompt: {prompt}");
+        assert_eq!(payload.get("planned_role"), Some(&json!("test")));
+        assert_eq!(payload.get("role_reroute_decision"), Some(&json!("d-rr-1")));
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("planned_role"), Some(&json!("test")));
+        assert_eq!(econ.get("role_reroute_decision"), Some(&json!("d-rr-1")));
+    }
+
+    #[test]
+    fn an_escalated_cell_under_a_v2_plan_gets_no_herding_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let config = serde_json::json!({
+            "team": {
+                "claude": {
+                    "plan": "sonnet",
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": "haiku",
+                    "review": "opus",
+                    "supervisor": "opus"
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        let table_val = crate::verbs::models_group::team_table(&root, Some("claude")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "claude").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "claude",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let cells = vec![
+            serde_json::json!({ "id": "c-1", "role": "code" }),
+            serde_json::json!({ "id": "c-2", "role": "code" }),
+        ];
+        let packet = serde_json::json!({
+            "feature": "feat-v2",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        w(
+            &root,
+            ".bee/lanes/feat-v2.json",
+            &serde_json::to_string_pretty(&serde_json::json!({
+                "feature": "feat-v2",
+                "approved_cell_packet": packet,
+            }))
+            .unwrap(),
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"feat-v2","title":"rescue ladder","role":"code","escalate":true,"status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"feat-v2","title":"ordinary work","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let prep = |role: Option<&str>, id: &str| {
+            let Prepared::Value(v) = prepare_dispatch_wire(
+                &root, "claude", "cell", role, Some(id), Some("w"), false, None, None, false, None,
+                None, None, None, None, None,
+            )
+            .unwrap() else {
+                panic!("expected prepared dispatch value")
+            };
+            v
+        };
+
+        let unescalated = prep(None, "c-2");
+        assert_eq!(
+            unescalated.get("tool"),
+            Some(&json!("Bash")),
+            "control: an unescalated v2 cell still herds"
+        );
+        assert_eq!(
+            unescalated.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+
+        let v = prep(None, "c-1");
+        assert_ne!(v.get("tool"), Some(&json!("Bash")), "an escalated v2 cell must not herd");
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("command"), None, "an escalated dispatch has no herding command");
+        assert_eq!(payload.get("model"), None, "an escalated dispatch has no model param");
+        assert_eq!(payload.get("planned_role"), Some(&json!("code")));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("session-model")));
+        assert_eq!(econ.get("planned_role"), Some(&json!("code")));
+
+        let explicit = prep(Some("code"), "c-1");
+        assert_eq!(
+            explicit.get("tool"),
+            Some(&json!("Bash")),
+            "an explicit --role still outranks the escalate flag"
+        );
+    }
+
+    #[test]
+    fn test_v2_non_cell_without_stage_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, _roster_sha, _plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        // Truth 2: An approved v2 non-cell dispatch without a stage is refused.
+        // Explicit --feature without stage:
+        let Prepared::Value(refusal) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, Some("researching"), false, None, None, Some("feat-v2"), None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(refusal.get("reason"), Some(&json!("stage_required")));
+        assert_eq!(refusal.get("feature"), Some(&json!("feat-v2")));
+
+        // Calling session bound lane without explicit --feature:
+        std::fs::create_dir_all(root.join(".bee/sessions")).unwrap();
+        w(&root, ".bee/sessions/s-1.json", r#"{"id":"s-1","lane":"feat-v2"}"#);
+        let Prepared::Value(refusal_sess) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, Some("researching"), false, None, None, None, None, Some("s-1"), None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(refusal_sess.get("reason"), Some(&json!("stage_required")));
+        assert_eq!(refusal_sess.get("feature"), Some(&json!("feat-v2")));
+    }
+
+    #[test]
+    fn test_v2_non_cell_stage_checks_and_role_enforcement() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, roster_sha, plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        // 1. Unknown stage: stage_unknown
+        let Prepared::Value(ref_unknown) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("unknown-stage"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_unknown.get("reason"), Some(&json!("stage_unknown")));
+
+        // 2. Not-applicable stage: stage_not_applicable
+        let Prepared::Value(ref_na) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("supervision"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_na.get("reason"), Some(&json!("stage_not_applicable")));
+
+        // 3. Stage role mismatch with explicit --role: planned_role_mismatch
+        let Prepared::Value(ref_mismatch) = prepare_dispatch_wire(
+            &root, "claude", "gather", Some("code"), None, None, false, None, None, false, None, None, Some("feat-v2"), Some("planning"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_mismatch.get("reason"), Some(&json!("planned_role_mismatch")));
+        assert_eq!(ref_mismatch.get("stage"), Some(&json!("planning")));
+        assert_eq!(ref_mismatch.get("planned_role"), Some(&json!("plan")));
+        assert_eq!(ref_mismatch.get("declared_role"), Some(&json!("code")));
+
+        // 4. Truth 3: Required stage dispatch uses the approved runtime role ("plan")
+        let Prepared::Value(v_req) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("planning"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let payload_req = v_req.get("payload").unwrap();
+        let prompt_req = payload_req.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt_req.starts_with("[bee-tier: plan] [bee-feature: feat-v2] [bee-stage: planning]"), "prompt: {prompt_req}");
+        assert_eq!(payload_req.get("stage"), Some(&json!("planning")));
+        assert_eq!(payload_req.get("planned_role"), Some(&json!("plan")));
+        assert_eq!(payload_req.get("feature"), Some(&json!("feat-v2")));
+        assert_eq!(payload_req.get("plan_sha256"), Some(&json!(plan_sha)));
+
+        let econ_req = v_req.get("economics").unwrap();
+        assert_eq!(econ_req.get("stage"), Some(&json!("planning")));
+        assert_eq!(econ_req.get("planned_role"), Some(&json!("plan")));
+        assert_eq!(econ_req.get("feature"), Some(&json!("feat-v2")));
+        assert_eq!(econ_req.get("plan_sha256"), Some(&json!(plan_sha)));
+        assert_eq!(econ_req.get("roster_sha256"), Some(&json!(roster_sha)));
+
+        // 5. Truth 3: Conditional stage dispatch uses the approved runtime role ("review")
+        let Prepared::Value(v_cond) = prepare_dispatch_wire(
+            &root, "claude", "reviewer", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("independent-review"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let payload_cond = v_cond.get("payload").unwrap();
+        let prompt_cond = payload_cond.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt_cond.starts_with("[bee-tier: review] [bee-feature: feat-v2] [bee-stage: independent-review]"), "prompt: {prompt_cond}");
+        assert_eq!(payload_cond.get("stage"), Some(&json!("independent-review")));
+        assert_eq!(payload_cond.get("planned_role"), Some(&json!("review")));
+    }
+
+    #[test]
+    fn test_v2_runtime_mismatch_and_stale_roster() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, _roster_sha, _plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        // 1. Runtime mismatch: plan is for claude, dispatch asks for codex
+        let Prepared::Value(ref_rt) = prepare_dispatch_wire(
+            &root, "codex", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("planning"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_rt.get("reason"), Some(&json!("role_plan_runtime_mismatch")));
+        assert_eq!(ref_rt.get("runtime"), Some(&json!("codex")));
+        assert_eq!(ref_rt.get("plan_runtime"), Some(&json!("claude")));
+
+        // 2. Stale roster: change roster_sha256 in approved lane record to a mismatch
+        let lane_path = root.join(".bee").join("lanes").join("feat-v2.json");
+        let mut lane_val: Value = serde_json::from_str(&std::fs::read_to_string(&lane_path).unwrap()).unwrap();
+        lane_val["approved_cell_packet"]["role_plan"]["roster_sha256"] = json!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+        w(&root, ".bee/lanes/feat-v2.json", &serde_json::to_string_pretty(&lane_val).unwrap());
+
+        let Prepared::Value(ref_stale) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("planning"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_stale.get("reason"), Some(&json!("role_plan_roster_stale")));
+    }
+
+    #[test]
+    fn test_v2_legacy_plan_without_role_plan_stays_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"team":{"claude":{"generation":{"model":"sonnet"},"code":{"model":"sonnet"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-leg.json",
+            r#"{"id":"c-leg","feature":"leg","title":"legacy cell","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        // Non-v2 lane record without role_plan
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/leg.json", r#"{"feature":"leg","approved_cell_packet":{"cells":[{"id":"c-leg","role":"code"}]}}"#);
+
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "cell", None, Some("c-leg"), Some("w"), false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+
+        let payload = v.get("payload").unwrap();
+        let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
+        // Legacy prompt starts with [bee-tier: code] with NO [bee-feature:] or [bee-cell:] markers
+        assert!(prompt.starts_with("[bee-tier: code] [bee-kind: cell]"), "legacy prompt was: {prompt}");
+        assert!(!prompt.contains("[bee-feature:"), "legacy prompt must not contain bee-feature");
+        assert!(payload.get("planned_role").is_none());
+        assert!(payload.get("plan_sha256").is_none());
+
+        let econ = v.get("economics").unwrap();
+        assert!(econ.get("planned_role").is_none());
+        assert!(econ.get("plan_sha256").is_none());
+    }
+
+    #[test]
+    fn test_dispatch_prepare_cli_routing_feature_stage_session_id() {
+        let t0 = Instant::now();
+        let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+
+        // --session-id on non-cell kind is now accepted and handled natively (does NOT return None)
+        assert!(try_native(
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "gather", "--session-id", "s-1"]),
+            t0
+        ).is_some());
+
+        // --feature and --stage are accepted
+        assert!(try_native(
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "gather", "--feature", "demo", "--stage", "planning"]),
+            t0
+        ).is_some());
+
+        // --session-id without --claim on --kind cell remains unproven (returns None)
+        assert!(try_native(
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "cell", "--session-id", "s"]),
+            t0
+        ).is_none());
+    }
+
+    // ── slr-6: Release deploy-role authorization protocol ──────────────────
+
+    #[test]
+    fn test_deploy_authorization_prepare_release_version_gates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-rel",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-rel.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-rel",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        // 1. --release-version on non-deployment stage returns release_version_not_permitted
+        let Prepared::Value(ref_not_perm) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-rel"), Some("planning"), None, Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_not_perm.get("reason"), Some(&json!("release_version_not_permitted")));
+
+        // 2. stage deployment without --release-version returns release_version_required
+        let Prepared::Value(ref_req) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-rel"), Some("deployment"), None, None,
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_req.get("reason"), Some(&json!("release_version_required")));
+
+        // 3. stage deployment with invalid semver returns release_version_invalid
+        let Prepared::Value(ref_inv) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-rel"), Some("deployment"), None, Some("invalid.v"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_inv.get("reason"), Some(&json!("release_version_invalid")));
+
+        // 4. valid deployment dispatch prepare binds fields and exports variables
+        let Prepared::Value(v_deploy) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("feat-rel"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(v_deploy.get("tool"), Some(&json!("Bash")));
+        let payload = v_deploy.get("payload").unwrap();
+        let cmd = payload.get("command").and_then(Value::as_str).unwrap();
+        assert!(cmd.contains("export BEE_DISPATCH_ID="), "command must export BEE_DISPATCH_ID: {cmd}");
+        assert!(cmd.contains("BEE_RELEASE_VERSION=\"2.38.0\""), "command must export BEE_RELEASE_VERSION: {cmd}");
+        assert!(cmd.contains("BEE_SESSION_ID=\"sess-1\""), "command must export BEE_SESSION_ID: {cmd}");
+        assert_eq!(payload.get("release_version"), Some(&json!("2.38.0")));
+
+        // Verify dispatch.jsonl was written with audit fields
+        let log_path = root.join(".bee").join("logs").join("dispatch.jsonl");
+        assert!(log_path.exists());
+        let log_content = std::fs::read_to_string(&log_path).unwrap();
+        let last_line = log_content.lines().last().unwrap();
+        let log_val: Value = serde_json::from_str(last_line).unwrap();
+        assert_eq!(log_val.get("stage"), Some(&json!("deployment")));
+        assert_eq!(log_val.get("planned_role"), Some(&json!("deploy")));
+        assert_eq!(log_val.get("release_version"), Some(&json!("2.38.0")));
+        assert_eq!(log_val.get("feature"), Some(&json!("feat-rel")));
+        assert_eq!(log_val.get("plan_sha256"), Some(&json!(plan_sha)));
+        assert!(log_val.get("main_commit").is_some());
+        assert!(log_val.get("expires_at").is_some());
+    }
+
+    #[test]
+    fn test_deploy_authorization_authorize_success_and_reuse_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-auth",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-auth.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-auth",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        std::fs::create_dir_all(root.join(".bee").join("sessions")).unwrap();
+        w(&root, ".bee/sessions/sess-auth.json", &serde_json::json!({
+            "id": "sess-auth",
+            "lane": "feat-auth",
+        }).to_string());
+
+        // Prepare dispatch
+        let Prepared::Value(v_deploy) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("feat-auth"), Some("deployment"), Some("sess-auth"), Some("2.39.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let dispatch_id = v_deploy.get("dispatch_id").and_then(Value::as_str).unwrap();
+
+        // 1. First authorize succeeds
+        let res = authorize_dispatch_permit(&root, dispatch_id, "2.39.0", Some("sess-auth"));
+        assert!(res.is_ok(), "expected authorize to succeed, got {res:?}");
+        let auth_val = res.unwrap();
+        assert_eq!(auth_val.get("ok"), Some(&json!(true)));
+        assert_eq!(auth_val.get("authorized"), Some(&json!(true)));
+
+        // Consumed marker exists
+        let marker_path = root.join(".bee").join("authorizations").join(format!("{dispatch_id}.json"));
+        assert!(marker_path.exists());
+
+        // 2. Second authorize on same ID refuses with deploy_authorization_consumed
+        let res_replay = authorize_dispatch_permit(&root, dispatch_id, "2.39.0", Some("sess-auth"));
+        assert!(res_replay.is_err());
+        let ref_replay = res_replay.unwrap_err();
+        assert_eq!(ref_replay.get("reason"), Some(&json!("deploy_authorization_consumed")));
+        let fix_replay = ref_replay.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_replay.contains("bee dispatch prepare --runtime"));
+        assert!(fix_replay.contains("--role deploy"));
+        assert!(fix_replay.contains("--release-version 2.39.0"));
+    }
+
+    #[test]
+    fn test_deploy_authorization_flagless_prepare_with_env_session_success() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-auth",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-auth.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-auth",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        std::fs::create_dir_all(root.join(".bee").join("sessions")).unwrap();
+        w(&root, ".bee/sessions/sess-auth.json", &serde_json::json!({
+            "id": "sess-auth",
+            "lane": "feat-auth",
+        }).to_string());
+
+        struct EnvGuard(&'static str);
+        impl Drop for EnvGuard {
+            fn drop(&mut self) {
+                unsafe { std::env::remove_var(self.0); }
+            }
+        }
+
+        unsafe { std::env::set_var("BEE_SESSION_ID", "sess-auth"); }
+        let _guard = EnvGuard("BEE_SESSION_ID");
+
+        // Prepare dispatch with session flag `None`
+        let Prepared::Value(v_deploy) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("feat-auth"), Some("deployment"), None, Some("2.39.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let dispatch_id = v_deploy.get("dispatch_id").and_then(Value::as_str).unwrap();
+
+        // 1. Authorize succeeds
+        let res = authorize_dispatch_permit(&root, dispatch_id, "2.39.0", Some("sess-auth"));
+        assert!(res.is_ok(), "expected authorize to succeed, got {res:?}");
+        let auth_val = res.unwrap();
+        assert_eq!(auth_val.get("ok"), Some(&json!(true)));
+        assert_eq!(auth_val.get("authorized"), Some(&json!(true)));
+
+        // 2. Dispatch record in .bee/logs/dispatch.jsonl carries issuer_session equal to that id
+        let log_path = root.join(".bee").join("logs").join("dispatch.jsonl");
+        let log_content = std::fs::read_to_string(&log_path).unwrap();
+        let mut found_issuer_session = None;
+        for line in log_content.lines().rev() {
+            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+                if entry.get("dispatch_id").and_then(Value::as_str) == Some(dispatch_id) {
+                    found_issuer_session = entry.get("issuer_session").and_then(Value::as_str).map(|s| s.to_string());
+                    break;
+                }
+            }
+        }
+        assert_eq!(found_issuer_session.as_deref(), Some("sess-auth"), "dispatch log record must carry issuer_session");
+    }
+
+    #[test]
+    fn test_deploy_authorization_refusals_matrix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "test" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-matrix",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-matrix.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-matrix",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        std::fs::create_dir_all(root.join(".bee").join("sessions")).unwrap();
+        w(&root, ".bee/sessions/sess-matrix.json", &serde_json::json!({
+            "id": "sess-matrix",
+            "lane": "feat-matrix",
+        }).to_string());
+
+        // Prepare valid dispatch
+        let Prepared::Value(v_deploy) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("feat-matrix"), Some("deployment"), Some("sess-matrix"), Some("2.40.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let dispatch_id = v_deploy.get("dispatch_id").and_then(Value::as_str).unwrap();
+
+        let log_path = root.join(".bee").join("logs").join("dispatch.jsonl");
+
+        let mutate_last_record = |mutator: &dyn Fn(&mut Value)| {
+            let content = std::fs::read_to_string(&log_path).unwrap();
+            let mut lines: Vec<Value> = content
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .map(|l| serde_json::from_str(l).unwrap())
+                .collect();
+            let last_idx = lines.len() - 1;
+            mutator(&mut lines[last_idx]);
+            let new_content: Vec<String> = lines.iter().map(|l| serde_json::to_string(l).unwrap()).collect();
+            std::fs::write(&log_path, new_content.join("\n") + "\n").unwrap();
+        };
+
+        // 1. Unknown dispatch ID
+        let err_unk = authorize_dispatch_permit(
+            &root,
+            "00000000-0000-4000-8000-000000000000",
+            "2.40.0",
+            Some("sess-matrix"),
+        )
+        .unwrap_err();
+        assert_eq!(err_unk.get("reason"), Some(&json!("deploy_authorization_unknown")));
+
+        // A forged matching record must refuse before its ID can escape the authorization directory.
+        mutate_last_record(&|r| {
+            r["dispatch_id"] = json!("../escaped");
+        });
+        let err_forged = authorize_dispatch_permit(
+            &root,
+            "../escaped",
+            "2.40.0",
+            Some("sess-matrix"),
+        )
+        .unwrap_err();
+        assert_eq!(err_forged.get("reason"), Some(&json!("deploy_authorization_unknown")));
+        assert!(!root.join(".bee/escaped.json").exists());
+        mutate_last_record(&|r| {
+            r["dispatch_id"] = json!(dispatch_id);
+        });
+
+        // 2. Wrong version
+        let err_ver = authorize_dispatch_permit(&root, dispatch_id, "2.40.1", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_ver.get("reason"), Some(&json!("deploy_authorization_wrong_version")));
+
+        // 3. Stale dispatch (simulate expired > 2 hours)
+        mutate_last_record(&|r| {
+            r["ts"] = json!("2020-01-01T00:00:00.000Z");
+            r["expires_at"] = json!("2020-01-01T02:00:00.000Z");
+        });
+        let err_stale = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_stale.get("reason"), Some(&json!("deploy_authorization_stale")));
+        let fix_stale = err_stale.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_stale.contains("bee dispatch prepare --runtime"));
+        assert!(fix_stale.contains("--role deploy"));
+        assert!(fix_stale.contains("--release-version 2.40.0"));
+
+        // 4. Malformed expiry (invalid RFC3339 in expires_at)
+        mutate_last_record(&|r| {
+            r["ts"] = json!(chrono::Utc::now().to_rfc3339());
+            r["expires_at"] = json!("malformed-timestamp-string");
+        });
+        let err_malformed_exp = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_malformed_exp.get("reason"), Some(&json!("deploy_authorization_malformed_expiry")));
+
+        // 5. Malformed expiry (invalid RFC3339 in ts)
+        mutate_last_record(&|r| {
+            r["ts"] = json!("malformed-ts");
+            r["expires_at"] = json!((chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339());
+        });
+        let err_malformed_ts = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_malformed_ts.get("reason"), Some(&json!("deploy_authorization_malformed_expiry")));
+
+        // The expiry must describe one bounded two-hour lifetime, not only be in the future.
+        mutate_last_record(&|r| {
+            r["ts"] = json!(chrono::Utc::now().to_rfc3339());
+            r["expires_at"] = json!((chrono::Utc::now() + chrono::Duration::hours(3)).to_rfc3339());
+        });
+        let err_long_lived = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_long_lived.get("reason"), Some(&json!("deploy_authorization_malformed_expiry")));
+
+        // A future creation time is forged, even when its expiry is also in the future.
+        mutate_last_record(&|r| {
+            r["ts"] = json!((chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339());
+            r["expires_at"] = json!((chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339());
+        });
+        let err_future = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_future.get("reason"), Some(&json!("deploy_authorization_malformed_expiry")));
+
+        // 6. Wrong commit
+        let now_str = chrono::Utc::now().to_rfc3339();
+        let exp_str = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+        mutate_last_record(&|r| {
+            r["ts"] = json!(now_str);
+            r["expires_at"] = json!(exp_str);
+            r["main_commit"] = json!("wrongcommit00000000000000000000000000000");
+        });
+        let err_commit = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_commit.get("reason"), Some(&json!("deploy_authorization_wrong_commit")));
+
+        // Restore valid commit
+        let current_commit = resolve_main_commit(&root).unwrap();
+        mutate_last_record(&|r| {
+            r["main_commit"] = json!(current_commit);
+        });
+
+        // 7. Wrong stage
+        mutate_last_record(&|r| {
+            r["stage"] = json!("planning");
+        });
+        let err_stage = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_stage.get("reason"), Some(&json!("deploy_authorization_wrong_stage")));
+        mutate_last_record(&|r| {
+            r["stage"] = json!("deployment");
+        });
+
+        // 8. Wrong role
+        mutate_last_record(&|r| {
+            r["planned_role"] = json!("code");
+        });
+        let err_role = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_role.get("reason"), Some(&json!("deploy_authorization_wrong_role")));
+        mutate_last_record(&|r| {
+            r["planned_role"] = json!("deploy");
+        });
+
+        // 9. Runtime mismatch
+        mutate_last_record(&|r| {
+            r["runtime"] = json!("codex");
+        });
+        let err_runtime = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_runtime.get("reason"), Some(&json!("deploy_authorization_wrong_runtime")));
+        mutate_last_record(&|r| {
+            r["runtime"] = json!("pi");
+        });
+
+        // 10. Unknown / wrong feature
+        mutate_last_record(&|r| {
+            r["feature"] = json!("nonexistent-feature");
+        });
+        let err_feat = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_feat.get("reason"), Some(&json!("deploy_authorization_wrong_feature")));
+        let fix_feat = err_feat.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_feat.contains("bee state lanes"));
+        assert!(fix_feat.contains("run bee state lanes from main"));
+        mutate_last_record(&|r| {
+            r.as_object_mut().unwrap().remove("feature");
+        });
+        let err_missing_feat = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_missing_feat.get("reason"), Some(&json!("deploy_authorization_wrong_feature")));
+        let fix_missing_feat = err_missing_feat.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_missing_feat.contains("bee state lanes"));
+        assert!(fix_missing_feat.contains("run bee state lanes from main"));
+        mutate_last_record(&|r| {
+            r["feature"] = json!("feat-matrix");
+        });
+
+        // 11. Wrong approved plan SHA
+        mutate_last_record(&|r| {
+            r["plan_sha256"] = json!("badplansha000000000000000000000000000000000000000000000000000000");
+        });
+        let err_plan = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_plan.get("reason"), Some(&json!("deploy_authorization_wrong_plan")));
+        mutate_last_record(&|r| {
+            r["plan_sha256"] = json!(plan_sha);
+        });
+
+        // 12. Missing issuer session
+        mutate_last_record(&|r| {
+            r.as_object_mut().unwrap().remove("issuer_session");
+        });
+        let err_no_sess = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", None).unwrap_err();
+        assert_eq!(err_no_sess.get("reason"), Some(&json!("deploy_authorization_wrong_session")));
+
+        // 13. Mismatched issuer session
+        mutate_last_record(&|r| {
+            r["issuer_session"] = json!("sess-matrix");
+        });
+        let err_mismatch_sess = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-other")).unwrap_err();
+        assert_eq!(err_mismatch_sess.get("reason"), Some(&json!("deploy_authorization_wrong_session")));
+
+        // The permit is session-bound, so an absent acting session cannot consume it.
+        let err_absent_caller = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", None).unwrap_err();
+        assert_eq!(err_absent_caller.get("reason"), Some(&json!("deploy_authorization_wrong_session")));
+
+        // 14. Storage failure for authorization marker
+        let auth_dir = root.join(".bee").join("authorizations");
+        std::fs::remove_dir_all(&auth_dir).ok();
+        std::fs::write(&auth_dir, "block-dir-creation").unwrap();
+        let err_storage = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_storage.get("reason"), Some(&json!("deploy_authorization_storage_error")));
+        std::fs::remove_file(&auth_dir).ok();
+    }
+
+    #[test]
+    fn test_direct_release_script_call_refuses_before_mutation() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..");
+        let script = repo_root.join("scripts").join("release.sh");
+        if !script.exists() {
+            return;
+        }
+        let out = Command::new("bash")
+            .arg(&script)
+            .env_remove("BEE_DISPATCH_ID")
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("release authorization required") && stderr.contains("BEE_DISPATCH_ID is unset"),
+            "expected refusal on direct release call, got: {stderr}"
+        );
+    }
+
+    #[test]
+    fn test_release_dirt_script_filters_only_bee_paths() {
+        let repo_root_3 = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..");
+        let repo_root = if repo_root_3.join("scripts").join("release-dirt.sh").exists() {
+            repo_root_3
+        } else {
+            repo_root_3.join("..")
+        };
+        let script = repo_root.join("scripts").join("release-dirt.sh");
+
+        let tmp = tempfile::tempdir().unwrap();
+        let td = tmp.path();
+
+        let run_git = |args: &[&str]| {
+            let out = Command::new("git")
+                .args(args)
+                .current_dir(td)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&out.stderr));
+        };
+
+        run_git(&["init", "-q"]);
+        run_git(&["config", "user.email", "test@example.com"]);
+        run_git(&["config", "user.name", "test"]);
+
+        std::fs::create_dir_all(td.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(td.join(".bee").join("supervisor")).unwrap();
+        std::fs::write(td.join("a.txt"), "a\n").unwrap();
+        std::fs::write(td.join(".bee").join("wave-ledger.jsonl"), "wave\n").unwrap();
+        std::fs::write(td.join(".bee").join("lanes").join("x.json"), "{}\n").unwrap();
+        std::fs::write(td.join(".bee").join("supervisor").join("broker-heartbeat.json"), "{}\n").unwrap();
+
+        run_git(&["add", "."]);
+        run_git(&["commit", "-m", "init", "-q"]);
+
+        std::fs::write(td.join("a.txt"), "a dirty\n").unwrap();
+        std::fs::write(td.join(".bee").join("wave-ledger.jsonl"), "wave dirty\n").unwrap();
+        std::fs::write(td.join(".bee").join("lanes").join("x.json"), "{\"dirty\":true}\n").unwrap();
+        std::fs::write(td.join(".bee").join("supervisor").join("broker-heartbeat.json"), "{\"beat\":1}\n").unwrap();
+        std::fs::write(td.join("b.txt"), "b untracked\n").unwrap();
+
+        // On Windows use crate::shell::command() to reach a real Win32 bash (see shell.rs); elsewhere use Command::new("bash") because shell::command() returns /bin/sh.
+        let bash_cmd = || -> Command {
+            if cfg!(windows) {
+                crate::shell::command().expect("real Win32 bash must be present on Windows (see shell.rs)")
+            } else {
+                Command::new("bash")
+            }
+        };
+
+        let out = bash_cmd()
+            .arg(&script)
+            .current_dir(td)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "release-dirt.sh failed: status={:?}, stdout={}, stderr={}",
+            out.status,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(stdout.contains("a.txt"), "output should contain a.txt: {stdout:?}");
+        assert!(stdout.contains("b.txt"), "output should contain b.txt: {stdout:?}");
+        assert!(!stdout.contains(".bee/wave-ledger.jsonl"), "output should not contain wave-ledger: {stdout:?}");
+        assert!(!stdout.contains(".bee/lanes/x.json"), "output should not contain lanes/x.json: {stdout:?}");
+        assert!(
+            !stdout.contains(".bee/supervisor/broker-heartbeat.json"),
+            "output should not contain the broker heartbeat: {stdout:?}"
+        );
+
+        std::fs::write(td.join(".bee").join("supervisor").join("other.json"), "{}\n").unwrap();
+        let out_sibling = bash_cmd()
+            .arg(&script)
+            .current_dir(td)
+            .output()
+            .unwrap();
+        let stdout_sibling = String::from_utf8_lossy(&out_sibling.stdout);
+        assert!(
+            stdout_sibling.contains(".bee/supervisor/other.json"),
+            "the heartbeat allowlist must be the exact path, not its directory: {stdout_sibling:?}"
+        );
+        std::fs::remove_file(td.join(".bee").join("supervisor").join("other.json")).unwrap();
+
+        run_git(&["checkout", "--", "a.txt"]);
+        std::fs::remove_file(td.join("b.txt")).unwrap();
+
+        let out_clean = bash_cmd()
+            .arg(&script)
+            .current_dir(td)
+            .output()
+            .unwrap();
+        assert!(
+            out_clean.status.success(),
+            "release-dirt.sh failed: status={:?}, stdout={}, stderr={}",
+            out_clean.status,
+            String::from_utf8_lossy(&out_clean.stdout),
+            String::from_utf8_lossy(&out_clean.stderr)
+        );
+        let stdout_clean = String::from_utf8_lossy(&out_clean.stdout);
+        assert!(stdout_clean.is_empty(), "expected empty output when only bee paths dirty, got: {stdout_clean:?}");
+    }
+
+    #[test]
+    fn test_release_sh_authorizes_after_cheap_checks_on_every_path() {
+        let mut root = Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf();
+        let script = loop {
+            let candidate = root.join("scripts").join("release.sh");
+            if candidate.exists() {
+                break Some(candidate);
+            }
+            if !root.pop() {
+                break None;
+            }
+        };
+        let script = match script {
+            Some(s) => s,
+            None => return,
+        };
+        let text = std::fs::read_to_string(&script).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        let find = |needle: &str| -> Option<usize> { lines.iter().position(|l| l.contains(needle)) };
+        let authorize_calls: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| l.trim() == "authorize_release")
+            .map(|(i, _)| i)
+            .collect();
+
+        let first_dirt = find("done < <(\"$ROOT/scripts/release-dirt.sh\")")
+            .expect("release.sh must collect the dirt through scripts/release-dirt.sh");
+        let bump = find("bump_version_field \"$PLUGIN_JSON\"")
+            .expect("release.sh must bump the version field once section 3 runs");
+        let head_version_check = find("git show \"HEAD:$PLUGIN_JSON\"")
+            .expect("release.sh must check the version at HEAD before it tags");
+        let tag = find("git tag \"$TAG\"").expect("release.sh must create the tag");
+        let push = find("git push origin main").expect("release.sh must push main");
+
+        assert!(
+            authorize_calls.len() == 3,
+            "release.sh must call authorize_release once on each of its three paths: {authorize_calls:?}"
+        );
+
+        let fresh = authorize_calls.iter().copied().find(|i| *i > first_dirt);
+        let fresh = fresh.expect("the fresh-release path must authorize after its dirt check");
+        assert!(
+            fresh < bump,
+            "authorization must come after the zero-mutation checks and before the bump (dirt at {first_dirt}, authorize at {fresh}, bump at {bump})"
+        );
+
+        assert!(
+            authorize_calls.iter().any(|i| *i < first_dirt),
+            "the idempotent re-run path must authorize before its tail: {authorize_calls:?}"
+        );
+
+        assert!(
+            authorize_calls
+                .iter()
+                .any(|i| *i > head_version_check && *i < tag),
+            "the tail (no version argument, and the resumed re-run) must authorize after its last zero-mutation check and before any tag: {authorize_calls:?}"
+        );
+
+        for i in &authorize_calls {
+            assert!(
+                *i < tag && *i < push,
+                "every path reaching `git tag` or `git push` must pass authorize_release first (call at {i}, tag at {tag}, push at {push})"
+            );
+        }
+    }
+
+    #[test]
+    fn test_release_authorizations_git_ignored() {
+        let repo_root_3 = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..");
+        let repo_root = if repo_root_3.join(".gitignore").exists() {
+            repo_root_3
+        } else {
+            repo_root_3.join("..")
+        };
+        if !repo_root.join(".gitignore").exists() {
+            return;
+        }
+        let out = Command::new("git")
+            .args(&["check-ignore", "-q", ".bee/authorizations/x.json"])
+            .current_dir(&repo_root)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "expected .bee/authorizations/x.json to be ignored by git at repo_root: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    #[test]
+    fn test_deploy_authorization_cli_routing() {
+        let t0 = Instant::now();
+        let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+
+        // dispatch prepare accepts --release-version
+        assert!(try_native(
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "gather", "--feature", "demo", "--stage", "deployment", "--role", "deploy", "--release-version", "2.38.0"]),
+            t0
+        ).is_some());
+
+        // dispatch authorize routes natively
+        assert!(try_native(
+            &os(&["dispatch", "authorize", "--id", "disp-1", "--release-version", "2.38.0"]),
+            t0
+        ).is_some());
+    }
+
+    #[test]
+    fn test_deploy_payload_stdin_and_cwd_with_and_without_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"read-only-gather","classification":"conditional","role":"read","condition":"cond","reason":"r"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" },
+                    "read": { "kind": "herding", "agent": "gather-agent" }
+                }
+            }
+        });
+        w(&main, ".bee/config.json", &config.to_string());
+
+        let table_val = crate::verbs::models_group::team_table(&main, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "demo",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(main.join(".bee").join("lanes")).unwrap();
+        w(&main, ".bee/lanes/demo.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "demo",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        let norm_main = dunce::canonicalize(&main).unwrap().to_string_lossy().into_owned();
+        let norm_granted = dunce::canonicalize(&granted).unwrap().to_string_lossy().into_owned();
+
+        // 1. Stage deployment WITH granted feature worktree:
+        // Cwd MUST be main root, NOT the worktree; stdin MUST permit mutation and name scripts/release.sh.
+        let Prepared::Value(v_deploy_wt) = prepare_dispatch_wire(
+            &main, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("demo"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for deployment with worktree");
+        };
+        let payload_deploy_wt = v_deploy_wt.get("payload").unwrap();
+        let stdin_deploy_wt = payload_deploy_wt.get("stdin").and_then(Value::as_str).unwrap();
+        assert!(stdin_deploy_wt.contains("scripts/release.sh 2.38.0"), "deployment stdin must name authorized positional release: {stdin_deploy_wt}");
+        assert!(stdin_deploy_wt.contains("authorized to perform release mutations"), "deployment stdin must permit mutation: {stdin_deploy_wt}");
+        assert!(stdin_deploy_wt.contains("CI"), "deployment stdin must mention CI verification: {stdin_deploy_wt}");
+        assert!(stdin_deploy_wt.contains("asset"), "deployment stdin must mention asset verification: {stdin_deploy_wt}");
+        assert!(stdin_deploy_wt.contains("never run `bee dispatch authorize` yourself"), "deployment stdin must forbid calling dispatch authorize: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("Read-only"), "deployment stdin must not contain Read-only: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("never write"), "deployment stdin must not forbid writes: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("never edit"), "deployment stdin must not forbid edits: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("never run a mutating command"), "deployment stdin must not forbid mutation: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("bee-gather"), "deployment stdin must not contain bee-gather embedded body: {stdin_deploy_wt}");
+
+        let cmd_deploy_wt = payload_deploy_wt.get("command").and_then(Value::as_str).unwrap();
+        assert!(
+            cmd_deploy_wt.contains(&format!("--cwd \"{}\"", main.to_string_lossy())) || cmd_deploy_wt.contains(&format!("--cwd \"{}\"", norm_main)),
+            "deployment command cwd must be main root: {cmd_deploy_wt}"
+        );
+        assert!(!cmd_deploy_wt.contains(&granted.to_string_lossy().into_owned()) && !cmd_deploy_wt.contains(&norm_granted), "deployment command cwd must not be worktree: {cmd_deploy_wt}");
+        assert!(cmd_deploy_wt.contains("export BEE_DISPATCH_ID="), "deployment command must export BEE_DISPATCH_ID: {cmd_deploy_wt}");
+        assert!(cmd_deploy_wt.contains("BEE_RELEASE_VERSION=\"2.38.0\""), "deployment command must export BEE_RELEASE_VERSION: {cmd_deploy_wt}");
+        assert!(!cmd_deploy_wt.contains("--read-only"), "deployment command must stay writable, no --read-only (D5, issue 126): {cmd_deploy_wt}");
+
+        // 2. Ordinary gather WITH granted feature worktree:
+        // Cwd MUST be the granted worktree; stdin MUST be read-only gather template.
+        let Prepared::Value(v_gather_wt) = prepare_dispatch_wire(
+            &main, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("demo"), Some("read-only-gather"), Some("sess-1"), None,
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for ordinary gather with worktree");
+        };
+        let payload_gather_wt = v_gather_wt.get("payload").unwrap();
+        let stdin_gather_wt = payload_gather_wt.get("stdin").and_then(Value::as_str).unwrap();
+        assert!(stdin_gather_wt.contains("Read-only"), "gather stdin must be read-only: {stdin_gather_wt}");
+        assert!(stdin_gather_wt.contains("Gather: locate and digest"), "gather stdin must be gather prompt: {stdin_gather_wt}");
+
+        let cmd_gather_wt = payload_gather_wt.get("command").and_then(Value::as_str).unwrap();
+        assert!(
+            cmd_gather_wt.contains(&format!("--cwd \"{}\"", granted.to_string_lossy())) || cmd_gather_wt.contains(&format!("--cwd \"{}\"", norm_granted)),
+            "ordinary gather command cwd must be worktree: {cmd_gather_wt}"
+        );
+        assert!(cmd_gather_wt.contains("--read-only"), "ordinary gather command must stay read-only: {cmd_gather_wt}");
+
+        // Revoke the worktree grant to test without worktree
+        w(&main, ".bee/runtime/worktree-grants.json", "{}\n");
+
+        // 3. Stage deployment WITHOUT granted feature worktree:
+        // Cwd MUST STILL be main root.
+        let Prepared::Value(v_deploy_no_wt) = prepare_dispatch_wire(
+            &main, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("demo"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for deployment without worktree");
+        };
+        let payload_deploy_no_wt = v_deploy_no_wt.get("payload").unwrap();
+        let cmd_deploy_no_wt = payload_deploy_no_wt.get("command").and_then(Value::as_str).unwrap();
+        assert!(
+            cmd_deploy_no_wt.contains(&format!("--cwd \"{}\"", main.to_string_lossy())) || cmd_deploy_no_wt.contains(&format!("--cwd \"{}\"", norm_main)),
+            "deployment command cwd without worktree must still be main root: {cmd_deploy_no_wt}"
+        );
+
+        // 4. Ordinary gather WITHOUT granted feature worktree:
+        // Command MUST NOT contain --cwd.
+        let Prepared::Value(v_gather_no_wt) = prepare_dispatch_wire(
+            &main, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("demo"), Some("read-only-gather"), Some("sess-1"), None,
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for ordinary gather without worktree");
+        };
+        let payload_gather_no_wt = v_gather_no_wt.get("payload").unwrap();
+        let cmd_gather_no_wt = payload_gather_no_wt.get("command").and_then(Value::as_str).unwrap();
+        assert!(!cmd_gather_no_wt.contains("--cwd"), "ordinary gather without worktree must not specify --cwd: {cmd_gather_no_wt}");
+    }
+
+    #[test]
+    fn test_deploy_non_main_root_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        // Switch to a non-main branch
+        dp1_git_ok(&root, &["checkout", "-q", "-b", "feature-non-main"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-branch",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-branch.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-branch",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        let Prepared::Value(ref_branch) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-branch"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch refusal for non-main branch");
+        };
+        assert_eq!(ref_branch.get("ok"), Some(&json!(false)));
+        assert_eq!(ref_branch.get("type"), Some(&json!("refused")));
+        assert_eq!(ref_branch.get("reason"), Some(&json!("main_branch_required")));
+    }
+
+    #[test]
+    fn test_deploy_without_approved_v2_role_plan_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        // 1. Feature with no lane record / no approved role plan
+        let Prepared::Value(ref_no_plan) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-no-plan"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch refusal for missing plan");
+        };
+        assert_eq!(ref_no_plan.get("ok"), Some(&json!(false)));
+        assert_eq!(ref_no_plan.get("type"), Some(&json!("refused")));
+        assert_eq!(ref_no_plan.get("reason"), Some(&json!("role_plan_required")));
+        let fix_no_plan = ref_no_plan.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_no_plan.contains("bee gate --preview"));
+        assert!(fix_no_plan.contains("docs/history/feat-no-plan/plan.md"));
+        assert!(fix_no_plan.contains("## Role assignments"));
+
+        // 2. Deployment request without feature
+        let Prepared::Value(ref_no_feat) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, None, Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch refusal for deployment without feature");
+        };
+        assert_eq!(ref_no_feat.get("ok"), Some(&json!(false)));
+        assert_eq!(ref_no_feat.get("type"), Some(&json!("refused")));
+        assert_eq!(ref_no_feat.get("reason"), Some(&json!("role_plan_required")));
+        let fix_no_feat = ref_no_feat.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_no_feat.contains("bee gate --preview"));
+        assert!(fix_no_feat.contains("docs/history/<feature>/plan.md"));
+        assert!(fix_no_feat.contains("## Role assignments"));
     }

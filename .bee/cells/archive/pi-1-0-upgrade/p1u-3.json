@@ -1,0 +1,148 @@
+{
+  "id": "p1u-3",
+  "feature": "pi-1-0-upgrade",
+  "title": "Record Pi 1.0.0 as the proven ceiling and audit the 0.85.1 to 1.0.0 range",
+  "lane": "high-risk",
+  "role": "docs",
+  "deps": [
+    "p1u-2"
+  ],
+  "decisions": [
+    "D1",
+    "D4",
+    "D10",
+    "bfc7e34e-2722-4af4-baab-6869b2b0c96f"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "action": "Edit the existing CEILING comment line to name 1.0.0 and the p1u-2 run (an edit, not a new comment). Add the 0.85.1 to 1.0.0 keep/adapt/delete table to the audit page, including codemode partial writes and the D3 and /reload findings. Update the re-verified label in the contract test. File the D4 and D10 backlog rows with bee backlog add.",
+  "must_haves": {
+    "truths": [
+      "header, audit page and test name the same ceiling",
+      "every breaking entry from 0.86.0 and 0.87.0 has a disposition row",
+      "D4 and D10 rows exist in the backlog"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+        "substantive": "0.85.1 to 1.0.0 disposition table"
+      }
+    ],
+    "key_links": [
+      "the ceiling cites the p1u-2 run id"
+    ],
+    "prohibitions": [
+      "Floor stays 0.84.4",
+      "No D4 or D10 ability is built",
+      "Comment count does not rise"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "p1u-3-docs",
+    "outcome": "Pi 1.0.0 named as proven ceiling (run 20261002-135348-2965648) in belt header, audit page and contract test; 0.85.1 to 1.0.0 audit table added; D4 and D10 backlog rows filed",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      ".bee/backlog.jsonl"
+    ],
+    "deviations": [
+      "bee backlog add wrote the two rows into the worktree tracked .bee/backlog.jsonl, which is outside the cell files — the CLI picks the store, and the cell action requires the rows — something else had to be fixed first",
+      "Also updated the Re-verified note above PI_BUILTIN_TOOLS in bee-guard.ts to 1.0.0 (same line count) — it named 0.85.1 as the ceiling in the same file — found a better route",
+      "Audit table cites event names from the 1.0.0 pi binary because the 1.0.0 docs no longer list ui_prompt_start, ui_prompt_end or session_tree; recorded as a Known gap — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T07:06:09.001Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify; 88 passed; touched belt comments and the Pi contract test doc only, plus line-cite spot checks against the 1.0.0 CHANGELOG",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+    "claimed_at": "2026-10-02T07:01:31.647Z",
+    "mistakes": [
+      {
+        "wrong": "audit page first cited CHANGELOG.md:216 for context_with_system, the real line is 215",
+        "better": "spot-check every cited line before writing the table",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Pi 1.0.0 named as proven ceiling (run 20261002-135348-2965648) in belt header CEILING line (.pi/extensions/bee-guard.ts:82-83) and PI_BUILTIN_TOOLS note, in the audit page (Data Dictionary + new section The 0.85.1 to 1.0.0 audit, 18 rows incl. all 8 breaking entries of 0.86.0/0.87.0, codemode partial writes, D3 and /reload rows), and in pi_plugin_contracts.rs pi_builtin_tools doc; D4 and D10 backlog rows filed via bee backlog add",
+      "commit": "b0d60b13c",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        ".bee/backlog.jsonl"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts — green:unit — cell verify; 88 passed; touched belt comments and the Pi contract test doc only, plus line-cite spot checks against the 1.0.0 CHANGELOG",
+      "deviations": [
+        "bee backlog add wrote the two rows into the worktree tracked .bee/backlog.jsonl, which is outside the cell files — the CLI picks the store, and the cell action requires the rows — something else had to be fixed first",
+        "Also updated the Re-verified note above PI_BUILTIN_TOOLS in bee-guard.ts to 1.0.0 (same line count) — it named 0.85.1 as the ceiling in the same file — found a better route",
+        "Audit table cites event names from the 1.0.0 pi binary because the 1.0.0 docs no longer list ui_prompt_start, ui_prompt_end or session_tree; recorded as a Known gap — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "audit page first cited CHANGELOG.md:216 for context_with_system, the real line is 215 — spot-check every cited line before writing the table — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "header, audit page and test name the same ceiling",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "every breaking entry from 0.86.0 and 0.87.0 has a disposition row",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "D4 and D10 rows exist in the backlog",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          }
+        ],
+        "recorded_at": "2026-10-02T07:09:39.150Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "header, audit page and test name the same ceiling",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "every breaking entry from 0.86.0 and 0.87.0 has a disposition row",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "D4 and D10 rows exist in the backlog",
+            "artifact": ".bee/backlog.jsonl"
+          }
+        ],
+        "recorded_at": "2026-10-02T07:09:46.016Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

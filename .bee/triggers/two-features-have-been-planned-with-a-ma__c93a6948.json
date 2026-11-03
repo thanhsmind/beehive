@@ -1,0 +1,11 @@
+{
+  "id": "two-features-have-been-planned-with-a-ma__c93a6948",
+  "decision": "c93a6948",
+  "condition": "Two features have been planned with a mapped feature file available. Then check whether their plan risk maps actually cite gotchas from that file. If they do not, D4's shaping-tier index read earned nothing and is reverted — this is the named falsifier for the feature-map-is-read-first theory.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-02T02:28:51.491Z",
+  "updated_at": "2026-09-02T02:28:51.491Z",
+  "outcome": null
+}

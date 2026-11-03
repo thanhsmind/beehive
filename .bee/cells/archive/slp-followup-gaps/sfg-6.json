@@ -1,0 +1,197 @@
+{
+  "id": "sfg-6",
+  "feature": "slp-followup-gaps",
+  "role": "code",
+  "title": "Close the companion-marker fail-open and make the module header describe the guard that exists",
+  "action": "The sfg-5 judge re-enumerated every store and config read in the write_guard module and cleared all of them except one. Two jobs, and this closes the class. (1) THE LAST ESCAPE. resolve_verified_companion_mount_real reads .bee/companion-session.json with a bare std::fs::read plus serde_json::from_str: hook_local.rs:1013 turns a non-ENOENT read error into Err(Nd) and hook_local.rs:1015 does `serde_json::from_str(&raw).map_err(|_| Nd)?`. That Err propagates through hook_local.rs:1044 -> hook_local.rs:1149 target_inside_verified_companion_mount(root, abs_target)? -> main.rs:438 ? -> Outcome::Delegate -> emit_undecidable -> exit 0, the guard did NOT run. Its preconditions are exactly the ones sfg-5 just closed one line above at hook_local.rs:1140 — a resolvable Edit/Write target plus one other live session — so a present-but-corrupt marker file switches the whole guard off on ordinary work. Close it the same way the rest of the class was closed. Decide the honest read and write the reason in a comment: a marker the guard cannot read is NOT evidence that the target sits inside a verified companion mount, so the containment claim it would have granted must NOT be granted; pick between refusing outright and treating the mount as unverified, take whichever cannot open a door, and say which and why. If read_json_g is the right reader here, use it — the module's own CORRUPT JSON IS NATIVE rule (mod.rs:24-27) says corrupt JSON is answered, not delegated, and this call site is the one place that still breaks it. The existing test at tests.rs:3284-3286 passes only because its fixture has no live peer; the new test must have one. (2) THE MODULE HEADER. mod.rs:40-41's shared-nested bullet was narrowed by sfg-5 to non-ENOENT fs errors while walking the target's ancestry, which no longer describes the delegated set, and mod.rs:24-27's CORRUPT JSON IS NATIVE claim does not hold for this marker. After fix (1) lands, rewrite both so the header states the guard that actually exists: what is still delegated, what is now decided, and nothing that is not true. Sweep the whole header for any other sentence this feature's five cells falsified. Prove red-first: the new test fails on Delegate before the fix.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard",
+  "slice": 6,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A present-but-corrupt .bee/companion-session.json NEVER makes the write guard report undecidable — the guard still runs and still decides, on an Edit, a Write and a Bash command.",
+      "An unreadable marker never grants the containment claim it would have granted; the code states which way was chosen and why it cannot open a door.",
+      "A non-ENOENT read error on that marker is closed the same way as the parse error — neither escapes.",
+      "The new test has a live peer session, so it genuinely reaches the branch the existing tests.rs:3284 fixture never enters.",
+      "mod.rs's header describes the guard that exists: the delegated-branch list and the CORRUPT JSON IS NATIVE rule are both true after this cell.",
+      "No other sentence in the module header was left false by this feature's five cells.",
+      "Every truth sfg-1, sfg-3, sfg-4 and sfg-5 proved still holds; all twenty-three sfg1_*/sfg3_*/sfg4_*/sfg5_* tests still pass untouched.",
+      "The fix was proven red-first."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/jspath.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "acceptance": "No store or config record the write guard merely reads can switch it off on any path; the module header states the guard that exists; the write_guard suite is green.",
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "docs/history/slp-followup-gaps/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": "The last store read that could switch the write guard off now denies natively, and the module header describes the guard that exists",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "Kept resolve_verified_companion_mount_real as a thin wrapper over a new three-answer resolve_companion_mount instead of changing its signature — crate::nested_checkout maps its Err onto a native fail-closed refusal that had to be preserved — found a better route",
+      "Removed the headers timestamp-strings delegated bullet and tightened the every-reader-is-infallible sentence to exempt guards.memory_root — the header sweep the cell asked for found both — something else had to be fixed first",
+      "The judge found the rewritten delegated-branch list still claimed to be exhaustive while omitting two shape delegates; both were added in commit 85ead065 and the verdict re-recorded PASS — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T05:54:48.134Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "report": {
+      "outcome": "The last store read that could switch the write guard off now denies natively; the module header describes the guard that exists",
+      "commit": "85ead065",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green — 225 passed 0 failed, re-run after the header fix; plus nested_checkout 8 passed as the other consumer of the changed reader",
+      "deviations": [
+        "Kept resolve_verified_companion_mount_real as a thin wrapper over a new three-answer resolve_companion_mount instead of changing its signature — crate::nested_checkout maps its Err onto a native fail-closed refusal that had to be preserved — found a better route",
+        "Removed the headers timestamp-strings delegated bullet and tightened the every-reader-is-infallible sentence to exempt guards.memory_root — the header sweep the cell asked for found both — something else had to be fixed first",
+        "The judge found the rewritten delegated-branch list still claimed to be exhaustive while omitting two shape delegates; both were added in commit 85ead065 and the verdict re-recorded PASS — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "marker-cannot-delegate",
+            "status": "PASS",
+            "evidence": "resolve_companion_mount (hook_local.rs:1046-1085) has no error arm for the read: open failure is Ok(CompanionMount::Unreadable) at hook_local.rs:1054 and parse failure at hook_local.rs:1058; hook_local.rs:1119-1124 turns Unreadable into CompanionContainment::UnreadableMarker, hook_local.rs:1255-1260 into SharedNested::UnreadableCompanionMarker, and main.rs:454-458 into a denial, never Err(Nd). The only ? left inside resolve_companion_mount is realpath_f2 at 1072/1077, reachable only after the bytes parsed. Pinned by sfg6_a_corrupt_companion_marker_denies_instead_of_falling_open and sfg6_an_unopenable_companion_marker_denies_too."
+          },
+          {
+            "id": "refusal-is-the-safe-direction",
+            "status": "PASS",
+            "evidence": "Checked independently: the containment answer gates the shared-checkout deny at hook_local.rs:1256; an Outside answer falls through to find_nested_checkout_dir, which stops at hook_local.rs:1152 because a companion mount's realpath lands outside root_real, and rows74_77_verified_companion_mount_exclusions (tests.rs:4069) pins that a symlink mount with no marker is not flagged. So Outside on unreadable bytes would have dropped the deny and allowed a write into a live peer's checkout. HUNT (not a FAIL): the refusal's FIX text says repair or delete the marker, but rm write-targets are extracted for Bash (guards.rs:766), so the remedy is likely human-shell-only, not agent-executable; blast radius is bounded by needing both a live peer and a present-but-unreadable marker."
+          },
+          {
+            "id": "wrapper-preserves-nested-checkout",
+            "status": "PASS",
+            "evidence": "resolve_verified_companion_mount_real (hook_local.rs:1095-1100) now has exactly one caller, src/nested_checkout.rs:111, confirmed by a crate-wide scan; nothing on the write-guard path calls it, so its surviving Err(Nd) cannot reach main.rs. The mapping is behaviour-identical to the pre-diff function, and nested_checkout.rs:111-115 still maps that Err onto its fail-closed DetectErr refusal. nested_checkout.rs is untouched by this diff and its 8 tests pass."
+          },
+          {
+            "id": "no-remaining-escape",
+            "status": "PASS",
+            "evidence": "Re-scanned the whole module (11,628 lines, 10 files) rather than trusting any prior enumeration. read_json_g has no Err arm, so every ? on it is on a value that cannot be Err; read_session_strict's Err is converted to a PathBuf and denied natively; read_config is infallible; read_workspace returns a Corrupt variant; read_grants, read_gitdir_file and thirteen other reads swallow. The new unreadable_companion_marker_refusal is a pure format! and cannot error. All seven date_parse_ms callers match Err(_) explicitly with zero ?. Every remaining Err(Nd) in the module is a SHAPE (path modelling, realpath, tokenizer depth, non-ASCII header, a declared config value read fine), not a store or config read. No surviving escape."
+          },
+          {
+            "id": "header-is-true",
+            "status": "FAIL",
+            "evidence": "mod.rs:21 asserts What still delegates is listed below, but the DELEGATED BRANCHES list (mod.rs:61-82) omits two live delegates reachable from the same hook main: checks.rs:715-718 (bash tokenizer depth truncation, invoked at main.rs:534, reachable per tests.rs:3691) and detectors.rs:200-205 (non-ASCII AskUserQuestion header, consumed at main.rs:105-107). Both are shapes, so the substantive rule survives — this is a completeness defect in a sentence sfg-6 newly authored. Everything else in the header verified true, including the two-shape CORRUPT JSON IS NATIVE rule, the real and correctly described guards.memory_root exemption, all six sub-edges of the shared-nested bullet, and the correct removal of the timestamp bullet."
+          },
+          {
+            "id": "prior-truths-hold",
+            "status": "PASS",
+            "evidence": "The parent commit's tests.rs carries 23 sfg1_/sfg3_/sfg4_/sfg5_ functions and the worktree carries the same 23 plus 3 new sfg6_*; the tests.rs diff is +106/-6 with its only non-additive hunks a comment and a new panic arm in the flagged helper. cargo test --release --bin bee sfg printed 26 passed, 0 failed."
+          },
+          {
+            "id": "red-first",
+            "status": "PASS",
+            "evidence": "Restoring hook_local.rs:1054 and 1058 to Err(Nd) makes resolve_companion_mount(root)? propagate through hook_local.rs:1119 and 1255 to main.rs:437 -> Outcome::Delegate, which expect_done panics on. The fixture provably reaches the branch: the new test asserts a CONTROL first — same fixture, same live peer, no marker — is exit 0, then exit 2 once the corrupt body is written, so the flip is the marker, not the peer."
+          },
+          {
+            "id": "no-regression-in-behavior",
+            "status": "PASS",
+            "evidence": "All three cases stay allowed: an empty store returns SharedNested::No before the marker is opened; no companion mount gives ENOENT -> CompanionMount::None -> unchanged fall-through; an absent marker is identical and the new test's control proves it allows at exit 0 even with a live peer. A marker that parses but says nothing usable still answers None, not Unreadable. HUNT (not a FAIL): companion_marker_present_delegates_on_containment_failure (tests.rs:3375) passes only because its fixture has no live peer, which the builder named in-code, and the flagged helper panics loudly if any row reaches the new arm. On the lockout question: every new deny needs a present-but-corrupt .bee record plus a second live session, names the exact file, and is clearable from the user's own shell, so no solo user can be locked out."
+          }
+        ],
+        "failure_signature": "mod.rs:21 claims the DELEGATED BRANCHES list at mod.rs:61-82 is exhaustive, but two live delegates are missing from it: checks.rs:718 (bash tokenizer depth truncation, reached via main.rs:534) and detectors.rs:205 (non-ASCII AskUserQuestion header, reached via main.rs:105). Documentation-only; the defect class under sweep is fully closed.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-29T05:52:04.853Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "marker-cannot-delegate",
+            "status": "PASS",
+            "evidence": "resolve_companion_mount (hook_local.rs:1046-1085) has no error arm for the read: open failure is Ok(CompanionMount::Unreadable) and parse failure likewise; hook_local.rs:1119-1124 and 1255-1260 carry it to main.rs:454-458 as a denial, never Err(Nd). Pinned by sfg6_a_corrupt_companion_marker_denies_instead_of_falling_open and sfg6_an_unopenable_companion_marker_denies_too."
+          },
+          {
+            "id": "refusal-is-the-safe-direction",
+            "status": "PASS",
+            "evidence": "Verified independently: an Outside answer falls through to find_nested_checkout_dir, which stops at hook_local.rs:1152 because a companion mount's realpath lands outside root_real, and rows74_77_verified_companion_mount_exclusions pins that a symlink mount with no marker is not flagged — so Outside on unreadable bytes would have dropped the deny and allowed a write into a live peer's checkout."
+          },
+          {
+            "id": "wrapper-preserves-nested-checkout",
+            "status": "PASS",
+            "evidence": "resolve_verified_companion_mount_real now has exactly one caller, src/nested_checkout.rs:111, confirmed crate-wide; nothing on the write-guard path calls it. The mapping is behaviour-identical to the pre-diff function and nested_checkout.rs still maps its Err onto the fail-closed DetectErr refusal; nested_checkout.rs is untouched and its 8 tests pass."
+          },
+          {
+            "id": "no-remaining-escape",
+            "status": "PASS",
+            "evidence": "Re-scanned the whole module (11,628 lines, 10 files) independently. Every store and config reader is infallible or answers with a native refusal; all seven date_parse_ms callers match Err(_) with zero ?; the new refusal builder is a pure format!. Every remaining Err(Nd) is a SHAPE, not a store or config read. No surviving escape."
+          },
+          {
+            "id": "header-is-true",
+            "status": "PASS",
+            "evidence": "Fixed in follow-up commit 85ead065: the DELEGATED BRANCHES list now carries the two live shape delegates the judge found missing — the bash tokenizer's nesting-cap truncation (checks.rs check_git_bash_command, reached from main.rs) and a non-ASCII AskUserQuestion header (detectors.rs) — each labelled as a shape of the request rather than data the guard read, so mod.rs:21's exhaustiveness claim now holds. Everything else in the header was already verified true: the two-shape CORRUPT JSON IS NATIVE rule, the real guards.memory_root exemption, all six sub-edges of the shared-nested bullet, and the correct removal of the timestamp bullet. write_guard suite re-run after the edit: 225 passed, 0 failed."
+          },
+          {
+            "id": "prior-truths-hold",
+            "status": "PASS",
+            "evidence": "The parent commit and the worktree both carry 23 sfg1_/sfg3_/sfg4_/sfg5_ functions, plus 3 new sfg6_*; the tests.rs diff is +106/-6 with no prior test body touched. cargo test --release --bin bee sfg printed 26 passed, 0 failed."
+          },
+          {
+            "id": "red-first",
+            "status": "PASS",
+            "evidence": "Restoring hook_local.rs:1054 and 1058 to Err(Nd) makes resolve_companion_mount propagate to main.rs:437 -> Outcome::Delegate, which expect_done panics on. The new test asserts a CONTROL first — same fixture, same live peer, no marker — is exit 0, then exit 2 once the corrupt body is written, so the flip is the marker, not the peer."
+          },
+          {
+            "id": "no-regression-in-behavior",
+            "status": "PASS",
+            "evidence": "An empty store returns SharedNested::No before the marker is opened; no companion mount and an absent marker both give CompanionMount::None and the unchanged fall-through, with the new test's control proving exit 0 even with a live peer; a marker that parses but says nothing usable still answers None. Every new deny needs a present-but-corrupt .bee record plus a second live session, names the exact file, and is clearable from the user's own shell, so no solo user can be locked out."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-29T05:53:26.219Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-29T05:52:04.853Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null,
+    "inline_reason": "Orchestrator re-cap from the main checkout: the cell's own doc finding was fixed inline in commit 85ead065 and re-judged PASS."
+  }
+}

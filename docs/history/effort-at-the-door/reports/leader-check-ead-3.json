@@ -1,0 +1,9 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "bee team show prints the ladder from the one constant, text and JSON, and says when it is idle", "artifact": "packages/bee-rs/crates/bee/src/verbs/models_group.rs"},
+    {"requirement": "A role's configured effort is visible in team show beside its model", "artifact": "packages/bee-rs/crates/bee/src/verbs/models_group.rs"},
+    {"requirement": "The concept states the rule, the repair posture, the audit grep, the idle condition and the herding gap", "artifact": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"},
+    {"requirement": "models_group.rs reads models::EFFORT_LADDER, no copy", "artifact": "packages/bee-rs/crates/bee/src/verbs/models_group.rs"}
+  ]
+}

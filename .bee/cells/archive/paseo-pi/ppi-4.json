@@ -1,0 +1,144 @@
+{
+  "id": "ppi-4",
+  "feature": "paseo-pi",
+  "lane": "high-risk",
+  "role": "docs",
+  "title": "Write the Paseo channel concept",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/bee-herding/index.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi/CONTEXT.md",
+    "docs/history/paseo-pi/plan.md",
+    "docs/knowledge/areas/bee-herding/the-mailbox-broker.md",
+    "docs/knowledge/areas/bee-herding/index.md"
+  ],
+  "action": "Write docs/knowledge/areas/bee-herding/the-paseo-channel.md with the same frontmatter shape as the-mailbox-broker.md (type bee.area, id bee-herding-the-paseo-channel, areas [bee-herding], decisions citing paseo-pi D1, D4, D5, D6 by name, owns.code naming packages/bee-rs/crates/bee/src/herding/paseo.rs and herding/run.rs). Body in ASD-STE100 style, short sections: what the channel is (D1); the herding.agents.<name>.paseo block and herding.paseo.command, with one JSON example; how a run goes (paseo run, job.json paseo_agent_id, the file mailbox, the bee_job label); the liveness states and what Unknown means; when the agent is archived and when it is kept; the two FIX lines (version below 0.10.3, daemon down); the environment facts from CONTEXT.md (npm CLI starts the daemon, the AppImage CLI cannot); and one line each pointing at slice 2 (D6 heartbeat) and slice 3 (D5 answers) as planned work. Add one line for the new concept to docs/knowledge/areas/bee-herding/index.md in the same style as its other entries.",
+  "must_haves": {
+    "truths": [
+      "the concept names the paseo block, its fields and its default command",
+      "the concept states the liveness mapping and that Unknown never counts as alive",
+      "the concept states the archive rule and the own-id guard",
+      "the concept gives both FIX lines",
+      "the bee-herding index links the new concept"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "the Paseo channel concept"
+      },
+      {
+        "path": "docs/knowledge/areas/bee-herding/index.md",
+        "substantive": "the index entry"
+      }
+    ],
+    "key_links": [
+      "index.md links the-paseo-channel.md"
+    ],
+    "prohibitions": [
+      "No change to any other concept file"
+    ]
+  },
+  "verify": ".bee/bin/bee knowledge check --json",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppi-4",
+    "outcome": "The Paseo channel concept is written, indexed and linked",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+      "docs/knowledge/areas/bee-herding/index.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+    ],
+    "deviations": [
+      "Leader added one Pointers link in the-run-verb-and-worker-outcomes.md: knowledge check requires a new concept to have an inbound concept link, which the cell prohibition did not allow for"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-05T15:59:20.781Z",
+    "behavior_change": false,
+    "verification_evidence": "errors 0, the new concept is not in profile.orphans",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": ".bee/bin/bee knowledge check --json",
+    "claimed_at": "2026-10-05T15:54:37.941Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T15:59:20.780Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T16:18:34.853Z"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "ppi-4 prohibition No change to any other concept file conflicted with the orphan_concept rule",
+        "better": "name one sibling concept to link from in the cell",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "The Paseo channel concept is written, indexed and linked from the run verb concept",
+      "commit": "ea40cd049 63ccec2c5",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "docs/knowledge/areas/bee-herding/index.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --json — green:static — errors 0, the new concept is not in profile.orphans",
+      "deviations": [
+        "Leader added one Pointers link in the-run-verb-and-worker-outcomes.md: knowledge check requires a new concept to have an inbound concept link, which the cell prohibition did not allow for"
+      ],
+      "mistakes": [
+        "ppi-4 prohibition No change to any other concept file conflicted with the orphan_concept rule — name one sibling concept to link from in the cell — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the concept names the paseo block, its fields and its default command",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the concept states the liveness mapping and that Unknown never counts as alive",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the concept states the archive rule and the own-id guard",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the concept gives both FIX lines",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the bee-herding index links the new concept",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-05T16:18:34.853Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

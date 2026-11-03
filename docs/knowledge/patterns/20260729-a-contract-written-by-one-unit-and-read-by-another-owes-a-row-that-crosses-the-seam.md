@@ -7,6 +7,7 @@ timestamp: 2026-07-29
 bee:
   id: pattern-20260729-a-contract-written-by-one-unit-and-read-by-another-owes-a-row-that-crosses-the-seam
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["original feature: worker-conformance", docs/history/learnings/20260729-worker-conformance.md]
   polarity: pitfall
   critical: false

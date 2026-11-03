@@ -8,7 +8,7 @@ bee:
   id: pattern-20260818-a-rule-checked-at-two-points-needs-one-shared
   lifecycle: active
   areas: [worktree-parallelism]
-  sources: [".bee/cells/usp-3.json", ".bee/cells/usp-5.json", ".bee/cells/usp-6.json", "original feature: uat-stop-placement, round 2", ".bee/cells/archive/guard-herding-fallback/hgf-1.json", "recurrence: guard-herding-fallback (the dispatch-prepare door published a model the model-guard door refused; the fix reads the producer's own default-model table rather than a second copy, and the consumer's member set is the exact image of what the producer can publish, narrowed deliberately where the producer cannot reach)"]
+  sources: [".bee/cells/archive/uat-stop-placement/usp-3.json", ".bee/cells/archive/uat-stop-placement/usp-5.json", ".bee/cells/archive/uat-stop-placement/usp-6.json", "original feature: uat-stop-placement, round 2", ".bee/cells/archive/guard-herding-fallback/hgf-1.json", "recurrence: guard-herding-fallback (the dispatch-prepare door published a model the model-guard door refused; the fix reads the producer's own default-model table rather than a second copy, and the consumer's member set is the exact image of what the producer can publish, narrowed deliberately where the producer cannot reach)"]
   polarity: pitfall
   critical: true
   evidence: wired
@@ -64,3 +64,10 @@ when a downstream decision (suppress cleanup, block an action) depends on a fact
 it from the same source the upstream decision already trusted — never from a side effect
 (a write succeeding, a file existing) that can diverge from that fact for reasons that
 have nothing to do with it.
+
+The reading-side twin of this pitfall is
+[The predicate you found first is not the rule](20260919-the-predicate-you-found-first-is-not-the-rule-read-its-siblings-before-you-derive-from-it.md):
+here two homes for one rule drift apart, there a single home is read partially —
+one predicate is taken for the whole rule while its siblings, a few lines away,
+decide the other branches. Both end the same way: a confident, tested,
+documented rule that the code it claims to follow contradicts.

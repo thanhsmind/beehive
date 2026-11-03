@@ -38,6 +38,31 @@ pub(crate) const PROMPT_REVIEWER: &str = include_str!("../../../../../../bee/pro
 
 pub(crate) const PROMPT_ADVISOR: &str = include_str!("../../../../../../bee/prompts/advisor.md");
 
+pub(crate) const AGENT_BUILD: &str = include_str!("../../../../../../bee/agents/bee-build.md.tmpl");
+
+pub(crate) const AGENT_DESIGN: &str = include_str!("../../../../../../bee/agents/bee-design.md.tmpl");
+
+pub(crate) const DESIGN_CELL_PREAMBLE: &str = "Design cell: before you write UI, load the `bee-design` skill and every installed `bee-design-*` pack, and follow its workflow. The design check is `bee design gate`; record it as your proof. It needs Node 20 or newer; without it, it prints `design gate: not run — Node 20 or newer is missing`, the proof reason must carry `design gate not run`, and you never write that it ran. With no `bee-design` skill installed, say the design taste is absent and execute the cell as a plain cell executor.";
+
+pub(crate) const AGENT_GATHER: &str = include_str!("../../../../../../bee/agents/bee-gather.md.tmpl");
+
+pub(crate) const AGENT_EXTRACT: &str = include_str!("../../../../../../bee/agents/bee-extract.md.tmpl");
+
+pub(crate) const AGENT_REVIEW: &str = include_str!("../../../../../../bee/agents/bee-review.md.tmpl");
+
+pub(crate) fn embedded_agent_body(agent_name: &str) -> Option<&'static str> {
+    let source = match agent_name {
+        "bee-build" => AGENT_BUILD,
+        "bee-design" => AGENT_DESIGN,
+        "bee-gather" => AGENT_GATHER,
+        "bee-extract" => AGENT_EXTRACT,
+        "bee-review" => AGENT_REVIEW,
+        _ => return None,
+    };
+    let (_front, body) = crate::textutil::split_frontmatter(source);
+    Some(body.trim())
+}
+
 pub(crate) fn embedded_prompt(name: &str) -> Option<&'static str> {
     match name {
         "worker-cell" => Some(PROMPT_WORKER_CELL),
@@ -69,11 +94,21 @@ pub(crate) fn load_prompt(name: &str) -> Option<String> {
 /// this port would render a stale template: byte-compare and delegate on any
 /// mismatch. A repo shipping neither (a pure-binary install) trusts the
 /// embedded copy, which is the only copy that exists there.
-pub(crate) fn prompts_match_disk(root: &Path, name: &str) -> bool {
-    let embedded = match embedded_prompt(name) {
-        Some(t) => t,
-        None => return false,
-    };
+/// What a skew IS, so the refusal can name it instead of shrugging.
+#[derive(Debug)]
+pub(crate) enum PromptSkew {
+    /// No compiled-in template answers to this name.
+    NoEmbedded,
+    /// This on-disk copy disagrees with the compiled-in bytes.
+    Disk(std::path::PathBuf),
+}
+
+/// The first on-disk prompt copy whose bytes disagree with the compiled-in
+/// template, or `None` when every copy present agrees. Same comparison
+/// this guard always made — it now reports WHICH file, because a
+/// caller that cannot delegate has to explain itself.
+pub(crate) fn prompt_skew(root: &Path, name: &str) -> Option<PromptSkew> {
+    let embedded = embedded_prompt(name)?;
     let candidates = [
         root.join("packages").join("bee").join("prompts").join(format!("{name}.md")),
         root.join(".bee").join("bin").join("prompts").join(format!("{name}.md")),
@@ -82,10 +117,36 @@ pub(crate) fn prompts_match_disk(root: &Path, name: &str) -> bool {
         let Ok(bytes) = std::fs::read(&file) else { continue };
         let disk = String::from_utf8_lossy(&bytes);
         if normalize_template(&disk) != normalize_template(embedded) {
-            return false;
+            return Some(PromptSkew::Disk(file));
         }
     }
-    true
+    None
+}
+
+/// The refusal a skew earns. Skew used to `return None` — "delegate to the
+/// Node renderer" — and the dispatcher turned that into its generic
+/// "unsupported argument shape" message, which blames the caller's flags for
+/// a stale binary. The Node runtime was deleted at R6, so there is nothing to
+/// delegate TO: name the file, the cause, and the remedy.
+pub(crate) fn prompt_skew_message(cmd: &str, name: &str, skew: &PromptSkew) -> String {
+    match skew {
+        PromptSkew::NoEmbedded => format!(
+            "bee {cmd}: no prompt template named `{name}` is compiled into this binary \
+             (bee {}), so no worker prompt can be rendered. FIX: rebuild from a source tree \
+             that carries packages/bee/prompts/{name}.md.",
+            crate::version::BEE_VERSION
+        ),
+        PromptSkew::Disk(path) => format!(
+            "bee {cmd}: prompt skew — {} does not match the `{name}` template compiled into \
+             this binary (bee {}), so a worker would be handed a prompt that is not the one on \
+             disk. Nothing is dispatched. FIX: re-vendor the binary from this source tree \
+             (`cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee`, then \
+             copy the built `bee` over `.bee/bin/bee`), or restore that file to the bytes this \
+             binary was built from.",
+            path.display(),
+            crate::version::BEE_VERSION
+        ),
+    }
 }
 
 /// provenance: prompt-renderer.mjs render(template, vars) — the whole minimal
@@ -190,4 +251,34 @@ pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, St
         i += ch.len_utf8();
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_agent_body_resolves_known_agents() {
+        let body = embedded_agent_body("bee-gather").expect("bee-gather body should exist");
+        assert!(body.starts_with("You are a bee gather worker"));
+        assert!(!body.contains("---"));
+
+        let build = embedded_agent_body("bee-build").expect("bee-build body should exist");
+        assert!(build.starts_with("You are a bee execution worker"));
+        assert!(!build.contains("---"));
+
+        let extract = embedded_agent_body("bee-extract").expect("bee-extract body should exist");
+        assert!(extract.starts_with("You are a bee extract worker"));
+        assert!(!extract.contains("---"));
+
+        let review = embedded_agent_body("bee-review").expect("bee-review body should exist");
+        assert!(review.starts_with("You are a bee review worker"));
+        assert!(!review.contains("---"));
+    }
+
+    #[test]
+    fn embedded_agent_body_returns_none_for_unknown_agents() {
+        assert_eq!(embedded_agent_body("general-purpose"), None);
+        assert_eq!(embedded_agent_body("nonsense"), None);
+    }
 }

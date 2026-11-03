@@ -6,14 +6,20 @@ bee ships four subagent definitions and one hook that stands behind them. The de
 
 ## The simple case
 
-The agent runs `bee dispatch prepare`, gets back `{"tool": "Agent", "payload": {"subagent_type": "bee-gather", "prompt": "[bee-tier: generation]…", "model": "sonnet"}}`, and makes exactly that call. The guard reads it: the marker names a configured role, the subagent type is the rendered agent for that role, the model parameter equals what the role resolves to. Nothing to correct. The guard appends one line to `.bee/logs/dispatch.jsonl` and exits 0 without printing anything. The subagent starts, reads only what the prompt handed it, and returns a digest.
+The agent runs `bee dispatch prepare` on a host that configures no `read` slot, gets back `{"tool": "Agent", "payload": {"subagent_type": "bee-gather", "prompt": "[bee-tier: generation]…", "model": "sonnet"}}` — the gather's `[read, generation]` walk found nothing at `read` and landed on `generation` — and makes exactly that call. The guard reads it: the marker names a configured role, the subagent type is the rendered agent for that role, the model parameter equals what the role resolves to. Nothing to correct. The guard appends one line to `.bee/logs/dispatch.jsonl` and exits 0 without printing anything. The subagent starts, reads only what the prompt handed it, and returns a digest.
 
 The failure case is just as short. The agent types an `Agent` call by hand with a prompt and nothing else:
 
 > bee-model-guard: every Agent/Task dispatch needs an explicit role — a rendered bee agent type, a `model` param, or a `[bee-tier: <role>]` marker opening the prompt/description (decision 0023). A bare dispatch would silently inherit the most expensive session model.
-> FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, bee-extract = extraction, bee-review = review) — that alone declares the role. Otherwise pass model: "sonnet" for the generation role, or open the prompt/description with [bee-tier: ceiling] (or any configured role: ceiling/code/extraction/generation/read/review).
 
-The dispatch never runs. The remedy is the door: `bee dispatch prepare`.
+The dispatch never runs, and the FIX printed under that line leads with the
+door: it opens with `bee dispatch prepare …` and only then offers the
+fallbacks — name one of bee's rendered agents in `subagent_type`
+(`bee-gather`, `bee-extract`, `bee-build`, `bee-review`), pass a `model` param,
+or open the prompt with a `[bee-tier: <role>]` marker naming a configured role.
+The agents are listed by what each one does, never paired with a role name: the
+role is the resolver's answer, and hand-naming an agent to reach a model is the
+habit the door exists to unteach.
 
 ## The four rendered agents
 
@@ -21,10 +27,16 @@ Each file is generated from a template at onboarding and kept current from then 
 
 | Agent | Role(s) it declares | Tools | What it does |
 | --- | --- | --- | --- |
-| `bee-gather` | `generation` | Read, Grep, Glob | Open-ended multi-file hunts. Reads and reports, never writes. |
+| `bee-gather` | `read`, then `generation` | Read, Grep, Glob | Open-ended multi-file hunts. Reads and reports, never writes. |
 | `bee-extract` | `extraction` | Read, Grep, Glob | One already-scoped fact out of a known location. Never widens the search itself — that is bee-gather's job. |
 | `bee-build` | `generation` | Read, Edit, Write, Grep, Glob, Bash | Executes exactly one already-claimed cell: reserve, write, commit, cap. The only one that writes. |
 | `bee-review` | `review`, then `generation` | Read, Grep, Glob, Bash | Checks a claim read-only. May run tests, linters, `git diff`; never edits. |
+
+Every one of those files opens its `description:` by naming the one door: the
+type is reached through `bee dispatch prepare` — which may hand back a herding
+pane instead of a subagent — and is never named by hand. That description is
+the line the Claude harness shows in its agent list, so the door is the first
+thing a reader of that list sees.
 
 Four contract clauses are common to all of them, and they are what makes a worker safe to dispatch cold:
 
@@ -35,7 +47,7 @@ Four contract clauses are common to all of them, and they are what makes a worke
 
 ### Which model a file pins
 
-The `model:` line is resolved at onboarding from the agent's role list, walked against bee's baked-in seed (`extraction` → haiku, `generation` → sonnet, `review` → opus) overlaid by whatever `models.claude` carries. In a freshly onboarded host — whose seeded config names `code`, `read`, `extraction`, `generation` and no `review` — that gives bee-gather and bee-build sonnet, bee-extract haiku, and bee-review opus off the seed.
+The `model:` line is resolved at onboarding from the agent's role list, walked against bee's baked-in seed (`extraction` → haiku, `generation` → sonnet, `review` → opus) overlaid by whatever `team.claude` carries. In a freshly onboarded host — whose seeded config names `code`, `read`, `extraction`, `generation` and no `review` — that gives bee-gather and bee-build sonnet, bee-extract haiku, and bee-review opus off the seed.
 
 > Technical note: beehive's own checkout is a variant, not a contradiction. Its config configures the roles differently, so its rendered files read gather/build/review as opus and extract as sonnet. The role list is fixed; the model behind it is per host.
 
@@ -103,7 +115,7 @@ The order is load-bearing; the first matching rule wins.
 
 **Refuse.**
 
-- *A marker naming a role nothing configures* — checked before everything else, because a wrong role is wrong whatever else the dispatch carries. The refusal names the role and says how to configure it: `[bee-tier: <name>] names a role nothing configures — models.claude in .bee/config.json carries no "<name>" entry, so the dispatch would silently inherit the session model while dispatch.jsonl recorded a role that selects no model.`
+- *A marker naming a role nothing configures* — checked before everything else, because a wrong role is wrong whatever else the dispatch carries. The refusal names the role and says how to configure it: `[bee-tier: <name>] names a role nothing configures — team.claude in .bee/config.json carries no "<name>" entry, so the dispatch would silently inherit the session model while dispatch.jsonl recorded a role that selects no model.`
 - *An ambiguous generic type* — a role served by more than one rendered agent, dispatched as `general-purpose`. `generation` is served by two (bee-gather reads, bee-build writes), and the guard will not guess which. The FIX names both with a clause each: `subagent_type "bee-gather" reads and reports (never writes); subagent_type "bee-build" executes a cell (reserves, writes, commits, caps)`.
 - *A marker whose role resolves to no model, dispatched with a `model` parameter* — the marker would record one thing while the subagent ran on another.
 - *A bare `model` parameter naming a model no configured role carries* — a param outside config selects an unaudited model and, on an up-dispatch, hides ceiling scarcity.
@@ -157,7 +169,7 @@ The guard is an instantaneous decider, so the meaningful rows are about the disp
 
 **What the human sees.** A repair announces itself twice — `additionalContext` to the agent, `systemMessage` to the human — so a rewritten dispatch is never quiet. A deny is a refusal line and is never silenced.
 
-**Configuration.** `hooks.model-guard: false` turns the guard off entirely. `models.<runtime>` decides which roles exist and what each resolves to; a slot object may carry a `description`, which only the preamble's door line prints — nothing that resolves, guards or dispatches ever reads it.
+**Configuration.** `hooks.model-guard: false` turns the guard off entirely. `team.<runtime>` decides which roles exist and what each resolves to; a slot object may carry a `description`, which only the preamble's door line prints — nothing that resolves, guards or dispatches ever reads it.
 
 **Output modes and exit codes.** Deny = exit 2 with stderr text; repair = exit 0 with a JSON rewrite on stdout; allow = exit 0 silent with an audit line; no opinion = exit 0 silent with nothing at all.
 

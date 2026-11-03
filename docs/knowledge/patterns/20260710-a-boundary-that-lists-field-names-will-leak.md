@@ -7,6 +7,7 @@ timestamp: 2026-07-10
 bee:
   id: pattern-20260710-a-boundary-that-lists-field-names-will-leak
   lifecycle: active
+  areas: [hook-runtime]
   sources: ["docs/history/learnings/critical-patterns.md#PAT10", "original feature: evolving-loop"]
   polarity: pitfall
   critical: true

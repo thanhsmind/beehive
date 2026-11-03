@@ -53,7 +53,9 @@ one owner, generated ids that never collide however many sessions run at once.
 
 - **`backlog pbi add --title --cos [--status] [--id]`** — appends an `add` event and prints the
   created id. `--status` defaults to `proposed`. `--id` exists only for migration, to preserve a
-  legacy id; an agent never supplies it in ordinary use.
+  legacy id; an agent never supplies it in ordinary use. `--brief-file <draft>` carries the
+  item's owner brief, checked and copied to `docs/briefs/<id>.md`; the contract lives in
+  `docs/knowledge/areas/decision-memory/owner-brief-contract.md`.
 - **`backlog pbi status --id --to [--feature]`** — appends a `status` event flipping the PBI to
   `--to`. `--feature` optionally stamps the feature slug in the *same* event — the
   exploring D11a flip needs status and slug written together, not as two writes a crash could

@@ -1,0 +1,141 @@
+{
+  "id": "pl-3",
+  "feature": "paseo-leverage",
+  "title": "Make read-only herded runs read-only",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "168b8037",
+    "e296acd4-45a7-453f-8738-89aa9bec6c22",
+    "0575661a-2ac0-41ab-b903-67d4b65fed43"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+    ".pi/extensions/bee-guard/events.ts",
+    "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-leverage/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/tool-map.ts",
+    "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+  ],
+  "action": "Per D2 as revised (store 168b8037). (1) `bee herding run` accepts `--read-only`; it lands in Options and job.json as `read_only: true`. (2) prepare.rs: the herding arm that builds `.bee/bin/bee herding run --task-file - --json` appends ` --read-only` for kinds gather and advisor; never for cell or reviewer. (3) Paseo spawn (run.rs `execute_paseo`): a read-only run on provider pi adds env `BEE_HERDING_READ_ONLY=1` (beside BEE_HERDING_WORKER and BEE_HERDING_JOB_ID); any other provider refuses before spawn with a FIX line naming pi as the supported read-only Paseo provider. No `--mode` is set. Herdr and tmux runs only record read_only. (4) worker_guard.rs, when BEE_HERDING_READ_ONLY and BEE_HERDING_JOB_ID are set: file-writing tools (Edit, Write, MultiEdit, NotebookEdit, and the pi write and edit tools as named in tool-map.ts) are allowed only when the target path resolves inside `.bee/mailbox/<BEE_HERDING_JOB_ID>/`; every other target is denied. Shell commands go through mode B's `Bash(...)` checker (`evaluate_mode_b`) with a new READ_ONLY_ALLOWED constant: cat, head, tail, wc, ls, rg, fd, jq, git log, git show, git diff, git status, git blame, bee status, bee orient, bee herding status, bee herding notify, and mv only when both paths are inside the job mailbox. The read-only path also denies: a truncated parse, $( and backticks, any > or >> whose target is outside the job mailbox, a pipe into a head not on the list, and the flags rg --pre, fd -x/-X/--exec/--exec-batch, git --output, sed, find, xargs, tee, env, sh -c, eval. Its denial text says the run is read-only, that the worker may still write its ack, report and result files in its mailbox, and that a blocker belongs in the result or `bee herding notify`. (5) events.ts: when BEE_HERDING_READ_ONLY is set for a herded Paseo worker, route every mapped tool call, not only Bash, to worker-guard, keeping the existing fail-closed checks. Tests: a guard table with one allow row (rg, a Write into the job mailbox, mv inside it) and one deny row per bypass listed above plus Write outside the mailbox; mode A and mode B tables unchanged; prepare rows (gather and advisor carry --read-only, cell and reviewer do not); a pi contract test that a write tool call outside the mailbox is blocked under the env, allowed inside it, and allowed without the env.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worker_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee prepare && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_worker_guard_contracts",
+  "must_haves": {
+    "truths": [
+      "A gather or advisor dispatch command carries --read-only; cell and reviewer do not",
+      "A read-only pi Paseo spawn sets BEE_HERDING_READ_ONLY=1 and no --mode",
+      "worker-guard allows Write and mv inside the job mailbox and denies Write elsewhere",
+      "worker-guard denies every listed bypass and allows rg",
+      "A read-only spawn on another Paseo provider refuses before spawn with a FIX line"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+        "substantive": "read-only path on the mode B checker with the mailbox write zone and tests"
+      }
+    ],
+    "key_links": [
+      "events.ts routes non-Bash tools to worker-guard under the env",
+      "prepare passes the flag that run turns into the env"
+    ],
+    "prohibitions": [
+      "No change to mode A or mode B results for non-read-only workers",
+      "No change to cell or reviewer dispatch commands",
+      "No Paseo --mode set by bee"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-pl-3",
+    "outcome": "herding status shows read_only enforced on paseo, not-enforced on herdr or tmux, for read-only jobs",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs"
+    ],
+    "deviations": [
+      "Edited packages/bee-rs/crates/bee/src/herding.rs, outside the cell file list, reserved first — the reopen reason named it as the fix location for the status read_only field — something else had to be fixed first",
+      "sync-ack: plan assigns affects_skills [] to pl-3; the bee-herding skill and concept sync for status read_only land in the feature docs cell pl-7 (regen_obligation_ack wave-barrier)"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-12T09:16:21.566Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell verify (pi contracts 10 passed) plus cargo test -p bee --bin bee herding::tests::status (16 passed, the new read_only status test listed ok) for the reopen fix in herding.rs; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worker_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee prepare && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_worker_guard_contracts",
+    "claimed_at": "2026-10-12T09:13:30.671Z",
+    "sync_ack": "plan assigns affects_skills [] to pl-3; the bee-herding skill and concept sync for status read_only land in the feature docs cell pl-7 (regen_obligation_ack wave-barrier)",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "herding status now shows read_only on a job whose job.json has read_only true: enforced for paseo, not-enforced for herdr/tmux, absent otherwise (herding.rs insert_read_only, both collect_jobs branches, JSON and text line; test herding::tests::status_shows_read_only_enforced_on_paseo_not_enforced_on_panes_and_absent_otherwise). Prior-round guard, prepare, run and events.ts work unchanged (commit 50dc88322).",
+      "commit": "91ac750e6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worker_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee prepare && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_worker_guard_contracts — green:unit — the cell verify (pi contracts 10 passed) plus cargo test -p bee --bin bee herding::tests::status (16 passed, the new read_only status test listed ok) for the reopen fix in herding.rs; full suite not run",
+      "deviations": [
+        "Edited packages/bee-rs/crates/bee/src/herding.rs, outside the cell file list, reserved first — the reopen reason named it as the fix location for the status read_only field — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A gather or advisor dispatch command carries --read-only; cell and reviewer do not",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "A read-only pi Paseo spawn sets BEE_HERDING_READ_ONLY=1 and no --mode",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "worker-guard allows Write and mv inside the job mailbox and denies Write elsewhere",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+          },
+          {
+            "requirement": "worker-guard denies every listed bypass and allows rg",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+          },
+          {
+            "requirement": "A read-only spawn on another Paseo provider refuses before spawn with a FIX line",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "events.ts routes non-Bash tools to worker-guard under the env",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "prepare passes the flag that run turns into the env",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          }
+        ],
+        "recorded_at": "2026-10-12T08:44:12.354Z",
+        "recorded_by": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-12T09:13:24.689Z",
+    "reopened_reason": "D2 (store 168b8037) says herdr and tmux runs record read_only and status shows it as not enforced; herding.rs status has no read_only field (found at pl-7 docs). Fix: reserve packages/bee-rs/crates/bee/src/herding.rs, and in collect_jobs add read_only to a job's status object when job.json carries read_only true: enforced when the transport is paseo, else not-enforced; no field otherwise; print it on the per-job text line; tests beside the status tests for all three cases; prove with cargo test -p bee herding::tests::status plus the cell verify. No guard change."
+  }
+}

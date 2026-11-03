@@ -1,0 +1,56 @@
+{
+ "schema": "judge-verdict/1",
+ "verdict": "PASS",
+ "checks": [
+  {
+   "name": "a: carried computed only for flagged commits, branch stream at most once",
+   "status": "PASS",
+   "evidence": "phases.rs:184 returns early when first_pass.is_empty(); branch_patch_ids (phases.rs:143) is called once in split_carried_proof before the per-cell loop",
+   "id": "c1"
+  },
+  {
+   "name": "b: match excludes the commit's own id",
+   "status": "PASS",
+   "evidence": "phases.rs:212 branch_pid == &pid && branch_commit != commit",
+   "id": "c2"
+  },
+  {
+   "name": "c: fail open on git error / empty patch-id / empty range",
+   "status": "PASS",
+   "evidence": "merge-base status!=0 or empty base, log status!=0 or blank stream, patch-id status!=0 or no pairs: each returns (first_pass, []); commit_patch_id None -> cell stays stale (phases.rs:119-216). Note: git.rs:116 write_all before read can hang past ~800 commits \u2014 a hang, not a fail-open; follow-up cell p15-4",
+   "id": "c3"
+  },
+  {
+   "name": "d: neither advisory refuses",
+   "status": "PASS",
+   "evidence": "phases.rs:657-664 computes the lists only; phases.rs:1031-1041 inserts an advisory row; test asserts no MErr::Thrown and answer.ok",
+   "id": "c4"
+  },
+  {
+   "name": "e: handlers prints proof-carried line",
+   "status": "PASS",
+   "evidence": "handlers.rs:1522-1526 '  proof-carried: {}' right after proof-stale",
+   "id": "c5"
+  },
+  {
+   "name": "f: rebase test asserts JSON, text, merged==true",
+   "status": "PASS",
+   "evidence": "tests.rs:979-1034; cargo test -p bee verbs::worktree::tests 199 passed, 0 failed",
+   "id": "c6"
+  },
+  {
+   "name": "g: no new code comments",
+   "status": "PASS",
+   "evidence": "git show c7daa1bb8 -- packages/ | rg '^\\+' | rg '//|/\\*|#' -> no output",
+   "id": "c7"
+  },
+  {
+   "name": "h: concept paragraph names proof_carried, patch-id rule, D2",
+   "status": "PASS",
+   "evidence": "returning-and-the-merge-gate.md:156-168",
+   "id": "c8"
+  }
+ ],
+ "fixability": "automatic",
+ "confidence": "high"
+}

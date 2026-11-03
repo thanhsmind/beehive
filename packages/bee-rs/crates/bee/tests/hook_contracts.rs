@@ -118,6 +118,11 @@ fn run_hook(hook: &str, stdin: &[u8], cwd: &Path) -> Output {
         .args(["hook", hook])
         .current_dir(cwd)
         .env("BEE_HOOK_NO_DELEGATE", "1")
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("BEE_HERDING_JOB_ID")
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("PI_SESSION_ID")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -453,6 +458,35 @@ fn a_write_guard_deny_reaches_the_host_as_exit_two_on_stderr() {
 }
 
 #[test]
+fn a_comment_guard_deny_reaches_the_host_as_exit_two_on_stderr() {
+    let fx = fixture();
+    std::fs::write(
+        fx.root.join(".bee").join("config.json"),
+        "{\"no_code_comments\": true}\n",
+    )
+    .unwrap();
+    let rel = "packages/bee-rs/crates/bee/src/x.rs";
+    let target = fx.root.join(rel);
+    std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+    std::fs::write(&target, "fn f() {}\n").unwrap();
+    let input = serde_json::json!({
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": rel,
+            "old_string": "fn f() {}",
+            "new_string": "// note\nfn f() {}"
+        },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let out = run_hook("write-guard", input.as_bytes(), &fx.root);
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+    assert!(stdout(&out).is_empty(), "a deny writes its reason to stderr, not stdout");
+    assert!(stderr(&out).contains("FIX"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("bee comment guard"), "{}", stderr(&out));
+}
+
+#[test]
 fn a_model_guard_deny_reaches_the_host_as_exit_two_on_stderr() {
     let fx = fixture();
     let input = serde_json::json!({
@@ -466,6 +500,64 @@ fn a_model_guard_deny_reaches_the_host_as_exit_two_on_stderr() {
     assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
     assert!(stderr(&out).contains("bee-tier"), "{}", stderr(&out));
     assert!(stderr(&out).contains("FIX"), "{}", stderr(&out));
+}
+
+#[test]
+fn model_guard_semantic_role_mismatch_reaches_the_host_as_exit_two_on_stderr() {
+    let fx = fixture();
+    std::fs::create_dir_all(fx.root.join(".bee").join("lanes")).unwrap();
+    std::fs::write(
+        fx.root.join(".bee").join("lanes").join("demo.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "demo",
+            "approved_cell_packet": {
+                "cells": [
+                    { "id": "c1", "role": "builder" }
+                ],
+                "role_plan": {
+                    "schema": 2,
+                    "feature": "demo",
+                    "runtime": "claude",
+                    "cells": [
+                        { "id": "c1", "role": "builder" }
+                    ]
+                }
+            }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .unwrap();
+
+    std::fs::write(
+        fx.root.join(".bee").join("cells").join("c1.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "id": "c1",
+            "feature": "demo",
+            "title": "Cell 1",
+            "role": "builder",
+            "status": "open"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .unwrap();
+
+    let input = serde_json::json!({
+        "tool_name": "Agent",
+        "tool_input": {
+            "prompt": "[bee-feature: demo][bee-cell: c1][bee-tier: review] do work",
+            "description": "some description",
+            "subagent_type": "reviewer"
+        },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let out = run_hook("model-guard", input.as_bytes(), &fx.root);
+    assert!(ran_native("model-guard", &out, "semantic-role-mismatch-deny"));
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+    assert!(stderr(&out).contains("effective role is \"builder\""), "{}", stderr(&out));
+    assert!(stderr(&out).contains("FIX: use planned role"), "{}", stderr(&out));
 }
 
 // ── 5. a hook never fails closed over missing infrastructure ─────────────
@@ -491,4 +583,200 @@ fn no_bee_root_is_silent_success_for_every_hook() {
             stderr(&out)
         );
     }
+}
+
+// ── 6. installed manifest selection path ───────────────────────────────────
+// Manifest-level regression tests: verify that the installed Codex manifest
+// matcher actually matches `apply_patch` and `Bash` on PreToolUse and selects
+// the write-guard command, and that executing that selected hook produces the
+// expected deny / allow verdicts. Direct handler calls alone (`run_hook`) miss
+// matcher omissions.
+
+fn match_manifest_hooks(manifest: &serde_json::Value, event: &str, tool: &str) -> Vec<String> {
+    let mut selected = Vec::new();
+    let Some(groups) = manifest.get("hooks").and_then(|h| h.get(event)).and_then(|e| e.as_array()) else {
+        return selected;
+    };
+    for g in groups {
+        let matches = match g.get("matcher").and_then(|m| m.as_str()) {
+            None => true, // matcher-less fires on all tools
+            Some(regex_str) => {
+                // Pipe-delimited alternatives: "Edit|Write|...|apply_patch"
+                regex_str.split('|').any(|alt| alt.trim() == tool)
+            }
+        };
+        if matches {
+            if let Some(hooks) = g.get("hooks").and_then(|h| h.as_array()) {
+                for h in hooks {
+                    if let Some(cmd) = h.get("command").and_then(|c| c.as_str()) {
+                        selected.push(cmd.to_string());
+                    }
+                }
+            }
+        }
+    }
+    selected
+}
+
+#[cfg(unix)]
+fn run_selected_manifest_hook(commands: &[String], hook: &str, payload: &[u8], cwd: &Path) -> Output {
+    let needle = format!("hook {hook}");
+    let command = commands.iter().find(|c| c.contains(&needle))
+        .unwrap_or_else(|| panic!("manifest must select {hook}"));
+    // Run the installed shell command itself: direct handler calls cannot
+    // catch a broken root resolver, binary path, or source argument.
+    if !cwd.join(".git").exists() {
+        assert!(Command::new("git").args(["init", "--quiet"]).current_dir(cwd).status().unwrap().success());
+        let bin_dir = cwd.join(".bee/bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::copy(bee_bin(), bin_dir.join("bee")).unwrap();
+    }
+    let mut child = Command::new("sh").args(["-c", command]).current_dir(cwd)
+        .env("BEE_HOOK_NO_DELEGATE", "1")
+        .env_remove("BEE_HERDING_WORKER").env_remove("BEE_HERDING_JOB_ID")
+        .env_remove("BEE_SESSION_ID").env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_SESSION_ID").env_remove("CODEX_THREAD_ID")
+        .env_remove("PI_SESSION_ID")
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().unwrap();
+    child.stdin.take().unwrap().write_all(payload).unwrap();
+    child.wait_with_output().unwrap()
+}
+
+#[cfg(unix)]
+#[test]
+fn codex_installed_manifest_matcher_selects_write_guard_for_apply_patch() {
+    let fx = fixture();
+    // Read the installed .codex/hooks.json from the repository
+    let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .find(|p| p.join(".codex").join("hooks.json").exists())
+        .expect("must find repo root with .codex/hooks.json")
+        .join(".codex")
+        .join("hooks.json");
+    let manifest_text = std::fs::read_to_string(&manifest_path).expect("read .codex/hooks.json");
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_text).expect("parse hooks.json");
+
+    // 1. Manifest matcher selection: apply_patch must select write-guard
+    let commands = match_manifest_hooks(&manifest, "PreToolUse", "apply_patch");
+    assert!(
+        !commands.is_empty(),
+        "installed .codex/hooks.json PreToolUse matcher did not match apply_patch"
+    );
+    let write_guard_selected = commands.iter().any(|c| c.contains("hook write-guard"));
+    assert!(
+        write_guard_selected,
+        "selected commands for apply_patch did not contain write-guard: {commands:?}"
+    );
+
+    // 2. Also verify Bash and exec select write-guard
+    let bash_commands = match_manifest_hooks(&manifest, "PreToolUse", "Bash");
+    assert!(
+        bash_commands.iter().any(|c| c.contains("hook write-guard")),
+        "selected commands for Bash did not contain write-guard: {bash_commands:?}"
+    );
+    let exec_commands = match_manifest_hooks(&manifest, "PreToolUse", "exec");
+    assert!(
+        exec_commands.iter().any(|c| c.contains("hook write-guard")),
+        "selected commands for exec did not contain write-guard: {exec_commands:?}"
+    );
+
+    // 3. Execution of the selected write-guard: deny forbidden state.json write
+    let payload = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "apply_patch",
+        "tool_input": {
+            "command": "*** Begin Patch\n*** Update File: .bee/state.json\n@@\n-old\n+new\n*** End Patch"
+        },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let out = run_selected_manifest_hook(&commands, "write-guard", payload.as_bytes(), &fx.root);
+    assert_eq!(code(&out), 2, "selected write-guard must deny state.json patch: {}", stderr(&out));
+    assert!(stderr(&out).contains("state.json"));
+
+    // 4. Execution of the selected write-guard: allow safe write
+    let safe_payload = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "apply_patch",
+        "tool_input": {
+            "command": "*** Begin Patch\n*** Add File: src/manifest_test.rs\n+fn safe() {}\n*** End Patch"
+        },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let safe_out = run_selected_manifest_hook(&commands, "write-guard", safe_payload.as_bytes(), &fx.root);
+    assert_eq!(code(&safe_out), 0, "selected write-guard must allow safe patch: {}", stderr(&safe_out));
+}
+
+#[cfg(unix)]
+#[test]
+fn codex_installed_manifest_matcher_selects_write_guard_for_exec() {
+    let fx = fixture();
+    let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .find(|p| p.join(".codex").join("hooks.json").exists())
+        .expect("must find repo root with .codex/hooks.json")
+        .join(".codex")
+        .join("hooks.json");
+    let manifest_text = std::fs::read_to_string(&manifest_path).expect("read .codex/hooks.json");
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_text).expect("parse hooks.json");
+
+    let commands = match_manifest_hooks(&manifest, "PreToolUse", "exec");
+    assert!(
+        !commands.is_empty(),
+        "installed .codex/hooks.json PreToolUse matcher did not match exec"
+    );
+
+    // Deny forbidden shell write via exec
+    let deny_payload = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "exec",
+        "tool_input": {
+            "command": "echo corrupt > .bee/state.json"
+        },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let deny_out = run_selected_manifest_hook(&commands, "write-guard", deny_payload.as_bytes(), &fx.root);
+    assert_eq!(code(&deny_out), 2, "selected write-guard must deny state.json write via exec: {}", stderr(&deny_out));
+    assert!(stderr(&deny_out).contains("state.json"));
+
+    // Allow safe command via exec
+    let safe_payload = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "exec",
+        "tool_input": {
+            "command": "cargo check"
+        },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let safe_out = run_selected_manifest_hook(&commands, "write-guard", safe_payload.as_bytes(), &fx.root);
+    assert_eq!(code(&safe_out), 0, "selected write-guard must allow safe exec: {}", stderr(&safe_out));
+}
+
+#[cfg(unix)]
+#[test]
+fn installed_manifest_denies_observed_codex_spawn_with_opaque_message() {
+    let fx = fixture();
+    let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors().find(|p| p.join(".codex/hooks.json").is_file()).unwrap()
+        .join(".codex/hooks.json");
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(manifest_path).unwrap(),
+    ).unwrap();
+    // Captured on Codex 0.154.0: the host joins namespace + tool name,
+    // and the message reaches the hook as opaque host-wrapped bytes.
+    // Its contents must never supply an inferred or decrypted role.
+    let payload = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "collaborationspawn_agent",
+        "tool_input": {"task_name":"canary_child", "fork_turns":"none", "message":"opaque-host-message"},
+        "cwd": fx.root,
+    }).to_string();
+    let commands = match_manifest_hooks(&manifest, "PreToolUse", "collaborationspawn_agent");
+    let out = run_selected_manifest_hook(&commands, "model-guard", payload.as_bytes(), &fx.root);
+    assert_eq!(code(&out), 2, "undecidable native dispatch must deny: {}", stderr(&out));
+    assert!(stderr(&out).contains("explicit role"), "{}", stderr(&out));
 }

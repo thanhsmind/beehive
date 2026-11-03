@@ -7,6 +7,7 @@ timestamp: 2026-07-24
 bee:
   id: pattern-20260724-scheduler-blind-to-regen-side-effects
   lifecycle: active
+  areas: [workflow-state]
   sources: ["worktree-concurrency-guard cells wcg-1/wcg-2/wcg-3 (capped, trace.friction each independently names the same shape); reports/validation-e2e3.md (plan-checker BLOCKER: wcg-2/wcg-3 both silently rewrite release-manifest.json and .bee/onboarding.json via regen_obligation_ack, only wcg-3 declared those paths, risking a lost update if scheduled as one parallel wave)"]
   polarity: pitfall
   critical: true

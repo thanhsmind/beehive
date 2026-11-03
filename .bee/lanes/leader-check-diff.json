@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "leader-check-diff",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"leader-check-diff\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"leader-check-diff\" — feature is closed.",
+  "created_at": "2026-09-21T07:55:53.226Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "fix #5: stop (already covered by fix #1) or add the cap-time check anyway",
+    "asked_at": "2026-09-21T13:42:48.037Z",
+    "session": "51beeb2f-06ab-4324-a9ef-cb11453519ab"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-09-21T07:55:53.256Z",
+    "feature": "leader-check-diff"
+  }
+}

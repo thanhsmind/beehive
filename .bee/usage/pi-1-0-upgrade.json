@@ -1,0 +1,81 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "pi-1-0-upgrade",
+  "closed_at": "2026-10-02T14:54:43.681Z",
+  "sessions": [
+    {
+      "session_id": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 878,
+          "output": 319957,
+          "cache_write": 1855309,
+          "cache_read": 165601608,
+          "new": 2176144,
+          "cached": 165601608,
+          "total": 167777752
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5-5": {
+          "input": 734,
+          "output": 257814,
+          "cache_write": 1326375,
+          "cache_read": 22085192,
+          "new": 1584923,
+          "cached": 22085192,
+          "total": 23670115
+        }
+      },
+      "subagent_count": 20,
+      "started_ms": 1790919454736,
+      "ended_ms": 1790951954596,
+      "totals": {
+        "new": 3761067,
+        "cached": 187686800,
+        "total": 191447867
+      }
+    },
+    {
+      "session_id": "efc4f7ef-8185-4d94-b537-d769ed9cdd25",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 150,
+          "output": 24488,
+          "cache_write": 123083,
+          "cache_read": 7706706,
+          "new": 147721,
+          "cached": 7706706,
+          "total": 7854427
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1790952190031,
+      "ended_ms": 1790952878143,
+      "totals": {
+        "new": 147721,
+        "cached": 7706706,
+        "total": 7854427
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 2323865,
+      "cached": 173308314,
+      "total": 175632179
+    },
+    "subagents": {
+      "new": 1584923,
+      "cached": 22085192,
+      "total": 23670115
+    },
+    "total": {
+      "new": 3908788,
+      "cached": 195393506,
+      "total": 199302294
+    }
+  }
+}

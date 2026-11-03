@@ -7,6 +7,7 @@ timestamp: 2026-07-08
 bee:
   id: pattern-20260708-verify-strings-are-authored-not-just-read
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT9", "original feature: harness10", docs/history/learnings/20260708-harness10.md]
   polarity: pitfall
   critical: false

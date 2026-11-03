@@ -1,0 +1,73 @@
+{
+  "id": "ksn-1",
+  "feature": "knowledge-show-new",
+  "title": "Add bee knowledge show and bee knowledge new verbs",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/bootstrap.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frontmatter.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "New file author.rs with run_show and run_new. show: --id <bee.id> (required) finds the one concept by bee.id via collect_concepts, prints path, type, title, description, tags, timestamp, every bee.* field, the body (concept_body), and the concept's outbound links (relative .md targets found in the body plus bee.required_context) and inbound referrers (other concepts whose body or required_context names this path); --json emits {path,data,body,links_out,links_in}; unknown id is ctx.fail. new: --type pattern|area --title T --summary D --area SLUG (all required) [--tags a,b] [--lifecycle L default active] [--file BODY.md]; builds the Map exactly like bootstrap build_area_concept, emits through emit_frontmatter, pattern lands at patterns/YYYYMMDD-<slug>.md with id pattern-YYYYMMDD-<slug>, area lands at areas/<area>/<slug>.md with id <area>-<slug>; slug via slug_from_stem(title); today via chrono Utc like run_bootstrap; refuses (ctx.fail) when the path exists or the id is already claimed; body defaults to a '# <title>' heading; then re-renders indexes via compute_index_files (same write loop run_index uses); --json emits {path,id,written:[...]}. Register both in mod.rs (mod author + use) and routing.rs match arms; add knowledge.show and knowledge.new entries to registry_payload.json (one-line JSON, python json.dumps separators=(',',':') ensure_ascii=True, no trailing newline). Reuse flags id,type,title,summary,area,tags,lifecycle,file,json only — no new flag names, PINNED_FLAG_COUNT stays 203.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml knowledge -- --nocapture 2>&1 | tail -20; then cargo test registry_contracts and catalog; then .bee/bin/bee knowledge check on the repo bundle stays OK",
+  "must_haves": [
+    "bee knowledge show --id <id> prints the concept and its links; unknown id exits 1 with a one-line error",
+    "bee knowledge new writes a file that knowledge check reports as canonical (parse->re-emit identical) and re-renders index.md files",
+    "bee knowledge new refuses an existing path or a duplicate bee.id without writing",
+    "registry_payload.json carries knowledge.show and knowledge.new; tests/registry_contracts.rs and catalog flag pin (203) stay green",
+    "inline tests in author.rs cover show (found, not found, links) and new (pattern write canonical, area write, duplicate refusal)"
+  ],
+  "trace": {
+    "worker": "ksn-worker",
+    "outcome": "knowledge show and knowledge new verbs landed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-06T15:24:26.598Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f1ec668d-fc40-4702-8eae-c0be9f8854cc",
+    "claimed_at": "2026-09-06T15:04:12.396Z",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "knowledge show (path, frontmatter, body, links out/in) and knowledge new (canonical concept write, duplicate refusal, index re-render) landed in author.rs, routed and registered",
+      "commit": "08a13bfc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml knowledge, registry_contracts, catalog; bee knowledge check — green:unit — touched the knowledge verb group and the command registry only",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 722 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

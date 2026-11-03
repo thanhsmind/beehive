@@ -1,0 +1,116 @@
+{
+  "id": "phb-3",
+  "feature": "paseo-heartbeat",
+  "lane": "high-risk",
+  "role": "docs",
+  "title": "Document the leader heartbeat",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-heartbeat/CONTEXT.md",
+    "docs/history/paseo-heartbeat/plan.md",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "In docs/knowledge/areas/bee-herding/the-paseo-channel.md replace the one planned-work line about slice 2 with a section 'The leader heartbeat' in the same ASD-STE100 style: who is a leader (PASEO_AGENT_ID set, BEE_HERDING_WORKER unset); the bee-leader heartbeat made once per agent at session start, its marker file .bee/runtime/paseo-heartbeat/<agent id>.json, and the keys herding.paseo.heartbeat_cron (default */5 * * * *) and herding.paseo.command; what each firing does (broker tick, news text or the one-word ok text, never a swallowed prompt, and why: a swallowed prompt stalls Paseo); that worker results do not wait for it (the 2-second result drain); that a no-news turn skips the continuation nudge; how to stop it (paseo heartbeat delete <id> from the marker, then delete the marker). Add 'paseo-pi D6, D7, D8' to the frontmatter decisions list. Change nothing else in the file.",
+  "must_haves": {
+    "truths": [
+      "the concept names the bee-leader heartbeat, its marker file and both config keys with defaults",
+      "the concept states news text, the ok text, and that a heartbeat is never swallowed",
+      "the concept states how to stop the heartbeat",
+      "the frontmatter cites paseo-pi D6, D7, D8"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "the leader heartbeat section"
+      }
+    ],
+    "key_links": [
+      "the section links nothing new; it extends the existing concept"
+    ],
+    "prohibitions": [
+      "No change to any other file"
+    ]
+  },
+  "verify": ".bee/bin/bee knowledge check --json",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-phb-3",
+    "outcome": "The Paseo channel concept documents the leader heartbeat",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-05T23:29:39.876Z",
+    "behavior_change": false,
+    "verification_evidence": "errors 0, orphans 5 (none new)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": ".bee/bin/bee knowledge check --json",
+    "claimed_at": "2026-10-05T23:26:41.187Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:29:39.875Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T23:57:48.708Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The Paseo channel concept documents the leader heartbeat",
+      "commit": "860d1e3de",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --json — green:static — errors 0, orphans 5 (none new)",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the concept names the bee-leader heartbeat, its marker file and both config keys with defaults",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the concept states news text, the ok text, and that a heartbeat is never swallowed",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the concept states how to stop the heartbeat",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the frontmatter cites paseo-pi D6, D7, D8",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-05T23:57:48.708Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

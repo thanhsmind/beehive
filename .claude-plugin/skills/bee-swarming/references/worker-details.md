@@ -14,8 +14,8 @@ You own test scope: pick the proof your change type needs (code →
 related tests green; docs → parity/pointer checks; behavior → judge
 verdict), run it yourself, and record it on `cells finish --report` as
 the required `tests` proof line — `<command> — <result> — <scope
-reason>` (three non-empty segments, e.g. `cargo test -p bee — green —
-touched close.rs`). `bee close` and `bee worktree merge` CHECK that
+reason>` (three non-empty segments, e.g.
+`cargo test -p bee — green:unit — touched close.rs`). `bee close` and `bee worktree merge` CHECK that
 recorded proof at the boundary; neither runs `commands.test` itself. CI
 runs the project's declared `.bee/config.json` `commands.test` on every
 push — the one deterministic net. A `red` result segment refuses the
@@ -27,6 +27,11 @@ never the record, quote it instead. A repo declared no-test
 (`commands.test` set to the sentinel `"none"`) proves with the command
 segment `none` and the reason naming the parity/docs check actually
 used.
+
+The report also carries an optional `baseline` field. A baseline is what
+the SAME proof command produced on the base commit, before this change.
+It is optional, but expected whenever the proof command could have passed
+before the change.
 
 Tests are yours to write, TDD-style, as part of the cell's own work:
 judge existing coverage first (`.bee/expertise/tests.md`), author only
@@ -179,12 +184,12 @@ One commit per cell (rule: agents-one-commit-per-cell):
 
 ```bash
 BEE_AGENT_NAME="<name>" git add <files>
-git commit -m "<Imperative summary matching the cap outcome>" -m "Cell: <cell-id>"
+git commit -m "<Imperative summary matching the cap outcome>" -m "cell: <cell-id>"
 ```
 
 ## Result Field Spec
 
-Every result starts with exactly one token and includes, minimum: nickname, cell id, files touched/requested, reservation outcome (released yes/no), the test result from the finish run, and the parent's next action. When the cell owes a report file (`[BLOCKED]`/`[HANDOFF]`/consult-carrying/explicit request), mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) and the test record (`.bee/logs/test-results.json`) — never a second copy of either.
+The Result form — the status token, the fenced JSON block beside it, and the four token reports — has one home: `bee-swarming/references/swarming-reference.md` ("Result Formats"). Worker reports are navigation aids, not completion evidence: the leader independently compares approved requirements against actual artifacts and execution evidence before accepting. When the cell owes a report file (`[BLOCKED]`/`[HANDOFF]`/consult-carrying/explicit request), mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) and the test record (`.bee/logs/test-results.json`) — never a second copy of either.
 
 When dispatched with native worktree isolation, also report the observed working
 directory, symbolic ref (or detached state), and resulting commit. These values
@@ -195,26 +200,31 @@ prove base ancestry and the reserved-path diff subset before the result counts.
 Do not describe a branch name, worktree id, base, or commit as integration
 authority, and do not ask the orchestrator to trust a worker-supplied value.
 
-- `[DONE]` — cell finished (a proof line `<command> — <result> — <scope reason>` recorded on the cap, checked — not re-run — at close/merge), one commit made, reservations released.
-- `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state.
-- `[HANDOFF]` — `.bee/HANDOFF.json` written (rule: agents-context-handoff-65); include progress, active reservations, and the resume point.
-- `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.
+`[HANDOFF]` means `.bee/HANDOFF.json` is written first (rule: agents-context-handoff-65).
 
 Ambiguities you deferred go in an `Outstanding Questions` section of the report.
 
+## Leader Completeness Check (Acceptance Boundary)
+
+When a worker caps a cell, the leader must verify completion before accepting the result. Worker reports are navigation aids, not completion evidence.
+
+- **Check artifacts, not prose**: For every worker completion, compare every approved requirement (from cell and plan) against actual artifacts, wiring, and execution evidence. Never accept a cell solely on the worker's report or status token.
+- **Reuse existing requirements**: Reuse existing `must_haves`, acceptance criteria, and proof lines from the cell and plan. Do not invent new report schemas.
+- **No new report schema or mandatory full-suite rerun**: This check introduces no new report schema. It requires no mandatory full-suite test rerun.
+- **Risk-based depth**: Verification depth stays risk-based. Deeper checks (reading full diffs, tracing wiring, inspecting runtime outputs) apply to high risk, missing evidence, or contradictions. Low-risk mechanical changes need only direct artifact spot-checks.
+
 ## Evidence Report Budget
 
-A per-cell report file is CONDITIONAL: routine `[DONE]` cells write none — the cap trace + status-token message are the record. A report is owed only for `[BLOCKED]`/`[HANDOFF]`, consult-carrying cells, or on explicit orchestrator request. When one IS written, `docs/history/<feature>/reports/<cell-id>.md` targets **<=40 lines**. Structure:
+A per-cell report file is CONDITIONAL: routine `[DONE]` cells write none — the cap trace + status-token message are the record. A report is owed only for `[BLOCKED]`/`[HANDOFF]`, consult-carrying cells, or on explicit orchestrator request. When one IS written, `docs/history/<feature>/reports/<cell-id>.md` is a short summary the orchestrator can act on without opening anything else first. Structure:
 
-- **Outcome** (1-3 lines) — status token + what changed, in plain language.
-- **Tests** — the declared command(s) and the decisive lines of the result record, quoted, **<=10 lines**.
-- **Files + commit** (<=5 lines) — files touched and the commit hash.
-- **Deviations** (<=5 lines) — one line each, only if any fired.
+- **Outcome** — status token + what changed, in plain language.
+- **Tests** — the declared command(s) and the decisive lines of the result record, quoted.
+- **Files + commit** — files touched and the commit hash.
+- **Deviations** — one line each, only if any fired.
 - **Side-by-side excerpts** — only when the cell explicitly demands them (e.g. a before/after diff the reviewer can't get any other way).
 
 Raw full output never goes inline — point to `.bee/cells/<cell-id>.json` (the `trace`) and `.bee/logs/test-results.json` instead.
 
-**Soft budget:** going over 40 lines is allowed but requires a one-line reason at the top of the report (e.g. "high-risk cell, full trace required").
 
 ## Post-Compaction Recovery
 
@@ -241,21 +251,39 @@ fail 1 -> consult 1 -> advised retry
 
 A re-dispatched cell (rescue rung) starts a **fresh** budget — the 2-consult cap is per claim, not per cell lifetime. Consulting after `[BLOCKED]` has already been returned for the current claim is never permitted.
 
-**Evidence bundle — two shapes:**
+**Evidence bundle — three shapes:**
 - **On-failure consult (this loop):** the exact failing command, the failing excerpt from the test record, your diagnosis, the relevant cited file excerpts, and the `CONTEXT.md` path — the advisor is debugging with you, it needs the evidence.
 - **Gate-time consult (the unconditional high-risk/hard-gate pre-cap consult, bee-swarming "Execute", before the cap):** a COMPACT DIGEST only — cell id, one-paragraph change summary, file list with a one-liner per file, the `CONTEXT.md` path. Never full file excerpts: nothing failed, the advisor is sanity-checking shape and risk, and the semantic judge plus the close-time test run independently backstop correctness.
+- **Lead-run nudge consult:** carries the gate-time compact-digest bundle shape (not the on-failure bundle — nothing failed) plus the supervisor's nudge row verbatim and the in-flight diff.
 
-Either shape passes **inline in the consult prompt or via stdin — never a `/tmp` path**. Never include secrets or env values.
+All three shapes pass **inline in the consult prompt or via stdin — never a `/tmp` path**. Never include secrets or env values.
+
+The **nudge consult** is lead-owned, triggered by a supervisor `advisor-nudge` row rather than a red verify. It reuses the configured `advisor` slot via `bee dispatch prepare --kind advisor --purpose "nudge <row-id>: <cell-id>"`. It carries the gate-time compact-digest bundle shape (not the on-failure bundle — nothing failed) plus the nudge row verbatim and the in-flight diff, and its budget is one consult per nudge row because the mailbox point key already forbids a second nudge on the same point. The bundle rides the prompt body, never `--brief-file`. The return form is fixed:
+
+```text
+verdict: on-track|redirect|stop
+finding: <scenario with file:line> | none
+next: <one line>
+```
+
+`on-track / none` is the expected majority answer. Rules for this trigger (omitting what the section already forbids):
+- never answer a question the nudge row did not ask;
+- never treat green as suspect without a scenario at file:line;
+- never re-plan or propose a new cell;
+- never reinterpret a locked decision (a conflict is `stop` citing the D-id);
+- never grade diff size or ambition.
+
 
 **Transport** — the `Advisor` line names the advisor and how to consult it:
 - **Model-shaped advisor:** consult via your own Agent tool, with the model param set to the named advisor model, and the dispatch `description` starting **exactly** `advisor-consult <cell-id>: <advisor-model>` — this is the attribution record; bee-swarming's goal-check reads it from `.bee/logs/dispatch.jsonl`. Fallback if Agent dispatch is unavailable or rejected: a headless one-shot `claude -p --model <advisor-model>` call, same evidence bundle via stdin.
 - **cli-shaped advisor:** run the given command with the evidence bundle on stdin, reusing the External Executors output-capture discipline.
+- **Transport is config:** the shape you were handed (native, pane, cli) is config, not a signal about the work (`packages/bee/prompts/worker-cell.md`).
 - A **transport error** (non-zero exit, rejected dispatch, a hang past the External Executors timeout discipline) is **not advice** — it burns at most **one** budget slot total for the whole claim, and is never retried in a storm. Continue to the next step of the loop, or `[BLOCKED]` once the budget is spent.
 
 **After advice:** advice never substitutes for fresh test output — always re-run the declared tests yourself (`bee test`) before deciding whether the advised retry passed. Advice is **advice-only**: it never authorizes a package install, a gate approval, or file scope beyond the cell. Advice that conflicts with a locked decision → return `[BLOCKED]` citing both the D-ID and the advice.
 
-**Authority-type blocks never consult** — ambiguous cell, uncapped deps, architectural change, package install, locked-decision conflict stay **instant** `[BLOCKED]` exactly as in step 4 (Implement), whether or not an `Advisor` line is present.
+**Authority-type blocks never consult** — ambiguous cell, uncapped deps, architectural change, package install, locked-decision conflict stay **instant** `[BLOCKED]` exactly as in the Execute loop's step 2 (Implement), whether or not an `Advisor` line is present.
 
-**Headless rule:** consulting the advisor is not "asking the parent or user" under the Headless rule below — it stays inside your own turn. Workers still never approve gates.
+**Headless rule:** consulting the advisor is not "asking the parent or user" under bee-swarming's Headless section — it stays inside your own turn. Workers still never approve gates.
 
-Record every consult in the cap trace and the per-cell report (see Cap and Return) — count, advisor identity, and a one-line ask/answer digest per consult.
+Record every consult in the cap trace and the per-cell report (see Result Field Spec) — count, advisor identity, and a one-line ask/answer digest per consult.

@@ -1,0 +1,231 @@
+{
+  "id": "det-2",
+  "feature": "slp-detector",
+  "title": "Add bee detector tick with the four deterministic rules",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "det-1"
+  ],
+  "decisions": [
+    "D1",
+    "D3",
+    "D5",
+    "32492fc4",
+    "03838ea8"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-detector/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/detector.rs (det-1's module: Event, EVENT_SIGNALS, append_event, read_events)",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs — `rg -n 'pub\\(crate\\) fn mailbox_dir|pub\\(crate\\) fn job_path|pub\\(crate\\) fn result_path|fn result_filename'` — hits today: 60 `pub(crate) fn mailbox_dir(bee_dir: &Path, job_id: &str) -> PathBuf {`, 66 `pub(crate) fn job_path(bee_dir: &Path, job_id: &str) -> PathBuf {`, 116 `pub(crate) fn result_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {`, 125 `format!(\"result-{round}.json\")`",
+    "packages/bee-rs/crates/bee/src/herding/run.rs — `rg -n '\"ceiling_secs\": opts.ceiling_secs|\"created_at\"|\"cell_id\"|\"leader_session\"|\"round\"|fn record_round_usage'` — the job.json fields the rules read",
+    "packages/bee-rs/crates/bee/src/herding.rs — `rg -n 'fn worktree_fingerprint|let diff = git'` — hits today: 708 `fn worktree_fingerprint(cwd: &str) -> Option<String> {`, 715 `let diff = git(&[\"diff\", \"HEAD\"])?;` — the git invocation shape to mirror",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs — `rg -n 'pub\\(crate\\) fn resolve_cell_budgets|pub\\(crate\\) fn attempts_since_budget_reset|pub\\(crate\\) fn check_cell_budgets'` — hits today: 722, 740, 777; the claims count rule reuses these",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs — `rg -n 'fn event_has_contract_tag|fn contract_citation_refusal'` — how a cell's decisions resolve to contract-tagged decisions",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs — `rg -n 'pub\\(crate\\) enum ContractStatus|pub\\(crate\\) fn contract_status_over|pub\\(crate\\) fn contract_status\\('` — hits today: 324, 394, 419",
+    "packages/bee-rs/crates/bee/src/verbs/cells/read.rs — `rg -n 'pub\\(crate\\) fn read_cell'` — hit today: 180 `pub(crate) fn read_cell(root: &Path, id: &str) -> Result<Option<Value>, Delegate> {` — the one reader for a cell record by id; never a second parser",
+    "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs — `rg -n 'pub\\(crate\\) fn declared_covers|pub\\(crate\\) fn frozen_judge_hits'` — hits today: 119 `pub(crate) fn declared_covers(declared: &[Value], file: &str) -> bool {`, 200 `pub(crate) fn frozen_judge_hits(changed: &Value, declared: &Value) -> Vec<(String, &'static str)> {` — the boundary matcher to reuse",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs — `rg -n 'contract_status_over\\('` — hit today: 1286 `match crate::verbs::decisions::contract_status_over(` — the hoisted-reads pattern for a whole decisions walk",
+    "packages/bee-rs/crates/bee/src/herding/run.rs — `rg -n '\"created_at\": chrono::Utc::now\\(\\).to_rfc3339\\(\\),|\"continued_at\"'` — hits today: 2595 (and the two sibling spawn sites near 3194 and 3500) `\"created_at\": chrono::Utc::now().to_rfc3339(),`, 4936 `m.insert(\"continued_at\".into(), Value::String(chrono::Utc::now().to_rfc3339()));`"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D1, D3 with its refinement 32492fc4, and D5. (1) run.rs: at each of the three spawn sites that write `\"created_at\": chrono::Utc::now().to_rfc3339(),` also write `base_sha`: the cwd's HEAD commit read through one small helper that runs the version-control CLI with `-C <cwd>` and `rev-parse HEAD` the way worktree_fingerprint in herding.rs runs it, null when the cwd is not a checkout; one helper, three call sites. (2) Add `bee detector tick [--json]` to verbs/detector.rs, register `detector.tick` (flag json) in generated/registry_payload.json in the same shape as `detector.events`, and add a catalog.rs resolve test. The tick resolves the control root, lists every `.bee/mailbox/<job>/job.json`, and treats a job as live when `result-<round>.json` is absent for the job's `round` (default 1). It loads the job's cell record with `crate::verbs::cells::read_cell` when `cell_id` is set; with no cell only the ceiling and token rules apply. The changed set: `diff --name-only <base_sha>` plus `ls-files --others --exclude-standard`, both through the same CLI helper against the job cwd, repo-relative paths, minus every path under `.bee/` or `docs/decisions/`; `base_sha` is job.json `base_sha`, else the value stored in the job's detector state file, else the cwd's HEAD captured now and stored there (the first tick of an old job then sees only untracked paths). Rules, each firing at most one event per (job_id, signal, point_key) — before appending, skip any triple already present in events.jsonl: budget-80 (a) ceiling: now minus `continued_at` when present else `created_at`, at or above 0.8 times `ceiling_secs`, point_key `budget-80-ceiling-<job_id>`; (b) claims: `attempts_since_budget_reset(cell).len() + 1` at or above 0.8 times `resolve_cell_budgets(cell).max_claims`, point_key `budget-80-claims-<job_id>`; (c) tokens: job.json `usage.total_tokens` (the last finished round) at or above 0.8 times config `herding.budget.tokens_per_job` when that key is a positive number, point_key `budget-80-tokens-<job_id>`. test-on-unstable-contract: walk the cell's `decisions` once with the hoisted reads the way handlers_write.rs does around `contract_status_over(`; for each id naming an active decision with a `contract:<name>` tag whose status is Unsettled, when the changed set holds a test path (a `tests/` or `spec/` path segment, or a file name matching `*_test.*`, `*.test.*` or `*_tests.*`), fire with point_key `unstable-contract-<name>-<job_id>`. boundary-approach: when the cell's `files` is non-empty, every changed path for which `declared_covers(files, path)` is false fires with point_key `boundary-approach-<job_id>-<key>` where `<key>` is the first 8 hex chars of sha256(path); the excerpt carries the path. self-correction: read `.bee/supervisor/detector/<job_id>.json` (`{base_sha, changed_paths: [..], at}`); every path present there and absent from the current changed set fires with point_key `self-correction-<job_id>-<key>` (same key rule); then write the current set and base_sha to that file (create the directory on first write). Every event carries `cell_id`, `target_session` = job.json `leader_session`, `source` naming the surface (`job.json`, `cell`, `diff`, `config`), and an `excerpt` of one sentence holding the numbers or the path. A job whose job.json is unreadable, whose cwd is missing, or whose cwd is not a checkout prints one warning line on stderr and is skipped; the tick exits 0 unless the store itself cannot be written. Output: with `--json` `{fired: [events], scanned: n}`; text form one line per fired event in the `detector events` shape and a final line `detector: scanned <n> jobs, fired <m>`. Expose pub(crate) `tick_quiet(control_root: &Path) -> usize` returning the fired count with warnings on stderr, for det-3. Tests on tempdir fixtures (a real checkout per job cwd, job.json and cell records written as plain JSON in the shapes the writers use): every det-2 row of the plan's test matrix, plus the dedupe case (second tick fires none).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "a live job at 80% of ceiling_secs produces exactly one budget-80 row across two ticks",
+      "a job with result-<round>.json present produces no row and is not counted in scanned",
+      "a changed path that declared_covers accepts fires no boundary-approach row; a path under .bee/ never fires",
+      "a path committed mid-round stays in the changed set (diff against base_sha), so no self-correction row fires on a commit",
+      "an untracked new test file counts as a changed path",
+      "the tick never calls a model, paseo, or the network"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+        "substantive": "the tick verb, the four rules, tick_quiet, the per-job state file, and fixture tests for every matrix row"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "a detector.tick entry"
+      }
+    ],
+    "key_links": [
+      "the tick reads cells through the existing cell reader and budgets through validate.rs",
+      "the tick reads contract status through decisions/read.rs contract_status",
+      "tick_quiet is pub(crate) for the control loop"
+    ],
+    "prohibitions": [
+      "No write outside .bee/supervisor/events.jsonl and .bee/supervisor/detector/",
+      "No write to estimate_minutes",
+      "No second parser for cells, job.json or decisions",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": "bee detector tick with the four deterministic rules, base_sha recorded at spawn, tick_quiet for the control loop; commit 96878b399",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "registry_payload.json gained detector.tick by a byte-precise insertion script (.bee/spikes/slp-detector/insert-tick.py), 212 -> 213 commands, the precedent det-1 set — followed the plan",
+      "The session model executed det-2 after two paseo-pi-flash dispatches ended timed_out_idle with zero edits (rescue ladder rung 2, cell escalated) — bee dispatch prepare still returned the herding command despite escalate: true, so the leader ran the cell inline in the worktree — hit an unforeseen obstacle",
+      "cargo was invoked by its absolute path /home/thanhsmind/.cargo/bin/cargo instead of the PATH prefix spelling because the host worktree guard refuses shell variables; the same test legs ran — hit an unforeseen obstacle",
+      "sync-ack: herding/run.rs gains one job.json field (base_sha) the Detector reads; det-4 already rewrote the bee-herding supervisor prompt and the area concepts for the Detector"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-16T01:20:38.243Z",
+    "behavior_change": true,
+    "verification_evidence": "detector 23 passed (bin), catalog 20 passed incl. detector_tick_resolves_and_declares_only_the_json_flag, registry_contracts 12 passed; herding::run 319 passed after the base_sha change; bee dev comment-baseline --check 253 at or below baseline; bee dev release-manifest --check 419 files match",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": null,
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "confirm",
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "escalation_reason": "two paseo-pi-flash runs ended timed_out_idle with zero edits: the worker reasoned in prose and never called a tool; rescue ladder rung 2",
+    "sync_ack": "herding/run.rs gains one job.json field (base_sha) the Detector reads; det-4 already rewrote the bee-herding supervisor prompt and the area concepts for the Detector",
+    "no_mistakes": true,
+    "inline_reason": "escalated cell run inline by the session model after two timed_out_idle flash dispatches; dispatch prepare ignored the escalate flag (issue filed)",
+    "report": {
+      "outcome": "bee detector tick with the four rules, base_sha at spawn, tick_quiet for the loop; commit 96878b399",
+      "commit": "96878b399",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — detector 23 passed (bin), catalog 20 passed incl. detector_tick_resolves_and_declares_only_the_json_flag, registry_contracts 12 passed; herding::run 319 passed after the base_sha change; bee dev comment-baseline --check 253 at or below baseline; bee dev release-manifest --check 419 files match",
+      "deviations": [
+        "The session model executed det-2 after two paseo-pi-flash dispatches ended timed_out_idle with zero edits (rescue ladder rung 2, cell escalated) — bee dispatch prepare still returned the herding command despite escalate: true, so the leader ran the cell inline in the worktree — hit an unforeseen obstacle",
+        "cargo was invoked by its absolute path /home/thanhsmind/.cargo/bin/cargo instead of the PATH prefix spelling because the host worktree guard refuses shell variables; the same test legs ran — hit an unforeseen obstacle",
+        "registry_payload.json gained detector.tick by a byte-precise insertion script (.bee/spikes/slp-detector/insert-tick.py), 212 -> 213 commands, the precedent det-1 set — followed the plan"
+      ],
+      "mistakes": [],
+      "reaction": "confirm"
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 831 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a live job at 80% of ceiling_secs produces exactly one budget-80 row across two ticks",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "a job with result-<round>.json present produces no row and is not counted in scanned",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "a changed path that declared_covers accepts fires no boundary-approach row; a path under .bee/ never fires",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "a path committed mid-round stays in the changed set (diff against base_sha), so no self-correction row fires on a commit",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "an untracked new test file counts as a changed path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "the tick never calls a model, paseo, or the network",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "the tick reads cells through the existing cell reader and budgets through validate.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "the tick reads contract status through decisions/read.rs contract_status",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "tick_quiet is pub(crate) for the control loop",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "the tick verb, the four rules, tick_quiet, the per-job state file, and fixture tests for every matrix row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "a detector.tick entry",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-10-16T01:20:38.289Z",
+        "recorded_by": "7504dd00-ad2f-49c6-9913-687bf1b353cc",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "four rules fire once per (job, signal, point_key)",
+            "status": "PASS",
+            "evidence": "test tick_fires_once_per_point_and_tracks_the_changed_set_across_ticks: second tick fires none",
+            "id": "det-2-check-1"
+          },
+          {
+            "name": "changed set = diff against base_sha plus untracked, minus .bee/ and docs/decisions/",
+            "status": "PASS",
+            "evidence": "changed_paths + excluded_path; .bee/decisions.jsonl never fires in the tick test",
+            "id": "det-2-check-2"
+          },
+          {
+            "name": "base_sha written at the three spawn sites",
+            "status": "PASS",
+            "evidence": "run.rs created_at sites now carry base_sha: head_sha(&opts.cwd); herding::run 319 passed",
+            "id": "det-2-check-3"
+          },
+          {
+            "name": "old job without base_sha captures HEAD at the first tick",
+            "status": "PASS",
+            "evidence": "test tick_captures_the_base_for_an_old_job_without_base_sha",
+            "id": "det-2-check-4"
+          },
+          {
+            "name": "proof",
+            "status": "PASS",
+            "evidence": "detector 23, catalog 20, registry_contracts 12 passed; comment-baseline and manifest checks green",
+            "id": "det-2-check-5"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-16T01:34:36.767Z"
+      }
+    ]
+  },
+  "escalate": true
+}
