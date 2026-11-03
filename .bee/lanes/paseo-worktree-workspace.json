@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "cli-shape-continuation: sửa comment rồi merge, hay xóa nhánh",
-    "asked_at": "2026-11-03T07:12:55.285Z",
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-03T08:05:06.774Z",
     "session": "1b77b574-ae50-4682-98ca-66bf154a613e"
   }
 }
