@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-11-03T09:49:08.097Z",
+    "subject": "✓ Bee 2.72.0 đã phát hành. Script in ra `release  OK  bee 2.72.0 is live`. Bây giờ các commit sửa lỗi đã có trên GitHub. Tôi kiểm tra từng c",
+    "asked_at": "2026-11-03T10:04:56.780Z",
     "session": "1b77b574-ae50-4682-98ca-66bf154a613e"
   }
 }
