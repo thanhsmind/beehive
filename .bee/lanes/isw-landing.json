@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"isw-landing\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"isw-landing\" (lane).",
+  "next_action": "Merged into main at 2601556; capture what settled, then bee close --feature isw-landing.",
   "created_at": "2026-11-03T07:09:20.809Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-03T07:09:20.857Z",
     "feature": "isw-landing"
-  },
-  "merge_ready": {
-    "since": "2026-11-03T07:11:15.360Z",
-    "branch": "wt/isw-landing",
-    "worktree_id": "beehive--wt--isw-landing",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
