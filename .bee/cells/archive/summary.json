@@ -1823,5 +1823,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-03T07:35:54.320Z"
+  },
+  "issue-sweep-2": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-11-03T09:51:29.393Z"
   }
 }

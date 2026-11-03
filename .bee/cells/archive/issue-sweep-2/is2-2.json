@@ -1,0 +1,120 @@
+{
+  "feature": "issue-sweep-2",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "ab1c51bb"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "id": "is2-2",
+  "title": "Read slash, range and comma D-ID lists in feature-local decisions at close",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs"
+  ],
+  "action": "Fix GitHub issue #150 (read it with gh issue view 150), per ab1c51bb. In close.rs the feature_local_hit check (search: let feature_local_hit = local_decisions.iter().any) matches only the plain token feature D<n>, so a decision naming feature D2/D3/D4 or feature D1, D2, D3 routes only the first id. Red first: add tests in verbs/drivers/tests.rs, named with the word routing, that log one feature-local decision naming admin D2/D3/D4 and one naming admin D1, D2, D3, D4 and assert the routing door reports none of those ids unrouted; watch them fail. Then make feature_local_hit also accept context_table_covers_d_id over the decision text, and extend parse_d_sequence in context_table.rs (search: matches!(chars[end], '-' | '/')) so a comma plus optional spaces before D<digits> continues the list as exactly the named ids, the same as a slash. Ranges keep their meaning. No code comments of any kind.",
+  "must_haves": {
+    "truths": [
+      "A feature-local decision naming feature D2/D3/D4 routes D2, D3 and D4",
+      "A feature-local decision naming feature D1, D2, D3, D4 routes all four",
+      "A bundle file citing feature D1, D3 covers exactly D1 and D3"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+        "substantive": "comma continuation in parse_d_sequence"
+      }
+    ],
+    "key_links": [
+      "close.rs feature_local_hit uses context_table_covers_d_id"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee routing",
+  "status": "capped",
+  "trace": {
+    "worker": "w-is2-2",
+    "outcome": "Routing door now reads comma and multi-id D-ID lists on feature-local decisions (close.rs feature_local_hit + parse_d_sequence comma continuation), red-first proven; commit 89df525d9",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: close routing door internals; no skill teaches this matcher"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-03T09:19:55.229Z",
+    "behavior_change": false,
+    "verification_evidence": "full declared suite on the issue-sweep-2 worktree rerun by the leader: 5053 passed 0 failed; worker recorded red before the fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1b77b574-ae50-4682-98ca-66bf154a613e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee routing",
+    "claimed_at": "2026-11-03T08:09:26.560Z",
+    "sync_ack": "close routing door internals; no skill teaches this matcher",
+    "no_mistakes": true,
+    "commit_pending": "commit 89df525d9 carries the trailer as close: is2-2 instead of cell: is2-2",
+    "report": {
+      "outcome": "Routing door now reads comma and multi-id D-ID lists on feature-local decisions (close.rs feature_local_hit + parse_d_sequence comma continuation), red-first proven; commit 89df525d9",
+      "commit": "60e2285ab72206abe3cc6b7776016af923634bc0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee routing — green:unit — full declared suite on the issue-sweep-2 worktree rerun by the leader: 5053 passed 0 failed; worker recorded red before the fix",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A feature-local decision naming feature D2/D3/D4 routes D2, D3 and D4",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "A feature-local decision naming feature D1, D2, D3, D4 routes all four",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "A bundle file citing feature D1, D3 covers exactly D1 and D3",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "close.rs feature_local_hit uses context_table_covers_d_id",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-03T09:20:05.240Z",
+        "recorded_by": "1b77b574-ae50-4682-98ca-66bf154a613e",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  }
+}

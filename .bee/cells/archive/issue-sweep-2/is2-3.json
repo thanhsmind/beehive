@@ -1,0 +1,115 @@
+{
+  "feature": "issue-sweep-2",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "ab1c51bb"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "id": "is2-3",
+  "title": "Do not read synced bee-* skill trees as a dirty worktree at merge",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+  ],
+  "action": "Fix GitHub issues #151 and #152 (read them with gh issue view), per ab1c51bb. worktree new copies every bee-* directory under each skill root of the main checkout into the new worktree (git.rs, search: if !is_dir || !name.starts_with(\"bee-\")); in a repo where those trees are untracked, worktree merge then refuses WORKTREE_MERGE_WORKTREE_DIRTY on them (phases.rs, search: let mut dirty_exclusions = vec). Red first: in verbs/worktree/tests.rs add a test with a host-shaped main where .claude/skills is untracked and holds bee-x, a worktree with that synced copy, and assert merge does not refuse dirty; add a second test where an untracked .claude/skills/bee-new exists only in the worktree and assert merge still refuses dirty. Watch the first fail. Then add to the dirty exclusions exactly the bee-* skill directories that are untracked in the worktree AND exist under the same root in the main checkout, using the same skill-root list worktree new uses. No code comments of any kind.",
+  "must_haves": {
+    "truths": [
+      "An untracked bee-* skill directory that also exists in main no longer makes worktree merge refuse as dirty",
+      "An untracked skill directory that exists only in the worktree still makes worktree merge refuse as dirty"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "substantive": "synced skill directories join the dirty exclusions"
+      }
+    ],
+    "key_links": [
+      "the exclusion uses the same skill roots worktree new syncs"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree",
+  "status": "capped",
+  "trace": {
+    "worker": "w-is2-3",
+    "outcome": "worktree merge now excludes untracked bee-* skill trees that also exist under the same root in main, so bee's own synced copies no longer refuse as dirty; a bee-* tree only the worktree holds still refuses. Commit 961c7e077.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: worktree merge dirty check internals; no skill step changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-03T09:19:55.343Z",
+    "behavior_change": false,
+    "verification_evidence": "full declared suite on the issue-sweep-2 worktree rerun by the leader: 5053 passed 0 failed; worker recorded red before the fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1b77b574-ae50-4682-98ca-66bf154a613e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree",
+    "claimed_at": "2026-11-03T08:09:26.857Z",
+    "sync_ack": "worktree merge dirty check internals; no skill step changes",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "worktree merge now excludes untracked bee-* skill trees that also exist under the same root in main, so bee's own synced copies no longer refuse as dirty; a bee-* tree only the worktree holds still refuses. Commit 961c7e077.",
+      "commit": "60e2285ab72206abe3cc6b7776016af923634bc0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree — green:unit — full declared suite on the issue-sweep-2 worktree rerun by the leader: 5053 passed 0 failed; worker recorded red before the fix",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An untracked bee-* skill directory that also exists in main no longer makes worktree merge refuse as dirty",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs"
+          },
+          {
+            "requirement": "An untracked skill directory that exists only in the worktree still makes worktree merge refuse as dirty",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs"
+          },
+          {
+            "requirement": "the exclusion uses the same skill roots worktree new syncs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-03T09:20:05.249Z",
+        "recorded_by": "1b77b574-ae50-4682-98ca-66bf154a613e",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
