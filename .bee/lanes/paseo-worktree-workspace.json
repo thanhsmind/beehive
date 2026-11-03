@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-11-03T03:43:37.226Z",
+    "subject": "✓ Đã đóng bản sửa. Tôi commit phần ghi chép còn lại và kiểm tra lần chạy của worker vừa rồi kết thúc ra sao.",
+    "asked_at": "2026-11-03T04:12:56.501Z",
     "session": "1b77b574-ae50-4682-98ca-66bf154a613e"
   }
 }
