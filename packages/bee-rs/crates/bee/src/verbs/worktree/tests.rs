@@ -3724,10 +3724,6 @@ use std::time::Instant;
         );
     }
 
-    /// A MAIN checkout shaped like a host repo that TRACKS `.bee/cells` (this
-    /// repo does), so the store is NOT gitignored there and a cell snapshot
-    /// `bee cells add` mirrors into a granted worktree shows up as ordinary
-    /// untracked dirt — issue #141.
     fn main_repo_tracking_cells(tmp: &Path) -> PathBuf {
         let main = tmp.join("main");
         std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
@@ -3746,11 +3742,6 @@ use std::time::Instant;
         main
     }
 
-    /// Issue #141: `bee cells add` run from main mirrors `.bee/cells/<id>.json`
-    /// into the granted worktree. In a host repo that tracks `.bee/cells` those
-    /// snapshots are untracked, and no CLI verb removes them (the direct-edit
-    /// guard refuses the `rm`) — so the merge must read bee's own store as part
-    /// of the bootstrapped store (D8a), never as the user's dirt.
     #[test]
     fn cell_snapshots_alone_never_refuse_a_merge_as_dirty() {
         let tmp = tempfile::tempdir().unwrap();
@@ -3784,8 +3775,6 @@ use std::time::Instant;
         assert_eq!(answer.result["merged"], Value::Bool(true));
     }
 
-    /// The other half of #141's contract: the exclusion covers bee's store and
-    /// NOTHING else — a real untracked product file still refuses.
     #[test]
     fn an_untracked_product_file_still_refuses_the_merge_as_dirty() {
         let tmp = tempfile::tempdir().unwrap();

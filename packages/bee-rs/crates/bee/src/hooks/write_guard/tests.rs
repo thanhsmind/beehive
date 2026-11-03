@@ -1471,12 +1471,6 @@ use std::process::ExitCode;
         assert_eq!(scoped.code, 0, "{}", scoped.stderr);
     }
 
-    /// Issue #144: the temp-index recipe advances HEAD without touching the
-    /// shared index, so the committed paths read as staged reversals and the
-    /// next shared-index commit reverts them. The recipe ends by refreshing
-    /// the shared index for exactly those paths, and the guard must let that
-    /// path-scoped refresh through while siblings are live — otherwise the
-    /// only repair the refusal prescribes is itself refused.
     #[test]
     fn concurrent_tree_guard_allows_a_path_scoped_index_refresh_with_siblings_live() {
         let fx = build_git_fixture("swarming");
@@ -1486,7 +1480,6 @@ use std::process::ExitCode;
             let e = expect_done(bash(cmd), &fx.root);
             assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
         }
-        // Every spelling that reaches past the named paths stays refused.
         for cmd in [
             "git reset --hard",
             "git reset",
@@ -1505,8 +1498,6 @@ use std::process::ExitCode;
         }
     }
 
-    /// The refresh step is the half the recipe was missing; a refusal that
-    /// omits it leaves the reader with the stale shared index #144 reported.
     #[test]
     fn concurrent_tree_guard_remedy_names_the_shared_index_refresh() {
         let fx = build_git_fixture("swarming");
