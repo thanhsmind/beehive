@@ -120,6 +120,10 @@ A new wait arms only after a timeout or after idle handling.
 A new wait never arms sooner than 3 seconds after the previous wait returned.
 While in `Blocked` state, and after an `Error` until a state is confirmed, the loop falls back to one `inspect` call every 3 seconds.
 This fallback preserves the three-read died debounce check.
+An armed wait that has not returned 30 seconds after its own timeout counts as a failed wait (paseo-wait-deadline D1, 2026-11-03).
+The loop cancels it and enters the same inspect fallback, so `inspect` decides liveness: a `running` agent refreshes the heartbeat and gets a new wait.
+Before this deadline, a wait child that never returned blocked every heartbeat refresh, and a working agent ended as `timed_out_idle` after the idle timeout.
+The grace is the `WAIT_DEADLINE_GRACE_SECS` const in `packages/bee-rs/crates/bee/src/herding/run.rs`, measured on the loop's injected clock.
 One `inspect` call after agent spawn records the model and thinking settings (paseo-pi-hardening D4, store `4cb9c644`).
 Mailbox file checks continue every 200 ms.
 The silent-idle nudge (paseo-pi-hardening D2, store `a8d28361`), idle timeouts, and ceiling timeouts remain unchanged.
