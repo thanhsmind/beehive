@@ -51,7 +51,11 @@ From two cells up, state the one-line concurrency plan before dispatching.
    of aborting the batch (`--feature` omitted only resolves from a bound
    session lane or the default record's own feature; nothing resolving is
    a typed refusal, never an every-feature grab — pass `--limit <n>` to
-   bound how many cells of the wave are claimed). One cell, or a cell
+   bound how many cells of the wave are claimed). Add `--run` to have bee
+   run every herding payload of that wave in parallel and wait: you get one
+   `{ran, native, skipped}` value — one short row per herding cell, full
+   envelopes saved under `.bee/workers/<id>-wave-run.json` — and you launch
+   only the `native` items yourself, then cap each cell. One cell, or a cell
    needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
    instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. A user-facing cell carries its mapped feature file that way — `.bee/verify/verify-app/features/<feature>.md` with its last-modified date, so the worker can judge a stale map. The cell already declares the job that
