@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"paseo-wait-deadline\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"paseo-wait-deadline\" (lane).",
+  "next_action": "Merged into main at 79d46c2; capture what settled, then bee close --feature paseo-wait-deadline.",
   "created_at": "2026-11-03T03:56:14.134Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-11-03T03:56:14.190Z",
     "feature": "paseo-wait-deadline"
-  },
-  "merge_ready": {
-    "since": "2026-11-03T04:11:52.015Z",
-    "branch": "wt/paseo-wait-deadline",
-    "worktree_id": "beehive--wt--paseo-wait-deadline",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
