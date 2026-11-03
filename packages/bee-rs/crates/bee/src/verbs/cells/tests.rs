@@ -8856,6 +8856,47 @@ use std::time::Instant;
         assert_eq!(ids, vec!["wa-1", "wa-2"], "payload: {payload}");
     }
 
+    #[test]
+    fn dispatch_wave_run_returns_agent_tool_cells_under_native_and_runs_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        for id in ["wr-1", "wr-2"] {
+            let mut c = cell(id, "open", "f", json!([]));
+            c["files"] = json!([format!("docs/{id}.md")]);
+            c["tier"] = json!("generation");
+            c["role"] = json!("code");
+            write_cell_fixture(&root, id, &c);
+        }
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f", "--run"]);
+
+        assert_eq!(payload["ran"], json!([]), "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        assert!(
+            payload.get("economics").is_none(),
+            "the run shape carries ran/native/skipped only: {payload}"
+        );
+        let native = payload["native"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(native.len(), 2, "payload: {payload}");
+        let mut reserved: Vec<String> = native
+            .iter()
+            .flat_map(|i| i["reserved"].as_array().cloned().unwrap_or_default())
+            .filter_map(|p| p.as_str().map(str::to_string))
+            .collect();
+        reserved.sort();
+        assert_eq!(reserved, vec!["docs/wr-1.md", "docs/wr-2.md"], "payload: {payload}");
+        for item in native {
+            assert_eq!(item["tool"], json!("Agent"), "payload: {payload}");
+            assert_eq!(item["claimed"], json!(true), "payload: {payload}");
+            assert_eq!(item["payload"]["subagent_type"], json!("bee-build"));
+        }
+        assert!(
+            !root.join(".bee").join("workers").exists(),
+            "nothing ran, so no envelope file is written: {payload}"
+        );
+    }
+
     /// must-have: "one refusal never poisons the batch" — a cell already
     /// claimed by another worker still occupies its wave slot (schedulable
     /// covers open AND claimed), the wave batch attempts it through the SAME
