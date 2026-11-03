@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "issue-sweep-2",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"issue-sweep-2\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 8e6151d; reload the product and test \"issue-sweep-2\", then either approve uat (\"bee gate --name uat --approved true --lane issue-sweep-2\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"issue-sweep-2\" — feature is closed.",
   "created_at": "2026-11-03T08:07:53.737Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
