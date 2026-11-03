@@ -12,8 +12,8 @@ healthy herding workers (cells cos-1 and wvr-1) as `timed_out_idle`.
 ## What was found
 
 - Both workers lost their heartbeat at about the same minute (02:23 and
-  02:24 UTC) and never got it back. Both kept working and later wrote valid
-  results.
+  02:24 UTC) and never got it back. Both kept working and each wrote a valid
+  result at the end of its run.
 - In the paseo wait loop, the heartbeat is refreshed only when an armed
   `paseo agent wait --timeout N` returns. A wait child that does not return
   blocks every refresh and every re-inspect, so the idle timeout fires while
