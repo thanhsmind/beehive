@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Đã kiểm tra: 10 test pass, 0 fail. Bây giờ tôi ghi lại bước kiểm tra của tôi, rồi merge và đóng feature.",
-    "asked_at": "2026-11-04T08:36:01.401Z",
+    "subject": "Code is pushed. Now I run the release `2.73.0`. It runs the full test suite, then waits for CI.",
+    "asked_at": "2026-11-04T09:37:15.435Z",
     "session": "2656a557-4baf-4aa1-ba9a-6292e1869680"
   }
 }
