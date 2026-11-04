@@ -410,6 +410,17 @@ false. A belt meant to reach two targets therefore stays inside the portable
 core: the extension factory, `on(session_start|tool_call|tool_result)`,
 `registerTool`, `registerCommand`, and `sendMessage`/`appendEntry`.
 
+## Native deploy dispatches carry the deployment brief (bee-report-fixes D4, 2026-11-04)
+
+A deploy-stage dispatch is mutating on every transport. The native Agent
+payload used to render the read-only gather prompt with no permit id,
+because only the herding and cli arms used the deployment brief. Now the
+Agent and spawn_agent payloads carry the brief, name `bee-build` as the
+agent type, and end with the dispatch id, the release version and the
+issuer session, plus the `export` lines the worker runs before
+`scripts/release.sh`. The session line is left out when no issuer
+session resolves. Herding and cli payloads are unchanged.
+
 ## Open Gaps
 
 - The escalation ration's denominator moved from `ceiling / tiered` to

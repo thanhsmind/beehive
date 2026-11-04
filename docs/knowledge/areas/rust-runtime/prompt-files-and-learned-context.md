@@ -119,6 +119,18 @@ trade than a worker occasionally re-deriving something.
   refuses a write that travels through a link. A prompt edit and a rebuilt,
   reinstalled executable are therefore one unit of work, never two.
 
+## Onboard vendors the binary with its prompts (bee-report-fixes D3, 2026-11-04)
+
+The prompt-skew guard refuses a dispatch when `.bee/bin/prompts/` does not
+match the templates compiled into `.bee/bin/bee`. Onboarding used to copy
+new prompts and leave an old binary, so every dispatch in an upgraded
+host refused. `bee onboard` now plans a `copy_binary` item for
+`.bee/bin/bee` (or `bee.exe`) when the host binary's bytes differ from
+the running binary and hooks expect one. Apply copies it through a temp
+file and a rename, with the executable bit set. It skips the item when
+the running binary is the target file, and when the target is a symlink
+into another checkout.
+
 ## Open Gaps
 
 - Rule 2's "area concepts whose `areas` overlap the feature's touched areas when
