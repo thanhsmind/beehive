@@ -1843,5 +1843,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-04T03:46:40.348Z"
+  },
+  "anti-pattern-principles": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-04T04:11:06.778Z"
   }
 }

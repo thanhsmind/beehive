@@ -1,0 +1,152 @@
+{
+  "id": "app-1",
+  "feature": "anti-pattern-principles",
+  "title": "bee orient names lock-the-contract and split-on-a-real-dependency for planning classes",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "a562288f-38f8-4c27-a053-5331940bde1f",
+    "831b3afa-cb98-4c76-b576-a4a30e9add72",
+    "eb394d8f-cf7d-4344-8ab6-6e22349b3c1e"
+  ],
+  "files": [
+    "skills/bee-principle-lock-the-contract/SKILL.md",
+    "skills/bee-principle-split-on-a-real-dependency/SKILL.md",
+    "expertise/planning.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/anti-pattern-principles/CONTEXT.md",
+    "skills/bee-principle-smallest-honest-shape/SKILL.md",
+    "expertise/planning.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "affects_skills": [
+    "skills/bee-principle-lock-the-contract/SKILL.md",
+    "skills/bee-principle-split-on-a-real-dependency/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Ship D1 of docs/history/anti-pattern-principles/CONTEXT.md. After this cell, `bee orient` on a feature, refactor or perf route lists bee-principle-lock-the-contract and bee-principle-split-on-a-real-dependency beside the existing principles, each with its spoken line, and each skill points to its own depth heading in expertise/planning.md. The depth for split-on-a-real-dependency is the paragraph agent-anti-patterns already added there; lock-the-contract gets a short depth section drawn from Cell quality rule 1 in skills/bee-planning/references/planning-reference.md, with that rule staying where it is. Each skill follows the shape of the existing principle skills (trigger description, short body, Check, Why, Depth). Commit d9eabd076 is a worked example of adding principles end to end. Run bee dev regen and commit its outputs with the sources. No code comments. One commit with the trailer `cell: app-1`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity --test skill_triggers --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "skills/bee-principle-lock-the-contract/SKILL.md and skills/bee-principle-split-on-a-real-dependency/SKILL.md exist in the same shape as the other principle skills",
+      "the Principle homes index lists both with a spoken line and classes feature, refactor, perf",
+      "each skill's Depth line names a heading that exists in expertise/planning.md",
+      "bee orient on a feature route names both principles",
+      "the regenerated outputs match their sources"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-principle-lock-the-contract/SKILL.md",
+        "substantive": "principle skill"
+      },
+      {
+        "path": "skills/bee-principle-split-on-a-real-dependency/SKILL.md",
+        "substantive": "principle skill"
+      }
+    ],
+    "key_links": [
+      "principle_index_parity reads both index rows and both skills"
+    ],
+    "prohibitions": [
+      "No principle for anti-pattern 1",
+      "Do not reword Cell quality rule 1 or the agent-anti-patterns doctrine beyond moving a heading",
+      "No text that orders a worker to find faults, doubt the lead, or dissent",
+      "No code comments"
+    ],
+    "open_choices": [
+      "The slugs lock-the-contract and split-on-a-real-dependency"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-app-1",
+    "outcome": "bee orient lists lock-the-contract and split-on-a-real-dependency for feature, refactor and perf routes, each skill pointing at its own heading in expertise/planning.md",
+    "files_changed": [
+      "skills/bee-principle-lock-the-contract/SKILL.md",
+      "skills/bee-principle-split-on-a-real-dependency/SKILL.md",
+      "expertise/planning.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Ran the verify cargo step with the absolute path /home/thanhsmind/.cargo/bin/cargo instead of the CARGO_HOME PATH prefix — the worktree shell guard refused the runtime variable — hit an unforeseen obstacle",
+      "Changed one Spike craft phrase from The section above to Build order versus discovery order — the new Split only on a real dependency heading made The section above point at the wrong section — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T04:10:33.415Z",
+    "behavior_change": true,
+    "verification_evidence": "principle_index_parity 5/5, pointer_integrity 10/10, skill_triggers 1 ok and 1 ignored (real-agent eval not run), release-manifest 599 files match; bee orient driven in a scratch repo with route class feature listed both new principles with their spoken lines",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity --test skill_triggers --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-04T04:06:21.363Z",
+    "mistakes": [
+      {
+        "wrong": "The first skill-writing shell call used heredocs and the worktree guard refused it",
+        "better": "write new files with the Write tool in a worktree session",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Two principle skills shipped and indexed with classes feature, refactor, perf; depth headings Lock the contract (new, drawn from Cell quality rule 1, rule left in place) and Split only on a real dependency (existing paragraph, bold lead promoted to a heading, text unchanged) in expertise/planning.md; regen outputs committed with sources",
+      "commit": "d1335e159",
+      "files": [
+        "skills/bee-principle-lock-the-contract/SKILL.md",
+        "skills/bee-principle-split-on-a-real-dependency/SKILL.md",
+        "expertise/planning.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test principle_index_parity --test skill_triggers --test pointer_integrity && .bee/bin/bee dev release-manifest --check — green:unit — principle_index_parity 5/5, pointer_integrity 10/10, skill_triggers 1 ok and 1 ignored (real-agent eval not run), release-manifest 599 files match; bee orient driven in a scratch repo with route class feature listed both new principles with their spoken lines",
+      "deviations": [
+        "Ran the verify cargo step with the absolute path /home/thanhsmind/.cargo/bin/cargo instead of the CARGO_HOME PATH prefix — the worktree shell guard refused the runtime variable — hit an unforeseen obstacle",
+        "Changed one Spike craft phrase from The section above to Build order versus discovery order — the new Split only on a real dependency heading made The section above point at the wrong section — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "The first skill-writing shell call used heredocs and the worktree guard refused it — write new files with the Write tool in a worktree session — doctrine"
+      ],
+      "baseline": "on base principle_index_parity passed with the 15 rows then present; the two new rows and skills did not exist"
+    },
+    "baseline": "on base principle_index_parity passed with the 15 rows then present; the two new rows and skills did not exist",
+    "warnings": [
+      "advisory: this cap's commit changes 468 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-principle-lock-the-contract/SKILL.md and skills/bee-principle-split-on-a-real-dependency/SKILL.md exist in the same shape as the other principle skills",
+            "artifact": "skills/bee-principle-lock-the-contract/SKILL.md"
+          },
+          {
+            "requirement": "the Principle homes index lists both with a spoken line and classes feature, refactor, perf",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "each skill's Depth line names a heading that exists in expertise/planning.md",
+            "artifact": "expertise/planning.md"
+          },
+          {
+            "requirement": "bee orient on a feature route names both principles",
+            "artifact": "skills/bee-principle-split-on-a-real-dependency/SKILL.md"
+          },
+          {
+            "requirement": "the regenerated outputs match their sources",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-04T04:11:05.083Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
