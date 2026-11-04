@@ -450,10 +450,16 @@ schema, the tmp-rename write gesture — so a worker that has never seen bee
 can complete it. Everything bee-shaped that follows (`cells finish`, the
 proof line, reservations, the dispatch-log row for the CALLER's bookkeeping)
 is done by the orchestrator after it reads the result file back, never by
-the worker. The one exception the verb itself owns: it appends the
+the worker. Two exceptions the verb itself owns. It appends the
 `dispatch.jsonl` row and a wave-ledger `record-worker` row for every run it
 starts (D9), so occupancy counts these workers too, mechanically, without
-relying on the bee-ignorant worker to say anything back.
+relying on the bee-ignorant worker to say anything back. And it caps a done
+cell: when a `--cell-id` run's result is `done`, its `proof` parses as a
+proof line with a green result, and a commit carrying `cell: <id>` is in
+the feature's history, the verb caps the cell with `--no-mistakes`, prints
+`capped cell "<id>"`, and exits 0. Any other done result leaves the cell
+uncapped and exits non-zero with the `bee cells finish --from-job` line
+that settles it. The leader completeness check stays the orchestrator's.
 
 **Liveness is health-check based, native, at zero token cost (D5).** The
 poll loop watches `result-N.json` presence, `log.txt` mtime, worktree diff

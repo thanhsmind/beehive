@@ -39,13 +39,19 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 | `high-risk` | 4+ flags or any hard-gate flag (auth, authz, data loss, audit/security, external provider, validation removal) |
 | `spike` | one yes/no proof decides whether the plan is real — only for migration, security, an external side effect, or no in-repo precedent |
 
-Record: `bee route --set --class <c> --lane <l> --flags <f> --files <n>`;
-re-route upward on new evidence any time, de-escalate only on cited evidence.
+Record: a code-touching route opens its feature in one verb, run from the
+main checkout — `bee feature start --feature <slug> --class <c> --lane <l>
+[--flags <a,b>] --files <n>`. It runs `bee worktree new`, starts the lane
+record, and records the route (`bee route --set`), then prints the worktree
+path and the instruction line; open the session there (rule:
+agents-worktree-first). Work that stays in main (docs lane, a solo tiny fix)
+records the route alone: `bee route --set --class <c> --lane <l> [--flags
+<a,b>] --files <n>`. Re-route upward with `bee route --set` on new evidence
+any time, de-escalate only on cited evidence.
 That same step cites the matched class playbook into plan.md by name and
 anchor — `references/planning-reference.md` ("Playbooks") — never by
 copying its steps.
-A code-touching route's next action includes creating the feature worktree
-and opening the session there (rule: agents-worktree-first). Code truth changes only in the feature worktree, the
+Code truth changes only in the feature worktree, the
 user tests at staging once the slice is ready, and main receives the branch
 only after its uat gate.
 
