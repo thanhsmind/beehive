@@ -2815,3 +2815,28 @@
 {"kind":"stub","id":"7338b988-c1d1-46f7-9a07-e0f85b9b6aee","at":"2026-11-04T03:16:05.224Z","outcome":"Promote proposal for \"slp-article-gaps\" — docs/history/slp-article-gaps/promote-proposals.md","dids":[],"area":"workflow-state","files":["docs/history/slp-article-gaps/promote-proposals.md"],"lane":null,"source":"promote"}
 {"kind":"stub","id":"1926aabd-95e7-4706-9add-e7c65348dcba","at":"2026-11-04T03:46:40.349Z","outcome":"Promote proposal for \"agent-anti-patterns\" — docs/history/agent-anti-patterns/promote-proposals.md","dids":[],"area":"workflow-state","files":["docs/history/agent-anti-patterns/promote-proposals.md"],"lane":null,"source":"promote"}
 {"kind":"stub","id":"d48af16e-b0a2-40fa-940c-1ad7f6d5d555","at":"2026-11-04T04:11:06.788Z","outcome":"Promote proposal for \"anti-pattern-principles\" — docs/history/anti-pattern-principles/promote-proposals.md","dids":[],"area":"doctrine-layer","files":["docs/history/anti-pattern-principles/promote-proposals.md"],"lane":null,"source":"promote"}
+{"kind":"flush","id":"0277a548-84b8-4128-97bd-7b9f0228879e","at":"2026-11-04T04:28:44.505Z","into":"docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"}
+{"kind":"flush","id":"d7695218-98d8-4311-9f35-f4fa23d82571","at":"2026-11-04T04:28:56.927Z","into":"docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"}
+{"kind":"flush","id":"d879d94d-1c20-4610-b450-ba675a6dba93","at":"2026-11-04T04:28:56.949Z","into":"docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"}
+{"kind":"flush","id":"3e76af05-8f99-4753-bcc2-01d7cb26f5bd","at":"2026-11-04T04:28:56.971Z","into":"docs/knowledge/work/ui-ux-pro-max-a11y-port/delivery.md"}
+{"kind":"flush","id":"f8ef1d35-d6a1-486c-b243-c32d7df2a319","at":"2026-11-04T04:28:56.992Z","into":"docs/knowledge/work/release-2-66-0/delivery.md"}
+{"kind":"flush","id":"6c75b904-c6e2-4e94-aae4-c88ceb682dd4","at":"2026-11-04T04:28:57.014Z","into":"docs/knowledge/work/bee-deploying-skill/delivery.md"}
+{"kind":"flush","id":"a8994747-b9e8-4984-85b7-8e8c8488ecb0","at":"2026-11-04T04:28:57.037Z","into":"docs/knowledge/work/release-2-67-0/delivery.md"}
+{"kind":"flush","id":"923c1156-5a0a-4d5a-aa0f-72f249b171dd","at":"2026-11-04T04:28:57.060Z","into":"docs/knowledge/work/design-os-checks/delivery.md"}
+{"kind":"flush","id":"b6a62c76-098b-48c2-a0dd-638b7d16183b","at":"2026-11-04T04:28:57.082Z","into":"docs/knowledge/work/release-2-68-0/delivery.md"}
+{"kind":"flush","id":"189209a2-c5fc-4cfd-8f4e-bed5e60a8dfe","at":"2026-11-04T04:28:57.104Z","into":"docs/knowledge/work/pstack-0-15-36-port/delivery.md"}
+{"kind":"flush","id":"83a4fa58-59bd-41b8-aafb-417e6c8db94e","at":"2026-11-04T04:28:57.127Z","into":"docs/knowledge/work/release-2-69-0/delivery.md"}
+{"kind":"flush","id":"d3c72a99-72cc-4367-9b90-986e83306db7","at":"2026-11-04T04:28:57.149Z","into":"docs/knowledge/work/stageshow-frame-rehearsal/delivery.md"}
+{"kind":"flush","id":"11fc76ab-f771-4e08-a825-54a4faef5bd5","at":"2026-11-04T04:29:09.583Z","into":"docs/knowledge/work/design-check-motion-frames/delivery.md"}
+{"kind":"flush","id":"e16af91d-ec92-4382-82eb-89a5cddd6158","at":"2026-11-04T04:29:09.615Z","into":"docs/knowledge/work/release-2-70-0/delivery.md"}
+{"kind":"flush","id":"c5937fca-a649-42a6-8744-090ccc22886d","at":"2026-11-04T04:29:09.653Z","into":"docs/knowledge/work/cli-output-spill/delivery.md"}
+{"kind":"flush","id":"ec604846-a1a8-499d-961c-211b9c908944","at":"2026-11-04T04:29:09.685Z","into":"docs/knowledge/work/wave-run/delivery.md"}
+{"kind":"flush","id":"9f2d9669-9eac-4653-b795-329ac4bc0495","at":"2026-11-04T04:29:09.722Z","into":"docs/knowledge/work/paseo-wait-deadline/delivery.md"}
+{"kind":"flush","id":"8419e316-ea76-4edb-9d32-4369c6c55722","at":"2026-11-04T04:29:09.761Z","into":"docs/knowledge/work/release-2-71-0/delivery.md"}
+{"kind":"flush","id":"1d7d52b3-7696-44ca-a9be-b9938a8db417","at":"2026-11-04T04:29:09.791Z","into":"docs/knowledge/work/isw-landing/delivery.md"}
+{"kind":"flush","id":"7647303e-3e12-4015-90a5-3937140cd43b","at":"2026-11-04T04:29:09.818Z","into":"docs/knowledge/work/csc-landing/delivery.md"}
+{"kind":"flush","id":"44b7942a-54ba-4b07-9c90-c0590609b841","at":"2026-11-04T04:29:09.874Z","into":"docs/knowledge/work/issue-sweep-2/delivery.md"}
+{"kind":"flush","id":"83f500fc-31a7-49f5-a4d5-839dcb54eac2","at":"2026-11-04T04:29:09.908Z","into":"docs/knowledge/work/release-2-72-0/delivery.md"}
+{"kind":"flush","id":"7338b988-c1d1-46f7-9a07-e0f85b9b6aee","at":"2026-11-04T04:29:09.945Z","into":"docs/knowledge/work/slp-article-gaps/delivery.md"}
+{"kind":"flush","id":"1926aabd-95e7-4706-9add-e7c65348dcba","at":"2026-11-04T04:29:09.979Z","into":"docs/knowledge/work/agent-anti-patterns/delivery.md"}
+{"kind":"flush","id":"d48af16e-b0a2-40fa-940c-1ad7f6d5d555","at":"2026-11-04T04:29:10.015Z","into":"docs/knowledge/work/anti-pattern-principles/delivery.md"}
