@@ -417,6 +417,18 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
                     Some(m) => Some(lease_to_reservation(&m)?),
                     None => None,
                 };
+                let is_same_agent = matches!(
+                    &holder_resv.as_ref().and_then(|r| r.agent.as_ref()),
+                    Some(Value::String(a)) if a == &trimmed_agent
+                );
+                let is_same_cell = matches!(
+                    &holder_resv.as_ref().and_then(|r| r.cell.as_ref()),
+                    Some(Value::String(c)) if c == &trimmed_cell
+                );
+                if is_same_agent && is_same_cell {
+                    crate::fsutil::write_text_atomic(&lease_file, &body).map_err(|_| Err2::Ex)?;
+                    break;
+                }
                 let conflicts: Vec<Resv> = holder_resv.into_iter().collect();
                 return Ok(conflict_out(&conflicts));
             }

@@ -164,6 +164,53 @@ use std::time::Instant;
         assert!(text.contains("- main holds \"src/x.ts\" (cell cell-1, agent worker-a)"));
     }
 
+    #[test]
+    fn same_agent_same_cell_re_reserve_is_idempotent_refreshes_lease() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        assert!(matches!(
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+
+        let res2 = reserve_exec(
+            main_topo(tmp.path()),
+            &root_s,
+            &params("worker-a", "cell-1", "src/x.ts"),
+            1,
+        );
+        let Ok(Out::Emit(result2, text2, code2)) = res2 else {
+            panic!("expected emit");
+        };
+        assert_eq!(code2, 0);
+        assert_eq!(result2["ok"], Value::Bool(true));
+        assert!(text2.contains("Reserved \"src/x.ts\" for worker-a (cell cell-1"));
+
+        let diff_agent = reserve_exec(
+            main_topo(tmp.path()),
+            &root_s,
+            &params("worker-b", "cell-1", "src/x.ts"),
+            1,
+        );
+        let Ok(Out::Emit(result_b, _, code_b)) = diff_agent else {
+            panic!("expected emit");
+        };
+        assert_eq!(code_b, 1);
+        assert_eq!(result_b["ok"], Value::Bool(false));
+
+        let diff_cell = reserve_exec(
+            main_topo(tmp.path()),
+            &root_s,
+            &params("worker-a", "cell-2", "src/x.ts"),
+            1,
+        );
+        let Ok(Out::Emit(result_c, _, code_c)) = diff_cell else {
+            panic!("expected emit");
+        };
+        assert_eq!(code_c, 1);
+        assert_eq!(result_c["ok"], Value::Bool(false));
+    }
+
     /// D3 (dirty-main-conflicts dmc-4) — counterpart to
     /// `reserve_exact_path_race_reports_conflict`: a dead session's lease on
     /// the exact same path has already passed its own `expires_at`, so the
