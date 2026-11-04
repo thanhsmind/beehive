@@ -108,7 +108,7 @@ Full contract: `references/gates-and-delegation.md` ("Headless mode").
 ## Hard rules
 
 - P1 review findings always block; never build on a red base (rule: agents-never-build-on-red).
-- Locked decisions (cite, never reinterpret), the pre-execution-gate edit boundary, and the 65%-context handoff hold as written (rule: agents-context-handoff-65).
+- Locked decisions (cite, never reinterpret), the pre-execution-gate edit boundary, and the handoff at about 150k tokens or 65% context (whichever comes first, and at every feature close) hold as written (rule: agents-context-handoff-65).
 - When a worker caps a cell, the leader compares approved requirements against actual artifacts and records the check; both exits check it — worker reports are navigation aids, not completion evidence ("Leader completeness check").
 - "done/green/fixed" only beside fresh command output in the same message; every close carries a capture line or an explicit "nothing settled" (rule: agents-capture-line-at-close).
 - The agent runs every bee command ("The agent runs the machinery"); work language only, one tick line per visible step ("Progress ticks", "Communication contract"); a red line is never silenced.

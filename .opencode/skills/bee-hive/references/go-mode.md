@@ -121,7 +121,7 @@ When the context budget nears its handoff point with slices still left, land fir
 - **Spike returns NO** (opt-in by change class — migration, security, external side effect, or no in-repo precedent): STOP before Gate 2. Present "Spike [id] failed: [reason]. Current work is blocked." Options: revise approach / descope the risky part / change mode or boundaries. A workaround that "probably works" is not a path — plausibility is not evidence.
 - **SMALLER PATH check fails:** default is to redraft the shape before presenting Gate 2, rather than persist-then-preview.
 - **A hat-wave BLOCKER still open after its one permitted re-run** (`gates-and-delegation.md`, "Hat wave" — Idempotence): escalate — present both positions to the user and ask "Return to planning with these specific concerns?".
-- **Context hits ~65% mid-swarm** (rule: agents-context-handoff-65)**:** write `.bee/HANDOFF.json`, present "[X] cells capped, [Y] in flight. Resume in a new session." End gracefully. The next session triages each in-flight cell per `bee-swarming/references/swarming-reference.md` ("Fresh-session handoff in full").
+- **Context hits ~150k tokens or ~65% mid-swarm, whichever comes first** (rule: agents-context-handoff-65)**:** write `.bee/HANDOFF.json`, present "[X] cells capped, [Y] in flight. Resume in a new session." End gracefully. The next session triages each in-flight cell per `bee-swarming/references/swarming-reference.md` ("Fresh-session handoff in full").
 - **User rejects at any gate:** identify what feels wrong, return to the owning stage, update the artifact in place, re-present the same gate.
 
 ## Close-out

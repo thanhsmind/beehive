@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)"]
-  sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/reports/hat-wave-synthesis.md, "cell tt-1 (commit 3ca8a49fe, 2026-10-21)", "cell tt-2 (commit 646c14cff, 2026-10-21)", "cell tt-3 (commit 81f81b039, 2026-10-21)", "measured 2026-10-21: the session preamble on this repo was 11,041 to 11,161 bytes before tt-1"]
+  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", "9bf28c33-73c8-4f61-9f04-c199dc58e748 (lean-context D1: prompt-context warns at handoff_context_tokens)"]
+  sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/reports/hat-wave-synthesis.md, "cell tt-1 (commit 3ca8a49fe, 2026-10-21)", "cell tt-2 (commit 646c14cff, 2026-10-21)", "cell tt-3 (commit 81f81b039, 2026-10-21)", "measured 2026-10-21: the session preamble on this repo was 11,041 to 11,161 bytes before tt-1", "docs/history/lean-context/CONTEXT.md", "cell lnc-1"]
   authoritative_for: "hook-runtime: the size limits on injected session context and why they exist"
 ---
 
@@ -106,6 +106,16 @@ clear commands, then `; +N more` (token-thrift D7).
 - Each cell runs in a fresh dispatched worker. A worker starts with the brief
   of its cell, not with the history of the session that dispatched it.
 
+**The prompt-context hook warns when session context passes the handoff mark.**
+On UserPromptSubmit, the prompt-context hook reads the payload's `transcript_path`
+and takes the latest request context (input + cache read + cache creation tokens,
+as statusline `context_and_turns` computes it). When that value is at or above
+`handoff_context_tokens` from `.bee/config.json` (integer; absent means 150000;
+0 turns the check off), the injected context carries exactly one extra line:
+`context <N>k tokens is past the handoff mark (<T>k): finish this step, write a planned-next handoff (bee state handoff write --kind planned-next), and continue in a fresh session.`
+Below the mark, with no `transcript_path`, or with an unreadable or usage-free
+transcript, nothing is added and the hook never fails or slows the turn.
+
 ## Business Rules
 
 - R1 — A byte budget on an injected payload stays below the smallest host
@@ -164,4 +174,12 @@ clear commands, then `; +N more` (token-thrift D7).
 - Preamble promote proposal line cap: `promote_proposal_lines` and
   `PROMOTE_CLEAR_COMMANDS_SHOWN` in
   `packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs`.
-- Locked decisions: `docs/history/token-thrift/CONTEXT.md`.
+- Handoff context warning: `compute_handoff_warning` and
+  `handoff_context_tokens` in
+  `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs`. Tests:
+  `transcript_past_handoff_mark_carries_warning_line`,
+  `transcript_below_handoff_mark_adds_no_line`,
+  `handoff_context_tokens_zero_adds_no_line_at_any_size`,
+  `missing_or_unreadable_transcript_adds_no_line_and_exits_zero`.
+- Locked decisions: `docs/history/token-thrift/CONTEXT.md`,
+  `docs/history/lean-context/CONTEXT.md` (decision 9bf28c33, D1).

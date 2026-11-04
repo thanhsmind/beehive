@@ -28,7 +28,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "80e81d7e68aebf55a192b3f5ea0d9ea2f76a67b271a28b25b1881e88222f0a8c"
+      "sha256": "63b908db4dcdafe120c90f4b2bf97546297bd71ea897aef6a90c3538fee111e1"
     },
     {
       "name": "bee-how",
@@ -124,7 +124,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "4bb5e959e3f522e67d1434089486e332a0bad209f91633ef57747053f99ed496"
+      "sha256": "bc43a89edcc6761caca90b38a2f1b43f1055fc5d9d62d0af5992756e9cec1914"
     },
     {
       "name": "bee-teach",

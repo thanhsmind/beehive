@@ -651,7 +651,7 @@ A `[BLOCKED]` whose worker recorded a dissent owes its `.bee/bin/bee cells disse
 
 ## Handoff JSON
 
-Near 65% context, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
+Near 150k tokens or 65% context, whichever comes first, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
 
 - `verified` — the proof lines run so far, each `<command> — <result> — <scope reason>`; work with no line here is unproven.
 - `tree` — `clean`, or `dirty:<paths>` naming each uncommitted path.

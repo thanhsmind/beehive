@@ -240,6 +240,7 @@ struct Plan {
     /// oldest first, as `(row id, line)`. Read-only here; execute() stamps
     /// each row before it prints the line.
     pending_interventions: Vec<(String, String)>,
+    handoff_warning: Option<String>,
 }
 
 /// Ok(None) = hook disabled (native exit 0). Err = delegate.
@@ -341,12 +342,47 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
         inject_reminder,
         nudge,
         pending_interventions,
+        handoff_warning: compute_handoff_warning(&config, payload),
     }))
+}
+
+fn compute_handoff_warning(config: &Map<String, Value>, payload: &Map<String, Value>) -> Option<String> {
+    let threshold = match config.get("handoff_context_tokens") {
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(150_000),
+        _ => 150_000,
+    };
+    if threshold == 0 {
+        return None;
+    }
+    let transcript = payload
+        .get("transcript_path")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+    let (ctx, _) = crate::devtools::statusline::context_and_turns(transcript)?;
+    if ctx >= threshold {
+        let n_k = ctx / 1000;
+        let t_k = threshold / 1000;
+        Some(format!(
+            "context {n_k}k tokens is past the handoff mark ({t_k}k): finish this step, write a planned-next handoff (bee state handoff write --kind planned-next), and continue in a fresh session."
+        ))
+    } else {
+        None
+    }
 }
 
 // ─── execute (side effects in .mjs order) ───────────────────────────────────
 
 fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) -> ExitCode {
+    execute_to(root, ctx, plan, std::io::stdout())
+}
+
+fn execute_to<W: std::io::Write>(
+    root: &Path,
+    ctx: &crate::hooks::adapter::HookContext,
+    plan: Plan,
+    mut writer: W,
+) -> ExitCode {
     // Committed to native: release the warnings plan() queued. Everything read
     // from here on warns immediately (there is no delegate left to protect).
     flush_plan_warnings();
@@ -384,6 +420,9 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
             return ExitCode::SUCCESS;
         }
     }
+    if let Some(warning) = &plan.handoff_warning {
+        parts.push(warning.clone());
+    }
     if let Some(nudge) = &plan.nudge {
         if nudge.inject {
             // maybeAnchorNudge's own try/catch: a markInjected throw is
@@ -408,10 +447,7 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
     }
 
     if !parts.is_empty() {
-        // UserPromptSubmit stdout stays PLAIN developer context — direct
-        // write, never a JSON envelope, no trailing newline.
-        use std::io::Write;
-        let _ = std::io::stdout().write_all(parts.join("\n\n").as_bytes());
+        let _ = writer.write_all(parts.join("\n\n").as_bytes());
     }
     ExitCode::SUCCESS
 }
@@ -3191,5 +3227,148 @@ mod tests {
         let other = ask(&main, "advisor-nudge", "sess-other", "retry-loop", "Would an advisor help?");
         assert!(worktree_delivery(&wt, &payload).is_empty(), "sess-wt sees nothing addressed elsewhere");
         assert_eq!(pending_ids(&wt, "sess-other"), vec![other], "and never stamps it either");
+    }
+
+    fn write_transcript_with_usage(
+        dir: &Path,
+        name: &str,
+        input: u64,
+        cache_read: u64,
+        cache_creation: u64,
+    ) -> String {
+        let p = dir.join(name);
+        let row = json!({
+            "message": {
+                "id": "msg-1",
+                "model": "claude-opus-4-7",
+                "usage": {
+                    "input_tokens": input,
+                    "cache_read_input_tokens": cache_read,
+                    "cache_creation_input_tokens": cache_creation,
+                }
+            }
+        });
+        std::fs::write(&p, row.to_string()).unwrap();
+        p.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn transcript_past_handoff_mark_carries_warning_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let transcript = write_transcript_with_usage(tmp.path(), "transcript.jsonl", 10_000, 100_000, 50_000);
+        let payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "transcript_path": transcript,
+            "session_id": "sess-handoff",
+        });
+        let payload = parse_payload(&payload_val.to_string());
+        let p = plan(tmp.path(), &payload).ok().flatten().unwrap();
+        let expected_line = "context 160k tokens is past the handoff mark (150k): finish this step, write a planned-next handoff (bee state handoff write --kind planned-next), and continue in a fresh session.";
+        assert_eq!(p.handoff_warning.as_deref(), Some(expected_line));
+
+        let ctx = read_hook_context(HOOK_NAME, &[], &payload_val.to_string());
+        let mut out = Vec::new();
+        let code = execute_to(tmp.path(), &ctx, p, &mut out);
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+        let stdout = String::from_utf8(out).unwrap();
+        assert!(stdout.contains(expected_line));
+
+        let outcome = run(&[], &payload_val.to_string());
+        assert!(matches!(outcome, Outcome::Done(_)));
+    }
+
+    #[test]
+    fn transcript_below_handoff_mark_adds_no_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let transcript = write_transcript_with_usage(tmp.path(), "transcript.jsonl", 10_000, 80_000, 50_000);
+        let payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "transcript_path": transcript,
+            "session_id": "sess-below",
+        });
+        let payload = parse_payload(&payload_val.to_string());
+        let p = plan(tmp.path(), &payload).ok().flatten().unwrap();
+        assert!(p.handoff_warning.is_none());
+
+        let ctx = read_hook_context(HOOK_NAME, &[], &payload_val.to_string());
+        let mut out = Vec::new();
+        execute_to(tmp.path(), &ctx, p, &mut out);
+        let stdout = String::from_utf8(out).unwrap();
+        assert!(!stdout.contains("past the handoff mark"));
+
+        let outcome = run(&[], &payload_val.to_string());
+        assert!(matches!(outcome, Outcome::Done(_)));
+    }
+
+    #[test]
+    fn handoff_context_tokens_zero_adds_no_line_at_any_size() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(tmp.path(), ".bee/config.json", r#"{"handoff_context_tokens": 0}"#);
+        let transcript = write_transcript_with_usage(tmp.path(), "transcript.jsonl", 10_000, 150_000, 50_000);
+        let payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "transcript_path": transcript,
+            "session_id": "sess-zero",
+        });
+        let payload = parse_payload(&payload_val.to_string());
+        let p = plan(tmp.path(), &payload).ok().flatten().unwrap();
+        assert!(p.handoff_warning.is_none());
+
+        let ctx = read_hook_context(HOOK_NAME, &[], &payload_val.to_string());
+        let mut out = Vec::new();
+        execute_to(tmp.path(), &ctx, p, &mut out);
+        let stdout = String::from_utf8(out).unwrap();
+        assert!(!stdout.contains("past the handoff mark"));
+
+        let outcome = run(&[], &payload_val.to_string());
+        assert!(matches!(outcome, Outcome::Done(_)));
+    }
+
+    #[test]
+    fn missing_or_unreadable_transcript_adds_no_line_and_exits_zero() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+
+        let missing_payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "transcript_path": "/does/not/exist.jsonl",
+            "session_id": "sess-missing",
+        });
+        let p1 = plan(tmp.path(), &parse_payload(&missing_payload_val.to_string())).ok().flatten().unwrap();
+        assert!(p1.handoff_warning.is_none());
+        assert!(matches!(run(&[], &missing_payload_val.to_string()), Outcome::Done(_)));
+
+        let empty_path = tmp.path().join("empty.jsonl");
+        std::fs::write(&empty_path, "").unwrap();
+        let empty_payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "transcript_path": empty_path.to_string_lossy(),
+            "session_id": "sess-empty",
+        });
+        let p2 = plan(tmp.path(), &parse_payload(&empty_payload_val.to_string())).ok().flatten().unwrap();
+        assert!(p2.handoff_warning.is_none());
+        assert!(matches!(run(&[], &empty_payload_val.to_string()), Outcome::Done(_)));
+
+        let corrupt_path = tmp.path().join("corrupt.jsonl");
+        std::fs::write(&corrupt_path, "not json\n").unwrap();
+        let corrupt_payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "transcript_path": corrupt_path.to_string_lossy(),
+            "session_id": "sess-corrupt",
+        });
+        let p3 = plan(tmp.path(), &parse_payload(&corrupt_payload_val.to_string())).ok().flatten().unwrap();
+        assert!(p3.handoff_warning.is_none());
+        assert!(matches!(run(&[], &corrupt_payload_val.to_string()), Outcome::Done(_)));
+
+        let no_transcript_payload_val = json!({
+            "cwd": tmp.path().to_string_lossy(),
+            "session_id": "sess-no-tp",
+        });
+        let p4 = plan(tmp.path(), &parse_payload(&no_transcript_payload_val.to_string())).ok().flatten().unwrap();
+        assert!(p4.handoff_warning.is_none());
+        assert!(matches!(run(&[], &no_transcript_payload_val.to_string()), Outcome::Done(_)));
     }
 }

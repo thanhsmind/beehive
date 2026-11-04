@@ -294,9 +294,11 @@ one type per file, linked where types meet.
 ## Care for the session
 
 <!-- rule: agents-context-handoff-65 -->
-- At roughly 65% context, write `.bee/HANDOFF.json` and pause cleanly.
-  It holds mid-wave too — never push through it. The record's schema
-  lives in `bee-swarming/references/swarming-reference.md`.
+- At about 150k tokens or 65% of the context window, whichever comes
+  first, write `.bee/HANDOFF.json` and pause cleanly. It holds mid-wave
+  too — never push through it. Every feature close is also a handoff
+  point. The record's schema lives in
+  `bee-swarming/references/swarming-reference.md`.
 <!-- /rule -->
 <!-- rule: agents-one-commit-per-cell -->
 - One commit per cell. The subject line describes the change in
