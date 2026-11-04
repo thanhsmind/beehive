@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "agent-efficiency",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"agent-efficiency\" started at phase \"exploring\" (lane).",
-  "next_action": "uat",
+  "next_action": "bee close finished \"agent-efficiency\" — feature is closed.",
   "created_at": "2026-11-04T04:19:52.944Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
