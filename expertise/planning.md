@@ -13,7 +13,9 @@ amount of careful coding can recover. This guide is about choosing well.
 | Judging whether a change is riskier than it looks | Reading risk before it reads you |
 | Tempted to give risky work a lighter shape | De-escalate on evidence, not optimism |
 | Breaking a plan into pickable, provable pieces | What makes a good unit of work |
+| Writing what a unit must keep versus how it is built | Lock the contract |
 | Ordering units; deciding what to verify first | Build order versus discovery order |
+| A plan proposes phases, slices or expand-migrate-contract | Split only on a real dependency |
 | An interface is genuinely open on a standard or high-risk shape | Design it twice |
 | A discovery-order unit needs a written answer before others proceed | Spike craft |
 | Deciding how much detail later phases get | Plan the current slice; headline the rest |
@@ -135,6 +137,20 @@ finishes, and proves. Four properties make one good:
 Size follows from these properties rather than from a line-count rule: a
 unit small enough to hold one outcome and one exit state is small enough.
 
+## Lock the contract
+
+A unit's action names the outcome and the contract the work must keep —
+inputs, outputs, persisted state, error shape, and the tests that prove it.
+It leaves internal structure to whoever builds it: helper names, the call
+graph, variable placement, line-level edits. A structural choice belongs in
+the plan only when it crosses a shared contract.
+
+Read anchors that say where to look stay; they guide without binding. A
+detail the plan never proved does not stay: the moment the action prescribes
+it, it turns into a constraint. Test each line of the action: if it were
+built differently and every contract test still passed, would anything
+break? If nothing would, the line is implementation, and it comes out.
+
 ## Build order versus discovery order
 
 Two orders matter, and they are usually different:
@@ -154,7 +170,9 @@ you find at unit 4 that invalidates units 1 through 3.
 look for what is *not* there: units with no edges between them can proceed
 in parallel, and pretending otherwise serializes work for no reason.
 
-**Split only on a real dependency.** A phase, a slice, or an
+## Split only on a real dependency
+
+A phase, a slice, or an
 expand-migrate-contract sequence needs a real dependency: a persisted-data
 migration, a consumer outside this change (another live worktree, an
 external client, a published contract), or a compatibility window. Without
@@ -175,7 +193,7 @@ easy change.
 
 ## Spike craft
 
-The section above names the spike as the unit that answers an unverified
+Build order versus discovery order names the spike as the unit that answers an unverified
 fact before the units depending on it proceed. This is its craft.
 
 A spike answers exactly **one named question** — write the question down
