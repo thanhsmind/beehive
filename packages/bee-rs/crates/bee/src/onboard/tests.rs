@@ -1193,6 +1193,7 @@ fn remove_pi_extension_arm_refuses_out_of_scope_paths() {
         statusline: false,
         runtime: "all".into(),
         design_packs: None,
+        current_exe: None,
     };
     let mut computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
     computed.plan.push(json!({"action": "remove_pi_extension", "path": ".pi/extensions/../outside.ts"}));
@@ -2904,4 +2905,145 @@ fn a_second_run_after_apply_reports_up_to_date_for_the_worktree_projection() {
     );
     let a = apply(&fx, &[]);
     assert_eq!(a["recheck"], "up_to_date");
+}
+
+fn test_options(current_exe: Option<PathBuf>, repo_hooks: bool) -> Options {
+    Options {
+        repo_hooks,
+        claude_md: false,
+        global_skills: false,
+        skillstation: false,
+        sync_skills: false,
+        force_downgrade: false,
+        plugin_source: false,
+        statusline: false,
+        runtime: "all".into(),
+        design_packs: None,
+        current_exe,
+    }
+}
+
+#[test]
+fn vendored_binary_planned_when_host_binary_stale() {
+    let fx = fixture();
+    let engine = Engine::from_plugin_root(fx.root.clone());
+    let host_bin = fx.repo.join(".bee").join("bin").join("bee");
+    write(&host_bin, "stale-bin-1\n");
+    let current_bin = fx.root.join("bee-current");
+    write(&current_bin, "current-bin-2\n");
+
+    let opts = test_options(Some(current_bin), false);
+    let computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    let binary_item = computed.plan.iter().find(|i| i["action"] == "copy_binary");
+    assert!(binary_item.is_some());
+    assert_eq!(binary_item.unwrap()["path"], ".bee/bin/bee");
+}
+
+#[test]
+fn vendored_binary_not_planned_when_bytes_match() {
+    let fx = fixture();
+    let engine = Engine::from_plugin_root(fx.root.clone());
+    let host_bin = fx.repo.join(".bee").join("bin").join("bee");
+    write(&host_bin, "identical-bytes\n");
+    let current_bin = fx.root.join("bee-current");
+    write(&current_bin, "identical-bytes\n");
+
+    let opts = test_options(Some(current_bin), false);
+    let computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    assert!(!computed.plan.iter().any(|i| i["action"] == "copy_binary"));
+}
+
+#[test]
+fn vendored_binary_not_planned_when_target_is_running_file() {
+    let fx = fixture();
+    let engine = Engine::from_plugin_root(fx.root.clone());
+    let host_bin = fx.repo.join(".bee").join("bin").join("bee");
+    write(&host_bin, "running-file-bytes\n");
+
+    let opts = test_options(Some(host_bin), false);
+    let computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    assert!(!computed.plan.iter().any(|i| i["action"] == "copy_binary"));
+}
+
+#[test]
+fn vendored_binary_not_planned_when_target_is_symlink_into_another_checkout() {
+    let fx = fixture();
+    let engine = Engine::from_plugin_root(fx.root.clone());
+    let other_checkout = fx.root.join("other_checkout");
+    let other_bin = other_checkout.join(".bee").join("bin").join("bee");
+    write(&other_bin, "other-checkout-bin\n");
+
+    let host_bin = fx.repo.join(".bee").join("bin").join("bee");
+    std::fs::create_dir_all(host_bin.parent().unwrap()).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&other_bin, &host_bin).unwrap();
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file(&other_bin, &host_bin).unwrap();
+
+    let current_bin = fx.root.join("bee-current");
+    write(&current_bin, "fresh-bin\n");
+
+    let opts = test_options(Some(current_bin), false);
+    let computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    assert!(!computed.plan.iter().any(|i| i["action"] == "copy_binary"));
+}
+
+#[test]
+fn vendored_binary_planned_when_missing_and_hooks_expect_it() {
+    let fx = fixture();
+    let engine = Engine::from_plugin_root(fx.root.clone());
+    let current_bin = fx.root.join("bee-current");
+    write(&current_bin, "fresh-bin\n");
+
+    let opts = test_options(Some(current_bin), true);
+    let computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    let binary_item = computed.plan.iter().find(|i| i["action"] == "copy_binary");
+    assert!(binary_item.is_some());
+    assert_eq!(binary_item.unwrap()["path"], ".bee/bin/bee");
+}
+
+#[test]
+fn vendored_binary_not_planned_when_missing_and_hooks_do_not_expect_it() {
+    let fx = fixture();
+    let engine = Engine::from_plugin_root(fx.root.clone());
+    let current_bin = fx.root.join("bee-current");
+    write(&current_bin, "fresh-bin\n");
+
+    let opts = test_options(Some(current_bin), false);
+    let computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    assert!(!computed.plan.iter().any(|i| i["action"] == "copy_binary"));
+}
+
+#[test]
+fn vendored_binary_apply_copies_atomically_and_sets_executable() {
+    let fx = fixture();
+    let engine = Engine::from_plugin_root(fx.root.clone());
+    let host_bin = fx.repo.join(".bee").join("bin").join("bee");
+    write(&host_bin, "stale-bin-1\n");
+    let current_bin = fx.root.join("bee-current");
+    write(&current_bin, "current-bin-2\n");
+
+    let opts = test_options(Some(current_bin), false);
+    let computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    assert!(computed.plan.iter().any(|i| i["action"] == "copy_binary"));
+
+    let outcome = super::apply::apply_computed_plan(&engine, &fx.repo, &opts, computed);
+    match outcome {
+        ApplyOutcome::Ok(ok) => {
+            assert!(ok.applied.iter().any(|i| i["action"] == "copy_binary"));
+        }
+        _ => panic!("expected successful apply"),
+    }
+    assert_eq!(std::fs::read_to_string(&host_bin).unwrap(), "current-bin-2\n");
+    assert!(!fx.repo.join(".bee").join("bin").join("bee.tmp").exists());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::metadata(&host_bin).unwrap().permissions();
+        assert_ne!(perms.mode() & 0o111, 0);
+    }
+
+    let recheck = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    assert!(!recheck.plan.iter().any(|i| i["action"] == "copy_binary"));
 }

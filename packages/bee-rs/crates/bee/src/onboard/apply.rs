@@ -435,6 +435,7 @@ pub fn apply_computed_plan(
                                     | Some("copy_helper")
                                     | Some("copy_expertise")
                                     | Some("copy_prompt")
+                                    | Some("copy_binary")
                             )
                         })
                         .cloned()
@@ -631,6 +632,24 @@ pub fn apply_computed_plan(
                     &target,
                     read_text_if_exists(&engine.templates_prompts_dir.join(name)).as_bytes(),
                 );
+            }
+            "copy_binary" => {
+                let current_exe = opts.current_exe.clone().or_else(|| std::env::current_exe().ok());
+                if let Some(src) = current_exe {
+                    let canon_src = src.canonicalize().ok();
+                    let canon_tgt = target.canonicalize().ok();
+                    let same_file = canon_src.is_some() && canon_src == canon_tgt;
+                    let is_symlink = target
+                        .symlink_metadata()
+                        .map(|m| m.file_type().is_symlink())
+                        .unwrap_or(false);
+                    let symlink_to_other_checkout = is_symlink
+                        && (canon_tgt.as_ref().map(|c| !c.starts_with(repo_root)).unwrap_or(false)
+                            || target.read_link().map(|d| d.is_absolute() && !d.starts_with(repo_root)).unwrap_or(false));
+                    if !same_file && !symlink_to_other_checkout && src.is_file() {
+                        let _ = copy_binary_atomic(&src, &target);
+                    }
+                }
             }
             "remove_prompt" => {
                 if posix_dirname(rel) == ".bee/bin/prompts" {
@@ -1090,6 +1109,33 @@ fn edit_config(target: &Path, edit: impl FnOnce(&mut Map<String, Value>)) {
         out = out.replace('\n', "\r\n");
     }
     let _ = write_file_atomic(target, out.as_bytes());
+}
+
+fn copy_binary_atomic(src: &Path, target: &Path) -> std::io::Result<()> {
+    if let Some(dir) = target.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut tmp = target.as_os_str().to_os_string();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    std::fs::copy(src, &tmp)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(src) {
+            let mut perms = meta.permissions();
+            let mode = perms.mode() | 0o111;
+            perms.set_mode(mode);
+            let _ = std::fs::set_permissions(&tmp, perms);
+        } else {
+            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    let res = std::fs::rename(&tmp, target);
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    res
 }
 
 fn is_truthy(v: &Value) -> bool {
