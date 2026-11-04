@@ -314,6 +314,40 @@ fn run_finish(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
 
+    let lane_path = main_root.join(".bee").join("lanes").join(format!("{feature}.json"));
+    if lane_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&lane_path) {
+            if let Ok(val) = serde_json::from_str::<Value>(&content) {
+                if let Some(old_phase) = val.get("phase").and_then(|p| p.as_str()) {
+                    if old_phase == "exploring" || old_phase == "planning" {
+                        let mut set_argv = vec![
+                            OsString::from("state"),
+                            OsString::from("set"),
+                            OsString::from("--lane"),
+                            OsString::from(&feature),
+                            OsString::from("--owner"),
+                            OsString::from(old_phase),
+                            OsString::from("--phase"),
+                            OsString::from("swarming"),
+                        ];
+                        if use_json {
+                            set_argv.push(OsString::from("--json"));
+                        }
+                        let code = match crate::verbs::state_group::try_native(&set_argv, Instant::now()) {
+                            Some(c) => c,
+                            None => ExitCode::FAILURE,
+                        };
+                        if code != ExitCode::SUCCESS {
+                            record_timing(&main_root, "feature finish", t0, false);
+                            return Some(code);
+                        }
+                        println!("feature finish: lane {feature} phase {old_phase} -> swarming (merge proved the cells)");
+                    }
+                }
+            }
+        }
+    }
+
     let mut scribing_argv = vec![
         OsString::from("state"),
         OsString::from("scribing-run"),
@@ -540,6 +574,93 @@ mod tests {
         assert!(ledger.exists());
         let ledger_content = std::fs::read_to_string(&ledger).unwrap();
         assert!(ledger_content.contains("feat-small"));
+    }
+
+    #[test]
+    fn feature_finish_moves_exploring_lane_to_swarming_after_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+
+        let start_argv = vec![
+            OsString::from("feature"),
+            OsString::from("start"),
+            OsString::from("--feature"),
+            OsString::from("feat-exp"),
+            OsString::from("--class"),
+            OsString::from("feature"),
+            OsString::from("--lane"),
+            OsString::from("small"),
+            OsString::from("--files"),
+            OsString::from("1"),
+        ];
+        let code = try_native(&start_argv, Instant::now());
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+
+        let lane_path = repo.join(".bee").join("lanes").join("feat-exp.json");
+        let lane_before: Value =
+            serde_json::from_str(&std::fs::read_to_string(&lane_path).unwrap()).unwrap();
+        assert_eq!(lane_before["phase"], "exploring");
+
+        let finish_argv = vec![
+            OsString::from("feature"),
+            OsString::from("finish"),
+            OsString::from("--feature"),
+            OsString::from("feat-exp"),
+            OsString::from("--areas"),
+            OsString::from("auth"),
+        ];
+        let code = try_native(&finish_argv, Instant::now());
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+
+        let ledger = repo.join(".bee").join("logs").join("scribing-runs.jsonl");
+        assert!(ledger.exists());
+        let ledger_content = std::fs::read_to_string(&ledger).unwrap();
+        assert!(ledger_content.contains("feat-exp"));
+    }
+
+    #[test]
+    fn feature_finish_moves_planning_lane_to_swarming_after_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+
+        let start_argv = vec![
+            OsString::from("feature"),
+            OsString::from("start"),
+            OsString::from("--feature"),
+            OsString::from("feat-plan"),
+            OsString::from("--class"),
+            OsString::from("feature"),
+            OsString::from("--lane"),
+            OsString::from("small"),
+            OsString::from("--files"),
+            OsString::from("1"),
+        ];
+        let code = try_native(&start_argv, Instant::now());
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+
+        let lane_path = repo.join(".bee").join("lanes").join("feat-plan.json");
+        let mut lane_content: Value =
+            serde_json::from_str(&std::fs::read_to_string(&lane_path).unwrap()).unwrap();
+        lane_content["phase"] = json!("planning");
+        std::fs::write(&lane_path, serde_json::to_string_pretty(&lane_content).unwrap()).unwrap();
+
+        let finish_argv = vec![
+            OsString::from("feature"),
+            OsString::from("finish"),
+            OsString::from("--feature"),
+            OsString::from("feat-plan"),
+            OsString::from("--areas"),
+            OsString::from("auth"),
+        ];
+        let code = try_native(&finish_argv, Instant::now());
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+
+        let ledger = repo.join(".bee").join("logs").join("scribing-runs.jsonl");
+        assert!(ledger.exists());
+        let ledger_content = std::fs::read_to_string(&ledger).unwrap();
+        assert!(ledger_content.contains("feat-plan"));
     }
 
     #[test]
