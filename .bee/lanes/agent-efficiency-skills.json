@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"agent-efficiency-skills\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 54c82b4; capture what settled, then bee close --feature agent-efficiency-skills.",
   "created_at": "2026-11-04T05:13:16.701Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-04T05:13:13.498Z",
     "feature": "agent-efficiency-skills"
-  },
-  "merge_ready": {
-    "since": "2026-11-04T05:25:59.490Z",
-    "branch": "wt/agent-efficiency-skills",
-    "worktree_id": "beehive--wt--agent-efficiency-skills",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
