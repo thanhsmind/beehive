@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "slp-article-gaps",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"slp-article-gaps\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"slp-article-gaps\" (lane).",
+  "created_at": "2026-11-04T02:32:31.262Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-11-04T02:32:31.311Z",
+    "feature": "slp-article-gaps"
+  },
+  "merge_ready": {
+    "since": "2026-11-04T03:14:39.671Z",
+    "branch": "wt/slp-article-gaps",
+    "worktree_id": "beehive--wt--slp-article-gaps",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

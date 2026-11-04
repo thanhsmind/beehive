@@ -779,6 +779,7 @@
     "contract:output-spill",
     "contract:wave-run",
     "contract:paseo-wait-deadline",
-    "contract:issue-sweep-2"
+    "contract:issue-sweep-2",
+    "contract:worker-cell-prompt"
   ]
 }
