@@ -368,7 +368,7 @@ proves itself red then green. Cells 4 and 6 defer regen to the wave close
         }
       ],
       "key_links": [
-        "a test fails before the change and passes after"
+        "bee status --json reports the capture queue and promote debt drained"
       ],
       "prohibitions": [
         "Do not weaken an existing assertion",
@@ -381,6 +381,138 @@ proves itself red then green. Cells 4 and 6 defer regen to the wave close
     "behavior_change": true
   }
 ]
+```
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "claude",
+  "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+  "stages": [
+    {
+      "stage": "implementation",
+      "classification": "required",
+      "role": "code",
+      "reason": "Cells aef-1 to aef-6 change bee-rs code or the vendored prompt."
+    },
+    {
+      "stage": "deployment",
+      "classification": "not-applicable",
+      "role": "deploy",
+      "reason": "No release rides this lane."
+    },
+    {
+      "stage": "planning",
+      "classification": "not-applicable",
+      "role": "plan",
+      "reason": "The plan is this page."
+    },
+    {
+      "stage": "test-and-live-proof",
+      "classification": "not-applicable",
+      "role": "test",
+      "reason": "Each code cell carries its own red-then-green unit test."
+    },
+    {
+      "stage": "documentation-and-capture",
+      "classification": "required",
+      "role": "docs",
+      "reason": "Cell aef-7 drains the capture queue and promote proposals."
+    },
+    {
+      "stage": "read-only-gather",
+      "classification": "not-applicable",
+      "role": "read",
+      "reason": "The leader traced each issue already."
+    },
+    {
+      "stage": "fact-extraction",
+      "classification": "not-applicable",
+      "role": "extraction",
+      "reason": "No narrow lookup is needed."
+    },
+    {
+      "stage": "generation-fallback",
+      "classification": "not-applicable",
+      "role": "generation",
+      "reason": "Every job has a specific role."
+    },
+    {
+      "stage": "independent-review",
+      "classification": "not-applicable",
+      "role": "review",
+      "reason": "Independent review stays user-invoked."
+    },
+    {
+      "stage": "generic-advisor",
+      "classification": "not-applicable",
+      "role": "advisor",
+      "reason": "Not high-risk."
+    },
+    {
+      "stage": "supervision",
+      "classification": "not-applicable",
+      "role": "supervisor",
+      "reason": "No unattended loop."
+    },
+    {
+      "stage": "blind-lane-1",
+      "classification": "not-applicable",
+      "role": "lane-1",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "blind-lane-2",
+      "classification": "not-applicable",
+      "role": "lane-2",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "blind-lane-3",
+      "classification": "not-applicable",
+      "role": "lane-3",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "design-ui",
+      "classification": "not-applicable",
+      "role": "design",
+      "reason": "No rendered UI."
+    },
+    {
+      "stage": "hat-facts-gaps",
+      "classification": "not-applicable",
+      "role": "hat-facts-gaps",
+      "reason": "Hat wave skipped: each cell fixes a reported, traced bug with the fix shape in the report."
+    },
+    {
+      "stage": "hat-risks",
+      "classification": "not-applicable",
+      "role": "hat-risks",
+      "reason": "Hat wave skipped: see hat-facts-gaps."
+    },
+    {
+      "stage": "hat-value",
+      "classification": "not-applicable",
+      "role": "hat-value",
+      "reason": "Hat wave skipped: see hat-facts-gaps."
+    },
+    {
+      "stage": "hat-alternatives",
+      "classification": "not-applicable",
+      "role": "hat-alternatives",
+      "reason": "Hat wave skipped: see hat-facts-gaps."
+    },
+    {
+      "stage": "hat-user-impact",
+      "classification": "not-applicable",
+      "role": "hat-user-impact",
+      "reason": "Hat wave skipped: see hat-facts-gaps."
+    }
+  ]
+}
 ```
 
 ## Proof
