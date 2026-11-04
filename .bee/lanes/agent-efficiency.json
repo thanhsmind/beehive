@@ -985,5 +985,12 @@
       "onboarding"
     ],
     "next_action": "bee close --feature agent-efficiency"
+  },
+  "merge_ready": {
+    "since": "2026-11-04T06:29:32.197Z",
+    "branch": "wt/agent-efficiency",
+    "worktree_id": "beehive--wt--agent-efficiency",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

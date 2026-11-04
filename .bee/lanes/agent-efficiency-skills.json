@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "agent-efficiency-skills",
   "mode": "small",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"agent-efficiency-skills\" started at phase \"exploring\" (lane).",
-  "next_action": "close",
+  "next_action": "bee close finished \"agent-efficiency-skills\" — feature is closed.",
   "created_at": "2026-11-04T05:13:16.701Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,

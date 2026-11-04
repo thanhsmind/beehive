@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Lần này tôi chạy cả bộ test trước khi merge.",
-    "asked_at": "2026-11-04T05:26:26.741Z",
+    "subject": "Phần \"Prior rounds\" giờ mang đủ lý do giám khảo đưa ra (nhờ việc 5). ▸ Tôi giao `aef-1` cho worker.",
+    "asked_at": "2026-11-04T05:28:00.811Z",
     "session": "5b57a891-b417-4607-a588-032cc0626815"
   }
 }
