@@ -1,0 +1,125 @@
+{
+  "id": "fph-1",
+  "feature": "finish-phase",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "e715bc3a-5c13-47b5-b110-8f1da00cb9a6"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "title": "bee feature finish moves a pre-execution lane to swarming after a good merge",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+  ],
+  "read_first": [
+    "docs/history/finish-phase/CONTEXT.md"
+  ],
+  "action": "After `bee worktree merge` succeeds inside `bee feature finish --feature <f> --areas <a>`, when the lane record .bee/lanes/<f>.json has phase exploring or planning, finish sets it to swarming through the same state door `bee state set --lane <f> --owner <old> --phase swarming` uses, prints one line `feature finish: lane <f> phase <old> -> swarming (merge proved the cells)`, then runs the scribing stamp and close as today. A lane already at swarming, reviewing or scribing is not touched. A failed merge returns before any phase write. No code comments. One commit with the trailer `cell: fph-1`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- feature_group",
+  "must_haves": {
+    "truths": [
+      "a lane at exploring with a mergeable worktree ends past the scribing stamp, and the output names the exploring -> swarming move",
+      "a lane already at swarming gets no phase line and behaves as before",
+      "a refused merge leaves the lane phase unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "substantive": "phase move after merge"
+      }
+    ],
+    "key_links": [
+      "a test fails before the change and passes after"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "Never write the phase before the merge succeeds",
+      "Never approve a gate"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "fph-1-w",
+    "outcome": "Advance pre-execution lane phase to swarming on feature finish after merge 941d8c6edde2b1772e67f46224e7d636e977d5bf",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-04T07:27:55.257Z",
+    "behavior_change": true,
+    "verification_evidence": "unit tests for feature finish phase transition and worktree merge lifecycle in feature_group pass",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2656a557-4baf-4aa1-ba9a-6292e1869680",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- feature_group",
+    "claimed_at": "2026-11-04T07:17:04.623Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Advance pre-execution lane phase to swarming on feature finish after merge 941d8c6edde2b1772e67f46224e7d636e977d5bf",
+      "commit": "941d8c6edde2b1772e67f46224e7d636e977d5bf",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- feature_group — green:unit — unit tests for feature finish phase transition and worktree merge lifecycle in feature_group pass",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a lane at exploring with a mergeable worktree ends past the scribing stamp, and the output names the exploring -> swarming move",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "a lane already at swarming gets no phase line and behaves as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "a refused merge leaves the lane phase unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "a test fails before the change and passes after",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "Do not weaken an existing assertion",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "Never write the phase before the merge succeeds",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "Never approve a gate",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "phase move after merge",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          }
+        ],
+        "recorded_at": "2026-11-04T08:35:46.132Z",
+        "recorded_by": "2656a557-4baf-4aa1-ba9a-6292e1869680",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

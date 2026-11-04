@@ -1160,3 +1160,5 @@
 {"ts":"2026-11-04T07:02:46.692Z","event":"complete","id":"ffd505b2-a7e3-432b-a85f-dac28470d08b"}
 {"ts":"2026-11-04T07:02:50.014Z","event":"complete","id":"e1628b37-14a5-46c6-ba2c-fce8e7fa8369"}
 {"ts":"2026-11-04T07:02:53.686Z","event":"complete","id":"f231dc28-d1c8-43c6-8843-e951251d3141"}
+{"ts":"2026-11-04T08:35:46.931Z","event":"add","id":"e7d0c049-6ea4-428f-bab9-ce6b993693e0","kind":"worktree-cleanup","feature":"finish-phase","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--finish-phase"],"reason":"Worktree beehive--wt--finish-phase (branch wt/finish-phase) merged into main at d61d1c4d470f9a274d2bcf953ae1c7eaa37f172f and kept per default (D1) — remove it with `bee worktree prune`."}
+{"ts":"2026-11-04T08:35:48.200Z","event":"add","id":"b74db189-00c9-465a-a7e9-148f5e654d2b","kind":"promote","feature":"finish-phase","cells":[],"areas":[],"files":["docs/history/finish-phase/promote-proposals.md"],"reason":"Promote proposal for \"finish-phase\" awaiting apply — docs/history/finish-phase/promote-proposals.md."}

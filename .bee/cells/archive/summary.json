@@ -1863,5 +1863,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-04T07:01:17.888Z"
+  },
+  "finish-phase": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-04T08:35:48.199Z"
   }
 }
