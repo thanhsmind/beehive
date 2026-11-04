@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", "9bf28c33-73c8-4f61-9f04-c199dc58e748 (lean-context D1: prompt-context warns at handoff_context_tokens)"]
+  decisions: ["token-thrift D1 (PREAMBLE_BUDGET_BYTES is 9500, below HOST_INLINE_LIMIT_CHARS 10,000)", token-thrift D2 (fixed drop order and one Omitted line that names each fetch path), token-thrift D3 (zero-frontier discovery maps fold into one count line), "token-thrift D4 (dispatch door prints one line per rendered target, roles in full)", "token-thrift D5 (orient promote blocker names at most 3 features, then +N more)", "691fcac4-14a8-40b1-8600-d720ebc47e6f (token-thrift D7: the preamble promote proposal line names at most 3 clear commands, then +N more)", token-thrift D6 (this concept), "8f63adb4-de70-424e-b082-1f4c5ec4b693 (budget-fence-removal D1: budgets bind generated payloads only, never authored instruction text)", "lean-context D1 (prompt-context warns at handoff_context_tokens)"]
   sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/reports/hat-wave-synthesis.md, "cell tt-1 (commit 3ca8a49fe, 2026-10-21)", "cell tt-2 (commit 646c14cff, 2026-10-21)", "cell tt-3 (commit 81f81b039, 2026-10-21)", "measured 2026-10-21: the session preamble on this repo was 11,041 to 11,161 bytes before tt-1", "docs/history/lean-context/CONTEXT.md", "cell lnc-1"]
   authoritative_for: "hook-runtime: the size limits on injected session context and why they exist"
 ---
@@ -182,4 +182,4 @@ transcript, nothing is added and the hook never fails or slows the turn.
   `handoff_context_tokens_zero_adds_no_line_at_any_size`,
   `missing_or_unreadable_transcript_adds_no_line_and_exits_zero`.
 - Locked decisions: `docs/history/token-thrift/CONTEXT.md`,
-  `docs/history/lean-context/CONTEXT.md` (decision 9bf28c33, D1).
+  `docs/history/lean-context/CONTEXT.md` (D1).
