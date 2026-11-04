@@ -8,7 +8,7 @@ anti-pattern-principles.
 
 In scope: the seven items of D1. Out of scope: the 107 orphaned scribing-debt
 cells of old features (D2, filed as a backlog item). The "stale backlog row"
-the leader reported was a reading mistake: PBI p-05d2a4f4 carries a later
+the leader reported was a reading mistake: PBI p-05d2a4f4 carries a second,
 `done` status event; nothing to build.
 
 ## Locked Decisions

@@ -46,7 +46,7 @@ notices, the design offer among them. A plugin-based install, which copies no ot
 project, still copies the core set and the picked packs, and still removes
 dropped ones (owner decision 1dd050b7).
 
-**Dropping a pack.** When a later install's pick no longer names a pack, that
+**Dropping a pack.** When a newer install's pick no longer names a pack, that
 pack's folder is removed from the project, like any other bee-owned skill. A
 project's own skills are never touched, whatever their names. Picking "none"
 removes every design folder.
