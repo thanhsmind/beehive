@@ -91,10 +91,6 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
         Err(_) => return None,
     };
 
-    let class = match flags.req_str("class") {
-        Some(c) => c.to_string(),
-        None => return None,
-    };
 
     let ctx = match prelude("feature start", use_json, t0)? {
         Pre::Go(c) => *c,
@@ -177,7 +173,7 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
         &main_root,
         &main_root,
         &feature,
-        Some(&class),
+        None,
         "exploring",
         None,
         &[],
@@ -194,7 +190,7 @@ fn run_start(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
         &main_root,
         &feature,
         "exploring",
-        Some(&class),
+        None,
         legacy.get("summary"),
         legacy.get("next_action"),
         None,
@@ -472,7 +468,7 @@ mod tests {
         let lane_content: Value =
             serde_json::from_str(&std::fs::read_to_string(&lane_path).unwrap()).unwrap();
         assert_eq!(lane_content["feature"], "my-feat");
-        assert_eq!(lane_content["mode"], "feature");
+        assert_eq!(lane_content["mode"], Value::Null);
         assert_eq!(lane_content["phase"], "exploring");
 
         let route = &lane_content["route"];
@@ -621,5 +617,46 @@ mod tests {
             _ => panic!("expected Ok"),
         };
         assert_eq!(r2["flags"], json!([]));
+    }
+
+    #[test]
+    fn small_route_opened_by_feature_start_passes_merged_gate_without_plan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+
+        let start_argv = vec![
+            OsString::from("feature"),
+            OsString::from("start"),
+            OsString::from("--feature"),
+            OsString::from("feat-gate-test"),
+            OsString::from("--class"),
+            OsString::from("feature"),
+            OsString::from("--lane"),
+            OsString::from("small"),
+            OsString::from("--files"),
+            OsString::from("1"),
+        ];
+        let code = try_native(&start_argv, Instant::now());
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+
+        let derive_flags = crate::verbs::reservations::parse_flags(&["--lane", "feat-gate-test"]).unwrap().0;
+        let code = crate::verbs::state_group::run_plan_conflicts_derive(derive_flags, false, Instant::now());
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+
+        let lane_flags = crate::verbs::reservations::parse_flags(&[
+            "--lane",
+            "feat-gate-test",
+            "--merge",
+            "--approved",
+            "true",
+        ])
+        .unwrap()
+        .0;
+        let out = crate::verbs::state_group::run_gate_body(&repo, &lane_flags).unwrap();
+        match out {
+            crate::verbs::reservations::Out::Emit(_, _, code) => assert_eq!(code, 0),
+            crate::verbs::reservations::Out::Thrown(msg) => panic!("merged gate must pass, got: {msg}"),
+        }
     }
 }
