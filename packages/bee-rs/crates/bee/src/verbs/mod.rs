@@ -26,6 +26,7 @@ pub mod design_group;
 pub mod detector;
 pub mod discovery;
 pub mod drivers;
+pub mod feature_group;
 pub mod feedback;
 pub mod help;
 pub mod intent_group;
@@ -87,6 +88,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = worktree::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = feature_group::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = staging::try_native(args, t0) {
