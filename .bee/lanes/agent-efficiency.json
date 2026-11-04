@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"agent-efficiency\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 6e0d3a1; reload the product and test \"agent-efficiency\", then either approve uat (\"bee gate --name uat --approved true --lane agent-efficiency\") or fix it in the worktree and merge again.",
+  "next_action": "uat",
   "created_at": "2026-11-04T04:19:52.944Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: agent-efficiency",
-    "asked_at": "2026-11-04T06:29:40.299Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -983,12 +978,12 @@
   "last_scribing_run": {
     "feature": "agent-efficiency",
     "date": "2026-11-04",
-    "at": "2026-11-04T05:12:22.738Z",
+    "at": "2026-11-04T06:30:20.907Z",
     "areas_synced": [
       "workflow-state",
       "bee-herding",
       "onboarding"
     ],
-    "next_action": "bee close --feature agent-efficiency"
+    "next_action": "uat"
   }
 }
