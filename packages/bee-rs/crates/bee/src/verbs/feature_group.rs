@@ -276,6 +276,12 @@ fn run_finish(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
         Pre::Go(c) => *c,
         Pre::Emitted(code) => return Some(code),
     };
+    if ctx.kind != "ordinary" {
+        return Some(ctx.fail(&format!(
+            "\"bee feature finish\" must be run from inside the main checkout, not a \"{}\" checkout — nothing was merged; run it from the main repo root.",
+            ctx.kind
+        )));
+    }
     let main_root = ctx.work_root.clone();
 
     let worktree_id = find_granted_worktree_for_feature(&main_root, &feature);
@@ -306,11 +312,6 @@ fn run_finish(tokens: &[OsString], t0: Instant) -> Option<ExitCode> {
     if code != ExitCode::SUCCESS {
         record_timing(&main_root, "feature finish", t0, false);
         return Some(code);
-    }
-
-    if ctx.kind != "ordinary" {
-        record_timing(&main_root, "feature finish", t0, true);
-        return Some(ExitCode::SUCCESS);
     }
 
     let mut scribing_argv = vec![
@@ -539,6 +540,55 @@ mod tests {
         assert!(ledger.exists());
         let ledger_content = std::fs::read_to_string(&ledger).unwrap();
         assert!(ledger_content.contains("feat-small"));
+    }
+
+    #[test]
+    fn feature_finish_from_worktree_refuses_before_merging() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = init_repo(tmp.path());
+        let _guard = CwdGuard::enter(&repo);
+
+        let start_argv = vec![
+            OsString::from("feature"),
+            OsString::from("start"),
+            OsString::from("--feature"),
+            OsString::from("feat-wt"),
+            OsString::from("--class"),
+            OsString::from("feature"),
+            OsString::from("--lane"),
+            OsString::from("small"),
+            OsString::from("--files"),
+            OsString::from("1"),
+        ];
+        let code = try_native(&start_argv, Instant::now());
+        assert_eq!(code, Some(ExitCode::SUCCESS));
+
+        let lane_path = repo.join(".bee").join("lanes").join("feat-wt.json");
+        let mut lane_content: Value =
+            serde_json::from_str(&std::fs::read_to_string(&lane_path).unwrap()).unwrap();
+        lane_content["phase"] = json!("swarming");
+        std::fs::write(&lane_path, serde_json::to_string_pretty(&lane_content).unwrap()).unwrap();
+
+        let wt_path = tmp.path().join("testrepo--wt--feat-wt");
+        std::env::set_current_dir(&wt_path).unwrap();
+
+        let finish_argv = vec![
+            OsString::from("feature"),
+            OsString::from("finish"),
+            OsString::from("--feature"),
+            OsString::from("feat-wt"),
+            OsString::from("--areas"),
+            OsString::from("auth"),
+        ];
+        let code = try_native(&finish_argv, Instant::now());
+        assert_ne!(code, Some(ExitCode::SUCCESS));
+
+        let ledger = repo.join(".bee").join("logs").join("scribing-runs.jsonl");
+        let stamped = std::fs::read_to_string(&ledger).unwrap_or_default();
+        assert!(!stamped.contains("feat-wt"));
+        let lane_after: Value =
+            serde_json::from_str(&std::fs::read_to_string(&lane_path).unwrap()).unwrap();
+        assert_eq!(lane_after["phase"], "swarming");
     }
 
     #[test]
