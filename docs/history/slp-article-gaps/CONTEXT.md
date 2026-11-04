@@ -95,15 +95,9 @@ Out of scope:
 
 ## Outstanding Questions
 
-### Resolve Before Planning
-
 None.
 
-### Deferred To Planning
-
-None.
-
-## Deferred Ideas
+## Corrections
 
 - Correction to backlog row "Workers almost never challenge the brief":
   its numbers came from a raw line count. The parsed numbers are the ones
