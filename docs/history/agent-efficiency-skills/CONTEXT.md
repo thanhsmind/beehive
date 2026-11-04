@@ -8,7 +8,7 @@ Follow-up to agent-efficiency (merged on main at d77956f).
   feature start` and `bee feature finish`; the herding and swarming skills
   say `bee herding run` caps a done cell with a commit and a green proof;
   `bee cells leader-check --help` says a gap verdict reopens the cell; and
-  the goal-check judge owed by agent-efficiency (decision 395409fd) runs
+  the goal-check judge agent-efficiency deferred at its close runs
   from this lane over cells aef-1 to aef-7.
 - **asf-2.** Found live on 2026-11-04: `bee feature start` wrote the route
   class into the lane mode, so the shape gate demanded a plan.md for a
