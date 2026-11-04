@@ -1801,92 +1801,28 @@ pub(crate) fn unclaim_cell(
 }
 
 fn release_reservations_for_unclaimed_cell(root: &Path, cell_id: &str) {
-    let Ok(control) = control_root(root) else { return; };
+    let Some(root_s) = root.to_str() else { return; };
     let Ok(records) = list_path_lease_records(root) else { return; };
-    let mut pairs: Vec<(Value, Option<Value>)> = Vec::new();
-    let mut seen: Vec<String> = Vec::new();
-    let cell_v = Value::String(cell_id.to_string());
-    let key = format!("{}::", jsjson::js_to_string(&cell_v));
-    seen.push(key);
-    pairs.push((cell_v.clone(), None));
-
+    let mut agents: Vec<String> = Vec::new();
     for rec in &records {
-        let matches_cell = matches!(
-            rec.get("workflow_id"),
-            Some(v) if v == &cell_v
-        );
-        if !matches_cell {
+        if !matches!(rec.get("workflow_id"), Some(Value::String(c)) if c == cell_id) {
             continue;
         }
-        if let Ok(resv) = lease_to_resv_lite(rec) {
-            if let Some(cv) = resv.cell.as_ref().filter(|c| js_truthy(c)) {
-                let session_v = resv.session.as_ref().filter(|s| js_truthy(s)).cloned();
-                let k = format!(
-                    "{}::{}",
-                    jsjson::js_to_string(cv),
-                    session_v.as_ref().map(|s| jsjson::js_to_string(s)).unwrap_or_default()
-                );
-                if !seen.contains(&k) {
-                    seen.push(k);
-                    pairs.push((cv.clone(), session_v));
+        if let Some(Value::String(ws)) = rec.get("workspace_id") {
+            if let Some(agent) = ws.strip_prefix("agent:") {
+                if !agents.iter().any(|a| a == agent) {
+                    agents.push(agent.to_string());
                 }
             }
         }
-        let Some(Value::String(resource)) = rec.get("resource") else { continue; };
-        if !resource.starts_with("path:") {
-            continue;
-        }
-        let file = path_lease_file(&control, &resource["path:".len()..]);
-        let _ = std::fs::remove_file(&file);
     }
-
-    let topo = match resolve_store_root_worktree(root) {
+    let topology = match resolve_store_root_worktree(root) {
         RootsWt::Go(roots) => roots.hold_topology(),
         _ => None,
     };
-    if let Some((main_root, holder)) = topo.as_ref() {
-        for (cell_v, session_v) in &pairs {
-            let Ok(owner) = rsv::cell_hold_owner(main_root, holder, &jsjson::js_to_string(cell_v)) else {
-                continue;
-            };
-            let Ok(mut guard) = acquire_named_lock(main_root, CROSS_WORKTREE_HOLDS_LOCK) else {
-                continue;
-            };
-            let _ = (|| -> MR<()> {
-                let mut store = read_holds_store(main_root)?;
-                let released_at = utc_now();
-                let mut count: u64 = 0;
-                if let Some(Value::Array(holds)) = store.get_mut("holds") {
-                    for hold in holds.iter_mut() {
-                        let unreleased = matches!(hold.get("released_at"), None | Some(Value::Null));
-                        if !unreleased {
-                            continue;
-                        }
-                        if !matches!(hold.get("holder"), Some(Value::String(s)) if s == &owner.holder) {
-                            continue;
-                        }
-                        if let Some(s) = session_v {
-                            if !matches!(hold.get("session"), Some(v) if v == s) {
-                                continue;
-                            }
-                        }
-                        if !matches!(hold.get("cell"), Some(v) if v == cell_v) {
-                            continue;
-                        }
-                        if let Value::Object(m) = hold {
-                            m.insert("released_at".into(), Value::String(released_at.clone()));
-                        }
-                        count += 1;
-                    }
-                }
-                if count > 0 {
-                    write_json_atomic(&holds_ledger_path(main_root), &store)
-                        .map_err(|e| Fail::Thrown(format!("{e}")))?;
-                }
-                Ok(())
-            })();
-            guard.release();
-        }
+    let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+    for agent in &agents {
+        let _ = rsv::release_reservations_for_agent(topo, root_s, agent, Some(cell_id));
     }
 }
 
