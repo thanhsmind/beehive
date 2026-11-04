@@ -2478,6 +2478,11 @@ use std::time::Instant;
             ".bee/*\n!.bee/config.json\n!.bee/backlog.jsonl\n!.bee/cells/\n",
         )
         .unwrap();
+        std::fs::write(
+            main.join(".gitattributes"),
+            ".bee/backlog.jsonl merge=union\n",
+        )
+        .unwrap();
         std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
         std::fs::write(main.join(".bee").join("backlog.jsonl"), "[\"init\"]\n").unwrap();
         git_ok(&main, &["add", "-A"]);
@@ -2492,8 +2497,8 @@ use std::time::Instant;
         .unwrap();
         std::fs::create_dir_all(created.worktree_root.join(".bee").join("cells")).unwrap();
         std::fs::write(
-            created.worktree_root.join(".bee").join("cells").join("c1.json"),
-            "{\"id\":\"c1\"}\n",
+            created.worktree_root.join(".bee").join("cells").join("c2.json"),
+            "{\"id\":\"c2\"}\n",
         )
         .unwrap();
         git_ok(&created.worktree_root, &["add", "-A"]);
@@ -2517,11 +2522,78 @@ use std::time::Instant;
                 MErr::Thrown(m) => panic!("merge refused unexpectedly: {m}"),
                 MErr::Ex => panic!("merge delegated"),
             });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
         assert_eq!(
             answer.result["bookkeeping_commit"]["committed"],
             Value::Bool(true),
             "{}",
             answer.result["bookkeeping_commit"]
+        );
+        let head_commit_parents = run_git(&main, &["rev-parse", "HEAD^2"]);
+        assert_eq!(head_commit_parents.status, Some(0));
+        let status = git_status_porcelain_str(&main);
+        assert!(!status.contains(".bee/backlog.jsonl"), "{status}");
+        assert!(!status.contains(".bee/cells"), "{status}");
+    }
+
+    #[test]
+    fn uncommitted_bee_store_changes_on_main_with_ignored_stamp_path_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        std::fs::write(
+            main.join(".gitignore"),
+            ".bee/*\n!.bee/config.json\n!.bee/backlog.jsonl\n!.bee/cells/\n.agents/\n",
+        )
+        .unwrap();
+        std::fs::write(
+            main.join(".gitattributes"),
+            ".bee/backlog.jsonl merge=union\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::write(main.join(".bee").join("backlog.jsonl"), "[\"init\"]\n").unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "track store"]);
+
+        std::fs::create_dir_all(main.join(".agents").join("skills")).unwrap();
+        std::fs::write(
+            main.join(".agents").join("skills").join(".bee-skills-version.json"),
+            "{}\n",
+        )
+        .unwrap();
+
+        let created = worktree_with_a_real_commit(&main, "demo");
+        std::fs::write(
+            created.worktree_root.join(".bee").join("backlog.jsonl"),
+            "[\"init\", \"branch\"]\n",
+        )
+        .unwrap();
+        git_ok(&created.worktree_root, &["add", "-A"]);
+        git_ok(&created.worktree_root, &["commit", "-qm", "branch store changes"]);
+
+        std::fs::write(
+            main.join(".bee").join("backlog.jsonl"),
+            "[\"init\", \"main\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            main.join(".bee").join("cells").join("c1.json"),
+            "{\"id\":\"c1\"}\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge refused unexpectedly: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true)
         );
         let status = git_status_porcelain_str(&main);
         assert!(!status.contains(".bee/backlog.jsonl"), "{status}");
