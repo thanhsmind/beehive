@@ -28,6 +28,18 @@ Mode: `standard` — flags: multi-domain (reservations, worktree merge,
 onboarding, dispatch), public-contracts (dispatch payload, onboard plan).
 Four disjoint cells run in parallel; each writes its red test first.
 
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|---|---|---|---|
+| 1 | reserve filters conflicts by agent before the O_EXCL lease create | read | packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs:315 | `let overlap_conflicts: Vec<Resv> = find_conflicts(&control_root, &trimmed_agent, &p.path, now)?` |
+| 2 | unclaim flips the cell to open and releases nothing | read | packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1790 | `cell_map.insert("status".into(), Value::String("open".into()));` |
+| 3 | worktree merge raises WORKTREE_MERGE_ABORT_FAILED when the abort does not restore main | read | packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:700 | `"WORKTREE_MERGE_ABORT_FAILED",` |
+| 4 | onboard apply copies prompts and has no binary step | read | packages/bee-rs/crates/bee/src/onboard/apply.rs:628 | `"copy_prompt" => {` |
+| 5 | the skew guard refuses dispatch on a prompt that differs from the compiled template | read | packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs:265 | `"bee {cmd}: prompt skew — {} does not match the` |
+| 6 | the claude Agent arm uses prompt_body, not the deployment brief | read | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:2840 | `Value::String(format!("{marker_header}\n{prompt_body}")),` |
+| 7 | the dispatch id export is added only to a command payload | read | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:2887 | `let new_cmd = format!("export BEE_DISPATCH_ID=` |
+
 ## Evidence
 
 - #154: `reserve_exec` (`verbs/reservations/reserve.rs`) filters
