@@ -2840,3 +2840,4 @@
 {"kind":"flush","id":"7338b988-c1d1-46f7-9a07-e0f85b9b6aee","at":"2026-11-04T04:29:09.945Z","into":"docs/knowledge/work/slp-article-gaps/delivery.md"}
 {"kind":"flush","id":"1926aabd-95e7-4706-9add-e7c65348dcba","at":"2026-11-04T04:29:09.979Z","into":"docs/knowledge/work/agent-anti-patterns/delivery.md"}
 {"kind":"flush","id":"d48af16e-b0a2-40fa-940c-1ad7f6d5d555","at":"2026-11-04T04:29:10.015Z","into":"docs/knowledge/work/anti-pattern-principles/delivery.md"}
+{"kind":"stub","id":"52289a42-dc8e-4bc1-af38-c7f356491e3e","at":"2026-11-04T05:27:43.631Z","outcome":"Promote proposal for \"agent-efficiency-skills\" — docs/history/agent-efficiency-skills/promote-proposals.md","dids":[],"area":"bee-herding","files":["docs/history/agent-efficiency-skills/promote-proposals.md"],"lane":null,"source":"promote"}
