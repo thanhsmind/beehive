@@ -121,7 +121,7 @@
       },
       "design": {
         "kind": "herding",
-        "agent": "pi",
+        "agent": "paseo-claude-opus",
         "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
       }
     },
