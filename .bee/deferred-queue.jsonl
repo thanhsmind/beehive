@@ -1121,3 +1121,25 @@
 {"ts":"2026-11-04T03:46:40.349Z","event":"add","id":"0377ec7f-e89b-4a41-be92-495707d9815b","kind":"promote","feature":"agent-anti-patterns","cells":[],"areas":[],"files":["docs/history/agent-anti-patterns/promote-proposals.md"],"reason":"Promote proposal for \"agent-anti-patterns\" awaiting apply — docs/history/agent-anti-patterns/promote-proposals.md."}
 {"ts":"2026-11-04T04:11:05.777Z","event":"add","id":"03fd59e1-1d1e-4905-87b8-aa86b58fa17f","kind":"worktree-cleanup","feature":"anti-pattern-principles","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--anti-pattern-principles"],"reason":"Worktree beehive--wt--anti-pattern-principles (branch wt/anti-pattern-principles) merged into main at 00fe6fcd74dcbde23eaeb13d3370a0ac120c7ac5 and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-11-04T04:11:06.788Z","event":"add","id":"2f01ea7b-62a1-4503-b946-035715b67e3b","kind":"promote","feature":"anti-pattern-principles","cells":[],"areas":[],"files":["docs/history/anti-pattern-principles/promote-proposals.md"],"reason":"Promote proposal for \"anti-pattern-principles\" awaiting apply — docs/history/anti-pattern-principles/promote-proposals.md."}
+{"ts":"2026-11-04T04:31:16.301Z","event":"complete","id":"d668cf0d-e14c-4f9c-87c5-5d13fa4bc3c7"}
+{"ts":"2026-11-04T04:31:16.324Z","event":"complete","id":"884c18bc-c49c-4ec3-8479-d6aa832e43f0"}
+{"ts":"2026-11-04T04:31:16.345Z","event":"complete","id":"8f448c1d-3086-42df-a26e-58903123c16a"}
+{"ts":"2026-11-04T04:31:16.372Z","event":"complete","id":"75206462-ad1f-42e8-bbe9-b9098d805b7a"}
+{"ts":"2026-11-04T04:31:16.394Z","event":"complete","id":"3ef9e140-e39a-4fc5-a3b6-0a2a00c91181"}
+{"ts":"2026-11-04T04:31:16.416Z","event":"complete","id":"676e48f7-14dd-4d0b-b919-c3142ea086dd"}
+{"ts":"2026-11-04T04:31:16.437Z","event":"complete","id":"0fc3338e-2603-4b18-834d-5493add9f15d"}
+{"ts":"2026-11-04T04:31:16.460Z","event":"complete","id":"bf3d3098-c165-4829-bba1-5a8051702da8"}
+{"ts":"2026-11-04T04:31:16.494Z","event":"complete","id":"4d7d5544-3a50-46bd-a198-0c6391811e52"}
+{"ts":"2026-11-04T04:31:16.521Z","event":"complete","id":"5f1b2771-0d68-4aa1-9e16-0736270d6332"}
+{"ts":"2026-11-04T04:31:16.548Z","event":"complete","id":"cdddb7a9-8311-4f4b-9134-9fb0e2135b92"}
+{"ts":"2026-11-04T04:31:16.570Z","event":"complete","id":"1f321609-478b-4a52-bfc6-61746640727f"}
+{"ts":"2026-11-04T04:31:16.593Z","event":"complete","id":"2546ee5b-cec2-4e54-989d-c0e10f368d93"}
+{"ts":"2026-11-04T04:31:16.617Z","event":"complete","id":"b7db39a5-a3ea-49e7-bb9f-6c01878077a3"}
+{"ts":"2026-11-04T04:31:16.639Z","event":"complete","id":"d8866b2c-d4be-40f7-be26-f6d2fe77ca2b"}
+{"ts":"2026-11-04T04:31:16.657Z","event":"complete","id":"dd12bc49-c5ba-4590-bf66-015c8e8eed52"}
+{"ts":"2026-11-04T04:31:16.678Z","event":"complete","id":"0eef8ab1-afbb-4041-b8e4-960beb83ce25"}
+{"ts":"2026-11-04T04:31:16.698Z","event":"complete","id":"1c54cf9e-e6be-4fb9-9aad-f8301d057903"}
+{"ts":"2026-11-04T04:31:16.717Z","event":"complete","id":"e1e56289-45e4-4771-a11f-391678b2ceb8"}
+{"ts":"2026-11-04T04:31:16.738Z","event":"complete","id":"7c7c8c20-9113-48d5-b6a9-c0e0d90fd71c"}
+{"ts":"2026-11-04T04:31:16.759Z","event":"complete","id":"0377ec7f-e89b-4a41-be92-495707d9815b"}
+{"ts":"2026-11-04T04:31:16.786Z","event":"complete","id":"2f01ea7b-62a1-4503-b946-035715b67e3b"}
