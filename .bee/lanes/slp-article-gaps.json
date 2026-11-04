@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-article-gaps",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"slp-article-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature slp-article-gaps",
+  "next_action": "bee close finished \"slp-article-gaps\" — feature is closed.",
   "created_at": "2026-11-04T02:32:31.262Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
