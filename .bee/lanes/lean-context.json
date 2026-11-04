@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "lean-context",
   "mode": null,
-  "phase": "scribing",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"lean-context\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 39e92ba; capture what settled, then bee close --feature lean-context.",
+  "next_action": "bee close finished \"lean-context\" — feature is closed.",
   "created_at": "2026-11-04T06:45:19.026Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,

@@ -1152,3 +1152,11 @@
 {"ts":"2026-11-04T06:38:54.126Z","event":"add","id":"e8a5732a-57c5-4a6a-b973-5d9024d80659","kind":"promote","feature":"agent-efficiency","cells":[],"areas":[],"files":["docs/history/agent-efficiency/promote-proposals.md"],"reason":"Promote proposal for \"agent-efficiency\" awaiting apply — docs/history/agent-efficiency/promote-proposals.md."}
 {"ts":"2026-11-04T07:01:01.742Z","event":"add","id":"e1628b37-14a5-46c6-ba2c-fce8e7fa8369","kind":"worktree-cleanup","feature":"lean-context","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--lean-context"],"reason":"Worktree beehive--wt--lean-context (branch wt/lean-context) merged into main at 39e92ba64c6edaf0d92f0a3335d1227ad6bffec2 and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-11-04T07:01:17.889Z","event":"add","id":"427f91ff-a296-4dc7-8e80-4c3214938583","kind":"promote","feature":"lean-context","cells":[],"areas":[],"files":["docs/history/lean-context/promote-proposals.md"],"reason":"Promote proposal for \"lean-context\" awaiting apply — docs/history/lean-context/promote-proposals.md."}
+{"ts":"2026-11-04T07:02:32.965Z","event":"complete","id":"bf5c7c06-e458-439c-9737-091cd43b8443"}
+{"ts":"2026-11-04T07:02:36.389Z","event":"complete","id":"792a1a2e-6d00-4a47-9ef2-3962b1336707"}
+{"ts":"2026-11-04T07:02:36.389Z","event":"complete","id":"922aa2cd-8165-44c6-b8cd-f2e861985987"}
+{"ts":"2026-11-04T07:02:39.889Z","event":"complete","id":"0ce9bfb4-1060-4589-90d5-f311b56b4b5c"}
+{"ts":"2026-11-04T07:02:43.281Z","event":"complete","id":"03fd59e1-1d1e-4905-87b8-aa86b58fa17f"}
+{"ts":"2026-11-04T07:02:46.692Z","event":"complete","id":"ffd505b2-a7e3-432b-a85f-dac28470d08b"}
+{"ts":"2026-11-04T07:02:50.014Z","event":"complete","id":"e1628b37-14a5-46c6-ba2c-fce8e7fa8369"}
+{"ts":"2026-11-04T07:02:53.686Z","event":"complete","id":"f231dc28-d1c8-43c6-8843-e951251d3141"}
