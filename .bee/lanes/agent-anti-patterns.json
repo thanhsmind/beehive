@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "agent-anti-patterns",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"agent-anti-patterns\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 86307ea; capture what settled, then bee close --feature agent-anti-patterns.",
+  "next_action": "bee close --feature agent-anti-patterns",
   "created_at": "2026-11-04T03:30:36.249Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,5 +25,14 @@
     "rationale": null,
     "updated_at": "2026-11-04T03:30:36.297Z",
     "feature": "agent-anti-patterns"
+  },
+  "last_scribing_run": {
+    "feature": "agent-anti-patterns",
+    "date": "2026-11-04",
+    "at": "2026-11-04T03:46:38.382Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "bee close --feature agent-anti-patterns"
   }
 }

@@ -1838,5 +1838,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-04T03:16:05.223Z"
+  },
+  "agent-anti-patterns": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-04T03:46:40.348Z"
   }
 }

@@ -1,0 +1,159 @@
+{
+  "id": "aap-1",
+  "feature": "agent-anti-patterns",
+  "title": "Plans lock the contract and need a real dependency to split work",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "831b3afa-cb98-4c76-b576-a4a30e9add72",
+    "eb394d8f-cf7d-4344-8ab6-6e22349b3c1e",
+    "f19e05d1-a678-460b-8257-de014849b287"
+  ],
+  "files": [
+    "skills/bee-planning/references/planning-reference.md",
+    "expertise/planning.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/agent-anti-patterns/CONTEXT.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "expertise/planning.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [],
+  "action": "Make the planning and worker doctrine say what D1 and D2 of docs/history/agent-anti-patterns/CONTEXT.md lock. After this cell: a planner reading the Cell quality rules knows an action names the outcome and the contract and leaves internal structure to the worker; a planner reading expertise/planning.md knows expand-migrate-contract, phases and slices need a real dependency and meets the removal test; a worker reading the rendered cell prompt knows a simpler route that keeps every truth and prohibition is its call, recorded as a found-a-better-route departure; the goal-check text says it compares artifacts with must_haves and cited decisions, not with action wording. Where and how to word each edit is yours; keep each short and in the file's voice, and keep the existing expand-migrate-contract craft for the case where a real dependency exists. If the rendered-prompt golden test pins the old text, update only that expectation. Run bee dev regen and commit its outputs with the sources. A parallel worker (cell aap-2) edits packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs in the same worktree: never stage, commit or revert it. No code comments. One commit with the trailer `cell: aap-1`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "the Cell quality rules say an action names the outcome and the contract and leaves internal structure to the worker unless it crosses a shared contract",
+      "expertise/planning.md says expand-migrate-contract, phases and slices need a real dependency, names the three kinds, and asks the removal test",
+      "a temporary bridge is filed with bee backlog add naming its removal condition",
+      "the rendered cell prompt says a simpler route that keeps every truth and prohibition is the worker's call, recorded as a found-a-better-route departure",
+      "the goal-check compares artifacts with must_haves and cited decisions, never with action wording",
+      "the regenerated outputs match their sources"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-planning/references/planning-reference.md",
+        "substantive": "Cell quality rule on contract-not-implementation actions"
+      },
+      {
+        "path": "expertise/planning.md",
+        "substantive": "real-dependency test and removal test beside expand-migrate-contract"
+      }
+    ],
+    "key_links": [
+      "bee dev regen output committed with the source edits"
+    ],
+    "prohibitions": [
+      "No text that orders a worker to find faults, doubt the lead, or dissent",
+      "No length cap on cell actions",
+      "Do not delete the expand-migrate-contract craft; narrow when it applies",
+      "Never stage or commit packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+    ],
+    "open_choices": [
+      "Putting the contract rule into Cell quality rule 1 instead of a new rule"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-aap-1",
+    "outcome": "Planning, worker and goal-check doctrine now carry agent-anti-patterns D1 and D2; regen outputs committed",
+    "files_changed": [
+      "skills/bee-planning/references/planning-reference.md",
+      "expertise/planning.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T03:37:51.413Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify command: 465 drivers/prompts lib tests incl. native_cell_prompt_render_is_byte_identical_to_golden (confirmed by an --exact run), pointer_integrity 9, instruction_laws 10, skill_triggers 1 (1 ignored), manifest 593 files match; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-04T03:32:35.456Z",
+    "mistakes": [
+      {
+        "wrong": "my first rg filter on the golden-test output matched nothing, so it looked like the test had not run",
+        "better": "run the test by name with --exact first",
+        "fix_at": "none"
+      },
+      {
+        "wrong": "first cells finish used a shortened proof command and was refused",
+        "better": "copy the cell verify string verbatim into the proof line",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "D1 contract rule in planning-reference.md Cell quality rule 1; D2 real-dependency test, removal test and backlog bridge in expertise/planning.md paragraph 'Split only on a real dependency' above 'Expand, migrate, contract' (narrowed to 'When a real dependency holds'); better-route line in packages/bee/prompts/worker-cell.md after the open-choices block, pinned in drivers/tests.rs GOLDEN_NATIVE_CELL_PROMPT; goal-check 'never against the action's wording' in swarming-reference.md step 7 Leader completeness check bullet; bee dev regen outputs in commit 62cbf1a64",
+      "commit": "62cbf1a64",
+      "files": [
+        "skills/bee-planning/references/planning-reference.md",
+        "expertise/planning.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test skill_triggers && .bee/bin/bee dev release-manifest --check — green:unit — cell verify command: 465 drivers/prompts lib tests incl. native_cell_prompt_render_is_byte_identical_to_golden (confirmed by an --exact run), pointer_integrity 9, instruction_laws 10, skill_triggers 1 (1 ignored), manifest 593 files match; full suite not run",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "my first rg filter on the golden-test output matched nothing, so it looked like the test had not run — run the test by name with --exact first — none",
+        "first cells finish used a shortened proof command and was refused — copy the cell verify string verbatim into the proof line — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the Cell quality rules say an action names the outcome and the contract and leaves internal structure to the worker unless it crosses a shared contract",
+            "artifact": "skills/bee-planning/references/planning-reference.md"
+          },
+          {
+            "requirement": "expertise/planning.md says expand-migrate-contract, phases and slices need a real dependency, names the three kinds, and asks the removal test",
+            "artifact": "expertise/planning.md"
+          },
+          {
+            "requirement": "a temporary bridge is filed with bee backlog add naming its removal condition",
+            "artifact": "expertise/planning.md"
+          },
+          {
+            "requirement": "the rendered cell prompt says a simpler route that keeps every truth and prohibition is the worker's call, recorded as a found-a-better-route departure",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "the goal-check compares artifacts with must_haves and cited decisions, never with action wording",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "the regenerated outputs match their sources",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-04T03:46:30.423Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
