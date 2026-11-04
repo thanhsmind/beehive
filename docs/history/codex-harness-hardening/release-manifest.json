@@ -86,7 +86,7 @@
     },
     {
       "path": ".bee/expertise/planning.md",
-      "sha256": "a6075bd7de418e8ca168d499df1c11eb6099559f160ed52aa7e10cf78f684cfb",
+      "sha256": "2fb019904d455b9cdb7d117d15be3709b31921cea643a9754b3bbba7d96062a8",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "856a51e9ac53e6b8813beaa634dbda9c6a5a69157c494287a2c452d1fc03e2ce",
+      "sha256": "1697b9de172defe8e3256390d16d45e8a0d72028300ae7d284c982b0715173e0",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -555,6 +555,13 @@
       "packagePath": ".claude-plugin/skills/bee-principle-crash-site-versus-fault-site/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-principle-lock-the-contract/SKILL.md",
+      "sha256": "f94353bc00d6e4b27677ac2b0ba590add142aa00c1f4f01c7b0b234da8653e78",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-lock-the-contract/SKILL.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
       "sha256": "43f2def524131de8289ecc7f59a666b6ec9e8eb7d733f1e3ac72b6aa5d56e271",
       "mode": "644",
@@ -609,6 +616,13 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-principle-split-never-shrink/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-split-on-a-real-dependency/SKILL.md",
+      "sha256": "2a5563ba6b79495c1ef7da720f4125631cadcf6ae2008a6eb7b1573d4d3681d1",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-split-on-a-real-dependency/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-principle-test-behavior-not-structure/SKILL.md",
@@ -990,7 +1004,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "5220c2c8cc2e6b5dbf2ad93ac063254ea181b0cacc4feda964f47f811e1522fa",
+      "sha256": "a8aff57d9e6ab2778eed0f5d81eb0ae9ca69f3aa827e70575d36b2ecfec51895",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1409,6 +1423,13 @@
       "packagePath": ".codex-plugin/skills/bee-principle-crash-site-versus-fault-site/SKILL.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-principle-lock-the-contract/SKILL.md",
+      "sha256": "f94353bc00d6e4b27677ac2b0ba590add142aa00c1f4f01c7b0b234da8653e78",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-lock-the-contract/SKILL.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
       "sha256": "43f2def524131de8289ecc7f59a666b6ec9e8eb7d733f1e3ac72b6aa5d56e271",
       "mode": "644",
@@ -1463,6 +1484,13 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-principle-split-never-shrink/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-split-on-a-real-dependency/SKILL.md",
+      "sha256": "2a5563ba6b79495c1ef7da720f4125631cadcf6ae2008a6eb7b1573d4d3681d1",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-split-on-a-real-dependency/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-principle-test-behavior-not-structure/SKILL.md",
@@ -2035,7 +2063,7 @@
     },
     {
       "path": "expertise/planning.md",
-      "sha256": "a6075bd7de418e8ca168d499df1c11eb6099559f160ed52aa7e10cf78f684cfb",
+      "sha256": "2fb019904d455b9cdb7d117d15be3709b31921cea643a9754b3bbba7d96062a8",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -3699,6 +3727,13 @@
       "packagePath": "skills/bee-principle-crash-site-versus-fault-site/SKILL.md"
     },
     {
+      "path": "skills/bee-principle-lock-the-contract/SKILL.md",
+      "sha256": "f94353bc00d6e4b27677ac2b0ba590add142aa00c1f4f01c7b0b234da8653e78",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-lock-the-contract/SKILL.md"
+    },
+    {
       "path": "skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md",
       "sha256": "43f2def524131de8289ecc7f59a666b6ec9e8eb7d733f1e3ac72b6aa5d56e271",
       "mode": "644",
@@ -3753,6 +3788,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-principle-split-never-shrink/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-split-on-a-real-dependency/SKILL.md",
+      "sha256": "2a5563ba6b79495c1ef7da720f4125631cadcf6ae2008a6eb7b1573d4d3681d1",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-split-on-a-real-dependency/SKILL.md"
     },
     {
       "path": "skills/bee-principle-test-behavior-not-structure/SKILL.md",

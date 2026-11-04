@@ -55,6 +55,10 @@
       "sha256": "ff446600bed647741133fbba1b715d9a36a74cdc2375553bfe6eb7d6efa22fa5"
     },
     {
+      "name": "bee-principle-lock-the-contract",
+      "sha256": "8292e4aa3ce5542fc4c542a9c6b8af2e675e1500d9bf8263c37f4ef2da2ff0fd"
+    },
+    {
       "name": "bee-principle-never-invent-behavior-neither-side-has",
       "sha256": "4230d8c46673ee72bfed1242239c1ddcb45ac5b6b0841e6f6138138c30ee74b3"
     },
@@ -85,6 +89,10 @@
     {
       "name": "bee-principle-split-never-shrink",
       "sha256": "a620813ed9a8f378d3612a673c1d4e372b62adf0ed871710786fcfdc85a2e7ab"
+    },
+    {
+      "name": "bee-principle-split-on-a-real-dependency",
+      "sha256": "72da3b99be0d77f63c6c70c0f9f3306e83fe2b33f43ee269deeeab1d510704eb"
     },
     {
       "name": "bee-principle-test-behavior-not-structure",

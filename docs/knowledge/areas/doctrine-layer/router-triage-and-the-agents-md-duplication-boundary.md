@@ -405,6 +405,18 @@ plugin trees, not just `skills/`.
   - applied_at:
     - `skills/bee-principle-build-the-lever/SKILL.md`
 
+- `bee-principle-lock-the-contract` (expertise/planning.md § Lock the contract):
+  spoken: a cell's action names the outcome and the contract it must keep — inputs, outputs, persisted state, error shape, the proving tests — and leaves the implementation to the worker
+  classes: feature, refactor, perf
+  - applied_at:
+    - `skills/bee-principle-lock-the-contract/SKILL.md`
+
+- `bee-principle-split-on-a-real-dependency` (expertise/planning.md § Split only on a real dependency):
+  spoken: a phase, slice or expand-migrate-contract needs a real dependency — skip it and go straight to the final state: what breaks? Nothing breaks, it is not a phase
+  classes: feature, refactor, perf
+  - applied_at:
+    - `skills/bee-principle-split-on-a-real-dependency/SKILL.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens
