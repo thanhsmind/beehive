@@ -460,12 +460,19 @@ pub(crate) fn commit_main_bookkeeping(main_root: &Path, message: &str, pathspecs
             excludes.push(spec);
             continue;
         }
-        if main_root.join(spec).exists() || {
-            let tracked = run_git(main_root, &["ls-files", "--", spec]);
-            !js_trim(&tracked.stdout.unwrap_or_default()).is_empty()
-        } {
-            includes.push(spec);
+        let tracked = run_git(main_root, &["ls-files", "--", spec]);
+        let is_tracked = !js_trim(&tracked.stdout.unwrap_or_default()).is_empty();
+        let exists_on_disk = main_root.join(spec).exists();
+        if !is_tracked && !exists_on_disk {
+            continue;
         }
+        if !is_tracked && exists_on_disk {
+            let ignored = run_git(main_root, &["check-ignore", "-q", "--", spec]).status == Some(0);
+            if ignored {
+                continue;
+            }
+        }
+        includes.push(spec);
     }
     if includes.is_empty() {
         return MainBookkeepingCommit::skipped("clean");
@@ -485,13 +492,58 @@ pub(crate) fn commit_main_bookkeeping(main_root: &Path, message: &str, pathspecs
         return MainBookkeepingCommit::skipped("clean");
     }
 
-    let mut add_args: Vec<&str> = vec!["add", "-A", "--"];
+    let mut add_args: Vec<&str> = vec!["add", "-A", "--ignore-errors", "--"];
     add_args.extend_from_slice(&specs);
-    let add = run_git(main_root, &add_args);
+    let mut add = run_git(main_root, &add_args);
+    if add.status != Some(0) && includes.len() > 1 {
+        let mut reset_args: Vec<&str> = vec!["reset", "--"];
+        reset_args.extend_from_slice(&specs);
+        let _ = run_git(main_root, &reset_args);
+        let mut surviving_includes: Vec<&str> = Vec::new();
+        for inc in &includes {
+            let mut single_specs = vec![*inc];
+            single_specs.extend(excludes.iter().copied());
+            let mut single_args: Vec<&str> = vec!["add", "-A", "--ignore-errors", "--"];
+            single_args.extend_from_slice(&single_specs);
+            let single_add = run_git(main_root, &single_args);
+            if single_add.status == Some(0) {
+                surviving_includes.push(*inc);
+            } else {
+                let single_reset: Vec<&str> = vec!["reset", "--", *inc];
+                let _ = run_git(main_root, &single_reset);
+            }
+        }
+        if !surviving_includes.is_empty() {
+            includes = surviving_includes;
+            specs = includes.clone();
+            specs.extend(excludes.clone());
+            add = GitOut {
+                status: Some(0),
+                stdout: Some(String::new()),
+                stderr: Some(String::new()),
+            };
+        }
+    }
     match add.status {
         Some(0) => {}
-        Some(_) => return MainBookkeepingCommit::skipped(format!("git_failed:{}", git_fail_first_line(&add))),
-        None => return MainBookkeepingCommit::skipped("git_failed:git add could not be spawned"),
+        Some(_) => {
+            let mut reset_args: Vec<&str> = vec!["reset", "--"];
+            reset_args.extend_from_slice(&specs);
+            let index_restored = run_git(main_root, &reset_args).status == Some(0);
+            return MainBookkeepingCommit::Skipped {
+                reason: format!("git_failed:{}", git_fail_first_line(&add)),
+                index_restored: Some(index_restored),
+            };
+        }
+        None => {
+            let mut reset_args: Vec<&str> = vec!["reset", "--"];
+            reset_args.extend_from_slice(&specs);
+            let index_restored = run_git(main_root, &reset_args).status == Some(0);
+            return MainBookkeepingCommit::Skipped {
+                reason: "git_failed:git add could not be spawned".to_string(),
+                index_restored: Some(index_restored),
+            };
+        }
     }
 
     let commit_includes: Vec<&str> = includes
