@@ -470,8 +470,8 @@ pub(crate) fn commit_main_bookkeeping(main_root: &Path, message: &str, pathspecs
     if includes.is_empty() {
         return MainBookkeepingCommit::skipped("clean");
     }
-    let mut specs: Vec<&str> = includes;
-    specs.extend(excludes);
+    let mut specs: Vec<&str> = includes.clone();
+    specs.extend(excludes.clone());
 
     let mut status_args: Vec<&str> = vec!["status", "--porcelain", "--"];
     status_args.extend_from_slice(&specs);
@@ -494,7 +494,28 @@ pub(crate) fn commit_main_bookkeeping(main_root: &Path, message: &str, pathspecs
         None => return MainBookkeepingCommit::skipped("git_failed:git add could not be spawned"),
     }
 
-    let commit_out = commit_unsigned(main_root, message, &specs);
+    let commit_includes: Vec<&str> = includes
+        .iter()
+        .copied()
+        .filter(|spec| {
+            let ls = run_git(main_root, &["ls-files", "--", spec]);
+            if !js_trim(&ls.stdout.unwrap_or_default()).is_empty() {
+                return true;
+            }
+            let diff = run_git(main_root, &["diff", "--cached", "--name-only", "--", spec]);
+            !js_trim(&diff.stdout.unwrap_or_default()).is_empty()
+        })
+        .collect();
+    if commit_includes.is_empty() {
+        let mut reset_args: Vec<&str> = vec!["reset", "--"];
+        reset_args.extend_from_slice(&specs);
+        let _ = run_git(main_root, &reset_args);
+        return MainBookkeepingCommit::skipped("clean");
+    }
+    let mut commit_specs: Vec<&str> = commit_includes;
+    commit_specs.extend(excludes.iter().copied());
+
+    let commit_out = commit_unsigned(main_root, message, &commit_specs);
     if commit_out.stdout.is_none() {
         let mut reset_args: Vec<&str> = vec!["reset", "--"];
         reset_args.extend_from_slice(&specs);

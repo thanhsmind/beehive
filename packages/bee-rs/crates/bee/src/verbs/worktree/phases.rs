@@ -493,7 +493,9 @@ pub(crate) fn merge_stage(
         let branch_changed = current_branch(&worktree_root)
             .and_then(|b| branch_changed_files(main_root, &b));
         let collides = |path: &String| branch_changed.as_ref().map_or(true, |c| c.contains(path));
-        let unsweepable: Vec<String> = main_untracked_under(main_root, &roots)
+        let non_store_roots: Vec<String> =
+            roots.iter().filter(|r| !r.starts_with(".bee")).cloned().collect();
+        let unsweepable: Vec<String> = main_untracked_under(main_root, &non_store_roots)
             .map_err(MErr::Thrown)?
             .into_iter()
             .filter(|u| collides(u))
@@ -691,6 +693,11 @@ pub(crate) fn merge_stage(
         js_trim(&run_git(main_root, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
     let merge_head_file = main_root.join(".git").join("MERGE_HEAD");
     let merge_message = format!("Merge worktree {id} (branch {branch}) via bee worktree merge");
+
+    let staged_store = run_git(main_root, &["diff", "--cached", "--name-only", "--", ".bee"]);
+    if !js_trim(&staged_store.stdout.unwrap_or_default()).is_empty() {
+        run_git(main_root, &["reset", "--", ".bee"]);
+    }
 
     let merge_result = run_git(main_root, &["merge", "--no-ff", "--no-commit", "--", &branch]);
     if merge_result.status != Some(0) {
