@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "agent-anti-patterns",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"agent-anti-patterns\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-11-04T03:30:36.249Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-11-04T03:30:36.297Z",
+    "feature": "agent-anti-patterns"
+  },
+  "merge_ready": {
+    "since": "2026-11-04T03:46:04.808Z",
+    "branch": "wt/agent-anti-patterns",
+    "worktree_id": "beehive--wt--agent-anti-patterns",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
