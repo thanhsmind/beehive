@@ -2469,6 +2469,126 @@ use std::time::Instant;
         assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
     }
 
+    #[test]
+    fn uncommitted_bee_store_changes_on_main_are_committed_before_git_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        std::fs::write(
+            main.join(".gitignore"),
+            ".bee/*\n!.bee/config.json\n!.bee/backlog.jsonl\n!.bee/cells/\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::write(main.join(".bee").join("backlog.jsonl"), "[\"init\"]\n").unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "track backlog and cells"]);
+
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::write(
+            created.worktree_root.join(".bee").join("backlog.jsonl"),
+            "[\"init\", \"branch\"]\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(created.worktree_root.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            created.worktree_root.join(".bee").join("cells").join("c1.json"),
+            "{\"id\":\"c1\"}\n",
+        )
+        .unwrap();
+        git_ok(&created.worktree_root, &["add", "-A"]);
+        git_ok(&created.worktree_root, &["commit", "-qm", "branch store changes"]);
+
+        std::fs::write(
+            main.join(".bee").join("backlog.jsonl"),
+            "[\"init\", \"main\"]\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("cells").join("c1.json"),
+            "{\"id\":\"c1\",\"status\":\"open\"}\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge refused unexpectedly: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "{}",
+            answer.result["bookkeeping_commit"]
+        );
+        let status = git_status_porcelain_str(&main);
+        assert!(!status.contains(".bee/backlog.jsonl"), "{status}");
+        assert!(!status.contains(".bee/cells"), "{status}");
+    }
+
+    #[test]
+    fn uncommitted_bee_store_changes_on_main_with_conflict_restores_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        std::fs::write(
+            main.join(".gitignore"),
+            ".bee/*\n!.bee/config.json\n!.bee/backlog.jsonl\n!.bee/cells/\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::write(main.join(".bee").join("backlog.jsonl"), "[\"init\"]\n").unwrap();
+        std::fs::write(main.join("f.txt"), "base content\n").unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "track store and code"]);
+
+        let created = worktree_with_a_real_commit(&main, "demo");
+        std::fs::write(created.worktree_root.join("f.txt"), "branch conflict\n").unwrap();
+        std::fs::write(
+            created.worktree_root.join(".bee").join("backlog.jsonl"),
+            "[\"init\", \"branch\"]\n",
+        )
+        .unwrap();
+        git_ok(&created.worktree_root, &["add", "-A"]);
+        git_ok(&created.worktree_root, &["commit", "-qm", "branch work"]);
+
+        std::fs::write(main.join("f.txt"), "main conflict\n").unwrap();
+        git_ok(&main, &["add", "f.txt"]);
+        git_ok(&main, &["commit", "-qm", "main code move"]);
+
+        std::fs::write(
+            main.join(".bee").join("backlog.jsonl"),
+            "[\"init\", \"main\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            main.join(".bee").join("cells").join("c1.json"),
+            "{\"id\":\"c1\"}\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw unexpectedly: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(!answer.ok);
+        assert_eq!(answer.result["code"], "MERGE_CONFLICT");
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true)
+        );
+        let status = git_status_porcelain_str(&main);
+        assert!(!status.contains(".bee/backlog.jsonl"), "{status}");
+        assert!(!status.contains(".bee/cells"), "{status}");
+        assert_eq!(
+            std::fs::read_to_string(main.join("f.txt")).unwrap(),
+            "main conflict\n"
+        );
+    }
+
     /// Truth 3 (path scoping), tested at the same grain close.rs tests its
     /// own bookkeeping commit: an unrelated STAGED file must never be swept
     /// into the `.bee`-scoped auto-commit, even though `commit_main_bookkeeping`

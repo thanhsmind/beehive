@@ -2450,21 +2450,34 @@ pub(crate) fn prepare_dispatch_wire(
     // (`ROLE_ALIASES`), renaming an agent no decision moved. Every other
     // dispatch still reads the ASKED token, so `--role extraction` keeps
     // `bee-extract` (B11) and `--kind reviewer` keeps `bee-review`.
-    let design_role = tier_token == "design";
-    let design_cell = kind == "cell" && design_role;
-    let prompt_body =
-        if design_cell { format!("{DESIGN_CELL_PREAMBLE}\n\n{prompt_body}") } else { prompt_body };
-    let pinned_type = match kind {
-        "cell" if design_role => "bee-design",
-        "cell" => "bee-build",
-        "gather" if default_gather || design_role => "bee-gather",
-        "reviewer" if design_role => "bee-review",
-        _ => pinned_agent_type(marker_role),
-    };
     let is_deployment = v2_info
         .as_ref()
         .map(|v| v.stage.as_deref() == Some("deployment"))
         .unwrap_or(false);
+    let design_role = tier_token == "design";
+    let design_cell = kind == "cell" && design_role;
+    let prompt_body = if is_deployment {
+        let ver = v2_info
+            .as_ref()
+            .and_then(|v| v.release_version.as_deref())
+            .unwrap_or_default();
+        deployment_prompt(ver)
+    } else if design_cell {
+        format!("{DESIGN_CELL_PREAMBLE}\n\n{prompt_body}")
+    } else {
+        prompt_body
+    };
+    let pinned_type = if is_deployment {
+        "bee-build"
+    } else {
+        match kind {
+            "cell" if design_role => "bee-design",
+            "cell" => "bee-build",
+            "gather" if default_gather || design_role => "bee-gather",
+            "reviewer" if design_role => "bee-review",
+            _ => pinned_agent_type(marker_role),
+        }
+    };
 
     let pane_prompt = if is_deployment {
         let ver = v2_info
@@ -2751,7 +2764,7 @@ pub(crate) fn prepare_dispatch_wire(
                 }
                 channel = "herding-exec".into();
             }
-            _ if runtime == "codex" && purpose_is_gather(kind) => {
+            _ if runtime == "codex" && purpose_is_gather(kind) && !is_deployment => {
                 // Native read-only gather/reviewer/advisor jobs need enforced filesystem
                 // restrictions. Current spawn_agent has no sandbox field, so we dispatch
                 // via an explicit read-only CLI sandbox:
@@ -2886,6 +2899,32 @@ pub(crate) fn prepare_dispatch_wire(
                         .unwrap_or_default();
                     let new_cmd = format!("export BEE_DISPATCH_ID=\"{dispatch_id}\" BEE_RELEASE_VERSION=\"{ver}\"{session_export}; {cmd}");
                     payload.insert("command".into(), Value::String(new_cmd));
+                } else {
+                    let (issuer_line, session_export) = match deploy_issuer_session.as_deref() {
+                        Some(sid) => (
+                            format!("Issuer session: {sid}\n"),
+                            format!("export BEE_SESSION_ID=\"{sid}\"\n"),
+                        ),
+                        None => (String::new(), String::new()),
+                    };
+                    let env_lines = format!(
+                        "\n\nDispatch ID: {dispatch_id}\n\
+                        Release version: {ver}\n\
+                        {issuer_line}\n\
+                        Export these on the shell that runs scripts/release.sh:\n\
+                        export BEE_DISPATCH_ID=\"{dispatch_id}\"\n\
+                        export BEE_RELEASE_VERSION=\"{ver}\"\n\
+                        {session_export}"
+                    );
+                    if let Some(p) = payload.get_mut("prompt") {
+                        if let Value::String(s) = p {
+                            s.push_str(&env_lines);
+                        }
+                    } else if let Some(m) = payload.get_mut("message") {
+                        if let Value::String(s) = m {
+                            s.push_str(&env_lines);
+                        }
+                    }
                 }
             }
         }

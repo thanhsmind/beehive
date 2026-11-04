@@ -1795,7 +1795,34 @@ pub(crate) fn unclaim_cell(
         // it is no longer finished. Fail-open, and after the status flip —
         // the next last-cap re-sets the fact with a fresh `since`.
         clear_merge_ready_for(&root, &cell);
+        release_reservations_for_unclaimed_cell(&root, &id);
         Ok(cell)
+    }
+}
+
+fn release_reservations_for_unclaimed_cell(root: &Path, cell_id: &str) {
+    let Some(root_s) = root.to_str() else { return; };
+    let Ok(records) = list_path_lease_records(root) else { return; };
+    let mut agents: Vec<String> = Vec::new();
+    for rec in &records {
+        if !matches!(rec.get("workflow_id"), Some(Value::String(c)) if c == cell_id) {
+            continue;
+        }
+        if let Some(Value::String(ws)) = rec.get("workspace_id") {
+            if let Some(agent) = ws.strip_prefix("agent:") {
+                if !agents.iter().any(|a| a == agent) {
+                    agents.push(agent.to_string());
+                }
+            }
+        }
+    }
+    let topology = match resolve_store_root_worktree(root) {
+        RootsWt::Go(roots) => roots.hold_topology(),
+        _ => None,
+    };
+    let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+    for agent in &agents {
+        let _ = rsv::release_reservations_for_agent(topo, root_s, agent, Some(cell_id));
     }
 }
 

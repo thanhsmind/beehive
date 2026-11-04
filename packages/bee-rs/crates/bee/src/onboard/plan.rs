@@ -20,7 +20,7 @@ use super::merge::{
     render_gitignore_block,
 };
 use super::migration::{detect_worktree_migration, WorktreeMigration};
-use super::notices::has_prose_outside_block;
+use super::notices::{self, has_prose_outside_block};
 use super::render::{
     render_skill_bytes, runtime_for_target_kind, validate_skill_markers, walk_skill_tree, Walk,
 };
@@ -53,6 +53,7 @@ pub struct Options {
     pub statusline: bool,
     pub runtime: String,
     pub design_packs: Option<Vec<String>>,
+    pub current_exe: Option<PathBuf>,
 }
 
 pub struct ComputedPlan {
@@ -759,6 +760,58 @@ fn known_design_packs(recorded: Option<&Value>) -> Vec<String> {
         .collect()
 }
 
+fn files_have_same_bytes(p1: &Path, p2: &Path) -> bool {
+    let Ok(m1) = p1.metadata() else { return false };
+    let Ok(m2) = p2.metadata() else { return false };
+    if m1.len() != m2.len() {
+        return false;
+    }
+    let Ok(b1) = std::fs::read(p1) else { return false };
+    let Ok(b2) = std::fs::read(p2) else { return false };
+    b1 == b2
+}
+
+fn hooks_expect_binary(repo_root: &Path, opts: &Options, codex_hybrid: bool) -> bool {
+    if opts.repo_hooks || (codex_hybrid && !hw::repo_owns_hook_catalog(repo_root)) {
+        return true;
+    }
+    if notices::has_repo_hooks_recorded(repo_root) {
+        return true;
+    }
+    let claude_settings = repo_root.join(".claude").join("settings.json");
+    if let Ok(text) = std::fs::read_to_string(&claude_settings) {
+        if text.contains(".bee/bin/bee") {
+            return true;
+        }
+    }
+    let codex_hooks = repo_root.join(".codex").join("hooks.json");
+    if let Ok(text) = std::fs::read_to_string(&codex_hooks) {
+        if text.contains(".bee/bin/bee") {
+            return true;
+        }
+    }
+    let hooks_dir = repo_root.join(".bee").join("bin").join("hooks");
+    if hooks_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&hooks_dir) {
+            if entries.filter_map(|e| e.ok()).any(|e| e.path().is_file()) {
+                return true;
+            }
+        }
+    }
+    if let Ok(text) = std::fs::read_to_string(repo_root.join(".bee").join("onboarding.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&text) {
+            if let Some(m) = v.get("managed") {
+                if m.get("repo_hooks").and_then(Value::as_object).is_some_and(|o| !o.is_empty())
+                    || m.get("codex_hooks").and_then(Value::as_object).is_some_and(|o| !o.is_empty())
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ComputedPlan {
     let mut plan: Vec<Value> = Vec::new();
     let codex_hybrid = opts.plugin_source && hw::runtime_covers_codex(&opts.runtime);
@@ -1072,6 +1125,52 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             stale.sort();
             for name in stale {
                 plan.push(plan_item("remove_pi_extension", &format!(".pi/extensions/bee-guard/{name}")));
+            }
+        }
+    }
+
+    let current_exe = opts.current_exe.clone().or_else(|| std::env::current_exe().ok());
+    if let Some(current_exe) = current_exe {
+        let binary_rel = if cfg!(windows) {
+            if repo_root.join(".bee").join("bin").join("bee.exe").symlink_metadata().is_ok() {
+                ".bee/bin/bee.exe"
+            } else if repo_root.join(".bee").join("bin").join("bee").symlink_metadata().is_ok() {
+                ".bee/bin/bee"
+            } else {
+                ".bee/bin/bee.exe"
+            }
+        } else if repo_root.join(".bee").join("bin").join("bee").symlink_metadata().is_ok() {
+            ".bee/bin/bee"
+        } else if repo_root.join(".bee").join("bin").join("bee.exe").symlink_metadata().is_ok() {
+            ".bee/bin/bee.exe"
+        } else {
+            ".bee/bin/bee"
+        };
+        let target_path = repo_root.join(binary_rel);
+        let is_symlink = target_path
+            .symlink_metadata()
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false);
+        let canon_exe = current_exe.canonicalize().ok();
+        let canon_target = target_path.canonicalize().ok();
+        let same_file = canon_exe.is_some() && canon_exe == canon_target;
+        let symlink_to_other_checkout = is_symlink
+            && (canon_target
+                .as_ref()
+                .map(|c| !c.starts_with(repo_root))
+                .unwrap_or(false)
+                || target_path
+                    .read_link()
+                    .map(|d| d.is_absolute() && !d.starts_with(repo_root))
+                    .unwrap_or(false));
+
+        if !same_file && !symlink_to_other_checkout {
+            if target_path.exists() {
+                if !files_have_same_bytes(&target_path, &current_exe) {
+                    plan.push(plan_item("copy_binary", binary_rel));
+                }
+            } else if hooks_expect_binary(repo_root, opts, codex_hybrid) {
+                plan.push(plan_item("copy_binary", binary_rel));
             }
         }
     }

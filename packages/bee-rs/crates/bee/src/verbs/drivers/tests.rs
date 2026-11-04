@@ -12356,3 +12356,192 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(fix_no_feat.contains("docs/history/<feature>/plan.md"));
         assert!(fix_no_feat.contains("## Role assignments"));
     }
+
+    #[test]
+    fn test_deploy_native_agent_payload_renders_brief_and_dispatch_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "claude": {
+                    "plan": "sonnet",
+                    "code": "sonnet",
+                    "test": "sonnet",
+                    "review": "sonnet",
+                    "supervisor": "sonnet",
+                    "deploy": "sonnet"
+                },
+                "codex": {
+                    "plan": "gpt-5",
+                    "code": "gpt-5",
+                    "test": "gpt-5",
+                    "review": "gpt-5",
+                    "supervisor": "gpt-5",
+                    "deploy": "gpt-5"
+                },
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("claude")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "claude").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "claude",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-deploy",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-deploy.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-deploy",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        let Prepared::Value(v_deploy_native) = prepare_dispatch_wire(
+            &root, "claude", "gather", Some("deploy"), None, None, false, None, None, true, None, None, Some("feat-deploy"), Some("deployment"), Some("sess-deploy"), Some("2.73.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for native deploy");
+        };
+
+        assert_eq!(v_deploy_native.get("tool"), Some(&json!("Agent")));
+        let dispatch_id = v_deploy_native.get("dispatch_id").and_then(Value::as_str).unwrap();
+        assert!(!dispatch_id.is_empty());
+
+        let payload = v_deploy_native.get("payload").unwrap();
+        let subagent_type = payload.get("subagent_type").and_then(Value::as_str).unwrap();
+        assert_ne!(subagent_type, "bee-gather");
+        assert_eq!(subagent_type, "bee-build");
+
+        let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt.contains("Deploy-stage execution brief"), "prompt must contain deploy brief: {prompt}");
+        assert!(prompt.contains("scripts/release.sh 2.73.0"), "prompt must name release command: {prompt}");
+        assert!(prompt.contains("Authorized release version: 2.73.0"), "prompt must name release version: {prompt}");
+        assert!(prompt.contains(dispatch_id), "prompt must carry dispatch id: {prompt}");
+        assert!(prompt.contains("BEE_DISPATCH_ID"), "prompt must name BEE_DISPATCH_ID: {prompt}");
+        assert!(prompt.contains("BEE_RELEASE_VERSION"), "prompt must name BEE_RELEASE_VERSION: {prompt}");
+        assert!(prompt.contains("BEE_SESSION_ID"), "prompt must name BEE_SESSION_ID: {prompt}");
+        assert!(prompt.contains("sess-deploy"), "prompt must carry issuer session: {prompt}");
+        assert!(!prompt.contains("Read-only"), "prompt must not say read-only: {prompt}");
+        assert!(!prompt.contains("never write"), "prompt must not forbid writes: {prompt}");
+
+        let pi_table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let pi_runtimes_arr = pi_table_val["runtimes"].as_array().unwrap();
+        let pi_rt_entry = pi_runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let pi_roles_arr = pi_rt_entry["roles"].as_array().unwrap();
+        let (pi_roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(pi_roles_arr);
+        let pi_role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": pi_roster_sha,
+            "stages": stages,
+        });
+        let pi_packet = serde_json::json!({
+            "feature": "feat-deploy-pi",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": pi_role_plan,
+        });
+        w(&root, ".bee/lanes/feat-deploy-pi.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-deploy-pi",
+            "approved_cell_packet": pi_packet,
+        })).unwrap());
+
+        let Prepared::Value(v_deploy_herding) = prepare_dispatch_wire(
+            &root, "pi", "gather", Some("deploy"), None, None, false, None, None, true, None, None, Some("feat-deploy-pi"), Some("deployment"), Some("sess-deploy"), Some("2.73.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for herding deploy");
+        };
+        assert_eq!(v_deploy_herding.get("tool"), Some(&json!("Bash")));
+        let h_payload = v_deploy_herding.get("payload").unwrap();
+        let h_cmd = h_payload.get("command").and_then(Value::as_str).unwrap();
+        let h_stdin = h_payload.get("stdin").and_then(Value::as_str).unwrap();
+        assert!(h_cmd.contains("export BEE_DISPATCH_ID="));
+        assert!(h_cmd.contains("BEE_RELEASE_VERSION=\"2.73.0\""));
+        assert!(h_cmd.contains("BEE_SESSION_ID=\"sess-deploy\""));
+        assert!(h_cmd.contains(".bee/bin/bee herding run"));
+        assert!(h_stdin.contains("Deploy-stage execution brief"));
+        assert_eq!(h_stdin, deployment_prompt("2.73.0"));
+
+        let hook_input = serde_json::json!({
+            "cwd": root.to_string_lossy(),
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "tool_input": payload,
+        });
+        let outcome = crate::hooks::model_guard::run(&[], &hook_input.to_string());
+        assert!(matches!(outcome, crate::hooks::Outcome::Done(code) if code == std::process::ExitCode::SUCCESS));
+
+        let codex_table_val = crate::verbs::models_group::team_table(&root, Some("codex")).unwrap();
+        let codex_runtimes_arr = codex_table_val["runtimes"].as_array().unwrap();
+        let codex_rt_entry = codex_runtimes_arr.iter().find(|r| r["runtime"] == "codex").unwrap();
+        let codex_roles_arr = codex_rt_entry["roles"].as_array().unwrap();
+        let (codex_roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(codex_roles_arr);
+        let codex_role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "codex",
+            "roster_sha256": codex_roster_sha,
+            "stages": stages,
+        });
+        let codex_packet = serde_json::json!({
+            "feature": "feat-deploy-codex",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": codex_role_plan,
+        });
+        w(&root, ".bee/lanes/feat-deploy-codex.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-deploy-codex",
+            "approved_cell_packet": codex_packet,
+        })).unwrap());
+
+        let Prepared::Value(v_deploy_codex) = prepare_dispatch_wire(
+            &root, "codex", "gather", Some("deploy"), None, None, false, None, None, true, None, None, Some("feat-deploy-codex"), Some("deployment"), Some("sess-deploy"), Some("2.73.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for codex deploy");
+        };
+        assert_eq!(v_deploy_codex.get("tool"), Some(&json!("spawn_agent")));
+        let c_payload = v_deploy_codex.get("payload").unwrap();
+        let c_message = c_payload.get("message").and_then(Value::as_str).unwrap();
+        assert!(c_message.contains("Deploy-stage execution brief"));
+        assert!(c_message.contains("scripts/release.sh 2.73.0"));
+        assert!(c_message.contains("BEE_DISPATCH_ID"));
+        assert!(c_message.contains("BEE_RELEASE_VERSION"));
+        assert!(c_message.contains("BEE_SESSION_ID"));
+        assert!(!c_message.contains("Read-only"));
+        assert!(c_payload.get("command").is_none());
+    }

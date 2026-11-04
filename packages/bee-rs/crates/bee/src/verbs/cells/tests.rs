@@ -2537,6 +2537,53 @@ use std::time::Instant;
         assert!(held_paths(root).is_empty(), "zero declared paths reserves nothing");
     }
 
+    #[test]
+    fn unclaim_releases_reservations_held_for_that_cell() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "echo ok"}}));
+        lane_with_route(root, "urfeat");
+        write_cell_fixture(
+            root,
+            "ur-1",
+            &cell_with_files("ur-1", "urfeat", json!(["src/ur_one.rs", "src/ur_two.rs"])),
+        );
+
+        let door = claim_cell_with_reservations(
+            root,
+            main_topo(root),
+            "ur-1",
+            "worker-ur",
+            Some("sess-ur"),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+        assert_eq!(held_paths(root).len(), 2);
+
+        foreign_lease(root, "worker-other", "other-cell", "src/other.rs");
+        assert_eq!(held_paths(root).len(), 3);
+
+        unclaim_cell(root, "ur-1", Some("sess-ur"), false).unwrap();
+
+        assert_eq!(
+            held_paths(root),
+            vec![("src/other.rs".to_string(), "worker-other".to_string(), "other-cell".to_string())]
+        );
+
+        let re_door = claim_cell_with_reservations(
+            root,
+            main_topo(root),
+            "ur-1",
+            "worker-ur",
+            Some("sess-ur"),
+            None,
+            None,
+        );
+        assert!(re_door.is_ok());
+    }
+
     /// Constraint 2: a conflicting claim is refused TYPED and ZERO-MUTATION.
     /// The conflict sits on the SECOND declared path on purpose, so the first
     /// one is genuinely reserved before the refusal — the rollback has real

@@ -429,6 +429,7 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
         statusline: args.statusline && statusline_config_allowed && !is_powershell,
         runtime: args.runtime.clone(),
         design_packs: args.design_packs.clone(),
+        current_exe: None,
     };
     let statusline_skip_notices: Vec<String> =
         if args.statusline && statusline_config_allowed && is_powershell {

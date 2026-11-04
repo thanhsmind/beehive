@@ -151,3 +151,16 @@ shared holds ledger closes that gap at WRITE time:
   hold lapses by TTL if its owner dies. On a normal path (revised multisession-native D4)
   there is nothing to wait on at write time at all — the write proceeds with a warning, and
   the merge verify-gate stays the final semantic net for that path instead.
+
+## Re-reserving your own lease, and unclaim releases (bee-report-fixes D1, 2026-11-04)
+
+A reserve by the same agent for the same cell, over a live lease that
+agent already holds, refreshes the lease and answers ok. It used to meet
+its own lease on the exclusive create and report a conflict with itself,
+so `dispatch prepare --claim` refused a re-claim after `bee cells
+unclaim`. A different agent or a different cell still conflicts.
+
+`bee cells unclaim` now releases the reservations held for that cell,
+through the same releaser `bee reservations release --agent --cell`
+uses, for every agent whose lease names the cell. A separate release
+after unclaim is a harmless no-op.

@@ -321,6 +321,17 @@ other, so a green slice could not land at all.
   session's spec sync; nothing was lost, but both the authorship and the
   feature attribution were wrong, and a peer session found it, not a test.
 
+## A dirty main store never sits staged when the merge starts (bee-report-fixes D2, 2026-11-04)
+
+The bookkeeping commit used to stage main's dirty `.bee` store, then fail
+on a pathspec that named an empty or absent store root. The files stayed
+staged, and `git merge --no-ff --no-commit` refused with "Your local
+changes would be overwritten", which surfaced as
+`WORKTREE_MERGE_ABORT_FAILED`. The commit now passes only the pathspecs
+git knows, and the merge stage unstages any leftover `.bee` index entry
+before `git merge` runs. Untracked store files no longer block as
+unsweepable collisions, because the bookkeeping commit takes them.
+
 ## Concurrent merges serialize through an integration queue, never the lock (multisession-native D8 stage 5, D9 invariant 12, msn-22)
 
 Phase 2's lock release (D10b, above) is correct for letting other worktree-admin
