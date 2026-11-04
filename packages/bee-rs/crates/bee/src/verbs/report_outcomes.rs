@@ -1,5 +1,5 @@
 use crate::jsjson;
-use crate::roots::{resolve_store_root_worktree, RootsWt};
+use crate::roots::{resolve_store_root_worktree, RootsWt, StoreRoots};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -63,7 +63,7 @@ fn run(opts: &Opts, t0: Instant) -> ExitCode {
         }
         RootsWt::None => return emit_no_root_error(&cwd, CMD, opts.json, t0),
     };
-    let report = collect_outcomes(&roots.root, opts.feature.as_deref());
+    let report = collect_outcomes(&ledger_root(&roots), opts.feature.as_deref());
     if opts.json {
         println!("{}", jsjson::stringify_pretty(&render_json(&report)));
     } else {
@@ -71,6 +71,10 @@ fn run(opts: &Opts, t0: Instant) -> ExitCode {
     }
     record_timing(&roots.root, CMD, t0, true);
     ExitCode::SUCCESS
+}
+
+fn ledger_root(roots: &StoreRoots) -> PathBuf {
+    roots.main_root()
 }
 
 fn fail(root: &Path, use_json: bool, kind: &'static str, msg: String, t0: Instant) -> ExitCode {
@@ -342,10 +346,11 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
             }
         }
 
-        if let Some(rework_val) = trace_obj.and_then(|t| t.get("reopened_for_rework")) {
-            if is_truthy(rework_val) {
-                report.rework.cells_with_record += 1;
-            }
+        let reworked = ["reopened_for_rework", "reopened_at"]
+            .iter()
+            .any(|k| trace_obj.and_then(|t| t.get(*k)).is_some_and(is_truthy));
+        if reworked {
+            report.rework.cells_with_record += 1;
         }
 
         if let Some(reroute_arr) = obj.get("role_reroutes").and_then(Value::as_array) {
@@ -629,6 +634,10 @@ mod tests {
             cells.join("c-16.json"),
             r#"{"id":"c-16","feature":"slp-article-gaps","trace":{"reopened_for_rework":{"reason":"fix"}}}"#,
         ).unwrap();
+        std::fs::write(
+            cells.join("c-16b.json"),
+            r#"{"id":"c-16b","feature":"slp-article-gaps","trace":{"reopened_at":"2026-11-04T00:00:00Z","reopened_reason":"goal-check miss"}}"#,
+        ).unwrap();
 
         std::fs::write(
             cells.join("c-17.json"),
@@ -658,7 +667,7 @@ mod tests {
         let (_tmp, root) = setup_fixture_store();
         let report = collect_outcomes(&root, Some("slp-article-gaps"));
 
-        assert_eq!(report.cells_scanned, 18);
+        assert_eq!(report.cells_scanned, 19);
         assert_eq!(report.unreadable.len(), 1);
         assert!(report.unreadable[0].ends_with("corrupt.json"));
 
@@ -667,7 +676,7 @@ mod tests {
         assert_eq!(report.reaction.challenge, 1);
         assert_eq!(report.reaction.blocked, 1);
         assert_eq!(report.reaction.null, 1);
-        assert_eq!(report.reaction.absent, 12);
+        assert_eq!(report.reaction.absent, 13);
         assert_eq!(report.reaction.cells_with_record(), 6);
         assert_eq!(report.reaction.changed(), 3);
 
@@ -689,8 +698,8 @@ mod tests {
         assert_eq!(report.leader_check.verdicts.get("gap"), Some(&1));
         assert_eq!(report.leader_check.changed(), 1);
 
-        assert_eq!(report.rework.cells_with_record, 1);
-        assert_eq!(report.rework.changed(), 1);
+        assert_eq!(report.rework.cells_with_record, 2);
+        assert_eq!(report.rework.changed(), 2);
 
         assert_eq!(report.role_reroute.cells_with_record, 1);
         assert_eq!(report.role_reroute.entries, 1);
@@ -700,19 +709,19 @@ mod tests {
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 7);
         assert!(lines[0].starts_with("worker reaction: 6 cells (3 changed)"));
-        assert!(lines[0].contains("confirm: 2, partial: 1, challenge: 1, blocked: 1, null: 1, absent: 12"));
+        assert!(lines[0].contains("confirm: 2, partial: 1, challenge: 1, blocked: 1, null: 1, absent: 13"));
         assert!(lines[1].starts_with("dissent: 4 cells, 4 records (2 changed)"));
         assert!(lines[1].contains("accept: 1, reject: 1, escalate: 1, unanswered: 1"));
         assert!(lines[2].starts_with("semantic judge: 3 cells, 3 records (1 changed)"));
         assert!(lines[2].contains("PASS: 1, NEEDS_REVISION: 1, other: 1"));
         assert!(lines[3].starts_with("leader check: 2 cells, 2 records (1 changed)"));
         assert!(lines[3].contains("gap: 1, ok: 1"));
-        assert_eq!(lines[4], "rework: 1 cells (1 changed)");
+        assert_eq!(lines[4], "rework: 2 cells (2 changed)");
         assert_eq!(lines[5], "role reroute: 1 cells, 1 records (1 changed)");
         assert!(lines[6].starts_with("unreadable: 1"));
 
         let json = render_json(&report);
-        assert_eq!(json["cells_scanned"], 18);
+        assert_eq!(json["cells_scanned"], 19);
         assert_eq!(json["reaction"]["confirm"], 2);
         assert_eq!(json["reaction"]["changed"], 3);
         assert_eq!(json["dissent"]["accept"], 1);
@@ -721,7 +730,7 @@ mod tests {
         assert_eq!(json["semantic_judge"]["changed"], 1);
         assert_eq!(json["leader_check"]["verdicts"]["gap"], 1);
         assert_eq!(json["leader_check"]["changed"], 1);
-        assert_eq!(json["rework"]["changed"], 1);
+        assert_eq!(json["rework"]["changed"], 2);
         assert_eq!(json["role_reroute"]["changed"], 1);
     }
 
@@ -730,7 +739,7 @@ mod tests {
         let (_tmp, root) = setup_fixture_store();
         let report = collect_outcomes(&root, None);
 
-        assert_eq!(report.cells_scanned, 19);
+        assert_eq!(report.cells_scanned, 20);
         assert_eq!(report.reaction.blocked, 2);
         assert_eq!(report.reaction.changed(), 4);
     }
@@ -840,16 +849,19 @@ mod tests {
         )
         .unwrap();
 
+        std::fs::create_dir_all(main.join(".bee/runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee/runtime/worktree-grants.json"),
+            r#"{"wt": true}"#,
+        )
+        .unwrap();
+
         let RootsWt::Go(roots) = resolve_store_root_worktree(&wt) else {
             panic!("worktree did not resolve");
         };
-        assert!(roots.linked.is_some());
-        assert_eq!(
-            roots.root.canonicalize().unwrap(),
-            main.canonicalize().unwrap()
-        );
+        assert!(roots.linked.as_ref().is_some_and(|l| l.granted()));
 
-        let report = collect_outcomes(&roots.root, None);
+        let report = collect_outcomes(&ledger_root(&roots), None);
         assert_eq!(report.cells_scanned, 1);
         assert_eq!(report.reaction.confirm, 1);
         assert_eq!(report.reaction.blocked, 0);
