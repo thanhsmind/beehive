@@ -2900,15 +2900,21 @@ pub(crate) fn prepare_dispatch_wire(
                     let new_cmd = format!("export BEE_DISPATCH_ID=\"{dispatch_id}\" BEE_RELEASE_VERSION=\"{ver}\"{session_export}; {cmd}");
                     payload.insert("command".into(), Value::String(new_cmd));
                 } else {
-                    let issuer = deploy_issuer_session.as_deref().unwrap_or_default();
+                    let (issuer_line, session_export) = match deploy_issuer_session.as_deref() {
+                        Some(sid) => (
+                            format!("Issuer session: {sid}\n"),
+                            format!("export BEE_SESSION_ID=\"{sid}\"\n"),
+                        ),
+                        None => (String::new(), String::new()),
+                    };
                     let env_lines = format!(
                         "\n\nDispatch ID: {dispatch_id}\n\
                         Release version: {ver}\n\
-                        Issuer session: {issuer}\n\n\
-                        Export BEE_DISPATCH_ID, BEE_RELEASE_VERSION and BEE_SESSION_ID on the shell that runs scripts/release.sh:\n\
+                        {issuer_line}\n\
+                        Export these on the shell that runs scripts/release.sh:\n\
                         export BEE_DISPATCH_ID=\"{dispatch_id}\"\n\
                         export BEE_RELEASE_VERSION=\"{ver}\"\n\
-                        export BEE_SESSION_ID=\"{issuer}\"\n"
+                        {session_export}"
                     );
                     if let Some(p) = payload.get_mut("prompt") {
                         if let Value::String(s) = p {
