@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "I have the deploy permit. Now I start the deploy worker to run the release.",
-    "asked_at": "2026-11-04T09:38:24.925Z",
+    "kind": "question",
+    "subject": "User sets team.claude.deploy to sonnet in .bee/config.json lines 150-154",
+    "asked_at": "2026-11-04T10:37:07.154Z",
     "session": "2656a557-4baf-4aa1-ba9a-6292e1869680"
   }
 }

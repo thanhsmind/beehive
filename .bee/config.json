@@ -147,9 +147,8 @@
         "description": "doc edits and parity sweeps",
         "effort": "high"
       },
-      "deploy": {
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash",
+       "deploy": {
+        "model": "sonnet",
         "description": "publish an approved release from main, wait for CI, and verify release assets"
       },
       "plan": {
