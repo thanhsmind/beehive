@@ -1143,3 +1143,4 @@
 {"ts":"2026-11-04T04:31:16.738Z","event":"complete","id":"7c7c8c20-9113-48d5-b6a9-c0e0d90fd71c"}
 {"ts":"2026-11-04T04:31:16.759Z","event":"complete","id":"0377ec7f-e89b-4a41-be92-495707d9815b"}
 {"ts":"2026-11-04T04:31:16.786Z","event":"complete","id":"2f01ea7b-62a1-4503-b946-035715b67e3b"}
+{"ts":"2026-11-04T05:11:46.753Z","event":"add","id":"792a1a2e-6d00-4a47-9ef2-3962b1336707","kind":"worktree-cleanup","feature":"agent-efficiency","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--agent-efficiency"],"reason":"Worktree beehive--wt--agent-efficiency (branch wt/agent-efficiency) merged into main at d77956f9a323c484dacba189a8222bd414386aaa and kept per default (D1) — remove it with `bee worktree prune`."}

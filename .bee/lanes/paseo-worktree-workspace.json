@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "✓ Đã đóng 22 bản ghi. Tôi ghi 223 bản ghi cũ vào backlog, cùng nhóm với nợ cũ.",
-    "asked_at": "2026-11-04T04:31:26.515Z",
+    "subject": "Lần này tôi chạy cả bộ test trước khi merge.",
+    "asked_at": "2026-11-04T05:26:26.741Z",
     "session": "5b57a891-b417-4607-a588-032cc0626815"
   }
 }
