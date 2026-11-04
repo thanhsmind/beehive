@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "bee-report-fixes",
   "mode": null,
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"bee-report-fixes\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 8c0366c; reload the product and test \"bee-report-fixes\", then either approve uat (\"bee gate --name uat --approved true --lane bee-report-fixes\") or fix it in the worktree and merge again.",
+  "next_action": "user tests the four fixes on main, then approves uat",
   "created_at": "2026-11-04T14:56:14.765Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: bee-report-fixes",
-    "asked_at": "2026-11-04T15:39:40.680Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -760,5 +755,23 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "bee-report-fixes",
+    "date": "2026-11-04",
+    "at": "2026-11-04T15:40:10.745Z",
+    "areas_synced": [
+      "worktree-parallelism",
+      "rust-runtime",
+      "doctrine-layer"
+    ],
+    "next_action": "user tests the four fixes on main, then approves uat"
+  },
+  "merge_ready": {
+    "since": "2026-11-04T16:14:36.525Z",
+    "branch": "wt/bee-report-fixes",
+    "worktree_id": "beehive--wt--bee-report-fixes",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
