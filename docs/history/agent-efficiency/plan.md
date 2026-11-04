@@ -21,9 +21,6 @@ the leader hit and traced this session (CONTEXT.md, Evidence); each code cell
 proves itself red then green. Cells 4 and 6 defer regen to the wave close
 (`regen_obligation_ack: wave-barrier`), so the leader runs bee dev regen once.
 
-Amendment (decision `83002d82`): cell aef-8 added after the cap sync door showed
-aef-1 and aef-2 changed agent-facing behavior no skill described.
-
 ## Requirements (from CONTEXT.md)
 
 - D1 (`c4da7108`): the seven items, one cell each; no verb approves a gate.
@@ -382,64 +379,6 @@ aef-1 and aef-2 changed agent-facing behavior no skill described.
       "open_choices": []
     },
     "behavior_change": true
-  },
-  {
-    "id": "aef-8",
-    "feature": "agent-efficiency",
-    "lane": "standard",
-    "role": "docs",
-    "deps": [
-      "aef-1",
-      "aef-2",
-      "aef-4"
-    ],
-    "decisions": [
-      "c4da7108-e15f-492f-94f1-1b9445e5eec7"
-    ],
-    "affects_skills": [
-      "skills/bee-planning/SKILL.md",
-      "skills/bee-swarming/SKILL.md",
-      "skills/bee-herding/SKILL.md"
-    ],
-    "affects_specs": [],
-    "title": "Skills tell agents to open and land features with bee feature start and finish, and that herding run caps",
-    "files": [
-      "skills/bee-planning/*",
-      "skills/bee-swarming/*",
-      "skills/bee-herding/*",
-      "skills/bee-hive/*"
-    ],
-    "read_first": [
-      "docs/history/agent-efficiency/CONTEXT.md",
-      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
-    ],
-    "action": "The skills that walk an agent through opening a feature (worktree, lane, route) and landing it (merge, scribing stamp, close) name `bee feature start` and `bee feature finish` as the one-verb path, keeping the separate verbs as what those run; the bee-herding and bee-swarming text that tells a leader to settle an uncapped herding cell says herding run now caps a done cell with a commit and a green proof, and names when it still does not. Keep each edit short and in the file's voice; where a skill already states the old multi-verb walk, replace it rather than add beside it. Read `bee feature --help` for the real flags. Regen is deferred to the wave close (regen_obligation_ack wave-barrier). No code comments. One commit with the trailer `cell: aef-8`.",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test skill_triggers",
-    "must_haves": {
-      "truths": [
-        "the planning or hive skill names bee feature start as the way to open a feature",
-        "the skill that lands a feature names bee feature finish",
-        "the herding and swarming skills say herding run caps a done cell with a commit and a green proof",
-        "no skill still tells the old walk as the only path"
-      ],
-      "artifacts": [
-        {
-          "path": "skills/bee-planning/SKILL.md",
-          "substantive": "bee feature start named"
-        }
-      ],
-      "key_links": [
-        "the flags named match bee feature --help"
-      ],
-      "prohibitions": [
-        "No verb approves a gate",
-        "No code comments",
-        "No text that orders a worker to find faults, doubt the lead, or dissent"
-      ],
-      "open_choices": []
-    },
-    "behavior_change": true,
-    "regen_obligation_ack": "wave-barrier"
   }
 ]
 ```
