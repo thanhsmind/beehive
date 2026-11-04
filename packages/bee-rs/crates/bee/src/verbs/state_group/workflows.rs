@@ -590,10 +590,9 @@ pub(crate) fn validate_route_set_flags(flags: &Flags) -> Ex<Result<Map<String, V
         )),
         Some(_) => {}
     }
-    // `flags.flags === undefined || flags.flags === true` — '' is legal here.
     let mut flag_names: Vec<String> = Vec::new();
     match flags.get("flags") {
-        None | Some(FlagV::Present) => missing.push("--flags"),
+        None | Some(FlagV::Present) => {}
         Some(FlagV::S(raw)) => {
             flag_names = split_list(raw);
             let bad: Vec<&String> = flag_names

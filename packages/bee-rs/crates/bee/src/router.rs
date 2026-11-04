@@ -98,6 +98,7 @@ pub const PORTED: &[&str] = &[
      (the current schedule wave, claimed + reserved + prepared in one call, scoped to \
      one resolved feature; --limit bounds how many cells are claimed)",
     "worktree list|register|unregister",
+    "feature start|finish",
     // R4 dev surface
     "onboard [--repo-root R] [--apply] [--json] [--repo-hooks] [--plugin-source] \
      [--runtime R] [--claude-md|--no-claude-md] [--global-skills] [--skillstation] \

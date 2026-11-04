@@ -243,10 +243,15 @@ steps for its single worker — never wave analysis or multi-cell assignment.
      a miss. The worker's Result form
      is a navigation aid — it names where each requirement landed so you
      can look, and is never the evidence that it did. A requirement with
-     no artifact behind it → the cell is NOT done. Depth is risk-based:
+     no artifact behind it → the cell is NOT done: record the miss with
+     `bee cells leader-check --id <id> --verdict gap --file <payload>`,
+     which records the gap and returns the capped cell to open for rework,
+     with the gap answers as the reopen reason, so the next dispatch's
+     Prior rounds shows them. Depth is risk-based:
      a low-risk mechanical cell needs direct artifact spot-checks; high
      risk, missing evidence, or a contradiction between report and diff
-     earns the full diff read and wiring trace. Record with `bee cells leader-check`
+     earns the full diff read and wiring trace. On a clean check, record with
+     `bee cells leader-check --id <id> --verdict ok --file <payload>`
      — the cap is not the end of the cell; the recorded mark is. No new report
      schema, no mandatory full-suite rerun — the single home of this rule is
      `bee-hive/references/routing-and-contracts.md` ("Leader completeness

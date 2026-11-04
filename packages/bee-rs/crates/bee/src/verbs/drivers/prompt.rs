@@ -83,44 +83,169 @@ pub(crate) fn normalize_template(raw: &str) -> String {
     }
 }
 
+thread_local! {
+    static LAST_PROMPT_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+pub(crate) fn set_last_prompt_root(root: &Path) {
+    LAST_PROMPT_ROOT.with(|cell| {
+        *cell.borrow_mut() = Some(root.to_path_buf());
+    });
+}
+
+fn supported_vars_for(name: &str) -> Option<&'static [&'static str]> {
+    match name {
+        "worker-cell" => Some(&[
+            "worker",
+            "cell_id",
+            "feature",
+            "cell_json",
+            "learned_context",
+            "expertise",
+            "advisor",
+            "prior_rounds",
+            "worktree_root",
+            "control_root",
+            "original_request",
+            "native_bookkeeping",
+            "herding",
+            "native_worktree_check",
+        ]),
+        "gather" | "reviewer" | "advisor" => Some(&[
+            "brief",
+            "expertise",
+            "purpose",
+            "original_request",
+            "seat",
+        ]),
+        _ => None,
+    }
+}
+
+fn can_render_prompt(name: &str, template: &str) -> bool {
+    let Some(supported) = supported_vars_for(name) else {
+        return false;
+    };
+    let mut rest = template;
+    while let Some(p) = rest.find("{{") {
+        let after = &rest[p + 2..];
+        let Some(close) = after.find("}}") else {
+            return false;
+        };
+        let raw = &after[..close];
+        if raw.starts_with('/') {
+            if raw != "/if" {
+                return false;
+            }
+        } else {
+            let var = raw.strip_prefix("#if ").unwrap_or(raw);
+            if !var.is_empty() && var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                if !supported.contains(&var) {
+                    return false;
+                }
+            }
+        }
+        rest = &after[close + 2..];
+    }
+    let vars_nonempty: Vec<(&str, &str)> = supported.iter().map(|k| (*k, "1")).collect();
+    let vars_empty: Vec<(&str, &str)> = supported.iter().map(|k| (*k, "")).collect();
+    render(template, &vars_nonempty).is_ok() && render(template, &vars_empty).is_ok()
+}
+
 pub(crate) fn load_prompt(name: &str) -> Option<String> {
+    if let Some(root) = LAST_PROMPT_ROOT.with(|cell| cell.borrow().clone()) {
+        let candidates = [
+            root.join("packages").join("bee").join("prompts").join(format!("{name}.md")),
+            root.join(".bee").join("bin").join("prompts").join(format!("{name}.md")),
+        ];
+        for file in candidates {
+            if let Ok(bytes) = std::fs::read(&file) {
+                let disk = String::from_utf8_lossy(&bytes);
+                return Some(normalize_template(&disk));
+            }
+        }
+    }
+    if let Some(source_root) = crate::devtools::bee_source_root() {
+        let candidates = [
+            source_root.join("packages").join("bee").join("prompts").join(format!("{name}.md")),
+            source_root.join(".bee").join("bin").join("prompts").join(format!("{name}.md")),
+        ];
+        for file in candidates {
+            if let Ok(bytes) = std::fs::read(&file) {
+                let disk = String::from_utf8_lossy(&bytes);
+                return Some(normalize_template(&disk));
+            }
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        let roots_to_check = match resolve_store_root(&cwd) {
+            Roots::Ordinary(r) => vec![r],
+            Roots::Unsupported(crate::roots::Unsupported::GrantedWorktree { main_root }) => {
+                vec![cwd.clone(), main_root]
+            }
+            _ => vec![cwd],
+        };
+        for r in roots_to_check {
+            let candidates = [
+                r.join("packages").join("bee").join("prompts").join(format!("{name}.md")),
+                r.join(".bee").join("bin").join("prompts").join(format!("{name}.md")),
+            ];
+            for file in candidates {
+                if let Ok(bytes) = std::fs::read(&file) {
+                    let disk = String::from_utf8_lossy(&bytes);
+                    return Some(normalize_template(&disk));
+                }
+            }
+        }
+    }
     embedded_prompt(name).map(normalize_template)
 }
 
-/// Runtime skew guard (R2 write-guard discipline). The Node renderer resolves
-/// prompts RELATIVE TO ITS OWN MODULE — `packages/bee/prompts/` for a
-/// canonical checkout, `.bee/bin/prompts/` for a vendored engine. Whenever a
-/// repo ships either directory, its bytes must equal the compiled-in bytes or
-/// this port would render a stale template: byte-compare and delegate on any
-/// mismatch. A repo shipping neither (a pure-binary install) trusts the
-/// embedded copy, which is the only copy that exists there.
-/// What a skew IS, so the refusal can name it instead of shrugging.
 #[derive(Debug)]
 pub(crate) enum PromptSkew {
-    /// No compiled-in template answers to this name.
     NoEmbedded,
-    /// This on-disk copy disagrees with the compiled-in bytes.
     Disk(std::path::PathBuf),
 }
 
-/// The first on-disk prompt copy whose bytes disagree with the compiled-in
-/// template, or `None` when every copy present agrees. Same comparison
-/// this guard always made — it now reports WHICH file, because a
-/// caller that cannot delegate has to explain itself.
 pub(crate) fn prompt_skew(root: &Path, name: &str) -> Option<PromptSkew> {
+    set_last_prompt_root(root);
     let embedded = embedded_prompt(name)?;
-    let candidates = [
-        root.join("packages").join("bee").join("prompts").join(format!("{name}.md")),
-        root.join(".bee").join("bin").join("prompts").join(format!("{name}.md")),
-    ];
-    for file in candidates {
-        let Ok(bytes) = std::fs::read(&file) else { continue };
-        let disk = String::from_utf8_lossy(&bytes);
-        if normalize_template(&disk) != normalize_template(embedded) {
-            return Some(PromptSkew::Disk(file));
+    let source_file = root.join("packages").join("bee").join("prompts").join(format!("{name}.md"));
+    let vendored_file = root.join(".bee").join("bin").join("prompts").join(format!("{name}.md"));
+
+    let source_bytes = std::fs::read(&source_file).ok();
+    let vendored_bytes = std::fs::read(&vendored_file).ok();
+
+    match (source_bytes, vendored_bytes) {
+        (None, None) => None,
+        (Some(src), Some(vnd)) => {
+            let src_text = normalize_template(&String::from_utf8_lossy(&src));
+            let vnd_text = normalize_template(&String::from_utf8_lossy(&vnd));
+            if src_text != vnd_text {
+                return Some(PromptSkew::Disk(source_file));
+            }
+            if !can_render_prompt(name, &src_text) {
+                return Some(PromptSkew::Disk(source_file));
+            }
+            None
+        }
+        (Some(src), None) => {
+            let src_text = normalize_template(&String::from_utf8_lossy(&src));
+            if src_text == normalize_template(embedded) {
+                None
+            } else {
+                Some(PromptSkew::Disk(source_file))
+            }
+        }
+        (None, Some(vnd)) => {
+            let vnd_text = normalize_template(&String::from_utf8_lossy(&vnd));
+            if vnd_text == normalize_template(embedded) {
+                None
+            } else {
+                Some(PromptSkew::Disk(vendored_file))
+            }
         }
     }
-    None
 }
 
 /// The refusal a skew earns. Skew used to `return None` — "delegate to the
@@ -280,5 +405,67 @@ mod tests {
     fn embedded_agent_body_returns_none_for_unknown_agents() {
         assert_eq!(embedded_agent_body("general-purpose"), None);
         assert_eq!(embedded_agent_body("nonsense"), None);
+    }
+
+    #[test]
+    fn prompt_skew_allows_matching_on_disk_prompts_even_if_different_from_embedded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let src_dir = root.join("packages").join("bee").join("prompts");
+        let bin_dir = root.join(".bee").join("bin").join("prompts");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let custom_prompt = "worker cell custom: {{worker}} {{cell_id}} {{feature}} {{cell_json}}\n";
+        std::fs::write(src_dir.join("worker-cell.md"), custom_prompt).unwrap();
+        std::fs::write(bin_dir.join("worker-cell.md"), custom_prompt).unwrap();
+        assert!(prompt_skew(root, "worker-cell").is_none());
+        let loaded = load_prompt("worker-cell").unwrap();
+        assert!(loaded.contains("worker cell custom:"));
+        let rendered = render(&loaded, &[("worker", "w1"), ("cell_id", "c1"), ("feature", "f1"), ("cell_json", "{}")]).unwrap();
+        assert_eq!(rendered, "worker cell custom: w1 c1 f1 {}");
+    }
+
+    #[test]
+    fn prompt_skew_refuses_when_source_and_vendored_differ() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let src_dir = root.join("packages").join("bee").join("prompts");
+        let bin_dir = root.join(".bee").join("bin").join("prompts");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(src_dir.join("worker-cell.md"), "version A\n").unwrap();
+        std::fs::write(bin_dir.join("worker-cell.md"), "version B\n").unwrap();
+        let skew = prompt_skew(root, "worker-cell");
+        assert!(skew.is_some());
+    }
+
+    #[test]
+    fn prompt_skew_refuses_when_template_cannot_be_rendered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let src_dir = root.join("packages").join("bee").join("prompts");
+        let bin_dir = root.join(".bee").join("bin").join("prompts");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let broken = "worker cell: {{unsupported_future_var}}\n";
+        std::fs::write(src_dir.join("worker-cell.md"), broken).unwrap();
+        std::fs::write(bin_dir.join("worker-cell.md"), broken).unwrap();
+        let skew = prompt_skew(root, "worker-cell");
+        assert!(skew.is_some());
+    }
+
+    #[test]
+    fn prompt_skew_refuses_nested_if_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let src_dir = root.join("packages").join("bee").join("prompts");
+        let bin_dir = root.join(".bee").join("bin").join("prompts");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let nested = "text\n{{#if worker}}\n{{#if feature}}\ninner\n{{/if}}\n{{/if}}\n";
+        std::fs::write(src_dir.join("worker-cell.md"), nested).unwrap();
+        std::fs::write(bin_dir.join("worker-cell.md"), nested).unwrap();
+        let skew = prompt_skew(root, "worker-cell");
+        assert!(skew.is_some());
     }
 }

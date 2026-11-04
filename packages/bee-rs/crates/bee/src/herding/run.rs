@@ -5726,6 +5726,80 @@ fn postflight_cap_check(
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum PostflightCapResult {
+    Capped,
+    Uncapped,
+}
+
+fn try_cap_finished_cell(
+    opts: &Options,
+    cell_id: &str,
+    outcome: &RunOutcome,
+) -> PostflightCapResult {
+    let RunOutcome::Result(r) = outcome else {
+        return PostflightCapResult::Uncapped;
+    };
+    let Some((_cmd, proof_res, proof_reason)) = crate::verbs::cells::parse_tests_proof(&r.proof) else {
+        return PostflightCapResult::Uncapped;
+    };
+    if !crate::verbs::cells::PROOF_RESULT_VALUES.contains(&proof_res.as_str()) {
+        return PostflightCapResult::Uncapped;
+    }
+
+    let cell_path = opts.main_root.join(".bee").join("cells").join(format!("{cell_id}.json"));
+    let feature = std::fs::read_to_string(&cell_path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .and_then(|v| v.get("feature").and_then(Value::as_str).map(str::to_string));
+    let history_root = crate::verbs::cells::commit_trailer_history_root(&opts.main_root, feature.as_deref());
+    let has_commit = crate::verbs::cells::commit_trailer_present(&history_root, cell_id)
+        || crate::verbs::cells::commit_trailer_present(&opts.cwd, cell_id);
+    if !has_commit {
+        return PostflightCapResult::Uncapped;
+    }
+
+    let roots = crate::roots::resolve_store_root_worktree(&opts.cwd);
+    let topo = match &roots {
+        crate::roots::RootsWt::Go(r) => r.hold_topology(),
+        _ => {
+            let main_roots = crate::roots::resolve_store_root_worktree(&opts.main_root);
+            match &main_roots {
+                crate::roots::RootsWt::Go(r) => r.hold_topology(),
+                _ => None,
+            }
+        }
+    };
+    let topo_ref = topo.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+
+    let cap_flags = crate::verbs::cells::CapFlags {
+        id: cell_id.to_string(),
+        outcome: None,
+        friction: None,
+        files_changed: Vec::new(),
+        deviations: Vec::new(),
+        deviation: None,
+        override_reason: String::new(),
+        mistake: None,
+        fix_at: None,
+        no_mistakes: true,
+        session_flag: None,
+        force_ownership: false,
+        commit_pending: None,
+        inline_reason: None,
+        report: None,
+        sync_ack: None,
+        from_job: Some(opts.job_id.clone()),
+        proof_result: Some(proof_res),
+        proof_reason: Some(proof_reason),
+    };
+
+    match crate::verbs::cells::finish_cap_and_release(&opts.main_root, topo_ref, cap_flags, None) {
+        Ok(crate::verbs::reservations::Out::Emit(_, _, _)) => PostflightCapResult::Capped,
+        _ => PostflightCapResult::Uncapped,
+    }
+}
+
 pub(super) fn run(flags: &[&str]) -> ExitCode {
     let mut opts = match parse_options(flags) {
         Ok(o) => o,
@@ -5875,11 +5949,19 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     let cap_action = postflight_cap_check(&opts.main_root, opts.cell_id.as_deref(), &result.outcome);
     let exit = match cap_action {
         PostflightCapAction::Refuse { ref cell_id } => {
-            eprintln!(
-                "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `bee cells finish --id {cell_id} --from-job {} --proof-result <green:unit> --no-mistakes`",
-                opts.job_id
-            );
-            ExitCode::FAILURE
+            match try_cap_finished_cell(&opts, cell_id, &result.outcome) {
+                PostflightCapResult::Capped => {
+                    eprintln!("bee herding run: capped cell \"{cell_id}\"");
+                    ExitCode::SUCCESS
+                }
+                PostflightCapResult::Uncapped => {
+                    eprintln!(
+                        "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `bee cells finish --id {cell_id} --from-job {} --proof-result <green:unit> --no-mistakes`",
+                        opts.job_id
+                    );
+                    ExitCode::FAILURE
+                }
+            }
         }
         PostflightCapAction::Proceed => exit_code_for(&result.outcome),
     };
@@ -11810,6 +11892,305 @@ mod tests {
             postflight_cap_check(main_root, Some("cell-1"), &RunOutcome::DryRun("brief".to_string())),
             PostflightCapAction::Proceed
         );
+    }
+
+    fn setup_cap_test_fixture(tmp: &Path, feature: &str, cell_id: &str, job_id: &str) -> (PathBuf, PathBuf) {
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("mailbox")).unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(main.join("file.txt"), "base\n").unwrap();
+
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main)
+            .args(["init", "-q", "-b", "main"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main)
+            .args(["config", "user.email", "a@b.c"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main)
+            .args(["config", "user.name", "t"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main)
+            .args(["config", "commit.gpgSign", "false"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main)
+            .args(["add", "-A"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main)
+            .args(["commit", "-qm", "initial commit"])
+            .status()
+            .unwrap();
+
+        let wt = tmp.join("wt");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main)
+            .args(["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "feat-wt"])
+            .status()
+            .unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(wt.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            wt.join(".bee").join("runtime").join("worktree-identity.json"),
+            format!("{{\"feature\": \"{feature}\"}}\n"),
+        )
+        .unwrap();
+
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&wt)
+            .args(["add", "file.txt"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&wt)
+            .args(["commit", "-qm", &format!("worker commit\n\ncell: {cell_id}")])
+            .status()
+            .unwrap();
+
+        let cell_val = serde_json::json!({
+            "id": cell_id,
+            "feature": feature,
+            "title": "job cell",
+            "action": "do work",
+            "verify": "cargo test",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": ["file.txt"],
+            "trace": { "worker": "w-worker" },
+        });
+        std::fs::write(
+            main.join(".bee").join("cells").join(format!("{cell_id}.json")),
+            serde_json::to_string(&cell_val).unwrap(),
+        )
+        .unwrap();
+
+        let job_dir = main.join(".bee").join("mailbox").join(job_id);
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let job_json = serde_json::json!({
+            "job_id": job_id,
+            "cell_id": cell_id,
+            "cwd": wt.to_string_lossy().to_string(),
+        });
+        std::fs::write(
+            job_dir.join("job.json"),
+            serde_json::to_string(&job_json).unwrap(),
+        )
+        .unwrap();
+
+        (main, wt)
+    }
+
+    fn write_cap_test_result(main: &Path, job_id: &str, proof: &str) {
+        let job_dir = main.join(".bee").join("mailbox").join(job_id);
+        let res = serde_json::json!({
+            "round": 1,
+            "status": "done",
+            "summary": "completed work",
+            "files_changed": ["file.txt"],
+            "proof": proof,
+            "report_path": "report-1.md"
+        });
+        std::fs::write(
+            job_dir.join("result-1.json"),
+            serde_json::to_string(&res).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn done_result_with_commit_and_green_proof_is_capped_by_herding_run_itself() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cell_id = "cell-cap-1";
+        let job_id = "job-cap-1";
+        let (main, wt) = setup_cap_test_fixture(tmp.path(), "feat-cap", cell_id, job_id);
+        write_cap_test_result(&main, job_id, "cargo test — green:unit — test reason");
+
+        let mut opts = test_options(&main, false);
+        opts.job_id = job_id.to_string();
+        opts.cell_id = Some(cell_id.to_string());
+        opts.cwd = wt;
+
+        let outcome = RunOutcome::Result(MailboxResult {
+            round: 1,
+            status: MailboxStatus::Done,
+            summary: "completed work".to_string(),
+            files_changed: vec!["file.txt".to_string()],
+            proof: "cargo test — green:unit — test reason".to_string(),
+            options: vec![],
+            leaning: None,
+            dissent: None,
+            handback: Default::default(),
+            report_path: None,
+            report_note: None,
+            question: None,
+        });
+
+        assert_eq!(
+            try_cap_finished_cell(&opts, cell_id, &outcome),
+            PostflightCapResult::Capped
+        );
+
+        let cell_raw = std::fs::read_to_string(main.join(".bee").join("cells").join(format!("{cell_id}.json"))).unwrap();
+        let cell_val: Value = serde_json::from_str(&cell_raw).unwrap();
+        assert_eq!(cell_val["status"], "capped");
+        assert!(cell_val["trace"]["capped_at"].as_str().is_some_and(|s| !s.is_empty()));
+    }
+
+    #[test]
+    fn red_or_missing_proof_or_no_commit_leaves_cell_uncapped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cell_id = "cell-cap-2";
+        let job_id = "job-cap-2";
+        let (main, wt) = setup_cap_test_fixture(tmp.path(), "feat-cap", cell_id, job_id);
+
+        let mut opts = test_options(&main, false);
+        opts.job_id = job_id.to_string();
+        opts.cell_id = Some(cell_id.to_string());
+        opts.cwd = wt.clone();
+
+        write_cap_test_result(&main, job_id, "cargo test — red — test failed");
+        let red_outcome = RunOutcome::Result(MailboxResult {
+            round: 1,
+            status: MailboxStatus::Done,
+            summary: "completed work".to_string(),
+            files_changed: vec!["file.txt".to_string()],
+            proof: "cargo test — red — test failed".to_string(),
+            options: vec![],
+            leaning: None,
+            dissent: None,
+            handback: Default::default(),
+            report_path: None,
+            report_note: None,
+            question: None,
+        });
+        assert_eq!(
+            try_cap_finished_cell(&opts, cell_id, &red_outcome),
+            PostflightCapResult::Uncapped
+        );
+
+        write_cap_test_result(&main, job_id, "missing separators");
+        let missing_outcome = RunOutcome::Result(MailboxResult {
+            round: 1,
+            status: MailboxStatus::Done,
+            summary: "completed work".to_string(),
+            files_changed: vec!["file.txt".to_string()],
+            proof: "missing separators".to_string(),
+            options: vec![],
+            leaning: None,
+            dissent: None,
+            handback: Default::default(),
+            report_path: None,
+            report_note: None,
+            question: None,
+        });
+        assert_eq!(
+            try_cap_finished_cell(&opts, cell_id, &missing_outcome),
+            PostflightCapResult::Uncapped
+        );
+
+        let cell_no_commit = "cell-no-commit";
+        let job_no_commit = "job-no-commit";
+        let cell_val = serde_json::json!({
+            "id": cell_no_commit,
+            "feature": "feat-cap",
+            "title": "job cell",
+            "action": "do work",
+            "verify": "cargo test",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": ["file.txt"],
+            "trace": { "worker": "w-worker" },
+        });
+        std::fs::write(
+            main.join(".bee").join("cells").join(format!("{cell_no_commit}.json")),
+            serde_json::to_string(&cell_val).unwrap(),
+        )
+        .unwrap();
+        let job_dir = main.join(".bee").join("mailbox").join(job_no_commit);
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let job_json = serde_json::json!({
+            "job_id": job_no_commit,
+            "cell_id": cell_no_commit,
+            "cwd": wt.to_string_lossy().to_string(),
+        });
+        std::fs::write(
+            job_dir.join("job.json"),
+            serde_json::to_string(&job_json).unwrap(),
+        )
+        .unwrap();
+        write_cap_test_result(&main, job_no_commit, "cargo test — green:unit — ok");
+        let mut opts_no_commit = test_options(&main, false);
+        opts_no_commit.job_id = job_no_commit.to_string();
+        opts_no_commit.cell_id = Some(cell_no_commit.to_string());
+        opts_no_commit.cwd = wt;
+        let no_commit_outcome = RunOutcome::Result(MailboxResult {
+            round: 1,
+            status: MailboxStatus::Done,
+            summary: "completed work".to_string(),
+            files_changed: vec!["file.txt".to_string()],
+            proof: "cargo test — green:unit — ok".to_string(),
+            options: vec![],
+            leaning: None,
+            dissent: None,
+            handback: Default::default(),
+            report_path: None,
+            report_note: None,
+            question: None,
+        });
+        assert_eq!(
+            try_cap_finished_cell(&opts_no_commit, cell_no_commit, &no_commit_outcome),
+            PostflightCapResult::Uncapped
+        );
+
+        let cell_raw = std::fs::read_to_string(main.join(".bee").join("cells").join(format!("{cell_id}.json"))).unwrap();
+        let cell_val: Value = serde_json::from_str(&cell_raw).unwrap();
+        assert_eq!(cell_val["status"], "claimed");
+    }
+
+    #[test]
+    fn already_capped_cell_is_not_capped_twice() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_capped_cell(main_root, "cell-1");
+        let outcome = done_outcome();
+
+        assert_eq!(
+            postflight_cap_check(main_root, Some("cell-1"), &outcome),
+            PostflightCapAction::Proceed
+        );
+
+        let cell_path = main_root.join(".bee").join("cells").join("cell-1.json");
+        let cell_raw = std::fs::read_to_string(&cell_path).unwrap();
+        let cell_val: Value = serde_json::from_str(&cell_raw).unwrap();
+        assert_eq!(cell_val["status"], "capped");
+        assert_eq!(cell_val["trace"]["capped_at"], "2026-09-20T14:00:00.000Z");
     }
 
     #[test]

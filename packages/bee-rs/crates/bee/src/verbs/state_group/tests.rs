@@ -1921,7 +1921,13 @@ use std::time::Instant;
             Err(m) => m,
             Ok(_) => panic!("expected a refusal"),
         };
-        assert!(missing.contains("missing required flag(s): --class, --lane, --flags, --files"));
+        assert!(missing.contains("missing required flag(s): --class, --lane, --files"));
+        let omitted_flags = route_flags(&[("class", "docs"), ("lane", "docs"), ("files", "0")]);
+        let route_omitted = match ok(validate_route_set_flags(&omitted_flags)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(route_omitted.get("flags"), Some(&json!([])));
         let zero = route_flags(&[("class", "docs"), ("lane", "docs"), ("flags", ""), ("files", "0")]);
         let route = match ok(validate_route_set_flags(&zero)) {
             Ok(r) => r,
