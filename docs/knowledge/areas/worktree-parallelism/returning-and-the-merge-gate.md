@@ -329,8 +329,11 @@ staged, and `git merge --no-ff --no-commit` refused with "Your local
 changes would be overwritten", which surfaced as
 `WORKTREE_MERGE_ABORT_FAILED`. The commit now passes only the pathspecs
 git knows, and the merge stage unstages any leftover `.bee` index entry
-before `git merge` runs. Untracked store files no longer block as
-unsweepable collisions, because the bookkeeping commit takes them.
+before `git merge` runs. An include path that git ignores is dropped
+before the add, and a failed add resets the index it staged. An
+untracked store file that the branch also adds still refuses with
+`WORKTREE_MERGE_MAIN_DIRTY` and changes nothing: sweeping it would end
+in an add/add conflict.
 
 ## Concurrent merges serialize through an integration queue, never the lock (multisession-native D8 stage 5, D9 invariant 12, msn-22)
 

@@ -3267,6 +3267,52 @@ use std::time::Instant;
     }
 
     #[test]
+    fn an_untracked_store_file_the_branch_also_adds_refuses_and_is_named() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        std::fs::write(main.join(".gitignore"), ".bee/*\n!.bee/config.json\n!.bee/cells/\n").unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "track cells"]);
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        let on_branch = created.worktree_root.join(".bee").join("cells").join("x-1.json");
+        std::fs::create_dir_all(on_branch.parent().unwrap()).unwrap();
+        std::fs::write(&on_branch, "{\"id\": \"x-1\", \"side\": \"branch\"}\n").unwrap();
+        git_ok(&created.worktree_root, &["add", "-A"]);
+        git_ok(&created.worktree_root, &["commit", "-qm", "the branch adds a cell file"]);
+
+        let collides = main.join(".bee").join("cells").join("x-1.json");
+        std::fs::create_dir_all(collides.parent().unwrap()).unwrap();
+        std::fs::write(&collides, "{\"id\": \"x-1\", \"side\": \"main\"}\n").unwrap();
+        let head = |root: &Path| {
+            String::from_utf8(
+                std::process::Command::new("git")
+                    .args(["rev-parse", "HEAD"])
+                    .current_dir(root)
+                    .output()
+                    .unwrap()
+                    .stdout,
+            )
+            .unwrap()
+        };
+        let head_before = head(&main);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else {
+            panic!("an untracked store file the branch also adds must refuse")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains(".bee/cells/x-1.json"), "{msg}");
+        assert_eq!(head(&main), head_before);
+        assert_eq!(
+            std::fs::read_to_string(&collides).unwrap(),
+            "{\"id\": \"x-1\", \"side\": \"main\"}\n"
+        );
+    }
+
+    #[test]
     fn an_untracked_history_file_the_branch_also_adds_refuses_and_is_named() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());

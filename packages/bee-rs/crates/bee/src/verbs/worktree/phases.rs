@@ -493,9 +493,7 @@ pub(crate) fn merge_stage(
         let branch_changed = current_branch(&worktree_root)
             .and_then(|b| branch_changed_files(main_root, &b));
         let collides = |path: &String| branch_changed.as_ref().map_or(true, |c| c.contains(path));
-        let non_store_roots: Vec<String> =
-            roots.iter().filter(|r| !r.starts_with(".bee")).cloned().collect();
-        let unsweepable: Vec<String> = main_untracked_under(main_root, &non_store_roots)
+        let unsweepable: Vec<String> = main_untracked_under(main_root, &roots)
             .map_err(MErr::Thrown)?
             .into_iter()
             .filter(|u| collides(u))
