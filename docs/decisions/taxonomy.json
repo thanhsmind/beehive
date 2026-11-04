@@ -782,6 +782,10 @@
     "contract:issue-sweep-2",
     "contract:worker-cell-prompt",
     "contract:prior-rounds-digest",
-    "token-economy"
+    "token-economy",
+    "contract:reservation-reclaim",
+    "contract:merge-dirty-store",
+    "contract:onboard-binary-vendor",
+    "contract:deploy-native-brief"
   ]
 }
