@@ -1,5 +1,5 @@
 use crate::jsjson;
-use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
+use crate::roots::{resolve_store_root_worktree, RootsWt};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -56,20 +56,20 @@ fn run(opts: &Opts, t0: Instant) -> ExitCode {
         Ok(c) => c,
         Err(e) => return fail(Path::new("."), opts.json, "bad_cwd", format!("bee {CMD}: {e}"), t0),
     };
-    let root = match resolve_store_root(&cwd) {
-        Roots::Ordinary(r) => r,
-        Roots::Unsupported(why) => {
+    let roots = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r,
+        RootsWt::Unsupported(why) => {
             return emit_unsupported_root(&cwd, CMD, opts.json, t0, &why)
         }
-        Roots::None => return emit_no_root_error(&cwd, CMD, opts.json, t0),
+        RootsWt::None => return emit_no_root_error(&cwd, CMD, opts.json, t0),
     };
-    let report = collect_outcomes(&root, opts.feature.as_deref());
+    let report = collect_outcomes(&roots.root, opts.feature.as_deref());
     if opts.json {
         println!("{}", jsjson::stringify_pretty(&render_json(&report)));
     } else {
         println!("{}", render_text(&report));
     }
-    record_timing(&root, CMD, t0, true);
+    record_timing(&roots.root, CMD, t0, true);
     ExitCode::SUCCESS
 }
 
@@ -550,6 +550,7 @@ fn render_json(r: &OutcomesReport) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     fn setup_fixture_store() -> (tempfile::TempDir, PathBuf) {
         let tmp = tempfile::tempdir().unwrap();
@@ -772,5 +773,85 @@ mod tests {
         assert_eq!(opts.feature.as_deref(), Some("abc"));
 
         assert!(parse(&[OsString::from("--unknown")]).is_none());
+    }
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let ok = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .unwrap()
+            .status
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    #[test]
+    fn test_report_outcomes_linked_worktree_reads_main_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main");
+        std::fs::create_dir_all(main.join(".bee/cells")).unwrap();
+        std::fs::write(main.join(".bee/onboarding.json"), "{}").unwrap();
+        git(&main, &["init", "-q", "."]);
+        git(
+            &main,
+            &[
+                "-c",
+                "user.email=t@t.t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "i",
+            ],
+        );
+        let wt = dir.path().join("wt");
+        git(
+            &main,
+            &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "wt/x"],
+        );
+
+        let main_cell = json!({
+            "id": "cell-main",
+            "feature": "feat-a",
+            "trace": {
+                "reaction": "confirm"
+            }
+        });
+        std::fs::write(
+            main.join(".bee/cells/cell-main.json"),
+            serde_json::to_string(&main_cell).unwrap(),
+        )
+        .unwrap();
+
+        std::fs::create_dir_all(wt.join(".bee/cells")).unwrap();
+        let wt_cell = json!({
+            "id": "cell-wt-stale",
+            "feature": "feat-a",
+            "trace": {
+                "reaction": "blocked"
+            }
+        });
+        std::fs::write(
+            wt.join(".bee/cells/cell-wt-stale.json"),
+            serde_json::to_string(&wt_cell).unwrap(),
+        )
+        .unwrap();
+
+        let RootsWt::Go(roots) = resolve_store_root_worktree(&wt) else {
+            panic!("worktree did not resolve");
+        };
+        assert!(roots.linked.is_some());
+        assert_eq!(
+            roots.root.canonicalize().unwrap(),
+            main.canonicalize().unwrap()
+        );
+
+        let report = collect_outcomes(&roots.root, None);
+        assert_eq!(report.cells_scanned, 1);
+        assert_eq!(report.reaction.confirm, 1);
+        assert_eq!(report.reaction.blocked, 0);
     }
 }
