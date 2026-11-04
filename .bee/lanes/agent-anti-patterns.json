@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"agent-anti-patterns\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 86307ea; capture what settled, then bee close --feature agent-anti-patterns.",
   "created_at": "2026-11-04T03:30:36.249Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-11-04T03:30:36.297Z",
     "feature": "agent-anti-patterns"
-  },
-  "merge_ready": {
-    "since": "2026-11-04T03:46:04.808Z",
-    "branch": "wt/agent-anti-patterns",
-    "worktree_id": "beehive--wt--agent-anti-patterns",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
