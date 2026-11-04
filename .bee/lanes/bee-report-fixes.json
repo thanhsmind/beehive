@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"bee-report-fixes\" started at phase \"exploring\" (lane).",
-  "next_action": "user tests the four fixes on main, then approves uat",
+  "next_action": "Merged into main at 38b6a63; reload the product and test \"bee-report-fixes\", then either approve uat (\"bee gate --name uat --approved true --lane bee-report-fixes\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-04T14:56:14.765Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: bee-report-fixes",
+    "asked_at": "2026-11-04T16:14:44.414Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -766,12 +771,5 @@
       "doctrine-layer"
     ],
     "next_action": "user tests the four fixes on main, then approves uat"
-  },
-  "merge_ready": {
-    "since": "2026-11-04T16:14:36.525Z",
-    "branch": "wt/bee-report-fixes",
-    "worktree_id": "beehive--wt--bee-report-fixes",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
