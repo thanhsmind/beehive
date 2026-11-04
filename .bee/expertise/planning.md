@@ -154,9 +154,19 @@ you find at unit 4 that invalidates units 1 through 3.
 look for what is *not* there: units with no edges between them can proceed
 in parallel, and pretending otherwise serializes work for no reason.
 
-**Expand, migrate, contract.** A wide mechanical refactor — a rename or a
-signature change touching many call sites — never goes in one red-to-green
-step. Expand: add the new form beside the old, so nothing breaks. Migrate:
+**Split only on a real dependency.** A phase, a slice, or an
+expand-migrate-contract sequence needs a real dependency: a persisted-data
+migration, a consumer outside this change (another live worktree, an
+external client, a published contract), or a compatibility window. Without
+one, the change lands as one coordinated change, proved by the compiler and
+the tests. Ask the removal test of every phase and slice: if we skip it and
+go straight to the final state, what breaks? Nothing breaks → it is not a
+phase. A temporary bridge left in the tree is filed with `bee backlog add`,
+naming its removal condition, and cited from the owning concept.
+
+**Expand, migrate, contract.** When a real dependency holds, a wide
+refactor — a rename or a signature change touching many call sites — never
+goes in one red-to-green step. Expand: add the new form beside the old, so nothing breaks. Migrate:
 move callers over in batches sized by blast radius, one small reversible
 step at a time. Contract: delete the old form once no caller remains. Full
 green is promised only at contract, never mid-migration. The prefactor

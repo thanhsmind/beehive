@@ -10509,6 +10509,8 @@ The cell names three parts apart:
 - Open choices — `must_haves.open_choices`, when present: design choices the plan made that the user did not ask for; without evidence against one, follow the plan.
   You may question an open choice with evidence through `bee cells dissent`.
 
+How you build inside the contract is yours: a simpler route than the action describes that keeps every truth and prohibition is your call — record it as a `found a better route` departure.
+
 Inputs — read these; nothing else is provided:
 - AGENTS.md
 - docs/history/feat-golden/CONTEXT.md

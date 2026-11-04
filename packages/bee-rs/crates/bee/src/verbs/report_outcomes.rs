@@ -188,6 +188,111 @@ impl RoleRerouteMetrics {
 }
 
 #[derive(Default, Debug)]
+struct PlanDepartureMetrics {
+    cells_with_record: usize,
+    hit_unforeseen_obstacle: usize,
+    found_better_route: usize,
+    plan_wrong_fact: usize,
+    something_else_fixed_first: usize,
+    followed_plan: usize,
+    other: usize,
+}
+
+impl PlanDepartureMetrics {
+    fn total_entries(&self) -> usize {
+        self.hit_unforeseen_obstacle
+            + self.found_better_route
+            + self.plan_wrong_fact
+            + self.something_else_fixed_first
+            + self.followed_plan
+            + self.other
+    }
+}
+
+enum DepartureKind {
+    HitUnforeseenObstacle,
+    FoundBetterRoute,
+    PlanWrongFact,
+    SomethingElseFixedFirst,
+    FollowedPlan,
+    Other,
+}
+
+fn departure_text(entry: &Value) -> Option<String> {
+    match entry {
+        Value::String(s) => {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Value::Object(m) => {
+            if let Some(s) = m.get("kind").and_then(Value::as_str) {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+            if let Some(s) = m.get("text").and_then(Value::as_str) {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+            if let Some(s) = m.get("description").and_then(Value::as_str) {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+            if let Some(s) = m.get("what").and_then(Value::as_str) {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+            let strings: Vec<&str> = m
+                .values()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !strings.is_empty() {
+                Some(strings.join(" "))
+            } else {
+                let s = entry.to_string();
+                if s.trim().is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
+            }
+        }
+        _ => None,
+    }
+}
+
+fn classify_departure(entry: &Value) -> Option<DepartureKind> {
+    let text = departure_text(entry)?;
+    let lower = text.to_lowercase();
+    if lower.contains("hit an unforeseen obstacle") {
+        Some(DepartureKind::HitUnforeseenObstacle)
+    } else if lower.contains("found a better route") {
+        Some(DepartureKind::FoundBetterRoute)
+    } else if lower.contains("the plan was wrong about a fact") {
+        Some(DepartureKind::PlanWrongFact)
+    } else if lower.contains("something else had to be fixed first") {
+        Some(DepartureKind::SomethingElseFixedFirst)
+    } else if lower.contains("followed the plan") {
+        Some(DepartureKind::FollowedPlan)
+    } else {
+        Some(DepartureKind::Other)
+    }
+}
+
+#[derive(Default, Debug)]
 struct OutcomesReport {
     feature: Option<String>,
     cells_scanned: usize,
@@ -198,6 +303,7 @@ struct OutcomesReport {
     leader_check: LeaderCheckMetrics,
     rework: ReworkMetrics,
     role_reroute: RoleRerouteMetrics,
+    plan_departure: PlanDepartureMetrics,
 }
 
 fn find_cell_files(root: &Path) -> Vec<PathBuf> {
@@ -261,6 +367,7 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
         leader_check: LeaderCheckMetrics::default(),
         rework: ReworkMetrics::default(),
         role_reroute: RoleRerouteMetrics::default(),
+        plan_departure: PlanDepartureMetrics::default(),
     };
     let files = find_cell_files(root);
     for file in files {
@@ -359,6 +466,38 @@ fn collect_outcomes(root: &Path, feature_filter: Option<&str>) -> OutcomesReport
                 report.role_reroute.entries += reroute_arr.len();
             }
         }
+
+        if let Some(dev_arr) = trace_obj.and_then(|t| t.get("deviations")).and_then(Value::as_array) {
+            let mut cell_has_departure = false;
+            for entry in dev_arr {
+                if let Some(kind) = classify_departure(entry) {
+                    cell_has_departure = true;
+                    match kind {
+                        DepartureKind::HitUnforeseenObstacle => {
+                            report.plan_departure.hit_unforeseen_obstacle += 1;
+                        }
+                        DepartureKind::FoundBetterRoute => {
+                            report.plan_departure.found_better_route += 1;
+                        }
+                        DepartureKind::PlanWrongFact => {
+                            report.plan_departure.plan_wrong_fact += 1;
+                        }
+                        DepartureKind::SomethingElseFixedFirst => {
+                            report.plan_departure.something_else_fixed_first += 1;
+                        }
+                        DepartureKind::FollowedPlan => {
+                            report.plan_departure.followed_plan += 1;
+                        }
+                        DepartureKind::Other => {
+                            report.plan_departure.other += 1;
+                        }
+                    }
+                }
+            }
+            if cell_has_departure {
+                report.plan_departure.cells_with_record += 1;
+            }
+        }
     }
     report
 }
@@ -442,6 +581,22 @@ fn render_text(r: &OutcomesReport) -> String {
             r.role_reroute.cells_with_record,
             r.role_reroute.entries,
             r.role_reroute.changed()
+        ));
+    }
+
+    if r.plan_departure.cells_with_record == 0 {
+        lines.push("plan departure: not recorded".to_string());
+    } else {
+        lines.push(format!(
+            "plan departure: {} cells, {} records — hit an unforeseen obstacle: {}, found a better route: {}, the plan was wrong about a fact: {}, something else had to be fixed first: {}, followed the plan: {}, other: {}",
+            r.plan_departure.cells_with_record,
+            r.plan_departure.total_entries(),
+            r.plan_departure.hit_unforeseen_obstacle,
+            r.plan_departure.found_better_route,
+            r.plan_departure.plan_wrong_fact,
+            r.plan_departure.something_else_fixed_first,
+            r.plan_departure.followed_plan,
+            r.plan_departure.other
         ));
     }
 
@@ -549,6 +704,29 @@ fn render_json(r: &OutcomesReport) -> Value {
         }),
     );
 
+    m.insert(
+        "plan_departure".into(),
+        json!({
+            "recorded": r.plan_departure.cells_with_record > 0,
+            "cells_with_record": r.plan_departure.cells_with_record,
+            "records": r.plan_departure.total_entries(),
+            "hit an unforeseen obstacle": r.plan_departure.hit_unforeseen_obstacle,
+            "found a better route": r.plan_departure.found_better_route,
+            "the plan was wrong about a fact": r.plan_departure.plan_wrong_fact,
+            "something else had to be fixed first": r.plan_departure.something_else_fixed_first,
+            "followed the plan": r.plan_departure.followed_plan,
+            "other": r.plan_departure.other,
+            "kinds": {
+                "hit an unforeseen obstacle": r.plan_departure.hit_unforeseen_obstacle,
+                "found a better route": r.plan_departure.found_better_route,
+                "the plan was wrong about a fact": r.plan_departure.plan_wrong_fact,
+                "something else had to be fixed first": r.plan_departure.something_else_fixed_first,
+                "followed the plan": r.plan_departure.followed_plan,
+                "other": r.plan_departure.other,
+            }
+        }),
+    );
+
     Value::Object(m)
 }
 
@@ -568,36 +746,36 @@ mod tests {
 
         std::fs::write(
             cells.join("c-01.json"),
-            r#"{"id":"c-01","feature":"slp-article-gaps","trace":{"reaction":"confirm"}}"#,
+            r#"{"id":"c-01","feature":"slp-article-gaps","trace":{"reaction":"confirm","deviations":["hit an unforeseen obstacle"]}}"#,
         ).unwrap();
         std::fs::write(
             cells.join("c-02.json"),
-            r#"{"id":"c-02","feature":"slp-article-gaps","trace":{"reaction":"partial"}}"#,
+            r#"{"id":"c-02","feature":"slp-article-gaps","trace":{"reaction":"partial","deviations":["Found a better route"]}}"#,
         ).unwrap();
         std::fs::write(
             cells.join("c-03.json"),
-            r#"{"id":"c-03","feature":"slp-article-gaps","trace":{"reaction":"challenge"}}"#,
+            r#"{"id":"c-03","feature":"slp-article-gaps","trace":{"reaction":"challenge","deviations":["the plan was wrong about a fact"]}}"#,
         ).unwrap();
         std::fs::write(
             cells.join("c-04.json"),
-            r#"{"id":"c-04","feature":"slp-article-gaps","trace":{"reaction":"blocked"}}"#,
+            r#"{"id":"c-04","feature":"slp-article-gaps","trace":{"reaction":"blocked","deviations":["something else had to be fixed first"]}}"#,
         ).unwrap();
         std::fs::write(
             cells.join("c-05.json"),
-            r#"{"id":"c-05","feature":"slp-article-gaps","trace":{"reaction":null}}"#,
+            r#"{"id":"c-05","feature":"slp-article-gaps","trace":{"reaction":null,"deviations":["followed the plan"]}}"#,
         ).unwrap();
         std::fs::write(
             cells.join("c-06.json"),
-            r#"{"id":"c-06","feature":"slp-article-gaps","trace":{}}"#,
+            r#"{"id":"c-06","feature":"slp-article-gaps","trace":{"deviations":["some unclassified deviation",{"text":"found a better route"}]}}"#,
         ).unwrap();
 
         std::fs::write(
             cells.join("c-07.json"),
-            r#"{"id":"c-07","feature":"slp-article-gaps","trace":{"dissent":[{"verdict":"accept"}]}}"#,
+            r#"{"id":"c-07","feature":"slp-article-gaps","trace":{"dissent":[{"verdict":"accept"}],"deviations":[{"kind":"hit an unforeseen obstacle","what":"did foo","why":"bar"}]}}"#,
         ).unwrap();
         std::fs::write(
             cells.join("c-08.json"),
-            r#"{"id":"c-08","feature":"slp-article-gaps","trace":{"dissent":[{"verdict":"reject"}]}}"#,
+            r#"{"id":"c-08","feature":"slp-article-gaps","trace":{"dissent":[{"verdict":"reject"}],"deviations":[]}}"#,
         ).unwrap();
         std::fs::write(
             cells.join("c-09.json"),
@@ -651,7 +829,7 @@ mod tests {
 
         std::fs::write(
             cells.join("c-19-other.json"),
-            r#"{"id":"c-19","feature":"other-feat","trace":{"reaction":"blocked"}}"#,
+            r#"{"id":"c-19","feature":"other-feat","trace":{"reaction":"blocked","deviations":["hit an unforeseen obstacle"]}}"#,
         ).unwrap();
 
         std::fs::write(
@@ -705,9 +883,18 @@ mod tests {
         assert_eq!(report.role_reroute.entries, 1);
         assert_eq!(report.role_reroute.changed(), 1);
 
+        assert_eq!(report.plan_departure.cells_with_record, 7);
+        assert_eq!(report.plan_departure.total_entries(), 8);
+        assert_eq!(report.plan_departure.hit_unforeseen_obstacle, 2);
+        assert_eq!(report.plan_departure.found_better_route, 2);
+        assert_eq!(report.plan_departure.plan_wrong_fact, 1);
+        assert_eq!(report.plan_departure.something_else_fixed_first, 1);
+        assert_eq!(report.plan_departure.followed_plan, 1);
+        assert_eq!(report.plan_departure.other, 1);
+
         let text = render_text(&report);
         let lines: Vec<&str> = text.lines().collect();
-        assert_eq!(lines.len(), 7);
+        assert_eq!(lines.len(), 8);
         assert!(lines[0].starts_with("worker reaction: 6 cells (3 changed)"));
         assert!(lines[0].contains("confirm: 2, partial: 1, challenge: 1, blocked: 1, null: 1, absent: 13"));
         assert!(lines[1].starts_with("dissent: 4 cells, 4 records (2 changed)"));
@@ -718,7 +905,11 @@ mod tests {
         assert!(lines[3].contains("gap: 1, ok: 1"));
         assert_eq!(lines[4], "rework: 2 cells (2 changed)");
         assert_eq!(lines[5], "role reroute: 1 cells, 1 records (1 changed)");
-        assert!(lines[6].starts_with("unreadable: 1"));
+        assert_eq!(
+            lines[6],
+            "plan departure: 7 cells, 8 records — hit an unforeseen obstacle: 2, found a better route: 2, the plan was wrong about a fact: 1, something else had to be fixed first: 1, followed the plan: 1, other: 1"
+        );
+        assert!(lines[7].starts_with("unreadable: 1"));
 
         let json = render_json(&report);
         assert_eq!(json["cells_scanned"], 19);
@@ -732,6 +923,16 @@ mod tests {
         assert_eq!(json["leader_check"]["changed"], 1);
         assert_eq!(json["rework"]["changed"], 2);
         assert_eq!(json["role_reroute"]["changed"], 1);
+        assert_eq!(json["plan_departure"]["recorded"], true);
+        assert_eq!(json["plan_departure"]["cells_with_record"], 7);
+        assert_eq!(json["plan_departure"]["records"], 8);
+        assert_eq!(json["plan_departure"]["hit an unforeseen obstacle"], 2);
+        assert_eq!(json["plan_departure"]["found a better route"], 2);
+        assert_eq!(json["plan_departure"]["the plan was wrong about a fact"], 1);
+        assert_eq!(json["plan_departure"]["something else had to be fixed first"], 1);
+        assert_eq!(json["plan_departure"]["followed the plan"], 1);
+        assert_eq!(json["plan_departure"]["other"], 1);
+        assert_eq!(json["plan_departure"]["kinds"]["hit an unforeseen obstacle"], 2);
     }
 
     #[test]
@@ -742,6 +943,9 @@ mod tests {
         assert_eq!(report.cells_scanned, 20);
         assert_eq!(report.reaction.blocked, 2);
         assert_eq!(report.reaction.changed(), 4);
+        assert_eq!(report.plan_departure.cells_with_record, 8);
+        assert_eq!(report.plan_departure.total_entries(), 9);
+        assert_eq!(report.plan_departure.hit_unforeseen_obstacle, 3);
     }
 
     #[test]
@@ -765,6 +969,12 @@ mod tests {
         assert!(text.contains("leader check: not recorded"));
         assert!(text.contains("rework: not recorded"));
         assert!(text.contains("role reroute: not recorded"));
+        assert!(text.contains("plan departure: not recorded"));
+
+        let json = render_json(&report);
+        assert_eq!(json["plan_departure"]["recorded"], false);
+        assert_eq!(json["plan_departure"]["cells_with_record"], 0);
+        assert_eq!(json["plan_departure"]["records"], 0);
     }
 
     #[test]
