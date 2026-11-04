@@ -520,9 +520,10 @@ task, absolute paths, file constraints, the `result-N.json` schema, the
 tmp-then-rename write gesture — and one JSON file written back. Every
 piece of bee bookkeeping — verify, `cells finish`, reservations, judge —
 is the ORCHESTRATOR's job, done AFTER reading the result, exactly as D4
-requires. This mirrors the cli gather branch's stdout-is-the-digest
-posture, but for write work: the external process never touches
-`.bee/*.json(l)`, never claims, never caps.
+requires; the one cap `bee herding run` takes itself is step 4's. This
+mirrors the cli gather branch's stdout-is-the-digest posture, but for
+write work: the external process never touches `.bee/*.json(l)`, never
+claims, never caps.
 
 The orchestrator's loop for one herding cell:
 
@@ -551,7 +552,15 @@ The orchestrator's loop for one herding cell:
 4. **Do the bookkeeping the worker never could:** verify the work.
    Re-run the declared test or parity check against the `files_changed` diff.
    Check the work.
-   Then cap the cell with:
+   `bee herding run` caps a done cell itself when the result's `proof`
+   parses as a proof line with a green result (`green:unit`,
+   `green:static`, `green:live`) and a commit carrying `cell: <id>` is in
+   the feature's history: it prints `capped cell "<id>"`, records
+   `--no-mistakes`, and exits 0. It leaves the cell uncapped — and exits
+   non-zero with the settle line — when the proof is missing, unparsed or
+   not green, when no trailer commit exists, or when the cap itself
+   refuses. The leader completeness check is owed either way.
+   Settle an uncapped cell with:
    `bee cells finish --id <cell> --from-job <job> --proof-result <green:unit|green:static|green:live> [--proof-reason <text>]`
    (herding-leader-toil D1, store `cb3dc85d`, contract store `d248942f`).
    Pass the mistakes answer (`--no-mistakes` or `--mistake <text> --fix-at <layer>`).

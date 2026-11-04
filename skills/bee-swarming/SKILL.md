@@ -55,7 +55,11 @@ From two cells up, state the one-line concurrency plan before dispatching.
    run every herding payload of that wave in parallel and wait: you get one
    `{ran, native, skipped}` value — one short row per herding cell, full
    envelopes saved under `.bee/workers/<id>-wave-run.json` — and you launch
-   only the `native` items yourself, then cap each cell. One cell, or a cell
+   only the `native` items yourself, then cap each cell. `bee herding run`
+   caps a herding cell itself when its worker reports done with a
+   `cell: <id>` commit and a green proof line; any other done row stays
+   uncapped — settle it with `bee cells finish --id <cell> --from-job
+   <job_id>`. One cell, or a cell
    needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
    instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. A user-facing cell carries its mapped feature file that way — `.bee/verify/verify-app/features/<feature>.md` with its last-modified date, so the worker can judge a stale map. The cell already declares the job that
@@ -91,8 +95,9 @@ From two cells up, state the one-line concurrency plan before dispatching.
    `bee cells judge-record` verdict or `bee close` refuses (`judge-debt`) —
    run the slice judge before you reach for close.
 6. Slice clean: `bee close --feature <slug> --dry-run` names every
-   remaining door with the command that settles it; the final slice runs
-   `bee close --feature <slug>`, which checks every capped cell's recorded
+   remaining door with the command that settles it; the final slice lands
+   through `bee feature finish` (Completion, below), whose `bee close`
+   checks every capped cell's recorded
    proof line — same check `bee worktree merge` runs when the feature has
    a worktree. Doors check proof, they never run tests themselves; a cell
    with no valid proof is the remaining door. Doors are never waived.
@@ -110,16 +115,22 @@ user: `references/swarming-reference.md` ("Failure responses").
 bee-planning for the next batch IN THE SAME TURN — the slice boundary is
 never a user question, never a "say go" (an approved plan stays frozen;
 planning shapes the next batch, never reopens it). Final slice green → the road
-splits on `uat_stop`:
+splits on `uat_stop`. Either way the feature lands in one verb from main:
+`bee feature finish --feature <slug> --areas <a,b>` runs `bee worktree
+merge` on the FEATURE's own branch, then the scribing stamp (`bee state
+scribing-run`), then `bee close`, and stops at the first refusal with
+that verb's own message. It never approves a gate or the uat door; run it
+again once the refusal is settled — a merged branch is already up to
+date, so the run moves on.
 
-- Default `uat_stop: "close"` (absent means this): merge FIRST, without
-  asking — `bee worktree merge` from main on the FEATURE's own branch is
-  the publish-for-testing step; green caps are its precondition, not a
-  user question. The worktree is kept. Then hand the user the reloaded
+- Default `uat_stop: "close"` (absent means this): run it FIRST, without
+  asking — the merge is the publish-for-testing step; green caps are its
+  precondition, not a user question. The worktree is kept, and `bee close`
+  stops at the uat door. Then hand the user the reloaded
   product on main — what changed, how to run or see it — and ask for uat
   there. Mark the wait:
   `bee state waiting-on set --kind gate --subject "uat: <feature>"`.
-  A failed uat is fixed in the worktree and merged again; the approval
+  A failed uat is fixed in the worktree and finished again; the approval
   (`bee gate --name uat --approved true`) unlocks `bee close`.
 - `uat_stop: "merge"`: put the work where the user tests it BEFORE any
   merge: `bee staging add --feature <slug>` plus the staging build, when
@@ -129,8 +140,8 @@ splits on `uat_stop`:
   `STAGING_DISABLED`. Present what changed, how to run or see it, and the
   fixed question "Ready to merge?" — never merge on your own read of
   green tests. Mark the wait the same way. After the user approves uat
-  (`bee gate --name uat --approved true`), land with `bee worktree merge`
-  from main on the FEATURE's own branch — never staging's — which refuses
+  (`bee gate --name uat --approved true`), land with `bee feature finish`
+  — its merge takes the FEATURE's own branch, never staging's, and refuses
   `WORKTREE_MERGE_UAT_PENDING` for `standard`/`high-risk` features until
   that approval.
 
