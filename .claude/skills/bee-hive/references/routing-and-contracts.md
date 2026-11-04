@@ -113,7 +113,7 @@ first yes wins:
    into a lossy summary, and compaction's failure mode is a fresh
    session confidently wrong about a decision the summary flattened.
 
-This is the procedure behind the 65%-context handoff rule (rule: agents-context-handoff-65):
+This is the procedure behind the handoff rule at about 150k tokens or 65% context, whichever comes first, and at every feature close (rule: agents-context-handoff-65):
 that rule says when to stop, this tree says which move to make.
 
 ## Scout Contract (just-enough reading)
@@ -193,7 +193,7 @@ Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-ce
 | shaping (Explore/Qualify/Lock) | user conversation, backlog row, critical-patterns, quick scout | `docs/history/<feature>/CONTEXT.md` (lock or park), backlog row status, state update |
 | planning | CONTEXT.md, critical-patterns, active decisions, bee status | `approach.md`, `plan.md` (frozen at Gate 2 — approval stamp only after approval; none for `tiny`, opt-in for `small`), current-slice cells via `bee cells add` |
 | shaping (Brief) | CONTEXT.md, approach.md, frozen plan.md + cells (drift re-render triggers on cell changes only, since the plan cannot drift after approval), test-result records (`.bee/logs/test-results.json`), state gates (render/refresh); capped cell traces, review findings, UAT (walkthrough) | `docs/history/<feature>/implement-plan.md` (projection; `high-risk` always, `standard` on-demand, `small` optional on request); `docs/history/<feature>/walkthrough.md` (post-Gate-3; `standard`/`high-risk`) |
-| swarming (orchestrate) | Gate-2-approved cells, state, reservations | worker registry in state, HANDOFF at ~65%, wave results |
+| swarming (orchestrate) | Gate-2-approved cells, state, reservations | worker registry in state, HANDOFF at ~150k tokens or ~65%, wave results |
 | swarming ("Execute") | assigned cell, CONTEXT.md, reservations | implementation commits (one per cell, cell id in message), finish (proof line recorded in `--report`, checked — never re-run — at close/merge, where the recorded proof is the evidence), report in `docs/history/<feature>/reports/` |
 | reviewing | user-selected immutable scope (a `bee_reviews` session — never triggered by phase or cell completion) | session findings (P1/P2/P3) and the Gate 3 decision recorded on that session, backlog items, `residual-findings.md` fallback |
 | capturing | `behavior_change` cells + test-result records, CONTEXT.md, active decisions, UAT/worker reports, feature history, traces, commits, code + user interview (harvest) | with a bundle: `docs/knowledge/areas/<area>/` concepts (BA-grade merge); with no bundle: `docs/specs/<area>.md` (BA-grade merge), `docs/specs/reading-map.md`; plus `docs/history/learnings/YYYYMMDD-<slug>.md`, critical-patterns promotions, decision log entries, backlog friction, state record |

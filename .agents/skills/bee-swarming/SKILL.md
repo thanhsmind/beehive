@@ -150,7 +150,7 @@ later, at the owner's pace).
 Before declaring done: no active reservations, no in-flight workers
 recorded.
 
-The 65%-context handoff holds mid-wave (rule: agents-context-handoff-65). When a unit finishes and approved work remains, continue
+The handoff at about 150k tokens or 65% context, whichever comes first, holds mid-wave (rule: agents-context-handoff-65); every feature close is also a handoff point. When a unit finishes and approved work remains, continue
 in-session; finishing a unit is never a reason to stop.
 
 **Reply:** capped cells over total, the proof line per cell, the merge or
@@ -223,7 +223,7 @@ included: add guidance beside those words, never over them.
 6. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
-   diagnosis) · `[HANDOFF]` (the 65% handoff — handoff file
+   diagnosis) · `[HANDOFF]` (the 150k-token or 65% handoff — handoff file
    written before the token; rule: agents-context-handoff-65) · `[NOOP]` (cell missing or already capped). Never wait
    silently; never ask a blocking question — you run headless.
 
