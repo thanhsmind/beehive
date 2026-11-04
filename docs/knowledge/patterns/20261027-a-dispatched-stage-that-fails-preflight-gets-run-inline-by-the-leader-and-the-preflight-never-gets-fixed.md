@@ -28,6 +28,8 @@ The inline run is cheaper than the fix and leaves no red behind: the cap records
 
 Cells rel450-1, rel470-1, rel480-1, rel490-1, rel500-1 (claude deploy role returned a read-only gather payload); rel530-1, rel540-1 (fresh permit instead of the Paseo deploy worker); rel550-1 (`deploy_authorization_wrong_session`); rel560-1 (broker-heartbeat dirt on main); rel570-1 (ran inline under the permit); rel600-1 (dirty-tree precondition). Delivery records: `docs/knowledge/work/release-2-45-0/delivery.md` through `docs/knowledge/work/release-2-63-0/delivery.md`. Later fixes that each removed one cause: deploy-role-agy-flash, deploy-stage-execution, deploy-pane-authorization, release-clean-tree.
 
+Recurrence, releases 2.66.0 through 2.72.0 (cells rel660-1 through rel720-1, delivery records `docs/knowledge/work/release-2-66-0/delivery.md` through `docs/knowledge/work/release-2-72-0/delivery.md`): every one ran inline again. The cause is now stable and by design, not a preflight bug — a herded worker may not push, and its 1800 s ceiling is shorter than the suite plus the CI wait. Releases 2.57.0 through 2.66.0 each logged a decision naming the inline run as the accepted path (d261d5ce through 997faaba), this pattern's own exit; 2.67.0 through 2.72.0 logged none and carried the inline run only as a cap deviation, so the stop above did not fire for six releases. Two first permits were refused before any change — 2.71.0's carried no release version, 2.72.0's was bound to an older main commit — each seen once, so neither is yet a second occurrence.
+
 ## Pointers
 
 - `docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md` (B21–B23, the deploy authorization chain)

@@ -3,7 +3,7 @@ type: bee.area
 title: "Onboarding — design packs, the design role, and the design gate"
 description: "bee carries the design-os taste as a core set and five packs that reach a project only by pick, a design team role that runs UI work with that taste, and a design gate whose baseline ratchet a UI unit of work must pass before it may close in a project that picked packs."
 tags: [design-os, design-packs, design-gate]
-timestamp: 2026-10-30
+timestamp: 2026-11-04
 bee:
   id: onboarding-onboarding-design-packs-the-design-role-and-the-design-gate
   lifecycle: active
@@ -98,6 +98,34 @@ its own list of the commands it may run, generated from the pinned tool, with
 the commands it mentions but must not run in a project named apart (design-os-checks D3/D4/D5).
 A suite check fails when a pack mentions a command no list covers.
 
+**bee's own additions to a pack.** Content bee writes for a pack, not taken
+from design-os, lives in the pack's own additions folder and is linked from the
+pack's skill page (decision e37c2be9). The refresh from design-os deletes and
+re-copies the upstream reference folder each time, so a bee file placed there
+is lost on the next refresh. The additions so far: six WCAG 2.2 rules design-os
+lacks, ported from ui-ux-pro-max-skill under MIT — focus not obscured, a drag
+alternative, accessible login, a pause for auto-rotation, scrim contrast on the
+real background, and an error summary that takes focus (decision e7b47aa2); the
+fresh-context critic's brief — frames only, the closest gold example beside
+them, ranked findings; and, in the motion pack, frame rehearsal scripts
+ported from Stageshow under MIT — the contact sheet, the jump and drift scan,
+and the box-fit check, without the parts bound to Stageshow's own kit
+(decision 967bd7a2).
+
+**The frame check for a page that moves.** A still shot cannot show a jump, so
+a page with an animation, a transition, scroll-driven motion or a hover state
+gets a frame check in the design workflow's Check step (decision 741aef06).
+When the motion pack is installed, a browser is available and the project has
+a headless browser driver, the design agent makes a contact sheet of the page's
+frames, looks at every frame, and runs a strict jump scan. A jump is a box that
+moves or resizes more than 2 px in one frame while it is still in the frames
+before and after (decision f55afb46). Every jump is fixed before hand-over.
+When any of the three is missing, the agent installs nothing and lists motion
+as not verified, naming what was missing. The hand-over always carries a motion
+field: the sheet and the jump result, no motion, or not checked and why.
+Each rehearsal script exits 0 on a pass, 1 on findings only in strict mode, and
+2 when the run is incomplete.
+
 **When the checker cannot run.** The checker needs Node 20 or newer. Without
 it the gate prints `design gate: not run — Node 20 or newer is missing`, records
 that it did not run, and succeeds, so work does not jam (owner answer recorded
@@ -134,6 +162,8 @@ flowchart TD
 - The baseline only moves by a person's explicit act, never inside a unit of
   work.
 - The close rule never binds in a project with no pick.
+- bee's own pack content never lives in a folder the design-os refresh
+  replaces.
 
 ## Open Gaps
 
@@ -173,5 +203,12 @@ flowchart TD
   test overrides `BEE_DESIGN_OS_CLI`, `BEE_DESIGN_NODE_BIN`.
 - Close rule: `verbs/cells/design_rule.rs`, called from `handlers_close.rs` and
   `handlers_write.rs`.
+- bee's additions: `packages/bee/design/bee-design/additions/wcag-2-2.md` and
+  `additions/frame-review.md`; `packages/bee/design/bee-design-motion/additions/frame-rehearsal.md`
+  and `additions/rehearse/` (`sheet.mjs`, `jumps.mjs`, `layout.mjs`, their
+  `*-core.mjs`, `LICENSE-stageshow.md`, `rehearse.test.mjs`); the wipe they
+  avoid is `scripts/sync-design-os.sh`. Frame check and the `MOTION` hand-over
+  field: `packages/bee/design/bee-design/SKILL.md` steps 3 and 4.
 - Decisions: b99dde04, 961426b5, 572bc11e, d5399608, 587bcc85, f4bbb166,
-  c86c235c, 053a14a4, 7cbfad00.
+  c86c235c, 053a14a4, 7cbfad00, e7b47aa2, e37c2be9, 967bd7a2, f55afb46,
+  741aef06.
