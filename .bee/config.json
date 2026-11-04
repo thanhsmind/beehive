@@ -188,7 +188,8 @@
         "effort": "high"
       },
       "lane-2": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "paseo-gpt-sol",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief",
         "effort": "high"
       },
@@ -208,12 +209,14 @@
         "effort": "high"
       },
       "hat-value": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "paseo-gpt-sol",
         "description": "hat: is this worth its cost — materiality test",
         "effort": "high"
       },
       "hat-alternatives": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "paseo-gpt-sol",
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude",
         "effort": "high"
       },
@@ -223,7 +226,7 @@
         "effort": "high"
       },
       "design": {
-        "model": "sonnet",
+        "model": "opus",
         "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
       }
     },
@@ -285,7 +288,7 @@
       },
       "lane-2": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-gpt-sol",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-3": {
@@ -295,7 +298,7 @@
       },
       "hat-facts-gaps": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-gpt-sol",
         "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
       },
       "hat-risks": {
@@ -355,10 +358,10 @@
           "mode": "bypassPermissions"
         }
       },
-      "paseo-gpt-luna": {
+      "paseo-gpt-tera": {
         "paseo": {
           "provider": "pi",
-          "model": "openai-codex/gpt-5.6-luna",
+          "model": "openai-codex/gpt-6.1-tera",
           "thinking": "high"
         }
       },
