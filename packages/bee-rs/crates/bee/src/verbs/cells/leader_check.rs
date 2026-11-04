@@ -18,7 +18,6 @@
 // 6. D5: Grandfathered by LEADER_CHECK_DOOR_INTRODUCED_AT.
 // 7. D6: Reached by two doors: bee close and bee worktree merge.
 // 8. D7: Named escape: a logged decision tagged leader-check-deferral.
-// 9. D8: A gap verdict records and never mutates cell status.
 
 #![allow(unused_imports)]
 #![allow(dead_code)]
@@ -113,6 +112,11 @@ pub(crate) fn record_leader_check(
             "{VERB}: cell \"{id}\" payload rejected against schema \"leader-check/1\" — answers field must be an array."
         )));
     };
+    if verdict == "gap" && answers_arr.is_empty() {
+        return Err(Fail::Thrown(format!(
+            "{VERB}: cell \"{id}\" gap payload has no missing requirements — answers array is empty."
+        )));
+    }
 
     let mut answers = Vec::with_capacity(answers_arr.len());
     for ans_val in answers_arr {
@@ -136,7 +140,7 @@ pub(crate) fn record_leader_check(
                 "{VERB}: cell \"{id}\" payload rejected against schema \"leader-check/1\" — answer requirement must be a non-empty string."
             )));
         }
-        if art_str.is_empty() {
+        if verdict == "ok" && art_str.is_empty() {
             return Err(Fail::Thrown(format!(
                 "{VERB}: cell \"{id}\" payload rejected against schema \"leader-check/1\" — answer artifact must be a non-empty string."
             )));
@@ -193,104 +197,97 @@ pub(crate) fn record_leader_check(
             })
             .unwrap_or_default();
 
-        if !truths.is_empty() {
-            let answered: HashSet<&str> =
-                answers.iter().map(|a| a.requirement.as_str()).collect();
-            let misses: Vec<&str> = truths
-                .iter()
-                .map(|s| s.as_str())
-                .filter(|t| !answered.contains(t))
-                .collect();
-            if !misses.is_empty() {
-                return Err(Fail::Thrown(format!(
-                    "{VERB}: cell \"{id}\" answers do not cover derived requirement(s): {}",
-                    misses.join(", ")
-                )));
-            }
-        } else if !files_changed.is_empty() {
-            let answered: HashSet<&str> =
-                answers.iter().map(|a| a.requirement.as_str()).collect();
-            let misses: Vec<&str> = files_changed
-                .iter()
-                .map(|s| s.as_str())
-                .filter(|f| !answered.contains(f))
-                .collect();
-            if !misses.is_empty() {
-                return Err(Fail::Thrown(format!(
-                    "{VERB}: cell \"{id}\" answers do not cover derived requirement(s): {}",
-                    misses.join(", ")
-                )));
-            }
-        } else {
-            // exactly one free requirement that must be answered non-blank
-            if answers.len() != 1 {
-                return Err(Fail::Thrown(format!(
-                    "{VERB}: cell \"{id}\" has no truths or changed files — requires exactly one non-blank answer, got {}.",
-                    answers.len()
-                )));
-            }
-        }
-
-        // D3 verification:
-        // (a) an artifact string that looks like a repo path (contains '/' and no whitespace)
-        // MUST exist on disk relative to the repo root
-        let feature = cell_map.get("feature").and_then(Value::as_str);
-        let history_root = commit_trailer_history_root(root, feature);
-        let canonical_history_root = std::fs::canonicalize(&history_root).ok();
-        let relative_artifact = |artifact: &str| -> String {
-            let path = Path::new(artifact);
-            let stripped = path.strip_prefix(&history_root).ok().map(Path::to_path_buf).or_else(|| {
-                let canonical_root = canonical_history_root.as_ref()?;
-                let canonical = std::fs::canonicalize(path).ok()?;
-                canonical.strip_prefix(canonical_root).ok().map(Path::to_path_buf)
-            });
-            stripped
-                .as_deref()
-                .and_then(Path::to_str)
-                .map(normalize_cell_path)
-                .unwrap_or_else(|| normalize_cell_path(artifact))
-        };
-        for answer in &answers {
-            if answer.artifact.contains('/') && !answer.artifact.chars().any(char::is_whitespace) {
-                let p = history_root.join(&answer.artifact);
-                if !p.exists() {
+        if verdict == "ok" {
+            if !truths.is_empty() {
+                let answered: HashSet<&str> =
+                    answers.iter().map(|a| a.requirement.as_str()).collect();
+                let misses: Vec<&str> = truths
+                    .iter()
+                    .map(|s| s.as_str())
+                    .filter(|t| !answered.contains(t))
+                    .collect();
+                if !misses.is_empty() {
                     return Err(Fail::Thrown(format!(
-                        "{VERB}: artifact \"{}\" does not exist on disk relative to repo root.",
-                        answer.artifact
+                        "{VERB}: cell \"{id}\" answers do not cover derived requirement(s): {}",
+                        misses.join(", ")
+                    )));
+                }
+            } else if !files_changed.is_empty() {
+                let answered: HashSet<&str> =
+                    answers.iter().map(|a| a.requirement.as_str()).collect();
+                let misses: Vec<&str> = files_changed
+                    .iter()
+                    .map(|s| s.as_str())
+                    .filter(|f| !answered.contains(f))
+                    .collect();
+                if !misses.is_empty() {
+                    return Err(Fail::Thrown(format!(
+                        "{VERB}: cell \"{id}\" answers do not cover derived requirement(s): {}",
+                        misses.join(", ")
+                    )));
+                }
+            } else {
+                if answers.len() != 1 {
+                    return Err(Fail::Thrown(format!(
+                        "{VERB}: cell \"{id}\" has no truths or changed files — requires exactly one non-blank answer, got {}.",
+                        answers.len()
+                    )));
+                }
+            }
+
+            let feature = cell_map.get("feature").and_then(Value::as_str);
+            let history_root = commit_trailer_history_root(root, feature);
+            let canonical_history_root = std::fs::canonicalize(&history_root).ok();
+            let relative_artifact = |artifact: &str| -> String {
+                let path = Path::new(artifact);
+                let stripped = path.strip_prefix(&history_root).ok().map(Path::to_path_buf).or_else(|| {
+                    let canonical_root = canonical_history_root.as_ref()?;
+                    let canonical = std::fs::canonicalize(path).ok()?;
+                    canonical.strip_prefix(canonical_root).ok().map(Path::to_path_buf)
+                });
+                stripped
+                    .as_deref()
+                    .and_then(Path::to_str)
+                    .map(normalize_cell_path)
+                    .unwrap_or_else(|| normalize_cell_path(artifact))
+            };
+            for answer in &answers {
+                if answer.artifact.contains('/') && !answer.artifact.chars().any(char::is_whitespace) {
+                    let p = history_root.join(&answer.artifact);
+                    if !p.exists() {
+                        return Err(Fail::Thrown(format!(
+                            "{VERB}: artifact \"{}\" does not exist on disk relative to repo root.",
+                            answer.artifact
+                        )));
+                    }
+                }
+            }
+
+            if !files_changed.is_empty() {
+                let names_changed_path = |candidate: &str| {
+                    let artifact = relative_artifact(candidate);
+                    files_changed.iter().any(|fc| normalize_cell_path(fc) == artifact)
+                };
+                let has_overlap = answers.iter().any(|a| {
+                    let leading = a.artifact.split_whitespace().next().unwrap_or(&a.artifact);
+                    names_changed_path(leading) || names_changed_path(&a.artifact)
+                });
+                if !has_overlap {
+                    let offending = answers
+                        .iter()
+                        .map(|a| format!("\"{}\"", a.artifact))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return Err(Fail::Thrown(format!(
+                        "{VERB}: cell \"{id}\" answers name no path present in trace.files_changed — offending artifact(s): {offending}."
                     )));
                 }
             }
         }
 
-        // (b) and at least one answer per cell MUST name a path present in that cell's trace.files_changed.
-        // Refuse, naming the offending artifact, otherwise.
-        if !files_changed.is_empty() {
-            let names_changed_path = |candidate: &str| {
-                let artifact = relative_artifact(candidate);
-                files_changed.iter().any(|fc| normalize_cell_path(fc) == artifact)
-            };
-            let has_overlap = answers.iter().any(|a| {
-                let leading = a.artifact.split_whitespace().next().unwrap_or(&a.artifact);
-                names_changed_path(leading) || names_changed_path(&a.artifact)
-            });
-            if !has_overlap {
-                let offending = answers
-                    .iter()
-                    .map(|a| format!("\"{}\"", a.artifact))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                return Err(Fail::Thrown(format!(
-                    "{VERB}: cell \"{id}\" answers name no path present in trace.files_changed — offending artifact(s): {offending}."
-                )));
-            }
-        }
-
-        // (c) files_changed is checked against the cell's real commit diff
-        // (decision 5e3f0baf): every claimed path must appear in a commit
-        // carrying the `cell: <id>` trailer. Extra diff paths are not refused.
-        let commit_diff = if files_changed.is_empty() {
-            None
-        } else {
+        let commit_diff = if verdict == "ok" && !files_changed.is_empty() {
+            let feature = cell_map.get("feature").and_then(Value::as_str);
+            let history_root = commit_trailer_history_root(root, feature);
             Some(match cell_commit_files(&history_root, id) {
                 None => "skipped: git unavailable",
                 Some(paths) if paths.is_empty() => {
@@ -322,6 +319,8 @@ pub(crate) fn record_leader_check(
                     "checked"
                 }
             })
+        } else {
+            None
         };
 
         let mut trace = merge_trace(cell_map.get("trace"))?;
@@ -362,11 +361,36 @@ pub(crate) fn record_leader_check(
         existing.push(Value::Object(entry));
         trace.insert(LEADER_CHECK_TRACE_KEY.into(), Value::Array(existing));
 
-        // D8: NEVER touch cell status, not even on gap!
-        cell_map.insert("trace".into(), Value::Object(trace));
-        let value = Value::Object(cell_map);
-        write_cell(root, &value)?;
-        Ok(value)
+        if verdict == "gap" {
+            let reopen_reason = answers
+                .iter()
+                .map(|a| {
+                    if a.artifact.is_empty() || a.artifact == a.requirement {
+                        a.requirement.clone()
+                    } else {
+                        format!("{}: {}", a.requirement, a.artifact)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+
+            cell_map.insert("status".into(), Value::String("open".into()));
+            let mut trace = release_trace(trace);
+            trace.insert("blocked_reason".into(), Value::Null);
+            trace.insert("dropped_reason".into(), Value::Null);
+            trace.insert("reopened_at".into(), Value::String(utc_now()));
+            trace.insert("reopened_reason".into(), Value::String(reopen_reason));
+            cell_map.insert("trace".into(), Value::Object(trace));
+            let value = Value::Object(cell_map);
+            write_cell(root, &value)?;
+            clear_merge_ready_for(root, &value);
+            Ok(value)
+        } else {
+            cell_map.insert("trace".into(), Value::Object(trace));
+            let value = Value::Object(cell_map);
+            write_cell(root, &value)?;
+            Ok(value)
+        }
     })();
     guard.release();
     saved
@@ -795,7 +819,54 @@ mod tests {
     }
 
     #[test]
-    fn gap_verdict_is_appended_and_cell_status_stays_capped() {
+    fn gap_verdict_reopens_capped_cell_with_gap_answers_as_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(
+            root,
+            "c-gap-reopen",
+            &make_capped_cell("c-gap-reopen", &["Truth 1", "Truth 2"], &["src/lib.rs"], None),
+        );
+
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [
+                {
+                    "requirement": "Truth 2",
+                    "artifact": "missing Truth 2 implementation"
+                }
+            ]
+        });
+
+        let updated = record_leader_check(root, "c-gap-reopen", "gap", &payload, None, false).unwrap();
+        assert_eq!(updated["status"], json!("open"));
+
+        let trace = &updated["trace"];
+        let checks = trace["leader_check"].as_array().unwrap();
+        assert_eq!(checks.len(), 1);
+        assert_eq!(checks[0]["verdict"], json!("gap"));
+        assert_eq!(checks[0]["answers"][0]["requirement"], json!("Truth 2"));
+        assert_eq!(
+            checks[0]["answers"][0]["artifact"],
+            json!("missing Truth 2 implementation")
+        );
+        assert_eq!(
+            trace["reopened_reason"],
+            json!("Truth 2: missing Truth 2 implementation")
+        );
+        assert!(trace["reopened_at"].is_string());
+        assert_eq!(trace["worker"], Value::Null);
+
+        let stored = read_cell_fixture(root, "c-gap-reopen");
+        assert_eq!(stored["status"], json!("open"));
+        assert_eq!(
+            stored["trace"]["reopened_reason"],
+            json!("Truth 2: missing Truth 2 implementation")
+        );
+    }
+
+    #[test]
+    fn gap_verdict_is_appended_and_cell_status_becomes_open() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let p = root.join("src/lib.rs");
@@ -819,7 +890,7 @@ mod tests {
         });
 
         let updated = record_leader_check(root, "c-gap", "gap", &payload, None, false).unwrap();
-        assert_eq!(updated["status"], json!("capped"));
+        assert_eq!(updated["status"], json!("open"));
 
         let trace = &updated["trace"];
         let checks = trace["leader_check"].as_array().unwrap();
@@ -828,9 +899,78 @@ mod tests {
         assert_eq!(checks[0]["answers"][0]["requirement"], json!("Truth 1"));
         assert_eq!(checks[0]["answers"][0]["artifact"], json!("src/lib.rs"));
 
-        // Verify stored file has status "capped"
         let stored = read_cell_fixture(root, "c-gap");
-        assert_eq!(stored["status"], json!("capped"));
+        assert_eq!(stored["status"], json!("open"));
+        assert_eq!(stored["trace"]["reopened_reason"], json!("Truth 1: src/lib.rs"));
+        assert!(stored["trace"]["reopened_at"].is_string());
+        assert_eq!(stored["trace"]["worker"], Value::Null);
+    }
+
+    #[test]
+    fn gap_answer_needs_no_existing_artifact_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(
+            root,
+            "c-gap2",
+            &make_capped_cell("c-gap2", &["Truth 1"], &["src/lib.rs"], None),
+        );
+
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [
+                {
+                    "requirement": "Truth 1",
+                    "artifact": "src/nonexistent.rs"
+                }
+            ]
+        });
+
+        let updated = record_leader_check(root, "c-gap2", "gap", &payload, None, false).unwrap();
+        assert_eq!(updated["status"], json!("open"));
+    }
+
+    #[test]
+    fn gap_answer_artifact_field_is_optional() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(
+            root,
+            "c-gap3",
+            &make_capped_cell("c-gap3", &["Truth 1"], &["src/lib.rs"], None),
+        );
+
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [
+                {
+                    "requirement": "Truth 1"
+                }
+            ]
+        });
+
+        let updated = record_leader_check(root, "c-gap3", "gap", &payload, None, false).unwrap();
+        assert_eq!(updated["status"], json!("open"));
+        assert_eq!(updated["trace"]["reopened_reason"], json!("Truth 1"));
+    }
+
+    #[test]
+    fn gap_answers_empty_array_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(
+            root,
+            "c-gap4",
+            &make_capped_cell("c-gap4", &["Truth 1"], &["src/lib.rs"], None),
+        );
+
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": []
+        });
+
+        let err = record_leader_check(root, "c-gap4", "gap", &payload, None, false);
+        assert!(thrown(err).contains("answers array is empty"));
     }
 
     #[test]
@@ -861,6 +1001,10 @@ mod tests {
             ]
         });
         record_leader_check(root, "c-debt", "gap", &payload, None, false).unwrap();
+        let mut recapped = read_cell_fixture(root, "c-debt");
+        recapped["status"] = json!("capped");
+        recapped["trace"]["capped_at"] = json!(stamp_now);
+        write_cell_fixture(root, "c-debt", &recapped);
         let debt_gap = feature_leader_check_debt(root, "feat-1").unwrap();
         assert_eq!(debt_gap.count, 1);
 
