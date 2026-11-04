@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "anti-pattern-principles",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"anti-pattern-principles\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature anti-pattern-principles",
+  "next_action": "bee close finished \"anti-pattern-principles\" — feature is closed.",
   "created_at": "2026-11-04T04:05:43.255Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
