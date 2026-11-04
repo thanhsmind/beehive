@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The worker is fixing the code. While it runs, I am updating my notes so I avoid the same refused commands next time.",
-    "asked_at": "2026-11-04T07:17:17.510Z",
+    "subject": "Đã kiểm tra: 10 test pass, 0 fail. Bây giờ tôi ghi lại bước kiểm tra của tôi, rồi merge và đóng feature.",
+    "asked_at": "2026-11-04T08:36:01.401Z",
     "session": "2656a557-4baf-4aa1-ba9a-6292e1869680"
   }
 }
