@@ -1,0 +1,158 @@
+{
+  "id": "lnc-1",
+  "feature": "lean-context",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "9bf28c33-73c8-4f61-9f04-c199dc58e748"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "title": "Warn in the prompt-context hook when the session context passes the handoff mark",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee-rs/crates/bee/src/devtools/statusline.rs",
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "read_first": [
+    "docs/history/lean-context/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "action": "On UserPromptSubmit, the prompt-context hook reads the payload's transcript_path and takes the latest request context (input + cache read + cache creation tokens, as statusline context_and_turns computes it). When that value is at or above handoff_context_tokens from .bee/config.json (integer; absent means 150000; 0 turns the check off), the injected context carries exactly one extra line: `context <N>k tokens is past the handoff mark (<T>k): finish this step, write a planned-next handoff (bee state handoff write --kind planned-next), and continue in a fresh session.` Below the mark, with no transcript_path, or with an unreadable or usage-free transcript, nothing is added and the hook never fails or slows the turn. Reuse context_and_turns rather than a second parser. Record the key and the line in the named knowledge concept. No code comments. One commit with the trailer `cell: lnc-1`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context statusline",
+  "must_haves": {
+    "truths": [
+      "a transcript whose latest usage sums to 160000 makes the hook output carry the handoff line naming 160k and 150k",
+      "a transcript at 140000 adds no line",
+      "handoff_context_tokens 0 adds no line at any size",
+      "a missing or unreadable transcript adds no line and the hook exits 0"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "substantive": "handoff mark warning line"
+      }
+    ],
+    "key_links": [
+      "a test fails before the change and passes after"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "Never fail the hook on a transcript read error"
+    ],
+    "open_choices": [
+      "where in the injected parts the line sits"
+    ]
+  },
+  "behavior_change": true,
+  "judge_obligation_ack": "the hook only adds an advisory context line; no allow or deny path changes",
+  "status": "capped",
+  "trace": {
+    "worker": "lnc-1-w",
+    "outcome": "The prompt-context hook adds one handoff line when the latest request context reaches handoff_context_tokens (default 150000, 0 off)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+    ],
+    "deviations": [
+      "statusline.rs needed no change: context_and_turns was already pub(crate)",
+      "execute split into execute_to so tests capture the injected output",
+      "sync-ack: skills/bee-hive/SKILL.md already names the 150k handoff mark through sibling cell lnc-2 in this feature"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T07:00:28.016Z",
+    "behavior_change": true,
+    "verification_evidence": "touched prompt_context.rs; leader re-ran it: 66 and 7 passed, 0 failed, including 4 new handoff tests (past, below, zero, missing or unreadable transcript)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2656a557-4baf-4aa1-ba9a-6292e1869680",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context statusline",
+    "claimed_at": "2026-11-04T06:47:39.418Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "2656a557-4baf-4aa1-ba9a-6292e1869680",
+        "owner_bypassed": null,
+        "at": "2026-11-04T07:00:28.016Z"
+      }
+    ],
+    "sync_ack": "skills/bee-hive/SKILL.md already names the 150k handoff mark through sibling cell lnc-2 in this feature",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The prompt-context hook adds one handoff line when the latest request context reaches handoff_context_tokens (default 150000, 0 off)",
+      "commit": "613a89073",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context statusline — green:unit — touched prompt_context.rs; leader re-ran it: 66 and 7 passed, 0 failed, including 4 new handoff tests (past, below, zero, missing or unreadable transcript)",
+      "deviations": [
+        "statusline.rs needed no change: context_and_turns was already pub(crate)",
+        "execute split into execute_to so tests capture the injected output"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 211 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a transcript whose latest usage sums to 160000 makes the hook output carry the handoff line naming 160k and 150k",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "a transcript at 140000 adds no line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "handoff_context_tokens 0 adds no line at any size",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "a missing or unreadable transcript adds no line and the hook exits 0",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "a test fails before the change and passes after",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "Do not weaken an existing assertion",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "Never fail the hook on a transcript read error",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "handoff mark warning line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          }
+        ],
+        "recorded_at": "2026-11-04T07:00:59.122Z",
+        "recorded_by": "2656a557-4baf-4aa1-ba9a-6292e1869680",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

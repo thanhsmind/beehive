@@ -1,0 +1,215 @@
+{
+  "id": "lnc-2",
+  "feature": "lean-context",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "9bf28c33-73c8-4f61-9f04-c199dc58e748",
+    "88109b52-87d4-4ddb-8cb7-d4875024db75"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "title": "Move the handoff mark to 150k tokens or 65% and run the docs role on sonnet",
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    ".bee/config.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/lean-context/CONTEXT.md"
+  ],
+  "action": "Every doctrine site that names the 65%-context handoff (rule: agents-context-handoff-65) says the mark is about 150k tokens or 65% of the window, whichever comes first, and that every feature close is also a handoff point; the rule id is unchanged. The AGENTS.block.md line under Care for the session carries this, and AGENTS.md is regenerated from it with bee dev regen inside this cell, never hand-edited. The rule index spoken line says the same. In .bee/config.json, team.claude.docs.model becomes sonnet; no other role changes. packages/bee/prompts/worker-cell.md is out of scope. One commit with the trailer `cell: lnc-2`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- agents_md doctrine parity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "rg -n '65%' over the five skills and AGENTS.block.md shows every hit paired with 150k",
+      "AGENTS.md matches bee dev regen output",
+      "team.claude.docs.model is sonnet and every other role is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "150k or 65% handoff mark plus feature close"
+      }
+    ],
+    "key_links": [
+      "the doctrine parity tests stay green"
+    ],
+    "prohibitions": [
+      "Do not rename the rule id",
+      "Do not hand-edit AGENTS.md",
+      "Do not touch worker-cell.md"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "lnc-2-w",
+    "outcome": "Handoff mark moved to about 150k tokens or 65% with feature close as a handoff point; the user set the docs role to the herding flash pane in main",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/go-mode.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "bee dev regen also rewrote the rendered skill trees and .bee/onboarding.json; committed as regen output",
+      "path-scoped commit because the guard refused staging with 2 live workers",
+      "team.claude.docs changed by the user in the main config to the herding pane paseo-pi-agy-flash, not sonnet; the config guard reserves role models for the user",
+      "sync-ack: AGENTS.md changed only in the handoff line of rule agents-context-handoff-65; agents-bee-defect-report text is unchanged"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T06:53:17.723Z",
+    "behavior_change": false,
+    "verification_evidence": "doctrine prose and regen parity only; 7 tests passed, manifest 599 files match",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "2656a557-4baf-4aa1-ba9a-6292e1869680",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- agents_md doctrine parity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-04T06:47:46.412Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "2656a557-4baf-4aa1-ba9a-6292e1869680",
+        "owner_bypassed": null,
+        "at": "2026-11-04T06:53:17.722Z"
+      }
+    ],
+    "sync_ack": "AGENTS.md changed only in the handoff line of rule agents-context-handoff-65; agents-bee-defect-report text is unchanged",
+    "mistakes": [
+      {
+        "wrong": "plan.md told the worker to edit a governed config key",
+        "better": "check governed keys at planning",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "Handoff mark moved to about 150k tokens or 65% with feature close as a handoff point; docs role set by the user",
+      "commit": "eb82a1159",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md",
+        "skills/bee-hive/SKILL.md",
+        "skills/bee-hive/references/go-mode.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- agents_md doctrine parity && .bee/bin/bee dev release-manifest --check — green:static — doctrine prose and regen parity only; 7 tests passed, manifest 599 files match",
+      "deviations": [
+        "bee dev regen also rewrote the rendered skill trees and .bee/onboarding.json; committed as regen output",
+        "path-scoped commit because the guard refused staging with 2 live workers",
+        "team.claude.docs changed by the user in the main config to the herding pane paseo-pi-agy-flash, not sonnet; the config guard reserves role models for the user"
+      ],
+      "mistakes": [
+        "plan.md told the worker to edit a governed config key — check governed keys at planning — check"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 162 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rg -n '65%' over the five skills and AGENTS.block.md shows every hit paired with 150k",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "AGENTS.md matches bee dev regen output",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "team.claude.docs.model is sonnet and every other role is unchanged",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "the doctrine parity tests stay green",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "Do not rename the rule id",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "Do not hand-edit AGENTS.md",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "Do not touch worker-cell.md",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "150k or 65% handoff mark plus feature close",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "packages/bee/AGENTS.block.md",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "AGENTS.md",
+            "artifact": "AGENTS.md"
+          },
+          {
+            "requirement": "skills/bee-hive/SKILL.md",
+            "artifact": "skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/go-mode.md",
+            "artifact": "skills/bee-hive/references/go-mode.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/SKILL.md",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/references/swarming-reference.md",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-04T07:00:59.130Z",
+        "recorded_by": "2656a557-4baf-4aa1-ba9a-6292e1869680",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
