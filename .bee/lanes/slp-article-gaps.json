@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"slp-article-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"slp-article-gaps\" (lane).",
+  "next_action": "Merged into main at 2c13e22; capture what settled, then bee close --feature slp-article-gaps.",
   "created_at": "2026-11-04T02:32:31.262Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-11-04T02:32:31.311Z",
     "feature": "slp-article-gaps"
-  },
-  "merge_ready": {
-    "since": "2026-11-04T03:14:39.671Z",
-    "branch": "wt/slp-article-gaps",
-    "worktree_id": "beehive--wt--slp-article-gaps",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
