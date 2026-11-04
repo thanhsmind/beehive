@@ -268,9 +268,16 @@ restates them.
 A cell is an executable prompt a cold worker can pick up with zero session
 history.
 
-1. **Directive action, no code blocks.** Prose that says what to do and
-   cites decisions (`per D2`). Code belongs in the repo, written by the
-   worker.
+1. **Directive action, no code blocks — the contract, not the
+   implementation.** Prose that says what to do and cites decisions
+   (`per D2`). Code belongs in the repo, written by the worker. The action
+   names the outcome and the contract the cell must keep — inputs,
+   outputs, persisted state, error shape, the tests that prove it — and
+   leaves internal structure (helper names, call graph, variable
+   placement, line-level edits) to the worker unless that choice crosses
+   a shared contract. Read anchors that say where to look stay. A detail
+   the plan never proved turns into a constraint the moment the action
+   prescribes it (agent-anti-patterns D1).
 2. **Bounded files.** `files` lists everything the worker may write;
    `read_first` what it must read. Cross-cell file overlap is legal, not a
    scoping error — it only costs a wave (auto-serialized); prefer explicit

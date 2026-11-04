@@ -30,6 +30,8 @@ The cell names three parts apart:
   You may question an open choice with evidence through `bee cells dissent`.
 {{/if}}
 
+How you build inside the contract is yours: a simpler route than the action describes that keeps every truth and prohibition is your call — record it as a `found a better route` departure.
+
 Inputs — read these; nothing else is provided:
 - AGENTS.md
 - docs/history/{{feature}}/CONTEXT.md

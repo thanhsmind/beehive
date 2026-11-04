@@ -222,7 +222,10 @@ steps for its single worker — never wave analysis or multi-cell assignment.
      lane.** Before accepting, compare every approved requirement (the
      cell's `must_haves`, the plan's acceptance criteria, the locked
      decisions it cites) against the actual artifacts: the diff, the
-     wiring it claims, and the recorded proof. The worker's Result form
+     wiring it claims, and the recorded proof — never against the
+     action's wording. A simpler route that keeps every truth and
+     prohibition, recorded as a `found a better route` departure, is not
+     a miss. The worker's Result form
      is a navigation aid — it names where each requirement landed so you
      can look, and is never the evidence that it did. A requirement with
      no artifact behind it → the cell is NOT done. Depth is risk-based:
