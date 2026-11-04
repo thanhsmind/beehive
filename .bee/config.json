@@ -51,7 +51,7 @@
       },
       "plan": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
       },
       "extraction": {
@@ -66,7 +66,7 @@
       },
       "review": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "independent read-only check of a claim or diff"
       },
       "advisor": {
@@ -81,12 +81,12 @@
       },
       "lane-1": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-2": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-3": {
@@ -96,27 +96,27 @@
       },
       "hat-facts-gaps": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
       },
       "hat-risks": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
       },
       "hat-value": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "hat: is this worth its cost — materiality test"
       },
       "hat-alternatives": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
       },
       "hat-user-impact": {
         "kind": "herding",
-        "agent": "paseo-gpt-luna",
+        "agent": "paseo-gpt-tera",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
       },
       "design": {
