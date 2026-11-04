@@ -1,0 +1,191 @@
+{
+  "id": "aef-7",
+  "feature": "agent-efficiency",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "c4da7108-e15f-492f-94f1-1b9445e5eec7"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "title": "Flush the capture queue and settle the unapplied promote proposals",
+  "files": [
+    "docs/knowledge/*",
+    "docs/history/*"
+  ],
+  "read_first": [
+    "docs/history/agent-efficiency/CONTEXT.md",
+    ".claude/skills/bee-capturing/SKILL.md"
+  ],
+  "action": "Load bee-capturing. Drain the pending capture stubs (22 at plan time) oldest first into their area concepts, and for each unapplied promote proposal (20 at plan time) either apply what belongs in docs/knowledge or record why not, then mark it complete with bee deferred-queue complete --kind promote --feature <f>. A stub or proposal that is already reflected in a concept is recorded as such, never duplicated. Report counts applied, skipped with reason, and left. Item 7 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-7`.",
+  "verify": ".bee/bin/bee status --json",
+  "must_haves": {
+    "truths": [
+      "the capture queue holds no pending stub, or each one left is named with its reason",
+      "every promote proposal is applied or recorded as skipped, and marked complete",
+      "no concept gains a near-duplicate of an entry it already holds"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/*",
+        "substantive": "Flush the capture queue and settle the unapplied promote proposals"
+      }
+    ],
+    "key_links": [
+      "bee status --json reports the capture queue and promote debt drained"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "No verb approves a gate",
+      "Never hand-edit .bee state; use the bee CLI"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-aef-7",
+    "outcome": "Capture queue drained and every pre-cell promote proposal settled",
+    "files_changed": [
+      "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+    ],
+    "deviations": [
+      "Leader ran the 22 promote completes and settled slp-role-gaps from main — the worktree host guard refuses the completing verb, and judge round 2 found slp-role-gaps scoped out by date — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T06:29:32.069Z",
+    "behavior_change": true,
+    "verification_evidence": "capture_queue holds only stub 52289a42 from the agent-efficiency-skills close after this cell; deferred-queue complete events for the 22 features and slp-role-gaps; orient's remaining promote item is agent-efficiency-skills, created after this cell",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": ".bee/bin/bee status --json",
+    "claimed_at": "2026-11-04T06:29:31.928Z",
+    "mistakes": [
+      {
+        "wrong": "Cited decision 967bd7a2 for the critic brief in the design-packs concept on the first edit",
+        "better": "checking the decision text before citing it would have been better; fixed in the same cell",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Capture queue drained (25 stubs) and every pre-cell promote proposal settled: 22 applied as delivery records, slp-role-gaps recorded as skipped (decision 480ffda6), all marked complete",
+      "commit": "8e891a25a",
+      "files": [
+        "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+      ],
+      "tests": ".bee/bin/bee status --json — green:static — capture_queue holds only stub 52289a42 from the agent-efficiency-skills close after this cell; deferred-queue complete events for the 22 features and slp-role-gaps; orient's remaining promote item is agent-efficiency-skills, created after this cell",
+      "deviations": [
+        "Leader ran the 22 promote completes and settled slp-role-gaps from main — the worktree host guard refuses the completing verb, and judge round 2 found slp-role-gaps scoped out by date — something else had to be fixed first"
+      ],
+      "mistakes": [],
+      "reaction": "partial",
+      "stopped": "223 promote records from 2026-08-16 to 2026-10-15 other than slp-role-gaps were already settled or are filed as backlog debt (decision 69e23234) — orient shows none left before this cell"
+    },
+    "reaction": "partial",
+    "found": null,
+    "stopped": "223 promote records from 2026-08-16 to 2026-10-15 other than slp-role-gaps were already settled or are filed as backlog debt (decision 69e23234) — orient shows none left before this cell",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the capture queue holds no pending stub, or each one left is named with its reason",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          },
+          {
+            "requirement": "every promote proposal is applied or recorded as skipped, and marked complete",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          },
+          {
+            "requirement": "no concept gains a near-duplicate of an entry it already holds",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          }
+        ],
+        "recorded_at": "2026-11-04T04:53:46.019Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the capture queue holds no pending stub, or each one left is named with its reason",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          },
+          {
+            "requirement": "every promote proposal is applied or recorded as skipped, and marked complete",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          },
+          {
+            "requirement": "no concept gains a near-duplicate of an entry it already holds",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          }
+        ],
+        "recorded_at": "2026-11-04T06:29:39.437Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "capture-queue-empty-or-named",
+            "status": "PASS",
+            "evidence": "25 earlier stubs carry flush events; the one stub left (52289a42) came from the agent-efficiency-skills close after the cell"
+          },
+          {
+            "id": "every-promote-applied-or-skipped-and-complete",
+            "status": "FAIL",
+            "evidence": "22 complete events exist; slp-role-gaps add 834c50b3 (2026-10-15) had no complete event and was scoped out by date"
+          },
+          {
+            "id": "no-near-duplicate",
+            "status": "PASS",
+            "evidence": "8e891a25a adds new sections only; 22 new delivery.md files"
+          },
+          {
+            "id": "key-link-status-reports-drained",
+            "status": "FAIL",
+            "evidence": "bee status --json has no promote-debt field; orient reported 2 features"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "docs/knowledge only; CLI events for flushes and completes"
+          }
+        ],
+        "failure_signature": "slp-role-gaps promote proposal predates the cell and had no complete event",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-04T06:29:20.678Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-04T06:29:20.678Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "skipped": null,
+    "unknowns": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-11-04T06:29:32.068Z",
+        "reason": "judge round 2 FAIL was the slp-role-gaps promote proposal; settled from main (decision 480ffda6, deferred-queue complete); the status key link reads orient, which shows no pre-cell promote debt",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ],
+    "no_mistakes": true
+  }
+}

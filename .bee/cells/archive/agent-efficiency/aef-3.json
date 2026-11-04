@@ -1,0 +1,142 @@
+{
+  "id": "aef-3",
+  "feature": "agent-efficiency",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "c4da7108-e15f-492f-94f1-1b9445e5eec7"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "title": "dispatch prepare works after a vendored prompt changes, with no hand rebuild",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee-rs/crates/bee/src/devtools/prompts.rs",
+    "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/agent-efficiency/CONTEXT.md"
+  ],
+  "action": "Today `bee dispatch prepare` refuses with prompt skew when packages/bee/prompts/*.md differs from the template compiled into the binary, and the fix is a hand rebuild and copy of .bee/bin/bee. After this cell, the flow that lands a prompt change (bee dev regen, or the merge that carries it) leaves a state where dispatch prepare renders the on-disk prompt it would render after a fresh build, with no manual step; the skew refusal stays for a binary that truly cannot render the on-disk prompt. Choose the mechanism; name it in your report. Keep tests out of verbs/drivers/tests.rs, which cells aef-5 and aef-6 edit. Item 3 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-3`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt",
+  "must_haves": {
+    "truths": [
+      "after a prompt source change lands through the normal flow, dispatch prepare succeeds with no hand rebuild",
+      "the rendered prompt equals the on-disk prompt source",
+      "a binary that cannot render the on-disk prompt still refuses with prompt skew"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+        "substantive": "dispatch prepare works after a vendored prompt changes, with no hand rebuild"
+      }
+    ],
+    "key_links": [
+      "a test fails before the change and passes after"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "No verb approves a gate",
+      "Never render a prompt that differs from the on-disk source without saying so"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-aef-3",
+    "outcome": "allow dispatch prepare after prompt change without manual rebuild 9ccf792386308cf869b49d230ad28eb4012dad15",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal render fallback; no skill tells an agent to act differently"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T04:52:43.383Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt — green:unit — narrow prompt renderer and skew test suite in bee crate",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt",
+    "claimed_at": "2026-11-04T04:22:28.574Z",
+    "sync_ack": "internal render fallback; no skill tells an agent to act differently",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "allow dispatch prepare after prompt change without manual rebuild 9ccf792386308cf869b49d230ad28eb4012dad15",
+      "commit": "2331f27ba71d7c7f84dfad2a9d2c20c06f749fb8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt — green:unit — narrow prompt renderer and skew test suite in bee crate",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "after a prompt source change lands through the normal flow, dispatch prepare succeeds with no hand rebuild",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "the rendered prompt equals the on-disk prompt source",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "a binary that cannot render the on-disk prompt still refuses with prompt skew",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          }
+        ],
+        "recorded_at": "2026-11-04T04:53:45.992Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "prepare-succeeds-after-landed-prompt-change",
+            "status": "PASS",
+            "evidence": "prompt.rs:221-231 no skew when source and vendored prompts match and the template renders"
+          },
+          {
+            "id": "rendered-equals-on-disk",
+            "status": "PASS",
+            "evidence": "prompt.rs:155-167 load_prompt; prepare.rs:1201; test prompt.rs:410-426"
+          },
+          {
+            "id": "unrenderable-still-skews",
+            "status": "PASS",
+            "evidence": "prompt.rs:125-153 can_render_prompt; tests :442-470; :232-239"
+          },
+          {
+            "id": "never-render-diverging-silently",
+            "status": "PASS",
+            "evidence": "prompt.rs:224-226 refuses when source and vendored copies differ"
+          },
+          {
+            "id": "no-code-comments",
+            "status": "PASS",
+            "evidence": "prompt.rs:96-153, 410-470 have no comments"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-04T05:20:42.645Z"
+      }
+    ]
+  }
+}

@@ -1853,5 +1853,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-04T05:27:43.630Z"
+  },
+  "agent-efficiency": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-11-04T06:38:54.125Z"
   }
 }

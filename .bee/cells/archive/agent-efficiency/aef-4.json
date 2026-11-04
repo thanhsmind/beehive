@@ -1,0 +1,149 @@
+{
+  "id": "aef-4",
+  "feature": "agent-efficiency",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "c4da7108-e15f-492f-94f1-1b9445e5eec7"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [],
+  "title": "A leader goal-check miss is a gap verdict that reopens the cell",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "read_first": [
+    "docs/history/agent-efficiency/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+    "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+  ],
+  "action": "`bee cells leader-check --id <id> --verdict gap --file <payload>` records the gap and returns the capped cell to open for rework, with the gap answers as the reopen reason, so the next dispatch's Prior rounds shows them. A gap payload names each missing requirement; an artifact path is not required for a gap answer. The ok verdict is unchanged. The goal-check step in skills/bee-swarming/references/swarming-reference.md tells the leader to record a miss this way. bee report outcomes then counts the miss in the leader check row with no change of its own. Item 4 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-4`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- leader_check",
+  "must_haves": {
+    "truths": [
+      "leader-check --verdict gap reopens a capped cell with the gap answers as the reason",
+      "a gap answer needs no existing artifact path",
+      "leader-check --verdict ok behaves as before",
+      "swarming-reference.md goal-check step records a miss with leader-check --verdict gap"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "substantive": "A leader goal-check miss is a gap verdict that reopens the cell"
+      }
+    ],
+    "key_links": [
+      "a test fails before the change and passes after"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "No verb approves a gate"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-aef-4",
+    "outcome": "Recorded goal-check miss as gap verdict reopening capped cell for rework 391afd12d498c3d995da1267c3f89efb5c413bc6",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-04T04:52:33.771Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- leader_check — green:unit — 39 tests passed covering gap verdict reopen, optional artifact path, and ok verdict stability",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- leader_check",
+    "claimed_at": "2026-11-04T04:22:29.030Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Recorded goal-check miss as gap verdict reopening capped cell for rework 391afd12d498c3d995da1267c3f89efb5c413bc6",
+      "commit": "2331f27ba71d7c7f84dfad2a9d2c20c06f749fb8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- leader_check — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- leader_check — green:unit — 39 tests passed covering gap verdict reopen, optional artifact path, and ok verdict stability",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "leader-check --verdict gap reopens a capped cell with the gap answers as the reason",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "a gap answer needs no existing artifact path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "leader-check --verdict ok behaves as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "swarming-reference.md goal-check step records a miss with leader-check --verdict gap",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          }
+        ],
+        "recorded_at": "2026-11-04T04:53:46.001Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "gap-reopens-with-answers-as-reason",
+            "status": "PASS",
+            "evidence": "leader_check.rs:364-387; prepare.rs:812-821 shows reopened_reason in Prior rounds"
+          },
+          {
+            "id": "gap-needs-no-artifact",
+            "status": "PASS",
+            "evidence": "leader_check.rs:143 artifact needed only for ok; :115-119 empty gap refused"
+          },
+          {
+            "id": "ok-unchanged",
+            "status": "PASS",
+            "evidence": "leader_check.rs:200-324 ok path"
+          },
+          {
+            "id": "swarming-reference-records-gap",
+            "status": "PASS",
+            "evidence": "swarming-reference.md:246-250"
+          },
+          {
+            "id": "no-gate-approval",
+            "status": "PASS",
+            "evidence": "no gate write in leader_check.rs:364-387"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-04T05:20:42.645Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "id": "aef-6",
+  "feature": "agent-efficiency",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "aef-5"
+  ],
+  "decisions": [
+    "c4da7108-e15f-492f-94f1-1b9445e5eec7",
+    "f19e05d1-a678-460b-8257-de014849b287"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "title": "Trim the worker cell prompt to what the skill does not already carry",
+  "files": [
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/agent-efficiency/CONTEXT.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "action": "The cell prompt rendered by `bee dispatch prepare --kind cell` repeats rules the bee-swarming Execute section already gives the worker. After this cell the prompt is materially shorter, and a worker still meets in it, or in a skill the prompt tells it to load, every contract it must keep: identity and location, the inlined cell, the three-part brief and the better-route line, the status tokens, the Result form fields and the closed tests result set, the finish command, and the no-comment rule. Report the before and after line counts. Update the golden prompt expectations to the new text only. Item 6 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-6`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts",
+  "must_haves": {
+    "truths": [
+      "the rendered cell prompt is materially shorter than before, with line counts reported",
+      "every listed contract is in the prompt or in a skill the prompt names",
+      "the herding variant still holds no bee command"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "Trim the worker cell prompt to what the skill does not already carry"
+      }
+    ],
+    "key_links": [
+      "a test fails before the change and passes after"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "No verb approves a gate",
+      "No text that orders a worker to find faults, doubt the lead, or dissent"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-aef-6",
+    "outcome": "Trim worker cell prompt to what the skill does not already carry f31c7a24c",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: prompt trim moves no rule; every removed rule already lives in bee-swarming, which the prompt tells the worker to load"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T05:06:48.102Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts — green:unit — drivers and prompts suites pass with trimmed prompt and updated golden expectation",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts",
+    "claimed_at": "2026-11-04T04:52:57.911Z",
+    "sync_ack": "prompt trim moves no rule; every removed rule already lives in bee-swarming, which the prompt tells the worker to load",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Trim worker cell prompt to what the skill does not already carry f31c7a24c",
+      "commit": "f31c7a24c8cf159bb934153d569ae2d60896fb51",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts — green:unit — drivers and prompts suites pass with trimmed prompt and updated golden expectation",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the rendered cell prompt is materially shorter than before, with line counts reported",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "every listed contract is in the prompt or in a skill the prompt names",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "the herding variant still holds no bee command",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          }
+        ],
+        "recorded_at": "2026-11-04T05:06:48.228Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "materially-shorter-with-counts",
+            "status": "PASS",
+            "evidence": "worker-cell.md 91 lines / 9122 bytes before f31c7a24c, 83 / 4938 after, 83 / 5005 at HEAD; counts stated by the leader, not the worker report"
+          },
+          {
+            "id": "listed-contracts-present",
+            "status": "PASS",
+            "evidence": "worker-cell.md :1-13, :22-23, :25-31, :33, :62, :66, :69, :71-77, :79; removed text homed in bee-swarming SKILL.md, worker-details.md, swarming-reference.md"
+          },
+          {
+            "id": "herding-no-bee-command",
+            "status": "PASS",
+            "evidence": "drivers/tests.rs:10634 herding stdin test passes"
+          },
+          {
+            "id": "verify-command",
+            "status": "PASS",
+            "evidence": "drivers prompts: 471 passed, 0 failed"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "only the golden text changed in tests; no fault-finding or dissent order"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-04T06:29:03.202Z"
+      }
+    ]
+  }
+}

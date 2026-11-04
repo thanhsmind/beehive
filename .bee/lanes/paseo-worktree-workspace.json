@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Phần \"Prior rounds\" giờ mang đủ lý do giám khảo đưa ra (nhờ việc 5). ▸ Tôi giao `aef-1` cho worker.",
-    "asked_at": "2026-11-04T05:28:00.811Z",
+    "kind": "gate",
+    "subject": "uat for agent-efficiency: try bee feature start/finish and bee report outcomes on main",
+    "asked_at": "2026-11-04T06:30:31.431Z",
     "session": "5b57a891-b417-4607-a588-032cc0626815"
   }
 }

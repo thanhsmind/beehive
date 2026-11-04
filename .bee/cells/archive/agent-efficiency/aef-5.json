@@ -1,0 +1,138 @@
+{
+  "id": "aef-5",
+  "feature": "agent-efficiency",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "c4da7108-e15f-492f-94f1-1b9445e5eec7",
+    "f6b3834e-86b8-4733-9148-9f07eeab805c"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "title": "The Prior rounds digest carries a block or reopen reason in full",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/agent-efficiency/CONTEXT.md"
+  ],
+  "action": "The Prior rounds block of a cell dispatch prompt today cuts a block or reopen reason after about 150 chars, so a re-dispatched worker loses the fix the leader wrote. After this cell, block and reopen reasons appear in full; other history kinds keep their current shape; the block as a whole still has a size bound, and when that bound cuts, the newest round is kept whole and the cut is marked. Item 5 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-5`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prior_rounds prepare",
+  "must_haves": {
+    "truths": [
+      "a 600-char block reason reaches the prompt in full",
+      "a 600-char reopen reason reaches the prompt in full",
+      "the digest still has a total bound that keeps the newest round whole and marks a cut"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "The Prior rounds digest carries a block or reopen reason in full"
+      }
+    ],
+    "key_links": [
+      "a test fails before the change and passes after"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "No verb approves a gate"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-aef-5",
+    "outcome": "Carry block and reopen reasons in full in prior rounds digest eae5baed4",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal digest length change; no skill text describes the cut"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T04:52:43.517Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prior_rounds prepare — green:unit — prior rounds digest and dispatch prepare test suite covers full block/reopen reasons and bounds",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prior_rounds prepare",
+    "claimed_at": "2026-11-04T04:22:44.412Z",
+    "sync_ack": "internal digest length change; no skill text describes the cut",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Carry block and reopen reasons in full in prior rounds digest eae5baed4",
+      "commit": "2331f27ba71d7c7f84dfad2a9d2c20c06f749fb8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prior_rounds prepare — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prior_rounds prepare — green:unit — prior rounds digest and dispatch prepare test suite covers full block/reopen reasons and bounds",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a 600-char block reason reaches the prompt in full",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a 600-char reopen reason reaches the prompt in full",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "the digest still has a total bound that keeps the newest round whole and marks a cut",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          }
+        ],
+        "recorded_at": "2026-11-04T04:53:46.009Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "600-char-block-reason-in-full",
+            "status": "PASS",
+            "evidence": "prepare.rs:758-765 one_line(..., usize::MAX)"
+          },
+          {
+            "id": "600-char-reopen-reason-in-full",
+            "status": "PASS",
+            "evidence": "prepare.rs:812-835 usize::MAX"
+          },
+          {
+            "id": "total-bound-keeps-newest-marks-cut",
+            "status": "PASS",
+            "evidence": "prepare.rs:846-855 event-count cap keeps the newest and marks the elided count"
+          },
+          {
+            "id": "other-kinds-unchanged",
+            "status": "PASS",
+            "evidence": "prepare.rs:767, :789, :802 unchanged"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-04T05:20:42.646Z"
+      }
+    ]
+  }
+}

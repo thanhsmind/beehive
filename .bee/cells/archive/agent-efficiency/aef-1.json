@@ -1,0 +1,250 @@
+{
+  "id": "aef-1",
+  "feature": "agent-efficiency",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "c4da7108-e15f-492f-94f1-1b9445e5eec7"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "title": "Open and land a feature with one verb each, and route without placeholder flags",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+  ],
+  "read_first": [
+    "docs/history/agent-efficiency/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "`bee feature start --feature <slug> --class <c> --lane <l> [--flags <a,b>] --files <n>` leaves the same state the separate verbs leave today: a granted feature worktree, a lane record for the feature, and the recorded route, and prints the worktree path and the instruction line `bee worktree new` prints. `bee feature finish --feature <slug> --areas <a,b>` runs worktree merge, then the scribing stamp, then close, stops at the first refusal with that verb's own message, and never approves a gate or the uat door. `bee route --set` (and `bee state route --set`) accepts a route with no risk flags when --flags is omitted or empty, recording flags=0. Each step's refusal passes through unchanged. Item 1 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-1`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- feature_group route",
+  "must_haves": {
+    "truths": [
+      "bee feature start leaves a worktree, a lane record and the route, equal to the separate verbs",
+      "bee feature finish runs merge, scribing stamp and close in order and stops at the first refusal with its message",
+      "bee route --set with no --flags or empty --flags records flags=0",
+      "bee feature --help lists start and finish"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs",
+        "substantive": "Open and land a feature with one verb each, and route without placeholder flags"
+      }
+    ],
+    "key_links": [
+      "a test fails before the change and passes after"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "No verb approves a gate"
+    ],
+    "open_choices": [
+      "A new verbs/feature_group.rs module"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-aef-1",
+    "outcome": "bee feature finish refuses outside the main checkout (168367e16)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+    ],
+    "deviations": [
+      "Leader wrote round 3 inline: the round-2 herding worker hit its 30-minute ceiling with only a test that asserted the buggy partial-success path and deadlocked on a nested CwdGuard; the fix refuses outside main instead of running stamp and close from a worktree, because bee merges run from main — the plan was wrong about a fact",
+      "sync-ack: skill text for feature finish landed in agent-efficiency-skills asf-1"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T06:29:32.192Z",
+    "behavior_change": true,
+    "verification_evidence": "8 feature_group tests incl. feature_finish_from_worktree_refuses_before_merging; red-first for the final test was not shown (the patch-out attempt broke syntax); bee feature finish also ran live from main for agent-efficiency-skills",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- feature_group route",
+    "claimed_at": "2026-11-04T05:27:52.843Z",
+    "sync_ack": "skill text for feature finish landed in agent-efficiency-skills asf-1",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee feature finish refuses before merging when run outside the main checkout, matching feature start; no silent partial success (168367e16)",
+      "commit": "168367e16",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- feature_group route — green:unit — 8 feature_group tests incl. feature_finish_from_worktree_refuses_before_merging; red-first for the final test was not shown (the patch-out attempt broke syntax); bee feature finish also ran live from main for agent-efficiency-skills",
+      "deviations": [
+        "Leader wrote round 3 inline: the round-2 herding worker hit its 30-minute ceiling with only a test that asserted the buggy partial-success path and deadlocked on a nested CwdGuard; the fix refuses outside main instead of running stamp and close from a worktree, because bee merges run from main — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "The round-1 cell contract said finish stops at the first refusal but did not say where finish may run, so the worker invented a silent worktree path — name where a landing verb may run in its contract — doctrine"
+      ],
+      "reaction": "challenge"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee feature start leaves a worktree, a lane record and the route, equal to the separate verbs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "bee feature finish runs merge, scribing stamp and close in order and stops at the first refusal with its message",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "bee route --set with no --flags or empty --flags records flags=0",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "bee feature --help lists start and finish",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          }
+        ],
+        "recorded_at": "2026-11-04T04:53:45.976Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee feature start leaves a worktree, a lane record and the route, equal to the separate verbs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "bee feature finish runs merge, scribing stamp and close in order and stops at the first refusal with its message",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "bee route --set with no --flags or empty --flags records flags=0",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          },
+          {
+            "requirement": "bee feature --help lists start and finish",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feature_group.rs"
+          }
+        ],
+        "recorded_at": "2026-11-04T06:29:39.429Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "start-equals-separate-verbs",
+            "status": "PASS",
+            "evidence": "feature_group.rs:135-229; test :445-483"
+          },
+          {
+            "id": "finish-order-and-stop-at-first-refusal",
+            "status": "FAIL",
+            "evidence": "feature_group.rs:315-318 returns SUCCESS right after merge when ctx.kind != ordinary, so finish run from inside a feature worktree skips the scribing stamp and close and exits 0 with no message"
+          },
+          {
+            "id": "route-set-no-or-empty-flags-zero",
+            "status": "PASS",
+            "evidence": "feature_group.rs:600-624"
+          },
+          {
+            "id": "feature-help-lists-start-finish",
+            "status": "PASS",
+            "evidence": "bee feature --help lists start and finish (leader ran the built binary)"
+          },
+          {
+            "id": "no-gate-approval",
+            "status": "PASS",
+            "evidence": "feature_group.rs:548-587"
+          },
+          {
+            "id": "no-code-comments",
+            "status": "PASS",
+            "evidence": "feature_group.rs has no comment lines"
+          }
+        ],
+        "failure_signature": "feature finish run from a non-ordinary checkout stops after worktree merge and exits 0 without the scribing stamp or close (feature_group.rs:315-318)",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-04T05:20:52.549Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "finish-refuses-outside-main",
+            "status": "PASS",
+            "evidence": "feature_group.rs:279-284 refuses when ctx.kind != ordinary before the merge at :308; the post-merge success branch is gone (168367e16)"
+          },
+          {
+            "id": "finish-order-merge-scribe-close-stop-at-first-refusal",
+            "status": "PASS",
+            "evidence": "feature_group.rs:299-357; test feature_finish_runs_merge_scribing_stamp_and_close passes"
+          },
+          {
+            "id": "start-equals-separate-verbs",
+            "status": "PASS",
+            "evidence": "test feature_start_leaves_worktree_lane_record_and_route passes"
+          },
+          {
+            "id": "route-set-no-or-empty-flags-zero",
+            "status": "PASS",
+            "evidence": "test route_set_no_flags_and_empty_flags_records_zero_flags passes"
+          },
+          {
+            "id": "help-lists-start-finish",
+            "status": "PASS",
+            "evidence": "test feature_help_lists_start_and_finish passes"
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "no comment added, no assertion weakened; feature_finish_never_approves_uat_door passes"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-04T06:29:03.201Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-04T05:20:52.549Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "challenge",
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "mistakes": [
+      {
+        "wrong": "The round-1 cell contract said finish stops at the first refusal but did not say where finish may run, so the worker invented a silent worktree path",
+        "better": "name where a landing verb may run in its contract",
+        "fix_at": "doctrine"
+      }
+    ]
+  }
+}

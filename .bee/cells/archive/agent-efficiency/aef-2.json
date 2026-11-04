@@ -1,0 +1,140 @@
+{
+  "id": "aef-2",
+  "feature": "agent-efficiency",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "c4da7108-e15f-492f-94f1-1b9445e5eec7"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "title": "bee herding run caps a cell the worker finished but did not cap",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/agent-efficiency/CONTEXT.md"
+  ],
+  "action": "When a herding worker reports outcome done for a cell with a commit and a proof line whose result is green, `bee herding run` caps the cell through the same finish door `bee cells finish --from-job` uses, and its output says it capped. A red or missing proof, no commit, or a refusal from finish leaves today's message naming the settle command, and the run exit code tells the two apart. A worker that capped itself is unchanged. Item 2 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-2`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- herding",
+  "must_haves": {
+    "truths": [
+      "a done result with a commit and a green proof is capped by herding run itself",
+      "a red or missing proof or no commit leaves the cell uncapped with the settle command named",
+      "an already-capped cell is not capped twice"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "bee herding run caps a cell the worker finished but did not cap"
+      }
+    ],
+    "key_links": [
+      "a test fails before the change and passes after"
+    ],
+    "prohibitions": [
+      "Do not weaken an existing assertion",
+      "No code comments",
+      "No verb approves a gate",
+      "Never cap on a red, missing or unparseable proof"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-aef-2",
+    "outcome": "bee herding run caps a finished cell with green proof and commit df46984b5a9a5b23c931d4ade1c02c9446a24a2b",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "sync-ack: bee-herding skill text for the auto-cap lands in cell aef-8 of this feature"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T04:52:43.252Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- herding — green:unit — herding run post-flight capping and tests passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- herding",
+    "claimed_at": "2026-11-04T04:22:28.201Z",
+    "sync_ack": "bee-herding skill text for the auto-cap lands in cell aef-8 of this feature",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee herding run caps a finished cell with green proof and commit df46984b5a9a5b23c931d4ade1c02c9446a24a2b",
+      "commit": "2331f27ba71d7c7f84dfad2a9d2c20c06f749fb8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- herding — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- herding — green:unit — herding run post-flight capping and tests passed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a done result with a commit and a green proof is capped by herding run itself",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a red or missing proof or no commit leaves the cell uncapped with the settle command named",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "an already-capped cell is not capped twice",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-11-04T04:53:45.984Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "done-commit-green-capped-by-run",
+            "status": "PASS",
+            "evidence": "run.rs:5949-5956 calls try_cap_finished_cell; run.rs:5797 caps through cells::finish_cap_and_release with from_job; test run.rs:12026-12063"
+          },
+          {
+            "id": "red-missing-nocommit-uncapped-settle-named",
+            "status": "PASS",
+            "evidence": "run.rs:5743-5748 proof parse and result set; :5756-5760 commit trailer; :5957-5962 settle command, exit FAILURE; test run.rs:12065-12175"
+          },
+          {
+            "id": "already-capped-not-twice",
+            "status": "PASS",
+            "evidence": "run.rs:5713-5726; test run.rs:12177-12194"
+          },
+          {
+            "id": "never-cap-on-red-missing-unparseable",
+            "status": "PASS",
+            "evidence": "run.rs:5743-5748"
+          },
+          {
+            "id": "no-code-comments",
+            "status": "PASS",
+            "evidence": "run.rs:5729-5801 has no comments"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-04T05:20:42.644Z"
+      }
+    ]
+  }
+}
