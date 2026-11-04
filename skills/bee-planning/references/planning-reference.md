@@ -298,6 +298,9 @@ history.
    `artifacts` (path + substantive description — no stub counts),
    `key_links` (wired, not just existing), `prohibitions` (what must NOT
    change). Required for `standard`/`high-risk`; `tiny` may omit.
+   Optional `open_choices` lists the plan's current design choices the
+   user did not ask for — a worker may question one with evidence; the
+   goal-check never reads it as a truth.
 5. **behavior_change honesty.** Any cell changing observable behavior is
    `behavior_change: true`. The flag decides the capture debt and review
    scrutiny — never mislabel it.
@@ -344,7 +347,8 @@ history.
     "truths": ["Unauthenticated /api/* requests return 401"],
     "artifacts": [{"path": "src/auth/middleware.ts", "substantive": "exports authGuard, no TODO stubs"}],
     "key_links": ["router.ts imports and mounts authGuard"],
-    "prohibitions": ["No change to public response envelope"]
+    "prohibitions": ["No change to public response envelope"],
+    "open_choices": ["Mount the middleware per route group instead of once at the app root"]
   },
   "trace": {
     "worker": null, "outcome": null, "files_changed": [],

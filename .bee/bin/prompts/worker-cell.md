@@ -22,6 +22,14 @@ from a session rooted there]`.
 Cell (authoritative — do not re-fetch):
 {{cell_json}}
 
+The cell names three parts apart:
+- Goal — `must_haves.truths`: what must be true when you finish.
+- Hard constraints — `must_haves.prohibitions` and the locked D-IDs in CONTEXT.md: a conflict is `[BLOCKED]`, never a workaround.
+- Open choices — `must_haves.open_choices`, when present: design choices the plan made that the user did not ask for; without evidence against one, follow the plan.
+{{#if native_bookkeeping}}
+  You may question an open choice with evidence through `bee cells dissent`.
+{{/if}}
+
 Inputs — read these; nothing else is provided:
 - AGENTS.md
 - docs/history/{{feature}}/CONTEXT.md
