@@ -183,7 +183,10 @@ included: add guidance beside those words, never over them.
    make the cell fit. Disagreeing with the cell is a RECORD, never a
    silent workaround — `bee cells dissent --id <cell> --reason "<claim>"
    --alternative "<instead>" --severity blocker|consider`, then
-   `[BLOCKED]`. An unexpected red or an unfamiliar mechanism
+   `[BLOCKED]`. An open choice (`must_haves.open_choices`) may be questioned
+   with evidence through that same `bee cells dissent`; a conflict with a
+   hard constraint (a prohibition or a locked decision) stays a
+   locked-decision `[BLOCKED]`. An unexpected red or an unfamiliar mechanism
    mid-cell is a pull moment: `bee knowledge search --text "<symptom>"`
    surfaces matching patterns and area concepts before you guess.
 4. Before the commit, revert any edit the proof did not need. Commit

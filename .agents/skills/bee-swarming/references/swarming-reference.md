@@ -534,6 +534,7 @@ Inputs — read these; nothing else will be provided:
 - Global constraints: <GLOBAL_CONSTRAINTS — locked D-IDs, prohibitions, budgets>
 - Your cell (inlined verbatim from the orchestrator's claim-time read — authoritative):
   <CELL_JSON — the full .bee/cells/<CELL_ID>.json content>
+- The cell's three parts, named apart: Goal (`must_haves.truths`); Hard constraints (`must_haves.prohibitions` plus locked D-IDs); Open choices (`must_haves.open_choices`, when present — the worker may question one with evidence through `bee cells dissent`)
 
 Contract:
 - Load the bee-swarming skill (Execute section) and follow its loop exactly.
