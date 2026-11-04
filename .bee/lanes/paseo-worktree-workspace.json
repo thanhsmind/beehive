@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "✓ `agent-efficiency` đã đóng. Giờ tôi lưu bookkeeping và push.",
-    "asked_at": "2026-11-04T06:39:21.843Z",
-    "session": "5b57a891-b417-4607-a588-032cc0626815"
+    "kind": "question",
+    "subject": "User edits team.claude.docs.model to sonnet in the lean-context worktree config",
+    "asked_at": "2026-11-04T06:51:08.156Z",
+    "session": "2656a557-4baf-4aa1-ba9a-6292e1869680"
   }
 }

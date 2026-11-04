@@ -781,6 +781,7 @@
     "contract:paseo-wait-deadline",
     "contract:issue-sweep-2",
     "contract:worker-cell-prompt",
-    "contract:prior-rounds-digest"
+    "contract:prior-rounds-digest",
+    "token-economy"
   ]
 }

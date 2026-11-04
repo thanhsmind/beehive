@@ -142,7 +142,8 @@
         "effort": "high"
       },
       "docs": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "paseo-pi-agy-flash",
         "description": "doc edits and parity sweeps",
         "effort": "high"
       },
