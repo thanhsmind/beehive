@@ -68,7 +68,7 @@ Contract:
 {{#if native_bookkeeping}}
 - Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
 
-Result form: beside the token, in the same message, emit exactly one fenced JSON block — never in place of the token — as the echo of having capped. `tests` is a proof string `<command> — <result> — <scope reason>` closed over `green:live`, `green:unit`, and `green:static`:
+Result form: beside the token, in the same message, emit exactly one fenced JSON block — never in place of the token — as the echo of having capped. `tests` is a proof string `<command> — <result> — <scope reason>` closed over `green:live`, `green:unit`, and `green:static` — e.g. `"cargo test -p bee — green:unit — touched close.rs"`:
 - `green:live` — the real product or command was driven and its observable result inspected.
 - `green:unit` — automated tests passed.
 - `green:static` — it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.

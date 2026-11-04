@@ -112,7 +112,7 @@ proves itself red then green. Cells 4 and 6 defer regen to the wave close
     "read_first": [
       "docs/history/agent-efficiency/CONTEXT.md"
     ],
-    "action": "When a herding worker reports outcome done for a cell with a commit and a proof line whose result is green, `bee herding run` caps the cell through the same finish door `bee cells finish --from-job` uses, and its output says it capped. A red or missing proof, no commit, or a refusal from finish leaves today's message naming the settle command, and the run exit code tells the two apart. A worker that capped itself is unchanged. Item 2 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-2`.",
+    "action": "When a herding worker reports outcome done for a cell with a commit and a proof line whose result is green, `bee herding run` caps the cell through the same finish door `bee cells finish --id <cell> --from-job <job>` uses, and its output says it capped. A red or missing proof, no commit, or a refusal from finish leaves today's message naming the settle command, and the run exit code tells the two apart. A worker that capped itself is unchanged. Item 2 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-2`.",
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- herding",
     "must_haves": {
       "truths": [
@@ -305,7 +305,7 @@ proves itself red then green. Cells 4 and 6 defer regen to the wave close
       "skills/bee-swarming/SKILL.md",
       "skills/bee-swarming/references/swarming-reference.md"
     ],
-    "action": "The cell prompt rendered by `bee dispatch prepare --kind cell` repeats rules the bee-swarming Execute section already gives the worker. After this cell the prompt is materially shorter, and a worker still meets in it, or in a skill the prompt tells it to load, every contract it must keep: identity and location, the inlined cell, the three-part brief and the better-route line, the status tokens, the Result form fields and the closed tests result set, the finish command, and the no-comment rule. Report the before and after line counts. Update the golden prompt expectations to the new text only. Item 6 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-6`.",
+    "action": "The cell prompt rendered by `bee dispatch prepare --runtime <rt> --kind cell` repeats rules the bee-swarming Execute section already gives the worker. After this cell the prompt is materially shorter, and a worker still meets in it, or in a skill the prompt tells it to load, every contract it must keep: identity and location, the inlined cell, the three-part brief and the better-route line, the status tokens, the Result form fields and the closed tests result set, the finish command, and the no-comment rule. Report the before and after line counts. Update the golden prompt expectations to the new text only. Item 6 of D1. Parallel cells share this worktree: stage and commit only your own paths by name. No code comments. One commit with the trailer `cell: aef-6`.",
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts",
     "must_haves": {
       "truths": [
