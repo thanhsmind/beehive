@@ -34,6 +34,7 @@ pub mod mailbox;
 pub mod mailbox_digest; // library module (no try_native) — never probed below
 pub mod models_group;
 pub mod report;
+pub mod report_outcomes;
 pub mod report_usage;
 pub mod reservations;
 pub mod reviews;
@@ -110,6 +111,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = report::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = report_outcomes::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = report_usage::try_native(args, t0) {
