@@ -1833,5 +1833,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-03T10:04:41.620Z"
+  },
+  "slp-article-gaps": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-04T03:16:05.223Z"
   }
 }

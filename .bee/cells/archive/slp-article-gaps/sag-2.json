@@ -1,0 +1,163 @@
+{
+  "id": "sag-2",
+  "feature": "slp-article-gaps",
+  "title": "Name goal, hard constraints, and open choices apart in the worker brief",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "50349b36-62d1-470f-9025-6239a5702366",
+    "b79877b1-1434-43e2-bec4-e0fbacab6409",
+    "34ad6dae-11ea-4608-9fa6-9eba731638bd",
+    "f19e05d1-a678-460b-8257-de014849b287"
+  ],
+  "files": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/SKILL.md",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-article-gaps/CONTEXT.md",
+    "docs/knowledge/areas/workflow-state/dissent-and-the-verdict-duty.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "packages/bee/prompts/worker-cell.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "D1 (store 50349b36): a cell's must_haves may carry open_choices. (a) planning-reference.md, where it lists the must_haves keys (around line 299) and in the example cell JSON (around line 347): add `open_choices` — the plan's current design choices the user did not ask for, which a worker may question with evidence; it is optional and the goal-check does not read it as a truth. (b) packages/bee/prompts/worker-cell.md is the prompt bee dispatch prepare actually renders for every cell worker: right after the inlined Cell block, add a short block that names the three parts apart — Goal (must_haves.truths), Hard constraints (must_haves.prohibitions plus locked D-IDs), Open choices (must_haves.open_choices, when present) — and says an open choice may be questioned with evidence through `bee cells dissent`. Mirror the same three-part naming in the Worker Prompt Template Inputs block of swarming-reference.md (around line 590). If a test in verbs/drivers/tests.rs pins the rendered prompt bytes, update that expectation to the new text and nothing else. (c) bee-swarming SKILL.md Execute step 3: one sentence that an open choice may be questioned through `bee cells dissent` with evidence, while a hard-constraint conflict stays a locked-decision `[BLOCKED]`. D2 (store b79877b1): write no text that orders a worker to look for faults, doubt the lead, or dissent; phrase it as a right used on evidence. Keep every edit short and in the files' existing voice. Run `bee dev regen` so the plugin skill copies, vendored prompts, and release manifest match, and commit the regenerated outputs in the same commit. No code comments. One commit with the trailer `cell: sag-2`. A parallel worker (cell sag-1) edits verbs/report_outcomes.rs, verbs/mod.rs, router.rs and generated/registry_payload.json in the same worktree at the same time: never stage, commit, or revert those paths, even when regen touches them; stage only your own files by name.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "planning-reference.md names open_choices as an optional must_haves key and shows it in the example cell",
+      "the prompt rendered by bee dispatch prepare --kind cell names Goal, Hard constraints, and Open choices apart",
+      "the swarming-reference.md worker prompt template names the same three parts",
+      "bee-swarming Execute step 3 says an open choice may be questioned with evidence through bee cells dissent",
+      "the regenerated outputs match their sources"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "three-part block after the inlined cell"
+      }
+    ],
+    "key_links": [
+      "bee dev regen output committed with the source edits"
+    ],
+    "prohibitions": [
+      "No text that orders a worker to find faults, doubt the lead, or dissent a set number of times",
+      "No change to the dissent verb or its verdict duty",
+      "Do not hand-edit generated copies; regenerate them",
+      "Do not weaken an existing assertion beyond updating pinned prompt text",
+      "Never stage or commit a sag-1 path: verbs/report_outcomes.rs, verbs/mod.rs, router.rs, generated/registry_payload.json"
+    ],
+    "open_choices": [
+      "Placing the three-part block right after the inlined Cell block instead of a new section at the end"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-sag-2",
+    "outcome": "Worker brief names Goal, Hard constraints, and Open choices apart; must_haves.open_choices documented",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/bin/prompts/worker-cell.md",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "The bee cells dissent sentence sits inside a native_bookkeeping block in worker-cell.md, so herding workers get Goal/Hard constraints/Open choices without the command — the herding stdin test forbids any bee command and herding dissent routing is out of scope (p-05d2a4f4) — hit an unforeseen obstacle",
+      "Committed regenerated plugin copies, .bee/bin/prompts/worker-cell.md and .bee/onboarding.json beyond the cell files list, reserved under w-sag-2 after regen wrote them — the action orders regen outputs in the same commit — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T02:40:24.725Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify in full: 465 drivers/prompts unit tests incl. native_cell_prompt_render_is_byte_identical_to_golden and herding_cell_dispatch_stdin_contains_no_bee_commands confirmed by name, pointer_integrity 9, instruction_laws 10, skill_triggers 1 (1 ignored), release manifest 593 files match",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test skill_triggers && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-04T02:35:11.545Z",
+    "mistakes": [
+      {
+        "wrong": "Reserved the regenerated output paths after bee dev regen had already written them",
+        "better": "reserve the known regen targets before running regen",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Worker brief names Goal, Hard constraints, and Open choices apart: packages/bee/prompts/worker-cell.md block right after the inlined Cell; swarming-reference.md Worker Prompt Template Inputs line; bee-swarming SKILL.md Execute step 3 sentence; planning-reference.md must_haves rule 4 plus example cell open_choices; golden prompt in verbs/drivers/tests.rs updated; regen outputs committed",
+      "commit": "c1552f9f0d23b1ac8d11237f00e19d82ceb72856",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "skills/bee-planning/references/planning-reference.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/bin/prompts/worker-cell.md",
+        ".bee/onboarding.json",
+        ".agents/skills, .claude/skills, .claude-plugin/skills, .codex-plugin/skills, .opencode/skills (regenerated bee-planning and bee-swarming copies plus .bee-render.json)"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- drivers prompts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test skill_triggers && .bee/bin/bee dev release-manifest --check — green:unit — the cell verify in full: 465 drivers/prompts unit tests incl. native_cell_prompt_render_is_byte_identical_to_golden and herding_cell_dispatch_stdin_contains_no_bee_commands confirmed by name, pointer_integrity 9, instruction_laws 10, skill_triggers 1 (1 ignored), release manifest 593 files match",
+      "deviations": [
+        "The bee cells dissent sentence sits inside a native_bookkeeping block in worker-cell.md, so herding workers get Goal/Hard constraints/Open choices without the command — the herding stdin test forbids any bee command and herding dissent routing is out of scope (p-05d2a4f4) — hit an unforeseen obstacle",
+        "Committed regenerated plugin copies, .bee/bin/prompts/worker-cell.md and .bee/onboarding.json beyond the cell files list, reserved under w-sag-2 after regen wrote them — the action orders regen outputs in the same commit — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "Reserved the regenerated output paths after bee dev regen had already written them — reserve the known regen targets before running regen — doctrine"
+      ],
+      "found": [
+        "Untracked packages/bee-rs/crates/bee/.bee/logs/timings.jsonl appears after cargo test in the worktree; left uncommitted"
+      ],
+      "reaction": "confirm"
+    },
+    "reaction": "confirm",
+    "found": [
+      "Untracked packages/bee-rs/crates/bee/.bee/logs/timings.jsonl appears after cargo test in the worktree; left uncommitted"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "planning-reference.md names open_choices as an optional must_haves key and shows it in the example cell",
+            "artifact": "skills/bee-planning/references/planning-reference.md"
+          },
+          {
+            "requirement": "the prompt rendered by bee dispatch prepare --kind cell names Goal, Hard constraints, and Open choices apart",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "the swarming-reference.md worker prompt template names the same three parts",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "bee-swarming Execute step 3 says an open choice may be questioned with evidence through bee cells dissent",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "the regenerated outputs match their sources",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-04T02:55:39.720Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

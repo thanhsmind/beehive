@@ -1,0 +1,180 @@
+{
+  "id": "sag-1",
+  "feature": "slp-article-gaps",
+  "title": "Add bee report outcomes: per-layer counts of how often each check changed a result",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "e4711613-5388-4eec-b3d5-ff700dfe9967",
+    "b79877b1-1434-43e2-bec4-e0fbacab6409"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-article-gaps/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/report_usage.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add a read-only verb `bee report outcomes [--feature <slug>] [--json]` (D3, store e4711613). It reads every cell JSON under .bee/cells/*.json and .bee/cells/archive/<feature>/*.json of the store root (filtered by the cell's feature when --feature is given) and prints one row per layer: (1) worker reaction: counts of confirm, partial, challenge, blocked, null, and absent (trace.reaction key missing) kept apart; (2) dissent: number of trace.dissent entries and counts by verdict (accept, reject, escalate, unanswered); (3) semantic judge: trace.semantic_judge entries by verdict (PASS, NEEDS_REVISION, other); (4) leader check: trace.leader_check entries by verdict; (5) rework: cells with trace.reopened_for_rework truthy; (6) role reroute: cells with a non-empty top-level role_reroutes. For each layer print how many cells carry a record and how many records changed a result (dissent accepted or escalated, judge NEEDS_REVISION, leader check not ok, reopen, reroute, reaction partial/challenge/blocked). A layer with zero cells carrying the record prints `not recorded`, never 0. The output carries NO advice line: never suggest adding, removing, or tuning a layer. --json emits the same numbers. Unreadable cell files are counted and named, never a crash. Wire it like report usage (verbs/mod.rs try_native chain, router.rs list, the registry payload via the same regen path the report usage entry uses). Red first: write the tests over a temp store with fixture cells (one per layer state, one archived, one feature-filtered out) and watch them fail before the verb exists. No code comments. One commit with the trailer `cell: sag-1`. ROUND 2 (goal-check miss on a7576e63b): run() resolves the store with resolve_store_root_any, so inside a linked feature worktree it counts the worktree tracked copy of .bee/cells instead of the control-plane store in the main checkout. Fix it the way verbs/report.rs does (resolve_store_root_worktree, read cells from roots.root) and add a test with a linked-worktree fixture (pattern: the verbs/report.rs test near line 1059) proving the main store is read. Keep the rest of a7576e63b; the COMMAND_SURFACE_BUDGET_CHARS bump in hooks/session_preamble/budget.rs is accepted. Commit the fix as a new commit with trailer cell: sag-1, then cap with bee cells finish.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- report_outcomes registry",
+  "must_haves": {
+    "truths": [
+      "bee report outcomes prints one row per layer: reaction, dissent, semantic judge, leader check, rework, role reroute",
+      "archived cells under .bee/cells/archive are counted",
+      "--feature limits the counts to that feature's cells",
+      "a layer with no record prints not recorded, never 0",
+      "reaction absent is counted apart from reaction null",
+      "--json carries the same numbers as the text output",
+      "bee --help --names lists report outcomes"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+        "substantive": "the verb and its tests"
+      }
+    ],
+    "key_links": [
+      "verbs/mod.rs routes report outcomes to report_outcomes::try_native"
+    ],
+    "prohibitions": [
+      "No line that recommends adding, removing, or tuning a layer",
+      "No write to any file: the verb is read-only",
+      "No code comments",
+      "Do not weaken an existing assertion"
+    ],
+    "open_choices": [
+      "A new module report_outcomes.rs instead of growing report_usage.rs",
+      "The text layout: one line per layer with records and changed counts"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-sag-1",
+    "outcome": "bee report outcomes prints per-layer result-change counts from the main cell ledger (499d1576e)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+    ],
+    "deviations": [
+      "Leader finished round 3 inline: ledger_root uses StoreRoots::main_root, granted-worktree test, rework counts reopened_at — two worker rounds both read the store root instead of the cell ledger; a one-line premise fix did not earn a third dispatch — found a better route",
+      "Raised COMMAND_SURFACE_BUDGET_CHARS in hooks/session_preamble/budget.rs from 2604 to 2614 — the new verb adds 10 chars to the command surface the budget pins — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-04T03:14:39.643Z",
+    "behavior_change": true,
+    "verification_evidence": "38+3 tests incl. granted-worktree fixture watched red first; also ran the built binary from the granted worktree (read 1199 main-ledger cells incl. sag-1/sag-2); full declared suite 5049 passed, 1 red opencode_plugin_contracts (known backlog red, depends on installed opencode-ai, untouched here)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- report_outcomes registry",
+    "claimed_at": "2026-11-04T02:56:02.695Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-11-04T02:55:39.723Z",
+        "claim_session": "5b57a891-b417-4607-a588-032cc0626815",
+        "claimed_at": "2026-11-04T02:40:38.285Z",
+        "acquired_at": "2026-11-04T02:34:11.261Z",
+        "worker": "w-sag-1",
+        "verdict": "blocked",
+        "failure_signature": "ea09d6b4e83b",
+        "note": "goal-check miss: report_outcomes.rs run() resolves the store with resolve_store_root_any, so inside a linked feature worktree it counts the worktree's stale tracked copy of .bee/cells (1150 cells) instead of the control-plane store in the main checkout (1198 live cells, incl. sag-*). Fix: resolve like verbs/report.rs does (resolve_store_root_worktree, read cells from roots.root), and add a test with a linked-worktree fixture (pattern: verbs/report.rs test near line 1059) proving the main store is read. Keep everything else in a7576e63b; the budget.rs COMMAND_SURFACE_BUDGET_CHARS bump to 2614 is accepted."
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "baseline": null,
+    "reaction": "challenge",
+    "skipped": null,
+    "unknowns": null,
+    "found": [
+      "rework layer missed leader reopens: bee cells reopen writes reopened_at, not reopened_for_rework"
+    ],
+    "stopped": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-04T02:55:39.725Z",
+    "reopened_reason": "goal-check miss: wrong store root inside a linked worktree (see block reason)",
+    "mistakes": [
+      {
+        "wrong": "Round 2 accepted a linked-worktree test whose fixture was ungranted, while the real feature worktree is granted",
+        "better": "build fixtures from the real topology and drive the binary from the real worktree",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "bee report outcomes: one row per layer (reaction, dissent, semantic judge, leader check, rework, role reroute), not recorded when empty, no advice, --feature and --json; reads StoreRoots::main_root so a granted worktree reads the main ledger; rework counts judge reopens and bee cells reopen",
+      "commit": "499d1576e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- report_outcomes registry — green:unit — 38+3 tests incl. granted-worktree fixture watched red first; also ran the built binary from the granted worktree (read 1199 main-ledger cells incl. sag-1/sag-2); full declared suite 5049 passed, 1 red opencode_plugin_contracts (known backlog red, depends on installed opencode-ai, untouched here)",
+      "deviations": [
+        "Leader finished round 3 inline: ledger_root uses StoreRoots::main_root, granted-worktree test, rework counts reopened_at — two worker rounds both read the store root instead of the cell ledger; a one-line premise fix did not earn a third dispatch — found a better route",
+        "Raised COMMAND_SURFACE_BUDGET_CHARS in hooks/session_preamble/budget.rs from 2604 to 2614 — the new verb adds 10 chars to the command surface the budget pins — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "Round 2 accepted a linked-worktree test whose fixture was ungranted, while the real feature worktree is granted — build fixtures from the real topology and drive the binary from the real worktree — doctrine"
+      ],
+      "reaction": "challenge",
+      "found": [
+        "rework layer missed leader reopens: bee cells reopen writes reopened_at, not reopened_for_rework"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee report outcomes prints one row per layer: reaction, dissent, semantic judge, leader check, rework, role reroute",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "archived cells under .bee/cells/archive are counted",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "--feature limits the counts to that feature's cells",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "a layer with no record prints not recorded, never 0",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "reaction absent is counted apart from reaction null",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "--json carries the same numbers as the text output",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "bee --help --names lists report outcomes",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-11-04T03:14:50.606Z",
+        "recorded_by": "5b57a891-b417-4607-a588-032cc0626815",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
