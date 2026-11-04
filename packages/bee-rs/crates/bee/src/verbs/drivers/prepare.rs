@@ -756,7 +756,7 @@ pub(crate) fn prior_round_event_lines(cell: &Value) -> Vec<String> {
             _ => "(none recorded)".to_string(),
         };
         if matches!(verdict, Some(Value::String(s)) if s == "blocked") {
-            let note = one_line(vget(&attempt, "note"), 140);
+            let note = one_line(vget(&attempt, "note"), usize::MAX);
             let reason = if note.is_empty() {
                 format!("failure signature {}", sig())
             } else {
@@ -815,14 +815,14 @@ pub(crate) fn prior_round_event_lines(cell: &Value) -> Vec<String> {
                 at_of(&trace, "reopened_at"),
                 format!(
                     "- (orchestrator) reopened: {}",
-                    one_line(vget(&trace, "reopened_reason"), 140)
+                    one_line(vget(&trace, "reopened_reason"), usize::MAX)
                 ),
             ));
         }
     }
     if let Some(rework) = vget(&trace, "reopened_for_rework") {
         if truthy(rework) && is_plain_object(rework) {
-            let reason = one_line(vget(rework, "reason"), 140);
+            let reason = one_line(vget(rework, "reason"), usize::MAX);
             let reason = if reason.is_empty() {
                 "NEEDS_REVISION verdict after cap".to_string()
             } else {

@@ -251,6 +251,73 @@ use std::time::Instant;
         );
     }
 
+    #[test]
+    fn prior_rounds_carries_block_and_reopen_reasons_in_full() {
+        let block_reason = "B".repeat(600);
+        let reopen_reason = "R".repeat(600);
+        let rework_reason = "W".repeat(600);
+        let long_tests_red = "T".repeat(600);
+        let long_deviation = "D".repeat(600);
+        let cell = json!({
+            "id": "c-1",
+            "trace": {
+                "capped_at": "2026-01-05T00:00:00.000Z",
+                "reopened_at": "2026-01-07T00:00:00.000Z",
+                "reopened_reason": reopen_reason,
+                "reopened_for_rework": {
+                    "at": "2026-01-08T00:00:00.000Z",
+                    "reason": rework_reason
+                },
+                "attempts": [
+                    {"at": "2026-01-02T00:00:00.000Z", "worker": "w1", "verdict": "blocked", "note": block_reason},
+                    {"at": "2026-01-03T00:00:00.000Z", "worker": "w2", "verdict": "tests-red", "note": long_tests_red}
+                ],
+                "deviations": [long_deviation]
+            }
+        });
+        let lines = prior_round_event_lines(&cell);
+        assert_eq!(lines[0], format!("- w1 blocked: {block_reason}"));
+        assert_eq!(lines[1], format!("- w2 tests red: {}...", "T".repeat(137)));
+        assert_eq!(lines[2], format!("- (prior worker) deviation: {}...", "D".repeat(137)));
+        assert_eq!(lines[3], format!("- (orchestrator) reopened: {reopen_reason}"));
+        assert_eq!(lines[4], format!("- (judge) reopened for rework: {rework_reason}"));
+    }
+
+    #[test]
+    fn dispatch_prompt_carries_600_char_block_and_reopen_reasons_in_full() {
+        let block_reason = "B".repeat(600);
+        let reopen_reason = "R".repeat(600);
+        let cell = json!({
+            "id": "c-1",
+            "feature": "feat",
+            "status": "claimed",
+            "trace": {
+                "worker": "w1",
+                "reopened_at": "2026-01-02T00:00:00.000Z",
+                "reopened_reason": reopen_reason,
+                "attempts": [
+                    {"at": "2026-01-01T00:00:00.000Z", "worker": "w0", "verdict": "blocked", "note": block_reason}
+                ]
+            }
+        });
+        let rendered = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+        ).unwrap().unwrap();
+        assert!(rendered.contains(&format!("- w0 blocked: {block_reason}")));
+        assert!(rendered.contains(&format!("- (orchestrator) reopened: {reopen_reason}")));
+    }
+
     // ── claim-ownership guard ──────────────────────────────────────────────
 
     #[test]
