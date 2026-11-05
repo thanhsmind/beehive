@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"machine-cap-half\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"machine-cap-half\" (lane).",
+  "next_action": "Merged into main at 4f4ff0c; capture what settled, then bee close --feature machine-cap-half.",
   "created_at": "2026-11-05T11:33:26.059Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
