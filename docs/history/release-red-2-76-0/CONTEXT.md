@@ -9,7 +9,7 @@ Nothing was tagged or pushed.
 
 - **D1** (`56d30fdd`) — Keep `bee herding notify --step` and raise
   `PINNED_FLAG_COUNT` from 235 to 236. worker-status-digest D2
-  (`d981106a`) locks `--step` by name. The nearest existing name,
+  locks `--step` by name. The nearest existing name,
   `--phase`, means a bee workflow phase, so reuse gives one word two
   meanings.
 - **D2** (`b0d85440`) — Pin the wsdg-1 truth line of
