@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "device-aware-cap",
+  "closed_at": "2026-11-05T03:00:28.007Z",
+  "sessions": [
+    {
+      "session_id": "298f3545-010d-470f-9df0-80be21e0ac1b",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 222,
+          "output": 36648,
+          "cache_write": 155192,
+          "cache_read": 11332644,
+          "new": 192062,
+          "cached": 11332644,
+          "total": 11524706
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1793846002781,
+      "ended_ms": 1793847625613,
+      "totals": {
+        "new": 192062,
+        "cached": 11332644,
+        "total": 11524706
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 192062,
+      "cached": 11332644,
+      "total": 11524706
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 192062,
+      "cached": 11332644,
+      "total": 11524706
+    }
+  }
+}

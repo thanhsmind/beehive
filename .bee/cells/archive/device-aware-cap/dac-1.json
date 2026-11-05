@@ -1,0 +1,117 @@
+{
+  "id": "dac-1",
+  "feature": "device-aware-cap",
+  "title": "Make the herding worker limit aware of CPU count and free memory",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "a9e06a0f-2545-4875-8f21-ea4555a77843",
+    "9bbef1a9-e281-444a-8bfc-32f268da8c32",
+    "4bb9da28-16aa-4ec0-b296-dc03f7db0dcc"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "docs/history/device-aware-cap/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In herding/wave.rs, extend herding_limits/limits_refusal/check_limits (search `pub(crate) fn herding_limits`, `pub(crate) fn limits_refusal`, `pub(crate) fn check_limits`). Per D1: when herding.limits.concurrency is unset, use CPU count / 4 (std::thread::available_parallelism), never below 1; an explicit value wins unchanged. Per the herding-limits contract: a CPU-derived default never yields the limits.unverifiable refusal; with a Fallback occupancy it lets the run start. Per D2: read MemAvailable from /proc/meminfo; when it is below herding.limits.min_free_mem_gb (default 4; 0 turns the check off) refuse with reason limits.memory, retryable true, available_gb, min_free_gb and a fix line naming the key. Unreadable memory skips the check. Keep the CPU count and memory reading injectable so tests do not depend on the host. Add unit tests beside the existing limits tests (search `a_run_at_the_concurrency_limit_is_refused_and_retryable`). No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave::",
+  "must_haves": {
+    "truths": [
+      "Unset concurrency on a 16-CPU host gives a limit of 4; on a 2-CPU host it gives 1",
+      "An explicit herding.limits.concurrency keeps today's behavior, including limits.unverifiable on a Fallback count",
+      "A default limit with a Fallback occupancy does not refuse",
+      "Available memory below min_free_mem_gb refuses with reason limits.memory and retryable true",
+      "Unreadable memory or min_free_mem_gb 0 never refuses for memory"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "substantive": "CPU default, memory floor, and unit tests for each truth"
+      }
+    ],
+    "key_links": [
+      "check_limits applies the CPU default and the memory floor"
+    ],
+    "prohibitions": [
+      "No change to the existing refusal JSON keys",
+      "No new crate dependency"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "dac-1-worker",
+    "outcome": "Make herding worker limits aware of CPU count and free memory e893db34f60c34026d95f75475d9404afc5de92b",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs"
+    ],
+    "deviations": [
+      "sync-ack: skills/bee-herding names only the cockpit four-slot cap, which is outside check_limits; the limit change is documented in docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-05T02:59:31.523Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave:: — green:unit — 68 tests passed covering CPU concurrency defaults, memory floor, and existing wave limits",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "298f3545-010d-470f-9df0-80be21e0ac1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave::",
+    "claimed_at": "2026-11-05T02:43:57.403Z",
+    "sync_ack": "skills/bee-herding names only the cockpit four-slot cap, which is outside check_limits; the limit change is documented in docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Make herding worker limits aware of CPU count and free memory e893db34f60c34026d95f75475d9404afc5de92b",
+      "commit": "db42f4312e55512a91fad1676a5f17eb57876c44",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave:: — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave:: — green:unit — 68 tests passed covering CPU concurrency defaults, memory floor, and existing wave limits",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Unset concurrency on a 16-CPU host gives a limit of 4; on a 2-CPU host it gives 1",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave.rs"
+          },
+          {
+            "requirement": "An explicit herding.limits.concurrency keeps today's behavior, including limits.unverifiable on a Fallback count",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave.rs"
+          },
+          {
+            "requirement": "A default limit with a Fallback occupancy does not refuse",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave.rs"
+          },
+          {
+            "requirement": "Available memory below min_free_mem_gb refuses with reason limits.memory and retryable true",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave.rs"
+          },
+          {
+            "requirement": "Unreadable memory or min_free_mem_gb 0 never refuses for memory",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave.rs"
+          },
+          {
+            "requirement": "check_limits applies the CPU default and the memory floor",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/wave.rs"
+          }
+        ],
+        "recorded_at": "2026-11-05T02:59:41.913Z",
+        "recorded_by": "298f3545-010d-470f-9df0-80be21e0ac1b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

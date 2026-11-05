@@ -1868,5 +1868,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-04T08:35:48.199Z"
+  },
+  "device-aware-cap": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-05T03:00:27.984Z"
   }
 }

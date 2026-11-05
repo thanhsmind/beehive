@@ -1,0 +1,103 @@
+{
+  "id": "dac-2",
+  "feature": "device-aware-cap",
+  "title": "Run the worktree prune sweep after a green close",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "14b76800-5dfc-4e29-bab8-2addfa145de5",
+    "ea534256-a4ce-4d67-8344-2d61112e1ff4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+    "docs/history/device-aware-cap/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D3 and the close-prune contract: after a green, non-dry-run bee close (search `pub(crate) fn run_close` and `close_handler(&ctx.root`), call run_prune_core (verbs/worktree/prune.rs, search `pub(crate) fn run_prune_core`) once on the MAIN checkout root (close may serve from a granted worktree; resolve main the way run_prune does) with dry_run false and the default 7-day threshold. Add the prune lines to the human output and a `prune` key to the JSON output. A prune Err adds one line naming the error and never changes the exit code. A dry-run or refused/red close never runs prune. Add tests beside the close tests (search `fn dry_run_and_red_close_never_commit`). No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml close::",
+  "must_haves": {
+    "truths": [
+      "A green close runs prune once on the main checkout and reports its lines",
+      "A dry-run close and a refused close never run prune",
+      "A prune error leaves the close exit code at success and adds one line"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "post-close prune call and tests"
+      }
+    ],
+    "key_links": [
+      "run_close calls run_prune_core after a green close"
+    ],
+    "prohibitions": [
+      "No change to prune classification rules in prune.rs"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "dac-2-worker",
+    "outcome": "Run worktree prune sweep after a green close 6ec864db0",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-05T02:57:13.291Z",
+    "behavior_change": false,
+    "verification_evidence": "unit tests covering post-close prune invocation, dry-run/refusal bypass, and error recovery",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "298f3545-010d-470f-9df0-80be21e0ac1b",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml close::",
+    "claimed_at": "2026-11-05T02:43:57.794Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Run worktree prune sweep after a green close 6ec864db0",
+      "commit": "6ec864db01fe809aa7b3127f98eb480400287ad4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml close:: — green:unit — unit tests covering post-close prune invocation, dry-run/refusal bypass, and error recovery",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A green close runs prune once on the main checkout and reports its lines",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "A dry-run close and a refused close never run prune",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "A prune error leaves the close exit code at success and adds one line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "run_close calls run_prune_core after a green close",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          }
+        ],
+        "recorded_at": "2026-11-05T02:59:41.921Z",
+        "recorded_by": "298f3545-010d-470f-9df0-80be21e0ac1b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
