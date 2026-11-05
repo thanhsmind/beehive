@@ -94,7 +94,7 @@ counts.
 
 `.bee/config.json` may set `herding.limits.concurrency` and `herding.limits.depth` (decision `ffa4e772`).
 An absent depth means no depth limit.
-An absent concurrency takes a machine default: CPU count divided by 4, never below 1 (device-aware-cap D1).
+An absent concurrency takes a machine default: CPU count divided by 2, never below 1 (device-aware-cap D1, divisor changed by machine-cap-half D1).
 A default limit never refuses as `limits.unverifiable`; with only a fallback count, the run starts (device-aware-cap D1).
 That refusal stays for an explicit limit, because a default every repo now carries must not block a host that has no pane list.
 `bee herding run` checks both before it starts a worker, and `bee dispatch prepare` checks them when the role resolves to a herding agent.
