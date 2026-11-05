@@ -10594,6 +10594,7 @@ Advisor: fable
 
 Contract:
 - Load the bee-swarming skill (Execute section) for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
+- At each meaningful step (read done, red test seen, green, committed) record one progress note with `.bee/bin/bee herding notify --kind progress --job c-golden --step <word> --text "<note, at most 120 characters>"`; a note never ends the turn.
 - Execute only the assigned cell. Do not select or accept other work.
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
 - Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
