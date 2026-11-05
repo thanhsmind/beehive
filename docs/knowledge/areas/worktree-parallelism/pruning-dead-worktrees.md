@@ -134,7 +134,23 @@ construction — the grant registry plus one metadata check per candidate, with 
 repository command and no directory walk — so orientation pays for it on every
 call without noticing.
 
+## A green close runs the sweep once (device-aware-cap D3)
+
+The count above tells; the close acts. After a green, real `bee close`, bee
+runs the same prune sweep once on the main checkout, with the default 7-day
+threshold (decision `14b76800`, contract `ea534256`). Its lines join the close
+output, and the JSON output gains a `prune` key. The sweep uses the same
+fail-closed classifier, so the close removes nothing a manual prune would keep.
+
+The sweep is best-effort. A prune error adds one `prune:` line and the close
+still exits green, because the close already succeeded. A dry-run close, or a
+close that refuses or goes red, never runs the sweep. The merge does not run
+it either: merge keeps the worktree on purpose, for the user's acceptance test.
+
 ## Pointers (implementation)
+
+- Prune at close (device-aware-cap D3): `apply_close_prune`, called from
+  `run_close` in `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs`.
 
 - Reclaimable-count surfacing (wr-5): `reclaimable_worktree_ids` and the shared
   floor constant `RECLAIMABLE_WORKTREES_SHOWN_FLOOR` (1) in

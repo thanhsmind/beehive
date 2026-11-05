@@ -3858,6 +3858,58 @@ fn commit_close_bookkeeping(root: &Path, feature: &str) -> BookkeepingCommit {
     BookkeepingCommit::Committed { sha }
 }
 
+fn prune_outcome_value(main_root: &Path, outcome: &crate::verbs::worktree::PruneOutcome) -> Value {
+    let mut map = Map::new();
+    map.insert("main_root".into(), json!(crate::verbs::worktree::p(main_root)));
+    map.insert("base_ref".into(), json!(outcome.base_ref));
+    map.insert("base_commit".into(), json!(outcome.base_commit));
+    map.insert("dry_run".into(), json!(outcome.dry_run));
+    map.insert("age_threshold_days".into(), json!(outcome.age_threshold_days));
+    map.insert("worktrees".into(), Value::Array(outcome.entries.clone()));
+    map.insert("removed".into(), json!(outcome.removed_ids));
+    map.insert("kept".into(), json!(outcome.kept_ids));
+    map.insert("reclaimed_bytes".into(), json!(outcome.reclaimed_bytes));
+    Value::Object(map)
+}
+
+pub(crate) fn apply_close_prune(main_root: &Path, dry_run: bool, out: &mut R2<Out>) {
+    if dry_run {
+        return;
+    }
+    let Ok(Out::Emit(result, text, code)) = out else {
+        return;
+    };
+    if *code != 0 {
+        return;
+    }
+    match crate::verbs::worktree::run_prune_core(
+        main_root,
+        false,
+        crate::verbs::worktree::DEFAULT_PRUNE_AGE_DAYS,
+    ) {
+        Ok(outcome) => {
+            if let Value::Object(map) = result {
+                map.insert("prune".into(), prune_outcome_value(main_root, &outcome));
+            }
+            if !outcome.lines.is_empty() {
+                if !text.is_empty() {
+                    text.push('\n');
+                }
+                text.push_str(&outcome.lines.join("\n"));
+            }
+        }
+        Err(err) => {
+            if let Value::Object(map) = result {
+                map.insert("prune".into(), json!({ "error": err }));
+            }
+            if !text.is_empty() {
+                text.push('\n');
+            }
+            text.push_str(&format!("prune: {err}"));
+        }
+    }
+}
+
 pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(&flags, &["feature", "dry-run", "pattern-verdicts"]) {
         return None;
@@ -3896,8 +3948,9 @@ pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         Ok(c) => c,
         Err(code) => return Some(code),
     };
-    let out: R2<Out> = close_handler(&ctx.root, &feature, dry_run, declared, None, &pattern_verdicts)
+    let mut out: R2<Out> = close_handler(&ctx.root, &feature, dry_run, declared, None, &pattern_verdicts)
         .map_err(crate::verbs::reservations::Err2::from);
+    apply_close_prune(&ctx.root, dry_run, &mut out);
     let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
     crate::verbs::drivers::finish_serving_granted(&ctx, out, served_main.as_deref())
 }
@@ -4500,6 +4553,85 @@ mod tests {
         assert_eq!(code, 1);
         assert!(result.get("bookkeeping_commit").is_none(), "{result}");
         assert!(!git_status_porcelain(root2).is_empty(), "a proof-debt-refused close must never commit");
+    }
+
+    #[test]
+    fn dry_run_and_red_close_never_prune() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        let mut dry_out = close_handler(root, "demo", true, None, None, &HashMap::new())
+            .map_err(crate::verbs::reservations::Err2::from);
+        apply_close_prune(root, true, &mut dry_out);
+        let Ok(Out::Emit(dry_result, _text, code)) = dry_out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert!(dry_result.get("prune").is_none(), "{dry_result}");
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        init_bee_repo(root2);
+        w(
+            root2,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
+        );
+        let mut red_out = close_handler(root2, "demo", false, None, None, &HashMap::new())
+            .map_err(crate::verbs::reservations::Err2::from);
+        apply_close_prune(root2, false, &mut red_out);
+        let Ok(Out::Emit(red_result, _text, code)) = red_out else { panic!("expected Emit") };
+        assert_eq!(code, 1);
+        assert!(red_result.get("prune").is_none(), "{red_result}");
+    }
+
+    #[test]
+    fn green_close_runs_prune_and_reports_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        let mut out = close_handler(root, "demo", false, None, None, &HashMap::new())
+            .map_err(crate::verbs::reservations::Err2::from);
+        apply_close_prune(root, false, &mut out);
+        let Ok(Out::Emit(result, text, code)) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert!(result.get("prune").is_some(), "{result}");
+        let prune = &result["prune"];
+        assert_eq!(prune["dry_run"], json!(false));
+        assert_eq!(prune["age_threshold_days"], json!(7.0));
+        assert_eq!(prune["removed"], json!([]));
+        assert!(text.contains("No granted or recorded worktrees to classify."), "{text}");
+    }
+
+    #[test]
+    fn prune_error_leaves_close_exit_code_at_success_and_adds_one_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        let mut out = close_handler(root, "demo", false, None, None, &HashMap::new())
+            .map_err(crate::verbs::reservations::Err2::from);
+        let text_len_before = match &out {
+            Ok(Out::Emit(_, text, _)) => text.lines().count(),
+            _ => panic!("expected Emit"),
+        };
+        git_ok(root, &["checkout", "-q", "--detach", "HEAD"]);
+        apply_close_prune(root, false, &mut out);
+        let Ok(Out::Emit(result, text, code)) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert!(result.get("prune").is_some(), "{result}");
+        assert!(result["prune"].get("error").is_some(), "{result}");
+        let text_len_after = text.lines().count();
+        assert_eq!(text_len_after, text_len_before + 1);
+        assert!(text.contains("detached HEAD"), "{text}");
+    }
+
+    #[test]
+    fn green_run_close_runs_prune_end_to_end() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        let _cwd = CwdGuard::enter(root);
+        let flags = Flags(vec![("feature".to_string(), FlagV::S("demo".to_string()))]);
+        let exit = run_close(flags, false, Instant::now());
+        assert_eq!(exit, Some(ExitCode::SUCCESS));
     }
 
     /// P3-4: `GIT_CEILING_DIRECTORIES` is process environment, so a bare

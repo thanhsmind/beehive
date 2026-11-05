@@ -1092,15 +1092,64 @@ fn quiet_occupancy(main_root: &Path) -> wave_ledger::Occupancy {
     quiet_occupancy_from(main_root, live_pane_ids(main_root), paseo_ids, chrono::Utc::now().timestamp_millis())
 }
 
+pub(crate) const DEFAULT_MIN_FREE_MEM_GB: u64 = 4;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct HerdingLimits {
     pub(crate) concurrency: Option<u64>,
     pub(crate) depth: Option<u64>,
 }
 
+pub(crate) fn default_concurrency(cpus: usize) -> u64 {
+    (cpus as u64 / 4).max(1)
+}
+
+pub(crate) fn host_cpu_count() -> usize {
+    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+}
+
+pub(crate) fn parse_meminfo_available_kb(contents: &str) -> Option<u64> {
+    for line in contents.lines() {
+        if let Some(rest) = line.strip_prefix("MemAvailable:") {
+            let part = rest.trim_start();
+            let num_str = part.split_whitespace().next()?;
+            return num_str.parse::<u64>().ok();
+        }
+    }
+    None
+}
+
+pub(crate) fn available_memory_gb_from_meminfo(contents: &str) -> Option<u64> {
+    let kb = parse_meminfo_available_kb(contents)?;
+    Some(kb / (1024 * 1024))
+}
+
+pub(crate) fn read_host_available_memory_gb() -> Option<u64> {
+    let contents = std::fs::read_to_string("/proc/meminfo").ok()?;
+    available_memory_gb_from_meminfo(&contents)
+}
+
+pub(crate) fn herding_min_free_mem_gb(cfg: &Value) -> u64 {
+    cfg["herding"]["limits"]["min_free_mem_gb"].as_u64().unwrap_or(DEFAULT_MIN_FREE_MEM_GB)
+}
+
 pub(crate) fn herding_limits(cfg: &Value) -> HerdingLimits {
     let limits = &cfg["herding"]["limits"];
     HerdingLimits { concurrency: limits["concurrency"].as_u64(), depth: limits["depth"].as_u64() }
+}
+
+pub(crate) fn herding_limits_from(cfg: &Value, cpus: usize) -> (HerdingLimits, bool) {
+    let raw = herding_limits(cfg);
+    match raw.concurrency {
+        Some(_) => (raw, false),
+        None => (
+            HerdingLimits {
+                concurrency: Some(default_concurrency(cpus)),
+                depth: raw.depth,
+            },
+            true,
+        ),
+    }
 }
 
 pub(crate) fn herding_depth_from(raw: Option<&str>) -> u64 {
@@ -1111,9 +1160,31 @@ pub(crate) fn herding_depth() -> u64 {
     herding_depth_from(std::env::var("BEE_HERDING_DEPTH").ok().as_deref())
 }
 
+pub(crate) fn memory_refusal(available_gb: Option<u64>, min_free_mem_gb: u64) -> Option<Value> {
+    if min_free_mem_gb == 0 {
+        return None;
+    }
+    let available = available_gb?;
+    if available < min_free_mem_gb {
+        Some(serde_json::json!({
+            "ok": false,
+            "reason": "limits.memory",
+            "available_gb": available,
+            "min_free_gb": min_free_mem_gb,
+            "retryable": true,
+            "fix": format!("available memory ({available} GB) is below herding.limits.min_free_mem_gb ({min_free_mem_gb} GB); wait for memory to free up or lower herding.limits.min_free_mem_gb"),
+        }))
+    } else {
+        None
+    }
+}
+
 pub(crate) fn limits_refusal(
     limits: HerdingLimits,
     depth: u64,
+    default_concurrency: bool,
+    available_mem_gb: Option<u64>,
+    min_free_mem_gb: u64,
     occupancy: impl FnOnce() -> wave_ledger::Occupancy,
 ) -> Option<Value> {
     if let Some(limit) = limits.depth.filter(|limit| depth >= *limit) {
@@ -1126,16 +1197,25 @@ pub(crate) fn limits_refusal(
             "fix": format!("this herding worker runs at depth {depth} and herding.limits.depth is {limit}; hand the work back to the leader or raise herding.limits.depth"),
         }));
     }
+    if let Some(refusal) = memory_refusal(available_mem_gb, min_free_mem_gb) {
+        return Some(refusal);
+    }
     let limit = limits.concurrency?;
     match occupancy() {
-        wave_ledger::Occupancy::Fallback(live) => Some(serde_json::json!({
-            "ok": false,
-            "reason": "limits.unverifiable",
-            "live": live,
-            "limit": limit,
-            "retryable": true,
-            "fix": "no live pane list could be read, so the live worker count cannot be verified; start the herding transport (herdr or tmux) or remove herding.limits.concurrency",
-        })),
+        wave_ledger::Occupancy::Fallback(live) => {
+            if default_concurrency {
+                None
+            } else {
+                Some(serde_json::json!({
+                    "ok": false,
+                    "reason": "limits.unverifiable",
+                    "live": live,
+                    "limit": limit,
+                    "retryable": true,
+                    "fix": "no live pane list could be read, so the live worker count cannot be verified; start the herding transport (herdr or tmux) or remove herding.limits.concurrency",
+                }))
+            }
+        }
         wave_ledger::Occupancy::Live(live) if live as u64 >= limit => Some(serde_json::json!({
             "ok": false,
             "reason": "limits.concurrency",
@@ -1149,7 +1229,27 @@ pub(crate) fn limits_refusal(
 }
 
 pub(crate) fn check_limits(main_root: &Path, cfg: &Value) -> Option<Value> {
-    limits_refusal(herding_limits(cfg), herding_depth(), || quiet_occupancy(main_root))
+    check_limits_from(
+        main_root,
+        cfg,
+        host_cpu_count(),
+        read_host_available_memory_gb(),
+        herding_depth(),
+        || quiet_occupancy(main_root),
+    )
+}
+
+pub(crate) fn check_limits_from(
+    _main_root: &Path,
+    cfg: &Value,
+    cpus: usize,
+    available_mem_gb: Option<u64>,
+    depth: u64,
+    occupancy: impl FnOnce() -> wave_ledger::Occupancy,
+) -> Option<Value> {
+    let (limits, is_default) = herding_limits_from(cfg, cpus);
+    let min_free = herding_min_free_mem_gb(cfg);
+    limits_refusal(limits, depth, is_default, available_mem_gb, min_free, occupancy)
 }
 
 /// `bee herding occupancy` — the CLI bridge to the wave ledger's read side
@@ -2747,13 +2847,13 @@ mod tests {
 
     #[test]
     fn no_limits_never_reads_occupancy_and_never_refuses() {
-        assert_eq!(limits_refusal(HerdingLimits::default(), 9, untouched), None);
+        assert_eq!(limits_refusal(HerdingLimits::default(), 9, false, None, 0, untouched), None);
     }
 
     #[test]
     fn a_run_at_the_concurrency_limit_is_refused_and_retryable() {
         let limits = HerdingLimits { concurrency: Some(4), depth: None };
-        let v = limits_refusal(limits, 0, || wave_ledger::Occupancy::Live(4)).expect("at the limit refuses");
+        let v = limits_refusal(limits, 0, false, None, 0, || wave_ledger::Occupancy::Live(4)).expect("at the limit refuses");
         assert_eq!(
             v,
             serde_json::json!({
@@ -2765,13 +2865,13 @@ mod tests {
                 "fix": "wait for a worker to finish (bee herding status) or raise herding.limits.concurrency",
             })
         );
-        assert_eq!(limits_refusal(limits, 0, || wave_ledger::Occupancy::Live(3)), None);
+        assert_eq!(limits_refusal(limits, 0, false, None, 0, || wave_ledger::Occupancy::Live(3)), None);
     }
 
     #[test]
     fn a_fallback_count_with_a_concurrency_limit_is_unverifiable() {
         let limits = HerdingLimits { concurrency: Some(4), depth: None };
-        let v = limits_refusal(limits, 0, || wave_ledger::Occupancy::Fallback(0)).expect("fallback refuses");
+        let v = limits_refusal(limits, 0, false, None, 0, || wave_ledger::Occupancy::Fallback(0)).expect("fallback refuses");
         assert_eq!(v["reason"], "limits.unverifiable");
         assert_eq!(v["retryable"], true);
         assert_eq!(v["limit"], 4);
@@ -2780,12 +2880,107 @@ mod tests {
     #[test]
     fn a_run_at_the_depth_limit_is_refused_before_occupancy_is_read() {
         let limits = HerdingLimits { concurrency: Some(4), depth: Some(1) };
-        let v = limits_refusal(limits, 1, untouched).expect("depth 1 at limit 1 refuses");
+        let v = limits_refusal(limits, 1, false, None, 0, untouched).expect("depth 1 at limit 1 refuses");
         assert_eq!(v["reason"], "limits.depth");
         assert_eq!(v["depth"], 1);
         assert_eq!(v["limit"], 1);
         let shallow = HerdingLimits { concurrency: None, depth: Some(1) };
-        assert_eq!(limits_refusal(shallow, 0, untouched), None);
+        assert_eq!(limits_refusal(shallow, 0, false, None, 0, untouched), None);
+    }
+
+    #[test]
+    fn unset_concurrency_defaults_to_cpu_count_over_four_never_below_one() {
+        let cfg = Value::Null;
+        let (limits_16, is_default_16) = herding_limits_from(&cfg, 16);
+        assert_eq!(limits_16.concurrency, Some(4));
+        assert!(is_default_16);
+
+        let (limits_2, is_default_2) = herding_limits_from(&cfg, 2);
+        assert_eq!(limits_2.concurrency, Some(1));
+        assert!(is_default_2);
+
+        let (limits_1, _) = herding_limits_from(&cfg, 1);
+        assert_eq!(limits_1.concurrency, Some(1));
+
+        let (limits_0, _) = herding_limits_from(&cfg, 0);
+        assert_eq!(limits_0.concurrency, Some(1));
+
+        let (limits_32, _) = herding_limits_from(&cfg, 32);
+        assert_eq!(limits_32.concurrency, Some(8));
+
+        let explicit = serde_json::json!({"herding": {"limits": {"concurrency": 10}}});
+        let (limits_explicit, is_default_explicit) = herding_limits_from(&explicit, 16);
+        assert_eq!(limits_explicit.concurrency, Some(10));
+        assert!(!is_default_explicit);
+    }
+
+    #[test]
+    fn explicit_concurrency_keeps_unverifiable_on_fallback() {
+        let explicit = serde_json::json!({"herding": {"limits": {"concurrency": 4}}});
+        let root = Path::new(".");
+        let v = check_limits_from(root, &explicit, 16, None, 0, || wave_ledger::Occupancy::Fallback(0))
+            .expect("explicit limit on fallback must refuse");
+        assert_eq!(v["reason"], "limits.unverifiable");
+        assert_eq!(v["retryable"], true);
+        assert_eq!(v["limit"], 4);
+    }
+
+    #[test]
+    fn default_concurrency_with_fallback_occupancy_does_not_refuse() {
+        let root = Path::new(".");
+        let res = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Fallback(0));
+        assert_eq!(res, None);
+
+        let at_limit = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Live(4))
+            .expect("at live limit must refuse");
+        assert_eq!(at_limit["reason"], "limits.concurrency");
+        assert_eq!(at_limit["retryable"], true);
+        assert_eq!(at_limit["live"], 4);
+        assert_eq!(at_limit["limit"], 4);
+
+        let below_limit = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Live(3));
+        assert_eq!(below_limit, None);
+    }
+
+    #[test]
+    fn available_memory_below_floor_refuses_with_limits_memory() {
+        let root = Path::new(".");
+        let v = check_limits_from(root, &Value::Null, 16, Some(2), 0, untouched)
+            .expect("memory below floor must refuse");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["reason"], "limits.memory");
+        assert_eq!(v["retryable"], true);
+        assert_eq!(v["available_gb"], 2);
+        assert_eq!(v["min_free_gb"], 4);
+        assert!(v["fix"].as_str().unwrap().contains("herding.limits.min_free_mem_gb"));
+
+        let custom_cfg = serde_json::json!({"herding": {"limits": {"min_free_mem_gb": 8}}});
+        let custom_v = check_limits_from(root, &custom_cfg, 16, Some(7), 0, untouched)
+            .expect("custom memory floor must refuse");
+        assert_eq!(custom_v["min_free_gb"], 8);
+        assert_eq!(custom_v["available_gb"], 7);
+
+        let sufficient = check_limits_from(root, &Value::Null, 16, Some(4), 0, || wave_ledger::Occupancy::Live(0));
+        assert_eq!(sufficient, None);
+    }
+
+    #[test]
+    fn unreadable_memory_or_zero_floor_never_refuses() {
+        let root = Path::new(".");
+        let unreadable = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Live(0));
+        assert_eq!(unreadable, None);
+
+        let zero_cfg = serde_json::json!({"herding": {"limits": {"min_free_mem_gb": 0}}});
+        let zero_res = check_limits_from(root, &zero_cfg, 16, Some(0), 0, || wave_ledger::Occupancy::Live(0));
+        assert_eq!(zero_res, None);
+
+        let meminfo_sample = "MemTotal:       65114768 kB\nMemFree:         2977568 kB\nMemAvailable:    8388608 kB\n";
+        assert_eq!(parse_meminfo_available_kb(meminfo_sample), Some(8388608));
+        assert_eq!(available_memory_gb_from_meminfo(meminfo_sample), Some(8));
+
+        let bad_meminfo = "MemTotal: 65114768 kB\n";
+        assert_eq!(parse_meminfo_available_kb(bad_meminfo), None);
+        assert_eq!(available_memory_gb_from_meminfo(bad_meminfo), None);
     }
 
     #[test]
