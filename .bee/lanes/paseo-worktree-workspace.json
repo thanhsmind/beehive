@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The release commit is made by the script, so it has no cell trailer. 2.74.0 had the same gap. I record a leader-check deferral and run close",
-    "asked_at": "2026-11-05T07:33:09.651Z",
+    "subject": "Merge done (`c4f951657`). I am past the context limit, so I write the handoff and pass the rest to a fresh leader.",
+    "asked_at": "2026-11-05T09:03:49.548Z",
     "session": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980"
   }
 }
