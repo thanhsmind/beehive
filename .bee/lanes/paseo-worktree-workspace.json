@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Chỉ còn test opencode đỏ như trước (đã có trong backlog). Giờ ghi quyết định và commit.",
-    "asked_at": "2026-11-05T11:40:08.204Z",
-    "session": "f9d9e9dc-b7c6-4595-a1e5-c8b0798c7533"
+    "kind": "question",
+    "subject": "Sửa luật handoff ở đâu: doctrine bee hay ~/.claude/CLAUDE.md",
+    "asked_at": "2026-11-05T12:01:23.216Z",
+    "session": "b99aebf2-3ed2-4aa6-b51e-794725ff1d10"
   }
 }

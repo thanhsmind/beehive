@@ -792,6 +792,7 @@
     "contract:agent-shells",
     "contract:flag-vocabulary-pin",
     "contract:documented-invocations",
-    "contract:native-cell-golden"
+    "contract:native-cell-golden",
+    "session-care"
   ]
 }
