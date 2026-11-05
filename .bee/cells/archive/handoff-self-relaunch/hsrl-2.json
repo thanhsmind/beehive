@@ -1,0 +1,127 @@
+{
+  "id": "hsrl-2",
+  "feature": "handoff-self-relaunch",
+  "title": "The prompt hook past the handoff mark tells the leader to hand the rest to waggledance",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "9a231232-f61f-457a-aa2c-110dceccde1c",
+    "c9439edb-7667-48fa-b584-fed8f1de7cd8",
+    "8ec20f49-1ddf-405d-84bd-f5ac4f61fb27"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "read_first": [
+    "docs/history/handoff-self-relaunch/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "D1 of docs/history/handoff-self-relaunch/CONTEXT.md: the prompt-context line emitted past the handoff mark (prompt_context.rs near line 367, format 'context {n_k}k tokens is past the handoff mark ({t_k}k): ...') becomes exactly: 'context {n_k}k tokens is past the handoff mark ({t_k}k): finish this step, write the handoff (bee state handoff write --kind planned-next), hand the rest to waggledance (waggledance_dispatch, leader: true), and release this session — never ask the user to open a new one.' Red first: update the expected_line assertion in the existing test (near line 3267) to the new text, run it and watch it fail, then change the line. The threshold and the cases where the line is absent stay as they are. No code comments. One commit with the trailer `cell: hsrl-2`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context",
+  "must_haves": {
+    "truths": [
+      "Past the mark the hook prints the new one-line text naming waggledance_dispatch with leader: true",
+      "Below the mark no handoff line is printed",
+      "The test failed on the old text before the change"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "substantive": "new hook line and its test"
+      }
+    ],
+    "key_links": [
+      "the hook line text matches the one quoted in hsrl-1's hook-runtime doc"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Do not weaken the absent-line assertions",
+      "Do not touch docs or skills (sibling cell hsrl-1 owns them)"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "judge_obligation_ack": "message text of one hook line only; no guard logic, threshold or decision path changes",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hsrl-2",
+    "outcome": "Update prompt-context hook line past handoff mark to instruct waggledance dispatch with leader: true — 7fe790799",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+    ],
+    "deviations": [
+      "sync-ack: sibling cell hsrl-1 updates the owned skills (go-mode.md, bee-swarming) for the same rule"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-05T12:10:27.263Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context — green:unit — prompt_context hook line and handoff warning unit tests pass",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b99aebf2-3ed2-4aa6-b51e-794725ff1d10",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context",
+    "claimed_at": "2026-11-05T12:05:24.044Z",
+    "sync_ack": "sibling cell hsrl-1 updates the owned skills (go-mode.md, bee-swarming) for the same rule",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Update prompt-context hook line past handoff mark to instruct waggledance dispatch with leader: true — 7fe790799",
+      "commit": "7fe790799ae113bb7ca24ba07ed1f89abff78c42",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context — green:unit — prompt_context hook line and handoff warning unit tests pass",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Past the mark the hook prints the new one-line text naming waggledance_dispatch with leader: true",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "Below the mark no handoff line is printed",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "The test failed on the old text before the change",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "the hook line text matches the one quoted in hsrl-1's hook-runtime doc",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "Do not weaken the absent-line assertions",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "Do not touch docs or skills (sibling cell hsrl-1 owns them)",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          }
+        ],
+        "recorded_at": "2026-11-05T12:16:32.249Z",
+        "recorded_by": "b99aebf2-3ed2-4aa6-b51e-794725ff1d10",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
