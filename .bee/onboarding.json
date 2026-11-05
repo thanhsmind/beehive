@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "2.75.0",
   "managed": {
-    "agents_block": "685516a70c75c3bbc54bb5daa6c9b661bbcb43bad8c85dcbfc7894ecd0ffbced",
+    "agents_block": "1921d8b06935958409dbb848bd82b98ca00f01d91e5aeb9d474a6be7303fb8b2",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
     "gitattributes_block": "6b45725311706710fbde882c308f5fe127fb73f9bbf1d19851d649c04644bb67",
     "helpers": {},
@@ -39,7 +39,7 @@
       "advisor.md": "62e71f2c7071d3c7395b40a7886b7e60cbefdf3257a72fce9de5fda26dfae5bc",
       "gather.md": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
       "reviewer.md": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
-      "worker-cell.md": "bd713f28d47be0a3ce1f08aef545de56451d4cd5de678939e13a86492f80ef41"
+      "worker-cell.md": "045c7f109730a0e0f246758a1576dd1063fd44932c12a4bcbcf6df83374a9965"
     },
     "repo_hooks": {
       ".codex/hooks.json": "b4ecbe18eed3506b7bf3a936aad5ab1f1e61f93379c37257bd26bb90c9b6bd9f"
@@ -136,5 +136,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-05T07:10:38.408Z"
+  "updated_at": "2026-11-05T09:22:24.073Z"
 }
