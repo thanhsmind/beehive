@@ -746,7 +746,7 @@ fn with_field(tool_input: &Map<String, Value>, key: &str, value: Value) -> Value
 /// `subagent_type` to a generic — or to the literal "undefined" — would be a
 /// repair that breaks the call it repairs. The caller skips the repair.
 ///
-/// `generation` is answered by bee-gather, the read-only one of the two
+/// `generation` is answered by bee-forager, the read-only one of the two
 /// agents that serve it: the guard cannot tell a gather from a cell execution
 /// by the role alone, so it refuses to guess and asks the caller instead
 /// (the `generic-type-denied` branch below).
@@ -760,6 +760,13 @@ fn pinned_type_for(role: &str) -> Option<&'static str> {
 /// one is what keeps the role decision off the caller's memory.
 fn role_for_pinned_type(subagent_type: &str) -> Option<&'static str> {
     crate::verbs::drivers::role_for_agent(subagent_type)
+}
+
+fn retired_agent_replacement(agent: &str) -> Option<&'static str> {
+    crate::onboard::templates::RETIRED_AGENT_NAMES
+        .iter()
+        .find(|(old, _)| *old == agent)
+        .map(|(_, new)| *new)
 }
 
 fn is_read_only_role(role: &str) -> bool {
@@ -1277,6 +1284,21 @@ fn evaluate_claude_model(root: Option<&Path>, tool_input: &Value, models: &Map<S
         return deny(reason, transport, tier, model_param, subagent_type);
     }
 
+    if tier.is_some() {
+        if let Some(old) = subagent_type.as_deref() {
+            if let Some(new_name) = retired_agent_replacement(old) {
+                let reason = format!("subagent_type \"{old}\" was renamed to \"{new_name}\"");
+                return deny(
+                    reason,
+                    "retired-agent-type",
+                    tier,
+                    model_param,
+                    subagent_type,
+                );
+            }
+        }
+    }
+
     // (0) Pinned-type rule (W3, AO5/AO10/AO11) — REPAIRED, not refused. The
     // tier is already stated; which agent file carries it is a lookup the
     // guard owns outright, so making the caller re-issue the dispatch to
@@ -1291,7 +1313,7 @@ fn evaluate_claude_model(root: Option<&Path>, tool_input: &Value, models: &Map<S
         // `generation` is the HISTORICAL spelling: every freshly onboarded
         // host configures `code`, which aliases onto the same job, so
         // `[bee-tier: code]` walked past the check and the branch below
-        // repaired it onto `bee-gather` — the read-only agent — and the
+        // repaired it onto `bee-forager` — the read-only agent — and the
         // execution dispatch died later at the write guard with the audit
         // line naming an agent that never ran. The ambiguity is a property of
         // the TABLE ("more than one rendered agent serves this job"), so the
@@ -1302,7 +1324,7 @@ fn evaluate_claude_model(root: Option<&Path>, tool_input: &Value, models: &Map<S
             // The FIX tail is DERIVED from the same `agents` the condition
             // above is, for the same reason the condition stopped being keyed
             // on the literal `"generation"`: it used to spell out the
-            // bee-build/bee-gather pair by hand under a condition that no
+            // bee-worker/bee-forager pair by hand under a condition that no
             // longer names them, so a second ambiguous role — a third agent
             // rendered for this one, or a new role with two of its own —
             // would have been told to name a pair that does not serve it.
@@ -1335,8 +1357,11 @@ FIX: name the one you mean. {choices}.",
         // operator invents) has no agent file to name, so the dispatch falls
         // through to the branches below, where the marker either agrees with
         // the model param or stands alone as the budget declaration.
+        let is_advisor_seat = markers.kind.as_deref() == Some("advisor")
+            && crate::verbs::drivers::SEAT_ROLES.contains(&t.as_str());
+        let pinned = pinned_type_for(t).or_else(|| if is_advisor_seat { Some("bee-elder") } else { None });
         if let (false, Some("general-purpose"), Some(pinned)) =
-            (t == "ceiling", subagent_type.as_deref(), pinned_type_for(t))
+            (t == "ceiling", subagent_type.as_deref(), pinned)
         {
             let note = format!(
                 "[bee-tier: {t}] dispatched with subagent_type \"general-purpose\" → \"{pinned}\" \
@@ -1512,7 +1537,6 @@ external agent in its own pane, not a spawned subagent.\n\
     // and that agent was generated from one tier's configured model. The tier
     // is therefore already declared, in the field that decides which agent
     // actually runs. Reading it here is what turns the single most common
-    // refusal ("you named bee-gather, now also say which tier bee-gather is")
     // into no event at all. Purely additive: it can only fire where the guard
     // used to have nothing to go on, so no dispatch that passes today changes
     // its verdict.
@@ -1585,7 +1609,7 @@ pane worker.\n\
     // hand-naming as the FIRST move — the exact habit D5 exists to unteach.
     // The rendered-agent sentence that follows is DERIVED from `ROLE_AGENTS`
     // and described by `agent_job_summary` (keyed on the agent, so it cannot
-    // drift): the retyped `bee-gather = generation` pairs went stale the day
+    // drift): the retyped `bee-forager = generation` pairs went stale the day
     // the gather kind changed slots, and a pair a reader copies is a pair
     // that outranks the door.
     let kinds = crate::verbs::drivers::DISPATCH_KINDS.join("|");
@@ -1630,8 +1654,16 @@ model param. Otherwise name one of bee's rendered agents in subagent_type \
 [bee-tier: ceiling] (or any configured role: {roles})."
         )
     };
+    let rename_line = subagent_type
+        .as_deref()
+        .and_then(retired_agent_replacement)
+        .map(|new_name| {
+            let old = subagent_type.as_deref().unwrap();
+            format!("subagent_type \"{old}\" was renamed to \"{new_name}\"\n")
+        })
+        .unwrap_or_default();
     let reason = format!(
-        "bee-model-guard: every Agent/Task dispatch needs an explicit role — a rendered \
+        "{rename_line}bee-model-guard: every Agent/Task dispatch needs an explicit role — a rendered \
 bee agent type, a `model` param, or a `[bee-tier: <role>]` marker opening the \
 prompt/description (decision 0023). A bare dispatch would silently inherit the most \
 expensive session model.\n{bare_fix}"
@@ -2171,28 +2203,28 @@ mod tests {
         assert_eq!(code, 0);
     }
 
-    /// The generation tier carries two agents — bee-gather reads, bee-build
+    /// The generation tier carries two agents — bee-forager reads, bee-worker
     /// writes — so "which agent does this tier mean" has no single answer and
-    /// the guard stops guessing. It used to answer bee-gather, which made
+    /// the guard stops guessing. It used to answer bee-forager, which made
     /// every execution dispatch land in an agent whose own contract forbids
     /// writing: a cell could never be executed by a dispatched worker.
     #[test]
-    fn a_generation_dispatch_names_its_agent_and_bee_build_is_allowed() {
+    fn a_generation_dispatch_names_its_agent_and_bee_worker_is_allowed() {
         let fx = fixture(&repo_config());
 
         // Naming the execution agent is enough on its own — no marker needed.
-        let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "go", "subagent_type": "bee-build"}}));
+        let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "go", "subagent_type": "bee-worker"}}));
         assert_eq!(code, 0);
 
         // general-purpose at the generation tier is refused, and the refusal
         // names both agents and what each one is for.
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "subagent_type": "general-purpose"}}));
         assert_ne!(code, 0, "generation must not be repaired to one of two agents");
-        assert!(stderr.contains("bee-build"), "{stderr}");
-        assert!(stderr.contains("bee-gather"), "{stderr}");
+        assert!(stderr.contains("bee-worker"), "{stderr}");
+        assert!(stderr.contains("bee-forager"), "{stderr}");
 
         // The other tiers have exactly one agent each and still repair.
-        for (tier, pinned) in [("extraction", "bee-extract"), ("review", "bee-review")] {
+        for (tier, pinned) in [("extraction", "bee-scout"), ("review", "bee-guard"), ("advisor", "bee-elder")] {
             let (code, stdout, _) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {tier}] go"), "subagent_type": "general-purpose"}}));
             assert_eq!(code, 0, "tier {tier} still repairs");
             assert_eq!(
@@ -2205,13 +2237,14 @@ mod tests {
         // The condition read the literal `"generation"`; a freshly onboarded
         // host configures `code`, which aliases onto the same two agents, so
         // `[bee-tier: code]` walked past the refusal and was repaired onto
-        // bee-gather — the READ-ONLY agent — and the execution dispatch died
+        // bee-forager — the READ-ONLY agent — and the execution dispatch died
         // later at the write guard with the audit line naming an agent that
         // never ran. Sweeping both tables is what makes an alias spelling
         // reachable by this test at all.
         let migrated = fixture(&json!({"models": {"claude": {
             "code": "sonnet", "read": "haiku", "design": "sonnet",
-            "extraction": "haiku", "generation": "sonnet", "review": "opus"
+            "extraction": "haiku", "generation": "sonnet", "review": "opus",
+            "advisor": "fable"
         }}}));
         let spellings = crate::verbs::drivers::ROLE_ALIASES
             .iter()
@@ -2253,13 +2286,13 @@ mod tests {
             panic!("expected an envelope")
         };
         let payload = prep["payload"].clone();
-        assert_eq!(payload["subagent_type"], json!("bee-design"), "{prep}");
+        assert_eq!(payload["subagent_type"], json!("bee-comb"), "{prep}");
         let (code, stdout, stderr) = run_full(root, json!({"tool_name": "Agent", "tool_input": payload}));
         assert_eq!(code, 0, "{stderr}");
         assert_eq!(stdout, "", "the door's own payload needs no repair");
         let d = last_jsonl(dispatch_log(root)).unwrap();
         assert_eq!(d["tier"], "design");
-        assert_eq!(d["subagent_type"], "bee-design");
+        assert_eq!(d["subagent_type"], "bee-comb");
         assert_eq!(d["model"], "sonnet");
     }
 
@@ -2294,12 +2327,12 @@ mod tests {
         // the type is still unnamed, and the refusal says so
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "model": "sonnet", "subagent_type": "general-purpose"}}));
         assert_ne!(code, 0);
-        assert!(stderr.contains("bee-build"), "{stderr}");
+        assert!(stderr.contains("bee-worker"), "{stderr}");
         // ceiling has no pinned agent
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: ceiling] go", "subagent_type": "general-purpose"}}));
         assert_eq!(code, 0);
         // Explore / own pinned type / absent subagent_type allowed
-        for st in [json!("Explore"), json!("bee-gather")] {
+        for st in [json!("Explore"), json!("bee-forager")] {
             let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "subagent_type": st}}));
             assert_eq!(code, 0);
         }
@@ -2311,7 +2344,7 @@ mod tests {
     #[test]
     fn a_rendered_bee_agent_type_declares_its_own_tier() {
         let fx = fixture(&repo_config());
-        // The refusal in the field report: a dispatch that names bee-gather
+        // The refusal in the field report: a dispatch that names bee-forager
         // and nothing else. It now carries its role in the agent type.
         for (tier, pinned) in crate::verbs::drivers::ROLE_AGENTS {
             let (code, stdout, stderr) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": pinned, "description": "map campaign source_type usage", "prompt": "find every caller"}}));
@@ -2325,6 +2358,7 @@ mod tests {
             assert_eq!(d["requested_model"], json!(match tier {
                 "generation" | "design" => "sonnet",
                 "extraction" => "haiku",
+                "advisor" => "fable",
                 _ => "opus",
             }));
         }
@@ -2332,23 +2366,23 @@ mod tests {
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "some-other-agent", "prompt": "go"}}));
         assert_eq!(code, 2);
         // gather-reads-the-read-slot D7: the FIX leads with the ONE door and
-        // no longer retypes an agent-to-slot pair (`bee-gather = generation`
+        // no longer retypes an agent-to-slot pair (`bee-forager = generation`
         // was already stale the moment the gather kind changed slots, and a
         // pair a reader copies outranks the door it sits beside).
         assert!(
             stderr.contains("FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind <"),
             "the FIX opens with the one door: {stderr}"
         );
-        assert!(stderr.contains("bee-gather"), "the FIX still names the agent: {stderr}");
+        assert!(stderr.contains("bee-forager"), "the FIX still names the agent: {stderr}");
         assert!(
-            !stderr.contains("bee-gather = generation"),
+            !stderr.contains("bee-forager = generation"),
             "the FIX no longer pairs an agent with a slot: {stderr}"
         );
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "bare-denied");
         // An explicit param still wins the read — inference never overrides a
         // stated model, so nothing that passes today changes verdict.
-        let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-gather", "model": "opus"}}));
+        let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-forager", "model": "opus"}}));
         assert_eq!(code, 0);
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "model-param");
@@ -2387,10 +2421,10 @@ mod tests {
         }}}));
         let (code, stderr) = run_payload(
             herding.path(),
-            json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-gather", "prompt": "gather"}}),
+            json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-forager", "prompt": "gather"}}),
         );
         assert_eq!(code, 2, "a herding slot cannot be an in-family subagent");
-        assert!(stderr.contains("bee-gather") && stderr.contains("herding-executor pane"));
+        assert!(stderr.contains("bee-forager") && stderr.contains("herding-executor pane"));
         let d = last_jsonl(dispatch_log(herding.path())).unwrap();
         assert_eq!(d["transport"], "herding-tier-denied");
         assert_eq!(d["tier"], "generation");
@@ -2419,7 +2453,7 @@ mod tests {
         }}}));
         let (code, stderr) = run_payload(
             herding.path(),
-            json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-extract", "prompt": "extract"}}),
+            json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-scout", "prompt": "extract"}}),
         );
         assert_eq!(code, 2, "a herding-shaped extraction slot cannot be an in-family subagent");
         assert!(!stderr.contains("--kind"), "no --kind may be named for a role that has none: {stderr}");
@@ -2452,7 +2486,7 @@ mod tests {
         }}}));
         let (code, stderr) = run_payload(
             herding.path(),
-            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: review] check", "subagent_type": "bee-review"}}),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: review] check", "subagent_type": "bee-guard"}}),
         );
         assert_eq!(code, 2, "a herding-shaped review slot cannot be an in-family Agent/Task subagent");
         assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json") && stderr.contains("dispatch prepare"));
@@ -2642,7 +2676,7 @@ mod tests {
         // the tier arrives as a marker or as a pinned subagent_type.
         let fx = fixture(&herding_generation(Some(json!("default"))));
         for tool_input in [
-            json!({"subagent_type": "bee-gather", "prompt": "gather"}),
+            json!({"subagent_type": "bee-forager", "prompt": "gather"}),
             json!({"prompt": "[bee-tier: generation] go"}),
         ] {
             let (code, stderr) = run_payload(
@@ -2665,9 +2699,9 @@ mod tests {
             "generation": {"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -"},
             "review": "opus"
         }}}));
-        let (code, stderr) = run_payload(cli.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-gather", "prompt": "gather"}}));
+        let (code, stderr) = run_payload(cli.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-forager", "prompt": "gather"}}));
         assert_eq!(code, 2, "a cli slot cannot be an in-family subagent");
-        assert!(stderr.contains("bee-gather") && stderr.contains("cli executor") && stderr.contains("dispatch prepare"));
+        assert!(stderr.contains("bee-forager") && stderr.contains("cli executor") && stderr.contains("dispatch prepare"));
         let d = last_jsonl(dispatch_log(cli.path())).unwrap();
         assert_eq!(d["transport"], "cli-tier-denied");
         assert_eq!(d["tier"], "generation");
@@ -3328,7 +3362,7 @@ mod tests {
         assert!(stderr.contains("bee-tier"));
 
         // Composes with an existing repair: subagent_type "general-purpose"
-        // at [bee-tier: extraction] is rewritten to "bee-extract" AND the
+        // at [bee-tier: extraction] is rewritten to "bee-scout" AND the
         // bare-id description is rewritten to carry the cell's title, both
         // in the one updatedInput.
         let prompt = "[bee-tier: extraction] Execute cell dlc-2\nAssigned cell id: dlc-2\n";
@@ -3338,7 +3372,7 @@ mod tests {
         );
         assert_eq!(code, 0);
         let out = repair_output(&stdout);
-        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["subagent_type"], json!("bee-extract"));
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["subagent_type"], json!("bee-scout"));
         assert_eq!(
             out["hookSpecificOutput"]["updatedInput"]["description"],
             json!(format!("dlc-2: {TITLE}"))
@@ -3538,7 +3572,7 @@ mod tests {
         let codex = fixture(&json!({"models": {"claude": {"generation": Value::Null}}}));
         let (code, stderr) = run_payload(
             codex.path(),
-            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "subagent_type": "bee-gather"}}),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "subagent_type": "bee-forager"}}),
         );
         assert_eq!(code, 0, "a null ordinary slot is prompt-budget, not a refusal: {stderr}");
     }
@@ -3550,7 +3584,7 @@ mod tests {
         // typo'd marker read as "no marker" the way the closed list made it.
         let (code, stderr) = run_payload(
             fx.path(),
-            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: tset] typo", "subagent_type": "bee-gather"}}),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: tset] typo", "subagent_type": "bee-forager"}}),
         );
         assert_eq!(code, 2, "{stderr}");
         assert!(stderr.contains("[bee-tier: tset] names a role nothing configures"), "{stderr}");
@@ -3595,7 +3629,7 @@ mod tests {
         // invents reaches it now, and a repair to a subagent_type that does
         // not exist would break the dispatch it claims to fix.
         let fx = fixture(&open_role_config());
-        for role in ["test", "advisor"] {
+        for role in ["test"] {
             let (code, stdout, stderr) = run_full(
                 fx.path(),
                 json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {role}] go"), "subagent_type": "general-purpose"}}),
@@ -3613,7 +3647,7 @@ mod tests {
         );
         assert_eq!(code, 0);
         let out = repair_output(&stdout);
-        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["subagent_type"], json!("bee-review"));
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["subagent_type"], json!("bee-guard"));
     }
 
     #[test]
@@ -3670,12 +3704,10 @@ mod tests {
         for (role, agent) in crate::verbs::drivers::ROLE_AGENTS {
             assert_eq!(role_for_pinned_type(agent), Some(role), "{agent}");
         }
-        assert_eq!(pinned_type_for("generation"), Some("bee-gather"));
-        assert_eq!(pinned_type_for("extraction"), Some("bee-extract"));
-        assert_eq!(pinned_type_for("review"), Some("bee-review"));
-        // A role with no rendered agent answers None — a legal answer, never
-        // a generic or invented type.
-        assert_eq!(pinned_type_for("advisor"), None);
+        assert_eq!(pinned_type_for("generation"), Some("bee-forager"));
+        assert_eq!(pinned_type_for("extraction"), Some("bee-scout"));
+        assert_eq!(pinned_type_for("review"), Some("bee-guard"));
+        assert_eq!(pinned_type_for("advisor"), Some("bee-elder"));
         assert_eq!(pinned_type_for("test"), None);
         assert_eq!(pinned_type_for("ceiling"), None);
         assert_eq!(role_for_pinned_type("general-purpose"), None);
@@ -3688,11 +3720,10 @@ mod tests {
         for (job, keyed) in ROLE_ALIASES {
             assert_eq!(agents_for_role(job), agents_for_role(keyed), "{job}/{keyed}");
         }
-        assert_eq!(agents_for_role("code"), vec!["bee-gather", "bee-build"]);
-        assert_eq!(agents_for_role("read"), vec!["bee-extract"]);
-        assert_eq!(agents_for_role("review"), vec!["bee-review"]);
-        // A role with no rendered agent has none, in every spelling.
-        assert!(agents_for_role("advisor").is_empty());
+        assert_eq!(agents_for_role("code"), vec!["bee-forager", "bee-worker"]);
+        assert_eq!(agents_for_role("read"), vec!["bee-scout"]);
+        assert_eq!(agents_for_role("review"), vec!["bee-guard"]);
+        assert_eq!(agents_for_role("advisor"), vec!["bee-elder"]);
         assert!(agents_for_role("test").is_empty());
     }
 
@@ -3879,6 +3910,7 @@ mod tests {
     fn every_seat_configured() -> Value {
         let mut claude = Map::new();
         claude.insert("generation".into(), json!("sonnet"));
+        claude.insert("code".into(), json!("sonnet"));
         claude.insert("review".into(), json!("opus"));
         claude.insert("advisor".into(), json!("fable"));
         for seat in SEAT_ROLES {
@@ -4675,5 +4707,85 @@ mod tests {
         let (code, stderr) = escalate_v2_dispatch(fx.path(), "test", "c-1");
         assert_eq!(code, 2, "{stderr}");
         assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
+    }
+
+    #[test]
+    fn advisor_shell_and_retired_agent_tests() {
+        let fx = fixture(&every_seat_configured());
+
+        let (code, stdout, stderr) = run_full(
+            fx.path(),
+            json!({
+                "tool_name": "Agent",
+                "tool_input": {
+                    "prompt": "[bee-tier: hat-value] consult",
+                    "subagent_type": "bee-elder"
+                }
+            }),
+        );
+        assert_eq!(code, 0, "hat-value + bee-elder must be allowed: {stderr}");
+        assert_eq!(stdout, "");
+
+        let (code, stdout, stderr) = run_full(
+            fx.path(),
+            json!({
+                "tool_name": "Agent",
+                "tool_input": {
+                    "prompt": "[bee-tier: advisor] consult",
+                    "subagent_type": "general-purpose"
+                }
+            }),
+        );
+        assert_eq!(code, 0, "advisor + general-purpose must be repaired: {stderr}");
+        let rep = repair_output(&stdout);
+        assert_eq!(
+            rep["hookSpecificOutput"]["updatedInput"]["subagent_type"],
+            json!("bee-elder")
+        );
+
+        let (code, stdout, stderr) = run_full(
+            fx.path(),
+            json!({
+                "tool_name": "Agent",
+                "tool_input": {
+                    "prompt": "[bee-tier: hat-value] [bee-kind: advisor] consult",
+                    "subagent_type": "general-purpose"
+                }
+            }),
+        );
+        assert_eq!(code, 0, "hat-value + general-purpose + advisor kind must repair: {stderr}");
+        let rep_seat = repair_output(&stdout);
+        assert_eq!(
+            rep_seat["hookSpecificOutput"]["updatedInput"]["subagent_type"],
+            json!("bee-elder")
+        );
+
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "Agent",
+                "tool_input": {
+                    "prompt": "build something",
+                    "subagent_type": "bee-build"
+                }
+            }),
+        );
+        assert_eq!(code, 2);
+        assert!(stderr.contains("subagent_type \"bee-build\" was renamed to \"bee-worker\""));
+
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "Agent",
+                "tool_input": {
+                    "prompt": "[bee-tier: code] build something",
+                    "subagent_type": "bee-build"
+                }
+            }),
+        );
+        assert_eq!(code, 2);
+        assert!(stderr.contains("subagent_type \"bee-build\" was renamed to \"bee-worker\""));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "retired-agent-type");
     }
 }

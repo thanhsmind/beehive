@@ -2354,7 +2354,7 @@ mod tests {
     /// defined over actual commit ancestry.
     fn git_repo(dir: &Path) -> String {
         git(dir, &["init", "-q"]);
-        git(dir, &["config", "user.email", "bee-review@example.com"]);
+        git(dir, &["config", "user.email", "bee-guard@example.com"]);
         git(dir, &["config", "user.name", "bee review tests"]);
         git(dir, &["config", "commit.gpgsign", "false"]);
         git_commit(dir, "seed.txt", "seed\n", "seed")

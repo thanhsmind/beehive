@@ -2887,7 +2887,7 @@ use crate::version::BEE_VERSION;
         // unpinned sibling under the same config is clean.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet-primary");
+        write_agent_file(root, "bee-forager", "name: bee-forager\nmodel: sonnet-primary");
         let cfg = json!({"models": {"claude": {"generation": {
             "primary": {"kind": "native", "model": "sonnet-primary"},
             "fallback_policy": "explicit-only",
@@ -2897,7 +2897,7 @@ use crate::version::BEE_VERSION;
             codes(&validate_agent_files_drift(&ctx_for(root), Some(&cfg))),
             vec!["agent-file-drift"]
         );
-        write_agent_file(root, "bee-gather", "name: bee-gather");
+        write_agent_file(root, "bee-forager", "name: bee-forager");
         assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
     }
 
@@ -3128,11 +3128,11 @@ use crate::version::BEE_VERSION;
         // (a) a legacy pinned file is the drift, whatever the config says.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: opus");
+        write_agent_file(root, "bee-forager", "name: bee-forager\nmodel: opus");
         let cfg = json!({"models": {"claude": {"generation": "sonnet"}}});
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
-        assert_eq!(problems[0].agent, Some("bee-gather"));
+        assert_eq!(problems[0].agent, Some("bee-forager"));
         // The finding is filed under the FIRST role the agent declares —
         // `read` since gather-reads-the-read-slot D4.
         assert_eq!(problems[0].slot.as_deref(), Some("read"));
@@ -3148,9 +3148,9 @@ use crate::version::BEE_VERSION;
         ] {
             let tmp = tempfile::tempdir().unwrap();
             let root = tmp.path();
-            write_agent_file(root, "bee-gather", "name: bee-gather");
-            write_agent_file(root, "bee-extract", "name: bee-extract");
-            write_agent_file(root, "bee-review", "name: bee-review");
+            write_agent_file(root, "bee-forager", "name: bee-forager");
+            write_agent_file(root, "bee-scout", "name: bee-scout");
+            write_agent_file(root, "bee-guard", "name: bee-guard");
             let cfg = json!({"models": {"claude": {"generation": gen_slot, "extraction": "haiku"}}});
             assert!(
                 validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty(),
@@ -3163,23 +3163,23 @@ use crate::version::BEE_VERSION;
         let cfg = json!({"models": {"claude": {"generation": "sonnet"}}});
         assert!(validate_agent_files_drift(&ctx_for(tmp.path()), Some(&cfg)).is_empty());
 
-        // (d) a pinned bee-build.md under a herding-shaped generation slot
+        // (d) a pinned bee-worker.md under a herding-shaped generation slot
         // is flagged as a legacy pin — the file itself is no longer removed
         // (the still-native code/test roles need it).
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_agent_file(root, "bee-build", "name: bee-build\nmodel: sonnet");
+        write_agent_file(root, "bee-worker", "name: bee-worker\nmodel: sonnet");
         let cfg = json!({"models": {"claude": {"generation": {"kind": "herding", "agent": "agy-flash", "fallback": "default"}}}});
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
-        assert_eq!(problems[0].agent, Some("bee-build"));
+        assert_eq!(problems[0].agent, Some("bee-worker"));
         assert!(problems[0].message.contains("still pins model: \"sonnet\""));
 
         // (e) a file with no readable model line is simply clean — there is
         // no pin to check, and no malformed finding on the Claude root.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write(root, ".claude/agents/bee-extract.md", "not even frontmatter, just plain text\n");
+        write(root, ".claude/agents/bee-scout.md", "not even frontmatter, just plain text\n");
         let cfg = json!({"models": {"claude": {"extraction": "haiku"}}});
         assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
 
@@ -3187,9 +3187,9 @@ use crate::version::BEE_VERSION;
         // unpinned one is still clean — the verdict never needed the config.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
+        write_agent_file(root, "bee-forager", "name: bee-forager\nmodel: sonnet");
         assert_eq!(codes(&validate_agent_files_drift(&ctx_for(root), None)), vec!["agent-file-drift"]);
-        write_agent_file(root, "bee-gather", "name: bee-gather");
+        write_agent_file(root, "bee-forager", "name: bee-forager");
         assert!(validate_agent_files_drift(&ctx_for(root), None).is_empty());
     }
 
@@ -3216,7 +3216,7 @@ use crate::version::BEE_VERSION;
         // same reasoning that already applied to claude's haiku/sonnet/opus.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        write_opencode_agent_file(root, "bee-forager", "model: opencode/big-pickle");
         assert!(validate_agent_files_drift(&ctx_for(root), None).is_empty());
         assert!(
             validate_agent_files_drift(&ctx_for(root), Some(&json!({"models": {}}))).is_empty()
@@ -3227,7 +3227,7 @@ use crate::version::BEE_VERSION;
         let cfg = json!({"models": {"opencode": {"generation": "opencode/deepseek-v4-flash-free"}}});
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
-        assert_eq!(problems[0].agent, Some("bee-gather"));
+        assert_eq!(problems[0].agent, Some("bee-forager"));
         assert!(problems[0].message.contains("model: \"opencode/big-pickle\""));
         assert!(problems[0].message.contains("is \"opencode/deepseek-v4-flash-free\""));
         assert!(problems[0].message.contains("bee onboard --apply"));
@@ -3237,9 +3237,9 @@ use crate::version::BEE_VERSION;
         // (c) matching config across all three opencode agents -> clean.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
-        write_opencode_agent_file(root, "bee-extract", "model: opencode/ling-3.0-tiny-free");
-        write_opencode_agent_file(root, "bee-review", "model: opencode/nemotron-3-ultra-free");
+        write_opencode_agent_file(root, "bee-forager", "model: opencode/big-pickle");
+        write_opencode_agent_file(root, "bee-scout", "model: opencode/ling-3.0-tiny-free");
+        write_opencode_agent_file(root, "bee-guard", "model: opencode/nemotron-3-ultra-free");
         let cfg = json!({"models": {"opencode": {
             "generation": "opencode/big-pickle",
             "extraction": "opencode/ling-3.0-tiny-free",
@@ -3251,35 +3251,35 @@ use crate::version::BEE_VERSION;
         // drift never contaminates a clean opencode root and vice versa.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: opus");
-        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        write_agent_file(root, "bee-forager", "name: bee-forager\nmodel: opus");
+        write_opencode_agent_file(root, "bee-forager", "model: opencode/big-pickle");
         let cfg = json!({"models": {
             "claude": {"generation": "sonnet"},
             "opencode": {"generation": "opencode/big-pickle"}
         }});
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
-        assert!(problems[0].message.starts_with(".claude/agents/bee-gather.md"));
+        assert!(problems[0].message.starts_with(".claude/agents/bee-forager.md"));
 
         // (e) a stale opencode file under a now cli-shaped slot is flagged
         // too — the same "this file should not exist" verdict claude's (d)
         // case proves, now symmetric across both rendered roots.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        write_opencode_agent_file(root, "bee-forager", "model: opencode/big-pickle");
         let cfg = json!({"models": {"opencode": {"generation": {"kind": "cli", "command": "opencode run -"}}}});
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert!(problems[0].message.contains("is now a cli executor"));
 
-        // (f) gather-reads-the-read-slot D4: bee-gather declares
+        // (f) gather-reads-the-read-slot D4: bee-forager declares
         // `["read", "generation"]`, so a configured `read` slot is what the
         // check expects of its file, and the finding is filed under `read`.
         // The check reads that list from AGENT_ROLES_BY_NAME — it does not
         // restate it — so this is the same walk onboarding renders from.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        write_opencode_agent_file(root, "bee-forager", "model: opencode/big-pickle");
         let cfg = json!({"models": {"opencode": {
             "read": "opencode/reader",
             "generation": "opencode/big-pickle"
@@ -3289,11 +3289,11 @@ use crate::version::BEE_VERSION;
         assert_eq!(problems[0].slot.as_deref(), Some("read"));
         assert!(problems[0].message.contains("is \"opencode/reader\""));
         // The file rendered from the read slot is clean.
-        write_opencode_agent_file(root, "bee-gather", "model: opencode/reader");
+        write_opencode_agent_file(root, "bee-forager", "model: opencode/reader");
         assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
         // A legacy host with no `read` key keeps expecting generation's
         // model — byte for byte the pre-D4 verdict.
-        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        write_opencode_agent_file(root, "bee-forager", "model: opencode/big-pickle");
         let legacy = json!({"models": {"opencode": {"generation": "opencode/big-pickle"}}});
         assert!(validate_agent_files_drift(&ctx_for(root), Some(&legacy)).is_empty());
     }

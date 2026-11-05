@@ -421,24 +421,33 @@ pub const REPO_SKILL_TARGETS: &[(&str, &[&str])] = &[
 /// it renders today.
 ///
 /// The lists are also where `resolveAgentTierModel`'s one hard-coded
-/// special case went: `bee-review` used to fall back to the generation model
+/// special case went: `bee-guard` used to fall back to the generation model
 /// through an `if tier == "review"` branch, which is plain fall-through
-/// spelled by hand. `bee-extract` deliberately does NOT fall through — a
+/// spelled by hand. `bee-scout` deliberately does NOT fall through — a
 /// null extraction slot removes the file today and must keep removing it.
 pub const AGENT_ROLES_BY_NAME: &[(&str, &[&str])] = &[
-    // bee-gather asks for the READ job first and only falls through to
-    // generation, which bee-build owns outright: gather reads, build writes.
+    // bee-forager asks for the READ job first and only falls through to
+    // generation, which bee-worker owns outright: forager reads, worker writes.
     // The list is the same one `drivers::tier_role_list("read")` walks
     // (gather-reads-the-read-slot D1/D4) — read, then generation, never
     // extraction — so the opencode render pin, the sync record and the
     // status drift check all reach it through the one shared resolver. The
     // role decides the model; what the agent may DO is the agent file's own
     // contract.
-    ("bee-build", &["generation"]),
-    ("bee-design", &["design", "generation"]),
-    ("bee-gather", &["read", "generation"]),
-    ("bee-extract", &["extraction"]),
-    ("bee-review", &["review", "generation"]),
+    ("bee-worker", &["generation"]),
+    ("bee-comb", &["design", "generation"]),
+    ("bee-forager", &["read", "generation"]),
+    ("bee-scout", &["extraction"]),
+    ("bee-guard", &["review", "generation"]),
+    ("bee-elder", &["advisor"]),
+];
+
+pub const RETIRED_AGENT_NAMES: &[(&str, &str)] = &[
+    ("bee-build", "bee-worker"),
+    ("bee-design", "bee-comb"),
+    ("bee-gather", "bee-forager"),
+    ("bee-extract", "bee-scout"),
+    ("bee-review", "bee-guard"),
 ];
 
 /// onboard_bee.mjs AGENT_TIER_DEFAULTS_CLAUDE (l. 1946) — bee's own baked-in
@@ -476,16 +485,17 @@ pub const AGENT_TIER_DEFAULTS_OPENCODE: &[(&str, &str)] = &[
 
 /// opencode-support oc-14: the per-agent OpenCode `permission:` deny list —
 /// a capability profile keyed by AGENT NAME, not by tier (unlike the model).
-/// Only `bee-build` may edit; only `bee-build` and `bee-review` may run
+/// Only `bee-worker` and `bee-comb` may edit; only `bee-worker` and `bee-guard` may run
 /// `bash`. Every agent denies `task`/`todowrite`/`webfetch`/`websearch`/`lsp`
 /// (mirrors oc-11's hand-authored `.opencode/agent/bee-*.md` baseline,
 /// verified live against opencode 1.18.16's `opencode agent list`).
 pub const AGENT_OPENCODE_PERMISSION_DENY: &[(&str, &[&str])] = &[
-    ("bee-build", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
-    ("bee-design", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
-    ("bee-gather", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
-    ("bee-extract", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
-    ("bee-review", &["edit", "task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-worker", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-comb", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-forager", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-scout", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-guard", &["edit", "task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-elder", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
 ];
 
 #[cfg(test)]

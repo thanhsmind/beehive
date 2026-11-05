@@ -3108,13 +3108,13 @@ use std::time::Instant;
         for rel in skills_version_stamp_paths() {
             seed_tracked_file(&main, &rel);
         }
-        seed_tracked_file(&main, ".claude/skills/bee-build/SKILL.md");
+        seed_tracked_file(&main, ".claude/skills/bee-worker/SKILL.md");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         for rel in skills_version_stamp_paths() {
             std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
         }
-        std::fs::write(main.join(".claude/skills/bee-build/SKILL.md"), "edited by hand\n").unwrap();
+        std::fs::write(main.join(".claude/skills/bee-worker/SKILL.md"), "edited by hand\n").unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
@@ -3123,7 +3123,7 @@ use std::time::Instant;
         };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
-        assert!(msg.contains(".claude/skills/bee-build/SKILL.md"), "{msg}");
+        assert!(msg.contains(".claude/skills/bee-worker/SKILL.md"), "{msg}");
     }
 
     #[test]
@@ -3133,14 +3133,14 @@ use std::time::Instant;
         for rel in skills_version_stamp_paths() {
             seed_tracked_file(&main, &rel);
         }
-        seed_tracked_file(&main, ".claude/skills/bee-build/.bee-skills-version.json");
+        seed_tracked_file(&main, ".claude/skills/bee-worker/.bee-skills-version.json");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         for rel in skills_version_stamp_paths() {
             std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
         }
         std::fs::write(
-            main.join(".claude/skills/bee-build/.bee-skills-version.json"),
+            main.join(".claude/skills/bee-worker/.bee-skills-version.json"),
             "{\"version\": \"9.9.9\"}\n",
         )
         .unwrap();
@@ -3152,7 +3152,7 @@ use std::time::Instant;
         };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
-        assert!(msg.contains(".claude/skills/bee-build/.bee-skills-version.json"), "{msg}");
+        assert!(msg.contains(".claude/skills/bee-worker/.bee-skills-version.json"), "{msg}");
     }
 
     // ── mdp-1: an untracked path in main blocks the merge only where the

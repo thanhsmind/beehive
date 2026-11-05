@@ -954,7 +954,7 @@ fn opencode_call_fixture(tool: &str) -> (Value, Value, &'static str) {
             let t = json!({
                 "description": "probe dispatch",
                 "prompt": "[bee-tier: generation] probe",
-                "subagent_type": "bee-build",
+                "subagent_type": "bee-worker",
             });
             (t.clone(), t, "Task")
         }

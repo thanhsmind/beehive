@@ -266,7 +266,7 @@ fn mechanical_rows_with_env(
 }
 
 const DESIGN_SKILL: &str = "bee-design";
-const DESIGN_AGENT_REL: &str = ".claude/agents/bee-design.md";
+const DESIGN_AGENT_REL: &str = ".claude/agents/bee-comb.md";
 
 fn design_role_configured(config: &Map<String, Value>) -> bool {
     config.get("team").and_then(Value::as_object).is_some_and(|team| {
@@ -298,9 +298,9 @@ fn design_skill_row(root: &Path) -> Option<Row> {
         .iter()
         .find(|home| root.join(home).join(DESIGN_SKILL).is_dir());
     let configured_by = match (role, agent) {
-        (true, true) => "the design role is configured and .claude/agents/bee-design.md is installed",
+        (true, true) => "the design role is configured and .claude/agents/bee-comb.md is installed",
         (true, false) => "the design role is configured in .bee/config.json",
-        _ => ".claude/agents/bee-design.md is installed",
+        _ => ".claude/agents/bee-comb.md is installed",
     };
     let (ok, detail) = if design_pick_is_none(&config) {
         (
@@ -1702,8 +1702,8 @@ mod design_skill_tests {
         if design_agent {
             std::fs::create_dir_all(root.join(".claude/agents")).unwrap();
             std::fs::write(
-                root.join(".claude/agents/bee-design.md"),
-                "---\nname: bee-design\n---\n",
+                root.join(".claude/agents/bee-comb.md"),
+                "---\nname: bee-comb\n---\n",
             )
             .unwrap();
         }
