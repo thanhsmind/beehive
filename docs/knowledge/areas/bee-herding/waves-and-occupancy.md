@@ -98,6 +98,7 @@ An absent concurrency takes a machine default: CPU count divided by 4, never bel
 A default limit never refuses as `limits.unverifiable`; with only a fallback count, the run starts (device-aware-cap D1).
 That refusal stays for an explicit limit, because a default every repo now carries must not block a host that has no pane list.
 `bee herding run` checks both before it starts a worker, and `bee dispatch prepare` checks them when the role resolves to a herding agent.
+The doctrine has no fixed worker count: a wave fans out disjoint cells up to this same limit, and the leader holds native (Agent-tool) workers to the same number, which no code counts (machine-sized-waves D1).
 Both count occupancy with `quiet_occupancy`, which prints nothing and writes nothing; the `occupancy` verb is not used here because it prints and marks orphans.
 Paseo agents count as live even when no pane list is available.
 The refusals are `limits.concurrency` (with `live`, `limit`, `retryable: true` and a fix), `limits.unverifiable` (only a fallback count exists while an explicit concurrency limit is set), `limits.depth`, and `limits.memory`.
