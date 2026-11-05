@@ -138,7 +138,7 @@ call without noticing.
 
 The count above tells; the close acts. After a green, real `bee close`, bee
 runs the same prune sweep once on the main checkout, with the default 7-day
-threshold (decision `14b76800`, contract `ea534256`). Its lines join the close
+threshold (device-aware-cap D3). Its lines join the close
 output, and the JSON output gains a `prune` key. The sweep uses the same
 fail-closed classifier, so the close removes nothing a manual prune would keep.
 

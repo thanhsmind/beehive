@@ -16,12 +16,13 @@ machine, and run the worktree cleanup on its own at close.
   (`packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs:610`, `run_prune_core`).
   Nothing runs it on its own.
 
-## Locked decisions
+## Locked Decisions
 
-- D1 (a9e06a0f) — unset `herding.limits.concurrency` defaults to CPU count / 4, never below 1. An explicit value wins.
-- D2 (9bbef1a9) — refuse a new worker when available memory is below `herding.limits.min_free_mem_gb` (default 4). Unreadable memory skips the check.
-- D3 (14b76800) — a green `bee close` runs the prune sweep once from main; a prune failure is one line and never turns the close red.
-- Contract herding-limits and contract close-prune (decision log, tags `contract:herding-limits`, `contract:close-prune`).
+| ID | Decision | Store id |
+|---|---|---|
+| D1 | Unset `herding.limits.concurrency` defaults to CPU count / 4, never below 1. An explicit value wins. A default limit never refuses as `limits.unverifiable`. | a9e06a0f, 4bb9da28 |
+| D2 | Refuse a new worker when available memory is below `herding.limits.min_free_mem_gb` (default 4). Unreadable memory skips the check. | 9bbef1a9, 4bb9da28 |
+| D3 | A green `bee close` runs the prune sweep once from main; a prune failure is one line and never turns the close red. | 14b76800, ea534256 |
 
 ## Open questions
 

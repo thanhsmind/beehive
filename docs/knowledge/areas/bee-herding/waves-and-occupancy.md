@@ -94,15 +94,15 @@ counts.
 
 `.bee/config.json` may set `herding.limits.concurrency` and `herding.limits.depth` (decision `ffa4e772`).
 An absent depth means no depth limit.
-An absent concurrency takes a machine default: CPU count divided by 4, never below 1 (device-aware-cap D1, decision `a9e06a0f`).
-A default limit never refuses as `limits.unverifiable`; with only a fallback count, the run starts (contract `4bb9da28`).
+An absent concurrency takes a machine default: CPU count divided by 4, never below 1 (device-aware-cap D1).
+A default limit never refuses as `limits.unverifiable`; with only a fallback count, the run starts (device-aware-cap D1).
 That refusal stays for an explicit limit, because a default every repo now carries must not block a host that has no pane list.
 `bee herding run` checks both before it starts a worker, and `bee dispatch prepare` checks them when the role resolves to a herding agent.
 Both count occupancy with `quiet_occupancy`, which prints nothing and writes nothing; the `occupancy` verb is not used here because it prints and marks orphans.
 Paseo agents count as live even when no pane list is available.
 The refusals are `limits.concurrency` (with `live`, `limit`, `retryable: true` and a fix), `limits.unverifiable` (only a fallback count exists while an explicit concurrency limit is set), `limits.depth`, and `limits.memory`.
 `limits.memory` fires when `MemAvailable` in `/proc/meminfo` is below `herding.limits.min_free_mem_gb` (default 4, whole GB; `0` turns the check off).
-It carries `available_gb`, `min_free_gb`, `retryable: true` and a fix (device-aware-cap D2, decision `9bbef1a9`).
+It carries `available_gb`, `min_free_gb`, `retryable: true` and a fix (device-aware-cap D2).
 When memory cannot be read (any host without `/proc/meminfo`), the memory check is skipped and never refuses; the CPU default still caps the run.
 Pointers: `default_concurrency`, `herding_limits_from`, `memory_refusal` and `check_limits_from` in `packages/bee-rs/crates/bee/src/herding/wave.rs`.
 Depth travels in `BEE_HERDING_DEPTH`, exported to the child as the caller's depth plus one, and only when a depth limit is set.
