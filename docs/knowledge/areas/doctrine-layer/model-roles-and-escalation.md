@@ -423,7 +423,7 @@ session resolves. Herding and cli payloads are unchanged.
 
 ## The six rendered shells
 
-Decision `e8ffde50-2e43-499e-86ee-a1d2eece215b` establishes hive-role naming for the six rendered agent shells:
+The agent-shell-rename decision (recorded in `docs/history/agent-shell-rename/plan.md`, approved 2026-11-05) establishes hive-role naming for the six rendered agent shells:
 
 | Shell | Job served | Writes |
 | --- | --- | --- |
