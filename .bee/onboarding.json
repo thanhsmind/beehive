@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.77.0",
+  "bee_version": "2.78.0",
   "managed": {
     "agents_block": "43edfc482ce6b5101e0b5d11fe9d714010e963ef4e943648a5d69d16b1eba296",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
@@ -102,7 +102,7 @@
     }
   },
   "agents_sync": {
-    "bee_version": "2.77.0",
+    "bee_version": "2.78.0",
     "files": [
       ".claude/agents/bee-comb.md",
       ".claude/agents/bee-elder.md",
@@ -136,5 +136,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-05T12:13:40.335Z"
+  "updated_at": "2026-11-05T13:40:23.958Z"
 }
