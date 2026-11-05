@@ -1893,5 +1893,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-05T09:33:16.713Z"
+  },
+  "worker-status-digest": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-05T09:41:43.490Z"
   }
 }

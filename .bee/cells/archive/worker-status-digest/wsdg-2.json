@@ -1,0 +1,201 @@
+{
+  "id": "wsdg-2",
+  "feature": "worker-status-digest",
+  "title": "Teach workers to write progress notes and leaders to read only the status line",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "d9007aca-6c61-4f07-a0e0-cf6bb15daa88",
+    "d981106a-71ea-4d4f-8fd3-c424a0f00e25",
+    "b4fd9daa-7a1d-4f9b-aa88-b5ebf7ac4ae6"
+  ],
+  "files": [
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "packages/bee/AGENTS.block.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/the-mailbox-broker.md"
+  ],
+  "read_first": [
+    "docs/history/worker-status-digest/CONTEXT.md",
+    "docs/history/worker-status-digest/plan.md",
+    "skills/bee-swarming/SKILL.md",
+    "packages/bee/AGENTS.block.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/the-mailbox-broker.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "(1) packages/bee/prompts/worker-cell.md, inside the native_bookkeeping contract block: an obligation line — at each meaningful step (read done, red test seen, green, committed) record one progress note with `.bee/bin/bee herding notify --kind progress --job {{cell_id}} --step <word> --text \"<note, at most 120 characters>\"`; a note never ends the turn. (2) skills/bee-swarming/SKILL.md step 4 (Tend): the leader learns a running worker's progress only from `bee herding status --job <id>` — one line — and never reads a worker's transcript, pane log, log.txt or activity stream for progress; cite decision d9007aca. Mirror one sentence in swarming-reference.md where it describes tending or stuck workers (search `Operating Contract in full`), pointing to SKILL.md as the home. (3) packages/bee/AGENTS.block.md § Work in parallel: one bullet — a leader watches a worker through `bee herding status --job <id>` (one line), never by reading its transcript, pane log or activity stream; workers write the notes. Keep it to two lines; it is the doctrine home, the skill text carries the how. (4) docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md: a section `Status digest` with the D4 order (result, none, verbatim ≤3, supervisor >3 with cache, fallback), the sources list, what it never reads, and Pointers to herding/status_digest.rs and herding.rs; add the decisions to the concept's decisions list. the-mailbox-broker.md: progress notes live in progress.jsonl, are never delivered to the leader, and messages.jsonl keeps question/blocked/dependency/reopen and the stall alert (decision 28b87b5b). Do not edit AGENTS.md at the repo root or any rendered skill copy under .claude/, .agents/ or .opencode/ — the leader runs bee dev regen at wave close. Write through the bee-technical-writing skill.",
+  "verify": "rg -n 'herding status --job' packages/bee/prompts/worker-cell.md skills/bee-swarming/SKILL.md packages/bee/AGENTS.block.md docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'notify --kind progress' packages/bee/prompts/worker-cell.md",
+  "must_haves": {
+    "truths": [
+      "worker-cell.md obliges a native worker to record progress notes with notify --kind progress --job <cell id>",
+      "bee-swarming Tend names bee herding status --job as the only progress read and forbids transcript, pane log and activity reads",
+      "AGENTS.block.md carries the rule in the dispatch section",
+      "The bee-herding knowledge describes the digest order and the progress.jsonl home"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "substantive": "a Status digest section with Pointers"
+      }
+    ],
+    "key_links": [
+      "AGENTS.block.md bullet and SKILL.md Tend step say the same rule; SKILL.md is the how"
+    ],
+    "prohibitions": [
+      "No edit to root AGENTS.md or rendered skill copies",
+      "No Rust edits"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "wsdg-2-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "packages/bee/AGENTS.block.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/knowledge/areas/bee-herding/the-mailbox-broker.md"
+    ],
+    "deviations": [
+      "proof line names the two rg commands without the verify string's own expected: clauses, because those clauses carry the proof separator"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-05T08:52:06.915Z",
+    "behavior_change": false,
+    "verification_evidence": "hits in SKILL.md, AGENTS.block.md and the concept, one notify hit in worker-cell.md; docs-only cell",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+    "verify_command": "rg -n 'herding status --job' packages/bee/prompts/worker-cell.md skills/bee-swarming/SKILL.md packages/bee/AGENTS.block.md docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'notify --kind progress' packages/bee/prompts/worker-cell.md",
+    "claimed_at": "2026-11-05T08:38:48.083Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "ownership_overrides": [
+      {
+        "verb": "blockCell",
+        "forced_by": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+        "owner_bypassed": null,
+        "at": "2026-11-05T08:52:02.243Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+        "owner_bypassed": null,
+        "at": "2026-11-05T08:53:01.619Z"
+      }
+    ],
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-11-05T08:52:02.243Z",
+        "claim_session": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+        "claimed_at": "2026-11-05T08:50:10.934Z",
+        "acquired_at": "2026-11-05T08:38:48.002Z",
+        "worker": "wsdg-2-worker",
+        "verdict": "blocked",
+        "failure_signature": "f56c05fd7e35",
+        "note": "verify text contains the proof separator, so no cap can match it; blocking to repair verify through cells update"
+      }
+    ],
+    "blocked_reason": "verify text contains the proof separator, so no cap can match it; blocking to repair verify through cells update",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Workers write progress notes with notify --kind progress; leaders read only the herding status --job line",
+      "commit": "dd344418c",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "packages/bee/AGENTS.block.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/knowledge/areas/bee-herding/the-mailbox-broker.md"
+      ],
+      "tests": "rg -n 'herding status --job' packages/bee/prompts/worker-cell.md skills/bee-swarming/SKILL.md packages/bee/AGENTS.block.md docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'notify --kind progress' packages/bee/prompts/worker-cell.md — green:static — hits in SKILL.md, AGENTS.block.md and the concept, one notify hit in worker-cell.md; docs-only cell",
+      "deviations": [
+        "proof line names the two rg commands without the verify string's own expected: clauses, because those clauses carry the proof separator"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "worker-cell.md obliges a native worker to record progress notes with notify --kind progress --job <cell id>",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "bee-swarming Tend names bee herding status --job as the only progress read and forbids transcript, pane log and activity reads",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "AGENTS.block.md carries the rule in the dispatch section",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "The bee-herding knowledge describes the digest order and the progress.jsonl home",
+            "artifact": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+            "artifact": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+          },
+          {
+            "requirement": "AGENTS.block.md bullet and SKILL.md Tend step say the same rule; SKILL.md is the how",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "No edit to root AGENTS.md or rendered skill copies",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "No Rust edits",
+            "artifact": "docs/knowledge/areas/bee-herding/the-mailbox-broker.md"
+          },
+          {
+            "requirement": "packages/bee/prompts/worker-cell.md",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/SKILL.md",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/references/swarming-reference.md",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "packages/bee/AGENTS.block.md",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/the-mailbox-broker.md",
+            "artifact": "docs/knowledge/areas/bee-herding/the-mailbox-broker.md"
+          }
+        ],
+        "recorded_at": "2026-11-05T08:53:01.619Z",
+        "recorded_by": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

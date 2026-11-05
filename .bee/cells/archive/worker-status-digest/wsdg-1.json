@@ -1,0 +1,205 @@
+{
+  "id": "wsdg-1",
+  "feature": "worker-status-digest",
+  "title": "Add the one-line worker status digest and move progress notes to progress.jsonl",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "d9007aca-6c61-4f07-a0e0-cf6bb15daa88",
+    "d981106a-71ea-4d4f-8fd3-c424a0f00e25",
+    "28b87b5b-426e-4fa9-aee1-6447b7754441",
+    "b4fd9daa-7a1d-4f9b-aa88-b5ebf7ac4ae6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/notify.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/status_digest.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/worker-status-digest/CONTEXT.md",
+    "docs/history/worker-status-digest/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/notify.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Write the red test FIRST and watch it fail: `bee herding status --job J` on a mailbox with job.json and a log.txt holding a sentinel string but no progress.jsonl and no result file prints exactly `no progress notes yet` (JSON: {job, line, source: none, notes: 0}), exits 0, and the sentinel never appears in the output. Then build. (1) notify.rs: `--kind progress` appends one line {ts, step, note} to `.bee/mailbox/<job>/progress.jsonl` (add `progress_path` in mailbox.rs beside messages/result paths), never to messages.jsonl; `--step` optional; a note over 120 characters is refused with a FIX; `--job <id>` overrides BEE_HERDING_JOB_ID and, for progress only, needs no job.json (it creates the job dir); the job-id path checks stay. Every other kind keeps today's messages.jsonl behaviour byte for byte, and the internal stall alert (herding.rs, search `no_diff_progress for`) keeps writing to messages.jsonl. (2) New module herding/status_digest.rs, wired from the existing `status` verb when `--job` is present (no `--job` keeps today's fleet output unchanged). It reads ONLY progress.jsonl and the highest result-N.json (reuse mailbox's latest_result_round); a torn last line is skipped. Order: result file → `<status>: <summary>` (source result); no notes → `no progress notes yet` (source none); notes ≤ 3 → last note verbatim as `<step>: <note>` or `<note>` (source verbatim); notes > 3 → if status-digest.json holds the same note count, its line (source cached); else ask the supervisor and cache {notes, line, at} (source supervisor); any failure → last note verbatim (source verbatim, plus `fallback` reason in JSON). The supervisor call runs this same binary's `dispatch prepare --runtime <rt> --kind gather --role supervisor --json` (rt: the runtime the dispatch door detects, claude when unknown) and runs the returned payload only when tool is Bash, passing on stdin a task that holds the notes and asks for one status line; take the first non-empty line of the result summary, cut to 120 chars. A non-Bash payload means no supervisor. Put the call behind a trait or fn seam so tests inject a fake summarizer and never reach paseo. (3) mailbox.rs render_brief: add one short paragraph telling a herded worker to append one JSON line {\"ts\",\"step\",\"note\"} (note ≤120 chars) to the absolute progress.jsonl path at each meaningful step, either by hand or with notify --kind progress; keep the notify line. (4) generated/registry_payload.json: if it describes `herding status` or `herding notify`, add --job / --step there (hand-maintained). Tests (behaviour, not structure): the red test above; ≤3 notes → last note verbatim and the fake summarizer is never called; result-2.json present → result line wins; 4 notes + fake summarizer → source supervisor and status-digest.json written, a second call → source cached and the fake not called again; 4 notes + failing summarizer → verbatim fallback; notify --kind progress writes progress.jsonl and leaves messages.jsonl absent; a 121-char note refused; notify --kind progress --job X with no job.json succeeds; notify --kind blocked still writes messages.jsonl. Update existing tests that assert progress lands in messages.jsonl (notify.rs tests near `half done`, herding.rs near line 2226 and 3222) to the new contract, citing decision 28b87b5b. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "bee herding status --job J with no progress.jsonl and no result prints `no progress notes yet` and exits 0, and never prints log.txt content",
+      "With 3 or fewer notes the line is the last note verbatim and no model is called",
+      "A result-N.json outranks notes",
+      "With more than 3 notes the supervisor line is used and cached by note count; failure falls back to the last note verbatim",
+      "bee herding notify --kind progress writes progress.jsonl only, refuses a note over 120 characters, and accepts --job with no job.json",
+      "Other notify kinds and the stall alert still write messages.jsonl",
+      "bee herding status with no --job is unchanged",
+      "The herded brief tells the worker to append progress notes to the absolute progress.jsonl path"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/status_digest.rs",
+        "substantive": "the digest mode with its supervisor seam and tests"
+      }
+    ],
+    "key_links": [
+      "herding.rs status routes --job to status_digest",
+      "status_digest reaches the supervisor only through dispatch prepare's payload"
+    ],
+    "prohibitions": [
+      "status_digest never opens log.txt, activity.json, a pane capture or a transcript",
+      "No test reaches paseo or a real model",
+      "No new top-level verb",
+      "No bee dev regen inside the cell"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "wsdg-1-worker",
+    "outcome": "Add one-line worker status digest mode and progress.jsonl routing cd0950262",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/notify.rs",
+      "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+    ],
+    "deviations": [
+      "sync-ack: skill and doc text for the status digest ships in sibling cell wsdg-2"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-05T08:38:41.642Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml herding — green:unit — 871 passed covering status_digest, herding status --job, notify progress home, and mailbox brief generation",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "4e7cc128-d356-4a36-8cbb-8b54931c1b1d",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml herding",
+    "claimed_at": "2026-11-05T07:00:06.115Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+        "owner_bypassed": null,
+        "at": "2026-11-05T08:38:41.641Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+        "owner_bypassed": null,
+        "at": "2026-11-05T08:53:01.610Z"
+      }
+    ],
+    "sync_ack": "skill and doc text for the status digest ships in sibling cell wsdg-2",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Add one-line worker status digest mode and progress.jsonl routing cd0950262",
+      "commit": "cd0950262df67b2a6418d8fb010fb11f59bc4703",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/notify.rs",
+        "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml herding — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml herding — green:unit — 871 passed covering status_digest, herding status --job, notify progress home, and mailbox brief generation",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 685 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee herding status --job J with no progress.jsonl and no result prints `no progress notes yet` and exits 0, and never prints log.txt content",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+          },
+          {
+            "requirement": "With 3 or fewer notes the line is the last note verbatim and no model is called",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+          },
+          {
+            "requirement": "A result-N.json outranks notes",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+          },
+          {
+            "requirement": "With more than 3 notes the supervisor line is used and cached by note count; failure falls back to the last note verbatim",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+          },
+          {
+            "requirement": "bee herding notify --kind progress writes progress.jsonl only, refuses a note over 120 characters, and accepts --job with no job.json",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/notify.rs"
+          },
+          {
+            "requirement": "Other notify kinds and the stall alert still write messages.jsonl",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/notify.rs"
+          },
+          {
+            "requirement": "bee herding status with no --job is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "The herded brief tells the worker to append progress notes to the absolute progress.jsonl path",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/status_digest.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+          },
+          {
+            "requirement": "herding.rs status routes --job to status_digest",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "status_digest reaches the supervisor only through dispatch prepare's payload",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+          },
+          {
+            "requirement": "status_digest never opens log.txt, activity.json, a pane capture or a transcript",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+          },
+          {
+            "requirement": "No test reaches paseo or a real model",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/status_digest.rs"
+          },
+          {
+            "requirement": "No new top-level verb",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "No bee dev regen inside the cell",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/notify.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/notify.rs"
+          }
+        ],
+        "recorded_at": "2026-11-05T08:53:01.610Z",
+        "recorded_by": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

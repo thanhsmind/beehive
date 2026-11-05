@@ -1183,3 +1183,4 @@
 {"ts":"2026-11-05T09:32:37.634Z","event":"complete","id":"e85cc156-aded-4798-ab73-4f3298db81bd"}
 {"ts":"2026-11-05T09:32:41.110Z","event":"complete","id":"e7e61129-d566-4ad6-ad07-3b1da98d2199"}
 {"ts":"2026-11-05T09:33:16.722Z","event":"add","id":"c9f19ace-3475-48ef-a7e4-9fa2ff020854","kind":"promote","feature":"release-2-76-0","cells":[],"areas":[],"files":["docs/history/release-2-76-0/promote-proposals.md"],"reason":"Promote proposal for \"release-2-76-0\" awaiting apply — docs/history/release-2-76-0/promote-proposals.md."}
+{"ts":"2026-11-05T09:41:43.491Z","event":"add","id":"6db019f8-b1aa-499f-a7f9-bac9273da3a4","kind":"promote","feature":"worker-status-digest","cells":[],"areas":[],"files":["docs/history/worker-status-digest/promote-proposals.md"],"reason":"Promote proposal for \"worker-status-digest\" awaiting apply — docs/history/worker-status-digest/promote-proposals.md."}
