@@ -187,6 +187,8 @@ context before planning or executing.
   execution workers only: the "zero subagents" of a small lane means
   zero *ceremony* helpers, and I/O helpers are exempt from both counts.
 <!-- /rule -->
+- A leader watches a worker through `bee herding status --job <id>` (one line),
+  never by reading its transcript, pane log or activity stream; workers write the notes.
 - Reserve files before write-heavy swarm work and prefix write-heavy
   shell commands with `BEE_AGENT_NAME=<name>`. On a reservation or
   hold conflict, stop and report it — never write through it. A worker
