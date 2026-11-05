@@ -789,6 +789,9 @@
     "contract:deploy-native-brief",
     "contract:herding-limits",
     "contract:close-prune",
-    "contract:agent-shells"
+    "contract:agent-shells",
+    "contract:flag-vocabulary-pin",
+    "contract:documented-invocations",
+    "contract:native-cell-golden"
   ]
 }

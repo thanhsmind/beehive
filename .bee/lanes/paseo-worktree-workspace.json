@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Merge done (`c4f951657`). I am past the context limit, so I write the handoff and pass the rest to a fresh leader.",
-    "asked_at": "2026-11-05T09:03:49.548Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-05T09:14:56.377Z",
     "session": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980"
   }
 }

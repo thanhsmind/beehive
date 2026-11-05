@@ -1,0 +1,184 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-red-2-76-0",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-red-2-76-0\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"release-red-2-76-0\" (lane).",
+  "created_at": "2026-11-05T09:11:12.089Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "proof-weakening"
+    ],
+    "product_files": 3,
+    "rationale": "three test-only release-gate reds",
+    "updated_at": "2026-11-05T09:12:50.162Z",
+    "feature": "release-red-2-76-0"
+  },
+  "gate_preview": {
+    "feature": "release-red-2-76-0",
+    "plan_sha256": "41ce77f7d1f77e2555751c3796d1f6a9d0a06593bc4d13a932817070b531f8d1",
+    "previewed_at": "2026-11-05T09:12:52.343Z",
+    "cells": [
+      {
+        "id": "rr76-1",
+        "feature": "release-red-2-76-0",
+        "title": "Turn the three 2.76.0 release-gate reds green without changing product behavior",
+        "lane": "small",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "56d30fdd-b714-4cca-9562-cfd46f83557e",
+          "b0d85440-6544-4e89-a789-b07c51258c12",
+          "6a7ba50e-a605-4de8-ab29-a340e771e3a1"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/catalog.rs",
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/release-red-2-76-0/CONTEXT.md",
+          "docs/history/release-red-2-76-0/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "judge_obligation_ack": "The only hooks/ change is one entry in KNOWN_HISTORICAL_EXCEPTIONS inside the cfg(test) documented_invocations module of cli_shape.rs: test-only code, the guard's runtime refusal path is untouched.",
+        "action": "RED BASE: three tests fail. Reproduce them first. (1) catalog.rs: set PINNED_FLAG_COUNT from 235 to 236 (D1, 56d30fdd). (2) hooks/cli_shape.rs: add one entry to KNOWN_HISTORICAL_EXCEPTIONS and bump the array length 19 to 20; the string is exactly the candidate the failing test prints for docs/history/worker-status-digest/plan.md (D2, b0d85440). (3) verbs/drivers/tests.rs: in GOLDEN_NATIVE_CELL_PROMPT add the line the render now emits after the 'Load the bee-swarming skill' contract line, byte for byte as the failing test's left side shows (D3, 6a7ba50e). Write no code comment. Change no product code, no worker-cell.md, no docs/history/worker-status-digest file.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "the distinct flag vocabulary test passes at 236",
+            "the widened CLI-shape spelling test passes on the repo docs",
+            "the native cell prompt golden test passes",
+            "the full declared suite is green with no filter"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+              "substantive": "PINNED_FLAG_COUNT is 236"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+              "substantive": "one new KNOWN_HISTORICAL_EXCEPTIONS entry for the wsdg-1 truth span"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+              "substantive": "golden carries the progress-note contract line"
+            }
+          ],
+          "key_links": [
+            "GOLDEN_NATIVE_CELL_PROMPT matches the render of packages/bee/prompts/worker-cell.md"
+          ],
+          "prohibitions": [
+            "No edit to docs/history/worker-status-digest/",
+            "No edit to packages/bee/prompts/worker-cell.md or herding/notify.rs",
+            "No code comment"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "release-red-2-76-0",
+    "plan_sha256": "41ce77f7d1f77e2555751c3796d1f6a9d0a06593bc4d13a932817070b531f8d1",
+    "previewed_at": "2026-11-05T09:12:52.343Z",
+    "cells": [
+      {
+        "id": "rr76-1",
+        "feature": "release-red-2-76-0",
+        "title": "Turn the three 2.76.0 release-gate reds green without changing product behavior",
+        "lane": "small",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "56d30fdd-b714-4cca-9562-cfd46f83557e",
+          "b0d85440-6544-4e89-a789-b07c51258c12",
+          "6a7ba50e-a605-4de8-ab29-a340e771e3a1"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/catalog.rs",
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/release-red-2-76-0/CONTEXT.md",
+          "docs/history/release-red-2-76-0/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "judge_obligation_ack": "The only hooks/ change is one entry in KNOWN_HISTORICAL_EXCEPTIONS inside the cfg(test) documented_invocations module of cli_shape.rs: test-only code, the guard's runtime refusal path is untouched.",
+        "action": "RED BASE: three tests fail. Reproduce them first. (1) catalog.rs: set PINNED_FLAG_COUNT from 235 to 236 (D1, 56d30fdd). (2) hooks/cli_shape.rs: add one entry to KNOWN_HISTORICAL_EXCEPTIONS and bump the array length 19 to 20; the string is exactly the candidate the failing test prints for docs/history/worker-status-digest/plan.md (D2, b0d85440). (3) verbs/drivers/tests.rs: in GOLDEN_NATIVE_CELL_PROMPT add the line the render now emits after the 'Load the bee-swarming skill' contract line, byte for byte as the failing test's left side shows (D3, 6a7ba50e). Write no code comment. Change no product code, no worker-cell.md, no docs/history/worker-status-digest file.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "the distinct flag vocabulary test passes at 236",
+            "the widened CLI-shape spelling test passes on the repo docs",
+            "the native cell prompt golden test passes",
+            "the full declared suite is green with no filter"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+              "substantive": "PINNED_FLAG_COUNT is 236"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+              "substantive": "one new KNOWN_HISTORICAL_EXCEPTIONS entry for the wsdg-1 truth span"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+              "substantive": "golden carries the progress-note contract line"
+            }
+          ],
+          "key_links": [
+            "GOLDEN_NATIVE_CELL_PROMPT matches the render of packages/bee/prompts/worker-cell.md"
+          ],
+          "prohibitions": [
+            "No edit to docs/history/worker-status-digest/",
+            "No edit to packages/bee/prompts/worker-cell.md or herding/notify.rs",
+            "No code comment"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-11-05T09:20:45.561Z",
+    "branch": "wt/release-red-2-76-0",
+    "worktree_id": "beehive--wt--release-red-2-76-0",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
