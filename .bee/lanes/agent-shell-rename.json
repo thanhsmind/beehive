@@ -1,0 +1,393 @@
+{
+  "schema_version": "1.0",
+  "feature": "agent-shell-rename",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"agent-shell-rename\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-11-05T05:28:30.508Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 12,
+    "rationale": null,
+    "updated_at": "2026-11-05T05:28:27.533Z",
+    "feature": "agent-shell-rename"
+  },
+  "gate_preview": {
+    "feature": "agent-shell-rename",
+    "plan_sha256": "4368d4ecff56a68672e9eab4e5c62eff90166792d163ed7f655658c15ffda539",
+    "previewed_at": "2026-11-05T05:37:56.303Z",
+    "cells": [
+      {
+        "id": "asr-1",
+        "feature": "agent-shell-rename",
+        "title": "Rename the rendered agent shells and add bee-elder for the advisor kind",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "e8ffde50-2e43-499e-86ee-a1d2eece215b"
+        ],
+        "files": [
+          "packages/bee/agents/bee-worker.md.tmpl",
+          "packages/bee/agents/bee-comb.md.tmpl",
+          "packages/bee/agents/bee-forager.md.tmpl",
+          "packages/bee/agents/bee-scout.md.tmpl",
+          "packages/bee/agents/bee-guard.md.tmpl",
+          "packages/bee/agents/bee-elder.md.tmpl",
+          "packages/bee/agents/bee-build.md.tmpl",
+          "packages/bee/agents/bee-design.md.tmpl",
+          "packages/bee/agents/bee-gather.md.tmpl",
+          "packages/bee/agents/bee-extract.md.tmpl",
+          "packages/bee/agents/bee-review.md.tmpl",
+          "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/tests/installer_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/verbs/reviews.rs"
+        ],
+        "read_first": [
+          "docs/history/agent-shell-rename/plan.md",
+          "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+          "packages/bee/agents/bee-review.md.tmpl"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "action": "Rename the five agent templates with git mv (bee-build→bee-worker, bee-design→bee-comb, bee-gather→bee-forager, bee-extract→bee-scout, bee-review→bee-guard) and update each file's `name:` and every self-reference in its body. Add packages/bee/agents/bee-elder.md.tmpl modelled on bee-review.md.tmpl: read-only tools (Read, Grep, Glob), description 'Advisor seat for the bee Delegation contract — a session-class consult, a hat seat, or a blind lane; reached only through bee dispatch prepare', body = the advisor contract (read-only, digest with recommendation/confidence/falsifier, no state writes, no decisions). In onboard/templates.rs rename every row of AGENT_ROLES_BY_NAME and AGENT_OPENCODE_PERMISSION_DENY, add (\"bee-elder\", &[\"advisor\"]) and a bee-elder deny row equal to bee-scout's, and add `pub const RETIRED_AGENT_NAMES: &[(&str, &str)]` holding the five (old, new) pairs. In onboard/agents.rs make compute_agent_file_plan and compute_opencode_agent_file_plan also emit remove_agent_file / remove_opencode_agent_file for every retired path that exists (search `for tmpl_name in list_template_agents`), each item carrying `replacement: <new name>`; apply.rs already deletes such items (apply.rs:796-810) and needs no change — only make its printed line name the replacement when the item carries one. In verbs/drivers/guard.rs rename every ROLE_AGENTS row (the array type grows to 6), add (\"advisor\", \"bee-elder\") as the LAST row, rename agent_job_summary arms (add bee-elder: 'advises read-only from a fixed seat and reports (never writes, never decides)'), and rewrite the doc text that says bee renders no advisor agent. In verbs/drivers/prompt.rs rename the include_str! paths and match arms and add AGENT_ELDER. In verbs/drivers/prepare.rs add an `\"advisor\" => \"bee-elder\"` arm to the pinned_type match (search `\"cell\" if design_role =>`) so every --kind advisor dispatch on claude — bare advisor role AND seat roles such as hat-value or lane-2 — returns subagent_type bee-elder while the marker still names the RESOLVED role; add a test for each in drivers/tests.rs, and one asserting a herding-shaped advisor slot now prefixes the pane prompt with the elder body. In hooks/model_guard.rs: (1) extend the general-purpose repair so a prompt carrying `[bee-kind: advisor]` with a seat marker is repaired onto bee-elder; (2) in the bare-denied refusal, when subagent_type is a retired name, prepend one line 'subagent_type \"bee-build\" was renamed to \"bee-worker\"' from RETIRED_AGENT_NAMES; (3) deny a marker dispatch whose subagent_type is a retired name with that same rename line (reason `retired-agent-type`) instead of allowing it through to the host's own not-found error. Drop `advisor` from the loop in the existing test `a_role_with_no_rendered_agent_is_never_repaired_to_undefined` (it now has a rendered agent). Add tests: `[bee-tier: hat-value]` + bee-elder allowed; `[bee-tier: advisor]` + general-purpose repaired onto bee-elder; `[bee-tier: hat-value]` + general-purpose + `[bee-kind: advisor]` repaired onto bee-elder; bare `bee-build` denied with the rename line; `[bee-tier: code]` + `bee-build` denied retired-agent-type. In doctor.rs point DESIGN_AGENT_REL and its messages and tests at .claude/agents/bee-comb.md. In generated/registry_payload.json rename the bee-extract mention in the dispatch.prepare --role description (this file is hand-maintained, not regenerated). In verbs/reviews.rs change the test git email bee-review@example.com to bee-guard@example.com. Sweep every remaining old name in the listed files (tests, fixtures, FIX strings such as hook_local.rs 'dispatch a bee-extract worker'). Do NOT touch the bee-design skill or bee-design-* packs anywhere (skills.rs, doctor DESIGN_SKILL, design/). No code comments; rewrite the touched `//`/`///` lines that explain the tables so they name the new shells, never add new ones. Do not run bee dev regen or onboard --apply: the leader runs the regen chain once at wave close.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "bee dispatch prepare --runtime claude --kind cell returns subagent_type bee-worker; --kind gather returns bee-forager; --kind gather --role extraction returns bee-scout; --kind reviewer returns bee-guard; a design-role cell returns bee-comb",
+            "bee dispatch prepare --runtime claude --kind advisor returns subagent_type bee-elder, and --kind advisor --role hat-value also returns bee-elder with [bee-tier: hat-value]",
+            "The model guard allows subagent_type bee-elder under a seat marker, repairs general-purpose onto bee-elder under [bee-tier: advisor] and under a seat marker with [bee-kind: advisor], and denies a retired name (bare or under a marker) with a one-line rename hint",
+            "On a host that still holds .claude/agents/bee-build.md (or any retired name), bee onboard plans remove_agent_file for it with replacement named; same for .opencode/agent/",
+            "A herding-shaped advisor slot's pane prompt is prefixed with the bee-elder body",
+            "`rg -n 'bee-build|bee-gather|bee-extract|bee-review\\b' packages/` returns nothing; bee-design remains only as the skill and pack names",
+            "The full cargo suite is green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/agents/bee-elder.md.tmpl",
+              "substantive": "a read-only advisor shell with the advisor contract"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+              "substantive": "renamed tables, bee-elder rows, RETIRED_AGENT_NAMES"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+              "substantive": "renamed ROLE_AGENTS with the advisor row"
+            }
+          ],
+          "key_links": [
+            "prepare.rs pinned_type match pins bee-elder on --kind advisor; ROLE_AGENTS carries the advisor row for the guard's repair and role_for_agent",
+            "onboard/agents.rs plan removes RETIRED_AGENT_NAMES files with their replacement named",
+            "model_guard.rs reads RETIRED_AGENT_NAMES for the rename hint"
+          ],
+          "prohibitions": [
+            "No alias that keeps an old agent name accepted",
+            "No change to role names or team.<runtime> config shape",
+            "No rename of the bee-design skill or bee-design-* packs",
+            "No bee dev regen or onboard --apply inside the cell"
+          ]
+        }
+      },
+      {
+        "id": "asr-2",
+        "feature": "agent-shell-rename",
+        "title": "Move the prose, the site guide and the knowledge concept to the new shell names",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "e8ffde50-2e43-499e-86ee-a1d2eece215b"
+        ],
+        "files": [
+          "skills/bee-swarming/references/swarming-reference.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "site/guide/vi/giao-viec.html",
+          "site/guide/vi/config.html",
+          "site/guide/vi/tu-vung.html",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+          "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+          "docs/knowledge/areas/workflow-state/overview.md",
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+          "docs/product-description/delegation/dispatch.md",
+          "docs/product-description/delegation/workers.md",
+          "docs/product-description/glossary.md",
+          "docs/product-description/goal.md",
+          "docs/product-description/reviews/reviewing.md",
+          "docs/product-description/verification/areas.md"
+        ],
+        "read_first": [
+          "docs/history/agent-shell-rename/plan.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "site/guide/vi/giao-viec.html"
+        ],
+        "affects_skills": [
+          "skills/bee-swarming/references/swarming-reference.md",
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "action": "In every listed file replace the agent shell names: bee-build→bee-worker, bee-gather→bee-forager, bee-extract→bee-scout, bee-review→bee-guard, and the AGENT bee-design→bee-comb (the bee-design SKILL and bee-design-* packs keep their names — read each hit and decide by context; `.claude/agents/bee-design.md` and `packages/bee/agents/bee-design.md.tmpl` are the agent). Where prose says the advisor runs as general-purpose or that bee renders no advisor agent, say it runs as bee-elder; in docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md (search `embedded_agent_body`) record that an advisor pane is now prefixed with the bee-elder body. Do not edit AGENTS.md at the repo root, .claude/agents/ or .opencode/agent/ (the regen chain renders them at wave close). In docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md add one short section 'The six rendered shells' listing each shell, the job it serves, whether it writes, and the decision id e8ffde50-2e43-499e-86ee-a1d2eece215b; keep historical decision text that quotes old names as-is when it is a quote. In site/guide/vi/giao-viec.html make the shell table (search `Bốn agent`) the ONE home for all six names in Vietnamese with each one's job and tool set: fix the heading count (four→six), drop the stale 'một model cố định' sentence (agent files no longer pin a model), and fix the claim that bee-build is the only writer (bee-worker and bee-comb both write). In site/guide/vi/tu-vung.html (search `Một trong bốn`) keep one glossary row per name but link each to the giao-viec table instead of repeating the descriptions. Leave docs/history/** and docs/knowledge/patterns/** untouched (history quotes). Write through the bee-technical-writing skill; no new bee terms the reader does not need.",
+        "verify": "rg -n 'bee-build|bee-gather|bee-extract|bee-review\\b' skills site/guide docs/knowledge/areas docs/product-description — expected: zero hits",
+        "must_haves": {
+          "truths": [
+            "rg for the four old non-design names over skills/, site/guide/, docs/knowledge/areas/ and docs/product-description/ returns nothing",
+            "model-roles-and-escalation.md names the six shells and cites the decision",
+            "giao-viec.html is the one home of the six names; tu-vung.html links there; the 'four' and 'only writer' claims are gone",
+            "The bee-design skill and packs are still named bee-design everywhere"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+              "substantive": "a 'The six rendered shells' section"
+            },
+            {
+              "path": "site/guide/vi/giao-viec.html",
+              "substantive": "a six-row shell table"
+            }
+          ],
+          "key_links": [
+            "tu-vung.html rows link to the giao-viec.html shell table",
+            "handing-a-foreign-agent-its-brief.md names the bee-elder pane prefix"
+          ],
+          "prohibitions": [
+            "No edit to AGENTS.md, .claude/agents/, .opencode/agent/, docs/history/, docs/knowledge/patterns/",
+            "No rename of the bee-design skill"
+          ]
+        }
+      }
+    ]
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-11-05T05:37:56.399Z",
+    "feature": "agent-shell-rename",
+    "newest_decision_id": "73d9eae8-bd86-48d4-a542-e1d6ff36d1d9",
+    "plan_sha256": "4368d4ecff56a68672e9eab4e5c62eff90166792d163ed7f655658c15ffda539",
+    "advisor": "hat-wave:opus+opus+fable",
+    "digest_head": "PLAN CHECK\nWork: agent-shell-rename, slice 1 (asr-1, asr-2)\n\nSeats: hat-facts-gaps (opus, dispatch 810a472d), hat-user-impact (opus,\ndispatch 661be5a0), hat-alternatives run on the advisor slot (fable,\ndispatch 958ef924; recorded deviation 73d9eae8 — the worktree config still\npinned the seat to a retired GPT pane).\n\nSTRUCTURE\nBLOCKERS (all fixed in plan.md before the gate):\n- coverage/key-link: a ROLE_AGENTS row alone never reaches bee-elder for a\n  seat role (prepare.rs:2354-2355 keeps the reso"
+  },
+  "approved_cell_packet": {
+    "feature": "agent-shell-rename",
+    "plan_sha256": "4368d4ecff56a68672e9eab4e5c62eff90166792d163ed7f655658c15ffda539",
+    "previewed_at": "2026-11-05T05:37:56.303Z",
+    "cells": [
+      {
+        "id": "asr-1",
+        "feature": "agent-shell-rename",
+        "title": "Rename the rendered agent shells and add bee-elder for the advisor kind",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "e8ffde50-2e43-499e-86ee-a1d2eece215b"
+        ],
+        "files": [
+          "packages/bee/agents/bee-worker.md.tmpl",
+          "packages/bee/agents/bee-comb.md.tmpl",
+          "packages/bee/agents/bee-forager.md.tmpl",
+          "packages/bee/agents/bee-scout.md.tmpl",
+          "packages/bee/agents/bee-guard.md.tmpl",
+          "packages/bee/agents/bee-elder.md.tmpl",
+          "packages/bee/agents/bee-build.md.tmpl",
+          "packages/bee/agents/bee-design.md.tmpl",
+          "packages/bee/agents/bee-gather.md.tmpl",
+          "packages/bee/agents/bee-extract.md.tmpl",
+          "packages/bee/agents/bee-review.md.tmpl",
+          "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/tests/installer_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/verbs/reviews.rs"
+        ],
+        "read_first": [
+          "docs/history/agent-shell-rename/plan.md",
+          "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+          "packages/bee/agents/bee-review.md.tmpl"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "action": "Rename the five agent templates with git mv (bee-build→bee-worker, bee-design→bee-comb, bee-gather→bee-forager, bee-extract→bee-scout, bee-review→bee-guard) and update each file's `name:` and every self-reference in its body. Add packages/bee/agents/bee-elder.md.tmpl modelled on bee-review.md.tmpl: read-only tools (Read, Grep, Glob), description 'Advisor seat for the bee Delegation contract — a session-class consult, a hat seat, or a blind lane; reached only through bee dispatch prepare', body = the advisor contract (read-only, digest with recommendation/confidence/falsifier, no state writes, no decisions). In onboard/templates.rs rename every row of AGENT_ROLES_BY_NAME and AGENT_OPENCODE_PERMISSION_DENY, add (\"bee-elder\", &[\"advisor\"]) and a bee-elder deny row equal to bee-scout's, and add `pub const RETIRED_AGENT_NAMES: &[(&str, &str)]` holding the five (old, new) pairs. In onboard/agents.rs make compute_agent_file_plan and compute_opencode_agent_file_plan also emit remove_agent_file / remove_opencode_agent_file for every retired path that exists (search `for tmpl_name in list_template_agents`), each item carrying `replacement: <new name>`; apply.rs already deletes such items (apply.rs:796-810) and needs no change — only make its printed line name the replacement when the item carries one. In verbs/drivers/guard.rs rename every ROLE_AGENTS row (the array type grows to 6), add (\"advisor\", \"bee-elder\") as the LAST row, rename agent_job_summary arms (add bee-elder: 'advises read-only from a fixed seat and reports (never writes, never decides)'), and rewrite the doc text that says bee renders no advisor agent. In verbs/drivers/prompt.rs rename the include_str! paths and match arms and add AGENT_ELDER. In verbs/drivers/prepare.rs add an `\"advisor\" => \"bee-elder\"` arm to the pinned_type match (search `\"cell\" if design_role =>`) so every --kind advisor dispatch on claude — bare advisor role AND seat roles such as hat-value or lane-2 — returns subagent_type bee-elder while the marker still names the RESOLVED role; add a test for each in drivers/tests.rs, and one asserting a herding-shaped advisor slot now prefixes the pane prompt with the elder body. In hooks/model_guard.rs: (1) extend the general-purpose repair so a prompt carrying `[bee-kind: advisor]` with a seat marker is repaired onto bee-elder; (2) in the bare-denied refusal, when subagent_type is a retired name, prepend one line 'subagent_type \"bee-build\" was renamed to \"bee-worker\"' from RETIRED_AGENT_NAMES; (3) deny a marker dispatch whose subagent_type is a retired name with that same rename line (reason `retired-agent-type`) instead of allowing it through to the host's own not-found error. Drop `advisor` from the loop in the existing test `a_role_with_no_rendered_agent_is_never_repaired_to_undefined` (it now has a rendered agent). Add tests: `[bee-tier: hat-value]` + bee-elder allowed; `[bee-tier: advisor]` + general-purpose repaired onto bee-elder; `[bee-tier: hat-value]` + general-purpose + `[bee-kind: advisor]` repaired onto bee-elder; bare `bee-build` denied with the rename line; `[bee-tier: code]` + `bee-build` denied retired-agent-type. In doctor.rs point DESIGN_AGENT_REL and its messages and tests at .claude/agents/bee-comb.md. In generated/registry_payload.json rename the bee-extract mention in the dispatch.prepare --role description (this file is hand-maintained, not regenerated). In verbs/reviews.rs change the test git email bee-review@example.com to bee-guard@example.com. Sweep every remaining old name in the listed files (tests, fixtures, FIX strings such as hook_local.rs 'dispatch a bee-extract worker'). Do NOT touch the bee-design skill or bee-design-* packs anywhere (skills.rs, doctor DESIGN_SKILL, design/). No code comments; rewrite the touched `//`/`///` lines that explain the tables so they name the new shells, never add new ones. Do not run bee dev regen or onboard --apply: the leader runs the regen chain once at wave close.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "bee dispatch prepare --runtime claude --kind cell returns subagent_type bee-worker; --kind gather returns bee-forager; --kind gather --role extraction returns bee-scout; --kind reviewer returns bee-guard; a design-role cell returns bee-comb",
+            "bee dispatch prepare --runtime claude --kind advisor returns subagent_type bee-elder, and --kind advisor --role hat-value also returns bee-elder with [bee-tier: hat-value]",
+            "The model guard allows subagent_type bee-elder under a seat marker, repairs general-purpose onto bee-elder under [bee-tier: advisor] and under a seat marker with [bee-kind: advisor], and denies a retired name (bare or under a marker) with a one-line rename hint",
+            "On a host that still holds .claude/agents/bee-build.md (or any retired name), bee onboard plans remove_agent_file for it with replacement named; same for .opencode/agent/",
+            "A herding-shaped advisor slot's pane prompt is prefixed with the bee-elder body",
+            "`rg -n 'bee-build|bee-gather|bee-extract|bee-review\\b' packages/` returns nothing; bee-design remains only as the skill and pack names",
+            "The full cargo suite is green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/agents/bee-elder.md.tmpl",
+              "substantive": "a read-only advisor shell with the advisor contract"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+              "substantive": "renamed tables, bee-elder rows, RETIRED_AGENT_NAMES"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+              "substantive": "renamed ROLE_AGENTS with the advisor row"
+            }
+          ],
+          "key_links": [
+            "prepare.rs pinned_type match pins bee-elder on --kind advisor; ROLE_AGENTS carries the advisor row for the guard's repair and role_for_agent",
+            "onboard/agents.rs plan removes RETIRED_AGENT_NAMES files with their replacement named",
+            "model_guard.rs reads RETIRED_AGENT_NAMES for the rename hint"
+          ],
+          "prohibitions": [
+            "No alias that keeps an old agent name accepted",
+            "No change to role names or team.<runtime> config shape",
+            "No rename of the bee-design skill or bee-design-* packs",
+            "No bee dev regen or onboard --apply inside the cell"
+          ]
+        }
+      },
+      {
+        "id": "asr-2",
+        "feature": "agent-shell-rename",
+        "title": "Move the prose, the site guide and the knowledge concept to the new shell names",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "e8ffde50-2e43-499e-86ee-a1d2eece215b"
+        ],
+        "files": [
+          "skills/bee-swarming/references/swarming-reference.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "site/guide/vi/giao-viec.html",
+          "site/guide/vi/config.html",
+          "site/guide/vi/tu-vung.html",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+          "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+          "docs/knowledge/areas/workflow-state/overview.md",
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+          "docs/product-description/delegation/dispatch.md",
+          "docs/product-description/delegation/workers.md",
+          "docs/product-description/glossary.md",
+          "docs/product-description/goal.md",
+          "docs/product-description/reviews/reviewing.md",
+          "docs/product-description/verification/areas.md"
+        ],
+        "read_first": [
+          "docs/history/agent-shell-rename/plan.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "site/guide/vi/giao-viec.html"
+        ],
+        "affects_skills": [
+          "skills/bee-swarming/references/swarming-reference.md",
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "action": "In every listed file replace the agent shell names: bee-build→bee-worker, bee-gather→bee-forager, bee-extract→bee-scout, bee-review→bee-guard, and the AGENT bee-design→bee-comb (the bee-design SKILL and bee-design-* packs keep their names — read each hit and decide by context; `.claude/agents/bee-design.md` and `packages/bee/agents/bee-design.md.tmpl` are the agent). Where prose says the advisor runs as general-purpose or that bee renders no advisor agent, say it runs as bee-elder; in docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md (search `embedded_agent_body`) record that an advisor pane is now prefixed with the bee-elder body. Do not edit AGENTS.md at the repo root, .claude/agents/ or .opencode/agent/ (the regen chain renders them at wave close). In docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md add one short section 'The six rendered shells' listing each shell, the job it serves, whether it writes, and the decision id e8ffde50-2e43-499e-86ee-a1d2eece215b; keep historical decision text that quotes old names as-is when it is a quote. In site/guide/vi/giao-viec.html make the shell table (search `Bốn agent`) the ONE home for all six names in Vietnamese with each one's job and tool set: fix the heading count (four→six), drop the stale 'một model cố định' sentence (agent files no longer pin a model), and fix the claim that bee-build is the only writer (bee-worker and bee-comb both write). In site/guide/vi/tu-vung.html (search `Một trong bốn`) keep one glossary row per name but link each to the giao-viec table instead of repeating the descriptions. Leave docs/history/** and docs/knowledge/patterns/** untouched (history quotes). Write through the bee-technical-writing skill; no new bee terms the reader does not need.",
+        "verify": "rg -n 'bee-build|bee-gather|bee-extract|bee-review\\b' skills site/guide docs/knowledge/areas docs/product-description — expected: zero hits",
+        "must_haves": {
+          "truths": [
+            "rg for the four old non-design names over skills/, site/guide/, docs/knowledge/areas/ and docs/product-description/ returns nothing",
+            "model-roles-and-escalation.md names the six shells and cites the decision",
+            "giao-viec.html is the one home of the six names; tu-vung.html links there; the 'four' and 'only writer' claims are gone",
+            "The bee-design skill and packs are still named bee-design everywhere"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+              "substantive": "a 'The six rendered shells' section"
+            },
+            {
+              "path": "site/guide/vi/giao-viec.html",
+              "substantive": "a six-row shell table"
+            }
+          ],
+          "key_links": [
+            "tu-vung.html rows link to the giao-viec.html shell table",
+            "handing-a-foreign-agent-its-brief.md names the bee-elder pane prefix"
+          ],
+          "prohibitions": [
+            "No edit to AGENTS.md, .claude/agents/, .opencode/agent/, docs/history/, docs/knowledge/patterns/",
+            "No rename of the bee-design skill"
+          ]
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-11-05T06:25:21.125Z",
+    "branch": "wt/agent-shell-rename",
+    "worktree_id": "beehive--wt--agent-shell-rename",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

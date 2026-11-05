@@ -51,7 +51,7 @@
       },
       "plan": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
       },
       "extraction": {
@@ -66,12 +66,12 @@
       },
       "review": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "independent read-only check of a claim or diff"
       },
       "advisor": {
         "kind": "herding",
-        "agent": "paseo-gpt-astra",
+        "agent": "paseo-claude-opus",
         "description": "session-class consult for high-risk gates"
       },
       "supervisor": {
@@ -81,12 +81,12 @@
       },
       "lane-1": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-2": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-3": {
@@ -96,27 +96,27 @@
       },
       "hat-facts-gaps": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
       },
       "hat-risks": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
       },
       "hat-value": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "hat: is this worth its cost — materiality test"
       },
       "hat-alternatives": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
       },
       "hat-user-impact": {
         "kind": "herding",
-        "agent": "paseo-gpt-tera",
+        "agent": "paseo-claude-opus",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
       },
       "design": {
@@ -147,7 +147,7 @@
         "description": "doc edits and parity sweeps",
         "effort": "high"
       },
-       "deploy": {
+      "deploy": {
         "model": "sonnet",
         "description": "publish an approved release from main, wait for CI, and verify release assets"
       },
@@ -187,8 +187,7 @@
         "effort": "high"
       },
       "lane-2": {
-        "kind": "herding",
-        "agent": "paseo-gpt-sol",
+        "model": "opus",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief",
         "effort": "high"
       },
@@ -208,14 +207,12 @@
         "effort": "high"
       },
       "hat-value": {
-        "kind": "herding",
-        "agent": "paseo-gpt-sol",
+        "model": "opus",
         "description": "hat: is this worth its cost — materiality test",
         "effort": "high"
       },
       "hat-alternatives": {
-        "kind": "herding",
-        "agent": "paseo-gpt-sol",
+        "model": "opus",
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude",
         "effort": "high"
       },
@@ -287,7 +284,7 @@
       },
       "lane-2": {
         "kind": "herding",
-        "agent": "paseo-gpt-sol",
+        "agent": "paseo-claude-opus",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-3": {
@@ -297,7 +294,7 @@
       },
       "hat-facts-gaps": {
         "kind": "herding",
-        "agent": "paseo-gpt-sol",
+        "agent": "paseo-claude-opus",
         "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
       },
       "hat-risks": {

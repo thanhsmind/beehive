@@ -788,6 +788,7 @@
     "contract:onboard-binary-vendor",
     "contract:deploy-native-brief",
     "contract:herding-limits",
-    "contract:close-prune"
+    "contract:close-prune",
+    "contract:agent-shells"
   ]
 }

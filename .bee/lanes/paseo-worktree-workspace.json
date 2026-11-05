@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Script cần một quyền phát hành qua cửa giao việc (vai trò `deploy`). Chưa có gì bị thay đổi. Mình lấy quyền đó.",
-    "asked_at": "2026-11-05T03:08:49.005Z",
-    "session": "298f3545-010d-470f-9df0-80be21e0ac1b"
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-05T05:27:03.138Z",
+    "session": "97febb1b-7dc3-4028-aad8-6c10b34059f0"
   }
 }
