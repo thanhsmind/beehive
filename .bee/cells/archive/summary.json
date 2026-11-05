@@ -1903,5 +1903,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-05T09:41:46.848Z"
+  },
+  "release-2-77-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-05T11:50:37.201Z"
   }
 }
