@@ -283,5 +283,12 @@
         }
       }
     ]
+  },
+  "merge_ready": {
+    "since": "2026-11-05T08:52:06.956Z",
+    "branch": "wt/worker-status-digest",
+    "worktree_id": "beehive--wt--worker-status-digest",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
