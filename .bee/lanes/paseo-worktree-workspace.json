@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: test the renamed agent shells on main (bee-worker/comb/forager/scout/guard/elder), then approve",
-    "asked_at": "2026-11-05T06:29:23.767Z",
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-05T06:35:46.357Z",
     "session": "97febb1b-7dc3-4028-aad8-6c10b34059f0"
   }
 }
