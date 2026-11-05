@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"handoff-self-relaunch\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"handoff-self-relaunch\" (lane).",
+  "next_action": "Merged into main at da53671; capture what settled, then bee close --feature handoff-self-relaunch.",
   "created_at": "2026-11-05T12:04:11.971Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": "doctrine text plus one hook line, two disjoint cells",
     "updated_at": "2026-11-05T12:04:12.020Z",
     "feature": "handoff-self-relaunch"
-  },
-  "merge_ready": {
-    "since": "2026-11-05T12:16:13.685Z",
-    "branch": "wt/handoff-self-relaunch",
-    "worktree_id": "beehive--wt--handoff-self-relaunch",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
