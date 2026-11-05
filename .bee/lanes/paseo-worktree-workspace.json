@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "Sửa luật handoff ở đâu: doctrine bee hay ~/.claude/CLAUDE.md",
-    "asked_at": "2026-11-05T12:01:23.216Z",
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-05T13:42:08.499Z",
     "session": "b99aebf2-3ed2-4aa6-b51e-794725ff1d10"
   }
 }
