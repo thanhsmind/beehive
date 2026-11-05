@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"device-aware-cap\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at d476993; capture what settled, then bee close --feature device-aware-cap.",
   "created_at": "2026-11-05T02:42:06.804Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -217,12 +217,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-11-05T02:59:31.535Z",
-    "branch": "wt/device-aware-cap",
-    "worktree_id": "beehive--wt--device-aware-cap",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
