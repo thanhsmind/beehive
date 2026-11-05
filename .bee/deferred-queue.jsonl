@@ -1174,3 +1174,4 @@
 {"ts":"2026-11-05T06:36:22.600Z","event":"add","id":"619b86fd-d51b-4f0a-bc27-b62c38071443","kind":"promote","feature":"release-2-74-0","cells":[],"areas":[],"files":["docs/history/release-2-74-0/promote-proposals.md"],"reason":"Promote proposal for \"release-2-74-0\" awaiting apply — docs/history/release-2-74-0/promote-proposals.md."}
 {"ts":"2026-11-05T06:36:43.743Z","event":"complete","id":"b4ae3309-dc8e-4ac9-9e38-4d903e73af18"}
 {"ts":"2026-11-05T06:36:43.753Z","event":"complete","id":"619b86fd-d51b-4f0a-bc27-b62c38071443"}
+{"ts":"2026-11-05T07:32:53.919Z","event":"add","id":"14280470-e192-4443-a5ad-fe220f024d04","kind":"promote","feature":"release-2-75-0","cells":[],"areas":[],"files":["docs/history/release-2-75-0/promote-proposals.md"],"reason":"Promote proposal for \"release-2-75-0\" awaiting apply — docs/history/release-2-75-0/promote-proposals.md."}

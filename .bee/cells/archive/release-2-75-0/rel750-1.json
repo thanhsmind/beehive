@@ -1,0 +1,109 @@
+{
+  "id": "rel750-1",
+  "feature": "release-2-75-0",
+  "title": "Publish release 2.75.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-75-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.75.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the user-installed opencode (/home/thanhsmind/.local/bin/opencode) on PATH, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.75.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.75.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.75.0",
+      "tag v2.75.0 exists locally and on the remote",
+      "the GitHub release for v2.75.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.75.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.75.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "bee 2.75.0 is live",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "ran the suite with CI-pinned opencode-ai@1.18.16 on PATH instead of the user-installed opencode 2.2.5, because the registry derivation cannot read 2.2.5; backlog row filed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-05T07:32:20.745Z",
+    "behavior_change": false,
+    "verification_evidence": "script printed release OK bee 2.75.0 is live after its full test gate; manifest check 600 files match; CI https://github.com/thanhsmind/beehive/actions/runs/41985682555",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "3fc93c6c-0550-4afa-88f2-da0c957214d6",
+    "verify_command": "bash scripts/release.sh 2.75.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-05T06:44:18.512Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980",
+        "owner_bypassed": "3fc93c6c-0550-4afa-88f2-da0c957214d6",
+        "at": "2026-11-05T07:32:20.745Z"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "first run died with BEE_DISPATCH_ID unset and the leader session went silent without reporting",
+        "better": "prepare the deployment-stage permit before the first run and report the stop at once",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "run 3 lost rustc to SIGKILL while a sibling worktree cargo test shared the same target dir",
+        "better": "check for live cargo jobs on the shared target dir before the release test step",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "bee 2.75.0 is live: tag v2.75.0 pushed at 2129a59f, release-binaries CI run 41985682555 green, release carries 5 binaries and SHA256SUMS",
+      "commit": "2129a59f",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.75.0 && bee dev release-manifest --check — green:live — script printed release OK bee 2.75.0 is live after its full test gate; manifest check 600 files match; CI https://github.com/thanhsmind/beehive/actions/runs/41985682555",
+      "deviations": [
+        "ran the suite with CI-pinned opencode-ai@1.18.16 on PATH instead of the user-installed opencode 2.2.5, because the registry derivation cannot read 2.2.5; backlog row filed"
+      ],
+      "mistakes": [
+        "first run died with BEE_DISPATCH_ID unset and the leader session went silent without reporting — prepare the deployment-stage permit before the first run and report the stop at once — doctrine",
+        "run 3 lost rustc to SIGKILL while a sibling worktree cargo test shared the same target dir — check for live cargo jobs on the shared target dir before the release test step — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

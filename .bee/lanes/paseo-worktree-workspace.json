@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The worker-status-digest worker runs its own cargo build. It uses the same build folder. I wait for it to stop, then I run the release again",
-    "asked_at": "2026-11-05T07:09:38.254Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-05T07:18:13.737Z",
     "session": "f78aa3e1-2443-4ecd-b38c-7c92b6c0a980"
   }
 }
