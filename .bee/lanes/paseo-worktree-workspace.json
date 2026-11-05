@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-11-05T09:41:21.324Z",
-    "session": "ed3774fe-276b-4f98-a654-230e31f91802"
+    "subject": "Tôi đang kiểm tra xem config có đặt giới hạn số worker không.",
+    "asked_at": "2026-11-05T11:21:37.559Z",
+    "session": "f9d9e9dc-b7c6-4595-a1e5-c8b0798c7533"
   }
 }
