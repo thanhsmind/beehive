@@ -87,6 +87,7 @@ mod control_loop;
 // mailbox layout and the self-contained-brief requirement, both locked in
 // .bee/decisions.jsonl feature=herding-executor). See mailbox.rs.
 pub(crate) mod mailbox;
+pub(crate) mod status_digest;
 
 // `bee herding run` (herding-executor D1/D2/D5/D6/D9) — the scope-A verb:
 // spawn one bee-ignorant external agent into a pane, wait on the mailbox
@@ -1603,6 +1604,46 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
 }
 
 fn status(flags: &[&str]) -> ExitCode {
+    let mut job_id: Option<&str> = None;
+    let mut json = false;
+    let mut explicit: Option<&str> = None;
+    let mut i = 0usize;
+    while i < flags.len() {
+        let arg = flags[i];
+        if arg == "--job" {
+            job_id = flags.get(i + 1).copied();
+            i += 2;
+            continue;
+        }
+        if arg.starts_with("--job=") {
+            job_id = Some(&arg["--job=".len()..]);
+            i += 1;
+            continue;
+        }
+        if arg == "--main-root" {
+            explicit = flags.get(i + 1).copied();
+            i += 2;
+            continue;
+        }
+        if arg.starts_with("--main-root=") {
+            explicit = Some(&arg["--main-root=".len()..]);
+            i += 1;
+            continue;
+        }
+        if arg == "--json" {
+            json = true;
+            i += 1;
+            continue;
+        }
+        i += 1;
+    }
+
+    if let Some(job) = job_id {
+        let main_root = resolve_main_root(explicit)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        return status_digest::status_job(&main_root, job, json);
+    }
+
     status_with_panes_and_transport(flags, None, None).0
 }
 
@@ -2072,6 +2113,27 @@ mod tests {
         assert_eq!(try_native(&args), Some(ExitCode::SUCCESS));
     }
 
+    #[test]
+    fn herding_status_job_subcommand_dispatches_in_try_native() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let job_dir = root.join(".bee/mailbox/J");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let args: Vec<OsString> = [
+            "herding",
+            "status",
+            "--main-root",
+            root.to_str().unwrap(),
+            "--job",
+            "J",
+            "--json",
+        ]
+        .iter()
+        .map(OsString::from)
+        .collect();
+        assert_eq!(try_native(&args), Some(ExitCode::SUCCESS));
+    }
+
     struct MockTransport {
         alive_pid: Option<u32>,
     }
@@ -2223,7 +2285,7 @@ mod tests {
         let job_dir = tmp.path().join(".bee/mailbox/job-msg");
         std::fs::create_dir_all(&job_dir).unwrap();
         std::fs::write(job_dir.join("job.json"), r#"{"job_id":"job-msg","pane_id":"w4:p1","round":1}"#).unwrap();
-        let first = "{\"kind\":\"progress\",\"text\":\"one\"}\n";
+        let first = "{\"kind\":\"question\",\"text\":\"one\"}\n";
         std::fs::write(job_dir.join("messages.jsonl"), format!("{first}{{\"kind\":\"blocked\",\"text\":\"two\"}}\n")).unwrap();
         let job = |cursor: Option<usize>| {
             if let Some(c) = cursor {
