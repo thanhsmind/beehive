@@ -1,0 +1,251 @@
+{
+  "id": "asr-2",
+  "feature": "agent-shell-rename",
+  "title": "Move the prose, the site guide and the knowledge concept to the new shell names",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "e8ffde50-2e43-499e-86ee-a1d2eece215b"
+  ],
+  "files": [
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "site/guide/vi/giao-viec.html",
+    "site/guide/vi/config.html",
+    "site/guide/vi/tu-vung.html",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/workflow-state/overview.md",
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+    "docs/product-description/delegation/dispatch.md",
+    "docs/product-description/delegation/workers.md",
+    "docs/product-description/glossary.md",
+    "docs/product-description/goal.md",
+    "docs/product-description/reviews/reviewing.md",
+    "docs/product-description/verification/areas.md"
+  ],
+  "read_first": [
+    "docs/history/agent-shell-rename/plan.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+    "site/guide/vi/giao-viec.html"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "In every listed file replace the agent shell names: bee-build→bee-worker, bee-gather→bee-forager, bee-extract→bee-scout, bee-review→bee-guard, and the AGENT bee-design→bee-comb (the bee-design SKILL and bee-design-* packs keep their names — read each hit and decide by context; `.claude/agents/bee-design.md` and `packages/bee/agents/bee-design.md.tmpl` are the agent). Where prose says the advisor runs as general-purpose or that bee renders no advisor agent, say it runs as bee-elder; in docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md (search `embedded_agent_body`) record that an advisor pane is now prefixed with the bee-elder body. Do not edit AGENTS.md at the repo root, .claude/agents/ or .opencode/agent/ (the regen chain renders them at wave close). In docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md add one short section 'The six rendered shells' listing each shell, the job it serves, whether it writes, and the decision id e8ffde50-2e43-499e-86ee-a1d2eece215b; keep historical decision text that quotes old names as-is when it is a quote. In site/guide/vi/giao-viec.html make the shell table (search `Bốn agent`) the ONE home for all six names in Vietnamese with each one's job and tool set: fix the heading count (four→six), drop the stale 'một model cố định' sentence (agent files no longer pin a model), and fix the claim that bee-build is the only writer (bee-worker and bee-comb both write). In site/guide/vi/tu-vung.html (search `Một trong bốn`) keep one glossary row per name but link each to the giao-viec table instead of repeating the descriptions. Leave docs/history/** and docs/knowledge/patterns/** untouched (history quotes). Write through the bee-technical-writing skill; no new bee terms the reader does not need.",
+  "verify": "rg -n 'bee-build|bee-gather|bee-extract|bee-review\\b' skills site/guide docs/knowledge/areas docs/product-description",
+  "must_haves": {
+    "truths": [
+      "rg for the four old non-design names over skills/, site/guide/, docs/knowledge/areas/ and docs/product-description/ returns nothing",
+      "model-roles-and-escalation.md names the six shells and cites the decision",
+      "giao-viec.html is the one home of the six names; tu-vung.html links there; the 'four' and 'only writer' claims are gone",
+      "The bee-design skill and packs are still named bee-design everywhere"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+        "substantive": "a 'The six rendered shells' section"
+      },
+      {
+        "path": "site/guide/vi/giao-viec.html",
+        "substantive": "a six-row shell table"
+      }
+    ],
+    "key_links": [
+      "tu-vung.html rows link to the giao-viec.html shell table",
+      "handing-a-foreign-agent-its-brief.md names the bee-elder pane prefix"
+    ],
+    "prohibitions": [
+      "No edit to AGENTS.md, .claude/agents/, .opencode/agent/, docs/history/, docs/knowledge/patterns/",
+      "No rename of the bee-design skill"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "asr-worker-2",
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "site/guide/vi/giao-viec.html",
+      "site/guide/vi/config.html",
+      "site/guide/vi/tu-vung.html",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+      "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+      "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/knowledge/areas/workflow-state/overview.md",
+      "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+      "docs/product-description/delegation/dispatch.md",
+      "docs/product-description/delegation/workers.md",
+      "docs/product-description/glossary.md",
+      "docs/product-description/goal.md",
+      "docs/product-description/reviews/reviewing.md",
+      "docs/product-description/verification/areas.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-05T05:50:41.908Z",
+    "behavior_change": false,
+    "verification_evidence": "leader re-ran it in the worktree: exit 1, zero hits over skills, site/guide, docs/knowledge/areas and docs/product-description",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "97febb1b-7dc3-4028-aad8-6c10b34059f0",
+    "verify_command": "rg -n 'bee-build|bee-gather|bee-extract|bee-review\\b' skills site/guide docs/knowledge/areas docs/product-description",
+    "claimed_at": "2026-11-05T05:38:28.517Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-11-05T05:50:34.028Z",
+        "claim_session": "97febb1b-7dc3-4028-aad8-6c10b34059f0",
+        "claimed_at": "2026-11-05T05:40:18.640Z",
+        "acquired_at": "2026-11-05T05:38:28.446Z",
+        "worker": "asr-worker-2",
+        "verdict": "blocked",
+        "failure_signature": "a9c98468e397",
+        "note": "leader reopening to fix the verify string: its ' -- expected: zero hits' suffix makes the proof line unparseable at cap (reflection 05:50Z)"
+      }
+    ],
+    "blocked_reason": "leader reopening to fix the verify string: its ' -- expected: zero hits' suffix makes the proof line unparseable at cap (reflection 05:50Z)",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Moved documentation, site guides, skill references, and knowledge concepts to the six hive-role shell names",
+      "commit": "fc9fb92eb84c06ea3c6ae424b4f60f9d95ced97e",
+      "files": [
+        "skills/bee-swarming/references/swarming-reference.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "site/guide/vi/giao-viec.html",
+        "site/guide/vi/config.html",
+        "site/guide/vi/tu-vung.html",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+        "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+        "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/knowledge/areas/workflow-state/overview.md",
+        "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+        "docs/product-description/delegation/dispatch.md",
+        "docs/product-description/delegation/workers.md",
+        "docs/product-description/glossary.md",
+        "docs/product-description/goal.md",
+        "docs/product-description/reviews/reviewing.md",
+        "docs/product-description/verification/areas.md"
+      ],
+      "tests": "rg -n 'bee-build|bee-gather|bee-extract|bee-review\\b' skills site/guide docs/knowledge/areas docs/product-description — green:static — leader re-ran it in the worktree: exit 1, zero hits over skills, site/guide, docs/knowledge/areas and docs/product-description",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "rg for the four old non-design names over skills/, site/guide/, docs/knowledge/areas/ and docs/product-description/ returns nothing",
+            "artifact": "docs/product-description/delegation/workers.md"
+          },
+          {
+            "requirement": "model-roles-and-escalation.md names the six shells and cites the decision",
+            "artifact": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+          },
+          {
+            "requirement": "giao-viec.html is the one home of the six names; tu-vung.html links there; the 'four' and 'only writer' claims are gone",
+            "artifact": "site/guide/vi/giao-viec.html"
+          },
+          {
+            "requirement": "The bee-design skill and packs are still named bee-design everywhere",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          },
+          {
+            "requirement": "tu-vung.html rows link to the giao-viec.html shell table",
+            "artifact": "site/guide/vi/tu-vung.html"
+          },
+          {
+            "requirement": "handing-a-foreign-agent-its-brief.md names the bee-elder pane prefix",
+            "artifact": "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/references/swarming-reference.md",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": "skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": "site/guide/vi/giao-viec.html",
+            "artifact": "site/guide/vi/giao-viec.html"
+          },
+          {
+            "requirement": "site/guide/vi/config.html",
+            "artifact": "site/guide/vi/config.html"
+          },
+          {
+            "requirement": "site/guide/vi/tu-vung.html",
+            "artifact": "site/guide/vi/tu-vung.html"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+            "artifact": "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+            "artifact": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/overview.md",
+            "artifact": "docs/knowledge/areas/workflow-state/overview.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          },
+          {
+            "requirement": "docs/product-description/delegation/dispatch.md",
+            "artifact": "docs/product-description/delegation/dispatch.md"
+          },
+          {
+            "requirement": "docs/product-description/delegation/workers.md",
+            "artifact": "docs/product-description/delegation/workers.md"
+          },
+          {
+            "requirement": "docs/product-description/glossary.md",
+            "artifact": "docs/product-description/glossary.md"
+          },
+          {
+            "requirement": "docs/product-description/goal.md",
+            "artifact": "docs/product-description/goal.md"
+          },
+          {
+            "requirement": "docs/product-description/reviews/reviewing.md",
+            "artifact": "docs/product-description/reviews/reviewing.md"
+          },
+          {
+            "requirement": "docs/product-description/verification/areas.md",
+            "artifact": "docs/product-description/verification/areas.md"
+          }
+        ],
+        "recorded_at": "2026-11-05T05:51:05.036Z",
+        "recorded_by": "97febb1b-7dc3-4028-aad8-6c10b34059f0",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

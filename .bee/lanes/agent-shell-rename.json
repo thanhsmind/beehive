@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"agent-shell-rename\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at f54e93f; reload the product and test \"agent-shell-rename\", then either approve uat (\"bee gate --name uat --approved true --lane agent-shell-rename\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-05T05:28:30.508Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: agent-shell-rename",
-    "asked_at": "2026-11-05T06:27:56.890Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
