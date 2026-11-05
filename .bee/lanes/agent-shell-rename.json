@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "agent-shell-rename",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"agent-shell-rename\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f54e93f; reload the product and test \"agent-shell-rename\", then either approve uat (\"bee gate --name uat --approved true --lane agent-shell-rename\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"agent-shell-rename\" — feature is closed.",
   "created_at": "2026-11-05T05:28:30.508Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
