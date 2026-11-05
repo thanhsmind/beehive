@@ -60,6 +60,7 @@ Address what blocked the last round before anything else.
 Contract:
 {{#if native_bookkeeping}}
 - Load the bee-swarming skill (Execute section) for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
+- At each meaningful step (read done, red test seen, green, committed) record one progress note with `.bee/bin/bee herding notify --kind progress --job {{cell_id}} --step <word> --text "<note, at most 120 characters>"`; a note never ends the turn.
 {{/if}}
 - Execute only the assigned cell. Do not select or accept other work.
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.

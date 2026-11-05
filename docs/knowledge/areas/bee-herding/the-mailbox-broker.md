@@ -8,10 +8,10 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["mailbox-broker D1 62b88465 (the broker is code, not an LLM; ticks on bee's control loop; reuses result-inbox and supervisor paths; adds no second mailbox; supervisor stays observer-only; touches 322695d6)", "mailbox-broker D2 0c094609 (only dispatched workers post questions; leader asks human directly)", "mailbox-broker D3 caf5f716 (worker stops with typed outcome question; broker gets answer and re-dispatches next round carrying question and answer; no pane injection)", "mailbox-broker D4 b9a3e488 (technical questions go to advisor first; gate or product questions and not-sure advisor answers go to human)", "mailbox-broker D5 c88d31bb (human question while away queued in presence queue and shown in wake report; consent-sweep rules apply unchanged; touches c706053e, 9f5cd250)", "mailbox-broker D6 969f077a (herding-channel workers only; native Agent worker returns [BLOCKED]; non-herding advisor slot routes to human)", "worker-question contract f58bfe89 (MailboxStatus::Question in mailbox.rs and result-N.json; question object with text and kind; optional proof; job.json facts)", "pi-question-drain contract 8e9a5eb0 (Pi verdict tool accepts question; result-inbox leaves marker in place for question results)", "broker-tick contract 91608561 (herding broker tick and answer verbs; atomic claim; advisor dispatch or supervisor intervention; child job re-dispatch; broker heartbeat)", "broker-role contract d3031edb (Role::Broker in control_loop.rs; code-only argv herding broker tick --json; default 30s interval)"]
+  decisions: ["mailbox-broker D1 62b88465 (the broker is code, not an LLM; ticks on bee's control loop; reuses result-inbox and supervisor paths; adds no second mailbox; supervisor stays observer-only; touches 322695d6)", "mailbox-broker D2 0c094609 (only dispatched workers post questions; leader asks human directly)", "mailbox-broker D3 caf5f716 (worker stops with typed outcome question; broker gets answer and re-dispatches next round carrying question and answer; no pane injection)", "mailbox-broker D4 b9a3e488 (technical questions go to advisor first; gate or product questions and not-sure advisor answers go to human)", "mailbox-broker D5 c88d31bb (human question while away queued in presence queue and shown in wake report; consent-sweep rules apply unchanged; touches c706053e, 9f5cd250)", "mailbox-broker D6 969f077a (herding-channel workers only; native Agent worker returns [BLOCKED]; non-herding advisor slot routes to human)", "worker-question contract f58bfe89 (MailboxStatus::Question in mailbox.rs and result-N.json; question object with text and kind; optional proof; job.json facts)", "pi-question-drain contract 8e9a5eb0 (Pi verdict tool accepts question; result-inbox leaves marker in place for question results)", "broker-tick contract 91608561 (herding broker tick and answer verbs; atomic claim; advisor dispatch or supervisor intervention; child job re-dispatch; broker heartbeat)", "broker-role contract d3031edb (Role::Broker in control_loop.rs; code-only argv herding broker tick --json; default 30s interval)", "herding-notify-progress 28b87b5b (progress notes live in progress.jsonl and are never delivered to leader; messages.jsonl keeps question/blocked/dependency/reopen and stall alert; supersedes 657bbe71)"]
   sources: [docs/history/mailbox-broker/CONTEXT.md, docs/history/mailbox-broker/plan.md, docs/history/mailbox-broker/reports/hat-wave.md, "mailbox-broker cells mb-1..mb-4"]
   authoritative_for: "bee-herding: the mailbox broker role, the question outcome, routing table, and child job redispatch"
-  owns.code: [packages/bee-rs/crates/bee/src/herding/broker.rs, packages/bee-rs/crates/bee/src/herding/control_loop.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/src/herding/run.rs, .pi/extensions/bee-guard/tool-verdict.ts, .pi/extensions/bee-guard/result-inbox.ts]
+  owns.code: [packages/bee-rs/crates/bee/src/herding/broker.rs, packages/bee-rs/crates/bee/src/herding/control_loop.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/src/herding/notify.rs, packages/bee-rs/crates/bee/src/herding/run.rs, .pi/extensions/bee-guard/tool-verdict.ts, .pi/extensions/bee-guard/result-inbox.ts]
 ---
 
 # Bee Herding — the mailbox broker, its tick, and how a worker question is routed
@@ -64,6 +64,16 @@ object (`tool-verdict.ts`, pi-question-drain contract, store `8e9a5eb0`). The Pi
 result drain (`result-inbox.ts`) leaves the pending marker in place while the latest
 result is a question. The leader receives the final result when subsequent rounds
 finish.
+
+## Progress notes and mailbox messages
+
+Worker progress notes live in `.bee/mailbox/<job>/progress.jsonl` (decision
+`28b87b5b`). They are never delivered to the leader. They supply input only
+for the one-line status digest (`bee herding status --job <id>`).
+
+The file `.bee/mailbox/<job>/messages.jsonl` keeps worker notifications that
+require leader action: kinds `question`, `blocked`, `dependency`, and
+`reopen`. It also holds bee's internal stall alert.
 
 ## Atomic claim and routing table
 
@@ -174,5 +184,6 @@ stateDiagram-v2
 - Run verb, question outcome, and envelope reporting: `packages/bee-rs/crates/bee/src/herding/run.rs`.
 - Mailbox result parsing and `MailboxStatus::Question`: `packages/bee-rs/crates/bee/src/herding/mailbox.rs`.
 - Control-loop broker role and iteration argv: `packages/bee-rs/crates/bee/src/herding/control_loop.rs`.
+- Worker notifications and progress append: `packages/bee-rs/crates/bee/src/herding/notify.rs` (decision `28b87b5b`).
 - Pi verdict tool question status: `.pi/extensions/bee-guard/tool-verdict.ts`.
 - Pi result drain question skip: `.pi/extensions/bee-guard/result-inbox.ts`.

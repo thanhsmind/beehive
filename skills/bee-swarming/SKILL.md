@@ -74,7 +74,10 @@ From two cells up, state the one-line concurrency plan before dispatching.
 3. Spawn with exactly that payload — a whole wave goes out in ONE message,
    one tool call per cell. Never paste session history; never hand a
    worker two cells.
-4. Tend: read each worker's Result form
+4. Tend: learn a running worker's progress only from
+   `bee herding status --job <id>` — one line — and never read a worker's
+   transcript, pane log, log.txt or activity stream for progress (decision
+   `d9007aca`). Read each worker's Result form
    (`references/swarming-reference.md`, "Result Formats"), never its
    prose. A `partial` result's `stopped` part becomes a new cell or a
    dissent verdict before close; your own final report states the four

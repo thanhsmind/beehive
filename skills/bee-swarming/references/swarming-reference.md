@@ -218,7 +218,10 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    assuming a worker is stuck. **Stuck** means no side effect — a commit, a
    reservation renewal, a trace write — past the runtime you expected when
    you dispatched it. Status probes stay read-only (`bee cells list`,
-   `bee reservations list`, `git log`); no routine mid-flight pings. A stuck
+   `bee reservations list`, `git log`); no routine mid-flight pings. The leader
+   learns a running worker's progress only from `bee herding status --job <id>`
+   (one line) and never reads a worker's transcript, pane log, log.txt, or
+   activity stream (`SKILL.md`, step 4). A stuck
    worker: stop it, `bee cells unclaim --id <id>`, `bee reservations release
    --agent <nickname> --cell <id>`, then re-dispatch ("Failure responses",
    below). **On the user's stop word**, stop every live worker, keep the
