@@ -297,9 +297,16 @@ one type per file, linked where types meet.
 
 <!-- rule: agents-context-handoff-65 -->
 - At about 150k tokens or 65% of the context window, whichever comes
-  first, write `.bee/HANDOFF.json` and pause cleanly. It holds mid-wave
-  too — never push through it. Every feature close is also a handoff
-  point. The record's schema lives in
+  first, write `.bee/HANDOFF.json`, hand the remaining work to a fresh
+  leader through the host's leader door when one exists (waggledance:
+  `waggledance_dispatch` with `leader: true`, task text naming what is
+  done, what is next, and the user's standing orders), and release
+  the session. Never tell the user to open a new session, never wait
+  for a `/clear`, and never spawn the leader yourself (no `paseo
+  create_agent`). Show the handoff to the user and wait only when a gate
+  or decision the user owns is pending, or when the host has no leader
+  door. It holds mid-wave too — never push through it. Every feature
+  close is also a handoff point. The record's schema lives in
   `bee-swarming/references/swarming-reference.md`.
 <!-- /rule -->
 <!-- rule: agents-one-commit-per-cell -->

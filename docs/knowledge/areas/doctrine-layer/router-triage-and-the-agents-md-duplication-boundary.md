@@ -220,7 +220,7 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
 - `agents-context-handoff-65` (AGENTS.md § Care for the session):
-  spoken: at about 150k tokens or 65% context, whichever comes first, write the handoff and stop cleanly — this holds mid-wave too, and every feature close is also a handoff point
+  spoken: at about 150k tokens or 65% context, whichever comes first, write the handoff, hand the rest to waggledance (leader: true), and release the session — never tell the user to open a new session; this holds mid-wave too, and every feature close is also a handoff point
   - applied_at:
     - `docs/knowledge/areas/onboarding/status-display-vendoring.md`
     - `skills/bee-hive/SKILL.md`

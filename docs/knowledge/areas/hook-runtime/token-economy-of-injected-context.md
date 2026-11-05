@@ -112,7 +112,7 @@ and takes the latest request context (input + cache read + cache creation tokens
 as statusline `context_and_turns` computes it). When that value is at or above
 `handoff_context_tokens` from `.bee/config.json` (integer; absent means 150000;
 0 turns the check off), the injected context carries exactly one extra line:
-`context <N>k tokens is past the handoff mark (<T>k): finish this step, write a planned-next handoff (bee state handoff write --kind planned-next), and continue in a fresh session.`
+`context <N>k tokens is past the handoff mark (<T>k): finish this step, write the handoff (bee state handoff write --kind planned-next), hand the rest to waggledance (waggledance_dispatch, leader: true), and release this session — never ask the user to open a new one.`
 Below the mark, with no `transcript_path`, or with an unreadable or usage-free
 transcript, nothing is added and the hook never fails or slows the turn.
 
