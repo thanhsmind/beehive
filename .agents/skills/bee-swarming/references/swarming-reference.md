@@ -30,7 +30,7 @@ returns exactly one status token.
 **Default — parallel:** a `small` lane's cells (1-3) fan out to
 concurrent execution workers whenever every cell's *product* file set is
 disjoint — reservations are the proof and the police (the guard denies an
-overlap; the worker count is a default, ~3-4 live). Serial is the
+overlap; the machine-aware limit caps it (`herding.limits.concurrency`; unset, bee sizes it from the CPU count — `docs/knowledge/areas/bee-herding/waves-and-occupancy.md`), the same number for native workers, never a fixed count). Serial is the
 exception and carries a named conflict in the dispatch note. `tiny` stays
 single-cell by shape, so the concurrency question does not arise;
 `small`'s extra cells scale the WORK and, when disjoint, the concurrency

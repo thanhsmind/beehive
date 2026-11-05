@@ -90,7 +90,7 @@ impossible to record; pre-existing records are never mutated by the check
   decisions a648ea2a/ecc8862d).
 
 - R78 — **Parallel is the default dispatch posture, every lane.** Units of the
-  same wave dispatch concurrently (3–4 live workers) whenever their product
+  same wave dispatch concurrently (up to the machine-aware limit, `herding.limits.concurrency`) whenever their product
   file sets are disjoint — reservations prove and police the disjointness;
   serial dispatch is the exception and must name its conflict. A unit touching
   shared generated artifacts (release manifest, plugin mirrors, onboarding

@@ -39,7 +39,7 @@ main is control-plane and fine; execution depends on transport:
 session; `small` and up always dispatches — one worker per cell
 (`references/swarming-reference.md` ("Single execution worker in full")),
 parallel by default: disjoint cells fan out concurrently (reservations
-prove it, 3-4 live workers cap it), serial needs a named file conflict.
+prove it, the machine-aware limit caps it (`herding.limits.concurrency`; unset, bee sizes it from the CPU count — `docs/knowledge/areas/bee-herding/waves-and-occupancy.md`), the same number for native workers, never a fixed count), serial needs a named file conflict.
 From two cells up, state the one-line concurrency plan before dispatching.
 
 1. `bee cells schedule --json` sets dispatch order — override only with a

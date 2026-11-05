@@ -41,7 +41,7 @@ unwound and nothing is left half-done),
 - **Never spawn before the execution gate is approved.** In a standard/high-risk
   wave the orchestrator never edits source itself.
 - **Concurrency is the default.** Disjoint cells fan out concurrently (reservations
-  prove disjointness, 3–4 live workers cap it); serial needs a *named* file
+  prove disjointness, the machine-aware limit caps it (`herding.limits.concurrency`; unset, bee sizes it from the CPU count — `docs/knowledge/areas/bee-herding/waves-and-occupancy.md`), the same number for native workers, never a fixed count); serial needs a *named* file
   conflict, dependency, or the user's say-so. From two cells up, state the one-line
   concurrency plan before dispatching. Overlapping-file cells are fixed by scope or
   reservations — never by "spawn both carefully".
