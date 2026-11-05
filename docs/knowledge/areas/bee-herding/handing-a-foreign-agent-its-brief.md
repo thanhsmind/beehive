@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/the-run-verb-and-worker-outcomes.md]
-  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)", "herding-prompt-stall D6 (narrows D1: a stalled submission is retryable, not an immediate delivery failure)", "pi-result-mailbox D1/D3 (the brief names report-<round>.md and its atomic write; report first, result last, and a resumed attempt rewrites its report before its result)", "pi-slp-dispatch-return D1 (a herding cell brief drops the bee-build body and every bee bookkeeping line; the native cell render stays byte-identical)"]
+  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)", "herding-prompt-stall D6 (narrows D1: a stalled submission is retryable, not an immediate delivery failure)", "pi-result-mailbox D1/D3 (the brief names report-<round>.md and its atomic write; report first, result last, and a resumed attempt rewrites its report before its result)", "pi-slp-dispatch-return D1 (a herding cell brief drops the bee-worker body and every bee bookkeeping line; the native cell render stays byte-identical)"]
   sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-brief-file/CONTEXT.md, docs/history/herding-worker-standalone/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "live smoke smoke-agy-delivery-1/-2/-3", "live case job hws-1-r1"]
   authoritative_for: "bee-herding: the brief mailbox, the standalone-worker contract, and delivery receipts"
 ---
@@ -141,13 +141,13 @@ reservations, and the decide-altitude boundary that keeps it from judging.
 The asymmetry is now answered at the source. Every pane- and cli-shaped payload
 carries the related agent's own body at the head of its brief, above the kind
 text, chosen by the same pinned agent the subagent path would have named:
-bee-build for a cell, bee-gather for a gather, bee-extract for an extraction,
-bee-review for a review. The subagent payload is untouched and byte-identical,
+bee-worker for a cell, bee-forager for a gather, bee-scout for an extraction,
+bee-guard for a review, and bee-elder for an advisor. The subagent payload is untouched and byte-identical,
 because adding the body there would state twice what the host already reads
 once.
 
-One exception: a **cell on the herding transport** gets no bee-build body
-(pi-slp-dispatch-return D1). bee-build is a bee workflow contract — claim,
+One exception: a **cell on the herding transport** gets no bee-worker body
+(pi-slp-dispatch-return D1). bee-worker is a bee workflow contract — claim,
 reserve, cap — and the herding wrapper forbids every `bee` command, so the body
 was a second, opposite order. The worker-cell template renders three flags for
 this: `native_bookkeeping` (every non-herding render) keeps the swarming-skill,
@@ -158,10 +158,11 @@ the commit sha, and a blocked result file instead of a text token. Shared rules
 — one cell only, no reinterpretation, no comments, the `cell: <id>` trailer —
 render for both. A golden test pins the native render byte for byte.
 
-A role whose pinned agent is the generic fallback adds nothing at all. That is
-not a gap to close later: most configurable roles — advisor, plan, test, docs —
-have no rendered agent file, and answering one would name a contract that does
-not exist. Nothing is the honest answer, and the payload for those roles stays
+An advisor pane is now prefixed with the bee-elder body (compiled in as
+`embedded_agent_body`), delivering the read-only advisor contract above the
+brief. Configurable roles with no rendered agent file — plan, test, docs — add
+nothing at all; answering one would name a contract that does not exist.
+Nothing is the honest answer, and the payload for those unrendered roles stays
 exactly as it was.
 
 ## A delivery receipt is an artifact the receiver wrote

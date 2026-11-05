@@ -140,7 +140,7 @@ recorded when a fifth `--kind extract` looked necessary, before D2 and D4 were
 settled. Under B2's fall-through it stopped being load-bearing, so it was
 **absorbed rather than shipped**: `--kind` still takes exactly `cell`, `gather`,
 `reviewer`, `advisor`, and a read-shaped consumer asks
-`--kind gather --role extraction`, which resolves to `bee-extract` on the
+`--kind gather --role extraction`, which resolves to `bee-scout` on the
 extraction model. It was recorded as an open question and answered, never
 silently dropped — the answer is in `docs/history/model-role-split/plan.md`
 ("D12's fate").
@@ -269,9 +269,9 @@ rule exists to prevent. The read-shaped CELL list is a different consumer with
 a different history (B8 backfilled `tier: extraction` cells to `role: read`)
 and stays `[read, extraction, generation]`; the two lists differ on purpose and
 each says why. The agent comes from the ASKED name and the kind, never from the
-winner: a role-less gather pins `bee-gather` whichever spelling of the read job
+winner: a role-less gather pins `bee-forager` whichever spelling of the read job
 won, while `--kind gather --role extraction` — or `--role read`, the same job
-under its other spelling — keeps B11's `bee-extract`. A broad multi-file hunt
+under its other spelling — keeps B11's `bee-scout`. A broad multi-file hunt
 is therefore the ROLE-LESS gather, never `--role read`, and the seeded `read`
 description says so. The
 name that won the walk is the name the dispatch travels under — `[bee-tier:
@@ -415,11 +415,24 @@ core: the extension factory, `on(session_start|tool_call|tool_result)`,
 A deploy-stage dispatch is mutating on every transport. The native Agent
 payload used to render the read-only gather prompt with no permit id,
 because only the herding and cli arms used the deployment brief. Now the
-Agent and spawn_agent payloads carry the brief, name `bee-build` as the
+Agent and spawn_agent payloads carry the brief, name `bee-worker` as the
 agent type, and end with the dispatch id, the release version and the
 issuer session, plus the `export` lines the worker runs before
 `scripts/release.sh`. The session line is left out when no issuer
 session resolves. Herding and cli payloads are unchanged.
+
+## The six rendered shells
+
+Decision `e8ffde50-2e43-499e-86ee-a1d2eece215b` establishes hive-role naming for the six rendered agent shells:
+
+| Shell | Job served | Writes |
+| --- | --- | --- |
+| `bee-worker` | Executes an assigned cell: reserve, write, commit, cap | Yes |
+| `bee-comb` | Executes an assigned design-role cell: UI work, design gate, commit, cap | Yes |
+| `bee-forager` | Open-ended multi-file hunt, reading and reporting digests | No |
+| `bee-scout` | Narrow extraction of an already-scoped fact from a known location | No |
+| `bee-guard` | Read-only verification, claim checking, tests, linters, git diff | No |
+| `bee-elder` | Read-only advisor seat from a fixed perspective (recommendation, confidence, falsifier) | No |
 
 ## Open Gaps
 

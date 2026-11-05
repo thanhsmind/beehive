@@ -702,11 +702,11 @@ evidence.
 
 A worker dispatched through `bee herding run` used to get two opposite orders:
 the standalone-executor wrapper forbade every `bee` command, while the cell
-prompt inside it (and the bee-build body above it) ordered `cells finish`. The
+prompt inside it (and the bee-worker body above it) ordered `cells finish`. The
 record shows the result: nc-1 and nc-2 on `nudge-consult`, and the four cases
 behind herding-cap-check, all returned `outcome=done` with the cell still
 claimed. Since pi-slp-dispatch-return D1 the order is one: a herding cell brief
-carries no `bee` command and no bee-build body. The worker implements, runs the
+carries no `bee` command and no bee-worker body. The worker implements, runs the
 narrowest proof, commits once with the `cell: <id>` trailer, and writes a
 three-part proof line and a one-line summary ending with the commit sha into its
 result file. Blocked work is a `blocked` result file, never a bare text token.

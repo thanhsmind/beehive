@@ -195,7 +195,7 @@ flowchart TD
 - Installers: `scripts/install.sh --design-packs`, `scripts/install.ps1
   -DesignPacks`; plugin-first design copy `compute_design_sync` in
   `onboard/skills.rs`, called from `onboard/plan.rs`.
-- Design agent: `packages/bee/agents/bee-design.md.tmpl`; pin in
+- Design agent: `packages/bee/agents/bee-comb.md.tmpl`; pin in
   `verbs/drivers/prepare.rs`; `ROLE_AGENTS` in `verbs/drivers/guard.rs`;
   `DESIGN_CELL_PREAMBLE` in `verbs/drivers/prompt.rs`.
 - Gate: `bee design gate`, `verbs/design_group.rs`; baseline

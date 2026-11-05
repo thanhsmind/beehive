@@ -130,11 +130,11 @@ plain JSON; `bee status --json` shows the derived gate_bypass_level</pre>
 <table class="guide-table">
   <thead><tr><th>Vai trò</th><th>Mặc định trên <code>claude</code></th><th>Mặc định trên <code>codex</code></th><th>Ý nghĩa</th></tr></thead>
   <tbody>
-    <tr><td><code>code</code></td><td><code>sonnet</code></td><td><code>null</code></td><td>Model dùng khi một <code>cell</code> thực thi ghi code thật (bee-build).</td></tr>
-    <tr><td><code>read</code></td><td><code>haiku</code></td><td><code>null</code></td><td>Model cho việc chỉ đọc, tổng hợp, báo cáo (bee-gather) — không bao giờ ghi.</td></tr>
+    <tr><td><code>code</code></td><td><code>sonnet</code></td><td><code>null</code></td><td>Model dùng khi một <code>cell</code> thực thi ghi code thật (bee-worker).</td></tr>
+    <tr><td><code>read</code></td><td><code>haiku</code></td><td><code>null</code></td><td>Model cho việc chỉ đọc, tổng hợp, báo cáo (bee-forager) — không bao giờ ghi.</td></tr>
     <tr><td><code>extraction</code></td><td><code>haiku</code></td><td><code>null</code></td><td>Model cho việc trích xuất máy móc: đọc, rút gọn, không cần phán đoán.</td></tr>
-    <tr><td><code>generation</code></td><td><code>sonnet</code></td><td><code>null</code></td><td>Model mặc định cho việc sinh nội dung/thực thi cell (bee-build) khi không có vai trò riêng nào khớp hơn.</td></tr>
-    <tr><td><code>review</code></td><td>không công bố sẵn — rơi xuống đúng model của <code>generation</code></td><td>không công bố sẵn</td><td>Vai trò rà soát (bee-review). Đặt riêng nếu muốn khác với <code>generation</code>.</td></tr>
+    <tr><td><code>generation</code></td><td><code>sonnet</code></td><td><code>null</code></td><td>Model mặc định cho việc sinh nội dung/thực thi cell (bee-worker) khi không có vai trò riêng nào khớp hơn.</td></tr>
+    <tr><td><code>review</code></td><td>không công bố sẵn — rơi xuống đúng model của <code>generation</code></td><td>không công bố sẵn</td><td>Vai trò rà soát (bee-guard). Đặt riêng nếu muốn khác với <code>generation</code>.</td></tr>
     <tr><td><code>advisor</code></td><td>không công bố sẵn — đọc là "tắt"</td><td>không công bố sẵn</td><td>Tư vấn AO3/AO13 bắt buộc trước khi mở nửa "execution" của Gate 2 cho việc high-risk. Không đặt nghĩa là không có tư vấn nào.</td></tr>
   </tbody>
 </table>

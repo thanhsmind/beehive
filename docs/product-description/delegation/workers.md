@@ -2,11 +2,11 @@
 
 ## Summary
 
-bee ships four subagent definitions and one hook that stands behind them. The definitions are files — `.claude/agents/bee-gather.md`, `bee-extract.md`, `bee-build.md`, `bee-review.md` — written into the host at onboarding, each pinning a model resolved from the role it serves and each carrying a contract the subagent reads as its own system prompt. The hook is the **model guard**, which sees every `Agent` and `Task` call (and `spawn_agent` on Codex) before it runs and answers one of four ways: *silent* when it has no opinion, *allow* with an audit line, *repair* when the dispatch names something configuration can correct, or *deny* with a reason and a FIX. The guard is why an agent never has to remember which subagent type goes with which model: naming a rendered bee agent *is* a role declaration, and a dispatch that declares nothing is refused rather than left to inherit the session's most expensive model. This document covers the agents and the guard's verdicts; [guards](../foundations/guards.md) holds the full deny catalog, [dispatch](dispatch.md) the door that produces conforming payloads, and [execution](../lifecycle/execution.md) the worker's own arc from claim to cap.
+bee ships six subagent definitions and one hook that stands behind them. The definitions are files — `.claude/agents/bee-forager.md`, `bee-scout.md`, `bee-worker.md`, `bee-comb.md`, `bee-guard.md`, `bee-elder.md` — written into the host at onboarding, each pinning a model resolved from the role it serves and each carrying a contract the subagent reads as its own system prompt. The hook is the **model guard**, which sees every `Agent` and `Task` call (and `spawn_agent` on Codex) before it runs and answers one of four ways: *silent* when it has no opinion, *allow* with an audit line, *repair* when the dispatch names something configuration can correct, or *deny* with a reason and a FIX. The guard is why an agent never has to remember which subagent type goes with which model: naming a rendered bee agent *is* a role declaration, and a dispatch that declares nothing is refused rather than left to inherit the session's most expensive model. This document covers the agents and the guard's verdicts; [guards](../foundations/guards.md) holds the full deny catalog, [dispatch](dispatch.md) the door that produces conforming payloads, and [execution](../lifecycle/execution.md) the worker's own arc from claim to cap.
 
 ## The simple case
 
-The agent runs `bee dispatch prepare` on a host that configures no `read` slot, gets back `{"tool": "Agent", "payload": {"subagent_type": "bee-gather", "prompt": "[bee-tier: generation]…", "model": "sonnet"}}` — the gather's `[read, generation]` walk found nothing at `read` and landed on `generation` — and makes exactly that call. The guard reads it: the marker names a configured role, the subagent type is the rendered agent for that role, the model parameter equals what the role resolves to. Nothing to correct. The guard appends one line to `.bee/logs/dispatch.jsonl` and exits 0 without printing anything. The subagent starts, reads only what the prompt handed it, and returns a digest.
+The agent runs `bee dispatch prepare` on a host that configures no `read` slot, gets back `{"tool": "Agent", "payload": {"subagent_type": "bee-forager", "prompt": "[bee-tier: generation]…", "model": "sonnet"}}` — the gather's `[read, generation]` walk found nothing at `read` and landed on `generation` — and makes exactly that call. The guard reads it: the marker names a configured role, the subagent type is the rendered agent for that role, the model parameter equals what the role resolves to. Nothing to correct. The guard appends one line to `.bee/logs/dispatch.jsonl` and exits 0 without printing anything. The subagent starts, reads only what the prompt handed it, and returns a digest.
 
 The failure case is just as short. The agent types an `Agent` call by hand with a prompt and nothing else:
 
@@ -15,22 +15,24 @@ The failure case is just as short. The agent types an `Agent` call by hand with 
 The dispatch never runs, and the FIX printed under that line leads with the
 door: it opens with `bee dispatch prepare …` and only then offers the
 fallbacks — name one of bee's rendered agents in `subagent_type`
-(`bee-gather`, `bee-extract`, `bee-build`, `bee-review`), pass a `model` param,
+(`bee-forager`, `bee-scout`, `bee-worker`, `bee-comb`, `bee-guard`, `bee-elder`), pass a `model` param,
 or open the prompt with a `[bee-tier: <role>]` marker naming a configured role.
 The agents are listed by what each one does, never paired with a role name: the
 role is the resolver's answer, and hand-naming an agent to reach a model is the
 habit the door exists to unteach.
 
-## The four rendered agents
+## The rendered agents
 
 Each file is generated from a template at onboarding and kept current from then on. What the agent *is* comes from the file; what model it runs on comes from the host's configuration.
 
 | Agent | Role(s) it declares | Tools | What it does |
 | --- | --- | --- | --- |
-| `bee-gather` | `read`, then `generation` | Read, Grep, Glob | Open-ended multi-file hunts. Reads and reports, never writes. |
-| `bee-extract` | `extraction` | Read, Grep, Glob | One already-scoped fact out of a known location. Never widens the search itself — that is bee-gather's job. |
-| `bee-build` | `generation` | Read, Edit, Write, Grep, Glob, Bash | Executes exactly one already-claimed cell: reserve, write, commit, cap. The only one that writes. |
-| `bee-review` | `review`, then `generation` | Read, Grep, Glob, Bash | Checks a claim read-only. May run tests, linters, `git diff`; never edits. |
+| `bee-forager` | `read`, then `generation` | Read, Grep, Glob | Open-ended multi-file hunts. Reads and reports, never writes. |
+| `bee-scout` | `extraction` | Read, Grep, Glob | One already-scoped fact out of a known location. Never widens the search itself — that is bee-forager's job. |
+| `bee-worker` | `generation` | Read, Edit, Write, Grep, Glob, Bash | Executes exactly one already-claimed cell: reserve, write, commit, cap. Writes code and changes files. |
+| `bee-comb` | `design` | Read, Edit, Write, Grep, Glob, Bash | Executes exactly one already-claimed UI design cell: writes UI and runs design check. |
+| `bee-guard` | `review`, then `generation` | Read, Grep, Glob, Bash | Checks a claim read-only. May run tests, linters, `git diff`; never edits. |
+| `bee-elder` | `advisor` | Read, Grep, Glob | Read-only advisor seat from a fixed perspective: recommendation, confidence, and falsifier. |
 
 Every one of those files opens its `description:` by naming the one door: the
 type is reached through `bee dispatch prepare` — which may hand back a herding
@@ -42,12 +44,12 @@ Four contract clauses are common to all of them, and they are what makes a worke
 
 - **No session history.** A worker sees nothing the dispatch prompt did not hand it. A cell that cannot be executed from that prompt alone failed cold-pickup review and comes back `[BLOCKED]` rather than guessed at.
 - **Decide-altitude stays home.** Gates, decisions, privacy approvals and synthesis belong to the orchestrator and the human. A worker that is asked to judge reports what it found instead.
-- **The read-only three take no reservations and register in no swarm registry.** That machinery is execution-only; bee-build is the one that reserves.
+- **The read-only shells take no reservations and register in no swarm registry.** That machinery is execution-only; bee-worker and bee-comb are the ones that reserve.
 - **One final status token.** `[DONE]`, `[BLOCKED]`, `[HANDOFF]`, or `[NOOP]`, exactly one, with its result fields beside it.
 
 ### Which model a file pins
 
-The `model:` line is resolved at onboarding from the agent's role list, walked against bee's baked-in seed (`extraction` → haiku, `generation` → sonnet, `review` → opus) overlaid by whatever `team.claude` carries. In a freshly onboarded host — whose seeded config names `code`, `read`, `extraction`, `generation` and no `review` — that gives bee-gather and bee-build sonnet, bee-extract haiku, and bee-review opus off the seed.
+The `model:` line is resolved at onboarding from the agent's role list, walked against bee's baked-in seed (`extraction` → haiku, `generation` → sonnet, `review` → opus) overlaid by whatever `team.claude` carries. In a freshly onboarded host — whose seeded config names `code`, `read`, `extraction`, `generation` and no `review` — that gives bee-forager and bee-worker sonnet, bee-scout haiku, and bee-guard opus off the seed.
 
 > Technical note: beehive's own checkout is a variant, not a contradiction. Its config configures the roles differently, so its rendered files read gather/build/review as opus and extract as sonnet. The role list is fixed; the model behind it is per host.
 
@@ -116,7 +118,7 @@ The order is load-bearing; the first matching rule wins.
 **Refuse.**
 
 - *A marker naming a role nothing configures* — checked before everything else, because a wrong role is wrong whatever else the dispatch carries. The refusal names the role and says how to configure it: `[bee-tier: <name>] names a role nothing configures — team.claude in .bee/config.json carries no "<name>" entry, so the dispatch would silently inherit the session model while dispatch.jsonl recorded a role that selects no model.`
-- *An ambiguous generic type* — a role served by more than one rendered agent, dispatched as `general-purpose`. `generation` is served by two (bee-gather reads, bee-build writes), and the guard will not guess which. The FIX names both with a clause each: `subagent_type "bee-gather" reads and reports (never writes); subagent_type "bee-build" executes a cell (reserves, writes, commits, caps)`.
+- *An ambiguous generic type* — a role served by more than one rendered agent, dispatched as `general-purpose`. `generation` is served by two (bee-forager reads, bee-worker writes), and the guard will not guess which. The FIX names both with a clause each: `subagent_type "bee-forager" reads and reports (never writes); subagent_type "bee-worker" executes a cell (reserves, writes, commits, caps)`.
 - *A marker whose role resolves to no model, dispatched with a `model` parameter* — the marker would record one thing while the subagent ran on another.
 - *A bare `model` parameter naming a model no configured role carries* — a param outside config selects an unaudited model and, on an up-dispatch, hides ceiling scarcity.
 - *A role whose slot is a cli executor or a herding pane* — an in-family subagent cannot **be** an external process or a pane worker. The FIX names the door: `bee dispatch prepare --runtime claude --kind <kind> --json`, which returns the Bash call that transport actually needs.
@@ -125,7 +127,7 @@ The order is load-bearing; the first matching rule wins.
 
 **Repair.**
 
-- *A generic type on an unambiguous role* — `[bee-tier: extraction]` with `subagent_type: "general-purpose"` becomes `bee-extract`, because general-purpose carries no role identity and would run under the runtime default.
+- *A generic type on an unambiguous role* — `[bee-tier: extraction]` with `subagent_type: "general-purpose"` becomes `bee-scout`, because general-purpose carries no role identity and would run under the runtime default.
 - *A model parameter disagreeing with the marker's role* — the param is rewritten to the role's configured model. Configuration is the authority; the model does not get a vote.
 - *A label that does not say what the work is* — when the prompt carries a line `Assigned cell id: <id>` and the label field does not already contain that cell's title, the label is rewritten to `<id>: <title>`. This one runs on **every** dispatch, including a hand-typed one that never called `prepare`, and it composes with the repairs above so both land in one rewrite. Every resolution failure — no cell id, no cell record, an unreadable record, a blank title — passes the payload through untouched and silent. A label is not worth losing a dispatch over, so no branch here can deny.
 
@@ -139,7 +141,7 @@ The order is load-bearing; the first matching rule wins.
 | Gate-bypass level | No effect. No bypass level silences the guard or changes a verdict; role and model enforcement is orthogonal to gates. | — |
 | Store phase | No effect on the verdict. The phase governs what the dispatched worker may then *write* ([guards](../foundations/guards.md)), never whether it may be dispatched. | — |
 | Where it runs | The guard reads the root the hook payload names. A worker inherits the spawning session's working directory, which is why an execution worker dispatched from main for a worktree'd feature dies on the write guard — the guard does not catch that; the worker's own Location self-check does ([worktrees](../foundations/worktrees.md)). | — |
-| Who runs it | The orchestrator dispatches; the guard intercepts. A worker dispatching a worker meets the same rules, and bee-gather, bee-extract and bee-review have no Agent tool at all — their tool lists cannot reach this hook. | — |
+| Who runs it | The orchestrator dispatches; the guard intercepts. A worker dispatching a worker meets the same rules, and bee-forager, bee-scout, bee-guard and bee-elder have no Agent tool at all — their tool lists cannot reach this hook. | — |
 
 ## Cancel and interrupt
 
@@ -163,7 +165,7 @@ The guard is an instantaneous decider, so the meaningful rows are about the disp
 
 **Worktrees and containment.** The rendered files live at `.claude/agents/` in the host and are onboarding-managed. A worker's containment is the write guard's business, not this hook's.
 
-**Claims, holds, and reservations.** bee-build reserves before writing and reports `[BLOCKED]` on a conflict rather than writing through it. The other three take no reservations at all.
+**Claims, holds, and reservations.** bee-worker and bee-comb reserve before writing and report `[BLOCKED]` on a conflict rather than writing through it. The read-only shells take no reservations at all.
 
 **Sibling sessions.** Two sessions dispatching at once do not interact here; each guard call is independent and the audit log is append-only.
 
@@ -182,7 +184,7 @@ The guard is an instantaneous decider, so the meaningful rows are about the disp
 - Membership for a bare `model` param is derived from what a *prepared* dispatch could publish, never from a hand-kept allowlist — including the runtime default model a herding slot's `fallback: "default"` publishes.
 - When the host configures no models at all, the membership set is empty and a bare model param is allowed rather than denied: with nothing configured there is nothing to check it against.
 - The preamble's role list prints at most six roles and then counts the rest; a role it clipped is still reachable by name, because a wrong guess refuses by name at both doors.
-- `bee-review` declares two roles, so it renders even on a host that configures no `review` slot — the walk falls through to `generation`.
+- `bee-guard` declares two roles, so it renders even on a host that configures no `review` slot — the walk falls through to `generation`.
 
 ## Open questions and verification
 

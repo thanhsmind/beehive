@@ -111,9 +111,9 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    naming a name nothing configures is refused by name, with a FIX listing
    the roles this runtime resolves and ending "Any role name you configure
    is legal; bee holds no fixed list" — never silently resolved.
-   `subagent_type: "bee-build"` (cell execution),
-   `"bee-gather"` (a read-only gather),
-   `"bee-extract"` (the cheap reader), `"bee-review"` (review) are bee's
+   `subagent_type: "bee-worker"` (cell execution),
+   `"bee-forager"` (a read-only gather),
+   `"bee-scout"` (the cheap reader), `"bee-guard"` (review) are bee's
    own rendered agent definitions (`.claude/agents/bee-*.md`,
    config-sourced at onboarding) and appear ONLY as what `prepare`
    returns — never type one by hand, and never another plugin's type.
@@ -405,7 +405,7 @@ that acceptance, not on an ordinary wave.
 | Follow-up / rescue | `SendMessage` to the same agent id continues it with context intact; a new `Agent` call starts fresh |
 | Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
 | Isolation guarantee | Fresh context per Agent call; include only the contract fields |
-| Subagent type | Resolved by the one door, never hand-typed: `.bee/bin/bee dispatch prepare --runtime claude --kind <cell|gather|reviewer|advisor> [--role <name>] --json` returns `subagent_type: "bee-build"` (executes a cell), `"bee-gather"` (reads only), `"bee-extract"` (the cheap reader — `--kind gather --role extraction`), or `"bee-review"`, when the rendered agent exists (`.claude/agents/bee-*.md` — each file declares the ordered ROLE list it serves and pins whatever model that list resolves to); an escalated dispatch returns the runtime default (`general-purpose`); a cli- or herding-shaped slot returns that transport instead (per D1). A role with no rendered agent (`advisor`, or a name this repo invented) is not repaired onto one. The guard repairs a generic type where the role names exactly one agent; where two agents share it, it refuses, because the role alone does not say whether the work writes |
+| Subagent type | Resolved by the one door, never hand-typed: `.bee/bin/bee dispatch prepare --runtime claude --kind <cell|gather|reviewer|advisor> [--role <name>] --json` returns `subagent_type: "bee-worker"` (executes a cell), `"bee-comb"` (design cell), `"bee-forager"` (reads only), `"bee-scout"` (the cheap reader — `--kind gather --role extraction`), `"bee-guard"` (review), or `"bee-elder"` (advisor), when the rendered agent exists (`.claude/agents/bee-*.md` — each file declares the ordered ROLE list it serves and pins whatever model that list resolves to); an escalated dispatch returns the runtime default (`general-purpose`); a cli- or herding-shaped slot returns that transport instead (per D1). A role with no rendered agent (a name this repo invented) is not repaired onto one. The guard repairs a generic type where the role names exactly one agent; where two agents share it, it refuses, because the role alone does not say whether the work writes |
 <!-- bee:end -->
 <!-- bee:only codex -->
 | | Codex |
