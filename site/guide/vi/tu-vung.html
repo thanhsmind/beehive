@@ -160,7 +160,13 @@
   <tbody>
     <tr><td>dispatch envelope</td><td>JSON mà <code>bee dispatch prepare</code> trả về và agent chạy nguyên văn — sản phẩm duy nhất của cửa giao việc. Xem <a href="/guide/giao-viec">chương 10</a>.</td></tr>
     <tr><td>role</td><td>Tên công việc của một lần dispatch, dùng để chọn model.</td></tr>
-    <tr><td>rendered agent</td><td>Một trong bốn định nghĩa subagent bee viết sẵn: <code>bee-gather</code>, <code>bee-extract</code>, <code>bee-build</code>, <code>bee-review</code>.</td></tr>
+    <tr><td>rendered agent</td><td>Một trong sáu định nghĩa subagent bee viết sẵn. Xem <a href="/guide/giao-viec#sau-agent-duc-san">bảng agent chương 10</a>.</td></tr>
+    <tr><td><code>bee-worker</code></td><td>Thực thi đúng một cell đã claim. Xem <a href="/guide/giao-viec#sau-agent-duc-san">bảng agent chương 10</a>.</td></tr>
+    <tr><td><code>bee-comb</code></td><td>Thực thi cell UI theo chuẩn bee-design. Xem <a href="/guide/giao-viec#sau-agent-duc-san">bảng agent chương 10</a>.</td></tr>
+    <tr><td><code>bee-forager</code></td><td>Lùng nhiều file, đọc và báo cáo. Xem <a href="/guide/giao-viec#sau-agent-duc-san">bảng agent chương 10</a>.</td></tr>
+    <tr><td><code>bee-scout</code></td><td>Lấy sự kiện đã khoanh vùng sẵn. Xem <a href="/guide/giao-viec#sau-agent-duc-san">bảng agent chương 10</a>.</td></tr>
+    <tr><td><code>bee-guard</code></td><td>Rà soát đọc-only, kiểm tra claim. Xem <a href="/guide/giao-viec#sau-agent-duc-san">bảng agent chương 10</a>.</td></tr>
+    <tr><td><code>bee-elder</code></td><td>Cố vấn đọc-only từ góc nhìn cố định. Xem <a href="/guide/giao-viec#sau-agent-duc-san">bảng agent chương 10</a>.</td></tr>
     <tr><td>status token</td><td>Chữ duy nhất một worker trả về cuối cùng: <code>[DONE]</code>, <code>[BLOCKED]</code>, <code>[HANDOFF]</code>, <code>[NOOP]</code>.</td></tr>
     <tr><td>wave</td><td>Tập cell được lên lịch chạy cùng đợt, không đụng file nhau.</td></tr>
     <tr><td>judge verdict</td><td>Phán quyết goal-check trên một cell: <code>PASS</code> hoặc <code>NEEDS_REVISION</code>.</td></tr>

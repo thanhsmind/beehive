@@ -8894,7 +8894,7 @@ use std::time::Instant;
         for item in wave {
             assert_eq!(item["claimed"], json!(true), "payload: {payload}");
             assert_eq!(item["tool"], json!("Agent"), "payload: {payload}");
-            assert_eq!(item["payload"]["subagent_type"], json!("bee-build"), "payload: {payload}");
+            assert_eq!(item["payload"]["subagent_type"], json!("bee-worker"), "payload: {payload}");
             assert!(!item["reserved"].as_array().unwrap().is_empty(), "payload: {payload}");
         }
         let economics = payload["economics"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
@@ -8936,7 +8936,7 @@ use std::time::Instant;
         for item in native {
             assert_eq!(item["tool"], json!("Agent"), "payload: {payload}");
             assert_eq!(item["claimed"], json!(true), "payload: {payload}");
-            assert_eq!(item["payload"]["subagent_type"], json!("bee-build"));
+            assert_eq!(item["payload"]["subagent_type"], json!("bee-worker"));
         }
         assert!(
             !root.join(".bee").join("workers").exists(),

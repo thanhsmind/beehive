@@ -202,7 +202,7 @@ mod tests {
             id.to_string(),
             json!({
                 "tool": "Agent",
-                "payload": {"subagent_type": "bee-build", "prompt": "go"},
+                "payload": {"subagent_type": "bee-worker", "prompt": "go"},
                 "claimed": true,
             }),
         )

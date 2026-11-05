@@ -173,17 +173,18 @@ pub(crate) fn role_list(models: &Map<String, Value>, runtime: &str) -> String {
 /// than restating it, the same collapse D1 made for the config parser.
 ///
 /// ORDER IS LOAD-BEARING. `generation` appears twice because two rendered
-/// agents serve it — bee-gather reads, bee-build writes — and a role-only
+/// agents serve it — bee-forager reads, bee-worker writes — and a role-only
 /// lookup answers with the FIRST entry, the read-only one. That is the safe
 /// answer when nothing else in the dispatch says which of the two is meant;
 /// the one signal that CAN say so is `--kind cell`, and `prepare.rs` reads it
 /// before it ever reaches this table.
-pub(crate) const ROLE_AGENTS: [(&str, &str); 5] = [
-    ("generation", "bee-gather"),
-    ("generation", "bee-build"),
-    ("extraction", "bee-extract"),
-    ("review", "bee-review"),
-    ("design", "bee-design"),
+pub(crate) const ROLE_AGENTS: [(&str, &str); 6] = [
+    ("generation", "bee-forager"),
+    ("generation", "bee-worker"),
+    ("extraction", "bee-scout"),
+    ("review", "bee-guard"),
+    ("design", "bee-comb"),
+    ("advisor", "bee-elder"),
 ];
 
 /// What a rendered bee agent DOES, in one clause — the sentence a refusal
@@ -196,11 +197,12 @@ pub(crate) const ROLE_AGENTS: [(&str, &str); 5] = [
 /// answers `None` and is named bare rather than described wrongly.
 pub(crate) fn agent_job_summary(agent: &str) -> Option<&'static str> {
     match agent {
-        "bee-build" => Some("executes a cell (reserves, writes, commits, caps)"),
-        "bee-design" => Some("executes a design cell with the bee-design taste (reserves, writes, commits, caps)"),
-        "bee-gather" => Some("reads and reports (never writes)"),
-        "bee-extract" => Some("pulls one already-scoped fact and reports (never writes)"),
-        "bee-review" => Some("checks a claim read-only and reports (never edits)"),
+        "bee-worker" => Some("executes a cell (reserves, writes, commits, caps)"),
+        "bee-comb" => Some("executes a design cell with the bee-design taste (reserves, writes, commits, caps)"),
+        "bee-forager" => Some("reads and reports (never writes)"),
+        "bee-scout" => Some("pulls one already-scoped fact and reports (never writes)"),
+        "bee-guard" => Some("checks a claim read-only and reports (never edits)"),
+        "bee-elder" => Some("advises read-only from a fixed seat and reports (never writes, never decides)"),
         _ => None,
     }
 }
@@ -209,7 +211,7 @@ pub(crate) fn agent_job_summary(agent: &str) -> Option<&'static str> {
 /// historical word the table above is keyed on.
 ///
 /// mrs-29, from an independent audit of this feature. A rendered bee agent
-/// serves a JOB — bee-extract reads, bee-build writes — and while the
+/// serves a JOB — bee-scout reads, bee-worker writes — and while the
 /// historical cost words were the only vocabulary bee spoke, keying the table
 /// on them made a role-to-agent lookup total. It is not any more: `read` and
 /// `code` are what `default_config` seeds into a fresh host
@@ -226,7 +228,7 @@ pub(crate) fn agent_job_summary(agent: &str) -> Option<&'static str> {
 /// --role read` returned `subagent_type: "general-purpose"` on a host seeded
 /// by today's `default_config`, while the same call on a pre-roles host was
 /// refused `role_not_configured` and only `--role extraction` reached
-/// `bee-extract` there. One rendered read agent, reachable only through
+/// `bee-scout` there. One rendered read agent, reachable only through
 /// whichever word the host happened to speak.
 ///
 /// So the LOOKUP keys on the job, not on the spelling. `read` and
@@ -258,12 +260,12 @@ pub(crate) fn canonical_role(role: &str) -> &str {
 /// of its own.
 ///
 /// `None` is a LEGAL answer, never a missing one. Under D2's open role set
-/// most roles a host can configure (`test`, `docs`, `design`, and `advisor`
-/// as shipped) have no rendered agent file at all, so answering one — or
+/// roles with no rendered agent file (such as `test` and `docs` as shipped)
+/// answer None, so answering one — or
 /// falling back to a generic type — would name an agent that does not exist.
 ///
 /// mrs-29: the role is normalized to its job first, so both spellings of one
-/// job answer with the one agent that serves it. `code` answers `bee-gather`
+/// job answer with the one agent that serves it. `code` answers `bee-forager`
 /// for the same reason `generation` does — the FIRST entry, the read-only one,
 /// is the safe answer when nothing else in the dispatch says which of the two
 /// generation agents is meant, and `--kind cell` is still the one signal that
@@ -275,7 +277,7 @@ pub(crate) fn agent_for_role(role: &str) -> Option<&'static str> {
 /// EVERY rendered bee agent that serves a role's job, in `ROLE_AGENTS` order.
 ///
 /// The question `agent_for_role` cannot answer: how MANY agents a role has.
-/// `generation` has two — bee-gather reads, bee-build writes — so a dispatch
+/// `generation` has two — bee-forager reads, bee-worker writes — so a dispatch
 /// naming the role and `general-purpose` has stated no agent at all, and the
 /// guard refuses rather than guessing (`hooks/model_guard.rs`, the pinned-type
 /// rule). That refusal used to be keyed on the literal `"generation"`, which
@@ -306,9 +308,7 @@ pub(crate) fn role_for_agent(agent: &str) -> Option<&'static str> {
 ///
 /// The one caller that needs a TOTAL answer: an Agent payload must name some
 /// type, so a role with no rendered agent of its own gets the runtime's own
-/// generic. That is the deliberate answer for `advisor` — bee renders no
-/// advisor agent, and an advisor's model comes from the advisor slot rather
-/// than from an agent file. Every caller that CAN honour "this role has no
+/// generic. Every caller that CAN honour "this role has no
 /// agent" — the model-guard's pinned-type repair above all — asks
 /// `agent_for_role` instead, and skips the repair rather than rewriting a
 /// dispatch onto a type that does not exist.

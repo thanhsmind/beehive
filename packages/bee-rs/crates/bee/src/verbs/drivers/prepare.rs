@@ -2143,7 +2143,7 @@ pub(crate) fn prepare_dispatch_wire(
     //
     // What this buys is the reachability D12 asked for without D12's fifth
     // kind: `--kind gather --role extraction` resolves the extraction slot
-    // and returns bee-extract, so every rendered bee agent is reachable
+    // and returns bee-scout, so every rendered bee agent is reachable
     // through the one door instead of one of them being rendered,
     // onboarded and documented while prepare could never return it.
     //
@@ -2436,20 +2436,20 @@ pub(crate) fn prepare_dispatch_wire(
         Resolved::Model { model, .. } => Some(model.clone()),
         _ => None,
     };
-    // The generation tier carries TWO rendered agents — bee-build executes
-    // a cell (reserves, writes, commits, caps), bee-gather reads and
-    // reports (never writes, per .claude/agents/bee-gather.md). tier alone
+    // The generation tier carries TWO rendered agents — bee-worker executes
+    // a cell (reserves, writes, commits, caps), bee-forager reads and
+    // reports (never writes, per .claude/agents/bee-forager.md). tier alone
     // cannot tell them apart (guard.rs's pinned_agent_type stays a tier-only
     // lookup, mirrored by hooks/model_guard.rs PINNED_AGENT_TYPE); `kind`
     // is the one signal that can, and only a --kind cell dispatch is a cell
     // execution (dp-2).
     //
-    // gather-reads-the-read-slot D3: a DEFAULT gather pins `bee-gather`
+    // gather-reads-the-read-slot D3: a DEFAULT gather pins `bee-forager`
     // whichever spelling of the read job won. Without the pin a `read` winner
-    // would answer `bee-extract` through the read->extraction alias
+    // would answer `bee-scout` through the read->extraction alias
     // (`ROLE_ALIASES`), renaming an agent no decision moved. Every other
     // dispatch still reads the ASKED token, so `--role extraction` keeps
-    // `bee-extract` (B11) and `--kind reviewer` keeps `bee-review`.
+    // `bee-scout` (B11) and `--kind reviewer` keeps `bee-guard`.
     let is_deployment = v2_info
         .as_ref()
         .map(|v| v.stage.as_deref() == Some("deployment"))
@@ -2468,13 +2468,14 @@ pub(crate) fn prepare_dispatch_wire(
         prompt_body
     };
     let pinned_type = if is_deployment {
-        "bee-build"
+        "bee-worker"
     } else {
         match kind {
-            "cell" if design_role => "bee-design",
-            "cell" => "bee-build",
-            "gather" if default_gather || design_role => "bee-gather",
-            "reviewer" if design_role => "bee-review",
+            "cell" if design_role => "bee-comb",
+            "cell" => "bee-worker",
+            "gather" if default_gather || design_role => "bee-forager",
+            "reviewer" if design_role => "bee-guard",
+            "advisor" => "bee-elder",
             _ => pinned_agent_type(marker_role),
         }
     };
@@ -5067,17 +5068,17 @@ mod role_flag_tests {
     }
 
     /// THE reachability truth (decision 8dad7c2e's stated defect, closed):
-    /// bee-extract is rendered, onboarded and documented, and now the one
+    /// bee-scout is rendered, onboarded and documented, and now the one
     /// door can return it. A read-shaped dispatch names the read-shaped role
     /// and gets the reader — no fifth dispatch kind, no remapped `gather`.
     #[test]
-    fn a_read_shaped_role_returns_the_bee_extract_worker() {
+    fn a_read_shaped_role_returns_the_bee_scout_worker() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, THREE_SLOTS);
         let v = envelope(&root, "gather", Some("extraction"));
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let p = v.get("payload").unwrap();
-        assert_eq!(p.get("subagent_type"), Some(&json!("bee-extract")));
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-scout")));
         assert_eq!(p.get("model"), Some(&json!("haiku")), "the ROLE picked the model");
         // The marker the guard will read back names the same role, so the
         // audit line and the model that actually runs cannot disagree.
@@ -5094,10 +5095,13 @@ mod role_flag_tests {
     #[test]
     fn every_rendered_agent_is_reachable_through_the_one_door() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, THREE_SLOTS);
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus","advisor":"fable"}}}"#,
+        );
         let mut returned: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for (kind, role) in
-            [("gather", None), ("gather", Some("extraction")), ("reviewer", None)]
+            [("gather", None), ("gather", Some("extraction")), ("reviewer", None), ("advisor", None)]
         {
             let v = envelope(&root, kind, role);
             let t = v.get("payload").and_then(|p| p.get("subagent_type")).cloned().unwrap();
@@ -5150,8 +5154,8 @@ mod role_flag_tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, THREE_SLOTS);
         for (kind, agent, model) in [
-            ("gather", "bee-gather", "sonnet"),
-            ("reviewer", "bee-review", "opus"),
+            ("gather", "bee-forager", "sonnet"),
+            ("reviewer", "bee-guard", "opus"),
         ] {
             let with_none = envelope(&root, kind, None);
             let p = with_none.get("payload").unwrap();
@@ -5198,7 +5202,7 @@ mod role_flag_tests {
         let v = envelope(&root, "gather", None);
         let p = v.get("payload").unwrap();
         assert_eq!(p.get("model"), Some(&json!("haiku")), "the read slot picked the model");
-        assert_eq!(p.get("subagent_type"), Some(&json!("bee-gather")));
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-forager")));
         let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
         assert!(prompt.starts_with("[bee-tier: read]"), "{prompt}");
         let e = v.get("economics").unwrap();
@@ -5288,7 +5292,7 @@ mod role_flag_tests {
         let v = envelope(&root, "gather", None);
         let p = v.get("payload").unwrap();
         assert_eq!(p.get("model"), Some(&json!("sonnet")));
-        assert_eq!(p.get("subagent_type"), Some(&json!("bee-gather")), "D3: the agent is pinned by kind");
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-forager")), "D3: the agent is pinned by kind");
         let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
         assert!(prompt.starts_with("[bee-tier: generation]"), "{prompt}");
         assert_eq!(
@@ -5301,14 +5305,14 @@ mod role_flag_tests {
     /// nowhere else. A host that names no `review` key resolves its reviewer
     /// exactly as it always did — `normalize_models` overlays claude's own
     /// built-in `review: opus` — and still stamps `review`, the marker every
-    /// `bee-review` has travelled under since before this feature.
+    /// `bee-guard` has travelled under since before this feature.
     #[test]
     fn a_review_less_host_keeps_its_reviewer_envelope_byte_for_byte() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"read":"haiku","generation":"sonnet"}}}"#);
         let v = envelope(&root, "reviewer", None);
         let p = v.get("payload").unwrap();
-        assert_eq!(p.get("subagent_type"), Some(&json!("bee-review")));
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-guard")));
         assert_eq!(p.get("model"), Some(&json!("opus")), "the built-in review default");
         let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
         assert!(prompt.starts_with("[bee-tier: review]"), "the winner is NOT recorded here: {prompt}");
@@ -5387,7 +5391,7 @@ mod role_flag_tests {
         // never what the worker is allowed to do.
         assert_eq!(
             v.get("payload").and_then(|p| p.get("subagent_type")),
-            Some(&json!("bee-build"))
+            Some(&json!("bee-worker"))
         );
     }
 

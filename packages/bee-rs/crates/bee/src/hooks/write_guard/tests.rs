@@ -4234,7 +4234,7 @@ use std::process::ExitCode;
         assert!(deny.stderr.contains("900"));
         assert!(deny.stderr.contains("800"));
         assert!(deny.stderr.contains("limit"));
-        assert!(deny.stderr.contains("bee-extract"));
+        assert!(deny.stderr.contains("bee-scout"));
 
         assert_eq!(expect_done(read(json!({"file_path":"big.md","limit":50})), &fx.root).code, 0);
         assert_eq!(expect_done(read(json!({"file_path":"big.md","offset":100})), &fx.root).code, 0);

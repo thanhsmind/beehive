@@ -38,25 +38,28 @@ pub(crate) const PROMPT_REVIEWER: &str = include_str!("../../../../../../bee/pro
 
 pub(crate) const PROMPT_ADVISOR: &str = include_str!("../../../../../../bee/prompts/advisor.md");
 
-pub(crate) const AGENT_BUILD: &str = include_str!("../../../../../../bee/agents/bee-build.md.tmpl");
+pub(crate) const AGENT_WORKER: &str = include_str!("../../../../../../bee/agents/bee-worker.md.tmpl");
 
-pub(crate) const AGENT_DESIGN: &str = include_str!("../../../../../../bee/agents/bee-design.md.tmpl");
+pub(crate) const AGENT_COMB: &str = include_str!("../../../../../../bee/agents/bee-comb.md.tmpl");
 
 pub(crate) const DESIGN_CELL_PREAMBLE: &str = "Design cell: before you write UI, load the `bee-design` skill and every installed `bee-design-*` pack, and follow its workflow. The design check is `bee design gate`; record it as your proof. It needs Node 20 or newer; without it, it prints `design gate: not run — Node 20 or newer is missing`, the proof reason must carry `design gate not run`, and you never write that it ran. With no `bee-design` skill installed, say the design taste is absent and execute the cell as a plain cell executor.";
 
-pub(crate) const AGENT_GATHER: &str = include_str!("../../../../../../bee/agents/bee-gather.md.tmpl");
+pub(crate) const AGENT_FORAGER: &str = include_str!("../../../../../../bee/agents/bee-forager.md.tmpl");
 
-pub(crate) const AGENT_EXTRACT: &str = include_str!("../../../../../../bee/agents/bee-extract.md.tmpl");
+pub(crate) const AGENT_SCOUT: &str = include_str!("../../../../../../bee/agents/bee-scout.md.tmpl");
 
-pub(crate) const AGENT_REVIEW: &str = include_str!("../../../../../../bee/agents/bee-review.md.tmpl");
+pub(crate) const AGENT_GUARD: &str = include_str!("../../../../../../bee/agents/bee-guard.md.tmpl");
+
+pub(crate) const AGENT_ELDER: &str = include_str!("../../../../../../bee/agents/bee-elder.md.tmpl");
 
 pub(crate) fn embedded_agent_body(agent_name: &str) -> Option<&'static str> {
     let source = match agent_name {
-        "bee-build" => AGENT_BUILD,
-        "bee-design" => AGENT_DESIGN,
-        "bee-gather" => AGENT_GATHER,
-        "bee-extract" => AGENT_EXTRACT,
-        "bee-review" => AGENT_REVIEW,
+        "bee-worker" => AGENT_WORKER,
+        "bee-comb" => AGENT_COMB,
+        "bee-forager" => AGENT_FORAGER,
+        "bee-scout" => AGENT_SCOUT,
+        "bee-guard" => AGENT_GUARD,
+        "bee-elder" => AGENT_ELDER,
         _ => return None,
     };
     let (_front, body) = crate::textutil::split_frontmatter(source);
@@ -384,21 +387,25 @@ mod tests {
 
     #[test]
     fn embedded_agent_body_resolves_known_agents() {
-        let body = embedded_agent_body("bee-gather").expect("bee-gather body should exist");
-        assert!(body.starts_with("You are a bee gather worker"));
+        let body = embedded_agent_body("bee-forager").expect("bee-forager body should exist");
+        assert!(body.starts_with("You are a bee forager worker"));
         assert!(!body.contains("---"));
 
-        let build = embedded_agent_body("bee-build").expect("bee-build body should exist");
+        let build = embedded_agent_body("bee-worker").expect("bee-worker body should exist");
         assert!(build.starts_with("You are a bee execution worker"));
         assert!(!build.contains("---"));
 
-        let extract = embedded_agent_body("bee-extract").expect("bee-extract body should exist");
-        assert!(extract.starts_with("You are a bee extract worker"));
+        let extract = embedded_agent_body("bee-scout").expect("bee-scout body should exist");
+        assert!(extract.starts_with("You are a bee scout worker"));
         assert!(!extract.contains("---"));
 
-        let review = embedded_agent_body("bee-review").expect("bee-review body should exist");
-        assert!(review.starts_with("You are a bee review worker"));
+        let review = embedded_agent_body("bee-guard").expect("bee-guard body should exist");
+        assert!(review.starts_with("You are a bee guard worker"));
         assert!(!review.contains("---"));
+
+        let elder = embedded_agent_body("bee-elder").expect("bee-elder body should exist");
+        assert!(elder.starts_with("You are a bee elder worker"));
+        assert!(!elder.contains("---"));
     }
 
     #[test]

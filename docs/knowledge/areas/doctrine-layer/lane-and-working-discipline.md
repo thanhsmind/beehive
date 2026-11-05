@@ -82,7 +82,7 @@ govern the working residue of a cell rather than its content.
   solves it, leave the base simpler than found, and a signal threaded through
   several layers means stop and find the direct path — live in the DISPATCH
   BRIEF (`packages/bee/prompts/worker-cell.md`, mirrored in
-  `packages/bee/agents/bee-build.md.tmpl`, which duplicates the brief's
+  `packages/bee/agents/bee-worker.md.tmpl`, which duplicates the brief's
   contract rather than pointing at it), never in the always-loaded contract.
   That placement is the point: `docs/history/research/pstack-xia.md` proposed
   `AGENTS.md` but its own ranking puts context-proximal placement above the

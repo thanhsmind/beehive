@@ -833,8 +833,8 @@ pub(crate) fn read_agent_file_model(file: &Path) -> (bool, Option<String>) {
 /// runtime root joins `.claude/agents/` — `.opencode/agent/` (singular
 /// "agent", per discovery.md's verified on-disk layout), checked against
 /// `team.opencode` instead of `team.claude`. Same four rendered agents
-/// on both roots, `bee-build` included (dod-4: it renders at the generation
-/// tier alongside `bee-gather` and drifts the same way). Before oc-14 the two
+/// on both roots, `bee-worker` included (dod-4: it renders at the generation
+/// tier alongside `bee-forager` and drifts the same way). Before oc-14 the two
 /// roots needed different verdict wording — opencode's files were
 /// hand-authored, so "re-run onboarding" was a promise bee could not keep. oc-14 renders
 /// `.opencode/agent/` from the same template source `.claude/agents/` uses

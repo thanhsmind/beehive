@@ -926,11 +926,10 @@ use std::time::Instant;
         // generation/cell override lives at the prepare.rs call site
         // (cell_envelope_names_the_execution_agent_not_the_read_only_gather
         // below), since prepare.rs is this cell's only declared file.
-        assert_eq!(pinned_agent_type("generation"), "bee-gather");
-        assert_eq!(pinned_agent_type("extraction"), "bee-extract");
-        assert_eq!(pinned_agent_type("review"), "bee-review");
-        // 'advisor' has no rendered agent — `|| 'general-purpose'`.
-        assert_eq!(pinned_agent_type("advisor"), "general-purpose");
+        assert_eq!(pinned_agent_type("generation"), "bee-forager");
+        assert_eq!(pinned_agent_type("extraction"), "bee-scout");
+        assert_eq!(pinned_agent_type("review"), "bee-guard");
+        assert_eq!(pinned_agent_type("advisor"), "bee-elder");
 
         // mrs-29: the JOB decides, not the spelling. Both words for one job
         // reach the one agent that serves it, so the lookup cannot answer
@@ -941,13 +940,14 @@ use std::time::Instant;
         // no rendered agent for an operator-invented job, and inventing one
         // would name a file that does not exist.
         assert_eq!(agent_for_role("test"), None);
-        assert_eq!(agent_for_role("design"), Some("bee-design"));
+        assert_eq!(agent_for_role("design"), Some("bee-comb"));
         assert_eq!(canonical_role("test"), "test");
         // The inverse lookup is deliberately NOT aliased: its answer is
         // resolved against `models.<runtime>`, so it must name the role the
         // agent was rendered from — the one every host still carries.
-        assert_eq!(role_for_agent("bee-extract"), Some("extraction"));
-        assert_eq!(role_for_agent("bee-gather"), Some("generation"));
+        assert_eq!(role_for_agent("bee-scout"), Some("extraction"));
+        assert_eq!(role_for_agent("bee-forager"), Some("generation"));
+        assert_eq!(role_for_agent("bee-elder"), Some("advisor"));
     }
 
     /// mrs-29, the audit's finding, pinned where a caller can feel it: ONE
@@ -956,7 +956,7 @@ use std::time::Instant;
     /// Measured on the release binary BEFORE the fix, `dispatch prepare
     /// --runtime claude --kind gather --role read` answered
     /// `subagent_type: "general-purpose"` on a host seeded by today's
-    /// `default_config`, while `--role extraction` answered `bee-extract` —
+    /// `default_config`, while `--role extraction` answered `bee-scout` —
     /// the same read job, two agents, decided by config drift rather than by
     /// the request. This asks the DOOR, over the payload a caller actually
     /// receives, on all three host shapes the migration produces.
@@ -989,13 +989,13 @@ use std::time::Instant;
             };
             assert_eq!(
                 v.get("payload").and_then(|p| p.get("subagent_type")),
-                Some(&json!("bee-extract")),
+                Some(&json!("bee-scout")),
                 "--role {role} on {config} must reach the rendered read agent"
             );
         }
 
         // The same for the generation job, whose FIRST entry (the read-only
-        // bee-gather) is the answer a role-only lookup owes on either word.
+        // bee-forager) is the answer a role-only lookup owes on either word.
         for (config, role) in
             [(PRE_ROLES, "generation"), (SEEDED, "generation"), (SEEDED, "code"), (MIGRATED, "code")]
         {
@@ -1009,7 +1009,7 @@ use std::time::Instant;
             };
             assert_eq!(
                 v.get("payload").and_then(|p| p.get("subagent_type")),
-                Some(&json!("bee-gather")),
+                Some(&json!("bee-forager")),
                 "--role {role} on {config} must reach the read-only generation agent"
             );
         }
@@ -1045,7 +1045,7 @@ use std::time::Instant;
         let Prepared::Value(v) = out else { panic!("expected an envelope") };
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let p = v.get("payload").unwrap();
-        assert_eq!(p.get("subagent_type"), Some(&json!("bee-gather")));
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-forager")));
         assert_eq!(p.get("model"), Some(&json!("sonnet")));
         assert_eq!(p.get("description"), Some(&json!("gather (sonnet)")));
         // The marker anchors at the very start of the prompt.
@@ -1059,8 +1059,8 @@ use std::time::Instant;
     fn cell_envelope_names_the_execution_agent_not_the_read_only_gather() {
         // The generation tier carries two rendered agents; a --kind cell
         // dispatch is the one whose whole job is executing the cell (reserve,
-        // write, commit, cap), so it must name bee-build, never bee-gather
-        // (the read-only agent from bee-gather.md — "Never writes, never
+        // write, commit, cap), so it must name bee-worker, never bee-forager
+        // (the read-only agent from bee-forager.md — "Never writes, never
         // edits"). dp-2.
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
@@ -1077,7 +1077,7 @@ use std::time::Instant;
         };
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let p = v.get("payload").unwrap();
-        assert_eq!(p.get("subagent_type"), Some(&json!("bee-build")));
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-worker")));
         assert_eq!(p.get("model"), Some(&json!("sonnet")));
         // The economics record still names the tier, not the agent, as the
         // generation-tier model authority (must-have 4).
@@ -1092,7 +1092,7 @@ use std::time::Instant;
             r#"{"models":{"claude":{"code":"sonnet","design":"sonnet","generation":"sonnet"}}}"#,
         );
         for (id, role, agent) in
-            [("c-d", "design", "bee-design"), ("c-c", "code", "bee-build"), ("c-t", "test", "bee-build")]
+            [("c-d", "design", "bee-comb"), ("c-c", "code", "bee-worker"), ("c-t", "test", "bee-worker")]
         {
             w(
                 &root,
@@ -1161,10 +1161,10 @@ use std::time::Instant;
             r#"{"id":"c-d","feature":"f","title":"design a page","role":"design","status":"claimed","trace":{"worker":"w"}}"#,
         );
         for (kind, role, cell, agent) in [
-            ("gather", Some("design"), None, "bee-gather"),
-            ("reviewer", Some("design"), None, "bee-review"),
-            ("cell", None, Some("c-d"), "bee-design"),
-            ("gather", Some("read"), None, "bee-extract"),
+            ("gather", Some("design"), None, "bee-forager"),
+            ("reviewer", Some("design"), None, "bee-guard"),
+            ("cell", None, Some("c-d"), "bee-comb"),
+            ("gather", Some("read"), None, "bee-scout"),
         ] {
             let Prepared::Value(v) = prepare_dispatch_with_role(
                 &root, "claude", kind, role, cell, cell.map(|_| "w"), false, None, None, false, None,
@@ -1187,7 +1187,7 @@ use std::time::Instant;
         }
     }
 
-    /// Measured from a live agent list: every row read `bee-build  Execute
+    /// Measured from a live agent list: every row read `bee-worker  Execute
     /// bbp-6` — an id and nothing else. prepare's own description was
     /// `cell (sonnet)`, which work-visibility D2 names a red flag, so nobody
     /// used it. The row now says what the work IS.
@@ -1621,7 +1621,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(v.get("payload").unwrap().get("command"), Some(&json!("glm run")));
         let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
-        let gather_body = embedded_agent_body("bee-gather").unwrap();
+        let gather_body = embedded_agent_body("bee-forager").unwrap();
         assert!(stdin.starts_with(gather_body));
         assert!(stdin.contains("Gather: locate and digest the requested paths/facts."));
     }
@@ -2207,7 +2207,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let payload = v.get("payload").unwrap();
         assert_eq!(payload.get("model"), None, "ceiling dispatch must have no model param");
-        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
+        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-worker")));
         assert_eq!(payload.get("description"), Some(&json!("c-1: critical ceiling fix (ceiling)")));
         assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
@@ -2294,7 +2294,7 @@ use std::time::Instant;
         let payload = v.get("payload").unwrap();
         assert_eq!(payload.get("model"), None, "an escalated dispatch has no model param");
         assert_eq!(payload.get("command"), None, "and no herding command");
-        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
+        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-worker")));
         assert_eq!(payload.get("description"), Some(&json!("c-1: rescue ladder (ceiling)")));
         assert!(payload
             .get("prompt")
@@ -7468,7 +7468,7 @@ exit 0
         let v = cell_envelope(&root, "c-1", None);
         let payload = v.get("payload").unwrap();
         assert_eq!(payload.get("model"), Some(&json!("grok-code")), "the job's own model");
-        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
+        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-worker")));
         assert!(payload
             .get("prompt")
             .unwrap()
@@ -7927,10 +7927,10 @@ exit 0
     /// gather kind's slot moved nothing else.
     #[test]
     fn no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical() {
-        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: read] [bee-kind: gather]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
+        const GATHER: &str = r#"{"subagent_type":"bee-forager","prompt":"[bee-tier: read] [bee-kind: gather]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
         // pi-run-friction-fixes prf-6 re-cut the REVIEWER golden ONCE, on purpose: reviewer.md gained the lens line.
-        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review] [bee-kind: reviewer]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\nThe dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity.\nBefore you review, check that HEAD equals the frozen review head and that the in-scope paths are clean. On a mismatch, stop and report `REVIEW_HEAD_MISMATCH` with the fix line `re-freeze the review head, or commit or drop the stray paths`.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
-        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor] [bee-kind: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\nEnd the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.","description":"advisor (fable)","model":"fable"}"#;
+        const REVIEWER: &str = r#"{"subagent_type":"bee-guard","prompt":"[bee-tier: review] [bee-kind: reviewer]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\nThe dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity.\nBefore you review, check that HEAD equals the frozen review head and that the in-scope paths are clean. On a mismatch, stop and report `REVIEW_HEAD_MISMATCH` with the fix line `re-freeze the review head, or commit or drop the stray paths`.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
+        const ADVISOR: &str = r#"{"subagent_type":"bee-elder","prompt":"[bee-tier: advisor] [bee-kind: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\nEnd the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.","description":"advisor (fable)","model":"fable"}"#;
 
         let t0 = tempfile::tempdir().unwrap();
         let none = chain_repo(&t0, "");
@@ -8337,13 +8337,14 @@ advance_on — falling to another model there hides the defect (D11)"
     }
 
     /// hab-2: a herding or cli payload prefixes the embedded agent template body
-    /// when the kind maps to a known bee agent (bee-build, bee-gather, bee-review).
+    /// when the kind maps to a known bee agent (bee-worker, bee-forager, bee-guard).
     fn expected_dispatched_body(runtime: &str, kind: &str, body: &str) -> String {
         if (runtime == "pi" && kind != "cell") || (runtime == "codex" && kind != "cell") {
             let pinned_type = match kind {
-                "cell" => "bee-build",
-                "gather" => "bee-gather",
-                "reviewer" => "bee-review",
+                "cell" => "bee-worker",
+                "gather" => "bee-forager",
+                "reviewer" => "bee-guard",
+                "advisor" => "bee-elder",
                 _ => "general-purpose",
             };
             if let Some(agent_body) = embedded_agent_body(pinned_type) {
@@ -8469,8 +8470,9 @@ advance_on — falling to another model there hides the defect (D11)"
                 "{runtime}: the brief must render exactly once, got {body}"
             );
             assert!(!body.contains("{{"), "{runtime}: unrendered marker left behind: {body}");
+            let expected_prefix = expected_dispatched_body(runtime, "advisor", ADVISOR_BODY_WITHOUT_A_BRIEF);
             assert!(
-                body.starts_with(ADVISOR_BODY_WITHOUT_A_BRIEF),
+                body.starts_with(&expected_prefix),
                 "{runtime}: the standing advisor prose must survive above the brief"
             );
             assert!(body.contains("Brief (the question to answer"), "{runtime}: {body}");
@@ -9287,7 +9289,11 @@ advance_on — falling to another model there hides the defect (D11)"
             let carried = non_cell_body(&root, runtime, "advisor", Some(EXPERTISE_BLOCK));
             assert_eq!(
                 carried,
-                format!("{ADVISOR_BODY_WITHOUT_A_BRIEF}{EXPERTISE_SECTION}"),
+                expected_dispatched_body(
+                    runtime,
+                    "advisor",
+                    &format!("{ADVISOR_BODY_WITHOUT_A_BRIEF}{EXPERTISE_SECTION}")
+                ),
                 "{runtime}: a briefless advisor dispatch dropped the reading list"
             );
             assert!(
@@ -9870,7 +9876,8 @@ advance_on — falling to another model there hides the defect (D11)"
             panic!("expected advisor on pi");
         };
         let stdin = adv.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
-        assert_eq!(stdin, ADVISOR_BODY_WITHOUT_A_BRIEF);
+        let elder_body = embedded_agent_body("bee-elder").expect("bee-elder body");
+        assert_eq!(stdin, format!("{elder_body}\n\n{ADVISOR_BODY_WITHOUT_A_BRIEF}"));
     }
 
     /// D5 / pihp-2: Non-cell prompts resolve the bound lane feature
@@ -10539,7 +10546,7 @@ advance_on — falling to another model there hides the defect (D11)"
         };
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
-        let gather_body = embedded_agent_body("bee-gather").expect("bee-gather body");
+        let gather_body = embedded_agent_body("bee-forager").expect("bee-forager body");
         assert!(stdin.starts_with(gather_body));
         let prompt = render(&load_prompt("gather").unwrap(), &[]).unwrap();
         assert!(stdin.ends_with(&prompt));
@@ -10671,7 +10678,8 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         };
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
-        assert_eq!(stdin, ADVISOR_BODY_WITHOUT_A_BRIEF);
+        let elder_body = embedded_agent_body("bee-elder").expect("bee-elder body");
+        assert_eq!(stdin, format!("{elder_body}\n\n{ADVISOR_BODY_WITHOUT_A_BRIEF}"));
     }
 
     #[test]
@@ -12191,7 +12199,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(!stdin_deploy_wt.contains("never write"), "deployment stdin must not forbid writes: {stdin_deploy_wt}");
         assert!(!stdin_deploy_wt.contains("never edit"), "deployment stdin must not forbid edits: {stdin_deploy_wt}");
         assert!(!stdin_deploy_wt.contains("never run a mutating command"), "deployment stdin must not forbid mutation: {stdin_deploy_wt}");
-        assert!(!stdin_deploy_wt.contains("bee-gather"), "deployment stdin must not contain bee-gather embedded body: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("bee-forager"), "deployment stdin must not contain bee-forager embedded body: {stdin_deploy_wt}");
 
         let cmd_deploy_wt = payload_deploy_wt.get("command").and_then(Value::as_str).unwrap();
         assert!(
@@ -12443,8 +12451,8 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
 
         let payload = v_deploy_native.get("payload").unwrap();
         let subagent_type = payload.get("subagent_type").and_then(Value::as_str).unwrap();
-        assert_ne!(subagent_type, "bee-gather");
-        assert_eq!(subagent_type, "bee-build");
+        assert_ne!(subagent_type, "bee-forager");
+        assert_eq!(subagent_type, "bee-worker");
 
         let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
         assert!(prompt.contains("Deploy-stage execution brief"), "prompt must contain deploy brief: {prompt}");
@@ -12544,4 +12552,61 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(c_message.contains("BEE_SESSION_ID"));
         assert!(!c_message.contains("Read-only"));
         assert!(c_payload.get("command").is_none());
+    }
+
+    #[test]
+    fn advisor_dispatch_returns_bee_elder_with_resolved_role_in_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","review":"opus","advisor":"fable","hat-value":"opus","lane-2":"haiku"}}}"#,
+        );
+        let Prepared::Value(bare) = prepare_dispatch(
+            &root, "claude", "advisor", None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected bare advisor envelope")
+        };
+        assert_eq!(bare.get("payload").unwrap().get("subagent_type"), Some(&json!("bee-elder")));
+        let prompt_bare = bare.get("payload").unwrap().get("prompt").unwrap().as_str().unwrap();
+        assert!(prompt_bare.starts_with("[bee-tier: advisor]"));
+
+        let Prepared::Value(hat) = prepare_dispatch_with_role(
+            &root, "claude", "advisor", Some("hat-value"), None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected hat-value envelope")
+        };
+        assert_eq!(hat.get("payload").unwrap().get("subagent_type"), Some(&json!("bee-elder")));
+        let prompt_hat = hat.get("payload").unwrap().get("prompt").unwrap().as_str().unwrap();
+        assert!(prompt_hat.starts_with("[bee-tier: hat-value]"));
+
+        let Prepared::Value(lane) = prepare_dispatch_with_role(
+            &root, "claude", "advisor", Some("lane-2"), None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected lane-2 envelope")
+        };
+        assert_eq!(lane.get("payload").unwrap().get("subagent_type"), Some(&json!("bee-elder")));
+        let prompt_lane = lane.get("payload").unwrap().get("prompt").unwrap().as_str().unwrap();
+        assert!(prompt_lane.starts_with("[bee-tier: lane-2]"));
+    }
+
+    #[test]
+    fn herding_shaped_advisor_slot_prefixes_pane_prompt_with_elder_body() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"advisor":{"kind":"herding","agent":"adv"}}}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "claude", "advisor", None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an advisor envelope on claude")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        let elder_body = embedded_agent_body("bee-elder").expect("bee-elder body");
+        assert!(stdin.starts_with(elder_body));
     }

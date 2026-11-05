@@ -91,7 +91,7 @@ fn fixture() -> Fixture {
         "#!/bin/sh\necho hi\n",
     );
     write(
-        &root.join("packages").join("bee").join("agents").join("bee-gather.md.tmpl"),
+        &root.join("packages").join("bee").join("agents").join("bee-forager.md.tmpl"),
         "---\nmodel: {{TIER_MODEL}}\n---\ngather\n",
     );
     for name in super::templates::HOOK_FILENAMES {
@@ -249,12 +249,12 @@ fn a_fresh_apply_writes_the_pi_table_and_records_the_offer() {
 }
 
 #[test]
-fn a_fresh_apply_seeds_the_design_role_and_renders_the_bee_design_agent() {
+fn a_fresh_apply_seeds_the_design_role_and_renders_the_bee_comb_agent() {
     let fx = fixture();
     let template = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..").join("..").join("..").join("bee").join("agents").join("bee-design.md.tmpl");
+        .join("..").join("..").join("..").join("bee").join("agents").join("bee-comb.md.tmpl");
     write(
-        &fx.root.join("packages").join("bee").join("agents").join("bee-design.md.tmpl"),
+        &fx.root.join("packages").join("bee").join("agents").join("bee-comb.md.tmpl"),
         &std::fs::read_to_string(&template).unwrap(),
     );
     apply(&fx, &[]);
@@ -262,8 +262,8 @@ fn a_fresh_apply_seeds_the_design_role_and_renders_the_bee_design_agent() {
     assert_eq!(config["team"]["claude"]["design"]["model"], "sonnet");
     assert_eq!(config["team"]["pi"]["design"]["kind"], "herding");
     let rendered =
-        std::fs::read_to_string(fx.repo.join(".claude").join("agents").join("bee-design.md")).unwrap();
-    assert!(rendered.starts_with("---\nname: bee-design\n"), "{rendered}");
+        std::fs::read_to_string(fx.repo.join(".claude").join("agents").join("bee-comb.md")).unwrap();
+    assert!(rendered.starts_with("---\nname: bee-comb\n"), "{rendered}");
     assert!(rendered.contains("load the `bee-design` skill"), "{rendered}");
 }
 

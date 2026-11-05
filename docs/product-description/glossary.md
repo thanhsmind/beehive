@@ -124,7 +124,7 @@ The vocabulary used across these documents. When a document uses one of these wo
 
 **Role.** The name of the job a dispatch is, used to select its model. Roles are an open set — any key `team.<runtime>` configures is legal; one nothing configures is refused by name, never silently resolved onto another model.
 
-**Rendered agent.** One of the four subagent definitions bee writes into a host — `bee-gather`, `bee-extract`, `bee-build`, `bee-review` — each generated from a role's configured model and carrying its contract as its system prompt. Naming one in a dispatch is a role declaration.
+**Rendered agent.** One of the six subagent definitions bee writes into a host — `bee-worker`, `bee-comb`, `bee-forager`, `bee-scout`, `bee-guard`, `bee-elder` — each generated from a role's configured model and carrying its contract as its system prompt. Naming one in a dispatch is a role declaration.
 
 **Status token.** The single word a worker returns at the head of its final message — `[DONE]`, `[BLOCKED]`, `[HANDOFF]`, or `[NOOP]` — with its result fields beside it. A `[DONE]` is goal-checked, not believed.
 

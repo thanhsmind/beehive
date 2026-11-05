@@ -996,7 +996,7 @@ pub(crate) fn check_read_size_denial(abs: &Path, label: &str, threshold: f64) ->
     Some(format!(
         "bee read-size guard: \"{label}\" is {count} lines (threshold: {}) and this Read \
 has neither `offset` nor `limit` — reading it unbounded would load the whole file into context. \
-FIX: pass `limit` (and optionally `offset`) to read a slice, or dispatch a `bee-extract` worker to read the whole file.",
+FIX: pass `limit` (and optionally `offset`) to read a slice, or dispatch a `bee-scout` worker to read the whole file.",
         jsjson::js_f64_to_string(threshold)
     ))
 }

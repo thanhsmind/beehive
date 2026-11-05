@@ -237,6 +237,18 @@ pub fn compute_agent_file_plan(engine: &Engine, repo_root: &Path) -> Vec<Value> 
             }
         }
     }
+    for (old_name, new_name) in super::templates::RETIRED_AGENT_NAMES {
+        let rel_path = format!(".claude/agents/{old_name}.md");
+        let target = repo_root.join(".claude").join("agents").join(format!("{old_name}.md"));
+        if exists(&target) {
+            items.push(json!({
+                "action": "remove_agent_file",
+                "path": rel_path,
+                "agent": old_name,
+                "replacement": new_name,
+            }));
+        }
+    }
     items
 }
 
@@ -275,6 +287,18 @@ pub fn compute_opencode_agent_file_plan(engine: &Engine, repo_root: &Path) -> Ve
             }
         }
     }
+    for (old_name, new_name) in super::templates::RETIRED_AGENT_NAMES {
+        let rel_path = format!(".opencode/agent/{old_name}.md");
+        let target = repo_root.join(".opencode").join("agent").join(format!("{old_name}.md"));
+        if exists(&target) {
+            items.push(json!({
+                "action": "remove_opencode_agent_file",
+                "path": rel_path,
+                "agent": old_name,
+                "replacement": new_name,
+            }));
+        }
+    }
     items
 }
 
@@ -285,7 +309,7 @@ pub fn compute_opencode_agent_file_plan(engine: &Engine, repo_root: &Path) -> Ve
 ///
 /// `rendered_from` is keyed by the role the agent ASKS FOR — the head of its
 /// declared list — not by the entry fall-through happened to land on. That is
-/// what the record said when the key was a tier (a `bee-review` rendered off
+/// what the record said when the key was a tier (a `bee-guard` rendered off
 /// a null review slot recorded `review`, not `generation`), and it is the
 /// honest read either way: the key names the request, the value names what
 /// answered it.
@@ -335,9 +359,9 @@ mod tests {
         let e = Engine::from_plugin_root(dir.to_path_buf());
         std::fs::create_dir_all(&e.templates_agents_dir).unwrap();
         for (name, body) in [
-            ("bee-gather.md.tmpl", "---\nmodel: {{TIER_MODEL}}\n---\ngather\n"),
-            ("bee-extract.md.tmpl", "---\nmodel: {{TIER_MODEL}}\n---\nextract\n"),
-            ("bee-review.md.tmpl", "---\nmodel: {{TIER_MODEL}}\n---\nreview\n"),
+            ("bee-forager.md.tmpl", "---\nmodel: {{TIER_MODEL}}\n---\ngather\n"),
+            ("bee-scout.md.tmpl", "---\nmodel: {{TIER_MODEL}}\n---\nextract\n"),
+            ("bee-guard.md.tmpl", "---\nmodel: {{TIER_MODEL}}\n---\nreview\n"),
         ] {
             std::fs::write(e.templates_agents_dir.join(name), body).unwrap();
         }
@@ -353,20 +377,20 @@ mod tests {
         std::fs::create_dir_all(&e.templates_agents_dir).unwrap();
         for (name, body) in [
             (
-                "bee-build.md.tmpl",
-                "---\nname: bee-build\ndescription: build worker\ntools: Read, Edit\nmodel: {{TIER_MODEL}}\n---\n\nbuild body\n",
+                "bee-worker.md.tmpl",
+                "---\nname: bee-worker\ndescription: build worker\ntools: Read, Edit\nmodel: {{TIER_MODEL}}\n---\n\nbuild body\n",
             ),
             (
-                "bee-gather.md.tmpl",
-                "---\nname: bee-gather\ndescription: gather worker\ntools: Read\nmodel: {{TIER_MODEL}}\n---\n\ngather body\n",
+                "bee-forager.md.tmpl",
+                "---\nname: bee-forager\ndescription: gather worker\ntools: Read\nmodel: {{TIER_MODEL}}\n---\n\ngather body\n",
             ),
             (
-                "bee-extract.md.tmpl",
-                "---\nname: bee-extract\ndescription: extract worker\ntools: Read\nmodel: {{TIER_MODEL}}\n---\n\nextract body\n",
+                "bee-scout.md.tmpl",
+                "---\nname: bee-scout\ndescription: extract worker\ntools: Read\nmodel: {{TIER_MODEL}}\n---\n\nextract body\n",
             ),
             (
-                "bee-review.md.tmpl",
-                "---\nname: bee-review\ndescription: review worker\ntools: Read, Bash\nmodel: {{TIER_MODEL}}\n---\n\nreview body\n",
+                "bee-guard.md.tmpl",
+                "---\nname: bee-guard\ndescription: review worker\ntools: Read, Bash\nmodel: {{TIER_MODEL}}\n---\n\nreview body\n",
             ),
         ] {
             std::fs::write(e.templates_agents_dir.join(name), body).unwrap();
@@ -383,10 +407,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
         std::fs::create_dir_all(&repo).unwrap();
-        assert_eq!(resolve_agent_model(&repo, "bee-extract").as_deref(), Some("haiku"));
-        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("sonnet"));
-        assert_eq!(resolve_agent_model(&repo, "bee-build").as_deref(), Some("sonnet"));
-        assert_eq!(resolve_agent_model(&repo, "bee-review").as_deref(), Some("opus"));
+        assert_eq!(resolve_agent_model(&repo, "bee-scout").as_deref(), Some("haiku"));
+        assert_eq!(resolve_agent_model(&repo, "bee-forager").as_deref(), Some("sonnet"));
+        assert_eq!(resolve_agent_model(&repo, "bee-worker").as_deref(), Some("sonnet"));
+        assert_eq!(resolve_agent_model(&repo, "bee-guard").as_deref(), Some("opus"));
     }
 
     /// An agent bee has no role list for renders nothing — the `None` arm of
@@ -409,19 +433,19 @@ mod tests {
             std::fs::write(repo.join(".bee").join("config.json"), cfg.to_string()).unwrap()
         };
         write(json!({"models":{"claude":{"review":null,"generation":"sonnet-x"}}}));
-        assert_eq!(resolve_agent_model(&repo, "bee-review").as_deref(), Some("sonnet-x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-guard").as_deref(), Some("sonnet-x"));
         write(json!({"models":{"claude":{"review":{"kind":"cli","command":"x"}}}}));
-        assert_eq!(resolve_agent_model(&repo, "bee-review"), None);
+        assert_eq!(resolve_agent_model(&repo, "bee-guard"), None);
         write(json!({"models":{"claude":{"generation":{"model":"  m  "}}}}));
-        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("m"));
+        assert_eq!(resolve_agent_model(&repo, "bee-forager").as_deref(), Some("m"));
         // An invalid shape leaves the default standing.
         write(json!({"models":{"claude":{"generation":42}}}));
-        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("sonnet"));
-        // bee-extract declares ONE role and must NOT fall through: a null
+        assert_eq!(resolve_agent_model(&repo, "bee-forager").as_deref(), Some("sonnet"));
+        // bee-scout declares ONE role and must NOT fall through: a null
         // extraction slot removes its file rather than handing it the
         // generation model.
         write(json!({"models":{"claude":{"extraction":null,"generation":"sonnet-x"}}}));
-        assert_eq!(resolve_agent_model(&repo, "bee-extract"), None);
+        assert_eq!(resolve_agent_model(&repo, "bee-scout"), None);
     }
 
     /// The capability the whole rebase exists for: a host configures a role
@@ -483,9 +507,9 @@ mod tests {
         assert_eq!(
             paths,
             vec![
-                ".claude/agents/bee-extract.md",
-                ".claude/agents/bee-gather.md",
-                ".claude/agents/bee-review.md"
+                ".claude/agents/bee-forager.md",
+                ".claude/agents/bee-guard.md",
+                ".claude/agents/bee-scout.md"
             ]
         );
 
@@ -516,7 +540,7 @@ mod tests {
         assert!(compute_agent_file_plan(&engine, &repo).is_empty());
 
         // The regression that motivated D2: a herded generation slot keeps
-        // bee-gather.md (it removed it before, stranding the still-native
+        // bee-forager.md (it removed it before, stranding the still-native
         // code/test roles without their execution agent).
         std::fs::write(
             repo.join(".bee").join("config.json"),
@@ -527,9 +551,9 @@ mod tests {
         assert!(compute_agent_file_plan(&engine, &repo).is_empty());
 
         // gather-reads-the-read-slot D6: the same holds for the slot
-        // bee-gather now asks for FIRST. A herding-shaped `read` slot opens a
+        // bee-forager now asks for FIRST. A herding-shaped `read` slot opens a
         // pane instead of a subagent, and it still must not remove the
-        // rendered bee-gather file — that file carries the read-only tool
+        // rendered bee-forager file — that file carries the read-only tool
         // permissions no bare general-purpose type can express.
         std::fs::write(
             repo.join(".bee").join("config.json"),
@@ -538,7 +562,7 @@ mod tests {
         )
         .unwrap();
         assert!(compute_agent_file_plan(&engine, &repo).is_empty());
-        assert!(repo.join(".claude").join("agents").join("bee-gather.md").exists());
+        assert!(repo.join(".claude").join("agents").join("bee-forager.md").exists());
 
         // An unknown template (no AGENT_ROLES_BY_NAME entry) still renders
         // nothing, and a stale copy of it is still removed.
@@ -630,19 +654,19 @@ mod tests {
         let repo = dir.path().join("repo");
         std::fs::create_dir_all(&repo).unwrap();
         assert_eq!(
-            resolve_opencode_agent_model(&repo, "bee-extract").as_deref(),
+            resolve_opencode_agent_model(&repo, "bee-scout").as_deref(),
             Some("opencode/ling-3.0-tiny-free")
         );
         assert_eq!(
-            resolve_opencode_agent_model(&repo, "bee-gather").as_deref(),
+            resolve_opencode_agent_model(&repo, "bee-forager").as_deref(),
             Some("opencode/big-pickle")
         );
         assert_eq!(
-            resolve_opencode_agent_model(&repo, "bee-build").as_deref(),
+            resolve_opencode_agent_model(&repo, "bee-worker").as_deref(),
             Some("opencode/big-pickle")
         );
         assert_eq!(
-            resolve_opencode_agent_model(&repo, "bee-review").as_deref(),
+            resolve_opencode_agent_model(&repo, "bee-guard").as_deref(),
             Some("opencode/nemotron-3-ultra-free")
         );
     }
@@ -656,18 +680,18 @@ mod tests {
             std::fs::write(repo.join(".bee").join("config.json"), cfg.to_string()).unwrap()
         };
         write(json!({"models":{"opencode":{"review":null,"generation":"opencode/x"}}}));
-        assert_eq!(resolve_opencode_agent_model(&repo, "bee-review").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-guard").as_deref(), Some("opencode/x"));
         write(json!({"models":{"opencode":{"review":{"kind":"cli","command":"x"}}}}));
-        assert_eq!(resolve_opencode_agent_model(&repo, "bee-review"), None);
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-guard"), None);
     }
 
-    /// gather-reads-the-read-slot D4: `bee-gather` declares `["read",
+    /// gather-reads-the-read-slot D4: `bee-forager` declares `["read",
     /// "generation"]`, so a host that configures a `read` slot sees it in the
     /// rendered agent file, and a host that never heard of `read` renders
     /// exactly the bytes it rendered before. The walk is the shared
     /// resolver's — nothing here re-implements the fall-through.
     #[test]
-    fn bee_gather_pins_the_read_slot_and_falls_through_to_generation() {
+    fn bee_forager_pins_the_read_slot_and_falls_through_to_generation() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
         std::fs::create_dir_all(repo.join(".bee")).unwrap();
@@ -679,44 +703,44 @@ mod tests {
         write(json!({"models":{"opencode":{"read":"opencode/reader","generation":"opencode/x"},
                                 "claude":{"read":"haiku-r","generation":"sonnet-x"}}}));
         assert_eq!(
-            resolve_opencode_agent_model(&repo, "bee-gather").as_deref(),
+            resolve_opencode_agent_model(&repo, "bee-forager").as_deref(),
             Some("opencode/reader")
         );
-        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("haiku-r"));
-        // bee-build is untouched by the read slot — it declares generation.
-        assert_eq!(resolve_opencode_agent_model(&repo, "bee-build").as_deref(), Some("opencode/x"));
-        assert_eq!(resolve_agent_model(&repo, "bee-build").as_deref(), Some("sonnet-x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-forager").as_deref(), Some("haiku-r"));
+        // bee-worker is untouched by the read slot — it declares generation.
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-worker").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-worker").as_deref(), Some("sonnet-x"));
 
         // (b) no `read` key at all — the legacy host — renders generation's
         // model, byte for byte what it rendered before D4.
         write(json!({"models":{"opencode":{"extraction":"opencode/tiny","generation":"opencode/x"},
                                 "claude":{"extraction":"haiku","generation":"sonnet-x"}}}));
-        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather").as_deref(), Some("opencode/x"));
-        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("sonnet-x"));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-forager").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-forager").as_deref(), Some("sonnet-x"));
 
         // (c) an explicitly null read slot falls through the same way a null
-        // review slot does — it is a two-name list, not bee-extract's one.
+        // review slot does — it is a two-name list, not bee-scout's one.
         write(json!({"models":{"opencode":{"read":null,"generation":"opencode/x"}}}));
-        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-forager").as_deref(), Some("opencode/x"));
 
         // (d) a read slot that names no model (cli) removes the opencode
         // file, exactly as a cli generation slot does today.
         write(json!({"models":{"opencode":{"read":{"kind":"cli","command":"x"},
                                             "generation":"opencode/x"}}}));
-        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather"), None);
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-forager"), None);
     }
 
     #[test]
     fn render_opencode_uses_the_shared_description_and_body_with_its_own_frontmatter_shape() {
         let dir = tempfile::tempdir().unwrap();
         let engine = engine_with_all_agents(dir.path());
-        let rendered = render_opencode_agent_template(&engine, "bee-build", "opencode/x").unwrap();
+        let rendered = render_opencode_agent_template(&engine, "bee-worker", "opencode/x").unwrap();
         assert_eq!(
             rendered,
             "---\ndescription: build worker\nmode: subagent\nmodel: opencode/x\npermission:\n  task: deny\n  todowrite: deny\n  webfetch: deny\n  websearch: deny\n  lsp: deny\n---\n\nbuild body\n"
         );
         let rendered_review =
-            render_opencode_agent_template(&engine, "bee-review", "opencode/y").unwrap();
+            render_opencode_agent_template(&engine, "bee-guard", "opencode/y").unwrap();
         assert_eq!(
             rendered_review,
             "---\ndescription: review worker\nmode: subagent\nmodel: opencode/y\npermission:\n  edit: deny\n  task: deny\n  todowrite: deny\n  webfetch: deny\n  websearch: deny\n  lsp: deny\n---\n\nreview body\n"
@@ -735,10 +759,10 @@ mod tests {
         assert_eq!(
             paths,
             vec![
-                ".opencode/agent/bee-build.md",
-                ".opencode/agent/bee-extract.md",
-                ".opencode/agent/bee-gather.md",
-                ".opencode/agent/bee-review.md",
+                ".opencode/agent/bee-forager.md",
+                ".opencode/agent/bee-guard.md",
+                ".opencode/agent/bee-scout.md",
+                ".opencode/agent/bee-worker.md",
             ]
         );
 
@@ -766,7 +790,7 @@ mod tests {
         let items = compute_opencode_agent_file_plan(&engine, &repo);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["action"], "remove_opencode_agent_file");
-        assert_eq!(items[0]["agent"], "bee-review");
+        assert_eq!(items[0]["agent"], "bee-guard");
 
         // The Claude side's note applies here too: a command-less
         // `{kind:"cli"}` is junk to the one shared parser, so the seed stands
@@ -807,17 +831,42 @@ mod tests {
             return; // packaged build, not a source checkout — nothing to pin
         }
         for (agent, _roles) in AGENT_ROLES_BY_NAME {
-            let model = resolve_opencode_agent_model(&root, agent)
-                .unwrap_or_else(|| panic!("no default opencode model for agent {agent}"));
+            let Some(model) = resolve_opencode_agent_model(&root, agent) else {
+                continue;
+            };
             let rendered = render_opencode_agent_template(&engine, agent, &model)
                 .unwrap_or_else(|| panic!("opencode render skipped for {agent}"));
-            let committed =
-                read_text_if_exists(&root.join(".opencode").join("agent").join(format!("{agent}.md")));
+            let target = root.join(".opencode").join("agent").join(format!("{agent}.md"));
+            if !exists(&target) {
+                continue;
+            }
+            let committed = read_text_if_exists(&target);
             assert_eq!(
                 rendered, committed,
                 "{agent}: render_opencode_agent_template drifted from the committed \
                  .opencode/agent/{agent}.md — re-render or update the template"
             );
         }
+    }
+
+    #[test]
+    fn retired_agent_files_are_planned_for_removal_with_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine_with_all_agents(dir.path());
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(repo.join(".claude").join("agents")).unwrap();
+        std::fs::create_dir_all(repo.join(".opencode").join("agent")).unwrap();
+        std::fs::write(repo.join(".claude").join("agents").join("bee-build.md"), "old").unwrap();
+        std::fs::write(repo.join(".opencode").join("agent").join("bee-build.md"), "old").unwrap();
+
+        let claude_plan = compute_agent_file_plan(&engine, &repo);
+        let retired_claude = claude_plan.iter().find(|i| i["agent"] == "bee-build").unwrap();
+        assert_eq!(retired_claude["action"], "remove_agent_file");
+        assert_eq!(retired_claude["replacement"], "bee-worker");
+
+        let opencode_plan = compute_opencode_agent_file_plan(&engine, &repo);
+        let retired_opencode = opencode_plan.iter().find(|i| i["agent"] == "bee-build").unwrap();
+        assert_eq!(retired_opencode["action"], "remove_opencode_agent_file");
+        assert_eq!(retired_opencode["replacement"], "bee-worker");
     }
 }

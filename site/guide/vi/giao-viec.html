@@ -61,23 +61,25 @@
 
 <p>Với <code>--kind cell --claim</code>, cửa làm luôn ba việc trong một lượt: <code>claim</code> cell, <code>reserve</code> từng file trong <code>files</code> của cell (xem <a href="/guide/phoi-hop">chương 11</a>), rồi mới dựng phong bì. Bất kỳ bước nào xung đột, mọi thứ được tháo lại đúng thứ tự ngược — agent nhận về <code>[BLOCKED]</code>, không phải một cell claim dở dang.</p>
 
-<h2>Bốn agent được đúc sẵn</h2>
+<h2 id="sau-agent-duc-san">Sáu agent được đúc sẵn</h2>
 
-<p>bee không tạo agent mới cho mỗi lần gọi. Nó chọn một trong bốn cái đã "đúc sẵn" từ trước — mỗi cái là một file cấu hình, một model cố định, một bộ công cụ cố định:</p>
+<p>bee không tạo agent mới cho mỗi lần gọi. Nó chọn một trong sáu cái đã "đúc sẵn" từ trước — mỗi cái là một file cấu hình, một bộ công cụ cố định:</p>
 
 <div class="guide-table-wrap">
 <table class="guide-table">
   <thead><tr><th>Agent</th><th>Công cụ</th><th>Việc của nó</th></tr></thead>
   <tbody>
-    <tr><td><code>bee-gather</code></td><td>Read, Grep, Glob</td><td>Lùng nhiều file, đọc và báo cáo. Không bao giờ viết.</td></tr>
-    <tr><td><code>bee-extract</code></td><td>Read, Grep, Glob</td><td>Lấy đúng một sự kiện đã khoanh vùng sẵn — không tự mở rộng phạm vi tìm.</td></tr>
-    <tr><td><code>bee-build</code></td><td>Read, Edit, Write, Grep, Glob, Bash</td><td>Thực thi đúng một cell đã claim: reserve, viết, commit, cap. Cái <strong>duy nhất</strong> được viết file.</td></tr>
-    <tr><td><code>bee-review</code></td><td>Read, Grep, Glob, Bash</td><td>Kiểm tra một claim, đọc-only — được chạy test/lint/<code>git diff</code>, không bao giờ sửa.</td></tr>
+    <tr><td><code>bee-worker</code></td><td>Read, Edit, Write, Grep, Glob, Bash</td><td>Thực thi đúng một cell đã claim: reserve, viết, commit, cap. Ghi code và sửa file.</td></tr>
+    <tr><td><code>bee-comb</code></td><td>Read, Edit, Write, Grep, Glob, Bash</td><td>Thực thi đúng một cell giao diện (UI) đã claim theo chuẩn bee-design: viết UI, chạy design gate.</td></tr>
+    <tr><td><code>bee-forager</code></td><td>Read, Grep, Glob</td><td>Lùng nhiều file, đọc và báo cáo. Không bao giờ viết.</td></tr>
+    <tr><td><code>bee-scout</code></td><td>Read, Grep, Glob</td><td>Lấy đúng một sự kiện đã khoanh vùng sẵn — không tự mở rộng phạm vi tìm.</td></tr>
+    <tr><td><code>bee-guard</code></td><td>Read, Grep, Glob, Bash</td><td>Kiểm tra một claim, đọc-only — được chạy test/lint/<code>git diff</code>, không bao giờ sửa.</td></tr>
+    <tr><td><code>bee-elder</code></td><td>Read, Grep, Glob</td><td>Cố vấn (advisor) đọc-only từ một góc nhìn cố định — đưa ra khuyến nghị, độ tin cậy và điều kiện bác bỏ; không bao giờ viết hay tự quyết định.</td></tr>
   </tbody>
 </table>
 </div>
 
-<p>Ba cái đầu không hề đăng ký reservation hay claim gì — máy đó chỉ dành cho <code>bee-build</code>, cái duy nhất viết file thật.</p>
+<p>Bốn agent đọc-only (<code>bee-forager</code>, <code>bee-scout</code>, <code>bee-guard</code>, <code>bee-elder</code>) không hề đăng ký reservation hay claim gì — cơ chế đó dành cho <code>bee-worker</code> và <code>bee-comb</code>, hai agent viết file thật.</p>
 
 <h2>Bốn từ khoá kết thúc</h2>
 

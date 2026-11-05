@@ -104,11 +104,13 @@
   "agents_sync": {
     "bee_version": "2.74.0",
     "files": [
-      ".claude/agents/bee-design.md",
-      ".claude/agents/bee-review.md"
+      ".claude/agents/bee-comb.md",
+      ".claude/agents/bee-elder.md",
+      ".claude/agents/bee-guard.md"
     ],
     "rendered_from": {
       "design": "opus",
+      "advisor": "fable",
       "review": "opus"
     },
     "codex": {
@@ -117,22 +119,22 @@
     },
     "opencode": {
       "files": [
-        ".opencode/agent/bee-build.md",
-        ".opencode/agent/bee-design.md",
-        ".opencode/agent/bee-extract.md",
-        ".opencode/agent/bee-gather.md",
-        ".opencode/agent/bee-review.md"
+        ".opencode/agent/bee-comb.md",
+        ".opencode/agent/bee-forager.md",
+        ".opencode/agent/bee-guard.md",
+        ".opencode/agent/bee-scout.md",
+        ".opencode/agent/bee-worker.md"
       ],
       "rendered_from": {
-        "generation": "opencode/big-pickle",
         "design": "opencode/big-pickle",
-        "extraction": "opencode/ling-3.0-tiny-free",
         "read": "opencode/big-pickle",
-        "review": "opencode/nemotron-3-ultra-free"
+        "review": "opencode/nemotron-3-ultra-free",
+        "extraction": "opencode/ling-3.0-tiny-free",
+        "generation": "opencode/big-pickle"
       }
     }
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-05T03:11:46.257Z"
+  "updated_at": "2026-11-05T06:25:38.701Z"
 }
