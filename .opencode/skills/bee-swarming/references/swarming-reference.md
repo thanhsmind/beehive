@@ -686,11 +686,17 @@ artifact, not an offer: only when this session is
 actually ending (context budget reached, or the run is otherwise
 terminating), claim the next unit (`bee cells claim-next`), write the
 handoff (`bee state handoff write --kind planned-next --writer-session <id>
---previous-cell <capped-id> --next-cell <claimed-id>`), and end cleanly —
-the next fresh session (a `/clear` or a fresh start) adopts the carried
-claim automatically and opens straight into the next cell, no confirmation
-asked. Never stop to suggest `/clear`, never wait for
-one, and never issue `/clear` yourself.
+--previous-cell <capped-id> --next-cell <claimed-id>`), and hand the
+remaining work to a fresh leader through the host's leader door when one
+exists (waggledance: `waggledance_dispatch` with `leader: true`, task
+text naming what is done, what is next, and the user's standing orders),
+then release this session. The fresh leader adopts the carried claim
+automatically and opens straight into the next cell, no confirmation
+asked. Never tell the user to open a new session, never stop to suggest
+`/clear`, never wait for one, and never spawn the leader yourself (no
+`paseo create_agent`). Show the handoff to the user and wait only when a
+gate or decision the user owns is pending, or when the host has no leader
+door.
 
 **Resume triage.** A session that picks up a handoff — a `pause` record
 after the user's word, a `planned-next` at adoption — sorts each
