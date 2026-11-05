@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "machine-cap-half",
+  "closed_at": "2026-11-05T11:39:59.372Z",
+  "sessions": [
+    {
+      "session_id": "f9d9e9dc-b7c6-4595-a1e5-c8b0798c7533",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 124,
+          "output": 19144,
+          "cache_write": 93403,
+          "cache_read": 4700788,
+          "new": 112671,
+          "cached": 4700788,
+          "total": 4813459
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1793877668600,
+      "ended_ms": 1793878798389,
+      "totals": {
+        "new": 112671,
+        "cached": 4700788,
+        "total": 4813459
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 112671,
+      "cached": 4700788,
+      "total": 4813459
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 112671,
+      "cached": 4700788,
+      "total": 4813459
+    }
+  }
+}
