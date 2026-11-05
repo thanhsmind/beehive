@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worker-status-digest",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"worker-status-digest\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c4f9516; reload the product and test \"worker-status-digest\", then either approve uat (\"bee gate --name uat --approved true --lane worker-status-digest\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"worker-status-digest\" — feature is closed.",
   "created_at": "2026-11-05T06:55:33.152Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",

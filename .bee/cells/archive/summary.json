@@ -1898,5 +1898,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-05T09:41:43.490Z"
+  },
+  "release-red-2-76-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-05T09:41:46.848Z"
   }
 }
