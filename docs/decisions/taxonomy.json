@@ -786,6 +786,8 @@
     "contract:reservation-reclaim",
     "contract:merge-dirty-store",
     "contract:onboard-binary-vendor",
-    "contract:deploy-native-brief"
+    "contract:deploy-native-brief",
+    "contract:herding-limits",
+    "contract:close-prune"
   ]
 }

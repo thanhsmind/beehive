@@ -1,0 +1,228 @@
+{
+  "schema_version": "1.0",
+  "feature": "device-aware-cap",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"device-aware-cap\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-11-05T02:42:06.804Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-11-05T02:42:06.855Z",
+    "feature": "device-aware-cap"
+  },
+  "gate_preview": {
+    "feature": "device-aware-cap",
+    "plan_sha256": "6f10a61bb85f92080044f71eb3411819d715fee493b3a7e0f87ff32a193aef0e",
+    "previewed_at": "2026-11-05T02:43:20.842Z",
+    "cells": [
+      {
+        "id": "dac-1",
+        "feature": "device-aware-cap",
+        "title": "Make the herding worker limit aware of CPU count and free memory",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "a9e06a0f-2545-4875-8f21-ea4555a77843",
+          "9bbef1a9-e281-444a-8bfc-32f268da8c32",
+          "4bb9da28-16aa-4ec0-b296-dc03f7db0dcc"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/wave.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/wave.rs",
+          "docs/history/device-aware-cap/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In herding/wave.rs, extend herding_limits/limits_refusal/check_limits (search `pub(crate) fn herding_limits`, `pub(crate) fn limits_refusal`, `pub(crate) fn check_limits`). Per D1: when herding.limits.concurrency is unset, use CPU count / 4 (std::thread::available_parallelism), never below 1; an explicit value wins unchanged. Per the herding-limits contract: a CPU-derived default never yields the limits.unverifiable refusal; with a Fallback occupancy it lets the run start. Per D2: read MemAvailable from /proc/meminfo; when it is below herding.limits.min_free_mem_gb (default 4; 0 turns the check off) refuse with reason limits.memory, retryable true, available_gb, min_free_gb and a fix line naming the key. Unreadable memory skips the check. Keep the CPU count and memory reading injectable so tests do not depend on the host. Add unit tests beside the existing limits tests (search `a_run_at_the_concurrency_limit_is_refused_and_retryable`). No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave::",
+        "must_haves": {
+          "truths": [
+            "Unset concurrency on a 16-CPU host gives a limit of 4; on a 2-CPU host it gives 1",
+            "An explicit herding.limits.concurrency keeps today's behavior, including limits.unverifiable on a Fallback count",
+            "A default limit with a Fallback occupancy does not refuse",
+            "Available memory below min_free_mem_gb refuses with reason limits.memory and retryable true",
+            "Unreadable memory or min_free_mem_gb 0 never refuses for memory"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+              "substantive": "CPU default, memory floor, and unit tests for each truth"
+            }
+          ],
+          "key_links": [
+            "check_limits applies the CPU default and the memory floor"
+          ],
+          "prohibitions": [
+            "No change to the existing refusal JSON keys",
+            "No new crate dependency"
+          ]
+        }
+      },
+      {
+        "id": "dac-2",
+        "feature": "device-aware-cap",
+        "title": "Run the worktree prune sweep after a green close",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "14b76800-5dfc-4e29-bab8-2addfa145de5",
+          "ea534256-a4ce-4d67-8344-2d61112e1ff4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+          "docs/history/device-aware-cap/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D3 and the close-prune contract: after a green, non-dry-run bee close (search `pub(crate) fn run_close` and `close_handler(&ctx.root`), call run_prune_core (verbs/worktree/prune.rs, search `pub(crate) fn run_prune_core`) once on the MAIN checkout root (close may serve from a granted worktree; resolve main the way run_prune does) with dry_run false and the default 7-day threshold. Add the prune lines to the human output and a `prune` key to the JSON output. A prune Err adds one line naming the error and never changes the exit code. A dry-run or refused/red close never runs prune. Add tests beside the close tests (search `fn dry_run_and_red_close_never_commit`). No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml close::",
+        "must_haves": {
+          "truths": [
+            "A green close runs prune once on the main checkout and reports its lines",
+            "A dry-run close and a refused close never run prune",
+            "A prune error leaves the close exit code at success and adds one line"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+              "substantive": "post-close prune call and tests"
+            }
+          ],
+          "key_links": [
+            "run_close calls run_prune_core after a green close"
+          ],
+          "prohibitions": [
+            "No change to prune classification rules in prune.rs"
+          ]
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "device-aware-cap",
+    "plan_sha256": "6f10a61bb85f92080044f71eb3411819d715fee493b3a7e0f87ff32a193aef0e",
+    "previewed_at": "2026-11-05T02:43:20.842Z",
+    "cells": [
+      {
+        "id": "dac-1",
+        "feature": "device-aware-cap",
+        "title": "Make the herding worker limit aware of CPU count and free memory",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "a9e06a0f-2545-4875-8f21-ea4555a77843",
+          "9bbef1a9-e281-444a-8bfc-32f268da8c32",
+          "4bb9da28-16aa-4ec0-b296-dc03f7db0dcc"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/wave.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/wave.rs",
+          "docs/history/device-aware-cap/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In herding/wave.rs, extend herding_limits/limits_refusal/check_limits (search `pub(crate) fn herding_limits`, `pub(crate) fn limits_refusal`, `pub(crate) fn check_limits`). Per D1: when herding.limits.concurrency is unset, use CPU count / 4 (std::thread::available_parallelism), never below 1; an explicit value wins unchanged. Per the herding-limits contract: a CPU-derived default never yields the limits.unverifiable refusal; with a Fallback occupancy it lets the run start. Per D2: read MemAvailable from /proc/meminfo; when it is below herding.limits.min_free_mem_gb (default 4; 0 turns the check off) refuse with reason limits.memory, retryable true, available_gb, min_free_gb and a fix line naming the key. Unreadable memory skips the check. Keep the CPU count and memory reading injectable so tests do not depend on the host. Add unit tests beside the existing limits tests (search `a_run_at_the_concurrency_limit_is_refused_and_retryable`). No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave::",
+        "must_haves": {
+          "truths": [
+            "Unset concurrency on a 16-CPU host gives a limit of 4; on a 2-CPU host it gives 1",
+            "An explicit herding.limits.concurrency keeps today's behavior, including limits.unverifiable on a Fallback count",
+            "A default limit with a Fallback occupancy does not refuse",
+            "Available memory below min_free_mem_gb refuses with reason limits.memory and retryable true",
+            "Unreadable memory or min_free_mem_gb 0 never refuses for memory"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+              "substantive": "CPU default, memory floor, and unit tests for each truth"
+            }
+          ],
+          "key_links": [
+            "check_limits applies the CPU default and the memory floor"
+          ],
+          "prohibitions": [
+            "No change to the existing refusal JSON keys",
+            "No new crate dependency"
+          ]
+        }
+      },
+      {
+        "id": "dac-2",
+        "feature": "device-aware-cap",
+        "title": "Run the worktree prune sweep after a green close",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "14b76800-5dfc-4e29-bab8-2addfa145de5",
+          "ea534256-a4ce-4d67-8344-2d61112e1ff4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+          "docs/history/device-aware-cap/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D3 and the close-prune contract: after a green, non-dry-run bee close (search `pub(crate) fn run_close` and `close_handler(&ctx.root`), call run_prune_core (verbs/worktree/prune.rs, search `pub(crate) fn run_prune_core`) once on the MAIN checkout root (close may serve from a granted worktree; resolve main the way run_prune does) with dry_run false and the default 7-day threshold. Add the prune lines to the human output and a `prune` key to the JSON output. A prune Err adds one line naming the error and never changes the exit code. A dry-run or refused/red close never runs prune. Add tests beside the close tests (search `fn dry_run_and_red_close_never_commit`). No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml close::",
+        "must_haves": {
+          "truths": [
+            "A green close runs prune once on the main checkout and reports its lines",
+            "A dry-run close and a refused close never run prune",
+            "A prune error leaves the close exit code at success and adds one line"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+              "substantive": "post-close prune call and tests"
+            }
+          ],
+          "key_links": [
+            "run_close calls run_prune_core after a green close"
+          ],
+          "prohibitions": [
+            "No change to prune classification rules in prune.rs"
+          ]
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-11-05T02:59:31.535Z",
+    "branch": "wt/device-aware-cap",
+    "worktree_id": "beehive--wt--device-aware-cap",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
