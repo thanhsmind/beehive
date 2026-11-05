@@ -113,6 +113,10 @@ pub(crate) fn pointer_prompt(brief_abs_path: &Path) -> String {
     )
 }
 
+pub(crate) fn progress_path(bee_dir: &Path, job_id: &str) -> PathBuf {
+    mailbox_dir(bee_dir, job_id).join("progress.jsonl")
+}
+
 pub(crate) fn result_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
     mailbox_dir(bee_dir, job_id).join(result_filename(round))
 }
@@ -287,6 +291,7 @@ pub(crate) fn render_brief(spec: &BriefSpec) -> String {
     let ack_tmp_name = format!("{}.tmp", ack_filename(spec.round));
     let report_file = report_path(spec.bee_dir, spec.job_id, spec.round);
     let report_tmp_name = format!("{}.tmp", report_filename(spec.round));
+    let progress_file = progress_path(spec.bee_dir, spec.job_id);
     let cell_id_line = match spec.cell_id {
         Some(id) => format!("  \"cell_id\": \"{id}\",\n"),
         None => String::new(),
@@ -391,6 +396,7 @@ While you work you may send your leader a short note with \
 `bee herding notify --kind <question|blocked|dependency|progress|reopen> --text <text>`.\n\
 A note never ends your turn: keep working after you send it.\n\
 A question you must stop for still goes in your result file, not in a note.\n\n\
+At each meaningful step, append one JSON line {{\"ts\",\"step\",\"note\"}} (note \u{2264}120 chars) to {progress_file}, either by hand or with `bee herding notify --kind progress`.\n\n\
 # Task\n\n\
 {task}\n\n\
 {expertise_block}\
@@ -488,6 +494,7 @@ signal; nothing else is read to decide whether you finished.\n\n\
         report_file = report_file.display(),
         expertise_clause = expertise_clause,
         question_section = question_section,
+        progress_file = progress_file.display(),
     )
 }
 
@@ -1198,6 +1205,7 @@ mod tests {
         assert_eq!(result_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/result-5.json"));
         assert_eq!(ack_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/ack-5.json"));
         assert_eq!(report_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/report-5.md"));
+        assert_eq!(progress_path(bee_dir, "job-1"), PathBuf::from("/repo/.bee/mailbox/job-1/progress.jsonl"));
     }
 
     // ─── brief renderer ─────────────────────────────────────────────────
@@ -1318,6 +1326,8 @@ mod tests {
             text.matches("bee herding notify").count(),
             "the brief names a herding verb other than notify:\n{text}"
         );
+        assert!(text.contains(&progress_path(bee_dir, "job-42").display().to_string()));
+        assert!(text.contains("{\"ts\",\"step\",\"note\"}"));
         assert!(
             text.contains("\"dissent\""),
             "the dissent field name belongs in the result schema now:\n{text}"
