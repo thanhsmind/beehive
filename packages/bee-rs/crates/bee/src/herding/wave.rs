@@ -1101,7 +1101,7 @@ pub(crate) struct HerdingLimits {
 }
 
 pub(crate) fn default_concurrency(cpus: usize) -> u64 {
-    (cpus as u64 / 4).max(1)
+    (cpus as u64 / 2).max(1)
 }
 
 pub(crate) fn host_cpu_count() -> usize {
@@ -2889,10 +2889,10 @@ mod tests {
     }
 
     #[test]
-    fn unset_concurrency_defaults_to_cpu_count_over_four_never_below_one() {
+    fn unset_concurrency_defaults_to_cpu_count_over_two_never_below_one() {
         let cfg = Value::Null;
         let (limits_16, is_default_16) = herding_limits_from(&cfg, 16);
-        assert_eq!(limits_16.concurrency, Some(4));
+        assert_eq!(limits_16.concurrency, Some(8));
         assert!(is_default_16);
 
         let (limits_2, is_default_2) = herding_limits_from(&cfg, 2);
@@ -2906,7 +2906,7 @@ mod tests {
         assert_eq!(limits_0.concurrency, Some(1));
 
         let (limits_32, _) = herding_limits_from(&cfg, 32);
-        assert_eq!(limits_32.concurrency, Some(8));
+        assert_eq!(limits_32.concurrency, Some(16));
 
         let explicit = serde_json::json!({"herding": {"limits": {"concurrency": 10}}});
         let (limits_explicit, is_default_explicit) = herding_limits_from(&explicit, 16);
@@ -2931,14 +2931,14 @@ mod tests {
         let res = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Fallback(0));
         assert_eq!(res, None);
 
-        let at_limit = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Live(4))
+        let at_limit = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Live(8))
             .expect("at live limit must refuse");
         assert_eq!(at_limit["reason"], "limits.concurrency");
         assert_eq!(at_limit["retryable"], true);
-        assert_eq!(at_limit["live"], 4);
-        assert_eq!(at_limit["limit"], 4);
+        assert_eq!(at_limit["live"], 8);
+        assert_eq!(at_limit["limit"], 8);
 
-        let below_limit = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Live(3));
+        let below_limit = check_limits_from(root, &Value::Null, 16, None, 0, || wave_ledger::Occupancy::Live(7));
         assert_eq!(below_limit, None);
     }
 
