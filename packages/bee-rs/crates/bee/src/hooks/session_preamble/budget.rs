@@ -505,6 +505,8 @@ pub fn build_session_preamble_with_runtime(
 
 const TRAILER_LINE: &str = "Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive.";
 
+const LEADER_DOCTRINE_LINE: &str = "Leader doctrine: read .bee/LEADER.md in full now, then LEADER.md if it exists; open a .bee/playbooks/ file only when its read-when line matches.";
+
 const DROPPABLE: [(&str, &str); 4] = [
     ("Recent decisions", ".bee/bin/bee status --json"),
     ("Critical patterns (digest)", "docs/knowledge/index.md"),
@@ -601,6 +603,9 @@ pub fn build_session_preamble_within(
 
     lines.push(format!("## bee v{BEE_VERSION}"));
     lines.push(onboarding_line(onboarding.as_ref()));
+    if root.join(".bee").join("LEADER.md").is_file() {
+        lines.push(LEADER_DOCTRINE_LINE.to_string());
+    }
     lines.push(format!(
         "- Phase: {} | Mode: {} | Feature: {}",
         tpl(pipeline_record.get("phase")),
