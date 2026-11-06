@@ -110,7 +110,7 @@ session model is this session, so that rung hands the blocker to you;
 A `[PARKED]` cell is never re-dispatched or escalated; it waits for the answer.
 
 **`[PARKED]`:** the lane keeps running — keep dispatching ready cells. Set
-`bee state waiting-on set --kind question` only when no ready cell remains
+`bee state waiting-on set --kind question --subject "<question>"` only when no ready cell remains
 in the lane, and list every open parked question in the reply. Record the
 human's answer with `bee cells answer --id <cell> --answer "<text>"`; the
 cell reopens and runs again with the answer in its brief.

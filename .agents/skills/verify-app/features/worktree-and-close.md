@@ -115,7 +115,11 @@ Preconditions:
   checks fire ahead of `git merge` (`worktree/phases.rs`):
   `WORKTREE_MERGE_PROOF_DEBT` when a capped cell carries no proof line
   (`:219-226`), `WORKTREE_MERGE_DISSENT_DEBT` (`:260-267`), and
-  `WORKTREE_MERGE_ADVISOR_NUDGE_DEBT` (`:296-303`). A `standard`/`high-risk`
+  `WORKTREE_MERGE_ADVISOR_NUDGE_DEBT` (`:296-303`), and
+  `WORKTREE_MERGE_PARKED_CELL` while a cell is parked on a human question
+  (drive it: `cells park --id <cell> --question "<q>"`, merge, see the
+  refusal, then `cells answer --id <cell> --answer "<a>"` and merge again).
+  A `standard`/`high-risk`
   feature with an unapproved uat gate refuses too (`:478-488`) unless
   `--skip-uat` is passed or config `uat_before_merge` is `false`.
 - **Reclaim dead worktrees.** `control-bee cli -- worktree prune --json` removes
@@ -130,7 +134,9 @@ Preconditions:
   lane: `tests`, `scribing-debt`, `capture-queue`, `mistakes`, `dissent-debt`,
   `advisor-nudge-debt`, `uat`, `pattern-check`, `knowledge-freshness`, `impact`,
   `routing`, `doc-deferral`. `judge-debt` is a thirteenth, lane-gated to
-  `standard`/`high-risk` (`drivers/close.rs:1594`). The builder is
+  `standard`/`high-risk` (`drivers/close.rs:1594`). A `parked-cell` door
+  joins the list only while the feature has a parked cell, so a clean
+  feature's count does not change. The builder is
   `build_close_report_doors` (`close.rs:1495-1786`); the remaining doors are
   added by `close_handler` (`close.rs:2403-2413`). A recipe that names only the
   door it cares about goes stale the next time one is added — read the array.
