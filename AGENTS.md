@@ -189,6 +189,9 @@ context before planning or executing.
 <!-- /rule -->
 - A leader watches a worker through `bee herding status --job <id>` (one line),
   never by reading its transcript, pane log or activity stream; workers write the notes.
+  A leader may steer a Claude worker — a claude-session job or a Claude
+  herding pane — with `SendMessage` to the `steer_to` name that status
+  prints; steering is not a transcript read.
 - Reserve files before write-heavy swarm work and prefix write-heavy
   shell commands with `BEE_AGENT_NAME=<name>`. On a reservation or
   hold conflict, stop and report it — never write through it. A worker

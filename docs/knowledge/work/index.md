@@ -12,6 +12,7 @@ never a generation timestamp or any other wall-clock value.
 
 - [agent-anti-patterns/](agent-anti-patterns/index.md) — 1 concept(s)
 - [agent-model-unpin/](agent-model-unpin/index.md) — 1 concept(s)
+- [agent-shell-rename/](agent-shell-rename/index.md) — 1 concept(s)
 - [anti-pattern-principles/](anti-pattern-principles/index.md) — 1 concept(s)
 - [awaiting-human/](awaiting-human/index.md) — 1 concept(s)
 - [baseline-release-clear/](baseline-release-clear/index.md) — 1 concept(s)
@@ -175,6 +176,7 @@ never a generation timestamp or any other wall-clock value.
 - [release-2-70-0/](release-2-70-0/index.md) — 1 concept(s)
 - [release-2-71-0/](release-2-71-0/index.md) — 1 concept(s)
 - [release-2-72-0/](release-2-72-0/index.md) — 1 concept(s)
+- [release-2-74-0/](release-2-74-0/index.md) — 1 concept(s)
 - [release-clean-tree/](release-clean-tree/index.md) — 1 concept(s)
 - [release-pointer-fix/](release-pointer-fix/index.md) — 1 concept(s)
 - [release-red-2-49-0/](release-red-2-49-0/index.md) — 1 concept(s)

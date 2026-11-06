@@ -57,6 +57,7 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 
 use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxDissent, MailboxResult, MailboxStatus};
+use super::claude_session::{self as cs, ClaudeCli, RealClaudeCli};
 use super::paseo::{self, PaseoCli, PaseoSpec, PaseoState, RealPaseoCli};
 use super::split_lock;
 use super::tmux::{RealTmux, TmuxSettings};
@@ -209,6 +210,13 @@ struct Options {
     pub(crate) question_round: u32,
     pub(crate) allow_question: bool,
     pub(crate) read_only: bool,
+    pub(crate) claude_session: Option<ClaudeSessionSpec>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ClaudeSessionSpec {
+    pub(crate) model: String,
+    pub(crate) effort: Option<String>,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -313,9 +321,19 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut question_round: u32 = 0;
     let mut allow_question = true;
     let mut read_only = false;
+    let mut session_model: Option<&str> = None;
+    let mut session_effort: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
+            "--session-model" => {
+                session_model = flags.get(i + 1).copied();
+                i += 2;
+            }
+            "--session-effort" => {
+                session_effort = flags.get(i + 1).copied();
+                i += 2;
+            }
             "--agent" => {
                 agent = flags.get(i + 1).copied();
                 i += 2;
@@ -422,6 +440,28 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         }
     }
 
+    let claude_session = match (session_model.map(str::trim).filter(|m| !m.is_empty()), session_effort) {
+        (None, None) => None,
+        (None, Some(_)) => return Err("--session-effort needs --session-model".to_string()),
+        (Some(model), effort) => {
+            if agent.is_some() || no_pane || continue_job_id.is_some() {
+                return Err(
+                    "--session-model starts a Claude Code session and cannot be combined with --agent, --no-pane or --continue"
+                        .to_string(),
+                );
+            }
+            if let Some(e) = effort {
+                if !super::claude_session::EFFORTS.contains(&e) {
+                    return Err(format!(
+                        "--session-effort \"{e}\" is not one of {}",
+                        super::claude_session::EFFORTS.join(", ")
+                    ));
+                }
+            }
+            Some(ClaudeSessionSpec { model: model.to_string(), effort: effort.map(str::to_string) })
+        }
+    };
+
     let task_text = resolve_task(task, task_file)?;
     let main_root = super::resolve_main_root(explicit_root).ok_or_else(|| {
         "could not resolve the MAIN checkout root (no --main-root given and `git rev-parse \
@@ -473,6 +513,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         question_round,
         allow_question,
         read_only,
+        claude_session,
     })
 }
 
@@ -3495,6 +3536,15 @@ fn adopted_agent_after_spawn_timeout(listed: &str, argv: &[String], error: &str)
 }
 
 pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli) -> ExecResult {
+    execute_paseo_steered(opts, spec, cli, None)
+}
+
+fn execute_paseo_steered(
+    opts: &Options,
+    spec: &PaseoSpec,
+    cli: &dyn PaseoCli,
+    claude: Option<&dyn ClaudeCli>,
+) -> ExecResult {
     let provider_is_pi = spec.provider.trim().eq_ignore_ascii_case("pi");
     let provider_is_claude = spec.provider.trim().eq_ignore_ascii_case("claude");
     if opts.read_only && !provider_is_pi && !provider_is_claude {
@@ -3670,6 +3720,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         opts.cell_id.as_deref(),
         workspace.as_deref(),
     );
+    let spawned_at_ms = now_ms();
     let run_res = cli.call_as_caller(&argv);
     let agent_id = match run_res {
         Ok(stdout) => match paseo::parse_run_agent_id(&stdout) {
@@ -3727,6 +3778,12 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
     if let Value::Object(ref mut m) = job_value {
         m.insert("paseo_agent_id".into(), Value::String(agent_id.clone()));
         m.insert("kind".into(), Value::String(opts.agent.as_deref().unwrap_or("paseo").to_string()));
+        if let Some(name) = claude
+            .filter(|_| provider_is_claude)
+            .and_then(|c| cs::steer_name_after_spawn(c, &opts.cwd, spawned_at_ms))
+        {
+            m.insert("steer_to".into(), Value::String(name));
+        }
     }
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
         return ExecResult {
@@ -3795,6 +3852,260 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         pane_id: Some(agent_id),
         closed_pane,
     }
+}
+
+const CLAUDE_SESSION_AGENTS_EVERY_TICKS: u32 = 10;
+
+fn spawn_refused(message: String) -> ExecResult {
+    ExecResult { outcome: RunOutcome::SpawnFailed(message), pane_id: None, closed_pane: false }
+}
+
+fn execute_claude_session(opts: &Options, session: &ClaudeSessionSpec, cli: &dyn ClaudeCli) -> ExecResult {
+    execute_claude_session_paced(opts, session, cli, POLL_INTERVAL, CLAUDE_SESSION_AGENTS_EVERY_TICKS)
+}
+
+fn execute_claude_session_paced(
+    opts: &Options,
+    session: &ClaudeSessionSpec,
+    cli: &dyn ClaudeCli,
+    poll_interval: Duration,
+    agents_every_ticks: u32,
+) -> ExecResult {
+    if opts.read_only {
+        if let Some(refusal) = claude_worker_guard_missing(&opts.main_root) {
+            return spawn_refused(refusal);
+        }
+    }
+    let bee_dir = opts.main_root.join(".bee");
+    if !opts.dry_run {
+        write_inbox_marker(&bee_dir, opts);
+    }
+    let files: Vec<String> = Vec::new();
+    let brief_spec = BriefSpec {
+        job_id: &opts.job_id,
+        task: &opts.task,
+        worktree_root: &opts.cwd,
+        files: &files,
+        bee_dir: &bee_dir,
+        round: 1,
+        expertise: &opts.expertise,
+        nickname: &opts.nickname,
+        cell_id: opts.cell_id.as_deref(),
+        allow_question: opts.allow_question,
+    };
+    let brief = mailbox::render_brief(&brief_spec);
+
+    let mut job_value = serde_json::json!({
+        "job_id": opts.job_id,
+        "task": opts.task,
+        "cwd": opts.cwd.display().to_string(),
+        "round": 1,
+        "idle_timeout_secs": opts.idle_timeout_secs,
+        "ceiling_secs": opts.ceiling_secs,
+        "close_always": opts.close_always,
+        "created_at": chrono::Utc::now().to_rfc3339(),
+        "base_sha": crate::verbs::detector::head_sha(&opts.cwd),
+        "expertise": opts.expertise,
+        "agent": opts.agent,
+        "seat": opts.seat,
+        "cell_id": opts.cell_id,
+        "no_pane": opts.no_pane,
+        "inbox_session": opts.inbox_session,
+        "leader_session": resolve_leader_session(),
+        "question_of": opts.question_of,
+        "question_round": opts.question_round,
+        "read_only": opts.read_only,
+        "transport": "claude-session",
+        "session_model": session.model,
+        "session_effort": session.effort,
+    });
+    let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
+    if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
+        return spawn_refused(format!("could not write {}: {e}", job_file_path.display()));
+    }
+
+    if opts.dry_run {
+        return ExecResult { outcome: RunOutcome::DryRun(brief), pane_id: None, closed_pane: false };
+    }
+
+    let brief_file = mailbox::brief_path(&bee_dir, &opts.job_id, 1);
+    if let Err(e) = crate::fsutil::write_text_atomic(&brief_file, &brief) {
+        return spawn_refused(format!("could not write {}: {e}", brief_file.display()));
+    }
+    let digest_file = mailbox::digest_path(&bee_dir, &opts.job_id, 1);
+    let digest = mailbox::dispatch_digest(&opts.task, &files);
+    if let Err(e) = crate::fsutil::write_text_atomic(&digest_file, &digest) {
+        return spawn_refused(format!("could not write {}: {e}", digest_file.display()));
+    }
+    let pointer = mailbox::pointer_prompt(&brief_file);
+
+    let mut child_env = build_child_env(std::env::vars(), &BTreeMap::new(), &opts.pane_env_passthrough, &opts.job_id);
+    if opts.read_only {
+        child_env.insert("BEE_HERDING_READ_ONLY".to_string(), "1".to_string());
+    }
+    let mut settings_env: BTreeMap<String, String> = ["BEE_HERDING_WORKER", "BEE_HERDING_JOB_ID", "BEE_HERDING_READ_ONLY"]
+        .iter()
+        .filter_map(|k| child_env.get(*k).map(|v| (k.to_string(), v.clone())))
+        .collect();
+    settings_env.extend(opts.pane_env_passthrough.clone());
+    let spawn_env: BTreeMap<String, String> = paseo_env_pairs(child_env).into_iter().collect();
+
+    let planned_name = cs::session_name(opts.cell_id.as_deref(), opts.seat.as_deref(), &opts.job_id);
+    let argv = cs::spawn_argv(
+        &planned_name,
+        &session.model,
+        session.effort.as_deref(),
+        &cs::settings_json(&settings_env),
+        &pointer,
+    );
+    let (session_id, listed_name) = match cli.spawn(&argv, &opts.cwd, &spawn_env).and_then(|out| cs::parse_backgrounded(&out)) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            return spawn_refused(format!(
+                "could not start the claude session: {e} — FIX: check that `claude` runs, is logged in, and accepts the model \"{}\" (herding.claude_command names another binary)",
+                session.model
+            ));
+        }
+    };
+    let steer_to = if listed_name.is_empty() { planned_name } else { listed_name };
+
+    if let Value::Object(ref mut m) = job_value {
+        m.insert("session_id".into(), Value::String(session_id.clone()));
+        m.insert("steer_to".into(), Value::String(steer_to.clone()));
+        m.insert("kind".into(), Value::String("claude-session".to_string()));
+    }
+    if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
+        stop_claude_session(cli, &session_id);
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not update {}: {e}", job_file_path.display())),
+            pane_id: Some(session_id),
+            closed_pane: true,
+        };
+    }
+    record_dispatch(&opts.main_root, opts, "claude-session", &session_id);
+
+    let decision = wait_for_round_claude(
+        &bee_dir,
+        &opts.job_id,
+        &session_id,
+        now_ms(),
+        opts.idle_timeout_secs,
+        opts.ceiling_secs,
+        cli,
+        poll_interval,
+        agents_every_ticks,
+        |d| std::thread::sleep(d),
+        now_ms,
+    );
+
+    let outcome = match decision {
+        PollDecision::ResultReady => read_result_for_round(&bee_dir, &opts.job_id, 1),
+        PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle(format!(
+            "herding: claude session {session_id} ({steer_to}) went idle with no result for round 1 (idle twice, or no heartbeat for {}s) — session stopped",
+            opts.idle_timeout_secs
+        )),
+        PollDecision::TimedOutCeiling => {
+            eprintln!("bee herding run: claude session {session_id} ({steer_to}) hit the ceiling, so it was stopped");
+            RunOutcome::TimedOutCeiling
+        }
+        PollDecision::Died { pid } => {
+            eprintln!("bee herding run: claude session {session_id} ({steer_to}) is no longer running — see claude agents --json --all");
+            RunOutcome::Died { pid }
+        }
+        PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
+        PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
+        PollDecision::Marked(mailbox::Mark::CancelPending)
+        | PollDecision::Continue
+        | PollDecision::Blocked
+        | PollDecision::PausedLimit
+        | PollDecision::ModelMismatch => unreachable!("the claude session poll never ends on this decision"),
+    };
+
+    let closed = if matches!(outcome, RunOutcome::Died { .. }) { false } else { stop_claude_session(cli, &session_id) };
+    ExecResult { outcome, pane_id: Some(session_id), closed_pane: closed }
+}
+
+fn stop_claude_session(cli: &dyn ClaudeCli, session_id: &str) -> bool {
+    match cli.call(&cs::stop_argv(session_id)) {
+        Ok(_) => true,
+        Err(e) => {
+            eprintln!("bee herding run: could not stop claude session {session_id}: {e}");
+            false
+        }
+    }
+}
+
+fn wait_for_round_claude(
+    bee_dir: &Path,
+    job_id: &str,
+    session_id: &str,
+    started_at_ms: i64,
+    idle_timeout_secs: u64,
+    ceiling_secs: u64,
+    cli: &dyn ClaudeCli,
+    poll_interval: Duration,
+    agents_every_ticks: u32,
+    sleep: impl FnMut(Duration),
+    now: impl FnMut() -> i64,
+) -> PollDecision {
+    let log_file_path = mailbox::log_path(bee_dir, job_id);
+    let ack_file_path = mailbox::ack_path(bee_dir, job_id, 1);
+    let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
+    let mut last_log_mtime: Option<std::time::SystemTime> = None;
+    let mut last_ack_mtime: Option<std::time::SystemTime> = None;
+    let mut watch = cs::Watch::default();
+    let mut ticks: u32 = 0;
+    run_poll_loop(
+        started_at_ms,
+        idle_timeout_secs,
+        ceiling_secs,
+        poll_interval,
+        |_heartbeat_already_stale| {
+            let result_ready = std::fs::read_dir(&mailbox_path)
+                .ok()
+                .map(|rd| rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect::<Vec<_>>())
+                .and_then(|names| mailbox::latest_result_round(&names))
+                .is_some_and(|round| round >= 1);
+            let mut tick = PollTick {
+                result_ready,
+                heartbeat_fresh: false,
+                pane_text: None,
+                liveness: None,
+                blocked: false,
+                mark: mailbox::read_mark(bee_dir, job_id).map(|(mark, _)| mark),
+                silent_idle: false,
+            };
+            if result_ready {
+                return tick;
+            }
+            for (path, last) in [(&log_file_path, &mut last_log_mtime), (&ack_file_path, &mut last_ack_mtime)] {
+                if let Some(modified) = std::fs::metadata(path).ok().and_then(|m| m.modified().ok()) {
+                    if last.map_or(true, |prev| modified > prev) {
+                        *last = Some(modified);
+                        tick.heartbeat_fresh = true;
+                    }
+                }
+            }
+            let query = ticks % agents_every_ticks.max(1) == 0;
+            ticks = ticks.saturating_add(1);
+            if query {
+                let listed = cli.call(&cs::agents_argv()).ok();
+                let signals = watch.observe(cs::seen_in(listed.as_deref(), session_id));
+                tick.heartbeat_fresh |= signals.working;
+                tick.silent_idle = signals.silent_idle;
+                tick.liveness = Some(if signals.gone {
+                    Liveness::Absent
+                } else if signals.unknown {
+                    Liveness::Unknown
+                } else {
+                    Liveness::Alive { pid: 0 }
+                });
+            }
+            tick
+        },
+        sleep,
+        now,
+    )
 }
 
 fn diagnose_giveup_paseo(
@@ -5339,6 +5650,15 @@ fn result_envelope(
     m.insert("pane_id".into(), result.pane_id.clone().map(Value::String).unwrap_or(Value::Null));
     m.insert("closed_pane".into(), Value::Bool(result.closed_pane));
     m.insert("dry_run".into(), Value::Bool(opts.dry_run));
+    if let crate::fsutil::ReadJson::Parsed(Value::Object(job)) =
+        crate::fsutil::read_json(&mailbox::job_path(&opts.main_root.join(".bee"), &opts.job_id))
+    {
+        for key in ["session_id", "steer_to"] {
+            if let Some(v) = job.get(key).and_then(Value::as_str) {
+                m.insert(key.into(), Value::String(v.to_string()));
+            }
+        }
+    }
     let outcome = outcome_label(&result.outcome);
     if outcome != "done" && outcome != "dry_run" && !opts.dry_run {
         let retryable = matches!(result.outcome, RunOutcome::SpawnFailed(_));
@@ -5888,6 +6208,8 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     };
     let (transport, transport_name) = if opts.no_pane {
         (None, "no-pane")
+    } else if opts.claude_session.is_some() {
+        (None, "claude-session")
     } else if paseo_spec.is_some() || is_paseo_continue {
         (None, "paseo")
     } else {
@@ -5919,6 +6241,9 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     }
     let result = if opts.no_pane {
         execute_no_pane(&opts)
+    } else if let Some(ref session) = opts.claude_session {
+        let cli = RealClaudeCli::new(cs::claude_command(&main_cfg));
+        execute_claude_session(&opts, session, &cli)
     } else if is_paseo_continue {
         let cmd = paseo::paseo_command(&main_cfg);
         let cli = RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(15));
@@ -5926,7 +6251,8 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     } else if let Some(ref spec) = paseo_spec {
         let cmd = paseo::paseo_command(&main_cfg);
         let cli = RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(15));
-        execute_paseo(&opts, spec, &cli)
+        let claude = RealClaudeCli::new(cs::claude_command(&main_cfg));
+        execute_paseo_steered(&opts, spec, &cli, Some(&claude))
     } else {
         execute(&opts, transport.as_ref().unwrap().as_ref())
     };
@@ -7347,6 +7673,7 @@ mod tests {
             question_round: 0,
             allow_question: true,
             read_only: false,
+            claude_session: None,
         }
     }
 
@@ -7431,6 +7758,7 @@ mod tests {
             question_round: 0,
             allow_question: true,
             read_only: false,
+            claude_session: None,
         }
     }
 
@@ -12773,6 +13101,296 @@ mod tests {
             _ => panic!("expected a refusal"),
         }
         assert!(calls.is_empty());
+    }
+
+    struct FakeClaudeCli {
+        spawns: std::sync::Mutex<Vec<(Vec<String>, PathBuf, BTreeMap<String, String>)>>,
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        spawn_reply: Result<String, String>,
+        agents_last: Result<String, String>,
+    }
+
+    impl FakeClaudeCli {
+        fn listing(state: &str, status: &str) -> Result<String, String> {
+            Ok(format!(
+                r#"[{{"id":"sess1","name":"bee-run-job-1","cwd":"/elsewhere","state":"{state}","status":"{status}"}}]"#
+            ))
+        }
+
+        fn new(agents: Result<String, String>) -> Self {
+            Self {
+                spawns: std::sync::Mutex::new(Vec::new()),
+                calls: std::sync::Mutex::new(Vec::new()),
+                spawn_reply: Ok("backgrounded · sess1 · bee-run-job-1\n".to_string()),
+                agents_last: agents,
+            }
+        }
+
+        fn stops(&self) -> Vec<Vec<String>> {
+            self.calls.lock().unwrap().iter().filter(|c| c[0] == "stop").cloned().collect()
+        }
+    }
+
+    impl ClaudeCli for FakeClaudeCli {
+        fn spawn(&self, args: &[String], cwd: &Path, env: &BTreeMap<String, String>) -> Result<String, String> {
+            self.spawns.lock().unwrap().push((args.to_vec(), cwd.to_path_buf(), env.clone()));
+            self.spawn_reply.clone()
+        }
+
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            self.calls.lock().unwrap().push(args.to_vec());
+            match args[0].as_str() {
+                "agents" => self.agents_last.clone(),
+                "stop" => Ok("stopped sess1\n".to_string()),
+                other => Err(format!("unexpected claude command {other}")),
+            }
+        }
+    }
+
+    fn claude_session_spec() -> ClaudeSessionSpec {
+        ClaudeSessionSpec { model: "haiku".to_string(), effort: None }
+    }
+
+    fn seed_done_result(main_root: &Path, job_id: &str) {
+        let dir = mailbox::mailbox_dir(&main_root.join(".bee"), job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"gathered","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+    }
+
+    fn run_claude_session(opts: &Options, fake: &FakeClaudeCli) -> ExecResult {
+        execute_claude_session_paced(opts, &claude_session_spec(), fake, Duration::from_millis(1), 1)
+    }
+
+    #[test]
+    fn claude_session_happy_path_returns_the_mailbox_result_and_stops_the_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.cell_id = Some("cssd-1".to_string());
+        seed_done_result(tmp.path(), &opts.job_id);
+        let fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+
+        let res = run_claude_session(&opts, &fake);
+
+        match &res.outcome {
+            RunOutcome::Result(r) => assert_eq!(r.summary, "gathered"),
+            other => panic!("expected a result, got {other:?}"),
+        }
+        assert_eq!(res.pane_id.as_deref(), Some("sess1"));
+        assert!(res.closed_pane);
+        let spawns = fake.spawns.lock().unwrap();
+        assert_eq!(spawns.len(), 1);
+        let (argv, cwd, _) = &spawns[0];
+        assert_eq!(argv[0], "--bg");
+        assert!(argv.windows(2).any(|w| w[0] == "--model" && w[1] == "haiku"), "{argv:?}");
+        assert!(argv.windows(2).any(|w| w[0] == "--permission-mode" && w[1] == "bypassPermissions"), "{argv:?}");
+        assert!(argv.windows(2).any(|w| w[0] == "--name" && w[1].starts_with("bee-cssd-1-")), "{argv:?}");
+        let settings = argv.windows(2).find(|w| w[0] == "--settings").map(|w| w[1].clone()).unwrap();
+        let settings: Value = serde_json::from_str(&settings).unwrap();
+        assert_eq!(settings["worktree"]["bgIsolation"], "none");
+        assert_eq!(settings["env"]["BEE_HERDING_JOB_ID"], "job-1");
+        assert_eq!(cwd, &opts.cwd);
+        assert_eq!(fake.stops(), vec![vec!["stop".to_string(), "sess1".to_string()]]);
+
+        let job = read_job(&mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id));
+        assert_eq!(job["transport"], "claude-session");
+        assert_eq!(job["session_id"], "sess1");
+        assert_eq!(job["steer_to"], "bee-run-job-1");
+
+        let envelope = result_envelope(&opts, &res, "claude-session", None);
+        assert_eq!(envelope["outcome"], "done");
+        assert_eq!(envelope["summary"], "gathered");
+        assert_eq!(envelope["session_id"], "sess1");
+        assert_eq!(envelope["steer_to"], "bee-run-job-1");
+    }
+
+    #[test]
+    fn claude_session_effort_rides_the_spawn_argv() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_done_result(tmp.path(), &opts.job_id);
+        let fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+        let session = ClaudeSessionSpec { model: "fable".to_string(), effort: Some("xhigh".to_string()) };
+
+        let _ = execute_claude_session_paced(&opts, &session, &fake, Duration::from_millis(1), 1);
+
+        let spawns = fake.spawns.lock().unwrap();
+        assert!(spawns[0].0.windows(2).any(|w| w[0] == "--effort" && w[1] == "xhigh"), "{:?}", spawns[0].0);
+    }
+
+    #[test]
+    fn claude_session_idle_twice_with_no_result_times_out_and_stops_the_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = FakeClaudeCli::new(FakeClaudeCli::listing("idle", "idle"));
+
+        let res = run_claude_session(&opts, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::TimedOutIdle(_)), "{:?}", res.outcome);
+        assert_eq!(fake.stops().len(), 1);
+    }
+
+    #[test]
+    fn claude_session_spawn_output_without_a_backgrounded_line_fails_naming_the_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let mut fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+        fake.spawn_reply = Ok("error: unknown model\n".to_string());
+
+        let res = run_claude_session(&opts, &fake);
+
+        match res.outcome {
+            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("unknown model") && msg.contains("FIX:"), "{msg}"),
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+        assert!(fake.stops().is_empty());
+    }
+
+    #[test]
+    fn claude_session_that_leaves_the_agents_list_is_reported_died_without_a_stop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = FakeClaudeCli::new(Ok("[]".to_string()));
+
+        let res = run_claude_session(&opts, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::Died { .. }), "{:?}", res.outcome);
+        assert!(fake.stops().is_empty());
+    }
+
+    #[test]
+    fn claude_session_in_failed_state_is_reported_died() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = FakeClaudeCli::new(FakeClaudeCli::listing("failed", "idle"));
+
+        let res = run_claude_session(&opts, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::Died { .. }), "{:?}", res.outcome);
+    }
+
+    #[test]
+    fn claude_session_past_the_ceiling_is_stopped_and_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.ceiling_secs = 0;
+        let fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+
+        let res = run_claude_session(&opts, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::TimedOutCeiling), "{:?}", res.outcome);
+        assert_eq!(fake.stops().len(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn claude_session_read_only_sets_the_env_for_the_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_claude_guard(tmp.path(), "worker-guard", "x/.bee/bin/bee hook worker-guard; exit 0");
+        let mut opts = test_options(tmp.path(), false);
+        opts.read_only = true;
+        seed_done_result(tmp.path(), &opts.job_id);
+        let fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+
+        let res = run_claude_session(&opts, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+        let spawns = fake.spawns.lock().unwrap();
+        assert_eq!(spawns[0].2.get("BEE_HERDING_READ_ONLY").map(String::as_str), Some("1"));
+        assert_eq!(spawns[0].2.get("BEE_HERDING_WORKER").map(String::as_str), Some("1"));
+        let settings = spawns[0].0.windows(2).find(|w| w[0] == "--settings").map(|w| w[1].clone()).unwrap();
+        let settings: Value = serde_json::from_str(&settings).unwrap();
+        assert_eq!(settings["env"]["BEE_HERDING_READ_ONLY"], "1");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn claude_session_read_only_refuses_before_spawn_without_the_worker_guard() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_claude_guard(tmp.path(), "stage-tools", "x/.bee/bin/bee hook worker-guard; exit 0");
+        let mut opts = test_options(tmp.path(), false);
+        opts.read_only = true;
+        let fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+
+        let res = run_claude_session(&opts, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::SpawnFailed(_)));
+        assert!(fake.spawns.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn claude_session_options_parse_model_and_effort() {
+        let opts = parse_options(&["--task", "t", "--main-root", "/tmp", "--session-model", "haiku", "--session-effort", "high"]).unwrap();
+        assert_eq!(
+            opts.claude_session,
+            Some(ClaudeSessionSpec { model: "haiku".to_string(), effort: Some("high".to_string()) })
+        );
+        assert!(parse_options(&["--task", "t", "--main-root", "/tmp"]).unwrap().claude_session.is_none());
+    }
+
+    #[test]
+    fn claude_session_options_refuse_conflicting_flags() {
+        for extra in [vec!["--agent", "w"], vec!["--no-pane"], vec!["--continue", "job-1"]] {
+            let mut flags = vec!["--task", "t", "--main-root", "/tmp", "--session-model", "haiku"];
+            flags.extend(extra);
+            let err = parse_options(&flags).unwrap_err();
+            assert!(err.contains("--session-model"), "{err}");
+        }
+        let err = parse_options(&["--task", "t", "--main-root", "/tmp", "--session-model", "haiku", "--session-effort", "huge"]).unwrap_err();
+        assert!(err.contains("huge"), "{err}");
+        let err = parse_options(&["--task", "t", "--main-root", "/tmp", "--session-effort", "high"]).unwrap_err();
+        assert!(err.contains("--session-model"), "{err}");
+    }
+
+    fn paseo_claude_run_with_listing(listing: String) -> Value {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_done_result(tmp.path(), &opts.job_id);
+        let spec = PaseoSpec {
+            provider: "claude".to_string(),
+            model: Some("claude-sonnet-5-5".to_string()),
+            thinking: None,
+            mode: None,
+            isolated_config: false,
+        };
+        let paseo_fake = FakePaseoCli::new(
+            Ok("0.12.0\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-claude\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+        let claude_fake = FakeClaudeCli::new(Ok(listing.replace("CWD", &opts.cwd.display().to_string())));
+        let _ = execute_paseo_steered(&opts, &spec, &paseo_fake, Some(&claude_fake));
+        read_job(&mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id))
+    }
+
+    #[test]
+    fn claude_session_paseo_claude_run_records_the_one_matching_session_as_steer_to() {
+        let job = paseo_claude_run_with_listing(
+            r#"[{"id":"c1","name":"paseo-worker","cwd":"CWD","state":"working","status":"busy","startedAt":"2999-01-01T00:00:00Z"},
+                {"id":"c2","name":"old","cwd":"CWD","state":"idle","status":"idle","startedAt":"2000-01-01T00:00:00Z"}]"#
+                .to_string(),
+        );
+        assert_eq!(job["steer_to"], "paseo-worker");
+    }
+
+    #[test]
+    fn claude_session_paseo_claude_run_omits_steer_to_when_several_sessions_match() {
+        let job = paseo_claude_run_with_listing(
+            r#"[{"id":"c1","name":"a","cwd":"CWD","startedAt":"2999-01-01T00:00:00Z"},
+                {"id":"c2","name":"b","cwd":"CWD","startedAt":"2999-01-01T00:00:01Z"}]"#
+                .to_string(),
+        );
+        assert!(job.get("steer_to").is_none(), "{job}");
+    }
+
+    #[test]
+    fn claude_session_paseo_claude_run_omits_steer_to_when_none_match() {
+        let job = paseo_claude_run_with_listing("[]".to_string());
+        assert!(job.get("steer_to").is_none(), "{job}");
     }
 
     #[test]
