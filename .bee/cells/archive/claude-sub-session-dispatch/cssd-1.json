@@ -1,0 +1,208 @@
+{
+  "id": "cssd-1",
+  "feature": "claude-sub-session-dispatch",
+  "title": "Add a claude-session transport to herding run",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "7fe67d57-462a-4090-a2bb-d0b937e31c0c",
+    "16fb3feb-5856-4cbb-a7c2-65125d6650b7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "read_first": [
+    "docs/history/claude-sub-session-dispatch/CONTEXT.md",
+    "docs/history/claude-sub-session-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D1 and D2: add a claude-session transport to `bee herding run`. New flags `--session-model <model>` and optional `--session-effort <low|medium|high|xhigh|max>`; with `--session-model`, run takes this transport instead of paseo or a pane (refuse `--session-model` together with `--agent` or `--no-pane`). Follow execute_paseo (run.rs:3497) for the shape: write the inbox marker, build the herding brief and child env the same way, set BEE_HERDING_READ_ONLY=1 and apply claude_worker_guard_missing on --read-only. Spawn from inside bee, never through a shell, behind a trait like PaseoCli so tests use a fake: argv `claude --bg --name <name> --model <model> [--effort <e>] --permission-mode bypassPermissions --settings {\"worktree\":{\"bgIsolation\":\"none\"}} <prompt>` with cwd = --cwd. Name = `bee-<cell id or kind>-<short job id>`. Parse the id from the `backgrounded · <id> · <name>` line. Poll `claude agents --json --all` for that id and the mailbox result for round 1 with the same decisions the paseo loop makes (result -> done; status idle twice with no result -> TimedOutIdle; state failed or stopped, or id gone -> died; ceiling -> stop and timed out). Run `claude stop <id>` after the result or a give-up. Write `session_id` and `steer_to` (the session name) into the job record and the run JSON output, and have `bee herding status --job` print `steer_to`. Per D1 for a paseo run whose provider is claude: after spawn, find the one session in `claude agents --json --all` whose cwd equals --cwd and whose startedAt is after the spawn time, and record its name as steer_to; when none or several match, omit steer_to. The claude binary is `claude` unless `herding.claude_command` names another.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee claude_session",
+  "must_haves": {
+    "truths": [
+      "a run with --session-model spawns exactly one claude --bg process with bgIsolation none and the given model",
+      "the run returns the worker's mailbox result as its JSON output, the same shape a paseo run returns",
+      "a session that goes idle twice with no result, fails, or hits the ceiling is stopped and reported, never left running",
+      "--read-only sets BEE_HERDING_READ_ONLY=1 in the session env"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+        "substantive": "spawn argv builder, id parser, agents-json parser, poll decisions, unit tests on a fake CLI"
+      }
+    ],
+    "key_links": [
+      "run.rs takes the claude-session transport when --session-model is given",
+      "job record and run output carry session_id and steer_to",
+      "a paseo claude run records steer_to when exactly one matching claude session is listed"
+    ],
+    "prohibitions": [
+      "No change to the paseo, herdr or tmux transports' behavior",
+      "No code comments",
+      "Never read results from claude logs"
+    ],
+    "open_choices": [
+      "How the fake CLI trait is shaped, as long as no unit test runs the real claude binary"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "cssd-1-worker",
+    "outcome": "claude-session transport in herding run, live-proven",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/tests.rs"
+    ],
+    "deviations": [
+      "--settings also carries an env object so BEE_HERDING_WORKER, BEE_HERDING_JOB_ID and BEE_HERDING_READ_ONLY reach a session the Claude supervisor starts; the live run proved the read-only guard held",
+      "herding/tests.rs gained claude_session: None in four Options literals to compile",
+      "sync-ack: the bee-herding skill drives the cockpit roles, which this transport does not change; cssd-3 documents the transport in docs/knowledge/areas/bee-herding and the swarming reference"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T13:23:35.723Z",
+    "behavior_change": true,
+    "verification_evidence": "24 claude_session unit tests on a fake CLI passed, plus a leader live run of bee herding run --session-model haiku --read-only that returned outcome done with steer_to bee-run-42-1701186-1 and left the session stopped (evidence /mnt/data/Projects/goglbe/beehive/.bee/workers/cssd-live.out); full suite has 1 red (opencode projection drift) that is also red on main and is fixed by the wave-close regen",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee claude_session",
+    "claimed_at": "2026-11-06T13:06:40.093Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+        "owner_bypassed": null,
+        "at": "2026-11-06T13:23:35.722Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+        "owner_bypassed": null,
+        "at": "2026-11-06T13:23:56.286Z"
+      }
+    ],
+    "sync_ack": "the bee-herding skill drives the cockpit roles, which this transport does not change; cssd-3 documents the transport in docs/knowledge/areas/bee-herding and the swarming reference",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee herding run --session-model starts a Claude Code background session, returns its mailbox result, records session_id and steer_to, and stops the session; a paseo claude run records steer_to",
+      "commit": "255e4fb79dbed697ac87540a6bea7b6ef73533a0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee claude_session — green:live — 24 claude_session unit tests on a fake CLI passed, plus a leader live run of bee herding run --session-model haiku --read-only that returned outcome done with steer_to bee-run-42-1701186-1 and left the session stopped (evidence /mnt/data/Projects/goglbe/beehive/.bee/workers/cssd-live.out); full suite has 1 red (opencode projection drift) that is also red on main and is fixed by the wave-close regen",
+      "deviations": [
+        "--settings also carries an env object so BEE_HERDING_WORKER, BEE_HERDING_JOB_ID and BEE_HERDING_READ_ONLY reach a session the Claude supervisor starts; the live run proved the read-only guard held",
+        "herding/tests.rs gained claude_session: None in four Options literals to compile"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a run with --session-model spawns exactly one claude --bg process with bgIsolation none and the given model",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/claude_session.rs"
+          },
+          {
+            "requirement": "the run returns the worker's mailbox result as its JSON output, the same shape a paseo run returns",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "a session that goes idle twice with no result, fails, or hits the ceiling is stopped and reported, never left running",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "--read-only sets BEE_HERDING_READ_ONLY=1 in the session env",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/claude_session.rs"
+          },
+          {
+            "requirement": "run.rs takes the claude-session transport when --session-model is given",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "job record and run output carry session_id and steer_to",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "a paseo claude run records steer_to when exactly one matching claude session is listed",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/claude_session.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/run.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-06T13:23:56.286Z",
+        "recorded_by": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "one-bg-spawn-isolation-model",
+            "status": "PASS",
+            "evidence": "run.rs:3954-3961 one cli.spawn, no retry; claude_session.rs:120-129 argv --bg --name --model --permission-mode --settings; claude_session.rs:112 bgIsolation none; test run.rs:13169 asserts one spawn, --model haiku, bgIsolation none"
+          },
+          {
+            "id": "mailbox-result-same-envelope",
+            "status": "PASS",
+            "evidence": "run.rs:4002 ResultReady reads read_result_for_round(1); run.rs:5811-5813 shared result_envelope; run.rs:5656 adds session_id/steer_to; test run.rs:13203-13207"
+          },
+          {
+            "id": "idle-fail-ceiling-stopped-reported",
+            "status": "PASS",
+            "evidence": "claude_session.rs:234-241 idle twice; run.rs:1258-1265 ceiling and idle decisions; run.rs:4024 claude stop; run.rs:4003-4012 reported; Died skips stop per plan.md:164; tests run.rs:13225, 13265, 13276"
+          },
+          {
+            "id": "read-only-env",
+            "status": "PASS",
+            "evidence": "run.rs:3943-3951 BEE_HERDING_READ_ONLY=1 in spawn env and settings.env; run.rs:3874-3877 guard refusal; tests run.rs:13290, 13311"
+          },
+          {
+            "id": "tests-run",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee --bin bee claude_session: 33 passed, 0 failed (filtered run only)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-06T14:04:02.023Z"
+      }
+    ]
+  }
+}

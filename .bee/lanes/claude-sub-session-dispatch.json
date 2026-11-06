@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "claude-sub-session-dispatch",
   "mode": null,
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"claude-sub-session-dispatch\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f5895f6; reload the product and test \"claude-sub-session-dispatch\", then either approve uat (\"bee gate --name uat --approved true --lane claude-sub-session-dispatch\") or fix it in the worktree and merge again.",
+  "next_action": "none; captured in docs/knowledge/areas/bee-herding/claude-session-transport.md",
   "created_at": "2026-11-06T13:00:31.251Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: claude-sub-session-dispatch",
-    "asked_at": "2026-11-06T13:46:59.927Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "question",
+    "subject": "run the close judge for cssd-1 and cssd-2, or leave the feature open",
+    "asked_at": "2026-11-06T13:58:47.587Z",
+    "session": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081"
   },
   "route": {
     "class": "feature",
@@ -35,8 +35,8 @@
   },
   "gate_preview": {
     "feature": "claude-sub-session-dispatch",
-    "plan_sha256": "b6dfdff0002bf2753e6c1f7d409f24252b5f68d6336faeaa413e09772cf09469",
-    "previewed_at": "2026-11-06T13:19:50.158Z",
+    "plan_sha256": "3d5ff4da75eb50630c754a604924a8a0aad503b9f44def6a83bc4f62e602509c",
+    "previewed_at": "2026-11-06T14:00:17.590Z",
     "cells": [
       {
         "id": "cssd-1",
@@ -279,9 +279,10 @@
         },
         {
           "stage": "independent-review",
-          "classification": "not-applicable",
+          "classification": "conditional",
           "role": "review",
-          "reason": "Independent review stays user-invoked."
+          "condition": "the standard-lane semantic judge of capped behavior_change cells at slice close",
+          "reason": "Goal-check judge tier, not a user review session."
         },
         {
           "stage": "generic-advisor",
@@ -324,8 +325,8 @@
   },
   "approved_cell_packet": {
     "feature": "claude-sub-session-dispatch",
-    "plan_sha256": "b6dfdff0002bf2753e6c1f7d409f24252b5f68d6336faeaa413e09772cf09469",
-    "previewed_at": "2026-11-06T13:19:50.158Z",
+    "plan_sha256": "3d5ff4da75eb50630c754a604924a8a0aad503b9f44def6a83bc4f62e602509c",
+    "previewed_at": "2026-11-06T14:00:17.590Z",
     "cells": [
       {
         "id": "cssd-1",
@@ -568,9 +569,10 @@
         },
         {
           "stage": "independent-review",
-          "classification": "not-applicable",
+          "classification": "conditional",
           "role": "review",
-          "reason": "Independent review stays user-invoked."
+          "condition": "the standard-lane semantic judge of capped behavior_change cells at slice close",
+          "reason": "Goal-check judge tier, not a user review session."
         },
         {
           "stage": "generic-advisor",
@@ -610,5 +612,14 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "claude-sub-session-dispatch",
+    "date": "2026-11-06",
+    "at": "2026-11-06T13:57:40.926Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "none; captured in docs/knowledge/areas/bee-herding/claude-session-transport.md"
   }
 }

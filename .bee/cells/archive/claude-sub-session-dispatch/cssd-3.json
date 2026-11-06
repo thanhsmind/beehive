@@ -1,0 +1,132 @@
+{
+  "id": "cssd-3",
+  "feature": "claude-sub-session-dispatch",
+  "title": "Document sub-session dispatch and steering",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "cssd-1",
+    "cssd-2"
+  ],
+  "decisions": [
+    "7fe67d57-462a-4090-a2bb-d0b937e31c0c",
+    "16fb3feb-5856-4cbb-a7c2-65125d6650b7",
+    "0f6ebf63-a640-4b8f-80a3-e7fea16e857e"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+    "docs/knowledge/areas/bee-herding/index.md"
+  ],
+  "read_first": [
+    "docs/history/claude-sub-session-dispatch/CONTEXT.md",
+    "packages/bee/AGENTS.block.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+  ],
+  "action": "Per D1-D3: in packages/bee/AGENTS.block.md, extend the 'A leader watches a worker' line: a leader may steer a Claude worker (a claude-session job or a Claude herding pane) with SendMessage to the steer_to name bee herding status prints, and still never reads its transcript. Write the knowledge concept claude-session-transport.md (what it is, the claude --bg argv, bgIsolation none, the poll decisions, steer_to, the dispatch.claude_sessions switch and the PATH fallback, the worker-outward guard reason it spawns inside bee, Pointers to claude_session.rs and prepare.rs) and link it from the area index. Add one line to swarming-reference.md on steering. Run .bee/bin/bee dev regen so AGENTS.md matches.",
+  "verify": ".bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "AGENTS.md permits steering a Claude worker with SendMessage and keeps the no-transcript rule"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+        "substantive": "concept with Pointers to claude_session.rs and prepare.rs"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md matches the block after bee dev regen"
+    ],
+    "prohibitions": [
+      "Do not edit AGENTS.md by hand outside regen"
+    ]
+  },
+  "behavior_change": false,
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "cssd-3-worker",
+    "outcome": "Documented claude-session dispatch and SendMessage steering: AGENTS block line, swarming-reference line, new claude-session-transport concept, area index link; commit a838512c4",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+      "docs/knowledge/areas/bee-herding/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-06T13:42:24.353Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change; bee dev release-manifest --check, bee knowledge index --check and the cargo suite were not run (worker may not run bee verbs; no release build in this worktree); AGENTS.md left for the leader's bee dev regen",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+    "verify_command": ".bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-06T13:40:58.851Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Documented claude-session dispatch and SendMessage steering: AGENTS block line, swarming-reference line, new claude-session-transport concept, area index link; commit a838512c4",
+      "commit": "a838512c469c98d95efd7b66343d56e7bcb132ed",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+        "docs/knowledge/areas/bee-herding/index.md"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check — green:static — docs-only change; bee dev release-manifest --check, bee knowledge index --check and the cargo suite were not run (worker may not run bee verbs; no release build in this worktree); AGENTS.md left for the leader's bee dev regen",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "ownership_overrides": [
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+        "owner_bypassed": null,
+        "at": "2026-11-06T13:46:28.307Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "AGENTS.md permits steering a Claude worker with SendMessage and keeps the no-transcript rule",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "AGENTS.md matches the block after bee dev regen",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "packages/bee/AGENTS.block.md",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/references/swarming-reference.md",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+            "artifact": "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/index.md",
+            "artifact": "docs/knowledge/areas/bee-herding/index.md"
+          }
+        ],
+        "recorded_at": "2026-11-06T13:46:28.307Z",
+        "recorded_by": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

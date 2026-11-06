@@ -1,0 +1,196 @@
+{
+  "id": "cssd-2",
+  "feature": "claude-sub-session-dispatch",
+  "title": "Route native Claude dispatches to sub-sessions",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "cssd-1"
+  ],
+  "decisions": [
+    "16fb3feb-5856-4cbb-a7c2-65125d6650b7",
+    "0f6ebf63-a640-4b8f-80a3-e7fea16e857e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "docs/history/claude-sub-session-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D2 and D3: in the runtime-claude native arm of dispatch prepare (prepare.rs:2858, the `_ =>` arm that builds the Agent payload), when the slot resolves a configured model, `dispatch.claude_sessions` in the main checkout's config is not false, and `claude` (or herding.claude_command) resolves on PATH, emit tool Bash with the herding command built the same way as the herding arm (prepare.rs:2619: --task-file - --json, --cwd for the worktree, --cell-id for cells, --read-only for gather and advisor, --ceiling from config) plus `--session-model <model>` and `--session-effort <effort>` when an effort is chosen; stdin is the herding pane prompt; channel `claude-session`; transport_ready true with a reason naming the binary. When the CLI is missing, keep the Agent payload and add fallback_reason `claude_cli_missing`. When the switch is false, the payload is byte-identical to today. A session-model escalation keeps the Agent payload. Codex and Pi arms do not change.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+  "must_haves": {
+    "truths": [
+      "on runtime claude a native-model slot for cell, gather, reviewer and advisor returns a Bash bee herding run command carrying --session-model",
+      "dispatch.claude_sessions false returns the Agent payload unchanged",
+      "no claude CLI on PATH returns the Agent payload with fallback_reason claude_cli_missing",
+      "codex and pi payloads are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "claude-session arm and its tests"
+      }
+    ],
+    "key_links": [
+      "the emitted command uses the --session-model flag cssd-1 added"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to the herding arm for herding-configured slots"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "cssd-2-worker",
+    "outcome": "native Claude dispatches route to sub-sessions, live-proven",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "a test-only thread-local keeps the existing hundreds of Agent-payload unit tests hermetic on hosts with claude on PATH; production is always armed",
+      "herding.rs: claude_session module made pub(crate) so the door reads the same binary name as herding run",
+      "leader fixed tests/pi_plugin_contracts.rs fixture with dispatch.claude_sessions false in commit 1c50b3edf, outside the cell file list",
+      "sync-ack: the bee-herding skill drives the cockpit roles, which this door change does not touch; cssd-3 documents it in docs/knowledge/areas/bee-herding and the swarming reference"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T13:40:37.793Z",
+    "behavior_change": true,
+    "verification_evidence": "9 new claude_session_door tests pass; leader full suite with claude on PATH 5205 passed 1 failed and with claude off PATH the same single red, the opencode projection drift also red on main and fixed by the wave-close regen; leader live door run for hat-risks returned tool Bash with --session-model fable --read-only (evidence /mnt/data/Projects/goglbe/beehive/.bee/workers/cssd-door-live.json)",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+    "claimed_at": "2026-11-06T13:24:05.324Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+        "owner_bypassed": null,
+        "at": "2026-11-06T13:40:37.791Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+        "owner_bypassed": null,
+        "at": "2026-11-06T13:40:47.197Z"
+      }
+    ],
+    "sync_ack": "the bee-herding skill drives the cockpit roles, which this door change does not touch; cssd-3 documents it in docs/knowledge/areas/bee-herding and the swarming reference",
+    "mistakes": [
+      {
+        "wrong": "the worker left a red integration test it named but did not fix because the file was outside its list",
+        "better": "the leader fixed it; a cell that changes a default payload should list the integration tests that assert that payload",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "on runtime claude a native-model slot for cell, gather, reviewer and advisor returns a Bash bee herding run --session-model command; dispatch.claude_sessions false and a missing claude CLI keep the Agent payload; escalation keeps the Agent payload",
+      "commit": "5e7a358f1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare — green:live — 9 new claude_session_door tests pass; leader full suite with claude on PATH 5205 passed 1 failed and with claude off PATH the same single red, the opencode projection drift also red on main and fixed by the wave-close regen; leader live door run for hat-risks returned tool Bash with --session-model fable --read-only (evidence /mnt/data/Projects/goglbe/beehive/.bee/workers/cssd-door-live.json)",
+      "deviations": [
+        "a test-only thread-local keeps the existing hundreds of Agent-payload unit tests hermetic on hosts with claude on PATH; production is always armed",
+        "herding.rs: claude_session module made pub(crate) so the door reads the same binary name as herding run",
+        "leader fixed tests/pi_plugin_contracts.rs fixture with dispatch.claude_sessions false in commit 1c50b3edf, outside the cell file list"
+      ],
+      "mistakes": [
+        "the worker left a red integration test it named but did not fix because the file was outside its list — the leader fixed it; a cell that changes a default payload should list the integration tests that assert that payload — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "on runtime claude a native-model slot for cell, gather, reviewer and advisor returns a Bash bee herding run command carrying --session-model",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "dispatch.claude_sessions false returns the Agent payload unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "no claude CLI on PATH returns the Agent payload with fallback_reason claude_cli_missing",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "codex and pi payloads are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "the emitted command uses the --session-model flag cssd-1 added",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/herding.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-06T13:40:47.197Z",
+        "recorded_by": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "claude-native-slot-bash-session-model",
+            "status": "PASS",
+            "evidence": "prepare.rs:2505-2515 candidate gating; prepare.rs:2948-2970 Bash with claude_session_command; prepare.rs:761 --session-model; test prepare.rs:6819-6846 all four kinds"
+          },
+          {
+            "id": "switch-false-agent-unchanged",
+            "status": "PASS",
+            "evidence": "prepare.rs:729-736 switch read; prepare.rs:2516 and 2974 no change on switch off; test prepare.rs:6902-6920 (compares two switch-off configs, cell kind not covered)"
+          },
+          {
+            "id": "cli-missing-fallback-reason",
+            "status": "PASS",
+            "evidence": "prepare.rs:2972-3000 Agent arm; prepare.rs:2975 claude_cli_missing; prepare.rs:3259-3260 envelope; test prepare.rs:6923-6940 all four kinds"
+          },
+          {
+            "id": "codex-pi-unchanged",
+            "status": "PASS",
+            "evidence": "prepare.rs:2507 runtime claude only; codex arm prepare.rs:2939 first; test prepare.rs:6968-6980 codex advisor; pi_plugin_contracts.rs:2928 fixture pin only; injected_dispatch_guidance test 1 passed"
+          },
+          {
+            "id": "tests-run",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee --bin bee claude_session_door_tests: 9 passed, 0 failed (filtered run only)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-06T14:04:02.025Z"
+      }
+    ]
+  }
+}
