@@ -2434,25 +2434,123 @@ pub(crate) struct CloseUsage {
     pub(crate) skipped: usize,
     pub(crate) main: UsageBucket,
     pub(crate) subagents: UsageBucket,
+    pub(crate) herding: Vec<HerdingSession>,
+}
+
+pub(crate) struct HerdingSession {
+    pub(crate) job_id: String,
+    pub(crate) usage: SessionUsage,
+}
+
+impl HerdingSession {
+    fn value(&self) -> Value {
+        let mut v = self.usage.value();
+        v["job_id"] = json!(self.job_id);
+        v
+    }
+}
+
+fn merge_model_rows(into: &mut serde_json::Map<String, Value>, models: &Value) {
+    let Value::Object(rows) = models else { return };
+    for (name, row) in rows {
+        let Value::Object(fields) = row else { continue };
+        let slot = into.entry(name.clone()).or_insert_with(|| json!({}));
+        for (key, v) in fields {
+            let sum = slot.get(key).and_then(Value::as_f64).unwrap_or(0.0) + v.as_f64().unwrap_or(0.0);
+            slot[key] = json!(sum);
+        }
+    }
 }
 
 impl CloseUsage {
     pub(crate) fn sessions(&self) -> usize {
-        self.details.len()
+        self.details.len() + self.herding.len()
+    }
+
+    fn herding_bucket(&self) -> UsageBucket {
+        self.herding.iter().fold(UsageBucket::default(), |acc, h| acc.plus(&h.usage.totals))
+    }
+
+    fn herding_value(&self) -> Value {
+        let mut models = serde_json::Map::new();
+        for h in &self.herding {
+            merge_model_rows(&mut models, &h.usage.models);
+            merge_model_rows(&mut models, &h.usage.subagent_models);
+        }
+        let mut block = self.herding_bucket().value();
+        block["models"] = Value::Object(models);
+        block
     }
 
     fn total(&self) -> UsageBucket {
-        self.main.plus(&self.subagents)
+        self.main.plus(&self.subagents).plus(&self.herding_bucket())
     }
 
     pub(crate) fn value(&self) -> Value {
-        json!({
+        let mut v = json!({
             "sessions": self.sessions(),
             "skipped": self.skipped,
             "main": self.main.value(),
             "subagents": self.subagents.value(),
             "total": self.total().value(),
-        })
+        });
+        if !self.herding.is_empty() {
+            v["herding"] = self.herding_value();
+        }
+        v
+    }
+}
+
+fn herding_jobs(control: &Path, feature: &str) -> Vec<(String, Option<PathBuf>)> {
+    let mut jobs: Vec<(String, Option<PathBuf>)> = Vec::new();
+    let Ok(entries) = std::fs::read_dir(control.join(".bee").join("mailbox")) else { return jobs };
+    for entry in entries.flatten() {
+        let ReadJson::Parsed(activity) = read_json(&entry.path().join("activity.json")) else { continue };
+        if activity.get("feature").and_then(Value::as_str) != Some(feature) {
+            continue;
+        }
+        let transcript = activity
+            .get("transcript_path")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .filter(|p| p.exists());
+        jobs.push((entry.file_name().to_string_lossy().into_owned(), transcript));
+    }
+    jobs.sort();
+    jobs
+}
+
+fn collect_herding_usage(
+    control: &Path,
+    feature: &str,
+    counted: &mut std::collections::HashSet<String>,
+    usage: &mut CloseUsage,
+) {
+    for (job_id, transcript) in herding_jobs(control, feature) {
+        let Some(rollup) = transcript.and_then(|t| crate::hooks::session_close::rollup_transcript(&t)) else {
+            usage.skipped += 1;
+            continue;
+        };
+        if !counted.insert(rollup.session_id.clone()) {
+            continue;
+        }
+        let mut session = UsageBucket::default();
+        session.add_models(&rollup.models);
+        session.add_models(&rollup.subagent_models);
+        usage.herding.push(HerdingSession {
+            job_id,
+            usage: SessionUsage {
+                session_id: rollup.session_id,
+                models: rollup.models,
+                subagent_models: rollup.subagent_models,
+                subagent_count: rollup.subagent_count,
+                started_ms: rollup.started_ms,
+                ended_ms: rollup.ended_ms,
+                totals: session,
+            },
+        });
     }
 }
 
@@ -2510,7 +2608,9 @@ pub(crate) fn collect_close_usage(
         skipped: 0,
         main: UsageBucket::default(),
         subagents: UsageBucket::default(),
+        herding: Vec::new(),
     };
+    let mut counted: std::collections::HashSet<String> = std::collections::HashSet::new();
     for id in usage_session_ids(control, feature, calling_session) {
         let record = match read_json(&crate::verbs::cells::sessions_dir(control).join(format!("{id}.json"))) {
             ReadJson::Parsed(r) => r,
@@ -2546,6 +2646,8 @@ pub(crate) fn collect_close_usage(
         session_subagents.add_models(&rollup.subagent_models);
         usage.main = usage.main.plus(&session_main);
         usage.subagents = usage.subagents.plus(&session_subagents);
+        counted.insert(id.clone());
+        counted.insert(rollup.session_id.clone());
         usage.details.push(SessionUsage {
             session_id: id,
             models: rollup.models,
@@ -2556,6 +2658,7 @@ pub(crate) fn collect_close_usage(
             totals: session_main.plus(&session_subagents),
         });
     }
+    collect_herding_usage(control, feature, &mut counted, &mut usage);
     usage
 }
 
@@ -2571,7 +2674,7 @@ pub(crate) const USAGE_SCHEMA: &str = "bee-usage/v1";
 /// `closed_at` is a parameter rather than a `utc_now()` read inside, so a test
 /// can pin the one field that is not derived from the usage itself.
 pub(crate) fn usage_record_value(feature: &str, usage: &CloseUsage, closed_at: &str) -> Value {
-    json!({
+    let mut record = json!({
         "schema": USAGE_SCHEMA,
         "feature": feature,
         "closed_at": closed_at,
@@ -2582,7 +2685,12 @@ pub(crate) fn usage_record_value(feature: &str, usage: &CloseUsage, closed_at: &
             "subagents": usage.subagents.value(),
             "total": usage.total().value(),
         },
-    })
+    });
+    if !usage.herding.is_empty() {
+        record["totals"]["herding"] = usage.herding_value();
+        record["herding_sessions"] = Value::Array(usage.herding.iter().map(HerdingSession::value).collect());
+    }
+    record
 }
 
 /// Write `.bee/usage/<feature>.json`, answering the written path (relative to
@@ -2642,12 +2750,18 @@ pub(crate) fn close_usage_line(usage: &CloseUsage) -> Option<String> {
     } else {
         String::new()
     };
+    let herding = if usage.herding.is_empty() {
+        String::new()
+    } else {
+        format!(", herding {}", f(usage.herding_bucket().total))
+    };
     Some(format!(
-        "usage: {} session(s) — {} tokens (main {}, subagents {}; new {}, cached {}){}",
+        "usage: {} session(s) — {} tokens (main {}, subagents {}{}; new {}, cached {}){}",
         usage.sessions(),
         f(total.total),
         f(usage.main.total),
         f(usage.subagents.total),
+        herding,
         f(total.new_t),
         f(total.cached),
         skipped
@@ -5864,6 +5978,7 @@ mod tests {
             skipped: 0,
             main: UsageBucket { new_t: 500_000.0, cached: 900_000.0, total: 1_400_000.0 },
             subagents: UsageBucket::default(),
+            herding: Vec::new(),
         };
         assert_eq!(
             close_usage_line(&usage).unwrap(),
@@ -5907,6 +6022,63 @@ mod tests {
         assert_eq!(usage.sessions(), 0);
         assert_eq!(usage.skipped, 2);
         assert!(close_usage_line(&usage).is_none());
+    }
+
+    fn write_herding_job(root: &Path, job: &str, feature: &str, transcript: &str, body: Option<&str>) {
+        let path = root.join("transcripts").join(format!("{transcript}.jsonl"));
+        if let Some(body) = body {
+            w(root, &format!("transcripts/{transcript}.jsonl"), &format!("{body}\n"));
+        }
+        let path_json = path.to_string_lossy().replace('\\', "\\\\");
+        w(
+            root,
+            &format!(".bee/mailbox/{job}/activity.json"),
+            &format!(r#"{{"feature":"{feature}","job_id":"{job}","transcript_path":"{path_json}"}}"#),
+        );
+    }
+
+    #[test]
+    fn a_pane_session_counts_once_per_model_inside_the_feature_total() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        write_herding_job(root, "job-1", "demo", "pane-1", Some(&usage_event("sonnet", "p1", 1000, 100, 0, 5000)));
+        write_herding_job(root, "job-2", "other-feature", "pane-2", Some(&usage_event("sonnet", "p2", 7, 7, 7, 7)));
+        write_herding_job(root, "job-3", "demo", "pane-1", Some(&usage_event("sonnet", "p1", 1000, 100, 0, 5000)));
+        write_herding_job(root, "job-4", "demo", "s-bound", None);
+        let usage = collect_close_usage(root, "demo", Some("s-call"));
+
+        assert_eq!(usage.herding.len(), 1);
+        assert_eq!(usage.herding[0].job_id, "job-1");
+        assert_eq!(usage.skipped, 1);
+        assert_eq!(usage.value()["herding"]["total"].as_f64(), Some(6100.0));
+        assert_eq!(usage.value()["total"]["total"].as_f64(), Some(1590.0 + 6100.0));
+        assert_eq!(usage.value()["herding"]["models"]["sonnet"]["total"].as_f64(), Some(6100.0));
+
+        let rel = write_usage_record(root, "demo", &usage).unwrap();
+        let ReadJson::Parsed(record) = read_json(&root.join(&rel)) else { panic!("record") };
+        assert_eq!(tokens(&record["totals"]["herding"]), (1100.0, 5000.0, 6100.0));
+        assert_eq!(tokens(&record["totals"]["total"]), (1490.0, 6200.0, 7690.0));
+        assert_eq!(record["herding_sessions"].as_array().unwrap().len(), 1);
+        assert_eq!(record["herding_sessions"][0]["job_id"], json!("job-1"));
+        assert_eq!(record["herding_sessions"][0]["models"]["sonnet"]["total"].as_f64(), Some(6100.0));
+        assert_eq!(record["sessions"].as_array().unwrap().len(), 2);
+        assert!(close_usage_line(&usage).unwrap().contains("herding 6.1k"));
+    }
+
+    #[test]
+    fn a_leader_only_feature_keeps_the_record_without_a_herding_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        write_herding_job(root, "job-2", "other-feature", "pane-2", Some(&usage_event("sonnet", "p2", 7, 7, 7, 7)));
+        let usage = collect_close_usage(root, "demo", Some("s-call"));
+        assert!(usage.herding.is_empty());
+        assert!(usage.value().get("herding").is_none());
+        let record = usage_record_value("demo", &usage, "2026-01-01T00:00:00Z");
+        assert!(record["totals"].get("herding").is_none());
+        assert!(record.get("herding_sessions").is_none());
+        assert!(!close_usage_line(&usage).unwrap().contains("herding"));
     }
 
     // ─── tests: the usage RECORD (decision e97cc9d4) ───────────────────────
