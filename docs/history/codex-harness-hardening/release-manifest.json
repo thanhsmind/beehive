@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "1d8325687831428d50d64d9ac7350ab4675b6d32d309cd6d8ae16304f69906c3",
+      "sha256": "bd197cbfc11f1fcb02cc61f9f613b3d020ae0e7ec33eb7b311cf8a88866d8c45",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -178,7 +178,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/SKILL.md",
-      "sha256": "11aaba02ef5caa43ba9085068e82f2f8aa5b064bbc0345c9523270da34cdf54b",
+      "sha256": "c23d6a29047a96e78c2138b81b43021d97bf73703edb6c07e3d47cd2065ca717",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-capturing/SKILL.md"
@@ -1004,7 +1004,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "4902347178d647cd6a263ac8de78d0eca72e16bcd4e08d497cc718810d7c5c0a",
+      "sha256": "03b9c62c1597cbc108092c78ea5e3b033c20e8fd8da91948ab1043575bcf77b0",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1046,7 +1046,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/SKILL.md",
-      "sha256": "11aaba02ef5caa43ba9085068e82f2f8aa5b064bbc0345c9523270da34cdf54b",
+      "sha256": "c23d6a29047a96e78c2138b81b43021d97bf73703edb6c07e3d47cd2065ca717",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-capturing/SKILL.md"
@@ -2099,7 +2099,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "ae30205f1c6f5b31455d65960fe88a71d2b1448ecb4731e8de78f7d40ecb199e",
+      "sha256": "a68d62b92f6e23aa4095fef4b0801cf0995a3c1344ee6726e8b540f39f990123",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -3357,7 +3357,7 @@
     },
     {
       "path": "skills/bee-capturing/SKILL.md",
-      "sha256": "11aaba02ef5caa43ba9085068e82f2f8aa5b064bbc0345c9523270da34cdf54b",
+      "sha256": "c23d6a29047a96e78c2138b81b43021d97bf73703edb6c07e3d47cd2065ca717",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-capturing/SKILL.md"

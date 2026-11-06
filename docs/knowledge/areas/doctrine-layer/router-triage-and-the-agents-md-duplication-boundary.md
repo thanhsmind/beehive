@@ -219,6 +219,11 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-capturing/SKILL.md`
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
+- `agents-feedback-changes-framework` (AGENTS.md § Capture what settles):
+  spoken: in the bee repo, owner feedback about how agents work changes the framework — record it, change the owning doctrine, hook or skill through the bee chain, and release; a private memory note alone is a miss (framework-feedback-rule D1)
+  - applied_at:
+    - `CLAUDE.md`
+    - `skills/bee-capturing/SKILL.md`
 - `agents-context-handoff-65` (AGENTS.md § Care for the session):
   spoken: a context mark never stops work — finish the user's task; write the handoff only when the user asks for a switch or at feature close, then hand the rest to waggledance (leader: true, follow_up_of the current run, handoff: true) and release the session — never tell the user to open a new session (docs/history/context-mark-advisory D1, D3; handoff-flag-doctrine D1)
   - applied_at:

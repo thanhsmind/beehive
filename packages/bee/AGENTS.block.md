@@ -229,6 +229,13 @@ map is judged, never trusted blind. Absent or empty path is the
 environment-fact check of § Judgment and deviation: proceed silently,
 treating the ask as new.
 <!-- /rule -->
+<!-- rule: agents-feedback-changes-framework -->
+In the bee repo, owner feedback about how agents work is a change
+request to the framework: record it in the bee store, the backlog or the
+doctrine, change the doctrine, hook or skill that owns the behavior
+through the bee chain, and release it. An agent's private memory may
+hold a pointer, never the only copy.
+<!-- /rule -->
 
 ## Communication
 

@@ -25,6 +25,15 @@ prepare` RETURNS — never a hand-picked `subagent_type` or `model`. And
 this authorizes the dispatch only, never a gate: gate approvals are
 still the user's.
 
+## Feedback here changes the framework
+
+beehive is the frame for many projects. When the owner says, in this
+repo, how agents should work, that is a change request to bee itself.
+Apply it to the bee doctrine, hook or skill that owns the behavior, run
+it through the bee chain, and release it, so every project gets it on its
+next refresh. A private memory note may point to the change; a memory
+note alone is a miss.
+
 ## Speed
 
 Optimize for wall-clock speed. Finish tasks quickly.
