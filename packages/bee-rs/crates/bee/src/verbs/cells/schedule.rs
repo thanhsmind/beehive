@@ -96,6 +96,7 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
             Some(cell) => match status_of(cell).as_deref() {
                 Some("capped") => "satisfied",
                 Some("blocked") => "blocked",
+                Some("parked") => "parked",
                 Some("dropped") => "dropped",
                 _ => "pending",
             },
@@ -108,7 +109,7 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
         let Some(Value::String(cid)) = cell.get("id") else { continue };
         for dep in schedule_deps_of(cell) {
             let kind = classify(&dep);
-            if matches!(kind, "missing" | "blocked" | "dropped") {
+            if matches!(kind, "missing" | "blocked" | "parked" | "dropped") {
                 unsatisfiable.push((cid.clone(), dep, kind));
                 if !excluded.contains(cid) {
                     excluded.push(cid.clone());

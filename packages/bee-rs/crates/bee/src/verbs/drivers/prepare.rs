@@ -1208,7 +1208,10 @@ pub(crate) fn prompt_body_for(
     // (possibly bundle-less, possibly stale) checkout.
     let bundle_root: &Path = if worktree_root.is_empty() { root } else { Path::new(worktree_root) };
     let learned = learned_context_lines(bundle_root, cell)?.join("\n");
-    let prior = prior_round_event_lines(cell).join("\n");
+    let answered = crate::verbs::cells::park_answers(cell)
+        .into_iter()
+        .map(|(question, answer)| format!("- Answered question: {question} — {answer}"));
+    let prior = prior_round_event_lines(cell).into_iter().chain(answered).collect::<Vec<_>>().join("\n");
     let cell_json = jsjson::stringify_pretty(cell);
     let feature = tpl(vget(cell, "feature"));
     let cell_id = tpl(vget(cell, "id"));
@@ -6560,6 +6563,46 @@ mod paseo_probe_tests {
         assert!(command_resolves_on_path_in("test-bin", Some(bin_dir.as_os_str())));
         assert!(!command_resolves_on_path_in("missing-bin", Some(bin_dir.as_os_str())));
         assert!(!command_resolves_on_path_in("test-bin", None));
+    }
+}
+
+#[cfg(test)]
+mod park_answer_brief_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn the_brief_of_an_answered_cell_shows_each_question_and_its_answer() {
+        let cell = json!({
+            "id": "c-1",
+            "feature": "feat",
+            "status": "claimed",
+            "trace": {
+                "worker": "w1",
+                "park": [
+                    {"question": "Which locale wins?", "answer": "Vietnamese", "answer_decision": "d-1"},
+                    {"question": "Keep the old flag?", "answer": "No, delete it", "answer_decision": "d-2"}
+                ]
+            }
+        });
+        let rendered = prompt_body_for(
+            Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(rendered.contains("Answered question: Which locale wins? — Vietnamese"), "{rendered}");
+        assert!(rendered.contains("Answered question: Keep the old flag? — No, delete it"), "{rendered}");
     }
 }
 

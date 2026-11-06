@@ -149,8 +149,9 @@ pub(crate) fn set_after_cap(root: &Path, feature: &str, now_iso: &str) -> Option
     let open = count("open")?;
     let claimed = count("claimed")?;
     let blocked = count("blocked")?;
+    let parked = count("parked")?;
     let capped = count("capped")?;
-    if open != 0 || claimed != 0 || blocked != 0 {
+    if open != 0 || claimed != 0 || blocked != 0 || parked != 0 {
         return None;
     }
     if capped == 0 {
@@ -424,6 +425,42 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         lane(root, "demo", json!({}));
+        assert!(set_after_cap(root, "demo", "2026-01-01T00:00:00.000Z").is_none());
+        assert!(read_lane_raw(root, "demo").get("merge_ready").is_none());
+    }
+
+    fn granted_worktree(root: &Path, feature: &str) {
+        let id = format!("wt-{feature}");
+        let admin = root.join(".git").join("worktrees").join(&id);
+        let worktree = root.join("worktrees").join(&id);
+        std::fs::create_dir_all(&admin).unwrap();
+        std::fs::create_dir_all(worktree.join(".bee").join("runtime")).unwrap();
+        std::fs::write(admin.join("gitdir"), worktree.join(".git").to_str().unwrap()).unwrap();
+        std::fs::write(worktree.join(".git"), format!("gitdir: {}", admin.to_str().unwrap())).unwrap();
+        write_json(
+            &worktree.join(".bee").join("runtime").join("worktree-identity.json"),
+            &json!({"feature": feature}),
+        );
+        write_json(&root.join(".bee").join("runtime").join("worktree-grants.json"), &json!({ id: true }));
+    }
+
+    fn cell(root: &Path, id: &str, status: &str) {
+        write_json(
+            &root.join(".bee").join("cells").join(format!("{id}.json")),
+            &json!({"id": id, "feature": "demo", "status": status, "lane": "standard", "title": "t"}),
+        );
+    }
+
+    #[test]
+    fn merge_ready_set_after_cap_refuses_a_feature_with_a_parked_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        granted_worktree(root, "demo");
+        lane(root, "demo", json!({}));
+        cell(root, "c-1", "capped");
+        assert!(set_after_cap(root, "demo", "2026-01-01T00:00:00.000Z").is_some(), "the fixture reaches merge-ready");
+        clear(root, "demo");
+        cell(root, "c-2", "parked");
         assert!(set_after_cap(root, "demo", "2026-01-01T00:00:00.000Z").is_none());
         assert!(read_lane_raw(root, "demo").get("merge_ready").is_none());
     }

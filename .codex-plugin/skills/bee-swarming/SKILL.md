@@ -105,6 +105,13 @@ From two cells up, state the one-line concurrency plan before dispatching.
 missing context; (2) `bee cells escalate --id <id>` and re-dispatch — the
 session model is this session, so that rung hands the blocker to you;
 (3) surface it to the user with the worker's diagnosis. If it invalidates the plan, return to bee-planning.
+A `[PARKED]` cell is never re-dispatched or escalated; it waits for the answer.
+
+**`[PARKED]`:** the lane keeps running — keep dispatching ready cells. Set
+`bee state waiting-on set --kind question --subject "<question>"` only when no ready cell remains
+in the lane, and list every open parked question in the reply. Record the
+human's answer with `bee cells answer --id <cell> --answer "<text>"`; the
+cell reopens and runs again with the answer in its brief.
 
 **Other failures** — a handoff, a provider error, a red, a silent death —
 each take one fixed response, and a second failed re-dispatch goes to the
@@ -202,7 +209,10 @@ included: add guidance beside those words, never over them.
    hard constraint (a prohibition or a locked decision) stays a
    locked-decision `[BLOCKED]`. An unexpected red or an unfamiliar mechanism
    mid-cell is a pull moment: `bee knowledge search --text "<symptom>"`
-   surfaces matching patterns and area concepts before you guess.
+   surfaces matching patterns and area concepts before you guess. A
+   product question only the human can answer parks your cell, never the
+   lane: `bee cells park --id <cell> --question "<question>"`, then return
+   `[PARKED]`.
 4. Before the commit, revert any edit the proof did not need. Commit
    once: subject describes the change in imperative mood; the last line of
    the body is the literal trailer `cell: <id>` — a bare id alone fails
@@ -225,7 +235,7 @@ included: add guidance beside those words, never over them.
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
    diagnosis) · `[HANDOFF]` (the 150k-token or 65% handoff — handoff file
-   written before the token; rule: agents-context-handoff-65) · `[NOOP]` (cell missing or already capped). Never wait
+   written before the token; rule: agents-context-handoff-65) · `[PARKED]` (question, cell id) · `[NOOP]` (cell missing or already capped). Never wait
    silently; never ask a blocking question — you run headless.
 
 ## Hard rules (both roles)

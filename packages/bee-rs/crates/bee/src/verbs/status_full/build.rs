@@ -116,13 +116,14 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
     let onboarding_raw = read_onboarding(ctx)?.unwrap_or(Value::Null);
     let handoff = read_handoff(ctx)?.unwrap_or(Value::Null);
     let cells = list_cells(ctx, None, None)?;
-    let (mut open, mut claimed, mut capped, mut blocked) = (0i64, 0i64, 0i64, 0i64);
+    let (mut open, mut claimed, mut capped, mut blocked, mut parked) = (0i64, 0i64, 0i64, 0i64, 0i64);
     for cell in &cells {
         match vget(cell, "status").and_then(|v| v.as_str()) {
             Some("open") => open += 1,
             Some("claimed") => claimed += 1,
             Some("capped") => capped += 1,
             Some("blocked") => blocked += 1,
+            Some("parked") => parked += 1,
             _ => {}
         }
     }
@@ -398,6 +399,7 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
         c.insert("claimed".into(), json!(claimed));
         c.insert("capped".into(), json!(capped));
         c.insert("blocked".into(), json!(blocked));
+        c.insert("parked".into(), json!(parked));
         c.insert("archived".into(), Value::Object(archived));
         c.insert("archivable".into(), Value::Object(archivable_backlog(&cells, feature_or_null.as_ref())));
         status.insert("cells".into(), Value::Object(c));

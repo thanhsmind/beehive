@@ -4159,6 +4159,7 @@ use crate::version::BEE_VERSION;
         write(root, ".bee/cells/c-2.json", r#"{"id":"c-2","feature":"f1","status":"claimed","lane":"standard","title":"t"}"#);
         write(root, ".bee/cells/c-3.json", r#"{"id":"c-3","feature":"f1","status":"capped","lane":"standard","title":"t"}"#);
         write(root, ".bee/cells/c-4.json", r#"{"id":"c-4","feature":"f1","status":"blocked","lane":"standard","title":"t"}"#);
+        write(root, ".bee/cells/c-5.json", r#"{"id":"c-5","feature":"f1","status":"parked","lane":"standard","title":"t"}"#);
         let mut ctx = ctx_for(root);
         let status = build_status(&mut ctx, false).unwrap();
 
@@ -4175,8 +4176,8 @@ use crate::version::BEE_VERSION;
         assert_eq!(cells.get("claimed"), Some(&json!(1)));
         assert_eq!(cells.get("capped"), Some(&json!(1)));
         assert_eq!(cells.get("blocked"), Some(&json!(1)));
-        // Still exactly the five names — no sixth cell status was invented.
-        assert_eq!(cells.as_object().unwrap().len(), 6, "open/claimed/capped/blocked/archived/archivable");
+        assert_eq!(cells.get("parked"), Some(&json!(1)));
+        assert_eq!(cells.as_object().unwrap().len(), 7, "open/claimed/capped/blocked/parked/archived/archivable");
     }
 
     // ── ah-3 (awaiting-human): every reader names WHAT the run is waiting

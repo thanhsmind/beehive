@@ -440,6 +440,10 @@ pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &
     log_decision_from(root, decision, rationale, tags, DECISION_SOURCE_USER)
 }
 
+pub(crate) fn log_decision_id(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<String> {
+    log_decision_from_id(root, decision, rationale, tags, DECISION_SOURCE_USER)
+}
+
 /// [`log_decision`] with the `source` field named by the caller.
 ///
 /// Same event, same validation, same lock, same append — the ONE field that
@@ -454,6 +458,16 @@ pub(crate) fn log_decision_from(
     tags: &[&str],
     source: &str,
 ) -> MR<()> {
+    log_decision_from_id(root, decision, rationale, tags, source).map(drop)
+}
+
+fn log_decision_from_id(
+    root: &Path,
+    decision: &str,
+    rationale: &str,
+    tags: &[&str],
+    source: &str,
+) -> MR<String> {
     if js_trim(decision).is_empty() {
         return Err(Fail::Thrown("logDecision: decision text is required.".into()));
     }
@@ -469,8 +483,9 @@ pub(crate) fn log_decision_from(
     ])?;
     let normalized: Vec<String> = tags.iter().map(|t| t.to_string()).collect();
     classify_decision_tags(root, &normalized)?;
+    let id = rsv::pseudo_uuid_v4();
     let mut event = Map::new();
-    event.insert("id".into(), Value::String(rsv::pseudo_uuid_v4()));
+    event.insert("id".into(), Value::String(id.clone()));
     event.insert("type".into(), Value::String("decide".into()));
     event.insert("date".into(), Value::String(utc_now()));
     event.insert("decision".into(), Value::String(js_trim(decision).to_string()));
@@ -488,5 +503,6 @@ pub(crate) fn log_decision_from(
     with_decisions_lock(root, || {
         crate::fsutil::append_jsonl(&decisions_path(root), &Value::Object(event))
             .map_err(|e| Fail::Thrown(format!("{e}")))
-    })
+    })?;
+    Ok(id)
 }

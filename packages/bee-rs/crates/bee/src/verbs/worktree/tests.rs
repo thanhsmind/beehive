@@ -1409,6 +1409,77 @@ use std::time::Instant;
         assert_eq!(answer.result["merged"], Value::Bool(true));
     }
 
+    fn write_parked_cell(main: &Path, id: &str, feature: &str, question: &str) {
+        let cell = json!({
+            "id": id,
+            "feature": feature,
+            "status": "parked",
+            "trace": { "park": [{
+                "question": question,
+                "parked_at": "2026-11-06T00:00:00.000Z",
+                "answer": null,
+                "answer_decision": null,
+                "answered_at": null,
+            }] },
+        });
+        let dir = main.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
+    #[test]
+    fn a_parked_cell_refuses_the_merge_before_any_write() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "parking");
+        let wt = created.worktree_root.clone();
+        write_parked_cell(&main, "parking-1", "parking", "Which name wins?");
+        write_parked_cell(&main, "parking-2", "parking", "Keep the old flag?");
+        write_stranded_lane(&main, "parking", "swarming");
+        let lane_path = main.join(".bee").join("lanes").join("parking.json");
+        let lane_before = std::fs::read(&lane_path).unwrap();
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!("a parked cell must refuse the merge: {:?}", answer.result),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_PARKED_CELL] "), "{message}");
+        for needle in [
+            "parking-1",
+            "Which name wins?",
+            "parking-2",
+            "Keep the old flag?",
+            "bee cells answer --id parking-1 --answer",
+        ] {
+            assert!(message.contains(needle), "missing {needle}: {message}");
+        }
+        let head_after =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(head_after, pre_merge_head, "a refused merge must never touch main");
+        assert_eq!(std::fs::read(&lane_path).unwrap(), lane_before);
+        assert!(wt.exists(), "the worktree stands");
+    }
+
+    #[test]
+    fn an_answered_parked_cell_no_longer_refuses_the_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "answering");
+        write_parked_cell(&main, "answering-1", "answering", "Which name wins?");
+        crate::verbs::cells::answer_cell(&main, "answering-1", "the short one").unwrap();
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an answered cell must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
     // ── leader-check-door lcd-3: leader-check debt at the merge door ───────
     //
     // Placed beside the dissent-debt merge tests above: same slot, same

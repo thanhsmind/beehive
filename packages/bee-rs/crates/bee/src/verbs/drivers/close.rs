@@ -46,6 +46,18 @@ pub(crate) const CLOSE_JUDGE_DEBT_PREFIX: &str = "Judge debt for";
 /// rest of the dissent surface). Cite: a2affcba and 4b7aa303.
 pub(crate) const CLOSE_DISSENT_DEBT_PREFIX: &str = "Dissent debt for";
 
+pub(crate) const CLOSE_PARKED_CELL_PREFIX: &str = "Parked cell for";
+
+pub(crate) fn parked_cells_line(parked: &[(String, String)]) -> String {
+    parked
+        .iter()
+        .map(|(id, question)| {
+            format!("{id} asks \"{question}\" — {}", crate::verbs::cells::answer_remedy(id))
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 /// reflection-becomes-lesson D1: pinned prefix of the mistakes-door refusal
 /// headline (message-contract test lives in this file's own tests). The
 /// headline opens with the command's own name because it is the first line a
@@ -1920,6 +1932,16 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
         },
     });
 
+    let parked = crate::verbs::cells::feature_parked_cells(root, feature)?;
+    if !parked.is_empty() {
+        doors.push(Door {
+            door: "parked-cell",
+            blocking: true,
+            detail: format!("{} cell(s) wait on a human answer: {}", parked.len(), parked_cells_line(&parked)),
+            command: Some("bee cells answer"),
+        });
+    }
+
     // leader-check-door: the leader-check door (a38dc4bd). It applies to
     // EVERY lane and every capped cell (D4), grandfathered by
     // LEADER_CHECK_DOOR_INTRODUCED_AT (D5).
@@ -2891,6 +2913,24 @@ pub(crate) fn close_handler(
             ),
             remedy,
             format!("next: settle the dissent debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    if doors.iter().any(|d| d.door == "parked-cell" && d.blocking) {
+        let parked = crate::verbs::cells::feature_parked_cells(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let lines = vec![
+            format!(
+                "{CLOSE_PARKED_CELL_PREFIX} \"{feature}\" — close stops at the parked-cell door: {} cell(s) wait on a human answer.",
+                parked.len()
+            ),
+            format!("remedy: {}", parked_cells_line(&parked)),
+            format!("next: answer each parked question above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
@@ -6426,6 +6466,67 @@ mod tests {
             std::fs::canonicalize(docs_root_for_feature(&alias, "demo")).unwrap(),
             std::fs::canonicalize(&granted).unwrap()
         );
+    }
+
+    fn write_parked_cell(root: &Path, id: &str, question: &str) {
+        let cell = json!({
+            "id": id,
+            "feature": "demo",
+            "status": "parked",
+            "trace": {"park": [{"question": question, "parked_at": "2026-11-06T00:00:00.000Z", "answer": null}]}
+        });
+        w(root, &format!(".bee/cells/{id}.json"), &cell.to_string());
+    }
+
+    fn parked_door(doors: &[Door]) -> Option<&Door> {
+        doors.iter().find(|d| d.door == "parked-cell")
+    }
+
+    #[test]
+    fn close_refuses_at_the_parked_cell_door_naming_each_cell_and_question() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_parked_cell(root, "demo-1", "Which name wins?");
+        write_parked_cell(root, "demo-2", "Keep the old flag?");
+
+        let out = close_handler(root, "demo", true, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, _, _) = out else { panic!("expected Emit") };
+        let dry = result["doors"].as_array().unwrap().iter().find(|d| d["door"] == "parked-cell").unwrap().clone();
+        assert_eq!(dry["blocking"], json!(true));
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "the parked-cell door must stop this close: {text}");
+        assert!(text.starts_with(CLOSE_PARKED_CELL_PREFIX), "{text}");
+        for needle in [
+            "demo-1",
+            "Which name wins?",
+            "demo-2",
+            "Keep the old flag?",
+            "bee cells answer --id demo-2 --answer",
+        ] {
+            assert!(text.contains(needle), "missing {needle}: {text}");
+        }
+        let real = result["doors"].as_array().unwrap().iter().find(|d| d["door"] == "parked-cell").unwrap();
+        assert_eq!(real, &dry, "a dry run and a real close agree on the door");
+    }
+
+    #[test]
+    fn an_answered_parked_cell_clears_the_parked_cell_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        assert!(parked_door(&build_close_report_doors(root, "demo").unwrap()).is_none());
+        write_parked_cell(root, "demo-1", "Which name wins?");
+        assert!(parked_door(&build_close_report_doors(root, "demo").unwrap()).unwrap().blocking);
+
+        crate::verbs::cells::answer_cell(root, "demo-1", "the short one").unwrap();
+
+        assert!(parked_door(&build_close_report_doors(root, "demo").unwrap()).is_none());
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_, text, _) = out else { panic!("expected Emit") };
+        assert!(!text.starts_with(CLOSE_PARKED_CELL_PREFIX), "{text}");
     }
 }
 
