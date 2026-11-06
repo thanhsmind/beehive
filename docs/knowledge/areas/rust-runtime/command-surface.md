@@ -143,6 +143,19 @@ bought a smaller help output at the price of a blind guard.
   has, never the first one alone: hard-wiring that net to a single handler is
   how one verb shipped a flag with no net at all while its sibling had one
   (store-reach-gaps D2, 2026-08-21).
+- R11 — **An agent changes `.bee/config.json` through `bee config`, never by
+  hand.** `get`, `set`, `unset`, `explain` and `validate` are built in Rust;
+  `--local` targets `.bee/config.local.json`. `set` and `unset` refuse, with
+  zero mutation, any key that is, sits inside, or holds a key the config
+  write guard governs (`team`, `herding.agents`, `herding.agent_command`,
+  `hooks`). The refusal calls the guard's own check in both directions over
+  the merged tracked and local config, so the governed list has one home; it
+  also refuses an add inside `team` or `herding.agents`. A field the guard's
+  view ignores (for example a role description) can still be set. A
+  target file that is not a JSON object is never overwritten. `explain`
+  names the layer that wins: `local`, `tracked`, or `unset` (built-in
+  default). The user guide is `docs/config-reference.md`, "Setting values"
+  (bee-config-verbs, cfg-1, 2026-11-06).
 
 ## Edge Cases Settled
 

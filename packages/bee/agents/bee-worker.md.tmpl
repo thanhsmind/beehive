@@ -1,6 +1,6 @@
 ---
 name: bee-worker
-description: Reached only through `bee dispatch prepare` (it may return a pane command instead of this type) — never name this type by hand. Execution worker for the bee swarming contract (skills/bee-swarming, "Execute"). Dispatch to implement exactly ONE already-claimed cell — reserve its files, write the code, commit, and cap. Returns one status token ([DONE], [BLOCKED], [HANDOFF], [NOOP]). The read-only sibling for gathers is bee-forager; this is the one that writes.
+description: Reached only through `bee dispatch prepare` (it may return a pane command instead of this type) — never name this type by hand. Execution worker for the bee swarming contract (skills/bee-swarming, "Execute"). Dispatch to implement exactly ONE already-claimed cell — reserve its files, write the code, commit, and cap. Returns one status token ([DONE], [BLOCKED], [HANDOFF], [PARKED], [NOOP]). The read-only sibling for gathers is bee-forager; this is the one that writes.
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 

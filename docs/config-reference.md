@@ -2,25 +2,32 @@
 
 Every onboarded repo has a `.bee/config.json`. Any key you leave out uses a built-in default, so the file can be short — but the values below are the ones worth setting per repo. **`.bee/config.json` is strict JSON: no comments, no trailing commas.** The annotated block here is for reading; copy the clean block at the bottom into the real file.
 
-## Setting values — hand-edit the JSON
+## Setting values — `bee config`
 
-> **`bee config get|set|unset|validate` are NOT built into the current binary.** They lived only in
-> the Node runtime the R6 cutover deleted, and no Rust port replaced them, so each one now refuses by
-> name (`bee --help --all` marks them, and the registry carries the reason). **Edit
-> `.bee/config.json` directly** — it is plain, strict JSON. `bee status --json` reports the derived
-> `gate_bypass_level` and `ship_visibility`, which is what most `config get` calls were really after.
+Change a value through the CLI, not by hand. Every verb takes `--json`.
 
-Two rules the deleted CLI used to enforce for you, now yours to keep:
+| Verb | What it does |
+|---|---|
+| `bee config get --key <k> [--local]` | Prints `k = <json>`, or `config get: "k" is not set.` (exit 0 both ways). Reads `.bee/config.json`; `--local` reads `.bee/config.local.json`. |
+| `bee config set --key <k> --value <v> [--string] [--local]` | Writes the value. Missing parent objects are created. |
+| `bee config unset --key <k> [--local]` | Removes the key and prunes the parent objects it leaves empty. An absent key is a no-op. |
+| `bee config explain --key <k>` | Shows the effective value and where it comes from: `local`, `tracked`, or `unset` (no file sets it, so the built-in default in [Other keys](#other-keys) applies). The tracked and local values show side by side. |
+| `bee config validate` | Checks that both files parse and that the team config has no problems. Exits non-zero on any problem. |
 
-- **`hooks.*` and `guards.*` are local-only namespaces.** Put them in `.bee/config.local.json`
-  (gitignored, per-machine), never in the tracked `.bee/config.json` — so one developer muting a
-  hook never lands in everyone's config. The overlay wins over the tracked file at read time.
-- **The team/cli-executor block has to stay valid.** `config set` refused a write that broke it;
-  nothing refuses a hand-edit, so re-read [Which model each role uses](#which-model-each-role-uses)
-  after changing `team`.
-
-Values are ordinary JSON: `false` is a boolean, `12` a number, `"repo"` a string. Nested keys that
-the old `--key guards.idle_gate` dot-notation reached are just nested objects in the file.
+- **Keys use dot-notation:** `--key herding.enabled` reaches `{"herding": {"enabled": …}}`.
+- **Values are parsed as JSON** when they parse: `false` is a boolean, `12` a number, `{"a":1}` an
+  object. Anything else is kept as a string. `--string` forces a string (`--value false --string`
+  stores `"false"`).
+- **`--local` targets `.bee/config.local.json`** — the gitignored, per-machine overlay. It wins
+  over the tracked file at read time. `get`, `set` and `unset` with `--local` warn when the tracked
+  file also sets the key. Put machine-local toggles (`guards.*`) there.
+- **A broken file is never overwritten.** If the target file is not valid JSON or not a JSON
+  object, `set` and `unset` refuse and change nothing. Repair the file, then run the verb again.
+- **`set` refuses a write that adds a team-config problem** — the same problems `validate` reports.
+- **Governed keys are the user's.** `set` and `unset` refuse, and change nothing, for any key that
+  is, sits inside, or holds a key the config write guard protects: `team`, `herding.agents`,
+  `herding.agent_command`, and `hooks`. The user edits those mappings directly in the file; re-read
+  [Which model each role uses](#which-model-each-role-uses) after changing `team`.
 
 ## Which model each role uses
 

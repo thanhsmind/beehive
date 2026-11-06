@@ -375,6 +375,21 @@ pub(crate) fn merge_stage(
         }
     }
 
+    if let Some(feature) = identity.feature.as_deref() {
+        let parked = crate::verbs::cells::feature_parked_cells(main_root, feature)
+            .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+        if !parked.is_empty() {
+            return Err(refuse_merge(
+                "WORKTREE_MERGE_PARKED_CELL",
+                format!(
+                    "worktree {id}'s feature \"{feature}\" has {} cell(s) parked on a human question — \"bee worktree merge\" refuses until each one is answered: {}",
+                    parked.len(),
+                    crate::verbs::drivers::parked_cells_line(&parked),
+                ),
+            ));
+        }
+    }
+
     // leader-check-door lcd-3 (a38dc4bd): the merge door's leader-check
     // precondition — a branch must not land while a capped cell has no
     // leader check recorded. Both readers are the SAME two functions

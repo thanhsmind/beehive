@@ -2227,6 +2227,26 @@ fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) 
             text: format!("- waiting on you ({kind}): {}", clip(&subject)),
         });
     }
+    let mut features: Vec<String> = crate::verbs::cells::list_cells(control, None, Some("parked"))
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|c| c.get("feature").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    features.sort();
+    features.dedup();
+    for feature in features {
+        for (id, question) in crate::verbs::cells::feature_parked_cells(control, &feature).unwrap_or_default() {
+            items.push(ReportItem {
+                needs_human: needs_human_decision(WAITING_ON_QUESTION),
+                rank: needs_you_rank(WAITING_ON_QUESTION),
+                text: format!(
+                    "- parked question ({id}): {} — {}",
+                    clip(&question),
+                    crate::verbs::cells::answer_remedy(&id)
+                ),
+            });
+        }
+    }
     items
 }
 
@@ -5280,6 +5300,34 @@ mod tests {
         assert!(!rep.markdown.contains("ancient"), "{}", rep.markdown);
         assert!(rep.markdown.contains("A decision inside the window."), "{}", rep.markdown);
         assert!(rep.markdown.contains("- Nothing happened."), "{}", rep.markdown);
+    }
+
+    #[test]
+    fn a_parked_cell_is_listed_under_what_needs_you_with_its_question() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        write(
+            control,
+            ".bee/cells/pq-1.json",
+            r#"{"id":"pq-1","feature":"pq","status":"parked","trace":{"park":[{"question":"Which colour is the button?","answer":null}]}}"#,
+        );
+        write(
+            control,
+            ".bee/cells/pq-2.json",
+            r#"{"id":"pq-2","feature":"pq","status":"open","trace":{"park":[{"question":"Already answered?","answer":"yes"}]}}"#,
+        );
+
+        away_into(control, "supervisor away", None).unwrap();
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert!(
+            rep.markdown.contains("- parked question (pq-1): Which colour is the button?"),
+            "{}",
+            rep.markdown
+        );
+        assert!(rep.markdown.contains("bee cells answer --id pq-1 --answer"), "{}", rep.markdown);
+        assert!(!rep.markdown.contains("pq-2"), "an answered cell is not listed: {}", rep.markdown);
     }
 
     #[test]

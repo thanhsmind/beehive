@@ -1,0 +1,127 @@
+{
+  "id": "oc2x-1",
+  "feature": "opencode-2x-tool-ids",
+  "title": "Support opencode 2.x tool ids in the opencode guard and its registry gate",
+  "lane": "small",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "31ba5052-9601-44ed-a3ff-9a978c82fa01"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/opencode-support/discovery.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "The declared suite is red on this machine: every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap panics because the installed opencode is 2.2.5 (package @opencode/cli, ELF at $(mise which opencode) resolved), and its tool-id Set literal is now [\"shell\",\"glob\",\"read\",\"grep\",\"webfetch\",\"websearch\",\"write\",\"edit\",\"subagent\",\"execute\",\"patch\",\"todowrite\",\"question\",\"skill\"] (1.18.x had bash/task/apply_patch). The binary also carries a rename map {bash:\"shell\",task:\"subagent\",apply_patch:\"patch\"}. CI pins opencode-ai@1.18.16, so the derivation must keep passing on 1.18.x AND pass on 2.x. Step 1: find out from the 2.2.5 binary which id a plugin's tool.execute.before hook receives in 2.x (old or new name). Step 2: if 2.x hands the new ids to plugins, make mapToolCall in .opencode/plugins/bee-guard.ts route shell like bash and patch like apply_patch (check if bee-guard.ts is generated from a template: rg for its source and run bee dev regen if so; also check the Rust write_guard accepts the tool_name the plugin forwards). Step 3: make derive_opencode_tool_registry accept either Set literal shape and re-check every additional/unmapped anchor against 2.x; a tool that is new in 2.x and file-capable is mapped or named as a gap in discovery.md on its own line. Keep the test hard-failing when no opencode binary is readable. Record what you found in step 1 in the cap report. If bee-guard.ts changes, run bee dev regen in this cell (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) and commit the manifest.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "verify_owner": "main (feature close) — the worker never runs this",
+  "must_haves": {
+    "truths": [
+      "the opencode registry gate passes against the installed opencode 2.2.5",
+      "the registry derivation still accepts the opencode 1.18.x Set literal",
+      "every write- or shell-capable opencode 2.x tool id is routed by mapToolCall or named as a gap in discovery.md"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+        "substantive": "derivation handles both shapes, no skip added"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No new skip path or env switch that lets the gate pass without a readable binary",
+      "No code comments (no_code_comments): explain in discovery.md or the cap report"
+    ],
+    "open_choices": [
+      "How the derivation detects which literal shape is present"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "oc2x-1-worker",
+    "outcome": "Registry gate derives from both opencode 1.18.x and 2.x Set literals; 2.x ids named as gaps; 2.x does not load the 1.x bee-guard.ts plugin",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [
+      "found a better route: step 1 showed 2.x hands new ids (shell/patch/subagent) to execute.before hooks, but its loader accepts only default {id, effect|setup}; bee-guard.ts default-exports a 1.x hook function, so it never loads on 2.x. A case shell/patch alias in mapToolCall would be false coverage, so bee-guard.ts is untouched (decision 31ba5052 allows the named-gap path) and no regen/manifest change was needed",
+      "2.x also renames write/edit/read args filePath->path and moves hook args to input; porting the belt to the 2.x {id, setup} API is proposed as follow-up work",
+      "2.x registry adds additional anchors artifact_create, artifact_update, schedule_create (experimental flag), named as gaps; webfetch/websearch/todowrite/skill named as exclusions since 2.x tools are never classified safe by a filePath scan"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T03:32:52.766Z",
+    "behavior_change": false,
+    "verification_evidence": "10 passed against installed @opencode/cli 2.2.5 (cargo from ~/.cargo/bin on the default PATH); the 1.18.x shape is pinned by a new synthetic-text unit test because no 1.18 binary is on this machine; release-manifest --check matched 600 files; only the test file and discovery.md changed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "52195278-6a88-45d4-9842-b2876284d5e4",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-06T03:25:51.733Z",
+    "mistakes": [
+      {
+        "wrong": "ran cargo test with a hand-built PATH that put mise shims first, so command -v resolved the mise ELF and the gate reported no Set literal",
+        "better": "run the proof with the default PATH",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Registry gate derives from both opencode 1.18.x and 2.x Set literals; every unmapped 2.x id is named in discovery.md; finding: opencode 2.x rejects the 1.x-shape bee-guard.ts plugin at load",
+      "commit": "8ddf66bf01343a3b8fb8e6ac512e4a9df23629d2",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+        "docs/history/opencode-support/discovery.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts && .bee/bin/bee dev release-manifest --check — green:unit — 10 passed against installed @opencode/cli 2.2.5 (cargo from ~/.cargo/bin on the default PATH); the 1.18.x shape is pinned by a new synthetic-text unit test because no 1.18 binary is on this machine; release-manifest --check matched 600 files; only the test file and discovery.md changed",
+      "deviations": [
+        "found a better route: step 1 showed 2.x hands new ids (shell/patch/subagent) to execute.before hooks, but its loader accepts only default {id, effect|setup}; bee-guard.ts default-exports a 1.x hook function, so it never loads on 2.x. A case shell/patch alias in mapToolCall would be false coverage, so bee-guard.ts is untouched (decision 31ba5052 allows the named-gap path) and no regen/manifest change was needed",
+        "2.x also renames write/edit/read args filePath->path and moves hook args to input; porting the belt to the 2.x {id, setup} API is proposed as follow-up work",
+        "2.x registry adds additional anchors artifact_create, artifact_update, schedule_create (experimental flag), named as gaps; webfetch/websearch/todowrite/skill named as exclusions since 2.x tools are never classified safe by a filePath scan"
+      ],
+      "mistakes": [
+        "ran cargo test with a hand-built PATH that put mise shims first, so command -v resolved the mise ELF and the gate reported no Set literal — run the proof with the default PATH — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the opencode registry gate passes against the installed opencode 2.2.5",
+            "artifact": "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+          },
+          {
+            "requirement": "the registry derivation still accepts the opencode 1.18.x Set literal",
+            "artifact": "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+          },
+          {
+            "requirement": "every write- or shell-capable opencode 2.x tool id is routed by mapToolCall or named as a gap in discovery.md",
+            "artifact": "docs/history/opencode-support/discovery.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+          },
+          {
+            "requirement": "docs/history/opencode-support/discovery.md",
+            "artifact": "docs/history/opencode-support/discovery.md"
+          }
+        ],
+        "recorded_at": "2026-11-06T03:33:21.638Z",
+        "recorded_by": "52195278-6a88-45d4-9842-b2876284d5e4",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

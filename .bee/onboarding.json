@@ -39,7 +39,7 @@
       "advisor.md": "62e71f2c7071d3c7395b40a7886b7e60cbefdf3257a72fce9de5fda26dfae5bc",
       "gather.md": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
       "reviewer.md": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
-      "worker-cell.md": "045c7f109730a0e0f246758a1576dd1063fd44932c12a4bcbcf6df83374a9965"
+      "worker-cell.md": "3616571edbf569baf524da709a3e558a6cb96df0ccf415bde93922ee41409d2b"
     },
     "repo_hooks": {
       ".codex/hooks.json": "b4ecbe18eed3506b7bf3a936aad5ab1f1e61f93379c37257bd26bb90c9b6bd9f"
@@ -63,7 +63,7 @@
         "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
         "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
         "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
-        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+        "features/worktree-and-close.md": "9df7353381a357a3180e34d7dd4a870a38b3b28abe107136bfd5e2f078b38ff6"
       },
       ".agents/skills/verify-app": {
         "SKILL.md": "2003014d03cbe5d1c1a997d4ad32b12b554410b57b2b1c71b4bdacee64be2c80",
@@ -80,7 +80,7 @@
         "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
         "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
         "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
-        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+        "features/worktree-and-close.md": "9df7353381a357a3180e34d7dd4a870a38b3b28abe107136bfd5e2f078b38ff6"
       },
       ".opencode/skills/verify-app": {
         "SKILL.md": "2003014d03cbe5d1c1a997d4ad32b12b554410b57b2b1c71b4bdacee64be2c80",
@@ -97,7 +97,7 @@
         "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
         "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
         "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
-        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+        "features/worktree-and-close.md": "9df7353381a357a3180e34d7dd4a870a38b3b28abe107136bfd5e2f078b38ff6"
       }
     }
   },
@@ -136,5 +136,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-05T13:40:23.958Z"
+  "updated_at": "2026-11-06T04:20:03.823Z"
 }

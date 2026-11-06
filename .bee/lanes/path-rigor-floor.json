@@ -1,0 +1,598 @@
+{
+  "schema_version": "1.0",
+  "feature": "path-rigor-floor",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"path-rigor-floor\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"path-rigor-floor\" (lane).",
+  "created_at": "2026-11-06T03:31:14.288Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain",
+      "covered-contract-change"
+    ],
+    "product_files": 7,
+    "rationale": "new config key + cells add/update refusal + gate bypass refusal; public contracts",
+    "updated_at": "2026-11-06T03:32:01.316Z",
+    "feature": "path-rigor-floor"
+  },
+  "gate_preview": {
+    "feature": "path-rigor-floor",
+    "plan_sha256": "701c6b6a3ba6d33a6e0345aa85e1b89d69ed48f8cd78a9ae2dda0505430a0d7f",
+    "previewed_at": "2026-11-06T03:46:50.241Z",
+    "cells": [
+      {
+        "id": "rfl-1",
+        "feature": "path-rigor-floor",
+        "title": "Refuse a cell whose paths need a higher route, and keep owner-first gates with the human",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "4bf3a432-d4c3-4c6a-9b59-416d5627b2b8",
+          "f613e3c2-d396-42c3-8edd-86357e914253",
+          "f9ba8d88-f0f3-45a6-bb14-02bfb8abf005",
+          "a653682b-521f-4312-921b-68c39a5cabf9",
+          "49388de3-9a4f-4cf3-97f6-1dcff092bf29"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+        ],
+        "read_first": [
+          "docs/history/path-rigor-floor/CONTEXT.md",
+          "docs/history/path-rigor-floor/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+          "packages/bee-rs/crates/bee/src/state.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement contract decision a653682b (D1 4bf3a432, D2 f613e3c2) in a new module verbs/cells/rigor_floor.rs. Rows are {glob, min_lane, flags, owner_first}. Built-in rows (schema-shaped, not every SQL file): `**/migrations/**`, `**/migrate/**`, `**/alembic/versions/**`, `**/schema.sql`, `**/*.schema.sql` and `**/schema.prisma` at min_lane high-risk, flags [data-model], owner_first true; `.github/workflows/release*` and `.github/workflows/publish*` at min_lane standard, no flags, owner_first true. Repo rows come from the `.bee/config.json` key `rigor_floor` (an array of the same shape), read through read_config_raw (state.rs `pub fn read_config_raw(root: &Path) -> Map<String, Value> {`); a malformed row is skipped with a warning on stderr. For a file, the effective floor is the highest min_lane, the union of flags and the OR of owner_first over every matching row, built-in and repo alike, so a repo row can raise and never lower. Lane rank: docs < tiny < small < standard < high-risk, spike ranks as standard (workflows.rs triage_ladder_rank covers only three lanes; do not change it). Flag names must be in the route flag vocabulary in workflows.rs. Use the write guard's glob matcher: `crate::hooks::write_guard::{glob_tokens, glob_match}` (the paths module is private but re-exported by write_guard/mod.rs; design_group.rs already imports it this way); glob_match takes `&[char]`, so collect the path's chars first as paths.rs does; write_guard/tests.rs already proves `**/migrations/**` against db/migrations/001.sql. No new crate dependency. Register the module in cells/mod.rs with `mod rigor_floor;` plus `pub(crate) use self::rigor_floor::*;`. The lane vocabulary ROUTE_LANE_VALUES in workflows.rs is private, so the rank covers all six lanes itself. Export a lookup that takes the root and a list of files and returns the hits (path, row glob, row source built-in or repo, floor), and an owner-first query. Wire the check: in validate.rs beside `match assert_regen_obligation(map, \"addCell\") {` (problems are collected there, not thrown) and in handlers_write.rs beside `assert_regen_obligation(&merged, \"updateCell\")?;` (thrown before write_cell). The add seam covers single and batch add; validate_new_cell_problems has no feature argument, so read map[\"feature\"]; a cell with no feature skips the check. On update, run the lane check first, then the owner-first check below. Read the feature route (lane and flags) the way drivers/close.rs feature_route does: the lane record's route first, then the state.json route when it belongs to the feature (feature_route returns only the lane; read the flags beside it). No recorded route: no check. Refuse with the in-message token RIGOR_FLOOR (the REGEN_OBLIGATION style: `addCell: RIGOR_FLOOR — ...`; refusals carry no code field) when a hit's min_lane ranks above the route lane or a hit flag is missing from the route flags; the message names the path, the row glob, whether the row is built-in or from .bee/config.json, the floor, that an owner-first row also needs a human gate, and the remedy: `bee route --set --class <class> --lane <floor lane> --flags <route flags plus missing> --files <n>`. Owner-first at cells add/update: when a cell file hits an owner-first row and the feature's execution gate (or merged gate) is approved with actor auto in the workflow record (gates.<name>.actor), refuse with GATE_OWNER_FIRST — this closes the path where a route raised after an auto gate lets an owner-first cell in with no human gate. GATE GATE_OWNER_FIRST in set_gate.rs (contract decision 49388de3, D3 f9ba8d88): when actor is auto (`let actor = flag_value(flags, \"actor\").unwrap_or_else(|| \"user\".to_string());`) and the call approves shape, execution or --merge, collect the feature's files from the lane record's gate_preview cell packet (`if let Some(prev) = state.get(\"gate_preview\").cloned() {`) and from the feature's persisted cells (list_cells for the feature), ask the owner-first query, and on any hit refuse at every bypass level. Check once before the lock the way the uat refusal does (`if actor == \"auto\" && name == \"uat\" {`, reading the record with peek_target_record), and AGAIN against target.record() after acquire_mutation_locks and before the write, because gate_preview can change between the peek and the lock (the preview check already runs twice for this reason). The GATE_OWNER_FIRST message names the path and the row glob and tells the leader: stop; do not retry; do not pass --actor user; run `bee state waiting-on set --kind gate --subject \"<feature> owner-first gate\"`, show the gate to the human, and end the turn. An approval with actor user, a refusal (approved false), and an auto approval with no owner-first hit are unchanged. Tests red-first: add refuses a small-lane cell on db/migrations/001.sql under a small route; add passes under a high-risk route with data-model; db/migrate, alembic/versions and schema.prisma paths hit; a fixture tests/fixtures/report.sql passes; a repo config row raises a floor; a repo row with a lower lane does not lower a built-in floor; update refuses the same way; a feature with no route is not checked; unmatched paths pass; add of an owner-first cell after an auto-approved execution gate refuses GATE_OWNER_FIRST, and passes after a user-approved gate. Gate tests next to gate_refuses_uat_from_actor_auto_and_writes_nothing: auto merge refused with an owner-first file in the preview packet and nothing written, and the message names waiting-on; the same with actor user approves; auto merge with no owner-first file approves as before.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells set_gate gate",
+        "must_haves": {
+          "truths": [
+            "cells add refuses with RIGOR_FLOOR a cell on a migration path when the route lane is below high-risk or lacks data-model",
+            "cells update refuses the same cell the same way",
+            "the refusal names the path, the row glob, the row source, the floor and a bee route --set remedy with --files",
+            "a .bee/config.json rigor_floor row raises a floor and never lowers a built-in one",
+            "a fixture .sql file outside the schema-shaped rows passes",
+            "a feature with no recorded route and a cell with no matching path pass unchanged",
+            "an owner-first cell added after an auto-approved execution gate is refused with GATE_OWNER_FIRST",
+            "bee gate --merge --approved true --actor auto refuses with GATE_OWNER_FIRST when the preview packet or persisted cells touch an owner-first path, checks again after the lock, and writes nothing",
+            "the GATE_OWNER_FIRST message tells the leader to stop and set waiting-on gate",
+            "the same approval with actor user succeeds, and an auto approval with no owner-first hit succeeds as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+              "substantive": "rows, lane rank, glob lookup, owner-first query"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+              "substantive": "GATE_OWNER_FIRST refusal before and after the lock"
+            }
+          ],
+          "key_links": [
+            "validate.rs add path calls the floor check",
+            "handlers_write.rs update path calls the floor check before write_cell",
+            "set_gate.rs calls the owner-first query from rigor_floor.rs"
+          ],
+          "prohibitions": [
+            "Do not change triage_ladder_rank or the route verbs",
+            "Do not change the uat refusal or the bypass-level checks",
+            "Do not add a crate dependency",
+            "Do not add an exempt list or any config that lowers a floor",
+            "No code comments"
+          ],
+          "open_choices": [
+            "spike ranks as standard",
+            "no recorded route means no check"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "rfl-2",
+        "feature": "path-rigor-floor",
+        "title": "Name the rigor floor in the planning and bypass rules",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "4bf3a432-d4c3-4c6a-9b59-416d5627b2b8",
+          "f613e3c2-d396-42c3-8edd-86357e914253",
+          "f9ba8d88-f0f3-45a6-bb14-02bfb8abf005"
+        ],
+        "files": [
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/path-rigor-floor/CONTEXT.md",
+          "docs/history/path-rigor-floor/plan.md",
+          "skills/bee-planning/SKILL.md"
+        ],
+        "affects_skills": [
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [],
+        "action": "Doctrine for D1, D2 and D3. In skills/bee-planning/SKILL.md, section Route, add a short rule: paths set a floor — bee ships rows for migrations, SQL schema and release/publish workflows, a repo adds rows under rigor_floor in .bee/config.json (raise only), and bee cells add / update refuse a cell below its floor with RIGOR_FLOOR; the remedy is to raise the route, never to drop the file. In skills/bee-hive/references/gates-and-delegation.md, section Gate bypass mode, add one line: a feature whose cells touch an owner-first path keeps the merged gate with the human at every bypass level (GATE_OWNER_FIRST); on that refusal the leader stops, sets `bee state waiting-on set --kind gate`, and shows the gate to the human. Keep each addition short. Then run the regen chain (`bee dev regen`) so rendered skill trees and the release manifest follow, and run the manifest check. The release manifest is an exclusive path: reserve it before regen. Regen also rewrites rendered skill trees (.claude/skills, .agents/skills and the other rendered copies); list every file regen changed in the cap, and name the rendered copies as a scope deviation.",
+        "verify": ".bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the planning Route section says paths set a floor that can be raised, never lowered",
+            "the gate bypass section says owner-first paths keep the merged gate with the human at every level"
+          ],
+          "artifacts": [
+            {
+              "path": "skills/bee-planning/SKILL.md",
+              "substantive": "rigor floor rule in Route"
+            }
+          ],
+          "key_links": [
+            "gates-and-delegation.md names GATE_OWNER_FIRST in Gate bypass mode"
+          ],
+          "prohibitions": [
+            "Do not restate the row table in a second home"
+          ]
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "test",
+          "reason": "Rerouted from code: herding agent paseo-pi-agy-flash is out of quota; decision ff5427df (role-reroute)."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "Each cell writes its tests red-first."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "test",
+          "reason": "rfl-2 changes skill text; rerouted from docs for the same quota reason."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "required",
+          "role": "review",
+          "reason": "Gathers run on --kind gather --role review while read is out of quota."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard lane with more than five product files: the plan-step hat wave runs."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release rides this feature."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Out of quota; gathers use review."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "herding-code",
+          "classification": "not-applicable",
+          "role": "code",
+          "reason": "Out of quota; rerouted to test."
+        },
+        {
+          "stage": "herding-read",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Out of quota; rerouted to review."
+        },
+        {
+          "stage": "herding-docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "Out of quota; rerouted to test."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-11-06T03:46:54.268Z",
+    "feature": "path-rigor-floor",
+    "newest_decision_id": "8959b110-4d1b-4723-bbcc-0ac9b35bc0d3",
+    "plan_sha256": "701c6b6a3ba6d33a6e0345aa85e1b89d69ed48f8cd78a9ae2dda0505430a0d7f",
+    "advisor": "hat-wave(hat-facts-gaps,hat-alternatives,hat-user-impact; opus)",
+    "digest_head": "# Hat wave synthesis — path-rigor-floor\n\nSeats: hat-facts-gaps (two runs, conf 85 each), hat-alternatives (conf 72),\nhat-user-impact (conf 80). Raw findings: `.bee/tmp/hat-wave/path-rigor-floor.md`\nin the main checkout.\n\n## Applied to plan.md\n\n| Finding | Seat | Change |\n|---|---|---|\n| prf-2 is one file, serial on rfl-1 | alternatives | prf-2 merged into rfl-1; rfl-2 stays parallel |\n| Matcher choice open | alternatives, facts-gaps | write_guard `glob_tokens` / `glob_match` through the `crate::"
+  },
+  "approved_cell_packet": {
+    "feature": "path-rigor-floor",
+    "plan_sha256": "701c6b6a3ba6d33a6e0345aa85e1b89d69ed48f8cd78a9ae2dda0505430a0d7f",
+    "previewed_at": "2026-11-06T03:46:50.241Z",
+    "cells": [
+      {
+        "id": "rfl-1",
+        "feature": "path-rigor-floor",
+        "title": "Refuse a cell whose paths need a higher route, and keep owner-first gates with the human",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "4bf3a432-d4c3-4c6a-9b59-416d5627b2b8",
+          "f613e3c2-d396-42c3-8edd-86357e914253",
+          "f9ba8d88-f0f3-45a6-bb14-02bfb8abf005",
+          "a653682b-521f-4312-921b-68c39a5cabf9",
+          "49388de3-9a4f-4cf3-97f6-1dcff092bf29"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+        ],
+        "read_first": [
+          "docs/history/path-rigor-floor/CONTEXT.md",
+          "docs/history/path-rigor-floor/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+          "packages/bee-rs/crates/bee/src/state.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement contract decision a653682b (D1 4bf3a432, D2 f613e3c2) in a new module verbs/cells/rigor_floor.rs. Rows are {glob, min_lane, flags, owner_first}. Built-in rows (schema-shaped, not every SQL file): `**/migrations/**`, `**/migrate/**`, `**/alembic/versions/**`, `**/schema.sql`, `**/*.schema.sql` and `**/schema.prisma` at min_lane high-risk, flags [data-model], owner_first true; `.github/workflows/release*` and `.github/workflows/publish*` at min_lane standard, no flags, owner_first true. Repo rows come from the `.bee/config.json` key `rigor_floor` (an array of the same shape), read through read_config_raw (state.rs `pub fn read_config_raw(root: &Path) -> Map<String, Value> {`); a malformed row is skipped with a warning on stderr. For a file, the effective floor is the highest min_lane, the union of flags and the OR of owner_first over every matching row, built-in and repo alike, so a repo row can raise and never lower. Lane rank: docs < tiny < small < standard < high-risk, spike ranks as standard (workflows.rs triage_ladder_rank covers only three lanes; do not change it). Flag names must be in the route flag vocabulary in workflows.rs. Use the write guard's glob matcher: `crate::hooks::write_guard::{glob_tokens, glob_match}` (the paths module is private but re-exported by write_guard/mod.rs; design_group.rs already imports it this way); glob_match takes `&[char]`, so collect the path's chars first as paths.rs does; write_guard/tests.rs already proves `**/migrations/**` against db/migrations/001.sql. No new crate dependency. Register the module in cells/mod.rs with `mod rigor_floor;` plus `pub(crate) use self::rigor_floor::*;`. The lane vocabulary ROUTE_LANE_VALUES in workflows.rs is private, so the rank covers all six lanes itself. Export a lookup that takes the root and a list of files and returns the hits (path, row glob, row source built-in or repo, floor), and an owner-first query. Wire the check: in validate.rs beside `match assert_regen_obligation(map, \"addCell\") {` (problems are collected there, not thrown) and in handlers_write.rs beside `assert_regen_obligation(&merged, \"updateCell\")?;` (thrown before write_cell). The add seam covers single and batch add; validate_new_cell_problems has no feature argument, so read map[\"feature\"]; a cell with no feature skips the check. On update, run the lane check first, then the owner-first check below. Read the feature route (lane and flags) the way drivers/close.rs feature_route does: the lane record's route first, then the state.json route when it belongs to the feature (feature_route returns only the lane; read the flags beside it). No recorded route: no check. Refuse with the in-message token RIGOR_FLOOR (the REGEN_OBLIGATION style: `addCell: RIGOR_FLOOR — ...`; refusals carry no code field) when a hit's min_lane ranks above the route lane or a hit flag is missing from the route flags; the message names the path, the row glob, whether the row is built-in or from .bee/config.json, the floor, that an owner-first row also needs a human gate, and the remedy: `bee route --set --class <class> --lane <floor lane> --flags <route flags plus missing> --files <n>`. Owner-first at cells add/update: when a cell file hits an owner-first row and the feature's execution gate (or merged gate) is approved with actor auto in the workflow record (gates.<name>.actor), refuse with GATE_OWNER_FIRST — this closes the path where a route raised after an auto gate lets an owner-first cell in with no human gate. GATE GATE_OWNER_FIRST in set_gate.rs (contract decision 49388de3, D3 f9ba8d88): when actor is auto (`let actor = flag_value(flags, \"actor\").unwrap_or_else(|| \"user\".to_string());`) and the call approves shape, execution or --merge, collect the feature's files from the lane record's gate_preview cell packet (`if let Some(prev) = state.get(\"gate_preview\").cloned() {`) and from the feature's persisted cells (list_cells for the feature), ask the owner-first query, and on any hit refuse at every bypass level. Check once before the lock the way the uat refusal does (`if actor == \"auto\" && name == \"uat\" {`, reading the record with peek_target_record), and AGAIN against target.record() after acquire_mutation_locks and before the write, because gate_preview can change between the peek and the lock (the preview check already runs twice for this reason). The GATE_OWNER_FIRST message names the path and the row glob and tells the leader: stop; do not retry; do not pass --actor user; run `bee state waiting-on set --kind gate --subject \"<feature> owner-first gate\"`, show the gate to the human, and end the turn. An approval with actor user, a refusal (approved false), and an auto approval with no owner-first hit are unchanged. Tests red-first: add refuses a small-lane cell on db/migrations/001.sql under a small route; add passes under a high-risk route with data-model; db/migrate, alembic/versions and schema.prisma paths hit; a fixture tests/fixtures/report.sql passes; a repo config row raises a floor; a repo row with a lower lane does not lower a built-in floor; update refuses the same way; a feature with no route is not checked; unmatched paths pass; add of an owner-first cell after an auto-approved execution gate refuses GATE_OWNER_FIRST, and passes after a user-approved gate. Gate tests next to gate_refuses_uat_from_actor_auto_and_writes_nothing: auto merge refused with an owner-first file in the preview packet and nothing written, and the message names waiting-on; the same with actor user approves; auto merge with no owner-first file approves as before.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells set_gate gate",
+        "must_haves": {
+          "truths": [
+            "cells add refuses with RIGOR_FLOOR a cell on a migration path when the route lane is below high-risk or lacks data-model",
+            "cells update refuses the same cell the same way",
+            "the refusal names the path, the row glob, the row source, the floor and a bee route --set remedy with --files",
+            "a .bee/config.json rigor_floor row raises a floor and never lowers a built-in one",
+            "a fixture .sql file outside the schema-shaped rows passes",
+            "a feature with no recorded route and a cell with no matching path pass unchanged",
+            "an owner-first cell added after an auto-approved execution gate is refused with GATE_OWNER_FIRST",
+            "bee gate --merge --approved true --actor auto refuses with GATE_OWNER_FIRST when the preview packet or persisted cells touch an owner-first path, checks again after the lock, and writes nothing",
+            "the GATE_OWNER_FIRST message tells the leader to stop and set waiting-on gate",
+            "the same approval with actor user succeeds, and an auto approval with no owner-first hit succeeds as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+              "substantive": "rows, lane rank, glob lookup, owner-first query"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+              "substantive": "GATE_OWNER_FIRST refusal before and after the lock"
+            }
+          ],
+          "key_links": [
+            "validate.rs add path calls the floor check",
+            "handlers_write.rs update path calls the floor check before write_cell",
+            "set_gate.rs calls the owner-first query from rigor_floor.rs"
+          ],
+          "prohibitions": [
+            "Do not change triage_ladder_rank or the route verbs",
+            "Do not change the uat refusal or the bypass-level checks",
+            "Do not add a crate dependency",
+            "Do not add an exempt list or any config that lowers a floor",
+            "No code comments"
+          ],
+          "open_choices": [
+            "spike ranks as standard",
+            "no recorded route means no check"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "rfl-2",
+        "feature": "path-rigor-floor",
+        "title": "Name the rigor floor in the planning and bypass rules",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "4bf3a432-d4c3-4c6a-9b59-416d5627b2b8",
+          "f613e3c2-d396-42c3-8edd-86357e914253",
+          "f9ba8d88-f0f3-45a6-bb14-02bfb8abf005"
+        ],
+        "files": [
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/path-rigor-floor/CONTEXT.md",
+          "docs/history/path-rigor-floor/plan.md",
+          "skills/bee-planning/SKILL.md"
+        ],
+        "affects_skills": [
+          "skills/bee-planning/SKILL.md",
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [],
+        "action": "Doctrine for D1, D2 and D3. In skills/bee-planning/SKILL.md, section Route, add a short rule: paths set a floor — bee ships rows for migrations, SQL schema and release/publish workflows, a repo adds rows under rigor_floor in .bee/config.json (raise only), and bee cells add / update refuse a cell below its floor with RIGOR_FLOOR; the remedy is to raise the route, never to drop the file. In skills/bee-hive/references/gates-and-delegation.md, section Gate bypass mode, add one line: a feature whose cells touch an owner-first path keeps the merged gate with the human at every bypass level (GATE_OWNER_FIRST); on that refusal the leader stops, sets `bee state waiting-on set --kind gate`, and shows the gate to the human. Keep each addition short. Then run the regen chain (`bee dev regen`) so rendered skill trees and the release manifest follow, and run the manifest check. The release manifest is an exclusive path: reserve it before regen. Regen also rewrites rendered skill trees (.claude/skills, .agents/skills and the other rendered copies); list every file regen changed in the cap, and name the rendered copies as a scope deviation.",
+        "verify": ".bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the planning Route section says paths set a floor that can be raised, never lowered",
+            "the gate bypass section says owner-first paths keep the merged gate with the human at every level"
+          ],
+          "artifacts": [
+            {
+              "path": "skills/bee-planning/SKILL.md",
+              "substantive": "rigor floor rule in Route"
+            }
+          ],
+          "key_links": [
+            "gates-and-delegation.md names GATE_OWNER_FIRST in Gate bypass mode"
+          ],
+          "prohibitions": [
+            "Do not restate the row table in a second home"
+          ]
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "test",
+          "reason": "Rerouted from code: herding agent paseo-pi-agy-flash is out of quota; decision ff5427df (role-reroute)."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "Each cell writes its tests red-first."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "test",
+          "reason": "rfl-2 changes skill text; rerouted from docs for the same quota reason."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "required",
+          "role": "review",
+          "reason": "Gathers run on --kind gather --role review while read is out of quota."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard lane with more than five product files: the plan-step hat wave runs."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release rides this feature."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Out of quota; gathers use review."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "herding-code",
+          "classification": "not-applicable",
+          "role": "code",
+          "reason": "Out of quota; rerouted to test."
+        },
+        {
+          "stage": "herding-read",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Out of quota; rerouted to review."
+        },
+        {
+          "stage": "herding-docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "Out of quota; rerouted to test."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-11-06T03:46:44.100Z"
+  }
+}

@@ -873,6 +873,7 @@ fn count_cells(root: &Path) -> Map<String, Value> {
     let mut claimed = 0u64;
     let mut capped = 0u64;
     let mut blocked = 0u64;
+    let mut parked = 0u64;
     if let Ok(rd) = std::fs::read_dir(root.join(".bee").join("cells")) {
         for entry in rd.flatten() {
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -898,6 +899,7 @@ fn count_cells(root: &Path) -> Map<String, Value> {
                     "claimed" => claimed += 1,
                     "capped" => capped += 1,
                     "blocked" => blocked += 1,
+                    "parked" => parked += 1,
                     _ => {}
                 }
             }
@@ -908,6 +910,7 @@ fn count_cells(root: &Path) -> Map<String, Value> {
     counts.insert("claimed".to_string(), json!(claimed));
     counts.insert("capped".to_string(), json!(capped));
     counts.insert("blocked".to_string(), json!(blocked));
+    counts.insert("parked".to_string(), json!(parked));
     counts
 }
 
@@ -1227,11 +1230,12 @@ mod tests {
         write_cell(tmp.path(), "b", "capped");
         write_cell(tmp.path(), "c", "capped");
         write_cell(tmp.path(), "d", "weird"); // unknown status: not counted
+        write_cell(tmp.path(), "e", "parked");
         std::fs::create_dir_all(tmp.path().join(".bee/cells/archive/f")).unwrap(); // dirs skipped
         let counts = count_cells(tmp.path());
         assert_eq!(
             crate::jsjson::stringify(&Value::Object(counts)),
-            r#"{"open":1,"claimed":0,"capped":2,"blocked":0}"#
+            r#"{"open":1,"claimed":0,"capped":2,"blocked":0,"parked":1}"#
         );
     }
 
@@ -1252,7 +1256,7 @@ mod tests {
         // D1 fields untouched, extras preserved, cells/last_activity refreshed.
         assert_eq!(out["phase"], json!("swarming"));
         assert_eq!(out["extra"], json!(42));
-        assert_eq!(out["cells"], json!({"open":0,"claimed":0,"capped":0,"blocked":0}));
+        assert_eq!(out["cells"], json!({"open":0,"claimed":0,"capped":0,"blocked":0,"parked":0}));
         assert_eq!(out["last_activity"], json!("T"));
     }
 
@@ -1559,7 +1563,7 @@ mod tests {
         let counts = count_cells(tmp.path());
         assert_eq!(
             crate::jsjson::stringify(&Value::Object(counts)),
-            r#"{"open":1,"claimed":0,"capped":1,"blocked":0}"#
+            r#"{"open":1,"claimed":0,"capped":1,"blocked":0,"parked":0}"#
         );
     }
 

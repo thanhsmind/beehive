@@ -353,6 +353,20 @@ fn sweep_on_orient(ctx: &Ctx) -> R<Option<String>> {
 // hand from `build_status` (D4's `open_maps`, the global cell counts, the
 // handoff flag, the phase) — no second scan, no new field.
 
+fn parked_count(status: &JMap) -> i64 {
+    status.get("cells").and_then(|c| vget(c, "parked")).and_then(Value::as_i64).unwrap_or(0)
+}
+
+fn parked_cells_blocker_line(status: &JMap) -> Option<String> {
+    let parked = parked_count(status);
+    (parked > 0).then(|| {
+        format!(
+            "{parked} parked cell(s) awaiting a human answer — answer each with: {}",
+            sweep_cells::answer_remedy("<cell>")
+        )
+    })
+}
+
 /// True once the pipeline is idle enough to safely hand `next` over to
 /// wayfinding: no pending handoff, no open or claimed cell anywhere (the
 /// SAME global counts `work.cells` already reports), and the phase itself
@@ -367,7 +381,7 @@ fn pipeline_idle_for_wayfinding(status: &JMap) -> bool {
     let cells = status.get("cells");
     let open = cells.and_then(|c| vget(c, "open")).and_then(|v| v.as_i64()).unwrap_or(0);
     let claimed = cells.and_then(|c| vget(c, "claimed")).and_then(|v| v.as_i64()).unwrap_or(0);
-    if open != 0 || claimed != 0 {
+    if open != 0 || claimed != 0 || parked_count(status) != 0 {
         return false;
     }
     status
@@ -481,6 +495,9 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
                 tpl(vget(w, "subject")),
             )));
         }
+    }
+    if let Some(line) = parked_cells_blocker_line(&status) {
+        blockers.push(json!(line));
     }
     let sd = status.get("scribing_debt");
     if opt_truthy(sd) && vget(sd.unwrap(), "count").and_then(|v| v.as_f64()).unwrap_or(0.0) > 0.0 {
@@ -603,6 +620,7 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
         counts.insert("open".into(), vget(&cells, "open").cloned().unwrap_or(Value::Null));
         counts.insert("claimed".into(), vget(&cells, "claimed").cloned().unwrap_or(Value::Null));
         counts.insert("capped".into(), vget(&cells, "capped").cloned().unwrap_or(Value::Null));
+        counts.insert("parked".into(), vget(&cells, "parked").cloned().unwrap_or(Value::Null));
         work.insert("cells".into(), Value::Object(counts));
         work.insert("ready".into(), Value::Array(ready_ids.clone()));
         work.insert("blockers".into(), Value::Array(blockers));
@@ -868,4 +886,30 @@ pub(crate) fn run(verb: Verb, lanes_full: bool, use_json: bool, t0: Instant) -> 
     }
     record_timing(&ctx.root, cmd, t0, true);
     Some(ExitCode::SUCCESS)
+}
+
+#[cfg(test)]
+mod parked_orient_tests {
+    use super::*;
+
+    fn status_with(cells: Value) -> JMap {
+        let mut status = JMap::new();
+        status.insert("phase".into(), json!("idle"));
+        status.insert("cells".into(), cells);
+        status
+    }
+
+    #[test]
+    fn orient_never_calls_a_pipeline_with_a_parked_cell_idle() {
+        assert!(pipeline_idle_for_wayfinding(&status_with(json!({"open": 0, "claimed": 0, "parked": 0}))));
+        assert!(!pipeline_idle_for_wayfinding(&status_with(json!({"open": 0, "claimed": 0, "parked": 1}))));
+    }
+
+    #[test]
+    fn orient_names_the_parked_cell_count_and_the_answer_remedy() {
+        assert_eq!(parked_cells_blocker_line(&status_with(json!({"parked": 0}))), None);
+        let line = parked_cells_blocker_line(&status_with(json!({"parked": 2}))).expect("a parked line");
+        assert!(line.contains("2 parked cell(s)"), "{line}");
+        assert!(line.contains("bee cells answer --id <cell> --answer \"<text>\""), "{line}");
+    }
 }

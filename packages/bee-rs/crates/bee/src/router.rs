@@ -588,9 +588,7 @@ mod tests {
 
     #[test]
     fn an_unbuilt_but_declared_command_says_so_instead_of_suggesting_flags() {
-        // `doctor` stood here until it was ported. The class needs a LIVE
-        // example or the branch stops being exercised at all.
-        let (kind, msg) = classify_argv(&["config", "get", "--key", "gate_bypass"]);
+        let (kind, msg) = classify_argv(&["herding", "enable"]);
         assert_eq!(kind, "command_unavailable");
         assert!(msg.contains("not built into this binary"), "{msg}");
         assert!(msg.contains("Nothing ran and nothing changed"), "{msg}");
