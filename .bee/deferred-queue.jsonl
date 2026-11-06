@@ -1197,3 +1197,5 @@
 {"ts":"2026-11-06T02:11:54.089Z","event":"complete","id":"095497d8-3cd9-4d83-a893-988bc63b8669"}
 {"ts":"2026-11-06T02:11:57.296Z","event":"complete","id":"00aae1c2-ee49-4442-8491-a8636ef58fe5"}
 {"ts":"2026-11-06T02:12:00.402Z","event":"complete","id":"9e3896dd-8843-42d1-8a56-6bd6b099c3af"}
+{"ts":"2026-11-06T03:22:19.770Z","event":"add","id":"8bb57e11-1a87-44ba-bc9e-3140162cbbe2","kind":"worktree-cleanup","feature":"durable-state-writes","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--durable-state-writes"],"reason":"Worktree beehive--wt--durable-state-writes (branch wt/durable-state-writes) merged into main at f684a4a761249574e8a3e102db67b1e4254667a2 and kept per default (D1) — remove it with `bee worktree prune`."}
+{"ts":"2026-11-06T03:22:22.129Z","event":"add","id":"0199dc2c-9ba8-41d0-ae6d-833eeaa8ec68","kind":"scribe","feature":"durable-state-writes","cells":["dsw-1"],"areas":[],"files":["packages/bee-rs/crates/bee/src/fsutil.rs"],"reason":"Scribing debt: 1 capped behavior_change cell(s) for \"durable-state-writes\" with no scribing/compounding record since capping."}

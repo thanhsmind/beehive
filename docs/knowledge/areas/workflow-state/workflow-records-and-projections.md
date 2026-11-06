@@ -805,6 +805,16 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   checkout's own root; a linked worktree's workflow record therefore always
   lands at the same path a call from main would use (multisession-native D2,
   msn-18a-c).
+- R81 — Every bee store write survives a power loss or a crash.
+  `fsutil::write_text_atomic` (and `write_json_atomic`, which delegates to
+  it) writes the tmp file, calls `sync_all` on it, renames it over the
+  target, and on unix then syncs the parent directory so the new name is
+  durable; a directory-sync failure after a landed rename returns an error
+  that says the rename landed. `fsutil::append_jsonl` calls `sync_data`
+  before it returns. Bytes on disk, the tmp-name scheme, and tmp cleanup
+  on a failed rename are unchanged. Windows skips the directory sync
+  (durable-state-writes cell dsw-1, commit 0b60c9b87, 2026-11-06; origin
+  `docs/history/research/forgent-xia.md` item 1).
 
 ## Edge Cases Settled
 
@@ -1057,3 +1067,8 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   `packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs` acquires
   `workflow:<id>` before `handoff:<id>` and validates active workflow status
   before writing. Evidence: cell `pprf-3`, decision 7da86fdb-40de-415c-b3ac-ae84a4c89d60.
+- Durable store writes: `write_text_atomic`/`write_json_atomic`/`append_jsonl`
+  and the private `write_synced`/`sync_parent_dir` helpers in
+  `packages/bee-rs/crates/bee/src/fsutil.rs`; fsutil unit tests prove bytes
+  unchanged, no tmp left after success, tmp removed on a failed rename.
+  Evidence: cell `dsw-1`, commit 0b60c9b87.
