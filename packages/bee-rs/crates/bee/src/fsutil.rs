@@ -137,16 +137,7 @@ fn tmp_path_for(file: &Path) -> PathBuf {
 /// the same directory, then rename over `file`. On failure the tmp is removed
 /// best-effort and the original error propagates.
 pub fn write_json_atomic(file: &Path, value: &Value) -> std::io::Result<()> {
-    if let Some(dir) = file.parent() {
-        ensure_dir(dir)?;
-    }
-    let tmp = tmp_path_for(file);
-    let content = format!("{}\n", jsjson::stringify_pretty(value));
-    let result = std::fs::write(&tmp, content).and_then(|()| std::fs::rename(&tmp, file));
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
-    }
-    result
+    write_text_atomic(file, &format!("{}\n", jsjson::stringify_pretty(value)))
 }
 
 /// The text sibling of [`write_json_atomic`]: no JSON encoding, no shape —
@@ -159,11 +150,38 @@ pub fn write_text_atomic(file: &Path, content: &str) -> std::io::Result<()> {
         ensure_dir(dir)?;
     }
     let tmp = tmp_path_for(file);
-    let result = std::fs::write(&tmp, content).and_then(|()| std::fs::rename(&tmp, file));
+    let result = write_synced(&tmp, content.as_bytes()).and_then(|()| std::fs::rename(&tmp, file));
     if result.is_err() {
         let _ = std::fs::remove_file(&tmp);
+        return result;
     }
-    result
+    sync_parent_dir(file).map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!("{} was renamed into place, but syncing its directory failed: {e}", file.display()),
+        )
+    })
+}
+
+fn write_synced(path: &Path, content: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut f = std::fs::File::create(path)?;
+    f.write_all(content)?;
+    f.sync_all()
+}
+
+#[cfg(unix)]
+fn sync_parent_dir(file: &Path) -> std::io::Result<()> {
+    let dir = match file.parent() {
+        Some(d) if !d.as_os_str().is_empty() => d,
+        _ => Path::new("."),
+    };
+    std::fs::File::open(dir)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_parent_dir(_file: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// appendJsonl: compact stringify + "\n", appended (creating parents).
@@ -173,7 +191,8 @@ pub fn append_jsonl(file: &Path, value: &Value) -> std::io::Result<()> {
     }
     use std::io::Write;
     let mut f = std::fs::OpenOptions::new().create(true).append(true).open(file)?;
-    f.write_all(format!("{}\n", jsjson::stringify(value)).as_bytes())
+    f.write_all(format!("{}\n", jsjson::stringify(value)).as_bytes())?;
+    f.sync_data()
 }
 
 pub fn remove_file_if_exists(file: &Path) {
@@ -352,6 +371,35 @@ mod tests {
             .collect();
         assert!(leftovers.is_empty(), "a failed write must not leave a tmp behind");
         assert!(file.is_dir(), "the target must be untouched by the failure");
+    }
+
+    #[test]
+    fn a_failed_text_write_leaves_no_tmp_and_no_partial_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("blocked.md");
+        std::fs::create_dir(&file).unwrap();
+        assert!(write_text_atomic(&file, "body\n").is_err());
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "a failed write must not leave a tmp behind");
+        assert!(file.is_dir(), "the target must be untouched by the failure");
+    }
+
+    #[test]
+    fn append_jsonl_appends_the_exact_compact_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("nested").join("log.jsonl");
+        append_jsonl(&file, &json!({"a": 1, "b": "x"})).unwrap();
+        append_jsonl(&file, &json!([1, 2])).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "{\"a\":1,\"b\":\"x\"}\n[1,2]\n");
+    }
+
+    #[test]
+    fn a_bare_file_name_syncs_the_current_directory() {
+        assert!(sync_parent_dir(Path::new("state.json")).is_ok());
     }
 
     /// The native corrupt-JSON warning must carry every piece of information
