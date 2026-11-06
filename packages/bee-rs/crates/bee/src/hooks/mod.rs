@@ -113,7 +113,7 @@ pub(crate) fn thin_peer_boot(root: &std::path::Path) -> bool {
 }
 
 fn thin_peer_hook_open(name: &str) -> bool {
-    matches!(name, "session-init" | "prompt-context")
+    name == "session-init"
         && std::env::current_dir()
             .ok()
             .and_then(|cwd| adapter::resolve_roots(&cwd).work_root)
@@ -335,11 +335,11 @@ mod tests {
     }
 
     #[test]
-    fn only_the_two_boot_hooks_can_open_the_gate() {
+    fn only_session_init_can_open_the_gate() {
         let _guard = herding_worker_env_lock();
         let _env = MarkerEnv::set(Some("1"));
         for hook_name in HOOK_NAMES {
-            if hook_name == "session-init" || hook_name == "prompt-context" {
+            if hook_name == "session-init" {
                 continue;
             }
             assert!(!thin_peer_hook_open(hook_name), "{hook_name}");

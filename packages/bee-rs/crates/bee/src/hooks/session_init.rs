@@ -102,18 +102,18 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         return Outcome::Done(ExitCode::SUCCESS);
     }
 
+    if crate::hooks::thin_peer_boot(&root) {
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(crate::hooks::PEER_BOOT.as_bytes());
+        return Outcome::Done(ExitCode::SUCCESS);
+    }
+
     let session_id = trimmed(ctx.payload.get("session_id"));
     let event_source = trimmed(ctx.payload.get("source")).unwrap_or_default();
     let runtime = normalize_dispatch_runtime(ctx.payload.get("runtime"));
 
     if let Some(sid) = &session_id {
         register_acting_session(&ctx, &root, sid, &event_source);
-    }
-
-    if crate::hooks::thin_peer_boot(&root) {
-        use std::io::Write;
-        let _ = std::io::stdout().write_all(crate::hooks::PEER_BOOT.as_bytes());
-        return Outcome::Done(ExitCode::SUCCESS);
     }
 
     let handoff_outcome = match &session_id {
@@ -702,14 +702,14 @@ mod tests {
     }
 
     #[test]
-    fn a_thin_peer_boot_still_registers_the_worker_session() {
+    fn a_thin_peer_boot_registers_no_session() {
         let _guard = crate::hooks::herding_env_lock();
         let _env = crate::hooks::tests::MarkerEnv::set(Some("1"));
         let tmp = tempfile::tempdir().unwrap();
         crate::hooks::tests::thin_repo(tmp.path(), Some(true));
         let outcome = run(&[], &payload_for(tmp.path()));
         assert!(matches!(outcome, Outcome::Done(_)));
-        assert!(tmp.path().join(".bee").join("sessions").join("s1.json").is_file());
+        assert!(!tmp.path().join(".bee").join("sessions").exists(), "a herded pane is not a live session");
     }
 
     #[test]

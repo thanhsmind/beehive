@@ -141,12 +141,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         let _ctx = read_hook_context(HOOK_NAME, argv, stdin);
         return Outcome::Done(ExitCode::SUCCESS);
     }
-    let thin = crate::hooks::thin_peer_boot(&root) && !hook_disabled(&root);
     if roots.worktree_resolution != "ordinary" {
-        if thin {
-            print_peer_boot();
-            return Outcome::Done(ExitCode::SUCCESS);
-        }
         // Linked-worktree topology pulls the grants/control-root surface —
         // delegated wholesale for now, with ONE read lifted above the bail.
         //
@@ -182,22 +177,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     // Committed to native from here: the adapter read logs coverage gaps
     // exactly once, same as the .mjs's readHookContext.
     let ctx = read_hook_context(HOOK_NAME, argv, stdin);
-    if thin {
-        return Outcome::Done(execute_thin(&root, &ctx, plan));
-    }
     Outcome::Done(execute(&root, &ctx, plan))
-}
-
-fn hook_disabled(root: &Path) -> bool {
-    matches!(
-        crate::state::read_config_raw(root).get("hooks").and_then(|h| h.get(HOOK_NAME)),
-        Some(Value::Bool(false))
-    )
-}
-
-fn print_peer_boot() {
-    use std::io::Write;
-    let _ = std::io::stdout().write_all(crate::hooks::PEER_BOOT.as_bytes());
 }
 
 // ─── c80debd7 turn-boundary delivery ────────────────────────────────────────
@@ -397,13 +377,12 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
     execute_to(root, ctx, plan, std::io::stdout())
 }
 
-fn execute_thin(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) -> ExitCode {
-    side_effects(root, ctx, &plan);
-    print_peer_boot();
-    ExitCode::SUCCESS
-}
-
-fn side_effects(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: &Plan) {
+fn execute_to<W: std::io::Write>(
+    root: &Path,
+    ctx: &crate::hooks::adapter::HookContext,
+    plan: Plan,
+    mut writer: W,
+) -> ExitCode {
     // Committed to native: release the warnings plan() queued. Everything read
     // from here on warns immediately (there is no delegate left to protect).
     flush_plan_warnings();
@@ -430,15 +409,6 @@ fn side_effects(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: &Pl
     } else {
         crate::verbs::workflow_store::reap_stale_waiting_on(root, now_ms() as f64);
     }
-}
-
-fn execute_to<W: std::io::Write>(
-    root: &Path,
-    ctx: &crate::hooks::adapter::HookContext,
-    plan: Plan,
-    mut writer: W,
-) -> ExitCode {
-    side_effects(root, ctx, &plan);
 
     let mut parts: Vec<String> = Vec::new();
     if plan.inject_reminder {
@@ -2858,22 +2828,6 @@ mod tests {
             "the human's message must clear the live mark through the REAL hook entry \
              point, not merely through the inner clear function: {after:?}"
         );
-    }
-
-    #[test]
-    fn a_thin_peer_boot_consumes_no_inject_cache_and_the_switch_off_still_does() {
-        let _guard = crate::hooks::herding_env_lock();
-        let _env = crate::hooks::tests::MarkerEnv::set(Some("1"));
-        let thin = tempfile::tempdir().unwrap();
-        crate::hooks::tests::thin_repo(thin.path(), Some(true));
-        let plain = tempfile::tempdir().unwrap();
-        crate::hooks::tests::thin_repo(plain.path(), Some(false));
-        for dir in [thin.path(), plain.path()] {
-            let payload = json!({ "cwd": dir.to_string_lossy(), "session_id": "s1" }).to_string();
-            assert!(matches!(run(&[], &payload), Outcome::Done(_)));
-        }
-        assert!(!inject_cache_path(thin.path()).exists(), "thin boot prints the peer text only");
-        assert!(inject_cache_path(plain.path()).exists(), "switch off keeps today's reminder");
     }
 
     #[test]
