@@ -2925,6 +2925,7 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
     write_real_bee(dir.path());
 
     let config = json!({
+        "dispatch": { "claude_sessions": false },
         "team": {
             "pi": {
                 "extraction": {
