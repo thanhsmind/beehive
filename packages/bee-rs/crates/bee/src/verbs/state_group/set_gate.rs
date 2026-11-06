@@ -783,9 +783,6 @@ fn plan_claims_refusal(
     claims_refusal(root, &feature)
 }
 
-/// The mutation body, root-parameterized so it can be exercised directly in
-/// tests without a process CWD (`run_gate` above is the only caller in
-/// production; `prelude`'s CWD-resolved root is threaded through as `root`).
 fn owner_first_gate_refusal(root: &Path, record: &Map<String, Value>, lane: Option<&str>) -> Option<String> {
     let feature = match lane {
         Some(l) => l.to_string(),
@@ -810,6 +807,9 @@ fn owner_first_gate_refusal(root: &Path, record: &Map<String, Value>, lane: Opti
     ))
 }
 
+/// The mutation body, root-parameterized so it can be exercised directly in
+/// tests without a process CWD (`run_gate` above is the only caller in
+/// production; `prelude`'s CWD-resolved root is threaded through as `root`).
 pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     if flags.get("owner").is_some() {
         return Ok(Out::Thrown(
