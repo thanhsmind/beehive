@@ -1953,5 +1953,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-06T07:09:34.419Z"
+  },
+  "framework-feedback-rule": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-06T07:14:59.784Z"
   }
 }
