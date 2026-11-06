@@ -80,16 +80,16 @@ Risk map:
 
 | Component | Risk | Lands in | Proof |
 |---|---|---|---|
-| Existing cells in this repo meet a new refusal | MEDIUM | prf-1 | built-in rows touch only migrations, SQL and release/publish workflows; the full cells suite stays green |
-| Gate refusal blocks a legitimate auto approval | LOW | prf-1 | unit tests: auto approve refused only on an owner-first hit; user approve unchanged |
-| Glob semantics of `**` | LOW | prf-1 | unit tests per built-in row |
-| A built-in row catches a file that is not a schema (fixture SQL, report queries) and the owner cannot switch it off | MEDIUM | prf-1 | built-in rows are schema-shaped, not every `*.sql`; tests show a fixture `.sql` passes and Rails, Alembic and Prisma schema paths hit |
-| `.github/workflows/release*` now needs a standard route and a human gate for every release-CI change | LOW (accepted) | prf-1 | that is the point of D3 |
-| A route raised after an auto-approved gate lets an owner-first cell in with no human gate | MEDIUM | prf-1 | cells add/update refuse an owner-first hit when the execution gate's actor is auto |
+| Existing cells in this repo meet a new refusal | MEDIUM | rfl-1 | built-in rows touch only migrations, SQL and release/publish workflows; the full cells suite stays green |
+| Gate refusal blocks a legitimate auto approval | LOW | rfl-1 | unit tests: auto approve refused only on an owner-first hit; user approve unchanged |
+| Glob semantics of `**` | LOW | rfl-1 | unit tests per built-in row |
+| A built-in row catches a file that is not a schema (fixture SQL, report queries) and the owner cannot switch it off | MEDIUM | rfl-1 | built-in rows are schema-shaped, not every `*.sql`; tests show a fixture `.sql` passes and Rails, Alembic and Prisma schema paths hit |
+| `.github/workflows/release*` now needs a standard route and a human gate for every release-CI change | LOW (accepted) | rfl-1 | that is the point of D3 |
+| A route raised after an auto-approved gate lets an owner-first cell in with no human gate | MEDIUM | rfl-1 | cells add/update refuse an owner-first hit when the execution gate's actor is auto |
 
-Waves: prf-1 and prf-3 run in parallel (disjoint files). The old prf-2
-(the gate refusal) is merged into prf-1: it was one file and had to wait for
-prf-1 anyway (hat-alternatives), so a split bought nothing.
+Waves: rfl-1 and rfl-2 run in parallel (disjoint files). The old prf-2 (now part of rfl-1)
+(the gate refusal) is merged into rfl-1: it was one file and had to wait for
+rfl-1 anyway (hat-alternatives), so a split bought nothing.
 
 Built-in row globs (synthesis, decision touches f9ba8d88): D3 names "SQL
 schema", not every SQL file. A blanket `**/*.sql` row catches test
@@ -108,7 +108,7 @@ repo lower a floor, which D1 forbids.
   "stages": [
     {"stage":"implementation","classification":"required","role":"test","reason":"Rerouted from code: herding agent paseo-pi-agy-flash is out of quota; decision ff5427df (role-reroute)."},
     {"stage":"test-and-live-proof","classification":"required","role":"test","reason":"Each cell writes its tests red-first."},
-    {"stage":"documentation-and-capture","classification":"required","role":"test","reason":"prf-3 changes skill text; rerouted from docs for the same quota reason."},
+    {"stage":"documentation-and-capture","classification":"required","role":"test","reason":"rfl-2 changes skill text; rerouted from docs for the same quota reason."},
     {"stage":"read-only-gather","classification":"required","role":"review","reason":"Gathers run on --kind gather --role review while read is out of quota."},
     {"stage":"hat-facts-gaps","classification":"required","role":"hat-facts-gaps","reason":"Standard lane with more than five product files: the plan-step hat wave runs."},
     {"stage":"hat-alternatives","classification":"required","role":"hat-alternatives","reason":"Default hat seat."},
@@ -145,13 +145,13 @@ Phase plan (one slice):
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| prf-1 | Refuse a cell whose paths need a higher route, and keep owner-first gates with the human | cells/rigor_floor.rs (new), cells/mod.rs, cells/validate.rs, cells/handlers_write.rs, cells/tests.rs, state_group/set_gate.rs | — | `bee cells add` on a migration path under a small route refuses with RIGOR_FLOOR and names the route to set; `bee gate --merge --actor auto` on a feature that touches a migration refuses with GATE_OWNER_FIRST and tells the leader to stop for the human | cells and set_gate tests green |
-| prf-3 | Name the rigor floor in the planning and bypass rules | skills/bee-planning/SKILL.md, skills/bee-hive/references/gates-and-delegation.md, release manifest | — | the route rules say paths set a floor; the bypass table says owner-first gates stop for the human | release-manifest check green |
+| rfl-1 | Refuse a cell whose paths need a higher route, and keep owner-first gates with the human | cells/rigor_floor.rs (new), cells/mod.rs, cells/validate.rs, cells/handlers_write.rs, cells/tests.rs, state_group/set_gate.rs | — | `bee cells add` on a migration path under a small route refuses with RIGOR_FLOOR and names the route to set; `bee gate --merge --actor auto` on a feature that touches a migration refuses with GATE_OWNER_FIRST and tells the leader to stop for the human | cells and set_gate tests green |
+| rfl-2 | Name the rigor floor in the planning and bypass rules | skills/bee-planning/SKILL.md, skills/bee-hive/references/gates-and-delegation.md, release manifest | — | the route rules say paths set a floor; the bypass table says owner-first gates stop for the human | release-manifest check green |
 
 ```json
 [
   {
-    "id": "prf-1",
+    "id": "rfl-1",
     "feature": "path-rigor-floor",
     "title": "Refuse a cell whose paths need a higher route, and keep owner-first gates with the human",
     "lane": "standard",
@@ -213,7 +213,7 @@ Phase plan (one slice):
     "behavior_change": true
   },
   {
-    "id": "prf-3",
+    "id": "rfl-2",
     "feature": "path-rigor-floor",
     "title": "Name the rigor floor in the planning and bypass rules",
     "lane": "standard",
