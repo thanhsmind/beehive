@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"durable-state-writes\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"durable-state-writes\" (lane).",
+  "next_action": "Merged into main at f684a4a; capture what settled, then bee close --feature durable-state-writes.",
   "created_at": "2026-11-06T03:12:52.448Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-11-06T03:12:49.301Z",
     "feature": "durable-state-writes"
-  },
-  "merge_ready": {
-    "since": "2026-11-06T03:21:13.749Z",
-    "branch": "wt/durable-state-writes",
-    "worktree_id": "beehive--wt--durable-state-writes",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
