@@ -3288,6 +3288,13 @@
       "packagePath": "packages/bee/prompts/gather.md"
     },
     {
+      "path": "packages/bee/prompts/peer-boot.md",
+      "sha256": "bf9e4a6bc4fe17a669f59963a038ed32a71332d2c73683f478108d91da14f4f3",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/prompts/peer-boot.md"
+    },
+    {
       "path": "packages/bee/prompts/reviewer.md",
       "sha256": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
       "mode": "644",

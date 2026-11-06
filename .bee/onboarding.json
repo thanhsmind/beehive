@@ -38,6 +38,7 @@
     "prompts": {
       "advisor.md": "62e71f2c7071d3c7395b40a7886b7e60cbefdf3257a72fce9de5fda26dfae5bc",
       "gather.md": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
+      "peer-boot.md": "bf9e4a6bc4fe17a669f59963a038ed32a71332d2c73683f478108d91da14f4f3",
       "reviewer.md": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
       "worker-cell.md": "3616571edbf569baf524da709a3e558a6cb96df0ccf415bde93922ee41409d2b"
     },
@@ -136,5 +137,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-06T13:48:11.616Z"
+  "updated_at": "2026-11-06T15:16:47.946Z"
 }
