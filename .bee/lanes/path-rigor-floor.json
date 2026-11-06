@@ -594,5 +594,12 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-06T03:46:44.100Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-06T04:41:39.448Z",
+    "branch": "wt/path-rigor-floor",
+    "worktree_id": "beehive--wt--path-rigor-floor",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
