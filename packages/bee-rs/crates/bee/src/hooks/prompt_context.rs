@@ -364,7 +364,7 @@ fn compute_handoff_warning(config: &Map<String, Value>, payload: &Map<String, Va
         let n_k = ctx / 1000;
         let t_k = threshold / 1000;
         Some(format!(
-            "context {n_k}k tokens is past the handoff mark ({t_k}k): finish this step, write the handoff (bee state handoff write --kind planned-next), hand the rest to waggledance (waggledance_dispatch, leader: true), and release this session — never ask the user to open a new one."
+            "context {n_k}k tokens (mark {t_k}k): keep working; hand off only on the user's word or at feature close"
         ))
     } else {
         None
@@ -3264,7 +3264,7 @@ mod tests {
         });
         let payload = parse_payload(&payload_val.to_string());
         let p = plan(tmp.path(), &payload).ok().flatten().unwrap();
-        let expected_line = "context 160k tokens is past the handoff mark (150k): finish this step, write the handoff (bee state handoff write --kind planned-next), hand the rest to waggledance (waggledance_dispatch, leader: true), and release this session — never ask the user to open a new one.";
+        let expected_line = "context 160k tokens (mark 150k): keep working; hand off only on the user's word or at feature close";
         assert_eq!(p.handoff_warning.as_deref(), Some(expected_line));
 
         let ctx = read_hook_context(HOOK_NAME, &[], &payload_val.to_string());
@@ -3296,7 +3296,8 @@ mod tests {
         let mut out = Vec::new();
         execute_to(tmp.path(), &ctx, p, &mut out);
         let stdout = String::from_utf8(out).unwrap();
-        assert!(!stdout.contains("past the handoff mark"));
+        assert!(!stdout.contains("(mark "));
+        assert!(!stdout.contains("keep working; hand off"));
 
         let outcome = run(&[], &payload_val.to_string());
         assert!(matches!(outcome, Outcome::Done(_)));
@@ -3321,7 +3322,8 @@ mod tests {
         let mut out = Vec::new();
         execute_to(tmp.path(), &ctx, p, &mut out);
         let stdout = String::from_utf8(out).unwrap();
-        assert!(!stdout.contains("past the handoff mark"));
+        assert!(!stdout.contains("(mark "));
+        assert!(!stdout.contains("keep working; hand off"));
 
         let outcome = run(&[], &payload_val.to_string());
         assert!(matches!(outcome, Outcome::Done(_)));
