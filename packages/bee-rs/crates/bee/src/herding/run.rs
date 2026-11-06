@@ -5432,8 +5432,12 @@ fn exit_code_for(o: &RunOutcome) -> ExitCode {
 /// file for `herding.tmux.*`, so the two share one helper instead of two
 /// drifting copies.
 pub(crate) fn read_main_config(main_root: &Path) -> Value {
-    let cfg_path = main_root.join(".bee").join("config.json");
-    std::fs::read_to_string(&cfg_path).ok().and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or(Value::Null)
+    let merged = crate::state::read_config_raw(main_root);
+    if merged.is_empty() {
+        Value::Null
+    } else {
+        Value::Object(merged)
+    }
 }
 
 /// tmux-herding-transport D1: the already-decided transport kind, built into
@@ -6308,6 +6312,27 @@ mod tests {
         export_depth(&mut env, super::super::wave::HerdingLimits { concurrency: None, depth: Some(2) }, 1);
         env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());
         assert_eq!(build_export_line(&env), "export BEE_HERDING_DEPTH='2' BEE_HERDING_WORKER='1'");
+    }
+
+    #[test]
+    fn a_paseo_agent_declared_only_in_the_local_config_resolves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee).unwrap();
+        let agent = |model: &str| serde_json::json!({"paseo": {"provider": "claude", "model": model}});
+        std::fs::write(
+            bee.join("config.json"),
+            serde_json::json!({"herding": {"agents": {"tracked-one": agent("claude-sonnet-5-5")}}}).to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            bee.join("config.local.json"),
+            serde_json::json!({"herding": {"agents": {"local-one": agent("claude-haiku-5-5")}}}).to_string(),
+        )
+        .unwrap();
+        let cfg = read_main_config(tmp.path());
+        assert!(matches!(PaseoSpec::from_config(&cfg, "local-one"), Some(Ok(_))), "local agent unknown: {cfg}");
+        assert!(matches!(PaseoSpec::from_config(&cfg, "tracked-one"), Some(Ok(_))), "tracked agent lost: {cfg}");
     }
 
     // ─── pure decisions ─────────────────────────────────────────────────
