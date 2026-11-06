@@ -692,6 +692,85 @@ fn shell_quote(token: &str) -> String {
     format!("'{}'", token.replace('\'', "'\\''"))
 }
 
+#[cfg(test)]
+thread_local! {
+    static CLAUDE_SESSIONS_ARMED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+struct ClaudeSessionsArmed;
+
+#[cfg(test)]
+impl ClaudeSessionsArmed {
+    fn on() -> Self {
+        CLAUDE_SESSIONS_ARMED.with(|c| c.set(true));
+        Self
+    }
+}
+
+#[cfg(test)]
+impl Drop for ClaudeSessionsArmed {
+    fn drop(&mut self) {
+        CLAUDE_SESSIONS_ARMED.with(|c| c.set(false));
+    }
+}
+
+fn claude_sessions_armed() -> bool {
+    #[cfg(test)]
+    {
+        CLAUDE_SESSIONS_ARMED.with(|c| c.get())
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
+}
+
+fn claude_sessions_enabled(cfg: &Value) -> bool {
+    claude_sessions_armed()
+        && cfg
+            .get("dispatch")
+            .and_then(|d| d.get("claude_sessions"))
+            .and_then(Value::as_bool)
+            != Some(false)
+}
+
+fn shell_token(token: &str) -> String {
+    if !token.is_empty() && token.chars().all(|c| c.is_ascii_alphanumeric() || "._:-".contains(c)) {
+        token.to_string()
+    } else {
+        shell_quote(token)
+    }
+}
+
+fn claude_session_command(
+    cwd: Option<&str>,
+    cell_id: Option<&str>,
+    read_only: bool,
+    model: &str,
+    effort: Option<&str>,
+    ceiling: Option<u64>,
+) -> String {
+    let mut command = ".bee/bin/bee herding run --task-file - --json".to_string();
+    if let Some(cwd) = cwd {
+        command.push_str(&format!(" --cwd \"{cwd}\""));
+    }
+    if let Some(id) = cell_id {
+        command.push_str(&format!(" --cell-id \"{id}\""));
+    }
+    command.push_str(&format!(" --session-model {}", shell_token(model)));
+    if let Some(effort) = effort {
+        command.push_str(&format!(" --session-effort {}", shell_token(effort)));
+    }
+    if read_only {
+        command.push_str(" --read-only");
+    }
+    if let Some(seconds) = ceiling {
+        command.push_str(&format!(" --ceiling {seconds}"));
+    }
+    command
+}
+
 fn codex_spawn_payload(
     subject: &str,
     tier: &str,
@@ -2423,7 +2502,18 @@ pub(crate) fn prepare_dispatch_wire(
         .flatten()
         .filter(|seat| seat.starts_with("hat-"));
 
-    let is_herding = matches!(resolved, Resolved::Herding { .. });
+    let claude_session_candidate = match &resolved {
+        Resolved::Model { model, .. }
+            if runtime == "claude" && !is_escalated && !model.is_empty() && claude_sessions_enabled(&cfg) =>
+        {
+            Some(model.clone())
+        }
+        _ => None,
+    };
+    let claude_binary = crate::herding::claude_session::claude_command(&cfg);
+    let claude_on_path = claude_session_candidate.is_some() && command_resolves_on_path(&claude_binary);
+    let claude_session_model: Option<&str> = claude_session_candidate.as_deref().filter(|_| claude_on_path);
+    let is_herding = matches!(resolved, Resolved::Herding { .. }) || claude_session_model.is_some();
     let prompt_body = match prompt_body_for(
         root,
         kind,
@@ -2855,8 +2945,35 @@ pub(crate) fn prepare_dispatch_wire(
                 payload = codex_spawn_payload(&subject, marker_role, &prompt_body, cfg_model, cfg_effort, &extra_markers);
                 channel = "codex-native".into();
             }
+            _ if claude_session_model.is_some() => {
+                tool = "Bash".into();
+                let cwd = if is_deployment {
+                    Some(root.to_string_lossy().into_owned())
+                } else {
+                    worktree_location.as_ref().map(|(w, _)| w.clone()).filter(|w| !w.is_empty())
+                };
+                let command = claude_session_command(
+                    cwd.as_deref(),
+                    if kind == "cell" { cell_id } else { None },
+                    (kind == "gather" || kind == "advisor") && !is_deployment,
+                    claude_session_model.unwrap_or_default(),
+                    effort_choice.as_ref().and_then(|c| c.effort.as_deref()),
+                    ceiling_seconds_at(root),
+                );
+                payload.insert("command".into(), Value::String(command));
+                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
+                payload.insert("transport_ready".into(), Value::Bool(true));
+                payload.insert(
+                    "transport_reason".into(),
+                    Value::String(format!("claude session: {claude_binary} on PATH")),
+                );
+                channel = "claude-session".into();
+            }
             _ => {
                 tool = "Agent".into();
+                if claude_session_candidate.is_some() {
+                    extra_fallback_reason = Some("claude_cli_missing");
+                }
                 payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
                 payload.insert(
                     "prompt".into(),
@@ -2978,6 +3095,7 @@ pub(crate) fn prepare_dispatch_wire(
     let param_model = match (&channel[..], &resolved) {
         ("claude-agent", Resolved::Model { model, .. }) => Some(model.clone()),
         ("codex-native", Resolved::Model { model, .. }) => Some(model.clone()),
+        ("claude-session", Resolved::Model { model, .. }) => Some(model.clone()),
         _ => None,
     };
     let declared = match (&channel[..], &resolved) {
@@ -6648,3 +6766,233 @@ mod park_answer_brief_tests {
     }
 }
 
+
+#[cfg(test)]
+mod claude_session_door_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn stub_cli(tmp: &tempfile::TempDir) -> String {
+        let path = tmp.path().join("stub-claude");
+        std::fs::write(&path, "").unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
+    fn config(extra: &str, claude_command: &str) -> String {
+        format!(
+            r#"{{"models":{{"claude":{{"extraction":"haiku","generation":"sonnet","review":"opus","advisor":"fable"}}}},"herding":{{"claude_command":{}}}{extra}}}"#,
+            serde_json::to_string(claude_command).unwrap()
+        )
+    }
+
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)]
+        {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    fn w_cell(root: &Path, id: &str) {
+        let path = root.join(".bee").join("cells").join(format!("{id}.json"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(r#"{{"id":"{id}","feature":"f","status":"claimed","trace":{{"worker":"w"}}}}"#),
+        )
+        .unwrap();
+    }
+
+    fn dispatch(root: &Path, runtime: &str, kind: &str, role: Option<&str>, cell: Option<&str>) -> Value {
+        let _armed = ClaudeSessionsArmed::on();
+        let worker = cell.map(|_| "w");
+        let out = prepare_dispatch_with_role(root, runtime, kind, role, cell, worker, false, None, None, false, None)
+            .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected an envelope for {kind}") };
+        v
+    }
+
+    #[test]
+    fn a_native_model_slot_on_claude_returns_a_session_command_for_every_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = stub_cli(&tmp);
+        let root = repo(&tmp, &config("", &bin));
+        w_cell(&root, "c-1");
+        for (kind, role, cell, model, flags) in [
+            ("cell", "generation", Some("c-1"), "sonnet", " --cell-id \"c-1\" --session-model sonnet"),
+            ("gather", "extraction", None, "haiku", " --session-model haiku --read-only"),
+            ("reviewer", "review", None, "opus", " --session-model opus"),
+            ("advisor", "advisor", None, "fable", " --session-model fable --read-only"),
+        ] {
+            let v = dispatch(&root, "claude", kind, Some(role), cell);
+            assert_eq!(v["tool"], json!("Bash"), "{kind}");
+            let p = &v["payload"];
+            assert_eq!(
+                p["command"],
+                json!(format!(".bee/bin/bee herding run --task-file - --json{flags}")),
+                "{kind}"
+            );
+            assert!(p["stdin"].as_str().is_some_and(|s| !s.is_empty()), "{kind} carries the pane prompt on stdin");
+            assert_eq!(p["transport_ready"], json!(true), "{kind}");
+            assert_eq!(p["transport_reason"], json!(format!("claude session: {bin} on PATH")), "{kind}");
+            assert!(p.get("model").is_none() && p.get("subagent_type").is_none(), "{kind}");
+            assert_eq!(v["economics"]["channel"], json!("claude-session"), "{kind}");
+            assert_eq!(v["economics"]["effective_model"], json!(model), "{kind}");
+            assert!(v.get("fallback_reason").is_none(), "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_session_cell_gets_the_herding_brief_and_no_native_bookkeeping() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = stub_cli(&tmp);
+        let no_advisor = |extra: &str| config(extra, &bin).replace(r#","advisor":"fable""#, "");
+        let on = repo(&tmp, &no_advisor(""));
+        w_cell(&on, "c-1");
+        let session = dispatch(&on, "claude", "cell", Some("generation"), Some("c-1"));
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let off = repo(&tmp2, &no_advisor(r#","dispatch":{"claude_sessions":false}"#));
+        w_cell(&off, "c-1");
+        let agent = dispatch(&off, "claude", "cell", Some("generation"), Some("c-1"));
+
+        let herding_cfg = r#"{"team":{"claude":{"generation":{"kind":"herding","agent":"pi-agent"}}},"herding":{"agents":{"pi-agent":["pi","-a"]}}}"#;
+        let tmp3 = tempfile::tempdir().unwrap();
+        let pane = repo(&tmp3, herding_cfg);
+        w_cell(&pane, "c-1");
+        let herding = dispatch(&pane, "claude", "cell", Some("generation"), Some("c-1"));
+
+        let stdin = session["payload"]["stdin"].as_str().unwrap();
+        assert_eq!(stdin, herding["payload"]["stdin"].as_str().unwrap(), "same brief as a herding pane");
+        assert_ne!(stdin, agent["payload"]["prompt"].as_str().unwrap());
+    }
+
+    #[test]
+    fn the_session_command_carries_cwd_effort_and_ceiling() {
+        assert_eq!(
+            claude_session_command(Some("/w/t"), Some("c-1"), true, "opus[1m]", Some("high"), Some(900)),
+            ".bee/bin/bee herding run --task-file - --json --cwd \"/w/t\" --cell-id \"c-1\" --session-model 'opus[1m]' --session-effort high --read-only --ceiling 900"
+        );
+        assert_eq!(
+            claude_session_command(None, None, false, "claude-sonnet-5-5", None, None),
+            ".bee/bin/bee herding run --task-file - --json --session-model claude-sonnet-5-5"
+        );
+    }
+
+    #[test]
+    fn a_configured_ceiling_rides_the_session_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = stub_cli(&tmp);
+        let root = repo(&tmp, &config(r#","herding":{"claude_command":"x"}"#, &bin).replace(r#","herding":{"claude_command":"x"}"#, ""));
+        let cfg = config("", &bin).replacen(
+            r#""herding":{"#,
+            r#""herding":{"ceiling_seconds":600,"#,
+            1,
+        );
+        std::fs::write(root.join(".bee/config.json"), cfg).unwrap();
+        let v = dispatch(&root, "claude", "advisor", Some("advisor"), None);
+        let command = v["payload"]["command"].as_str().unwrap();
+        assert!(command.ends_with(" --read-only --ceiling 600"), "{command}");
+    }
+
+    #[test]
+    fn the_switch_off_returns_the_agent_payload_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = stub_cli(&tmp);
+        let off = repo(&tmp, &config(r#","dispatch":{"claude_sessions":false}"#, &bin));
+        let tmp2 = tempfile::tempdir().unwrap();
+        let bare = repo(
+            &tmp2,
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus","advisor":"fable"}},"dispatch":{"claude_sessions":false}}"#,
+        );
+        for (kind, role) in [("gather", "extraction"), ("reviewer", "review"), ("advisor", "advisor")] {
+            let a = dispatch(&off, "claude", kind, Some(role), None);
+            let b = dispatch(&bare, "claude", kind, Some(role), None);
+            assert_eq!(a["tool"], json!("Agent"), "{kind}");
+            assert_eq!(a["payload"], b["payload"], "{kind}");
+            assert_eq!(a["payload"]["model"], json!(match kind { "gather" => "haiku", "reviewer" => "opus", _ => "fable" }));
+            assert!(a.get("fallback_reason").is_none(), "{kind}");
+            assert_eq!(a["economics"]["channel"], json!("claude-agent"), "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_missing_cli_keeps_the_agent_payload_and_names_the_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("no-such-claude").to_string_lossy().into_owned();
+        let root = repo(&tmp, &config("", &missing));
+        w_cell(&root, "c-1");
+        for (kind, role, cell) in [
+            ("cell", "generation", Some("c-1")),
+            ("gather", "extraction", None),
+            ("reviewer", "review", None),
+            ("advisor", "advisor", None),
+        ] {
+            let v = dispatch(&root, "claude", kind, Some(role), cell);
+            assert_eq!(v["tool"], json!("Agent"), "{kind}");
+            assert_eq!(v["fallback_reason"], json!("claude_cli_missing"), "{kind}");
+            assert!(v["payload"].get("model").is_some(), "{kind}");
+            assert_eq!(v["economics"]["channel"], json!("claude-agent"), "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_session_model_escalation_keeps_the_agent_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = stub_cli(&tmp);
+        let root = repo(&tmp, &config("", &bin));
+        w_cell(&root, "c-1");
+        let path = root.join(".bee").join("cells").join("c-2.json");
+        std::fs::write(
+            &path,
+            r#"{"id":"c-2","feature":"f","title":"rescue","role":"code","escalate":true,"status":"claimed","trace":{"worker":"w"}}"#,
+        )
+        .unwrap();
+        let control = dispatch(&root, "claude", "cell", Some("generation"), Some("c-1"));
+        assert_eq!(control["tool"], json!("Bash"), "the control really opens a session");
+        let _armed = ClaudeSessionsArmed::on();
+        let Prepared::Value(escalated) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-2"), Some("w"), false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(escalated["tool"], json!("Agent"));
+        assert_eq!(escalated["economics"]["channel"], json!("session-model"));
+        assert!(escalated.get("fallback_reason").is_none());
+    }
+
+    #[test]
+    fn codex_and_pi_payloads_ignore_the_claude_switch_and_binary() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("no-such-claude").to_string_lossy().into_owned();
+        let cfg = format!(
+            r#"{{"models":{{"codex":{{"extraction":"gpt-5","generation":"gpt-5","review":"gpt-5","advisor":"gpt-5"}}}},"herding":{{"claude_command":{}}}}}"#,
+            serde_json::to_string(&missing).unwrap()
+        );
+        let root = repo(&tmp, &cfg);
+        let v = dispatch(&root, "codex", "advisor", Some("advisor"), None);
+        assert_ne!(v["economics"]["channel"], json!("claude-session"));
+        assert!(v.get("fallback_reason").is_none());
+        assert!(!v["payload"].to_string().contains("--session-model"));
+    }
+
+    #[test]
+    fn a_herding_slot_keeps_its_herding_command_with_no_session_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = stub_cli(&tmp);
+        let cfg = format!(
+            r#"{{"team":{{"claude":{{"advisor":{{"kind":"herding","agent":"pi-agent"}}}}}},"herding":{{"claude_command":{},"agents":{{"pi-agent":["pi","-a"]}}}}}}"#,
+            serde_json::to_string(&bin).unwrap()
+        );
+        let root = repo(&tmp, &cfg);
+        let v = dispatch(&root, "claude", "advisor", Some("advisor"), None);
+        assert_eq!(
+            v["payload"]["command"],
+            json!(".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --read-only")
+        );
+        assert_eq!(v["economics"]["channel"], json!("herding-exec"));
+    }
+}

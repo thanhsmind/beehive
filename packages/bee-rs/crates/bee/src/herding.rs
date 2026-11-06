@@ -123,7 +123,7 @@ pub(crate) mod fork;
 pub(crate) mod notify;
 pub(crate) mod broker;
 pub(crate) mod paseo;
-mod claude_session;
+pub(crate) mod claude_session;
 pub(crate) mod paseo_state;
 pub(crate) mod pi_agent_dir;
 
