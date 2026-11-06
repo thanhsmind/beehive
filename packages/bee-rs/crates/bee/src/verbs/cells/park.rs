@@ -1,4 +1,5 @@
 use super::*;
+use crate::lock;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::Out;
 use serde_json::{Map, Value};
@@ -10,6 +11,16 @@ const PARK_KEY: &str = "park";
 
 pub(crate) fn answer_remedy(id: &str) -> String {
     format!("bee cells answer --id {id} --answer \"<text>\"")
+}
+
+pub(crate) fn refuse_parked(verb: &str, id: &str, status: Option<&Value>) -> MR<()> {
+    match status {
+        Some(Value::String(s)) if s == "parked" => Err(Fail::Thrown(format!(
+            "{verb}: cell \"{id}\" is \"parked\" on a question — only an answer moves it. Run: {}",
+            answer_remedy(id)
+        ))),
+        _ => Ok(()),
+    }
 }
 
 fn entry_text(entry: &Value, key: &str) -> Option<String> {
@@ -49,6 +60,23 @@ pub(crate) fn feature_parked_cells(
         .iter()
         .filter_map(|c| Some((entry_text(c, "id")?, open_question(c).unwrap_or_default())))
         .collect())
+}
+
+pub(crate) fn parked_cells(root: &Path) -> Vec<(String, String)> {
+    let live = list_cells(root, None, Some("parked")).unwrap_or_default();
+    let archived = std::fs::read_dir(cells_dir(root).join(ARCHIVE_DIR_NAME))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter_map(|e| e.file_name().to_str().map(str::to_string));
+    let mut features: Vec<String> = live.iter().filter_map(|c| entry_text(c, "feature")).chain(archived).collect();
+    features.sort();
+    features.dedup();
+    features
+        .iter()
+        .flat_map(|f| feature_parked_cells(root, f).unwrap_or_default())
+        .collect()
 }
 
 pub(crate) fn run_park(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -161,6 +189,12 @@ pub(crate) fn answer_cell(root: &Path, id: &str, answer: &str) -> MR<Value> {
             )));
         };
         let question = entry.get("question").and_then(Value::as_str).unwrap_or_default().to_string();
+        if let lock::AcquireOnce::Busy { holder } = lock::acquire_store_lock_once(&root2, "cells-archive") {
+            return Err(Fail::Thrown(format!(
+                "answerCell: cell \"{id2}\" not answered — the \"cells-archive\" lock is held by {} (a live archive/unarchive transaction). Nothing was logged; retry once it completes.",
+                holder_who(&holder)
+            )));
+        }
         let decision_id = log_decision_id(
             &root2,
             &format!("cells answer: the parked question on cell \"{id2}\" is answered. Question: \"{question}\" Answer: \"{answer}\""),
