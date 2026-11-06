@@ -1,0 +1,111 @@
+{
+  "id": "cma-1",
+  "feature": "context-mark-advisory",
+  "title": "Make the context mark line advisory",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "8921875b-7143-4620-a636-747e75a766de",
+    "48741dcf-019c-4e33-8cc4-6ceec7e3bca4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "read_first": [
+    "docs/history/context-mark-advisory/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Contract decision 48741dcf. In compute_handoff_warning (prompt_context.rs), keep the threshold read, the 150000 default and the 0 switch unchanged. Replace the format string with exactly: `context {n_k}k tokens (mark {t_k}k): keep working; hand off only on the user's word or at feature close`. Update the three tests at transcript_past_handoff_mark_carries_warning_line, transcript_below_handoff_mark_adds_no_line and handoff_context_tokens_zero_adds_no_line_at_any_size: the past-mark test asserts `context 160k tokens (mark 150k): keep working; hand off only on the user's word or at feature close`; the two no-line tests assert stdout does not contain `(mark ` and does not contain `keep working; hand off`. Red first: change the expected text, see the test fail, then change the string.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context",
+  "must_haves": {
+    "truths": [
+      "past the mark the hook adds the advisory line with the token count and the mark",
+      "the line carries no stop order and no handoff steps",
+      "below the mark and with handoff_context_tokens 0 the hook adds no line"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "substantive": "advisory line and its tests"
+      }
+    ],
+    "key_links": [
+      "compute_handoff_warning returns the advisory line"
+    ],
+    "prohibitions": [
+      "Do not change the default or the 0 switch",
+      "No code comments"
+    ]
+  },
+  "behavior_change": true,
+  "judge_obligation_ack": "one owner-specified string in an advisory line; no guard logic changes, the tests assert the exact text",
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+    ],
+    "deviations": [
+      "ran inline on the leader: dispatch prepare refused limits.concurrency (decision logged)",
+      "sync-ack: cma-1 changed only prompt_context.rs; the AGENTS.md diff on this branch is cma-2's and touches only rule agents-context-handoff-65, agents-bee-defect-report text untouched"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T07:01:30.374Z",
+    "behavior_change": true,
+    "verification_evidence": "43 prompt_context tests, red first on the old line text",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2f346667-6330-4127-90da-e015976b38a9",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context",
+    "claimed_at": "2026-11-06T06:57:26.292Z",
+    "sync_ack": "cma-1 changed only prompt_context.rs; the AGENTS.md diff on this branch is cma-2's and touches only rule agents-context-handoff-65, agents-bee-defect-report text untouched",
+    "no_mistakes": true,
+    "inline_reason": "dispatch prepare refused limits.concurrency (live 5, limit 4) with no running worker agent; decision logged",
+    "report": {
+      "outcome": "past the mark the hook line says keep working; hand off only on the user word or at feature close",
+      "commit": "c7e09a5db",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context — green:unit — 43 prompt_context tests, red first on the old line text",
+      "deviations": [
+        "ran inline on the leader: dispatch prepare refused limits.concurrency (decision logged)"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "past the mark the hook adds the advisory line with the token count and the mark",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "the line carries no stop order and no handoff steps",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "below the mark and with handoff_context_tokens 0 the hook adds no line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "compute_handoff_warning returns the advisory line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          }
+        ],
+        "recorded_at": "2026-11-06T07:04:59.059Z",
+        "recorded_by": "2f346667-6330-4127-90da-e015976b38a9",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

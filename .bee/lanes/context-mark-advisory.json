@@ -1,0 +1,522 @@
+{
+  "schema_version": "1.0",
+  "feature": "context-mark-advisory",
+  "mode": null,
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"context-mark-advisory\" started at phase \"exploring\" (lane).",
+  "next_action": "close context-mark-advisory, merge, release",
+  "created_at": "2026-11-06T06:54:32.568Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 16,
+    "rationale": "one hook string plus one rule rewritten in every home",
+    "updated_at": "2026-11-06T06:56:15.784Z",
+    "feature": "context-mark-advisory"
+  },
+  "gate_preview": {
+    "feature": "context-mark-advisory",
+    "plan_sha256": "eff713016bc165f79c93faad8629e1ad94b033fd04e3e50af2abc6949f795e58",
+    "previewed_at": "2026-11-06T06:56:26.627Z",
+    "cells": [
+      {
+        "id": "cma-1",
+        "feature": "context-mark-advisory",
+        "title": "Make the context mark line advisory",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "8921875b-7143-4620-a636-747e75a766de",
+          "48741dcf-019c-4e33-8cc4-6ceec7e3bca4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+        ],
+        "read_first": [
+          "docs/history/context-mark-advisory/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Contract decision 48741dcf. In compute_handoff_warning (prompt_context.rs), keep the threshold read, the 150000 default and the 0 switch unchanged. Replace the format string with exactly: `context {n_k}k tokens (mark {t_k}k): keep working; hand off only on the user's word or at feature close`. Update the three tests at transcript_past_handoff_mark_carries_warning_line, transcript_below_handoff_mark_adds_no_line and handoff_context_tokens_zero_adds_no_line_at_any_size: the past-mark test asserts `context 160k tokens (mark 150k): keep working; hand off only on the user's word or at feature close`; the two no-line tests assert stdout does not contain `(mark ` and does not contain `keep working; hand off`. Red first: change the expected text, see the test fail, then change the string.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context",
+        "must_haves": {
+          "truths": [
+            "past the mark the hook adds the advisory line with the token count and the mark",
+            "the line carries no stop order and no handoff steps",
+            "below the mark and with handoff_context_tokens 0 the hook adds no line"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+              "substantive": "advisory line and its tests"
+            }
+          ],
+          "key_links": [
+            "compute_handoff_warning returns the advisory line"
+          ],
+          "prohibitions": [
+            "Do not change the default or the 0 switch",
+            "No code comments"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cma-2",
+        "feature": "context-mark-advisory",
+        "title": "Rewrite the context handoff rule as advisory in every home",
+        "lane": "small",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "8921875b-7143-4620-a636-747e75a766de",
+          "a23d677e-69b2-4d7c-b1a3-06e4dd9068f8",
+          "48741dcf-019c-4e33-8cc4-6ceec7e3bca4"
+        ],
+        "files": [
+          "packages/bee/AGENTS.block.md",
+          "AGENTS.md",
+          "skills/bee-hive/SKILL.md",
+          "skills/bee-hive/references/go-mode.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-swarming/references/swarming-reference.md",
+          "docs/handbook/stages/swarming.md",
+          "docs/handbook/architecture-map.md",
+          "docs/02-architecture.md",
+          "README.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+          "docs/history/handoff-self-relaunch/promote-proposals.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/context-mark-advisory/CONTEXT.md",
+          "packages/bee/AGENTS.block.md"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/SKILL.md",
+          "skills/bee-swarming/SKILL.md"
+        ],
+        "affects_specs": [],
+        "action": "Rewrite rule agents-context-handoff-65 per decision a23d677e in every home. New meaning, in short plain sentences: a session never interrupts work at a context mark; it finishes the task. The hook may show the context size against the mark (handoff_context_tokens, default 150000); that line is advice, not a stop. A handoff is written only when the user asks for a switch or at feature close. Then it goes through the host's leader door: waggledance_dispatch with leader: true and follow_up_of naming the current run, so the successor joins the same run family. Never a self-spawned Paseo agent, never tell the user to open a new session. Show the handoff and wait only when a gate or decision the user owns is pending, or when the host has no leader door. Homes: packages/bee/AGENTS.block.md (the § Care for the session bullet under the rule marker), then run `.bee/bin/bee dev regen` so AGENTS.md and the rendered skill copies follow; skills/bee-hive/SKILL.md line 111; skills/bee-hive/references/go-mode.md lines 117 and 124 (no mid-swarm stop; landing a slice before a user-asked switch stays); skills/bee-hive/references/routing-and-contracts.md lines 116 and 196; skills/bee-swarming/SKILL.md line 165 (keep the line 242 worker [HANDOFF] token: a worker window is out of scope); skills/bee-swarming/references/swarming-reference.md near line 746 and 780 (the HANDOFF.json schema stays); docs/handbook/stages/swarming.md near line 97; docs/handbook/architecture-map.md line 103 (swarming to paused on the user's word or feature close); docs/02-architecture.md line 244; README.md lines 100 and 508. Knowledge: in the rule index entry for agents-context-handoff-65 (router-triage-and-the-agents-md-duplication-boundary.md line 222), rewrite the spoken form and cite D1 and D3 of docs/history/context-mark-advisory; in docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md near line 115, replace the hook line with `context <N>k tokens (mark <T>k): keep working; hand off only on the user's word or at feature close` and say it is advisory. In docs/history/handoff-self-relaunch/promote-proposals.md, mark the old stop-at-mark proposal superseded by docs/history/context-mark-advisory D3 (decision a23d677e supersedes c9439edb). Reserve the release manifest before regen. List every file regen changed in the cap and name the rendered copies as a scope deviation.",
+        "verify": ".bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "no home tells a session to stop or hand off at the context mark",
+            "every home says a handoff happens only on the user's word or at feature close",
+            "the handoff dispatch names waggledance_dispatch with leader: true and follow_up_of the current run"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/AGENTS.block.md",
+              "substantive": "rewritten rule under the agents-context-handoff-65 marker"
+            }
+          ],
+          "key_links": [
+            "AGENTS.md matches the block after bee dev regen"
+          ],
+          "prohibitions": [
+            "Do not change the worker [HANDOFF] token",
+            "Do not change the HANDOFF.json schema"
+          ]
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cma-1 changes one hook string and its tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "cma-1 updates its own tests red-first on the code role."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "cma-2 rewrites the rule in every home."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader already read every anchor."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "scripts/release.sh runs after merge, from main."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No consult needed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "context-mark-advisory",
+    "plan_sha256": "eff713016bc165f79c93faad8629e1ad94b033fd04e3e50af2abc6949f795e58",
+    "previewed_at": "2026-11-06T06:56:26.627Z",
+    "cells": [
+      {
+        "id": "cma-1",
+        "feature": "context-mark-advisory",
+        "title": "Make the context mark line advisory",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "8921875b-7143-4620-a636-747e75a766de",
+          "48741dcf-019c-4e33-8cc4-6ceec7e3bca4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+        ],
+        "read_first": [
+          "docs/history/context-mark-advisory/CONTEXT.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Contract decision 48741dcf. In compute_handoff_warning (prompt_context.rs), keep the threshold read, the 150000 default and the 0 switch unchanged. Replace the format string with exactly: `context {n_k}k tokens (mark {t_k}k): keep working; hand off only on the user's word or at feature close`. Update the three tests at transcript_past_handoff_mark_carries_warning_line, transcript_below_handoff_mark_adds_no_line and handoff_context_tokens_zero_adds_no_line_at_any_size: the past-mark test asserts `context 160k tokens (mark 150k): keep working; hand off only on the user's word or at feature close`; the two no-line tests assert stdout does not contain `(mark ` and does not contain `keep working; hand off`. Red first: change the expected text, see the test fail, then change the string.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- prompt_context",
+        "must_haves": {
+          "truths": [
+            "past the mark the hook adds the advisory line with the token count and the mark",
+            "the line carries no stop order and no handoff steps",
+            "below the mark and with handoff_context_tokens 0 the hook adds no line"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+              "substantive": "advisory line and its tests"
+            }
+          ],
+          "key_links": [
+            "compute_handoff_warning returns the advisory line"
+          ],
+          "prohibitions": [
+            "Do not change the default or the 0 switch",
+            "No code comments"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cma-2",
+        "feature": "context-mark-advisory",
+        "title": "Rewrite the context handoff rule as advisory in every home",
+        "lane": "small",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "8921875b-7143-4620-a636-747e75a766de",
+          "a23d677e-69b2-4d7c-b1a3-06e4dd9068f8",
+          "48741dcf-019c-4e33-8cc4-6ceec7e3bca4"
+        ],
+        "files": [
+          "packages/bee/AGENTS.block.md",
+          "AGENTS.md",
+          "skills/bee-hive/SKILL.md",
+          "skills/bee-hive/references/go-mode.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-swarming/references/swarming-reference.md",
+          "docs/handbook/stages/swarming.md",
+          "docs/handbook/architecture-map.md",
+          "docs/02-architecture.md",
+          "README.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+          "docs/history/handoff-self-relaunch/promote-proposals.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/context-mark-advisory/CONTEXT.md",
+          "packages/bee/AGENTS.block.md"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/SKILL.md",
+          "skills/bee-swarming/SKILL.md"
+        ],
+        "affects_specs": [],
+        "action": "Rewrite rule agents-context-handoff-65 per decision a23d677e in every home. New meaning, in short plain sentences: a session never interrupts work at a context mark; it finishes the task. The hook may show the context size against the mark (handoff_context_tokens, default 150000); that line is advice, not a stop. A handoff is written only when the user asks for a switch or at feature close. Then it goes through the host's leader door: waggledance_dispatch with leader: true and follow_up_of naming the current run, so the successor joins the same run family. Never a self-spawned Paseo agent, never tell the user to open a new session. Show the handoff and wait only when a gate or decision the user owns is pending, or when the host has no leader door. Homes: packages/bee/AGENTS.block.md (the § Care for the session bullet under the rule marker), then run `.bee/bin/bee dev regen` so AGENTS.md and the rendered skill copies follow; skills/bee-hive/SKILL.md line 111; skills/bee-hive/references/go-mode.md lines 117 and 124 (no mid-swarm stop; landing a slice before a user-asked switch stays); skills/bee-hive/references/routing-and-contracts.md lines 116 and 196; skills/bee-swarming/SKILL.md line 165 (keep the line 242 worker [HANDOFF] token: a worker window is out of scope); skills/bee-swarming/references/swarming-reference.md near line 746 and 780 (the HANDOFF.json schema stays); docs/handbook/stages/swarming.md near line 97; docs/handbook/architecture-map.md line 103 (swarming to paused on the user's word or feature close); docs/02-architecture.md line 244; README.md lines 100 and 508. Knowledge: in the rule index entry for agents-context-handoff-65 (router-triage-and-the-agents-md-duplication-boundary.md line 222), rewrite the spoken form and cite D1 and D3 of docs/history/context-mark-advisory; in docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md near line 115, replace the hook line with `context <N>k tokens (mark <T>k): keep working; hand off only on the user's word or at feature close` and say it is advisory. In docs/history/handoff-self-relaunch/promote-proposals.md, mark the old stop-at-mark proposal superseded by docs/history/context-mark-advisory D3 (decision a23d677e supersedes c9439edb). Reserve the release manifest before regen. List every file regen changed in the cap and name the rendered copies as a scope deviation.",
+        "verify": ".bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "no home tells a session to stop or hand off at the context mark",
+            "every home says a handoff happens only on the user's word or at feature close",
+            "the handoff dispatch names waggledance_dispatch with leader: true and follow_up_of the current run"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/AGENTS.block.md",
+              "substantive": "rewritten rule under the agents-context-handoff-65 marker"
+            }
+          ],
+          "key_links": [
+            "AGENTS.md matches the block after bee dev regen"
+          ],
+          "prohibitions": [
+            "Do not change the worker [HANDOFF] token",
+            "Do not change the HANDOFF.json schema"
+          ]
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cma-1 changes one hook string and its tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "cma-1 updates its own tests red-first on the code role."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "cma-2 rewrites the rule in every home."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader already read every anchor."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Small lane."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "scripts/release.sh runs after merge, from main."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No consult needed."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-06T07:02:16.256Z",
+    "branch": "wt/context-mark-advisory",
+    "worktree_id": "beehive--wt--context-mark-advisory",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "last_scribing_run": {
+    "feature": "context-mark-advisory",
+    "date": "2026-11-06",
+    "at": "2026-11-06T07:05:14.120Z",
+    "areas_synced": [
+      "hook-runtime",
+      "doctrine-layer"
+    ],
+    "next_action": "close context-mark-advisory, merge, release"
+  }
+}

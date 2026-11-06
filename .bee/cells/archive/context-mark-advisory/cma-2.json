@@ -1,0 +1,419 @@
+{
+  "id": "cma-2",
+  "feature": "context-mark-advisory",
+  "title": "Rewrite the context handoff rule as advisory in every home",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "8921875b-7143-4620-a636-747e75a766de",
+    "a23d677e-69b2-4d7c-b1a3-06e4dd9068f8",
+    "48741dcf-019c-4e33-8cc4-6ceec7e3bca4"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/handbook/stages/swarming.md",
+    "docs/handbook/architecture-map.md",
+    "docs/02-architecture.md",
+    "README.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+    "docs/history/handoff-self-relaunch/promote-proposals.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/context-mark-advisory/CONTEXT.md",
+    "packages/bee/AGENTS.block.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Rewrite rule agents-context-handoff-65 per decision a23d677e in every home. New meaning, in short plain sentences: a session never interrupts work at a context mark; it finishes the task. The hook may show the context size against the mark (handoff_context_tokens, default 150000); that line is advice, not a stop. A handoff is written only when the user asks for a switch or at feature close. Then it goes through the host's leader door: waggledance_dispatch with leader: true and follow_up_of naming the current run, so the successor joins the same run family. Never a self-spawned Paseo agent, never tell the user to open a new session. Show the handoff and wait only when a gate or decision the user owns is pending, or when the host has no leader door. Homes: packages/bee/AGENTS.block.md (the § Care for the session bullet under the rule marker), then run `.bee/bin/bee dev regen` so AGENTS.md and the rendered skill copies follow; skills/bee-hive/SKILL.md line 111; skills/bee-hive/references/go-mode.md lines 117 and 124 (no mid-swarm stop; landing a slice before a user-asked switch stays); skills/bee-hive/references/routing-and-contracts.md lines 116 and 196; skills/bee-swarming/SKILL.md line 165 (keep the line 242 worker [HANDOFF] token: a worker window is out of scope); skills/bee-swarming/references/swarming-reference.md near line 746 and 780 (the HANDOFF.json schema stays); docs/handbook/stages/swarming.md near line 97; docs/handbook/architecture-map.md line 103 (swarming to paused on the user's word or feature close); docs/02-architecture.md line 244; README.md lines 100 and 508. Knowledge: in the rule index entry for agents-context-handoff-65 (router-triage-and-the-agents-md-duplication-boundary.md line 222), rewrite the spoken form and cite D1 and D3 of docs/history/context-mark-advisory; in docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md near line 115, replace the hook line with `context <N>k tokens (mark <T>k): keep working; hand off only on the user's word or at feature close` and say it is advisory. In docs/history/handoff-self-relaunch/promote-proposals.md, mark the old stop-at-mark proposal superseded by docs/history/context-mark-advisory D3 (decision a23d677e supersedes c9439edb). Reserve the release manifest before regen. List every file regen changed in the cap and name the rendered copies as a scope deviation.",
+  "verify": ".bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "no home tells a session to stop or hand off at the context mark",
+      "every home says a handoff happens only on the user's word or at feature close",
+      "the handoff dispatch names waggledance_dispatch with leader: true and follow_up_of the current run"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "rewritten rule under the agents-context-handoff-65 marker"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md matches the block after bee dev regen"
+    ],
+    "prohibitions": [
+      "Do not change the worker [HANDOFF] token",
+      "Do not change the HANDOFF.json schema"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": null,
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-hive/SKILL.md",
+      ".agents/skills/bee-hive/references/go-mode.md",
+      ".agents/skills/bee-hive/references/routing-and-contracts.md",
+      ".agents/skills/bee-swarming/SKILL.md",
+      ".agents/skills/bee-swarming/references/swarming-reference.md",
+      ".agents/skills/verify-app/features/feature-gates.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/SKILL.md",
+      ".claude-plugin/skills/bee-hive/references/go-mode.md",
+      ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude-plugin/skills/bee-swarming/SKILL.md",
+      ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-hive/SKILL.md",
+      ".claude/skills/bee-hive/references/go-mode.md",
+      ".claude/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude/skills/bee-swarming/SKILL.md",
+      ".claude/skills/bee-swarming/references/swarming-reference.md",
+      ".claude/skills/verify-app/features/feature-gates.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/SKILL.md",
+      ".codex-plugin/skills/bee-hive/references/go-mode.md",
+      ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".codex-plugin/skills/bee-swarming/SKILL.md",
+      ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-hive/SKILL.md",
+      ".opencode/skills/bee-hive/references/go-mode.md",
+      ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+      ".opencode/skills/bee-swarming/SKILL.md",
+      ".opencode/skills/bee-swarming/references/swarming-reference.md",
+      ".opencode/skills/verify-app/features/feature-gates.md",
+      "AGENTS.md",
+      "README.md",
+      "docs/02-architecture.md",
+      "docs/handbook/architecture-map.md",
+      "docs/handbook/stages/swarming.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/history/handoff-self-relaunch/promote-proposals.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/go-mode.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "ran inline on the leader: dispatch prepare refused limits.concurrency (decision logged)",
+      "regen rewrote the rendered skill copies, .bee/onboarding.json and verify-app feature-gates.md copies that lagged an earlier source change",
+      "sync-ack: only rule agents-context-handoff-65 changed in AGENTS.md; status-display-vendoring.md cites the mark only for statusline colour, which stays; agents-bee-defect-report untouched"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T07:02:16.256Z",
+    "behavior_change": false,
+    "verification_evidence": "600 manifest files match after bee dev regen; rg finds no stop-at-mark wording outside the worker [HANDOFF] token and history",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "2f346667-6330-4127-90da-e015976b38a9",
+    "verify_command": ".bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-06T06:57:26.541Z",
+    "sync_ack": "only rule agents-context-handoff-65 changed in AGENTS.md; status-display-vendoring.md cites the mark only for statusline colour, which stays; agents-bee-defect-report untouched",
+    "no_mistakes": true,
+    "inline_reason": "dispatch prepare refused limits.concurrency (live 5, limit 4) with no running worker agent; decision logged",
+    "report": {
+      "outcome": "every rule home says a context mark never stops work; a handoff happens on the user word or at feature close, through waggledance_dispatch leader true with follow_up_of",
+      "commit": "6e8626117",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-hive/SKILL.md",
+        ".agents/skills/bee-hive/references/go-mode.md",
+        ".agents/skills/bee-hive/references/routing-and-contracts.md",
+        ".agents/skills/bee-swarming/SKILL.md",
+        ".agents/skills/bee-swarming/references/swarming-reference.md",
+        ".agents/skills/verify-app/features/feature-gates.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-hive/SKILL.md",
+        ".claude-plugin/skills/bee-hive/references/go-mode.md",
+        ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude-plugin/skills/bee-swarming/SKILL.md",
+        ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-hive/SKILL.md",
+        ".claude/skills/bee-hive/references/go-mode.md",
+        ".claude/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude/skills/bee-swarming/SKILL.md",
+        ".claude/skills/bee-swarming/references/swarming-reference.md",
+        ".claude/skills/verify-app/features/feature-gates.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-hive/SKILL.md",
+        ".codex-plugin/skills/bee-hive/references/go-mode.md",
+        ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".codex-plugin/skills/bee-swarming/SKILL.md",
+        ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-hive/SKILL.md",
+        ".opencode/skills/bee-hive/references/go-mode.md",
+        ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+        ".opencode/skills/bee-swarming/SKILL.md",
+        ".opencode/skills/bee-swarming/references/swarming-reference.md",
+        ".opencode/skills/verify-app/features/feature-gates.md",
+        "AGENTS.md",
+        "README.md",
+        "docs/02-architecture.md",
+        "docs/handbook/architecture-map.md",
+        "docs/handbook/stages/swarming.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/history/handoff-self-relaunch/promote-proposals.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+        "packages/bee/AGENTS.block.md",
+        "skills/bee-hive/SKILL.md",
+        "skills/bee-hive/references/go-mode.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check — green:static — 600 manifest files match after bee dev regen; rg finds no stop-at-mark wording outside the worker [HANDOFF] token and history",
+      "deviations": [
+        "ran inline on the leader: dispatch prepare refused limits.concurrency (decision logged)",
+        "regen rewrote the rendered skill copies, .bee/onboarding.json and verify-app feature-gates.md copies that lagged an earlier source change"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "no home tells a session to stop or hand off at the context mark",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "every home says a handoff happens only on the user's word or at feature close",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "the handoff dispatch names waggledance_dispatch with leader: true and follow_up_of the current run",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "AGENTS.md matches the block after bee dev regen",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": ".agents/skills/.bee-render.json",
+            "artifact": ".agents/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".agents/skills/bee-hive/SKILL.md",
+            "artifact": ".agents/skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-hive/references/go-mode.md",
+            "artifact": ".agents/skills/bee-hive/references/go-mode.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".agents/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-swarming/SKILL.md",
+            "artifact": ".agents/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".agents/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".agents/skills/verify-app/features/feature-gates.md",
+            "artifact": ".agents/skills/verify-app/features/feature-gates.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/.bee-render.json",
+            "artifact": ".claude-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-hive/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-hive/references/go-mode.md",
+            "artifact": ".claude-plugin/skills/bee-hive/references/go-mode.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-swarming/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".claude/skills/.bee-render.json",
+            "artifact": ".claude/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude/skills/bee-hive/SKILL.md",
+            "artifact": ".claude/skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-hive/references/go-mode.md",
+            "artifact": ".claude/skills/bee-hive/references/go-mode.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".claude/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-swarming/SKILL.md",
+            "artifact": ".claude/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".claude/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".claude/skills/verify-app/features/feature-gates.md",
+            "artifact": ".claude/skills/verify-app/features/feature-gates.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/.bee-render.json",
+            "artifact": ".codex-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-hive/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-hive/references/go-mode.md",
+            "artifact": ".codex-plugin/skills/bee-hive/references/go-mode.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-swarming/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".opencode/skills/.bee-render.json",
+            "artifact": ".opencode/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".opencode/skills/bee-hive/SKILL.md",
+            "artifact": ".opencode/skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-hive/references/go-mode.md",
+            "artifact": ".opencode/skills/bee-hive/references/go-mode.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".opencode/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-swarming/SKILL.md",
+            "artifact": ".opencode/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-swarming/references/swarming-reference.md",
+            "artifact": ".opencode/skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": ".opencode/skills/verify-app/features/feature-gates.md",
+            "artifact": ".opencode/skills/verify-app/features/feature-gates.md"
+          },
+          {
+            "requirement": "AGENTS.md",
+            "artifact": "AGENTS.md"
+          },
+          {
+            "requirement": "README.md",
+            "artifact": "README.md"
+          },
+          {
+            "requirement": "docs/02-architecture.md",
+            "artifact": "docs/02-architecture.md"
+          },
+          {
+            "requirement": "docs/handbook/architecture-map.md",
+            "artifact": "docs/handbook/architecture-map.md"
+          },
+          {
+            "requirement": "docs/handbook/stages/swarming.md",
+            "artifact": "docs/handbook/stages/swarming.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "docs/history/handoff-self-relaunch/promote-proposals.md",
+            "artifact": "docs/history/handoff-self-relaunch/promote-proposals.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+          },
+          {
+            "requirement": "packages/bee/AGENTS.block.md",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "skills/bee-hive/SKILL.md",
+            "artifact": "skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/go-mode.md",
+            "artifact": "skills/bee-hive/references/go-mode.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/SKILL.md",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/references/swarming-reference.md",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          }
+        ],
+        "recorded_at": "2026-11-06T07:04:59.089Z",
+        "recorded_by": "2f346667-6330-4127-90da-e015976b38a9",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
