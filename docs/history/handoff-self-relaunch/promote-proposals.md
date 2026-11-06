@@ -2,6 +2,8 @@ promote proposal for work item "handoff-self-relaunch" (docs/history/handoff-sel
 anchor: history — docs/history/handoff-self-relaunch/CONTEXT.md, docs/history/handoff-self-relaunch/plan.md
 PROPOSAL ONLY — nothing was written. Applying any section below is a human or agent decision.
 
+SUPERSEDED (2026-11-06): the stop-at-the-context-mark rule below is retired. Decision a23d677e supersedes c9439edb and 48741dcf supersedes 9bf28c33: a context mark never stops work; a handoff happens only on the user's word or at feature close, with follow_up_of naming the current run. See docs/history/context-mark-advisory/CONTEXT.md D1-D3. Do not promote the old rule text.
+
 (a) DELIVERY DRAFT — save as docs/knowledge/work/handoff-self-relaunch/delivery.md
 
 ---

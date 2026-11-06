@@ -97,7 +97,7 @@ The result is meant to be *trustworthy, not ceremonial*: every "done" is backed 
 | **Lane** | The size/risk class of the work: `tiny`, `small`, `standard`, `high-risk`, `spike` | Decides how much process the work gets — no epic ceremony for a typo |
 | **Spec** | A tech-agnostic, BA-grade description of an *area* (a screen, API, job, process) in `docs/specs/` | The system's meaning, understandable without the code and rebuildable on any stack |
 | **Decision** | An append-only log entry (`D<n>`) recording a locked choice + its rationale | Nothing agreed evaporates when the session closes |
-| **Handoff** | A saved pause point written at ~65% context | Long work resumes cleanly next session — and never auto-resumes |
+| **Handoff** | A saved pause point written when you ask for a switch, or at feature close | Long work resumes cleanly next session — and never auto-resumes |
 
 ---
 
@@ -505,7 +505,7 @@ you approve GATE 3      →   (P1 findings block merge)
                             bee-shaping writes walkthrough     docs/history/X/walkthrough.md
 ```
 
-If a session runs long, bee writes `.bee/HANDOFF.json` at ~65% context and pauses; the next session surfaces the handoff and **waits** — it never auto-resumes.
+A long session keeps working until your task is done; bee shows the context size but never stops for it. When you ask for a switch, bee writes `.bee/HANDOFF.json`; the next session surfaces the handoff and **waits** — it never auto-resumes.
 
 ---
 
@@ -662,7 +662,7 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 | `onboarding.json` | installed bee version + managed-file hashes (drift detection) |
 | `state.json` | phase, mode, feature, the four gate approvals, workers, next action |
 | `config.json` | per-repo hook/guard toggles, lanes, capabilities, **`gate_bypass`**, **`team`** (runtime-keyed role→model map) |
-| `HANDOFF.json` | pause context at ~65% budget — surfaced next session, never auto-resumed |
+| `HANDOFF.json` | pause context written when you ask for a switch or at feature close — surfaced next session, never auto-resumed |
 | `cells/<id>.json` | one cell each: acceptance criteria, verify command, full trace |
 | `decisions.jsonl` / `backlog.jsonl` | append-only decision events / friction & grooming items |
 | `reservations.json` | active file reservations (TTL-bounded) |

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "2.78.0",
   "managed": {
-    "agents_block": "43edfc482ce6b5101e0b5d11fe9d714010e963ef4e943648a5d69d16b1eba296",
+    "agents_block": "3c768074372db53a78cafe04e08cc70101f9eb5640b835f2981fa6c5430c0e8d",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
     "gitattributes_block": "6b45725311706710fbde882c308f5fe127fb73f9bbf1d19851d649c04644bb67",
     "helpers": {},
@@ -55,7 +55,7 @@
         "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
         "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
         "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
-        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/feature-gates.md": "c3317d15ce22f0871ce58122d3d779ce3327cd6bc944903d0bc0e5ce919f7a02",
         "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
         "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
         "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
@@ -72,7 +72,7 @@
         "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
         "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
         "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
-        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/feature-gates.md": "c3317d15ce22f0871ce58122d3d779ce3327cd6bc944903d0bc0e5ce919f7a02",
         "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
         "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
         "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
@@ -89,7 +89,7 @@
         "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
         "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
         "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
-        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/feature-gates.md": "c3317d15ce22f0871ce58122d3d779ce3327cd6bc944903d0bc0e5ce919f7a02",
         "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
         "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
         "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
@@ -136,5 +136,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-06T04:45:01.932Z"
+  "updated_at": "2026-11-06T07:00:55.301Z"
 }

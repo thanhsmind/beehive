@@ -88,6 +88,10 @@ Preconditions:
   is refused.
 - An `--actor auto` approval requires **both** `--bypass-level` and `--reason`.
   bee refuses a bypassed approval that is less traceable than a stopped one.
+- An owner-first path keeps the merged gate human. With a cell on
+  `db/migrations/001.sql` under a high-risk route with `data-model`,
+  `gate --merge --approved true --actor auto` refuses `GATE_OWNER_FIRST`
+  and writes nothing; the same call with `--actor user` approves.
 - The `uat` gate is never bypass-approved. A recipe that auto-approves every gate
   will not get `uat` for free.
 - Starting a feature resets all four gates. A recipe that approves gates first

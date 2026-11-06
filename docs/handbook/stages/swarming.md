@@ -94,12 +94,14 @@ unwound and nothing is left half-done),
   execution is complete, capture is recorded as *pending*, and landing is
   `bee worktree merge` from main. Before declaring done: no active reservations, no
   in-flight workers.
-- At ~65% context, write `.bee/HANDOFF.json`, hand the rest to a fresh leader through
-  the host's leader door when one exists (waggledance: `waggledance_dispatch` with
-  `leader: true`), and release the session — never tell the user to open a new
-  session. Show the handoff and wait only when a gate or decision the user owns is
-  pending, or when the host has no leader door. Never push through the budget
-  mid-wave. Finishing a unit is never on its own a reason to stop.
+- A context mark never stops work: the session finishes the user's task. Write
+  `.bee/HANDOFF.json` only when the user asks for a switch, or at feature close.
+  Then hand the rest to a fresh leader through the host's leader door when one
+  exists (waggledance: `waggledance_dispatch` with `leader: true` and
+  `follow_up_of` naming the current run), and release the session — never tell
+  the user to open a new session. Show the handoff and wait only when a gate or
+  decision the user owns is pending, or when the host has no leader door.
+  Finishing a unit is never on its own a reason to stop.
 - **The doors here have teeth.** A claim onto a red base, a `small`+ cap with no
   registered execution worker, a cap with no `cell: <id>` commit trailer, and an
   escalation past the 40% budget each refuse by name — see

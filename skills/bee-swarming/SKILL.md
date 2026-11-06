@@ -162,7 +162,7 @@ later, at the owner's pace).
 Before declaring done: no active reservations, no in-flight workers
 recorded.
 
-The handoff at about 150k tokens or 65% context, whichever comes first, holds mid-wave (rule: agents-context-handoff-65); every feature close is also a handoff point. Write the handoff, hand the remaining work to a fresh leader through the host's leader door when one exists (waggledance: `waggledance_dispatch` with `leader: true`), and release the session — never tell the user to open a new session. Show the handoff and wait only when a user-owned gate or decision is pending, or when the host has no leader door. When a unit finishes and approved work remains, continue
+A context mark never stops a wave: keep working until the user's task is done (rule: agents-context-handoff-65). A handoff happens only when the user asks for a switch, or at feature close. Then write the handoff, hand the remaining work to a fresh leader through the host's leader door when one exists (waggledance: `waggledance_dispatch` with `leader: true` and `follow_up_of` naming the current run, so the successor joins the same run family), and release the session — never tell the user to open a new session. Show the handoff and wait only when a user-owned gate or decision is pending, or when the host has no leader door. When a unit finishes and approved work remains, continue
 in-session; finishing a unit is never a reason to stop.
 
 **Reply:** capped cells over total, the proof line per cell, the merge or

@@ -241,7 +241,7 @@ Any proposed tenth hook must name which of the nine it replaces — claudekit's 
 ```
 
 - Every skill updates `phase`, `summary`, `next_action` on completion — the handoff is machine-checkable.
-- At ~65% context usage, the active skill writes `.bee/HANDOFF.json` (phase, feature, cells in flight, done/remaining, next action) and pauses. Resume never auto-continues: `bee-hive` surfaces the handoff and waits for the user.
+- A context mark never pauses work. When the user asks for a session switch, or at feature close, the active skill writes `.bee/HANDOFF.json` (phase, feature, cells in flight, done/remaining, next action). Resume never auto-continues: `bee-hive` surfaces the handoff and waits for the user.
 - Gate approvals are recorded here; `bee status` refuses to report "ready to swarm" unless `execution: true`.
 
 ## Security posture (carried from upstreams)

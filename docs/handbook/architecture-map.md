@@ -100,7 +100,7 @@ stateDiagram-v2
     compounding_complete --> idle
     closed --> reviewing : only on explicit user request
     reviewing --> merged : Gate 3 — approve merge
-    swarming --> paused : ~65% context — HANDOFF.json
+    swarming --> paused : user asks for a switch — HANDOFF.json
     paused --> swarming : pause is presented, never auto-resumed
 ```
 
