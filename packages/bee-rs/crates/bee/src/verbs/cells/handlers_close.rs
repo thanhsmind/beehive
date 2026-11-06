@@ -772,6 +772,16 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             }
         }
 
+        match cell_usage(root, id) {
+            Ok(usage) => {
+                cell_map.insert("usage".into(), usage);
+                cell_map.remove("usage_reason");
+            }
+            Err(reason) => {
+                cell_map.insert("usage".into(), Value::Null);
+                cell_map.insert("usage_reason".into(), Value::String(reason));
+            }
+        }
         cell_map.insert("trace".into(), Value::Object(trace));
         let cell_value = Value::Object(cell_map);
         write_cell(root, &cell_value)?;
@@ -1216,6 +1226,71 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         proof_result,
         proof_reason,
     })
+}
+
+fn cell_usage(root: &Path, cell_id: &str) -> Result<Value, String> {
+    let Ok(entries) = std::fs::read_dir(root.join(".bee").join("mailbox")) else {
+        return Err("no herding mailbox: this cell ran in no herding job".into());
+    };
+    let mut jobs: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        let ReadJson::Parsed(job) = read_json(&entry.path().join("job.json")) else { continue };
+        if job.get("cell_id").and_then(Value::as_str) == Some(cell_id) {
+            jobs.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
+    if jobs.is_empty() {
+        return Err("no herding job names this cell: no session is attributable to it".into());
+    }
+    jobs.sort();
+    let mut models: Map<String, Value> = Map::new();
+    let mut seen: Vec<String> = Vec::new();
+    let mut counted_jobs: Vec<Value> = Vec::new();
+    let mut missing = 0usize;
+    for job in jobs {
+        let transcript = match read_json(&root.join(".bee").join("mailbox").join(&job).join("activity.json")) {
+            ReadJson::Parsed(a) => a
+                .get("transcript_path")
+                .and_then(Value::as_str)
+                .map(|s| PathBuf::from(js_trim(s)))
+                .filter(|p| p.exists()),
+            _ => None,
+        };
+        let Some(rollup) = transcript.and_then(|t| crate::hooks::session_close::rollup_transcript(&t)) else {
+            missing += 1;
+            continue;
+        };
+        if seen.contains(&rollup.session_id) {
+            continue;
+        }
+        seen.push(rollup.session_id.clone());
+        counted_jobs.push(Value::String(job));
+        for rows in [&rollup.models, &rollup.subagent_models] {
+            let Value::Object(rows) = rows else { continue };
+            for (name, row) in rows {
+                let slot = models
+                    .entry(name.clone())
+                    .or_insert_with(|| json!({"new": 0.0, "cached": 0.0, "total": 0.0}));
+                for key in ["new", "cached", "total"] {
+                    let sum = slot[key].as_f64().unwrap_or(0.0) + crate::hooks::session_close::num_field(row, key);
+                    slot[key] = json!(sum);
+                }
+            }
+        }
+    }
+    if counted_jobs.is_empty() {
+        return Err(format!(
+            "herding job(s) named this cell but no readable session transcript ({missing} unreadable)"
+        ));
+    }
+    let sum = |key: &str| -> f64 { models.values().map(|m| m[key].as_f64().unwrap_or(0.0)).sum() };
+    Ok(json!({
+        "new": sum("new"),
+        "cached": sum("cached"),
+        "total": sum("total"),
+        "models": models,
+        "jobs": counted_jobs,
+    }))
 }
 
 pub(crate) fn cap_text(cell: &Value) -> String {
@@ -2196,6 +2271,62 @@ mod tests {
         let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[1].what, "Wired the second stop");
+    }
+
+    fn pane_usage_line(model: &str, req: &str, input: u32, output: u32, cw: u32, cr: u32) -> String {
+        format!(
+            r#"{{"type":"assistant","sessionId":"sess-{req}","requestId":"{req}","timestamp":"2026-08-30T12:00:00.000Z","message":{{"model":"{model}","usage":{{"input_tokens":{input},"output_tokens":{output},"cache_creation_input_tokens":{cw},"cache_read_input_tokens":{cr}}}}}}}"#
+        )
+    }
+
+    fn herding_job_for(root: &Path, job: &str, cell: &str, transcript: Option<&str>) {
+        let dir = root.join(".bee").join("mailbox").join(job);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("job.json"), json!({"job_id": job, "cell_id": cell}).to_string()).unwrap();
+        if let Some(body) = transcript {
+            let path = root.join(format!("{job}.jsonl"));
+            std::fs::write(&path, format!("{body}\n")).unwrap();
+            std::fs::write(dir.join("activity.json"), json!({"transcript_path": path}).to_string()).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_capped_cell_carries_its_herding_workers_tokens_per_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+        mailbox_cell(root, "u-1");
+        mailbox_cell(root, "u-2");
+        herding_job_for(root, "job-a", "u-1", Some(&pane_usage_line("sonnet", "p1", 1000, 100, 0, 5000)));
+        herding_job_for(root, "job-b", "u-2", Some(&pane_usage_line("sonnet", "p2", 7, 7, 7, 7)));
+
+        let capped = cap_cell_from_flags(root, &mailbox_cap_flags("u-1", "Landed"), false).unwrap();
+        assert!(capped.get("usage_reason").is_none());
+        assert_eq!(capped["usage"]["total"].as_f64(), Some(6100.0));
+        assert_eq!(capped["usage"]["new"].as_f64(), Some(1100.0));
+        assert_eq!(capped["usage"]["cached"].as_f64(), Some(5000.0));
+        assert_eq!(capped["usage"]["models"]["sonnet"]["total"].as_f64(), Some(6100.0));
+        assert_eq!(capped["usage"]["jobs"], json!(["job-a"]));
+    }
+
+    #[test]
+    fn a_capped_cell_with_no_attributable_session_records_null_and_a_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+        mailbox_cell(root, "n-1");
+        mailbox_cell(root, "n-2");
+        herding_job_for(root, "job-x", "n-2", None);
+
+        let none = cap_cell_from_flags(root, &mailbox_cap_flags("n-1", "Landed"), false).unwrap();
+        assert_eq!(none["usage"], Value::Null);
+        assert!(none["usage_reason"].as_str().unwrap().contains("no herding job"));
+
+        let unreadable = cap_cell_from_flags(root, &mailbox_cap_flags("n-2", "Landed"), false).unwrap();
+        assert_eq!(unreadable["usage"], Value::Null);
+        assert!(unreadable["usage_reason"].as_str().unwrap().contains("no readable session transcript"));
     }
 
     // ── reflection-becomes-lesson D5: the cap collects the answer ────────
