@@ -231,12 +231,23 @@ question ended the leader's turn and stalled the whole lane.
   schedulable. The worker returns the token `[PARKED]`.
 - **Why a new status, not `blocked`.** `blocked` already means "cannot proceed",
   with its own release paths (a swept claim, `bee cells block`, a blocker
-  dissent). A parked cell has exactly one exit: the answer. So `bee cells
-  reopen` refuses a parked cell, and every refusal names the remedy
-  `bee cells answer --id <cell> --answer "<text>"`.
+  dissent). A parked cell has exactly one exit: the answer.
+- **The question lives in the trace, not the status.** A cell has an open
+  question when the last `trace.park` entry has no answer. One guard,
+  `refuse_parked` in `verbs/cells/park.rs`, refuses when the status is `parked`
+  OR that open entry exists. Block, a blocker dissent (both through
+  `apply_block_mutation`), claim, unclaim, update, reroute and reopen call it,
+  and a dissent verdict keeps such a cell blocked. Every refusal names the
+  remedy `bee cells answer --id <cell> --answer "<text>"`. A guard keyed on
+  status alone failed twice: block or dissent changed the status, and reopen
+  then opened the cell with its question unanswered.
 - **Answer (D2).** `bee cells answer` logs the answer as a decision first (tags
   `cells` and `slp`), then cites it on the cell, stamps the park entry and sets
-  the cell `open`. A failed log leaves the cell unchanged. The next dispatch
+  a parked cell `open`. On a dropped or blocked cell that still has an open
+  park entry, it stamps the answer and keeps the status, so a drop stays a drop
+  and a later reopen works. It probes the `cells-archive` lock before it logs.
+  Residual: an archive job that starts between the probe and the write, or a
+  failed disk write, leaves one decision no cell cites. The next dispatch
   brief carries every answered park entry as an `Answered question:` line.
 - **The leader keeps working (D3).** The leader sets the `question` waiting-on
   mark only when no ready cell remains in the lane, and lists every open parked
@@ -253,6 +264,11 @@ exits; the human answers later, through one verb.
 
 ## Open Gaps
 
+- **A cap has no parked gate.** The cap pre-check in
+  `verbs/cells/handlers_close.rs` refuses only capped and dropped cells, and a
+  parked cell has no claim, so `bee cells park` then a cap can cap a cell with
+  an open question. A later gap leader-check or NEEDS_REVISION judge-record then
+  opens it without the answer. Filed to the backlog (P3 debt, layer cells).
 - ~~**Herding-lane dissent has no carrier.**~~ Closed 2026-08-29 by decision
   `7db30738` (cell sfg-2), along exactly the line the gap named: the dissent
   fields ride the herding mailbox result and the control loop transcribes them
