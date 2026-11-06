@@ -805,6 +805,7 @@
     "sub-session",
     "plan-check",
     "telemetry",
-    "contract:usage-herding-block"
+    "contract:usage-herding-block",
+    "contract:doctrine-split"
   ]
 }
