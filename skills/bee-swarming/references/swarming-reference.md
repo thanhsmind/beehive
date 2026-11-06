@@ -221,7 +221,11 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    `bee reservations list`, `git log`); no routine mid-flight pings. The leader
    learns a running worker's progress only from `bee herding status --job <id>`
    (one line) and never reads a worker's transcript, pane log, log.txt, or
-   activity stream (`SKILL.md`, step 4). A stuck
+   activity stream (`SKILL.md`, step 4). To steer a Claude worker (a
+   claude-session job or a Claude herding pane), `SendMessage` to the
+   `steer_to` name that status prints — a deliberate steer, never a routine
+   ping and never a transcript read
+   (`docs/knowledge/areas/bee-herding/claude-session-transport.md`). A stuck
    worker: stop it, `bee cells unclaim --id <id>`, `bee reservations release
    --agent <nickname> --cell <id>`, then re-dispatch ("Failure responses",
    below). **On the user's stop word**, stop every live worker, keep the
