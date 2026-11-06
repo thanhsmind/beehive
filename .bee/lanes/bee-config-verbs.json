@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "bee-config-verbs",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"bee-config-verbs\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature bee-config-verbs",
+  "next_action": "bee close finished \"bee-config-verbs\" — feature is closed.",
   "created_at": "2026-11-06T03:26:45.845Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
