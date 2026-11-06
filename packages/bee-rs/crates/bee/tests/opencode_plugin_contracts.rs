@@ -2050,6 +2050,40 @@ const UNMAPPED_SET_TOOL_ANCHORS: &[(&str, &str)] = &[
     ("execute", "Script body executed by the confined interpreter"),
 ];
 
+const TOOL_SET_LITERAL_2X: &str =
+    "[\"shell\",\"glob\",\"read\",\"grep\",\"webfetch\",\"websearch\",\"write\",\"edit\",\"subagent\",\"execute\",\"patch\",\"todowrite\",\"question\",\"skill\"]";
+
+const ADDITIONAL_TOOL_ANCHORS_2X: &[AdditionalToolAnchor] = &[
+    AdditionalToolAnchor { id: "artifact_create", anchor: "name:\"artifact_create\"" },
+    AdditionalToolAnchor { id: "artifact_update", anchor: "name:\"artifact_update\"" },
+    AdditionalToolAnchor { id: "schedule_create", anchor: "name:\"schedule_create\"" },
+];
+
+struct RegistryShape {
+    version: &'static str,
+    set_literal: &'static str,
+    classifies_filepath: bool,
+    unmapped_set_anchors: &'static [(&'static str, &'static str)],
+    additional: &'static [AdditionalToolAnchor],
+}
+
+const REGISTRY_SHAPES: &[RegistryShape] = &[
+    RegistryShape {
+        version: "opencode-ai 1.18.x",
+        set_literal: TOOL_SET_LITERAL,
+        classifies_filepath: true,
+        unmapped_set_anchors: UNMAPPED_SET_TOOL_ANCHORS,
+        additional: ADDITIONAL_TOOL_ANCHORS,
+    },
+    RegistryShape {
+        version: "@opencode/cli 2.x",
+        set_literal: TOOL_SET_LITERAL_2X,
+        classifies_filepath: false,
+        unmapped_set_anchors: &[],
+        additional: ADDITIONAL_TOOL_ANCHORS_2X,
+    },
+];
+
 /// How far past an anchor this derivation looks for a `filePath` parameter
 /// before giving up — wide enough to cover every tool body actually
 /// observed in the installed binary (the longest, `lsp`'s, needed under 200
@@ -2084,34 +2118,70 @@ fn anchor_body_contains_filepath(text: &str, anchor: &str) -> Option<bool> {
 /// discovery.md instead of a derived one here — named, never silently
 /// assumed covered by this derivation's silence on it.
 fn derive_opencode_tool_registry(text: &str) -> Result<BTreeMap<String, Option<bool>>, String> {
-    if !text.contains(TOOL_SET_LITERAL) {
+    let Some(shape) = REGISTRY_SHAPES.iter().find(|s| text.contains(s.set_literal)) else {
+        let known: Vec<String> = REGISTRY_SHAPES.iter().map(|s| format!("{}: {}", s.version, s.set_literal)).collect();
         return Err(format!(
-            "the installed opencode binary's tool-id Set literal ({TOOL_SET_LITERAL}) was not \
-             found — has the installed opencode-ai version changed shape? this derivation needs \
-             updating rather than silently reporting zero tools"
+            "none of the known opencode tool-id Set literals was found ({}) — has the installed \
+             opencode version changed shape? this derivation needs updating rather than silently \
+             reporting zero tools",
+            known.join("; ")
         ));
-    }
+    };
+    let classify = |anchor: &str| {
+        if shape.classifies_filepath {
+            anchor_body_contains_filepath(text, anchor)
+        } else {
+            None
+        }
+    };
     let mut registry: BTreeMap<String, Option<bool>> = BTreeMap::new();
-    for id in TOOL_SET_LITERAL.trim_start_matches('[').trim_end_matches(']').split(',') {
-        let id = id.trim_matches('"');
-        registry.insert(id.to_string(), None); // classified below only for unmapped ones
+    for id in shape.set_literal.trim_start_matches('[').trim_end_matches(']').split(',') {
+        registry.insert(id.trim_matches('"').to_string(), None);
     }
-    for (id, anchor) in UNMAPPED_SET_TOOL_ANCHORS {
-        registry.insert((*id).to_string(), anchor_body_contains_filepath(text, anchor));
+    for (id, anchor) in shape.unmapped_set_anchors {
+        registry.insert((*id).to_string(), classify(anchor));
     }
-    for extra in ADDITIONAL_TOOL_ANCHORS {
+    for extra in shape.additional {
         let found = text.contains(extra.anchor);
-        assert!(found, "opencode binary: additional tool anchor for \"{}\" not found — {}", extra.id, extra.anchor);
-        registry.insert(extra.id.to_string(), anchor_body_contains_filepath(text, extra.anchor));
+        assert!(
+            found,
+            "opencode binary ({}): additional tool anchor for \"{}\" not found — {}",
+            shape.version, extra.id, extra.anchor
+        );
+        registry.insert(extra.id.to_string(), classify(extra.anchor));
     }
     assert!(
         registry.len() >= 15,
         "derived opencode tool registry found only {} id(s) — expected at least 15 (14 from the \
-         Set literal plus \"lsp\"); the derivation likely broke: {:?}",
+         Set literal plus at least one additional anchor); the derivation likely broke: {:?}",
         registry.len(),
         registry.keys().collect::<Vec<_>>()
     );
     Ok(registry)
+}
+
+#[test]
+fn the_registry_derivation_reads_both_the_1_18_and_the_2_x_set_literal() {
+    let pad = " ".repeat(FILEPATH_SCAN_WINDOW + 1);
+    let mut v1 = vec!["\"lsp\",s.gen(function*(){filePath".to_string(), TOOL_SET_LITERAL.to_string()];
+    v1.extend(UNMAPPED_SET_TOOL_ANCHORS.iter().map(|(_, a)| a.to_string()));
+    v1.extend(ADDITIONAL_TOOL_ANCHORS.iter().map(|a| a.anchor.to_string()));
+    let v1 = derive_opencode_tool_registry(&v1.join(&pad)).expect("1.18.x shape derives");
+    for id in ["bash", "apply_patch", "task", "lsp", "plan_exit"] {
+        assert!(v1.contains_key(id), "1.18.x registry lacks \"{id}\": {v1:?}");
+    }
+    assert_eq!(v1["lsp"], Some(true), "{v1:?}");
+    assert_eq!(v1["webfetch"], Some(false), "{v1:?}");
+
+    let mut v2 = vec![TOOL_SET_LITERAL_2X.to_string()];
+    v2.extend(ADDITIONAL_TOOL_ANCHORS_2X.iter().map(|a| a.anchor.to_string()));
+    let v2 = derive_opencode_tool_registry(&v2.join(&pad)).expect("2.x shape derives");
+    for id in ["shell", "patch", "subagent", "schedule_create"] {
+        assert!(v2.contains_key(id), "2.x registry lacks \"{id}\": {v2:?}");
+    }
+    assert!(v2.values().all(Option::is_none), "2.x ids are never classified as safe: {v2:?}");
+
+    assert!(derive_opencode_tool_registry("no set literal here").is_err());
 }
 
 /// F4: `mapToolCall`'s own `pairs.len() >= 9` floor and the three-belt
