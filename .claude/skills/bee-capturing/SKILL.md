@@ -30,7 +30,10 @@ Detect settlements yourself, unprompted. Most settlements are silent —
 the user confirms a behavior, accepts an explanation, picks a value,
 moves on — and a spoken settlement ("final", "ok ship it") is captured
 that same turn, never deferred. Do not ask "should I document this?";
-announce what settled, then record it:
+announce what settled, then record it. In the bee repo, owner feedback
+about how agents work changes the framework itself: route it through the
+bee chain to the owning doctrine, hook or skill, never into private memory
+alone (rule: agents-feedback-changes-framework):
 
 - A rule, behavior, or tuned value settles → `bee decisions log` the
   same turn, plus a one-line stub via `bee capture add`; the full spec
