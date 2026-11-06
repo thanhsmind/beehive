@@ -1492,9 +1492,23 @@ mod tests {
             target_root.is_dir(),
             ".opencode/skills/ must exist — run `regen_opencode_skills_tree` (see its doc comment)"
         );
+        let packs: Vec<String> = std::fs::read_to_string(root.join(".bee").join("config.json"))
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .and_then(|cfg| cfg.pointer("/design/packs").and_then(|v| v.as_array()).cloned())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect();
+        let sources = SkillSources {
+            skills_root: source_root.clone(),
+            design_root: root.join("packages").join("bee").join("design"),
+            design_packs: packs,
+        };
+        let drift = compute_skill_items(&sources, &target_root, "opencode");
         assert!(
-            compute_skill_items(&only(&source_root), &target_root, "opencode").is_empty(),
-            ".opencode/skills/ has drifted from skills/ — re-run the opencode regen"
+            drift.is_empty(),
+            ".opencode/skills/ has drifted from skills/ and the configured design packs — re-run the opencode regen: {drift:?}"
         );
         let committed_sidecar =
             std::fs::read(target_root.join(super::super::templates::RENDER_SIDECAR)).expect("sidecar");
