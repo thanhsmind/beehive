@@ -59,7 +59,7 @@ Risk map:
   "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
   "stages": [
     {"stage":"implementation","classification":"required","role":"code","reason":"cma-1 changes one hook string and its tests."},
-    {"stage":"test-and-live-proof","classification":"required","role":"code","reason":"cma-1 updates its tests red-first."},
+    {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"cma-1 updates its own tests red-first on the code role."},
     {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"cma-2 rewrites the rule in every home."},
     {"stage":"read-only-gather","classification":"not-applicable","role":"read","reason":"The leader already read every anchor."},
     {"stage":"hat-facts-gaps","classification":"not-applicable","role":"hat-facts-gaps","reason":"Small lane: no hat wave."},
