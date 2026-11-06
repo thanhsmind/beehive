@@ -98,8 +98,8 @@ unwound and nothing is left half-done),
   `.bee/HANDOFF.json` only when the user asks for a switch, or at feature close.
   Then hand the rest to a fresh leader through the host's leader door when one
   exists (waggledance: `waggledance_dispatch` with `leader: true` and
-  `follow_up_of` naming the current run), and release the session — never tell
-  the user to open a new session. Show the handoff and wait only when a gate or
+  `follow_up_of` naming the current run plus `handoff: true`), and release the
+  session — never tell the user to open a new session. Show the handoff and wait only when a gate or
   decision the user owns is pending, or when the host has no leader door.
   Finishing a unit is never on its own a reason to stop.
 - **The doors here have teeth.** A claim onto a red base, a `small`+ cap with no
