@@ -1,6 +1,6 @@
 ---
 name: bee-comb
-description: Reached only through `bee dispatch prepare` (it may return a pane command instead of this type) — never name this type by hand. Design execution worker for a cell whose role is design (skills/bee-swarming, "Execute"). Dispatch to implement exactly ONE already-claimed cell that builds or changes rendered UI — load the bee-design taste, reserve its files, write the UI, prove it with the design check, commit, and cap. Returns one status token ([DONE], [BLOCKED], [HANDOFF], [NOOP]). bee-worker is the sibling for every other cell.
+description: Reached only through `bee dispatch prepare` (it may return a pane command instead of this type) — never name this type by hand. Design execution worker for a cell whose role is design (skills/bee-swarming, "Execute"). Dispatch to implement exactly ONE already-claimed cell that builds or changes rendered UI — load the bee-design taste, reserve its files, write the UI, prove it with the design check, commit, and cap. Returns one status token ([DONE], [BLOCKED], [HANDOFF], [PARKED], [NOOP]). bee-worker is the sibling for every other cell.
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
