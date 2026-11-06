@@ -12197,3 +12197,175 @@ use std::time::Instant;
             vec![("pk-q".to_string(), "Should the export include archived rows?".to_string())]
         );
     }
+
+    fn rf_lane(root: &Path, feature: &str, lane: &str, flags: &[&str]) {
+        let dir = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({
+            "feature": feature,
+            "phase": "swarming",
+            "route": {"class": "feature", "lane": lane, "flags": flags, "product_files": 3},
+        });
+        std::fs::write(dir.join(format!("{feature}.json")), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    fn rf_config(root: &Path, rows: Value) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee/config.json"), jsjson::stringify_pretty(&json!({"rigor_floor": rows}))).unwrap();
+    }
+
+    fn rf_workflow(root: &Path, feature: &str, actor: &str) {
+        let dir = root.join(".bee/runtime/workflows/wf-1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({
+            "id": "wf-1",
+            "feature": feature,
+            "status": "active",
+            "phase": "swarming",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "gates": {"execution": {"approved": true, "state": "approved", "actor": actor}},
+        });
+        std::fs::write(dir.join("state.json"), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    fn rf_cell(feature: &str, files: &[&str]) -> Value {
+        json!({
+            "id": "rf-1", "feature": feature, "title": "t", "action": "a", "verify": "v",
+            "lane": "small", "role": "code", "affects_skills": [], "affects_specs": [], "files": files,
+        })
+    }
+
+    #[test]
+    fn rigor_floor_refuses_a_migration_cell_under_a_small_route_and_names_the_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        rf_lane(root, "rf", "small", &[]);
+        let msg = thrown(validate_new_cell(root, &rf_cell("rf", &["db/migrations/001.sql"])));
+        assert!(msg.starts_with("addCell: RIGOR_FLOOR"), "{msg}");
+        for part in [
+            "\"db/migrations/001.sql\"",
+            "\"**/migrations/**\"",
+            "source: built-in",
+            "lane \"high-risk\" with flags [data-model]",
+            "owner-first",
+            "`bee route --set --class feature --lane high-risk --flags data-model --files 3`",
+        ] {
+            assert!(msg.contains(part), "missing {part}: {msg}");
+        }
+    }
+
+    #[test]
+    fn rigor_floor_passes_a_migration_cell_under_a_high_risk_data_model_route() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        rf_lane(root, "rf", "high-risk", &["data-model"]);
+        assert!(validate_new_cell(root, &rf_cell("rf", &["db/migrations/001.sql"])).is_ok());
+        rf_lane(root, "rf", "high-risk", &[]);
+        let msg = thrown(validate_new_cell(root, &rf_cell("rf", &["db/migrations/001.sql"])));
+        assert!(msg.contains("RIGOR_FLOOR") && msg.contains("--flags data-model"), "{msg}");
+    }
+
+    #[test]
+    fn rigor_floor_built_in_rows_hit_schema_paths_and_skip_fixture_sql() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        rf_lane(root, "rf", "small", &[]);
+        for path in [
+            "db/migrate/20260101_add_users.rb",
+            "alembic/versions/abc123_add_users.py",
+            "prisma/schema.prisma",
+            "db/schema.sql",
+            "db/users.schema.sql",
+        ] {
+            let msg = thrown(validate_new_cell(root, &rf_cell("rf", &[path])));
+            assert!(msg.contains("RIGOR_FLOOR") && msg.contains(path), "{path}: {msg}");
+        }
+        assert!(validate_new_cell(root, &rf_cell("rf", &["tests/fixtures/report.sql"])).is_ok());
+        assert!(validate_new_cell(root, &rf_cell("rf", &["src/lib.rs"])).is_ok());
+        assert!(rigor_floor_hits(root, &["tests/fixtures/report.sql".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn rigor_floor_release_workflow_needs_a_standard_route() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        rf_lane(root, "rf", "small", &[]);
+        let msg = thrown(validate_new_cell(root, &rf_cell("rf", &[".github/workflows/release-binaries.yml"])));
+        assert!(msg.contains("--lane standard --files 3"), "{msg}");
+        rf_lane(root, "rf", "standard", &[]);
+        assert!(validate_new_cell(root, &rf_cell("rf", &[".github/workflows/release-binaries.yml"])).is_ok());
+    }
+
+    #[test]
+    fn rigor_floor_repo_row_raises_a_floor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        rf_config(root, json!([{"glob": "src/billing/**", "min_lane": "standard", "flags": ["auth"]}]));
+        rf_lane(root, "rf", "small", &[]);
+        let msg = thrown(validate_new_cell(root, &rf_cell("rf", &["src/billing/charge.rs"])));
+        assert!(msg.contains("source: .bee/config.json") && msg.contains("\"src/billing/**\""), "{msg}");
+        assert!(!msg.contains("owner-first"), "{msg}");
+        rf_lane(root, "rf", "standard", &["auth"]);
+        assert!(validate_new_cell(root, &rf_cell("rf", &["src/billing/charge.rs"])).is_ok());
+    }
+
+    #[test]
+    fn rigor_floor_repo_row_never_lowers_a_built_in_floor_and_malformed_rows_are_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        rf_config(
+            root,
+            json!([
+                {"glob": "**/migrations/**", "min_lane": "tiny", "flags": [], "owner_first": false},
+                {"glob": "src/**", "min_lane": "mega"},
+                {"glob": "lib/**", "min_lane": "standard", "flags": ["not-a-flag"]},
+                "src/**"
+            ]),
+        );
+        rf_lane(root, "rf", "small", &[]);
+        let msg = thrown(validate_new_cell(root, &rf_cell("rf", &["db/migrations/001.sql"])));
+        assert!(msg.contains("RIGOR_FLOOR") && msg.contains("lane \"high-risk\""), "{msg}");
+        assert!(validate_new_cell(root, &rf_cell("rf", &["src/a.rs", "lib/b.rs"])).is_ok());
+    }
+
+    #[test]
+    fn rigor_floor_skips_a_feature_with_no_recorded_route() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert!(validate_new_cell(root, &rf_cell("rf", &["db/migrations/001.sql"])).is_ok());
+    }
+
+    #[test]
+    fn rigor_floor_refuses_an_owner_first_cell_after_an_auto_execution_gate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        rf_lane(root, "rf", "high-risk", &["data-model"]);
+        rf_workflow(root, "rf", "auto");
+        let msg = thrown(validate_new_cell(root, &rf_cell("rf", &["db/migrations/001.sql"])));
+        assert!(msg.starts_with("addCell: GATE_OWNER_FIRST"), "{msg}");
+        assert!(msg.contains("bee state waiting-on set --kind gate"), "{msg}");
+        assert!(validate_new_cell(root, &rf_cell("rf", &["src/lib.rs"])).is_ok());
+        rf_workflow(root, "rf", "user");
+        assert!(validate_new_cell(root, &rf_cell("rf", &["db/migrations/001.sql"])).is_ok());
+    }
+
+    #[test]
+    fn rigor_floor_refuses_an_update_the_same_way_and_leaves_the_cell_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        rf_lane(root, "f", "small", &[]);
+        let mut seed = cell("c-1", "open", "f", json!([]));
+        seed["files"] = json!(["db/migrations/001.sql"]);
+        write_cell_fixture(root, "c-1", &seed);
+        std::fs::write(root.join("patch.json"), r#"{"title": "renamed"}"#).unwrap();
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", CELLS_UPDATE_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1", "--nocapture"])
+            .env_remove("PI_SESSION_ID")
+            .current_dir(root)
+            .output()
+            .unwrap();
+        let all = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        assert!(all.contains("updateCell: RIGOR_FLOOR"), "{all}");
+        assert_eq!(read_cell_fixture(root, "c-1")["title"], json!("title c-1"));
+    }

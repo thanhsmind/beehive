@@ -786,6 +786,30 @@ fn plan_claims_refusal(
 /// The mutation body, root-parameterized so it can be exercised directly in
 /// tests without a process CWD (`run_gate` above is the only caller in
 /// production; `prelude`'s CWD-resolved root is threaded through as `root`).
+fn owner_first_gate_refusal(root: &Path, record: &Map<String, Value>, lane: Option<&str>) -> Option<String> {
+    let feature = match lane {
+        Some(l) => l.to_string(),
+        None => record.get("feature").filter(|v| truthy(v)).map(js_disp)?,
+    };
+    let mut cells: Vec<Value> = match record.get("gate_preview").and_then(|p| p.get("cells")) {
+        Some(Value::Array(packet)) => packet.clone(),
+        _ => Vec::new(),
+    };
+    cells.extend(crate::verbs::cells::list_cells(root, Some(&feature), None).unwrap_or_default());
+    let files: Vec<String> = cells
+        .iter()
+        .filter_map(|c| c.get("files").and_then(Value::as_array))
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect();
+    let hit = crate::verbs::cells::owner_first_hit(root, &files)?;
+    Some(format!(
+        "gate: GATE_OWNER_FIRST \u{2014} feature \"{feature}\" touches \"{}\", which matches the owner-first rigor-floor row \"{}\" (source: {}). An owner-first gate is never auto-approved, at any gate_bypass level (path-rigor-floor D3). STOP: do not retry; do not pass --actor user. Run `bee state waiting-on set --kind gate --subject \"{feature} owner-first gate\"`, show the gate to the human, and end the turn. Nothing was written.",
+        hit.path, hit.glob, hit.source
+    ))
+}
+
 pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     if flags.get("owner").is_some() {
         return Ok(Out::Thrown(
@@ -860,9 +884,17 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
         Err(Err2::Ex) => return Err(Err2::Ex),
     };
     let exec_component = merge || name == "execution";
+    let owner_first_door = actor == "auto" && approved && (exec_component || name == "shape");
 
     let scope = resolve_mutation_lock_scope(root, lane_feature.as_deref(), no_lane)?;
     let workflows = list_workflows(root)?;
+    if owner_first_door {
+        let peek = peek_target_record(root, &scope, lane_feature.as_deref())?.unwrap_or_default();
+        let lane = scope.feature.as_deref().filter(|_| scope.lane);
+        if let Some(msg) = owner_first_gate_refusal(root, &peek, lane) {
+            return Ok(Out::Thrown(msg));
+        }
+    }
     // Gate 3 advisor precondition (AO3/AO13) — decided off a silent peek,
     // before any lock, so a refusal makes zero mutations.
     if exec_component && approved {
@@ -909,6 +941,11 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     }
     let locks = acquire_mutation_locks(root, &scope, &workflows)?;
     let mut target = resolve_mutation_target(root, lane_feature.as_deref(), "gate", no_lane)?;
+    if owner_first_door {
+        if let Some(msg) = owner_first_gate_refusal(root, target.record(), target.lane()) {
+            return Ok(Out::Thrown(msg));
+        }
+    }
     if approved && (merge || name == "shape") {
         if let Some(msg) = gate_preview_refusal(root, target.record(), target.lane()) {
             return Ok(Out::Thrown(msg));
@@ -2422,6 +2459,87 @@ mod tests {
             std::fs::read_to_string(root.join(".bee/runtime/workflows/wf-1/state.json")).unwrap();
         assert_eq!(after_state, before_state, "a refusal must write nothing to the legacy record");
         assert_eq!(after_wf, before_wf, "a refusal must write nothing to the workflow record");
+    }
+
+    fn owner_first_lane(root: &Path, feature: &str, preview_file: &str) {
+        w(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &format!(
+                r#"{{"feature":"{feature}","phase":"planning","mode":"tiny","gate_preview":{{"feature":"{feature}","cells":[{{"id":"of-1","files":["{preview_file}"]}}]}}}}"#
+            ),
+        );
+    }
+
+    fn owner_first_merge(root: &Path, feature: &str, auto: bool) -> Out {
+        let mut args = vec!["--lane", feature, "--merge", "--approved", "true"];
+        if auto {
+            args.extend(["--actor", "auto", "--bypass-level", "total", "--reason", "gate_bypass=total"]);
+        }
+        run_gate_body(root, &flags(&args)).unwrap()
+    }
+
+    #[test]
+    fn gate_refuses_an_auto_merge_over_an_owner_first_preview_file_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        owner_first_lane(root, "of-gate", "db/migrations/001.sql");
+        let before = std::fs::read_to_string(root.join(".bee/lanes/of-gate.json")).unwrap();
+        let Out::Thrown(msg) = owner_first_merge(root, "of-gate", true) else {
+            panic!("an auto merge over an owner-first path must be refused")
+        };
+        for part in [
+            "GATE_OWNER_FIRST",
+            "\"db/migrations/001.sql\"",
+            "\"**/migrations/**\"",
+            "do not retry",
+            "do not pass --actor user",
+            "bee state waiting-on set --kind gate --subject \"of-gate owner-first gate\"",
+        ] {
+            assert!(msg.contains(part), "missing {part}: {msg}");
+        }
+        let after = std::fs::read_to_string(root.join(".bee/lanes/of-gate.json")).unwrap();
+        assert_eq!(after, before, "a refusal must write nothing");
+    }
+
+    #[test]
+    fn gate_refuses_an_auto_merge_over_an_owner_first_persisted_cell() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        owner_first_lane(root, "of-cells", "src/lib.rs");
+        w(
+            root,
+            ".bee/cells/of-2.json",
+            r#"{"id":"of-2","feature":"of-cells","status":"open","files":[".github/workflows/release.yml"]}"#,
+        );
+        let Out::Thrown(msg) = owner_first_merge(root, "of-cells", true) else {
+            panic!("an auto merge over a persisted owner-first cell must be refused")
+        };
+        assert!(msg.contains("GATE_OWNER_FIRST") && msg.contains(".github/workflows/release*"), "{msg}");
+    }
+
+    #[test]
+    fn gate_approves_an_owner_first_merge_from_the_user() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        owner_first_lane(root, "of-user", "db/migrations/001.sql");
+        let Out::Emit(..) = owner_first_merge(root, "of-user", false) else {
+            panic!("a user approval must succeed")
+        };
+        let lane = read_json_file(root, ".bee/lanes/of-user.json");
+        assert_eq!(lane["approved_gates"]["execution"], json!(true));
+    }
+
+    #[test]
+    fn gate_approves_an_auto_merge_with_no_owner_first_file_as_before() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        owner_first_lane(root, "of-plain", "tests/fixtures/report.sql");
+        let Out::Emit(..) = owner_first_merge(root, "of-plain", true) else {
+            panic!("an auto merge with no owner-first file must succeed")
+        };
+        let lane = read_json_file(root, ".bee/lanes/of-plain.json");
+        assert_eq!(lane["approved_gates"]["shape"], json!(true));
     }
 
     /// Truth 2: `--actor auto --bypass-level normal --reason X` records all
