@@ -793,6 +793,7 @@
     "contract:flag-vocabulary-pin",
     "contract:documented-invocations",
     "contract:native-cell-golden",
-    "session-care"
+    "session-care",
+    "durability"
   ]
 }
