@@ -100,6 +100,26 @@ pub(crate) fn herding_worker_marker_set() -> bool {
 /// except `activity` — including names this build does not know, because an
 /// unknown name in a herded pane is still a hook invocation the pane must
 /// not answer.
+pub(crate) const PEER_BOOT: &str = include_str!("../../../../../bee/prompts/peer-boot.md");
+
+pub(crate) fn thin_peer_boot(root: &std::path::Path) -> bool {
+    herding_worker_marker_set()
+        && matches!(
+            crate::state::read_config_raw(root)
+                .get("dispatch")
+                .and_then(|d| d.get("thin_peer_boot")),
+            Some(serde_json::Value::Bool(true))
+        )
+}
+
+fn thin_peer_hook_open(name: &str) -> bool {
+    matches!(name, "session-init" | "prompt-context")
+        && std::env::current_dir()
+            .ok()
+            .and_then(|cwd| adapter::resolve_roots(&cwd).work_root)
+            .is_some_and(|root| thin_peer_boot(&root))
+}
+
 fn marker_short_circuits(name: &str) -> bool {
     name != "activity" && name != "worker-guard" && name != "write-guard"
 }
@@ -172,7 +192,7 @@ pub(crate) fn try_native_with(
                 Outcome::Delegate => ExitCode::SUCCESS,
             });
         }
-        if marker_short_circuits(&name) {
+        if marker_short_circuits(&name) && !thin_peer_hook_open(&name) {
             return Some(ExitCode::SUCCESS);
         }
     }
@@ -249,6 +269,81 @@ mod tests {
     /// `hooks::activity`'s tests, which set the same variables.
     fn herding_worker_env_lock() -> std::sync::MutexGuard<'static, ()> {
         super::herding_env_lock()
+    }
+
+    pub(crate) struct MarkerEnv(Option<std::ffi::OsString>);
+
+    impl MarkerEnv {
+        pub(crate) fn set(value: Option<&str>) -> Self {
+            let prior = std::env::var_os("BEE_HERDING_WORKER");
+            // SAFETY: callers hold `herding_env_lock` for the guard's life.
+            match value {
+                Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+                None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+            }
+            Self(prior)
+        }
+    }
+
+    impl Drop for MarkerEnv {
+        fn drop(&mut self) {
+            // SAFETY: see `set`.
+            match self.0.take() {
+                Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+                None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+            }
+        }
+    }
+
+    pub(crate) fn thin_repo(dir: &std::path::Path, switch: Option<bool>) {
+        std::fs::create_dir_all(dir.join(".bee")).unwrap();
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::write(dir.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        if let Some(on) = switch {
+            std::fs::write(
+                dir.join(".bee").join("config.json"),
+                serde_json::json!({"dispatch": {"thin_peer_boot": on}}).to_string(),
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn peer_boot_is_short_and_carries_no_dynamic_value() {
+        assert!(PEER_BOOT.len() < 1500, "{} bytes", PEER_BOOT.len());
+        assert!(!PEER_BOOT.chars().any(|c| c.is_ascii_digit()), "no date, id or count");
+        assert!(PEER_BOOT.contains("finish command"));
+    }
+
+    #[test]
+    fn thin_peer_boot_needs_both_the_switch_and_the_marker() {
+        let _guard = herding_worker_env_lock();
+        let on = tempfile::tempdir().unwrap();
+        thin_repo(on.path(), Some(true));
+        let off = tempfile::tempdir().unwrap();
+        thin_repo(off.path(), Some(false));
+        let absent = tempfile::tempdir().unwrap();
+        thin_repo(absent.path(), None);
+        {
+            let _env = MarkerEnv::set(Some("1"));
+            assert!(thin_peer_boot(on.path()));
+            assert!(!thin_peer_boot(off.path()));
+            assert!(!thin_peer_boot(absent.path()));
+        }
+        let _env = MarkerEnv::set(None);
+        assert!(!thin_peer_boot(on.path()), "no marker, no thin boot");
+    }
+
+    #[test]
+    fn only_the_two_boot_hooks_can_open_the_gate() {
+        let _guard = herding_worker_env_lock();
+        let _env = MarkerEnv::set(Some("1"));
+        for hook_name in HOOK_NAMES {
+            if hook_name == "session-init" || hook_name == "prompt-context" {
+                continue;
+            }
+            assert!(!thin_peer_hook_open(hook_name), "{hook_name}");
+        }
     }
 
     /// herding-worker-standalone D3: under the marker, a hook invocation
