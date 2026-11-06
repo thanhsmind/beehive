@@ -743,7 +743,7 @@ A `[BLOCKED]` whose worker recorded a dissent owes its `.bee/bin/bee cells disse
 
 ## Handoff JSON
 
-Near 150k tokens or 65% context, whichever comes first, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
+When the user asks for a session switch, or at feature close, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65; a context mark alone never triggers it) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
 
 - `verified` — the proof lines run so far, each `<command> — <result> — <scope reason>`; work with no line here is unproven.
 - `tree` — `clean`, or `dirty:<paths>` naming each uncommitted path.
@@ -772,13 +772,15 @@ execution-approved work remains — this lane or another Gate-3-approved one —
 continue with the next unit in this session: finishing a unit is never a
 reason to stop, ask, or wait. The planned-next handoff is a session-exit
 artifact, not an offer: only when this session is
-actually ending (context budget reached, or the run is otherwise
-terminating), claim the next unit (`bee cells claim-next`), write the
+actually ending (the user asked for a switch, or the feature closed;
+a context mark alone never ends it), claim the next unit (`bee cells claim-next`), write the
 handoff (`bee state handoff write --kind planned-next --writer-session <id>
 --previous-cell <capped-id> --next-cell <claimed-id>`), and hand the
 remaining work to a fresh leader through the host's leader door when one
-exists (waggledance: `waggledance_dispatch` with `leader: true`, task
-text naming what is done, what is next, and the user's standing orders),
+exists (waggledance: `waggledance_dispatch` with `leader: true` and
+`follow_up_of` naming the current run, so the successor joins the same
+run family; task text naming what is done, what is next, and the user's
+standing orders),
 then release this session. The fresh leader adopts the carried claim
 automatically and opens straight into the next cell, no confirmation
 asked. Never tell the user to open a new session, never stop to suggest

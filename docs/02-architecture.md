@@ -121,9 +121,11 @@ Area naming is kebab-case, chosen at first spec write, stable thereafter; the sc
 Every bee skill supports two invocation modes (compound-engineering):
 
 - **Interactive (default):** ask at decision points, using the standard question format.
+<!-- bee:not-a-deferral: describes headless-mode question handling, not a promise to act later -->
 - **Headless (`mode:headless`):** never block on a question. Apply only unambiguous actions, classify ambiguous cases as deferred, and end with a structured report containing an `Outstanding Questions` section. Terminal output is JSON or structured markdown so an orchestrator (go mode, a pipeline, another skill) can consume it deterministically.
 
 Hard limit: headless mode defers *within-stage* ambiguity only and never self-approves a gate. The one mode that self-approves gates is the opt-in gate-bypass switch (`.bee/config.json` `gate_bypass`, toggled through `bee-hive`'s "Gates" section, decision 0010): it auto-approves Gates 1-2 for `tiny`/`small`/`standard` work, never for high-risk/hard-gate work, and never Gate 3 UAT/P1 or secret reads. Off by default; surfaced loudly in the preamble and `bee status` when on.
+<!-- /bee:not-a-deferral -->
 
 ## The cell (task unit)
 
@@ -241,7 +243,7 @@ Any proposed tenth hook must name which of the nine it replaces — claudekit's 
 ```
 
 - Every skill updates `phase`, `summary`, `next_action` on completion — the handoff is machine-checkable.
-- At ~65% context usage, the active skill writes `.bee/HANDOFF.json` (phase, feature, cells in flight, done/remaining, next action) and pauses. Resume never auto-continues: `bee-hive` surfaces the handoff and waits for the user.
+- A context mark never pauses work. When the user asks for a session switch, or at feature close, the active skill writes `.bee/HANDOFF.json` (phase, feature, cells in flight, done/remaining, next action). Resume never auto-continues: `bee-hive` surfaces the handoff and waits for the user.
 - Gate approvals are recorded here; `bee status` refuses to report "ready to swarm" unless `execution: true`.
 
 ## Security posture (carried from upstreams)

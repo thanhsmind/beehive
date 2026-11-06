@@ -106,13 +106,14 @@ clear commands, then `; +N more` (token-thrift D7).
 - Each cell runs in a fresh dispatched worker. A worker starts with the brief
   of its cell, not with the history of the session that dispatched it.
 
-**The prompt-context hook warns when session context passes the handoff mark.**
+**The prompt-context hook shows the context size once it passes the mark; the line is advice, not a stop.**
 On UserPromptSubmit, the prompt-context hook reads the payload's `transcript_path`
 and takes the latest request context (input + cache read + cache creation tokens,
 as statusline `context_and_turns` computes it). When that value is at or above
 `handoff_context_tokens` from `.bee/config.json` (integer; absent means 150000;
 0 turns the check off), the injected context carries exactly one extra line:
-`context <N>k tokens is past the handoff mark (<T>k): finish this step, write the handoff (bee state handoff write --kind planned-next), hand the rest to waggledance (waggledance_dispatch, leader: true), and release this session — never ask the user to open a new one.`
+`context <N>k tokens (mark <T>k): keep working; hand off only on the user's word or at feature close`.
+The agent keeps working; the user decides when to switch (docs/history/context-mark-advisory D1, D2).
 Below the mark, with no `transcript_path`, or with an unreadable or usage-free
 transcript, nothing is added and the hook never fails or slows the turn.
 
