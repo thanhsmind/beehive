@@ -1,0 +1,205 @@
+{
+  "id": "ffr-1",
+  "feature": "framework-feedback-rule",
+  "title": "Route owner feedback in this repo into the framework",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "7d5b60ab-7a0c-460b-9ed1-b0508cdcee63"
+  ],
+  "files": [
+    "CLAUDE.md",
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "skills/bee-capturing/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/framework-feedback-rule/CONTEXT.md"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Per decision 7d5b60ab: add a CLAUDE.md section 'Feedback here changes the framework'; add rule agents-feedback-changes-framework to packages/bee/AGENTS.block.md under Capture what settles; add its rule index entry with applied_at CLAUDE.md and skills/bee-capturing/SKILL.md; add one sentence to skills/bee-capturing/SKILL.md Capture the moment it settles. Run `.bee/bin/bee dev regen`.",
+  "verify": ".bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "owner feedback about how agents work in this repo goes to the owning doctrine, hook or skill through the bee chain and a release; a memory note alone is a miss"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "rule agents-feedback-changes-framework"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md matches the block after bee dev regen"
+    ],
+    "prohibitions": [
+      "Do not delete agent memory files"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": null,
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-capturing/SKILL.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-capturing/SKILL.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-capturing/SKILL.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-capturing/SKILL.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-capturing/SKILL.md",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-capturing/SKILL.md"
+    ],
+    "deviations": [
+      "ran inline on the leader: herding concurrency full",
+      "own feature instead of the merged context-mark feature, which had already closed",
+      "regen rewrote the rendered bee-capturing copies and .bee/onboarding.json",
+      "sync-ack: AGENTS.md diff adds only rule agents-feedback-changes-framework; other rules untouched"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T07:14:58.372Z",
+    "behavior_change": false,
+    "verification_evidence": "600 manifest files match after bee dev regen; full declared cargo suite 42 binaries 0 failed",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "2f346667-6330-4127-90da-e015976b38a9",
+    "verify_command": ".bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-06T07:12:08.363Z",
+    "sync_ack": "AGENTS.md diff adds only rule agents-feedback-changes-framework; other rules untouched",
+    "no_mistakes": true,
+    "inline_reason": "dispatch prepare refused limits.concurrency; decision logged",
+    "report": {
+      "outcome": "rule agents-feedback-changes-framework lives in CLAUDE.md, the AGENTS block and AGENTS.md, the rule index and bee-capturing",
+      "commit": "bb0528e7f",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-capturing/SKILL.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-capturing/SKILL.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-capturing/SKILL.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-capturing/SKILL.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-capturing/SKILL.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "packages/bee/AGENTS.block.md",
+        "skills/bee-capturing/SKILL.md"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check — green:static — 600 manifest files match after bee dev regen; full declared cargo suite 42 binaries 0 failed",
+      "deviations": [
+        "ran inline on the leader: herding concurrency full",
+        "own feature instead of the merged context-mark feature, which had already closed",
+        "regen rewrote the rendered bee-capturing copies and .bee/onboarding.json"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "owner feedback about how agents work in this repo goes to the owning doctrine, hook or skill through the bee chain and a release; a memory note alone is a miss",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "AGENTS.md matches the block after bee dev regen",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": ".agents/skills/.bee-render.json",
+            "artifact": ".agents/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".agents/skills/bee-capturing/SKILL.md",
+            "artifact": ".agents/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/.bee-render.json",
+            "artifact": ".claude-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-capturing/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/.bee-render.json",
+            "artifact": ".claude/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude/skills/bee-capturing/SKILL.md",
+            "artifact": ".claude/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/.bee-render.json",
+            "artifact": ".codex-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-capturing/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/.bee-render.json",
+            "artifact": ".opencode/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".opencode/skills/bee-capturing/SKILL.md",
+            "artifact": ".opencode/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "AGENTS.md",
+            "artifact": "AGENTS.md"
+          },
+          {
+            "requirement": "CLAUDE.md",
+            "artifact": "CLAUDE.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "packages/bee/AGENTS.block.md",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "skills/bee-capturing/SKILL.md",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-06T07:14:58.462Z",
+        "recorded_by": "2f346667-6330-4127-90da-e015976b38a9",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
