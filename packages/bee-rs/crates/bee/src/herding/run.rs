@@ -2713,7 +2713,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     // id: the ROUND changes under a `--continue` while this export fires
     // once, at the fresh spawn, so an exported round would go stale and lie.
     // The hook reads the round from the job's own mailbox instead.
-    let mut pane_env = env.clone();
+    let mut pane_env = thin_peer_env(&cfg, is_claude_command(&kind), &env);
     // deploy-pane-authorization: a deploy dispatch's permit id, release
     // version and issuer session reach the pane that runs release.sh. The
     // map is empty unless the caller had BEE_DISPATCH_ID set, so an ordinary
@@ -2918,6 +2918,32 @@ pub(crate) fn resolve_paseo_workspace(
             "paseo workspace for {dir} could not be found or created: {err} — FIX: paseo workspace create --path {dir} --isolation local, then re-run"
         )
     })
+}
+
+const THIN_PEER_CLAUDE_ENV: [(&str, &str); 4] = [
+    ("CLAUDE_CODE_DISABLE_CLAUDE_MDS", "1"),
+    ("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1"),
+    ("ENABLE_CLAUDEAI_MCP_SERVERS", "false"),
+    ("CLAUDE_CODE_DISABLE_BUNDLED_SKILLS", "1"),
+];
+
+fn is_claude_command(kind: &str) -> bool {
+    Path::new(kind).file_name().and_then(|f| f.to_str()) == Some("claude")
+}
+
+pub(crate) fn thin_peer_env(
+    cfg: &Value,
+    is_claude: bool,
+    agent_env: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let on = cfg.pointer("/dispatch/thin_peer_boot").and_then(Value::as_bool) == Some(true);
+    if !(on && is_claude) {
+        return agent_env.clone();
+    }
+    let mut env: BTreeMap<String, String> =
+        THIN_PEER_CLAUDE_ENV.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+    env.extend(agent_env.clone());
+    env
 }
 
 pub(crate) fn paseo_env_pairs(child_env: BTreeMap<String, String>) -> Vec<(String, String)> {
@@ -3652,7 +3678,7 @@ fn execute_paseo_steered(
 
     let mut child_env = build_child_env(
         std::env::vars(),
-        &agent_env,
+        &thin_peer_env(&cfg, provider_is_claude, &agent_env),
         &opts.pane_env_passthrough,
         &opts.job_id,
     );
@@ -3939,7 +3965,8 @@ fn execute_claude_session_paced(
     }
     let pointer = mailbox::pointer_prompt(&brief_file);
 
-    let mut child_env = build_child_env(std::env::vars(), &BTreeMap::new(), &opts.pane_env_passthrough, &opts.job_id);
+    let session_env = thin_peer_env(&read_main_config(&opts.main_root), true, &BTreeMap::new());
+    let mut child_env = build_child_env(std::env::vars(), &session_env, &opts.pane_env_passthrough, &opts.job_id);
     if opts.read_only {
         child_env.insert("BEE_HERDING_READ_ONLY".to_string(), "1".to_string());
     }
@@ -13329,6 +13356,117 @@ mod tests {
         let settings = spawns[0].0.windows(2).find(|w| w[0] == "--settings").map(|w| w[1].clone()).unwrap();
         let settings: Value = serde_json::from_str(&settings).unwrap();
         assert_eq!(settings["env"]["BEE_HERDING_READ_ONLY"], "1");
+    }
+
+    const THIN_KEYS: [&str; 4] = [
+        "CLAUDE_CODE_DISABLE_CLAUDE_MDS",
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+        "ENABLE_CLAUDEAI_MCP_SERVERS",
+        "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS",
+    ];
+
+    fn paseo_run_argv_with_config(provider: &str, switch: Option<bool>, agent_env: Value) -> Vec<String> {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.agent = Some("w".to_string());
+        seed_done_result(tmp.path(), &opts.job_id);
+        let mut cfg = serde_json::json!({"herding": {"agents": {"w": {"env": agent_env}}}});
+        if let Some(on) = switch {
+            cfg["dispatch"] = serde_json::json!({"thin_peer_boot": on});
+        }
+        std::fs::write(tmp.path().join(".bee").join("config.json"), cfg.to_string()).unwrap_or_else(|_| {
+            std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+            std::fs::write(tmp.path().join(".bee").join("config.json"), cfg.to_string()).unwrap();
+        });
+        let spec = PaseoSpec {
+            provider: provider.to_string(),
+            model: Some("m".to_string()),
+            thinking: None,
+            mode: None,
+            isolated_config: false,
+        };
+        let fake = FakePaseoCli::new(
+            Ok("0.12.0\n".to_string()),
+            Ok("{\"agentId\":\"a\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+        let _ = execute_paseo(&opts, &spec, &fake);
+        run_call(&fake).expect("run call")
+    }
+
+    fn env_pairs(argv: &[String]) -> Vec<String> {
+        argv.windows(2).filter(|w| w[0] == "--env").map(|w| w[1].clone()).collect()
+    }
+
+    #[test]
+    fn thin_peer_switch_on_gives_a_paseo_claude_agent_the_four_env_pairs() {
+        let argv = paseo_run_argv_with_config("claude", Some(true), serde_json::json!({}));
+        let pairs = env_pairs(&argv);
+        for (k, v) in THIN_PEER_CLAUDE_ENV {
+            assert!(pairs.contains(&format!("{k}={v}")), "{k} missing: {pairs:?}");
+        }
+    }
+
+    #[test]
+    fn thin_peer_switch_on_leaves_a_pi_agent_unchanged() {
+        let on = env_pairs(&paseo_run_argv_with_config("pi", Some(true), serde_json::json!({})));
+        let off = env_pairs(&paseo_run_argv_with_config("pi", None, serde_json::json!({})));
+        assert_eq!(on, off);
+        assert!(!on.iter().any(|p| THIN_KEYS.iter().any(|k| p.starts_with(&format!("{k}=")))), "{on:?}");
+    }
+
+    #[test]
+    fn thin_peer_switch_off_or_absent_leaves_a_claude_agent_unchanged() {
+        for switch in [None, Some(false)] {
+            let pairs = env_pairs(&paseo_run_argv_with_config("claude", switch, serde_json::json!({})));
+            assert!(!pairs.iter().any(|p| THIN_KEYS.iter().any(|k| p.starts_with(&format!("{k}=")))), "{pairs:?}");
+        }
+    }
+
+    #[test]
+    fn thin_peer_per_agent_env_value_wins_over_the_default() {
+        let argv = paseo_run_argv_with_config(
+            "claude",
+            Some(true),
+            serde_json::json!({"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"}),
+        );
+        let pairs = env_pairs(&argv);
+        assert!(pairs.contains(&"CLAUDE_CODE_DISABLE_AUTO_MEMORY=0".to_string()), "{pairs:?}");
+        assert!(!pairs.contains(&"CLAUDE_CODE_DISABLE_AUTO_MEMORY=1".to_string()), "{pairs:?}");
+        assert!(pairs.contains(&"CLAUDE_CODE_DISABLE_CLAUDE_MDS=1".to_string()), "{pairs:?}");
+    }
+
+    #[test]
+    fn thin_peer_env_covers_claude_commands_only_and_keeps_the_per_agent_value() {
+        let on = serde_json::json!({"dispatch": {"thin_peer_boot": true}});
+        let mut agent: BTreeMap<String, String> = BTreeMap::new();
+        agent.insert("ENABLE_CLAUDEAI_MCP_SERVERS".to_string(), "true".to_string());
+        assert!(is_claude_command("claude") && is_claude_command("/usr/bin/claude"));
+        assert!(!is_claude_command("pi") && !is_claude_command("codex"));
+        let merged = thin_peer_env(&on, true, &agent);
+        assert_eq!(merged.get("ENABLE_CLAUDEAI_MCP_SERVERS").map(String::as_str), Some("true"));
+        assert_eq!(merged.get("CLAUDE_CODE_DISABLE_BUNDLED_SKILLS").map(String::as_str), Some("1"));
+        assert_eq!(thin_peer_env(&on, false, &agent), agent);
+        assert_eq!(thin_peer_env(&serde_json::json!({}), true, &agent), agent);
+    }
+
+    #[test]
+    fn claude_session_switch_on_sets_the_four_env_vars_for_the_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee").join("config.json"), r#"{"dispatch":{"thin_peer_boot":true}}"#).unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_done_result(tmp.path(), &opts.job_id);
+        let fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+
+        let res = run_claude_session(&opts, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+        let spawns = fake.spawns.lock().unwrap();
+        for (k, v) in THIN_PEER_CLAUDE_ENV {
+            assert_eq!(spawns[0].2.get(k).map(String::as_str), Some(v), "{k}");
+        }
     }
 
     #[cfg(unix)]
