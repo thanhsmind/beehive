@@ -191,7 +191,7 @@ fn the_json_refusal_carries_a_machine_readable_kind() {
         // `doctor` used to stand here. It is ported now, so the fixture moved to
         // a verb that is still declared-but-unbuilt — the class must keep a
         // live example or the branch stops being exercised.
-        (vec!["config", "get", "--key", "gate_bypass", "--json"], "command_unavailable"),
+        (vec!["herding", "enable", "--json"], "command_unavailable"),
         (vec!["state", "show", "--json"], "unknown_command"),
         (vec!["status", "wat", "--json"], "unexpected_argument"),
     ];
