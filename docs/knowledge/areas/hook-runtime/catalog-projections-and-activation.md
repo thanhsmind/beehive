@@ -275,6 +275,17 @@ recovery.
   named, explicit opt-out may still choose to degrade to a visible skip
   that states its own reason; the default is fail (opencode-support oc-9).
 
+- R42 — The OpenCode coverage gate reads the tool-id registry of both
+  OpenCode lines: the 1.x set and the 2.x set (`shell`, `patch`,
+  `subagent`, `execute`, and the rest). Every 2.x id that the belt does not
+  map carries its own NAMED GAP or NAMED EXCLUSION line in
+  `docs/history/opencode-support/discovery.md`, section oc2x-1. On 2.x the
+  gate never counts a tool as safe from a `filePath` scan, because 2.x
+  tools take `path`. Adding a `shell` or `patch` case to the 1.x belt
+  changes nothing on 2.x: the 2.x loader accepts only a default export
+  `{id, effect}` or `{id, setup}`, so it does not load the 1.x belt at all
+  (opencode-2x-tool-ids, oc2x-1).
+
 ## Edge Cases Settled
 
 - Explicitly disabling checkpoints produces no project lifecycle execution;
@@ -293,6 +304,12 @@ recovery.
 
 ## Open Gaps
 
+- OpenCode 2.x runs with no bee guard. Its plugin loader rejects the 1.x
+  shape of `.opencode/plugins/bee-guard.ts`, hands hook arguments in
+  `input`, and names the file argument `path`, not `filePath`. CI still
+  pins `opencode-ai@1.18.16`, so CI does not see this gap. The fix is a
+  port of the belt to the 2.x `{id, setup}` plugin API (opencode-2x-tool-ids,
+  oc2x-1; backlog p-627c4c0f).
 - The pre-spawn dispatch guard's explicit-model-choice check still only
   recognizes the models configured for Claude Code and Codex. OpenCode's
   own dispatch tool carries no model argument at all today, so this gap has
