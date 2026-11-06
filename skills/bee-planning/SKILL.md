@@ -48,6 +48,11 @@ agents-worktree-first). Work that stays in main (docs lane, a solo tiny fix)
 records the route alone: `bee route --set --class <c> --lane <l> [--flags
 <a,b>] --files <n>`. Re-route upward with `bee route --set` on new evidence
 any time, de-escalate only on cited evidence.
+Paths set a floor: bee ships rows for migrations, SQL schema and
+release/publish workflows, and a repo adds rows under `rigor_floor` in
+`.bee/config.json` — a row raises a floor, never lowers it. `bee cells add`
+and `bee cells update` refuse a cell below its floor with `RIGOR_FLOOR`;
+the remedy is to raise the route, never to drop the file.
 That same step cites the matched class playbook into plan.md by name and
 anchor — `references/planning-reference.md` ("Playbooks") — never by
 copying its steps.

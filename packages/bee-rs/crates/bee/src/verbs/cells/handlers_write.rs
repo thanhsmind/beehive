@@ -652,6 +652,9 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
                 assert_no_cycle(&root, "updateCell", std::slice::from_ref(&merged_value))?;
             }
             assert_regen_obligation(&merged, "updateCell")?;
+            if let Some(refusal) = rigor_floor_refusal(&root, &merged, "updateCell") {
+                return Err(Fail::Thrown(refusal));
+            }
             write_cell(&root, &merged_value)?;
             Ok(merged_value)
         })();
