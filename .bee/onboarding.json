@@ -42,6 +42,14 @@
       "reviewer.md": "e2c56ba17e2aa951a60c89f4c335a05355122062560e8e00277bd347dca87e9a",
       "worker-cell.md": "3616571edbf569baf524da709a3e558a6cb96df0ccf415bde93922ee41409d2b"
     },
+    "leader": {
+      "LEADER.md": "4a6d90831d44a79b035b3efa60479adea799f6c5f1ddb38342479a6f61e38e07"
+    },
+    "playbooks": {
+      "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
+      "handoff.md": "c4555ec494f174ee425b1ebd35153c9f5aa393a9bd2c8e3c568bab4477cd6557",
+      "multi-session.md": "1e820395d0daabd521c5d3b7d3a46fcbc8d24f3ce893ca43e6636693a44b6ea8"
+    },
     "repo_hooks": {
       ".codex/hooks.json": "b4ecbe18eed3506b7bf3a936aad5ab1f1e61f93379c37257bd26bb90c9b6bd9f"
     },
@@ -137,5 +145,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-06T15:41:40.454Z"
+  "updated_at": "2026-11-06T15:50:17.526Z"
 }
