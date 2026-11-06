@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "opencode-2x-tool-ids",
+  "closed_at": "2026-11-06T03:40:39.704Z",
+  "sessions": [
+    {
+      "session_id": "d422f401-8a56-46a9-99fb-b3cf6f257f2d",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 50,
+          "output": 9691,
+          "cache_write": 63624,
+          "cache_read": 1554312,
+          "new": 73365,
+          "cached": 1554312,
+          "total": 1627677
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5-5": {
+          "input": 58,
+          "output": 13451,
+          "cache_write": 144584,
+          "cache_read": 1339357,
+          "new": 158093,
+          "cached": 1339357,
+          "total": 1497450
+        }
+      },
+      "subagent_count": 2,
+      "started_ms": 1793936337904,
+      "ended_ms": 1793936438246,
+      "totals": {
+        "new": 231458,
+        "cached": 2893669,
+        "total": 3125127
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 73365,
+      "cached": 1554312,
+      "total": 1627677
+    },
+    "subagents": {
+      "new": 158093,
+      "cached": 1339357,
+      "total": 1497450
+    },
+    "total": {
+      "new": 231458,
+      "cached": 2893669,
+      "total": 3125127
+    }
+  }
+}

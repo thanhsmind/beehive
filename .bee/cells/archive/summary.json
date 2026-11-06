@@ -1923,5 +1923,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-06T03:23:10.663Z"
+  },
+  "opencode-2x-tool-ids": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-06T03:40:39.680Z"
   }
 }
