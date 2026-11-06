@@ -40,8 +40,8 @@ line.
 
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
-| 1 | Only open or claimed cells enter the schedulable set, so a parked cell leaves it with no scheduler edit | read | packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs:89 | `matches!(status_of(c).as_deref(), Some("open")` |
-| 2 | A dependency counts as met only when it is capped, so dependents of a parked cell wait | read | packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs:97 | `Some("capped") => "satisfied",` |
+| 1 | Only open or claimed cells enter the schedulable set, so a parked cell leaves it | read | packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs:89 | `matches!(status_of(c).as_deref(), Some("open")` |
+| 2 | A dependency counts as met only when it is capped, BUT `classify` reads an unknown status as `pending`, and the in-degree count skips a dependency outside the schedulable set, so today a dependent of a parked cell lands in wave 1; cqp-1 adds a `Some("parked")` arm to `classify` that excludes the dependent the way `blocked` does | read | packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs:97 | `Some("capped") => "satisfied",` |
 | 3 | Cell verbs are served from one match in util.rs, the place a park and an answer arm go | read | packages/bee-rs/crates/bee/src/verbs/cells/util.rs:74 | `"block" => run_block(flags, use_json, t0),` |
 | 4 | The block mutation is the status-write pattern to copy | read | packages/bee-rs/crates/bee/src/verbs/cells/util.rs:380 | `cell_map.insert("status".into(), Value::String("blocked".into()));` |
 | 5 | The Rust decision logger returns no id today, so the answer verb needs a variant that does | read | packages/bee-rs/crates/bee/src/verbs/cells/audit.rs:439 | `pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> {` |
@@ -53,9 +53,21 @@ line.
 
 A read-only gather walked the cell status sets, the scheduler, the block
 verb, the decision logger, the close and merge debt doors and the
-supervisor view (anchors above). Finding: no central status enum exists;
-the scheduler already does the right thing for an unknown status, so D1
-needs a new status value plus verbs, not a scheduler rewrite.
+supervisor view (anchors above). Finding: no central status enum exists.
+The scheduler drops a parked cell from the ready set, but it reads a parked
+DEPENDENCY as `pending` and puts the dependent in wave 1 (schedule.rs:96-111,
+162-164; the hat wave's facts seat found this). So D1 needs a new status
+value, two verbs, and one `parked` arm in `classify` — not a scheduler
+rewrite. `claim-next` and `ready_cells` already require capped deps.
+
+Status readers that must learn `parked` (hat wave): workflow run-state
+(`workflow_store/record.rs`), merge-ready (`workflow_store/merge_ready.rs`),
+status counts (`status_full/build.rs`, `hooks/state_sync.rs`, `orient.rs`),
+and the start-feature unfinished check (`state_group/policy.rs`). Claim,
+sweep, archive and new-cell checks are safe as they are. `bee cells reopen`
+would move a parked cell to open with no answer; it must refuse a parked
+cell. The dispatch brief (`drivers/prepare.rs`) renders no decision text
+today, so the answer text rides the park record and the brief renders it.
 
 ## Approach
 
@@ -66,9 +78,17 @@ close door, the merge refusal and the supervisor rows (D3, D4), per contract
 decision `3041908c`. The leader rule in D3 (set `waiting_on` only when no
 ready cell remains) is doctrine and lands in the swarming skill.
 
-Rejected: reuse `blocked` with a question field — `blocked` means a swept
-claim today and the merge and close paths treat it differently; a lane-wide
+Rejected: reuse `blocked` with a question field — `blocked` already has
+three writers (sweep, `bee cells block`, blocker dissent), `update` and
+`reroute` accept `blocked`, and the dissent release reads it, so a question
+riding `blocked` could be released with no answer; reuse dissent — it needs
+a decision against its own contract and still misses D2 and D4; a lane-wide
 mark — the stall this feature removes.
+
+Worker contract: a worker that parks returns the new token `[PARKED]`, not
+`[BLOCKED]`, so the leader's `[BLOCKED]` rescue ladder never re-dispatches
+a cell that waits on the human. Every refusal and every supervisor row
+names its remedy: `bee cells answer --id <cell> --answer "<text>"`.
 
 Risk map:
 
@@ -77,10 +97,16 @@ Risk map:
 | New status value meets old status checks (update, claim, counts) | MEDIUM | cqp-1 | unit tests: park, answer, schedule excludes a parked cell, dependents wait |
 | Registry entry for two new verbs | LOW | cqp-1 | registry tests green |
 | Close and merge refusal | LOW | cqp-2 | unit tests on both refusals |
-| Skill text | LOW | cqp-3 | release-manifest check |
+| Status readers count parked; answer text reaches the brief | MEDIUM | cqp-4 | unit tests per reader and a prepare brief test |
+| Skill text and the [PARKED] token | LOW | cqp-3 | release-manifest check |
 
-Waves: cqp-1 and cqp-3 run in parallel (disjoint files). cqp-2 waits for
-cqp-1 because it reads the parked status and question that cqp-1 writes.
+Waves: cqp-1 and cqp-3 run in parallel (disjoint files). cqp-2 and cqp-4
+wait for cqp-1 because they read the parked status and park record that
+cqp-1 writes; cqp-2 and cqp-4 run in parallel (disjoint files).
+
+Knowledge and verify-map sync (the dissent concept, the merge-gate concept,
+`docs/handbook/register.md`, the worktree-and-close feature map) is the
+leader's capture step at scribe time, not a cell.
 
 ## Role assignments
 
@@ -129,9 +155,10 @@ Phase plan (one slice):
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| cqp-1 | Park a cell on a question and answer it | cells/park.rs (new), cells/util.rs, cells/audit.rs, cells/mod.rs, cells/tests.rs, generated/registry_payload.json | — | `bee cells park` sets a cell aside with its question; siblings stay claimable; `bee cells answer` logs the answer and reopens it | cells and registry tests green |
-| cqp-2 | Refuse close and merge on a parked cell and list it for the human | drivers/close.rs, worktree/phases.rs, worktree/tests.rs, supervisor.rs | cqp-1 | `bee close` and `bee worktree merge` name the parked cell and its question; the supervisor view lists it | close, worktree and supervisor tests green |
-| cqp-3 | Teach workers to park and leaders to keep working | skills/bee-swarming/SKILL.md, skills/bee-hive/references/gates-and-delegation.md, release manifest | — | the worker contract says park the cell, not stop the lane; the leader sets the wait mark only with no ready cell | release-manifest check green |
+| cqp-1 | Park a cell on a question and answer it | cells/park.rs (new), cells/util.rs, cells/audit.rs, cells/mod.rs, cells/schedule.rs, cells/handlers_close.rs, cells/tests.rs, generated/registry_payload.json | — | `bee cells park` sets a cell aside with its question and frees its claim; siblings stay claimable, dependents wait; `bee cells answer` logs the answer and reopens it | cells and registry tests green |
+| cqp-2 | Refuse close and merge on a parked cell and list it for the human | drivers/close.rs, worktree/phases.rs, worktree/tests.rs, supervisor.rs | cqp-1 | `bee close` and `bee worktree merge` name the parked cell, its question and the answer command; the supervisor view lists it | close, worktree and supervisor tests green |
+| cqp-3 | Teach workers to park and leaders to keep working | skills/bee-swarming/SKILL.md, skills/bee-hive/references/gates-and-delegation.md, packages/bee/agents/bee-worker.md.tmpl, packages/bee/agents/bee-comb.md.tmpl, packages/bee/prompts/worker-cell.md, release manifest | — | the worker contract says park the cell and return [PARKED]; the rescue ladder skips [PARKED]; the leader sets the wait mark only with no ready cell | release-manifest check green |
+| cqp-4 | Count parked cells in status readers and carry the answer into the brief | workflow_store/record.rs, workflow_store/merge_ready.rs, status_full/build.rs, hooks/state_sync.rs, status_full/orient.rs, state_group/policy.rs, drivers/prepare.rs | cqp-1 | status and orient count parked cells and never call a lane with a parked cell done or idle; the next brief shows the question and its answer | workflow, status, orient and prepare tests green |
 
 ```json
 [
@@ -148,6 +175,8 @@ Phase plan (one slice):
       "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
       "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs",
       "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
       "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
       "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
     ],
@@ -160,15 +189,16 @@ Phase plan (one slice):
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Add two cell verbs per contract decision 16031715 (D1 b7b5b3c7, D2 8ed6f4a2). `bee cells park --id <cell> --question <text>` sets an open or claimed cell to status `parked`, writes trace.parked_question and trace.parked_at, and refuses an empty question or a cell that is capped, dropped or already parked. `bee cells answer --id <cell> --answer <text>` refuses a cell that is not parked; otherwise it logs the answer as a decision (tags cells and answer; the decision text names the cell id and quotes the question) BEFORE it writes the cell, appends the new decision id to the cell's `decisions`, moves the question into trace.park_history (question, answer decision id, time), clears trace.parked_question, and sets status `open`. A failed decision log leaves the cell unchanged. Copy the shape of `run_block` / `block_cell` in handlers_close.rs (rg anchor: `\"block\" => run_block(flags, use_json, t0),` in util.rs) and of `record_dissent_verdict` in dissent.rs for log-then-write. audit.rs `log_decision` returns no id today (`pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> {`): add a variant that returns the id; keep the old signature for its callers. Register both verbs in the util.rs try_mutating match AND in generated/registry_payload.json (the registry tests fail if a served verb is undeclared); if the registry file is produced by a regen step, run that step. Also export a reader `feature_parked_cells(root, feature) -> Vec<(cell id, question)>` from the cells module for cqp-2. Check the existing status checks for a status they now meet: handlers_write.rs `let status_ok = matches!(cell_map.get(\"status\"), Some(Value::String(s)) if s == \"open\" || s == \"blocked\");` and `if status != \"open\" && status != \"blocked\" {` — a parked cell must not be claimable and must not be updatable into a running state; leave them unchanged unless a test shows a parked cell slips through. Tests red-first: park sets status and question; a parked cell is absent from compute_schedule's ready set while its open sibling is present; a cell that depends on a parked cell is not ready; answer logs a decision, cites it on the cell and reopens it; the refusals named above.",
+    "action": "Add two cell verbs per contract decision 16031715 (D1 b7b5b3c7, D2 8ed6f4a2). Park record shape: one append-only array trace.park; each entry {question, parked_at, answer, answer_decision, answered_at}; the open question is the last entry with no answer. `bee cells park --id <cell> --question <text>` sets an open or claimed cell to status `parked`, appends a park entry, releases the cell's claim (clear the claim fields and trace.worker the way release does) and every file reservation the cell holds, adds NO attempts row, and passes guard_claim_ownership like block does (with --force-ownership). It refuses an empty question or a cell that is capped, dropped or already parked. `bee cells answer --id <cell> --answer <text>` refuses a cell that is not parked; otherwise it logs the answer as a decision BEFORE it writes the cell (tags `cells` and `slp`, both already in docs/decisions/taxonomy.json, the way dissent.rs does, so the taxonomy file never changes; the decision text names the cell id and quotes the question and the answer), appends the new decision id to the cell's `decisions`, stamps answer, answer_decision and answered_at on the open park entry, and sets status `open`. Answer needs no claim ownership: the claim was released at park. A failed decision log leaves the cell unchanged. Every refusal on a parked cell names the remedy `bee cells answer --id <cell> --answer \"<text>\"`. In schedule.rs `classify`, add a `Some(\"parked\")` arm so a dependent of a parked cell is excluded the way a dependent of a blocked cell is (today classify reads parked as pending and the in-degree count skips it, so the dependent lands in wave 1). In handlers_close.rs, `bee cells reopen` refuses a parked cell, naming the answer remedy. Copy the shape of `run_block` / `block_cell` in handlers_close.rs (rg anchor: `\"block\" => run_block(flags, use_json, t0),` in util.rs) and of `record_dissent_verdict` in dissent.rs for log-then-write. audit.rs `log_decision` returns no id today (`pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> {`): add a variant that returns the id; keep the old signature for its callers. Register both verbs in the util.rs try_mutating match AND in generated/registry_payload.json (the registry tests fail if a served verb is undeclared). The registry file is hand-edited (no generator exists): edit it by a JSON round-trip that keeps its compact byte format. Also export, through `mod park; pub(crate) use self::park::*;` in cells/mod.rs, a reader `feature_parked_cells(root, feature) -> Vec<(cell id, question)>` shaped like `feature_dissent_debt` (it reads live and archived cells) for cqp-2 and cqp-4, and a helper `park_answers(cell) -> Vec<(question, answer)>` for the brief. Check the existing status checks for a status they now meet: handlers_write.rs `let status_ok = matches!(cell_map.get(\"status\"), Some(Value::String(s)) if s == \"open\" || s == \"blocked\");` and `if status != \"open\" && status != \"blocked\" {` — a parked cell must not be claimable and must not be updatable into a running state; leave them unchanged unless a test shows a parked cell slips through. Tests red-first: park sets status and question and frees the claim and reservations; a parked cell is absent from compute_schedule's waves while its open sibling is present; a cell that depends on a parked cell is absent from every compute_schedule wave AND from ready_cells; answer logs a decision, cites it on the cell, stamps the park entry and reopens it; reopen refuses a parked cell; the refusals named above each name the answer remedy.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells registry",
     "must_haves": {
       "truths": [
-        "bee cells park sets the cell status to parked and stores the question in trace.parked_question",
+        "bee cells park sets the cell status to parked, appends the question to trace.park, and releases the claim and the file reservations",
         "a parked cell is not in the ready set while its open sibling is",
-        "a cell that depends on a parked cell is not ready",
-        "bee cells answer logs a decision, appends its id to the cell decisions, and sets the cell status to open",
-        "park refuses an empty question and a capped, dropped or already-parked cell; answer refuses a cell that is not parked"
+        "a cell that depends on a parked cell is in no compute_schedule wave and not in ready_cells",
+        "bee cells answer logs a decision, appends its id to the cell decisions, stamps the answer on the park entry, and sets the cell status to open",
+        "park refuses an empty question and a capped, dropped or already-parked cell; answer refuses a cell that is not parked; reopen refuses a parked cell",
+        "every refusal on a parked cell names bee cells answer as the remedy"
       ],
       "artifacts": [
         {"path": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs", "substantive": "park and answer verbs and the feature_parked_cells reader"},
@@ -180,7 +210,8 @@ Phase plan (one slice):
       ],
       "prohibitions": [
         "Do not change the meaning of status blocked",
-        "Do not change compute_schedule's ready filter",
+        "Do not change how classify treats any status other than parked",
+        "Do not add a tag that is not already in docs/decisions/taxonomy.json",
         "No code comments"
       ],
       "open_choices": ["Put the verbs in a new park.rs file instead of handlers_close.rs"]
@@ -209,7 +240,7 @@ Phase plan (one slice):
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Per contract decision 3041908c (D3 e2e0e77e, D4 2fe6f2a3), using the `feature_parked_cells` reader cqp-1 added in verbs/cells/park.rs. (1) bee close: add a door named `parked-cell` beside the dissent-debt door in drivers/close.rs (rg anchor: `let dissent = crate::verbs::cells::feature_dissent_debt(root, feature)?;`); it blocks while the feature has a parked cell and its message names every parked cell id and its question. Check both close paths that read dissent debt (close_handler reads it a second time) so a dry run and a real close agree. (2) bee worktree merge: in merge_stage in worktree/phases.rs, beside `let dissent = crate::verbs::cells::feature_dissent_debt(main_root, feature)`, refuse with code WORKTREE_MERGE_PARKED_CELL before any write, naming every parked cell and its question. (3) supervisor.rs collect_needs_you: after the waiting-on row (`if let Some((kind, subject)) = live_waiting_on(control) {`), add one ReportItem per parked cell across live features, text naming the cell id and the clipped question. Tests red-first: close refuses with the parked-cell door; merge refuses with WORKTREE_MERGE_PARKED_CELL and writes nothing (copy the write_dissenting_cell fixture style in worktree/tests.rs); the needs-you view lists a parked cell; after answer reopens the cell, the door and the refusal no longer fire for parking.",
+    "action": "Per contract decision 3041908c (D3 e2e0e77e, D4 2fe6f2a3), using the `feature_parked_cells` reader cqp-1 added in verbs/cells/park.rs. (1) bee close: add a door named `parked-cell` beside the dissent-debt door in drivers/close.rs (rg anchor: `let dissent = crate::verbs::cells::feature_dissent_debt(root, feature)?;`); it blocks while the feature has a parked cell and its message names every parked cell id, its question, and the remedy `bee cells answer --id <cell> --answer \"<text>\"`. Its tests go in close.rs's own `mod tests`, never in cells/tests.rs (cqp-1 owns that file). Check both close paths that read dissent debt (close_handler reads it a second time) so a dry run and a real close agree. (2) bee worktree merge: in merge_stage in worktree/phases.rs, beside `let dissent = crate::verbs::cells::feature_dissent_debt(main_root, feature)`, refuse with the in-message token WORKTREE_MERGE_PARKED_CELL before any write, naming every parked cell, its question and the answer remedy. (3) supervisor.rs collect_needs_you: after the waiting-on row (`if let Some((kind, subject)) = live_waiting_on(control) {`), add one ReportItem per parked cell across live features — collect_needs_you holds only the root, so read them with `list_cells(root, None, Some(\"parked\"))` — text naming the cell id, the clipped question and the answer remedy. Tests red-first: close refuses with the parked-cell door; merge refuses with WORKTREE_MERGE_PARKED_CELL and writes nothing (copy the write_dissenting_cell fixture style in worktree/tests.rs); the needs-you view lists a parked cell; after answer reopens the cell, the door and the refusal no longer fire for parking.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- close worktree supervisor",
     "must_haves": {
       "truths": [
@@ -225,7 +256,7 @@ Phase plan (one slice):
       ],
       "key_links": [
         "close.rs and phases.rs both call feature_parked_cells",
-        "collect_needs_you calls feature_parked_cells"
+        "collect_needs_you lists parked cells across live features"
       ],
       "prohibitions": [
         "Do not change the dissent-debt door or refusal",
@@ -245,6 +276,9 @@ Phase plan (one slice):
     "files": [
       "skills/bee-swarming/SKILL.md",
       "skills/bee-hive/references/gates-and-delegation.md",
+      "packages/bee/agents/bee-worker.md.tmpl",
+      "packages/bee/agents/bee-comb.md.tmpl",
+      "packages/bee/prompts/worker-cell.md",
       "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
@@ -254,13 +288,14 @@ Phase plan (one slice):
     ],
     "affects_skills": ["skills/bee-swarming/SKILL.md", "skills/bee-hive/references/gates-and-delegation.md"],
     "affects_specs": [],
-    "action": "Doctrine for D1, D2 and D3. In skills/bee-swarming/SKILL.md (the worker contract, section Execute): a worker with a product question it cannot answer runs `bee cells park --id <cell> --question \"<question>\"` and returns [BLOCKED]; it never stops the lane. On the leader side: when a worker parks, the leader keeps dispatching ready cells; it sets `bee state waiting-on set --kind question` only when no ready cell remains in the lane, and lists every open parked question in its reply; the human's answer is recorded with `bee cells answer --id <cell> --answer \"<text>\"`, and the cell runs again with the answer in its brief. In skills/bee-hive/references/gates-and-delegation.md, where the waiting-on mark and questions are described, add one line that points to this rule (one home: the swarming skill). Keep each addition short. Then run the regen chain (`bee dev regen`) so rendered skill trees and the release manifest follow, and run the manifest check.",
+    "action": "Doctrine for D1, D2 and D3. In skills/bee-swarming/SKILL.md (the worker contract, section Execute): a worker with a product question it cannot answer runs `bee cells park --id <cell> --question \"<question>\"` and returns the new token [PARKED] (question, cell id); it never stops the lane. Add [PARKED] to the worker status-token list in the same three places that list [DONE]/[BLOCKED]/[HANDOFF]/[NOOP]: skills/bee-swarming/SKILL.md, packages/bee/agents/bee-worker.md.tmpl and bee-comb.md.tmpl (description line), and packages/bee/prompts/worker-cell.md (final-token line). In the `[BLOCKED]` rescue ladder add one line: a [PARKED] cell is never re-dispatched or escalated; it waits for the answer. On the leader side: when a worker parks, the leader keeps dispatching ready cells; it sets `bee state waiting-on set --kind question` only when no ready cell remains in the lane, and lists every open parked question in its reply; the human's answer is recorded with `bee cells answer --id <cell> --answer \"<text>\"`, and the cell runs again with the answer in its brief. In skills/bee-hive/references/gates-and-delegation.md, where the waiting-on mark and questions are described, add one line that points to this rule (one home: the swarming skill). Keep each addition short. Then run the regen chain (`bee dev regen`) so rendered skill trees and the release manifest follow, and run the manifest check.",
     "verify": ".bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "the worker contract tells a worker with a question to park its cell, not stop the lane",
         "the leader rule sets the waiting-on question mark only when no ready cell remains",
-        "the answer path names bee cells answer"
+        "the answer path names bee cells answer",
+        "a worker that parks returns [PARKED], and the rescue ladder never re-dispatches a [PARKED] cell"
       ],
       "artifacts": [
         {"path": "skills/bee-swarming/SKILL.md", "substantive": "park and answer rule"}
@@ -269,6 +304,50 @@ Phase plan (one slice):
       "prohibitions": ["Do not restate the rule in a second home"]
     },
     "behavior_change": false
+  },
+  {
+    "id": "cqp-4",
+    "feature": "cell-question-park",
+    "title": "Count parked cells in status readers and carry the answer into the brief",
+    "lane": "standard",
+    "role": "test",
+    "deps": ["cqp-1"],
+    "decisions": ["b7b5b3c7-2ca2-47ff-b2f2-ff6e2561bf53", "8ed6f4a2-7d01-4b4c-95fd-ac08f408196e", "16031715-955e-41ea-832f-7c7b1ebc64fc"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "read_first": [
+      "docs/history/cell-question-park/CONTEXT.md",
+      "docs/history/cell-question-park/plan.md",
+      "packages/bee-rs/crates/bee/src/verbs/cells/park.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Per contract decision 16031715 (D1 b7b5b3c7, D2 8ed6f4a2), using the park record and the `feature_parked_cells` / `park_answers` helpers cqp-1 added in verbs/cells/park.rs. Line numbers are hat-wave anchors; confirm each site with rg before editing. (1) Workflow run state (workflow_store/record.rs, around derive_run_state ~284-355): a lane whose cells are all capped except parked ones is not done; it reads as waiting on the human. (2) Merge-ready (workflow_store/merge_ready.rs ~149-155): a feature with a parked cell is never merge-ready. (3) Status counts (status_full/build.rs ~119-127, hooks/state_sync.rs ~896-901, orient.rs ~368-371): count parked cells as their own bucket; orient never calls a pipeline with a parked cell idle, and it names the parked cell count with the remedy `bee cells answer --id <cell> --answer \"<text>\"`. (4) state_group/policy.rs ~302-310: the start-feature unfinished check counts a parked cell as unfinished. (5) drivers/prepare.rs: the cell brief renders every answered park entry as `Answered question: <question> — <answer>` lines, so the answer reaches the next worker (D2). Do not trip contract_citation_refusal: an answer decision is not a contract decision and must not change that check. Tests red-first in each file's own test module: one per reader showing a parked cell changes the result, and a prepare test showing the answered question and answer text in the brief.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- workflow_store status orient policy state_sync prepare",
+    "must_haves": {
+      "truths": [
+        "a lane with a parked cell is never reported done, idle or merge-ready",
+        "status and orient count parked cells and name the answer remedy",
+        "start-feature counts a parked cell as unfinished",
+        "the dispatch brief of an answered cell shows the question and the answer text"
+      ],
+      "artifacts": [
+        {"path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "substantive": "answered question lines in the brief"}
+      ],
+      "key_links": ["prepare.rs reads park answers through the cells module helper"],
+      "prohibitions": [
+        "Do not change contract_citation_refusal",
+        "No code comments"
+      ]
+    },
+    "behavior_change": true
   }
 ]
 ```
@@ -278,7 +357,9 @@ Phase plan (one slice):
 | Row | Case | Pass when |
 |---|---|---|
 | Happy | park, sibling claimable, answer, reopen | Pass when the parked cell is absent from the ready set, the sibling is present, and after answer the cell is open with the decision id in `decisions` |
-| Edge | dependent of a parked cell | Pass when the dependent is not ready while its dep is parked |
+| Edge | dependent of a parked cell | Pass when the dependent is in no compute_schedule wave and not in ready_cells while its dep is parked |
+| Edge | answered cell brief | Pass when the next dispatch brief shows the question and the answer text |
+| Error | reopen a parked cell | Pass when reopen refuses and names `bee cells answer` |
 | Edge | close and merge with no parked cell | Pass when both behave as on main |
 | Error | park with empty question, park a capped cell, answer an open cell | Pass when each refuses and the cell file is unchanged |
 | Error | close and merge with a parked cell | Pass when close blocks on door `parked-cell` and merge refuses `WORKTREE_MERGE_PARKED_CELL`, each naming the question |

@@ -15,7 +15,8 @@ The user asked on 2026-11-06 to build part B of the forgent adoption work
 
 Today one open product question ends the leader's turn and stalls the whole
 lane. `waiting_on` is one mark per session, and the cell state `blocked`
-exists only for swept claims. Nothing in dispatch reads `waiting_on`; the
+already means "cannot proceed" (a swept claim, `bee cells block`, a blocker
+dissent), with its own release paths. Nothing in dispatch reads `waiting_on`; the
 stall is doctrine. Forgent parks only the item that has the question, and
 sibling items keep running.
 
