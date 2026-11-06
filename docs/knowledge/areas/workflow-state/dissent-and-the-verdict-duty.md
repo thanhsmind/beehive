@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/cells-completion-judge-and-archive.md]
-  decisions: ["slp-dissent-stop-and-ask 4b7aa303 (dissent has FULL TEETH: a blocker-severity dissent pauses the RELATED part of the work while other parts continue, and the orchestrator is OBLIGATED to answer one of three — accept and log / reject with reasoning / escalate a rung — recorded in the decision log before the related work resumes)", "slp-role-gaps b2baf5e0 (dissent once per point: after a verdict on a cell's dissent, a further bee cells dissent on that cell is REFUSED unless it carries --new-evidence <text>; every dissent still appends and nothing is overwritten)", "slp-dissent-stop-and-ask a2affcba (mechanism: a cells-level dissent record {target, claim, alternative, severity} written through the CLI; bee close and bee worktree merge REFUSE while any dissent lacks a recorded verdict, the same enforcement shape as judge-debt; blocker severity rides the existing blocked-status machinery so the related work stays unclaimable; the SLP escalate verb NEVER reuses bee cells escalate, which means model tier)", "slp-dissent-stop-and-ask 787a9eb0 (dissent adds an obligation on the orchestrator, never a relaxation of a gate)", "slp-dissent-stop-and-ask a020319d (this is the SECOND of four slp clusters; blind lanes and contract/original-request are separate features and out of this boundary)", "slp-dissent-stop-and-ask e29918f7 (the merge half of the obligation is NEW code, not a copied arm — merge carried no judge-debt door, only proof debt, so the door had to be built rather than mirrored)", "slp-dissent-stop-and-ask 6a6b9975 (herding-lane dissent is OUT of this boundary: one writer owns the dissent record, and a herding worker is instructed never to run a bee command, so it cannot reach that writer; carried as backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — the herding half of 6a6b9975 is closed, and closed without a second writer: the dissent rides the herding mailbox result as data and the control loop transcribes it through the same record-dissent function; touches 6a6b9975)", "slp-article-gaps D1 (the brief names goal, hard constraints and open choices apart; must_haves.open_choices)", "slp-article-gaps D2 (dissent is a right used on evidence, never a duty)", "slp-article-gaps D3 (bee report outcomes: per-layer counts of results changed, not recorded never 0, no advice)", "agent-anti-patterns D1 (a cell action locks the contract, not the implementation; a simpler route is a found-a-better-route departure)", "agent-anti-patterns D3 (the plan departure row of bee report outcomes)"]
+  decisions: ["slp-dissent-stop-and-ask 4b7aa303 (dissent has FULL TEETH: a blocker-severity dissent pauses the RELATED part of the work while other parts continue, and the orchestrator is OBLIGATED to answer one of three — accept and log / reject with reasoning / escalate a rung — recorded in the decision log before the related work resumes)", "slp-role-gaps b2baf5e0 (dissent once per point: after a verdict on a cell's dissent, a further bee cells dissent on that cell is REFUSED unless it carries --new-evidence <text>; every dissent still appends and nothing is overwritten)", "slp-dissent-stop-and-ask a2affcba (mechanism: a cells-level dissent record {target, claim, alternative, severity} written through the CLI; bee close and bee worktree merge REFUSE while any dissent lacks a recorded verdict, the same enforcement shape as judge-debt; blocker severity rides the existing blocked-status machinery so the related work stays unclaimable; the SLP escalate verb NEVER reuses bee cells escalate, which means model tier)", "slp-dissent-stop-and-ask 787a9eb0 (dissent adds an obligation on the orchestrator, never a relaxation of a gate)", "slp-dissent-stop-and-ask a020319d (this is the SECOND of four slp clusters; blind lanes and contract/original-request are separate features and out of this boundary)", "slp-dissent-stop-and-ask e29918f7 (the merge half of the obligation is NEW code, not a copied arm — merge carried no judge-debt door, only proof debt, so the door had to be built rather than mirrored)", "slp-dissent-stop-and-ask 6a6b9975 (herding-lane dissent is OUT of this boundary: one writer owns the dissent record, and a herding worker is instructed never to run a bee command, so it cannot reach that writer; carried as backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — the herding half of 6a6b9975 is closed, and closed without a second writer: the dissent rides the herding mailbox result as data and the control loop transcribes it through the same record-dissent function; touches 6a6b9975)", "slp-article-gaps D1 (the brief names goal, hard constraints and open choices apart; must_haves.open_choices)", "slp-article-gaps D2 (dissent is a right used on evidence, never a duty)", "slp-article-gaps D3 (bee report outcomes: per-layer counts of results changed, not recorded never 0, no advice)", "agent-anti-patterns D1 (a cell action locks the contract, not the implementation; a simpler route is a found-a-better-route departure)", "agent-anti-patterns D3 (the plan departure row of bee report outcomes)", "cell-question-park D1 (a worker parks only its own cell on a product question; dependents wait, siblings stay schedulable)", "cell-question-park D2 (one answer verb logs the answer as a decision cited by the cell and reopens it with the answer in its brief)", "cell-question-park D3 (the leader sets the question waiting-on mark only when no ready cell remains)", "cell-question-park D4 (bee close and bee worktree merge refuse a feature with a parked cell)"]
   sources: ["docs/history/slp-dissent-stop-and-ask/CONTEXT.md (locked decisions, terms, boundary)", "docs/history/slp-role-gaps/CONTEXT.md (D3, store b2baf5e0)", "docs/history/slp-role-gaps/plan.md (cell rig-1)", "slp-role-gaps cell rig-1 (the evidence-taking sibling writer, the after-verdict refusal, and the --new-evidence flag; packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs)", "docs/history/slp-dissent-stop-and-ask/plan.md (the four phases)", "slp-dissent-stop-and-ask cell sd-1 (the dissent record, its closed severity set, the secret scan, the claim release, and the blocker tooth; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-1.json, commit 156b9566, 2026-08-28)", "slp-dissent-stop-and-ask cell sd-2 (the obligated verdict written to the decision log fail-closed, releasing the cell the blocker dissent parked; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-2.json, commit d7726926)", "slp-dissent-stop-and-ask cell sd-3 (the cells dispatch table folded into the served-but-undeclared law, proven red-first; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-3.json, commit 79f05db3)", "slp-dissent-stop-and-ask cell sd-4 (bee close refuses while any dissent lacks a verdict, in every lane; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-4.json, commit 6966d85c)", "slp-dissent-stop-and-ask cell sd-5 (bee worktree merge refuses WORKTREE_MERGE_DISSENT_DEBT, reading the close door's own two helpers so one deferral clears both doors; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-5.json, commit 18aa0e09)", "slp-dissent-stop-and-ask cell sd-6 (options[] and leaning on the worker result across three code surfaces, plus the swarming worker contract; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-6.json, commit ecdb89ea)", "slp-followup-gaps cell sfg-2 (commit 29fd6fbe, 2026-08-29 — the carried dissent on the herding mailbox result, and its transcription through the one record-dissent writer)"]
   authoritative_for: "workflow-state: the dissent record, the obligated verdict, the close and merge dissent-debt doors, and the three boundary signals that oblige a worker to stop and ask"
 ---
@@ -217,6 +217,40 @@ records changed a result. A layer with no record prints `not recorded`, never 0.
 The report gives data only; it never advises adding or removing a layer — that
 call stays with the human.
 
+## A parked question: one cell waits, the lane keeps working
+
+Dissent questions the plan. A **parked cell** asks the human a product question
+the worker cannot answer (cell-question-park D1-D4). Before this, one open
+question ended the leader's turn and stalled the whole lane.
+
+- **Park (D1).** `bee cells park --id <cell> --question "<text>"` sets the cell to
+  status `parked` and appends `{question, parked_at}` to the append-only
+  `trace.park` array. It releases the claim and every file reservation the cell
+  holds, and it adds no attempts row: a question is not a failed try. The cell
+  leaves the ready set, its dependents wait, and every sibling stays
+  schedulable. The worker returns the token `[PARKED]`.
+- **Why a new status, not `blocked`.** `blocked` already means "cannot proceed",
+  with its own release paths (a swept claim, `bee cells block`, a blocker
+  dissent). A parked cell has exactly one exit: the answer. So `bee cells
+  reopen` refuses a parked cell, and every refusal names the remedy
+  `bee cells answer --id <cell> --answer "<text>"`.
+- **Answer (D2).** `bee cells answer` logs the answer as a decision first (tags
+  `cells` and `slp`), then cites it on the cell, stamps the park entry and sets
+  the cell `open`. A failed log leaves the cell unchanged. The next dispatch
+  brief carries every answered park entry as an `Answered question:` line.
+- **The leader keeps working (D3).** The leader sets the `question` waiting-on
+  mark only when no ready cell remains in the lane, and lists every open parked
+  question in its reply. The supervisor what-needs-you view lists one row per
+  parked cell. Rule home: `skills/bee-swarming/SKILL.md`.
+- **Two doors (D4).** `bee close` shows a `parked-cell` door, and
+  `bee worktree merge` refuses `WORKTREE_MERGE_PARKED_CELL` before any write.
+  The close door appears only while a parked cell exists, so a feature with
+  none keeps its door list unchanged. Status, orient, merge-ready and
+  start-feature all count a parked cell as unfinished work, never as idle.
+
+This is still asynchronous, as "What this is not" requires: the worker parks and
+exits; the human answers later, through one verb.
+
 ## Open Gaps
 
 - ~~**Herding-lane dissent has no carrier.**~~ Closed 2026-08-29 by decision
@@ -251,6 +285,12 @@ call stays with the human.
   `open_choices` key).
 - The outcomes report: `packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs`
   (`ledger_root` reads `StoreRoots::main_root`).
+- Parked cells: `packages/bee-rs/crates/bee/src/verbs/cells/park.rs` (park,
+  answer, `feature_parked_cells`, `park_answers`); `verbs/cells/schedule.rs`
+  (`classify` parked arm); `verbs/drivers/close.rs` (`parked-cell` door);
+  `verbs/worktree/phases.rs` (`WORKTREE_MERGE_PARKED_CELL`);
+  `verbs/supervisor.rs` (`collect_needs_you` rows); `verbs/drivers/prepare.rs`
+  (answered lines in the brief).
 - Both sub-verbs are declared in the cells dispatch table, which the
   served-but-undeclared law now sweeps — a served verb missing its registry row
   fails a contract test rather than shipping invisible.
