@@ -160,6 +160,7 @@ fn parse_agents_rule_homes(body: &str, default_areas: &[String]) -> Vec<RuleHome
     };
 
     let mut current_rule: Option<String> = None;
+    let mut current_home = String::from("AGENTS.md");
     let mut current_applied_at: Vec<String> = Vec::new();
     let mut in_applied_at = false;
 
@@ -179,7 +180,7 @@ fn parse_agents_rule_homes(body: &str, default_areas: &[String]) -> Vec<RuleHome
             if let Some(rule_id) = current_rule.take() {
                 out.push(RuleHome {
                     rule: rule_id,
-                    home: "AGENTS.md".to_string(),
+                    home: std::mem::replace(&mut current_home, String::from("AGENTS.md")),
                     areas: default_areas.to_vec(),
                     applied_at: current_applied_at,
                 });
@@ -203,6 +204,9 @@ fn parse_agents_rule_homes(body: &str, default_areas: &[String]) -> Vec<RuleHome
             let rule_id = rule_id.trim();
             if !rule_id.is_empty() {
                 current_rule = Some(rule_id.to_string());
+                if let Some(home) = row_home(item_content) {
+                    current_home = home;
+                }
             }
         } else if trimmed.starts_with("- applied_at:")
             || trimmed.starts_with("* applied_at:")
@@ -229,13 +233,21 @@ fn parse_agents_rule_homes(body: &str, default_areas: &[String]) -> Vec<RuleHome
     if let Some(rule_id) = current_rule.take() {
         out.push(RuleHome {
             rule: rule_id,
-            home: "AGENTS.md".to_string(),
+            home: current_home,
             areas: default_areas.to_vec(),
             applied_at: current_applied_at,
         });
     }
 
     out
+}
+
+fn row_home(item_content: &str) -> Option<String> {
+    let open = item_content.find(" (")?;
+    let inner = &item_content[open + 2..];
+    let end = inner.find(" § ").or_else(|| inner.find(')'))?;
+    let home = inner[..end].trim();
+    (home.ends_with(".md") && !home.contains(' ')).then(|| home.to_string())
 }
 
 #[allow(dead_code)]

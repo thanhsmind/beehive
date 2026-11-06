@@ -1890,6 +1890,45 @@ use std::time::Instant;
         assert!(!report.ok);
     }
 
+    #[test]
+    fn rule_refs_resolve_against_leader_doctrine_in_source_and_host_layouts() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("skills/demo")).unwrap();
+        std::fs::write(
+            root.join("skills/demo/SKILL.md"),
+            "See (rule: leader-rule), (rule: playbook-rule) and (rule: phantom-rule)\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "code\n").unwrap();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview").ty("bee.area").bee("owns.code", json!(["src/*"])).body("Demo."),
+        );
+        let rule = |id: &str| format!("<!-- rule: {id} -->\n- text\n<!-- /rule -->\n");
+
+        std::fs::create_dir_all(root.join(".bee/playbooks")).unwrap();
+        std::fs::write(root.join(".bee/LEADER.md"), rule("leader-rule")).unwrap();
+        std::fs::write(root.join(".bee/playbooks/p.md"), rule("playbook-rule")).unwrap();
+        let host = check_bundle(&dir, false).unwrap();
+        let unk = of_code(&host.profile_errors, "unknown_rule_ref");
+        assert_eq!(unk.len(), 1, "host layout: only the phantom ref errors: {:?}", host.profile_errors);
+        assert!(msg(unk[0]).contains("phantom-rule"), "{}", msg(unk[0]));
+
+        std::fs::create_dir_all(root.join("packages/bee/playbooks")).unwrap();
+        std::fs::write(root.join("packages/bee/LEADER.md"), rule("leader-rule")).unwrap();
+        std::fs::write(root.join("packages/bee/playbooks/p.md"), rule("playbook-rule")).unwrap();
+        let source = check_bundle(&dir, false).unwrap();
+        assert!(
+            of_code(&source.profile_errors, "duplicate_rule_home").is_empty(),
+            "the vendored copy never counts beside its source: {:?}",
+            source.profile_errors
+        );
+        assert_eq!(of_code(&source.profile_errors, "unknown_rule_ref").len(), 1);
+    }
+
     /// D4: quoted rule syntax is documentation, not a home. A marker or a
     /// `(rule: id)` inside an inline backtick span or a fenced block is an
     /// example of the spelling — the doc that teaches the syntax must not
@@ -2779,7 +2818,7 @@ use std::time::Instant;
                 .ty("bee.area")
                 .bee("areas", json!(["doctrine"]))
                 .body(
-                    "## AGENTS.md rule homes\n\n- `agents-discipline-rule` (AGENTS.md § Test):\n  - applied_at:\n    - `skills/demo/SKILL.md`\n    - `docs/specs/demo.md`\n",
+                    "## AGENTS.md rule homes\n\n- `agents-discipline-rule` (AGENTS.md § Test):\n  - applied_at:\n    - `skills/demo/SKILL.md`\n    - `docs/specs/demo.md`\n- `agents-leader-rule` (packages/bee/playbooks/demo.md § Demo):\n  spoken: a leader rule\n  - applied_at:\n    - `skills/demo/SKILL.md`\n",
                 ),
         );
 
@@ -2813,6 +2852,13 @@ use std::time::Instant;
             .expect("agents-discipline-rule must be found");
         assert_eq!(agents_rule.home, "AGENTS.md");
         assert_eq!(agents_rule.areas, vec!["doctrine"]);
+        let leader_rule = ownership
+            .rules
+            .iter()
+            .find(|r| r.rule == "agents-leader-rule")
+            .expect("agents-leader-rule must be found");
+        assert_eq!(leader_rule.home, "packages/bee/playbooks/demo.md");
+        assert_eq!(leader_rule.applied_at, vec!["skills/demo/SKILL.md"]);
         assert_eq!(
             agents_rule.applied_at,
             vec!["skills/demo/SKILL.md", "docs/specs/demo.md"]

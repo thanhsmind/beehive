@@ -186,9 +186,9 @@ rule never disappears — only its elaboration moves.
 
 ## AGENTS.md rule homes
 
-Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_at` records are tracked here:
+Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages/bee/playbooks/`, and have no YAML frontmatter. Each row names the file that carries its marker, and the thin `packages/bee/AGENTS.block.md` carries none. Their `applied_at` records are tracked here:
 
-- `agents-proof-at-cap` (AGENTS.md § Prove, then say so):
+- `agents-proof-at-cap` (packages/bee/LEADER.md § Prove, then say so):
   spoken: run the proof your change type needs, then record it on the cap as command, result, and why that scope — bee close runs no tests
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
@@ -199,7 +199,7 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-shaping/references/mini-brief-template.md`
     - `skills/bee-shaping/references/implement-plan-template.md`
     - `skills/bee-swarming/references/swarming-reference.md`
-- `agents-never-build-on-red` (AGENTS.md § Prove, then say so):
+- `agents-never-build-on-red` (packages/bee/LEADER.md § Prove, then say so):
   spoken: never build on a red base — the red is the work now: fix it first, then carry on
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
@@ -208,23 +208,23 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-hive/references/gates-and-delegation.md`
     - `skills/bee-swarming/SKILL.md`
     - `skills/bee-swarming/references/swarming-reference.md`
-- `agents-never-zero-execution-workers` (AGENTS.md § Work in parallel, coordinate through the store):
+- `agents-never-zero-execution-workers` (packages/bee/LEADER.md § Work in parallel, coordinate through the store):
   spoken: from a small lane up, hand every cell to a dispatched worker — only a tiny cell may run inline
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/helper-classes-and-transports.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
-- `agents-capture-line-at-close` (AGENTS.md § Capture what settles):
+- `agents-capture-line-at-close` (packages/bee/LEADER.md § Capture what settles):
   spoken: write it down the moment it settles, and close every task with a capture line or a plain 'nothing settled' — lanes scale ceremony, never memory
   - applied_at:
     - `skills/bee-capturing/SKILL.md`
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
-- `agents-feedback-changes-framework` (AGENTS.md § Capture what settles):
+- `agents-feedback-changes-framework` (packages/bee/LEADER.md § Capture what settles):
   spoken: in the bee repo, owner feedback about how agents work changes the framework — record it, change the owning doctrine, hook or skill through the bee chain, and release; a private memory note alone is a miss (framework-feedback-rule D1)
   - applied_at:
     - `CLAUDE.md`
     - `skills/bee-capturing/SKILL.md`
-- `agents-context-handoff-65` (AGENTS.md § Care for the session):
+- `agents-context-handoff-65` (packages/bee/playbooks/handoff.md § Handoff):
   spoken: a context mark never stops work — finish the user's task; write the handoff only when the user asks for a switch or at feature close, then hand the rest to waggledance (leader: true, follow_up_of the current run, handoff: true) and release the session — never tell the user to open a new session (docs/history/context-mark-advisory D1, D3; handoff-flag-doctrine D1)
   - applied_at:
     - `docs/knowledge/areas/onboarding/status-display-vendoring.md`
@@ -234,28 +234,28 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-swarming/SKILL.md`
     - `skills/bee-swarming/references/swarming-reference.md`
     - `skills/bee-swarming/references/worker-details.md`
-- `agents-gates-never-self-approved` (AGENTS.md § Bee workflow):
+- `agents-gates-never-self-approved` (packages/bee/LEADER.md § Bee workflow):
   spoken: never approve your own gate — gates, decision answers and privacy calls belong to the user
   - applied_at:
     - `skills/bee-herding/README.md`
     - `skills/bee-herding/references/role-dispatch.md`
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
-- `agents-no-code-comments` (AGENTS.md § Care for the session):
+- `agents-no-code-comments` (packages/bee/LEADER.md § Care for the session):
   spoken: write no comment in code — the why goes to a docs/knowledge concept or the decision log
   - applied_at:
     - `docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md`
     - `packages/bee/prompts/worker-cell.md`
-- `agents-bee-defect-report` (AGENTS.md § Care for the session):
+- `agents-bee-defect-report` (packages/bee/playbooks/bee-defects.md § When bee itself is at fault):
   spoken: when bee itself breaks, file it upstream with bee report issue, tell the human the link, and never patch bee here — a local patch hides the defect
   - applied_at:
     - `docs/knowledge/areas/feedback-digest/bee-report-issues.md`
     - `skills/bee-evolving/SKILL.md`
-- `agents-one-commit-per-cell` (AGENTS.md § Care for the session):
+- `agents-one-commit-per-cell` (packages/bee/LEADER.md § Care for the session):
   spoken: one commit per cell — imperative subject, and the cell id on the last line of the body
   - applied_at:
     - `skills/bee-swarming/references/worker-details.md`
-- `agents-review-user-invoked` (AGENTS.md § Bee workflow):
+- `agents-review-user-invoked` (packages/bee/LEADER.md § Bee workflow):
   spoken: ask for a review when you want one — it never runs by itself as a step of the flow
   - applied_at:
     - `docs/knowledge/areas/workflow-state/review-sessions.md`
@@ -263,12 +263,12 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-hive/references/gates-and-delegation.md`
     - `skills/bee-hive/references/go-mode.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
-- `agents-one-next-action` (AGENTS.md § Communication):
+- `agents-one-next-action` (packages/bee/LEADER.md § Communication):
   spoken: close on exactly one next action — your own next move or the one call only the user can make
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/the-communication-contract.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
-- `agents-worktree-first` (AGENTS.md § Bee workflow):
+- `agents-worktree-first` (packages/bee/LEADER.md § Bee workflow):
   spoken: start code-touching feature work in its own worktree; main takes integration, release and a solo tiny fix — sessions never write over each other
   - applied_at:
     - `docs/knowledge/areas/workflow-state/worktree-isolation.md`
@@ -278,14 +278,14 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-hive/references/scout-and-ticks.md`
     - `skills/bee-planning/SKILL.md`
     - `skills/bee-swarming/SKILL.md`
-- `agents-name-applied-principles` (AGENTS.md § Judgment and deviation):
+- `agents-name-applied-principles` (packages/bee/LEADER.md § Judgment and deviation):
   spoken: name each principle you applied and the decision it changed — or say plainly it changed nothing
   - applied_at:
 
-The list is kept by hand because `AGENTS.md` carries no frontmatter. A
-`bee.applied_at` key on this concept would not serve: `applied_at_unlinked`
-resolves a target against the rules this concept's own body homes, and these
-rules are homed in `AGENTS.md`, not here.
+The list is kept by hand because `packages/bee/LEADER.md` and the playbooks
+carry no frontmatter. A `bee.applied_at` key on this concept would not serve:
+`applied_at_unlinked` resolves a target against the rules this concept's own
+body homes, and these rules are homed in those files, not here.
 
 ## Principle homes
 
@@ -442,6 +442,10 @@ plugin trees, not just `skills/`.
 - `skills/bee-hive/SKILL.md` — the router; `## Triage first` sits before onboarding, and the
   pinned region is `## Modes and Lanes`.
 - `AGENTS.md` — the operating block; its critical rules are what R4 is checked against.
+- `packages/bee/AGENTS.block.md` — the thin block every agent loads, rendered into `AGENTS.md` (thin-worker-boot D2).
+  `packages/bee/LEADER.md` and `packages/bee/playbooks/*.md` hold the leader doctrine and every rule marker;
+  onboarding vendors them to `.bee/LEADER.md` and `.bee/playbooks/` (`onboard/plan.rs`, `onboard/apply.rs`),
+  and `verbs/knowledge/check.rs` resolves `(rule: id)` references against them.
 - `skills/bee-hive/references/routing-and-contracts.md` — where deferred detail lands.
 - `scripts/tests/test_gate_bypass_doctrine.mjs`, `packages/bee/tests/test_misc.mjs` — the
   suites enforcing the pinned wording.

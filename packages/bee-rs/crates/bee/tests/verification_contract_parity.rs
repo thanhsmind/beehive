@@ -68,7 +68,7 @@ const NAME_CONST: &str = "VERIFY_APP_SKILL_NAME";
 
 /// The source of the operating block. `AGENTS.md` is its render and is pinned
 /// to it by `agents_block_render_parity`, so asserting here would double-count.
-const AGENTS_BLOCK: &str = "packages/bee/AGENTS.block.md";
+const AGENTS_BLOCK: &str = "packages/bee/LEADER.md";
 
 /// The doctrine roots: bee's own instruction surfaces.
 const ROOTS: [&str; 2] = ["skills", "packages/bee"];

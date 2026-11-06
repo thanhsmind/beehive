@@ -34,6 +34,8 @@ pub struct Engine {
     pub templates_agents_dir: PathBuf,
     pub expertise_dir: PathBuf,
     pub agents_block_template: PathBuf,
+    pub leader_template: PathBuf,
+    pub playbooks_dir: PathBuf,
     /// The Windows shell section, appended INSIDE the managed block when the
     /// resolved host shell is PowerShell (`merge::host_shell_is_powershell`).
     pub agents_windows_template: PathBuf,
@@ -67,6 +69,8 @@ impl Engine {
             templates_agents_dir: templates_dir.join("agents"),
             expertise_dir: plugin_root.join("expertise"),
             agents_block_template: templates_dir.join("AGENTS.block.md"),
+            leader_template: templates_dir.join("LEADER.md"),
+            playbooks_dir: templates_dir.join("playbooks"),
             agents_windows_template: templates_dir.join("AGENTS.windows.md"),
             opencode_plugin_dir: plugin_root.join(".opencode").join("plugins"),
             pi_extension_dir: plugin_root.join(".pi").join("extensions"),

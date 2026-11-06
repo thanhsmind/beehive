@@ -32,7 +32,15 @@ fn repo_root() -> PathBuf {
 /// `.claude/`, `.agents/`, `.claude-plugin/` and `.codex-plugin/` are byte
 /// copies of these, so scanning them would multiply one authoring mistake by
 /// the number of delivery targets.
-const SOURCE_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", "packages/bee/AGENTS.block.md"];
+const SOURCE_FILES: &[&str] = &[
+    "AGENTS.md",
+    "CLAUDE.md",
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/LEADER.md",
+    "packages/bee/playbooks/multi-session.md",
+    "packages/bee/playbooks/handoff.md",
+    "packages/bee/playbooks/bee-defects.md",
+];
 const SOURCE_TREE: &str = "skills";
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
