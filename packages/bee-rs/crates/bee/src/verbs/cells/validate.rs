@@ -453,6 +453,7 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
         Err(Fail::Thrown(message)) => problems.push(message),
         Err(Fail::Delegate) => return Err(Fail::Delegate),
     }
+    problems.extend(rigor_floor_refusal(root, map, "addCell"));
     Ok(problems)
 }
 

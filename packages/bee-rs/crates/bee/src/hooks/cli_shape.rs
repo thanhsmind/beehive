@@ -1191,7 +1191,8 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 21] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 22] = [
+        r#"bee state waiting-on set --kind gate"#,
         r#"bee state waiting-on set --kind question"#,
         // prd-1 (pi-relocation-delivery): the fenced cells JSON of that closed
         // plan carries this span as a cell TITLE naming the verb the cell adds
