@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-11-06T07:11:37.260Z",
+    "subject": "Waggledance 0.5.3 đã phát hành (3 file binary). Tôi nâng daemon trên máy này ngay, vì không có run nào đang chạy dở trong waggledance.",
+    "asked_at": "2026-11-06T07:16:19.342Z",
     "session": "cde25677-183a-4d8a-8d8d-f589526fe7f5"
   }
 }
