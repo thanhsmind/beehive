@@ -1210,7 +1210,13 @@ pub(crate) fn prompt_body_for(
     let learned = learned_context_lines(bundle_root, cell)?.join("\n");
     let answered = crate::verbs::cells::park_answers(cell)
         .into_iter()
-        .map(|(question, answer)| format!("- Answered question: {question} — {answer}"));
+        .map(|(question, answer)| {
+            format!(
+                "- Answered question: {} — {}",
+                one_line(Some(&Value::String(question)), usize::MAX),
+                one_line(Some(&Value::String(answer)), usize::MAX)
+            )
+        });
     let prior = prior_round_event_lines(cell).into_iter().chain(answered).collect::<Vec<_>>().join("\n");
     let cell_json = jsjson::stringify_pretty(cell);
     let feature = tpl(vget(cell, "feature"));
@@ -6603,6 +6609,42 @@ mod park_answer_brief_tests {
         .unwrap();
         assert!(rendered.contains("Answered question: Which locale wins? — Vietnamese"), "{rendered}");
         assert!(rendered.contains("Answered question: Keep the old flag? — No, delete it"), "{rendered}");
+    }
+
+    #[test]
+    fn a_multi_line_answer_collapses_to_one_brief_line() {
+        let cell = json!({
+            "id": "c-1",
+            "feature": "feat",
+            "status": "claimed",
+            "trace": {
+                "worker": "w1",
+                "park": [
+                    {"question": "Which\nlocale?", "answer": "Vietnamese\n## Injected heading\nmore", "answer_decision": "d-1"}
+                ]
+            }
+        });
+        let rendered = prompt_body_for(
+            Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            rendered.contains("Answered question: Which locale? — Vietnamese ## Injected heading more"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("\n## Injected heading"), "{rendered}");
     }
 }
 

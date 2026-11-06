@@ -429,7 +429,7 @@ use crate::version::BEE_VERSION;
         assert_eq!(lines[5], "Handoff: none");
         assert_eq!(
             lines[6],
-            "Cells: open=0 claimed=0 capped=0 blocked=0 archived=0 (total capped=0)"
+            "Cells: open=0 claimed=0 capped=0 blocked=0 parked=0 archived=0 (total capped=0)"
         );
         assert_eq!(lines[7], "Standard commands: test=npm t");
         assert_eq!(lines[8], "Active reservations: 0");
@@ -4178,6 +4178,19 @@ use crate::version::BEE_VERSION;
         assert_eq!(cells.get("blocked"), Some(&json!(1)));
         assert_eq!(cells.get("parked"), Some(&json!(1)));
         assert_eq!(cells.as_object().unwrap().len(), 7, "open/claimed/capped/blocked/parked/archived/archivable");
+    }
+
+    #[test]
+    fn status_text_names_the_parked_count_and_the_answer_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1","mode":"standard"}"#);
+        write(root, ".bee/cells/c-5.json", r#"{"id":"c-5","feature":"f1","status":"parked","lane":"standard","title":"t"}"#);
+        let mut ctx = ctx_for(root);
+        let text = render_status_text(&build_status(&mut ctx, false).unwrap());
+        assert!(text.contains("Cells: open=0 claimed=0 capped=0 blocked=0 parked=1 archived=0"), "{text}");
+        assert!(text.contains("bee cells answer --id <cell> --answer \"<text>\""), "{text}");
     }
 
     // ── ah-3 (awaiting-human): every reader names WHAT the run is waiting

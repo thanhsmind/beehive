@@ -500,7 +500,7 @@ pub(crate) fn record_dissent_verdict(
             !dissent_is_answered(r)
                 && matches!(r.get("severity"), Some(Value::String(s)) if s == "blocker")
         });
-        let released = blocked && !blocker_debt;
+        let released = blocked && !blocker_debt && !has_open_question(cell_map.get("trace"));
         if released {
             apply_release_mutation(
                 cell_map,

@@ -371,6 +371,7 @@ pub(crate) fn apply_block_mutation(
     trace: Map<String, Value>,
     reason: &str,
 ) -> MR<()> {
+    refuse_parked("blockCell", id, cell_map.get("status"), cell_map.get("trace"))?;
     let mut trace = append_attempt(
         root,
         id,

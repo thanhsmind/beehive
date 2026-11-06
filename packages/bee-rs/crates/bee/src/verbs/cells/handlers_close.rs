@@ -1771,6 +1771,7 @@ pub(crate) fn unclaim_cell(
         // unclaimCell has NO assertNotArchived (an archived cell reads as
         // capped/dropped and takes the not-claimed refusal instead).
         let cell = mutate_cell(&root, &id, "unclaimCell", None, true, move |cell_map| {
+            refuse_parked("unclaimCell", &id2, cell_map.get("status"), cell_map.get("trace"))?;
             let claimed = matches!(cell_map.get("status"), Some(Value::String(s)) if s == "claimed");
             if !claimed {
                 return Err(Fail::Thrown(format!(
@@ -1875,13 +1876,7 @@ pub(crate) fn reopen_cell(
                     "reopenCell: cell \"{id2}\" is \"claimed\" — use bee cells unclaim to release the claim back to open."
                 )))
             }
-            Some(Value::String(s)) if s == "parked" => {
-                return Err(Fail::Thrown(format!(
-                    "reopenCell: cell \"{id2}\" is \"parked\" on a question — reopen never answers it. Run: {}",
-                    answer_remedy(&id2)
-                )))
-            }
-            _ => {}
+            status => refuse_parked("reopenCell", &id2, status, cell_map.get("trace"))?,
         }
         let trace = merge_trace(cell_map.get("trace"))?;
         let trace = guard_claim_ownership(
