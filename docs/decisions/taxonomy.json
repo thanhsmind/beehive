@@ -801,6 +801,8 @@
     "contract:parked-cell-door",
     "contract:rigor-floor",
     "contract:owner-first-gate",
-    "contract:context-mark-advisory-line"
+    "contract:context-mark-advisory-line",
+    "sub-session",
+    "plan-check"
   ]
 }

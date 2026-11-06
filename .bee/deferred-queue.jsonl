@@ -1219,3 +1219,12 @@
 {"ts":"2026-11-06T07:16:33.038Z","event":"add","id":"567b5550-4c91-4eba-9710-a60e7b3c878a","kind":"promote","feature":"release-2-79-0","cells":[],"areas":[],"files":["docs/history/release-2-79-0/promote-proposals.md"],"reason":"Promote proposal for \"release-2-79-0\" awaiting apply — docs/history/release-2-79-0/promote-proposals.md."}
 {"ts":"2026-11-06T07:17:41.991Z","event":"add","id":"62029af1-7f29-4218-9151-037b01e790e6","kind":"worktree-cleanup","feature":"framework-feedback-rule","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--framework-feedback-rule"],"reason":"Worktree beehive--wt--framework-feedback-rule (branch wt/framework-feedback-rule) merged into main at 7d0398156627243d3bcb611da918d20c8d0c3759 and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-11-06T07:23:49.651Z","event":"add","id":"264fee82-0173-4691-ad3c-846dad6b9f8c","kind":"promote","feature":"release-2-79-1","cells":[],"areas":[],"files":["docs/history/release-2-79-1/promote-proposals.md"],"reason":"Promote proposal for \"release-2-79-1\" awaiting apply — docs/history/release-2-79-1/promote-proposals.md."}
+{"ts":"2026-11-06T07:45:00.963Z","event":"complete","id":"c99cb8c4-5803-4137-baf0-b3e85c154509"}
+{"ts":"2026-11-06T07:45:04.464Z","event":"complete","id":"d08b41cf-6a26-4cdd-82c1-05f225f00653"}
+{"ts":"2026-11-06T07:45:04.464Z","event":"complete","id":"1c8d2555-8313-483a-9d47-dd7690235e88"}
+{"ts":"2026-11-06T07:45:08.055Z","event":"complete","id":"1874d0ee-3751-4385-ae37-e3cb66667f67"}
+{"ts":"2026-11-06T07:45:16.322Z","event":"complete","id":"8bb57e11-1a87-44ba-bc9e-3140162cbbe2"}
+{"ts":"2026-11-06T07:45:22.822Z","event":"complete","id":"62029af1-7f29-4218-9151-037b01e790e6"}
+{"ts":"2026-11-06T07:45:26.307Z","event":"complete","id":"9a25ea8f-af5e-4275-b39c-065aff483762"}
+{"ts":"2026-11-06T07:45:31.433Z","event":"complete","id":"1864b8f8-fd24-4497-8054-b7ddd7ae6ce2"}
+{"ts":"2026-11-06T07:45:36.516Z","event":"complete","id":"aaf6a355-b4ec-4a20-bd9a-78b2ff7cfc27"}

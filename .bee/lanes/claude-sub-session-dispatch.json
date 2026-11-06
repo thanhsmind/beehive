@@ -1,0 +1,616 @@
+{
+  "schema_version": "1.0",
+  "feature": "claude-sub-session-dispatch",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"claude-sub-session-dispatch\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"claude-sub-session-dispatch\" (lane).",
+  "created_at": "2026-11-06T13:00:31.251Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-11-06T13:00:34.625Z",
+    "feature": "claude-sub-session-dispatch"
+  },
+  "gate_preview": {
+    "feature": "claude-sub-session-dispatch",
+    "plan_sha256": "b6dfdff0002bf2753e6c1f7d409f24252b5f68d6336faeaa413e09772cf09469",
+    "previewed_at": "2026-11-06T13:19:50.158Z",
+    "cells": [
+      {
+        "id": "cssd-1",
+        "feature": "claude-sub-session-dispatch",
+        "title": "Add a claude-session transport to herding run",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "7fe67d57-462a-4090-a2bb-d0b937e31c0c",
+          "16fb3feb-5856-4cbb-a7c2-65125d6650b7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs"
+        ],
+        "read_first": [
+          "docs/history/claude-sub-session-dispatch/CONTEXT.md",
+          "docs/history/claude-sub-session-dispatch/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1 and D2: add a claude-session transport to `bee herding run`. New flags `--session-model <model>` and optional `--session-effort <low|medium|high|xhigh|max>`; with `--session-model`, run takes this transport instead of paseo or a pane (refuse `--session-model` together with `--agent` or `--no-pane`). Follow execute_paseo (run.rs:3497) for the shape: write the inbox marker, build the herding brief and child env the same way, set BEE_HERDING_READ_ONLY=1 and apply claude_worker_guard_missing on --read-only. Spawn from inside bee, never through a shell, behind a trait like PaseoCli so tests use a fake: argv `claude --bg --name <name> --model <model> [--effort <e>] --permission-mode bypassPermissions --settings {\"worktree\":{\"bgIsolation\":\"none\"}} <prompt>` with cwd = --cwd. Name = `bee-<cell id or kind>-<short job id>`. Parse the id from the `backgrounded · <id> · <name>` line. Poll `claude agents --json --all` for that id and the mailbox result for round 1 with the same decisions the paseo loop makes (result -> done; status idle twice with no result -> TimedOutIdle; state failed or stopped, or id gone -> died; ceiling -> stop and timed out). Run `claude stop <id>` after the result or a give-up. Write `session_id` and `steer_to` (the session name) into the job record and the run JSON output, and have `bee herding status --job <id>` print `steer_to`. Per D1 for a paseo run whose provider is claude: after spawn, find the one session in `claude agents --json --all` whose cwd equals --cwd and whose startedAt is after the spawn time, and record its name as steer_to; when none or several match, omit steer_to. The claude binary is `claude` unless `herding.claude_command` names another.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee claude_session",
+        "must_haves": {
+          "truths": [
+            "a run with --session-model spawns exactly one claude --bg process with bgIsolation none and the given model",
+            "the run returns the worker's mailbox result as its JSON output, the same shape a paseo run returns",
+            "a session that goes idle twice with no result, fails, or hits the ceiling is stopped and reported, never left running",
+            "--read-only sets BEE_HERDING_READ_ONLY=1 in the session env"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+              "substantive": "spawn argv builder, id parser, agents-json parser, poll decisions, unit tests on a fake CLI"
+            }
+          ],
+          "key_links": [
+            "run.rs takes the claude-session transport when --session-model is given",
+            "job record and run output carry session_id and steer_to",
+            "a paseo claude run records steer_to when exactly one matching claude session is listed"
+          ],
+          "prohibitions": [
+            "No change to the paseo, herdr or tmux transports' behavior",
+            "No code comments",
+            "Never read results from claude logs"
+          ],
+          "open_choices": [
+            "How the fake CLI trait is shaped, as long as no unit test runs the real claude binary"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cssd-2",
+        "feature": "claude-sub-session-dispatch",
+        "title": "Route native Claude dispatches to sub-sessions",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "cssd-1"
+        ],
+        "decisions": [
+          "16fb3feb-5856-4cbb-a7c2-65125d6650b7",
+          "0f6ebf63-a640-4b8f-80a3-e7fea16e857e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "read_first": [
+          "docs/history/claude-sub-session-dispatch/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D2 and D3: in the runtime-claude native arm of dispatch prepare (prepare.rs:2858, the `_ =>` arm that builds the Agent payload), when the slot resolves a configured model, `dispatch.claude_sessions` in the main checkout's config is not false, and `claude` (or herding.claude_command) resolves on PATH, emit tool Bash with the herding command built the same way as the herding arm (prepare.rs:2619: --task-file - --json, --cwd for the worktree, --cell-id for cells, --read-only for gather and advisor, --ceiling from config) plus `--session-model <model>` and `--session-effort <effort>` when an effort is chosen; stdin is the herding pane prompt; channel `claude-session`; transport_ready true with a reason naming the binary. When the CLI is missing, keep the Agent payload and add fallback_reason `claude_cli_missing`. When the switch is false, the payload is byte-identical to today. A session-model escalation keeps the Agent payload. Codex and Pi arms do not change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+        "must_haves": {
+          "truths": [
+            "on runtime claude a native-model slot for cell, gather, reviewer and advisor returns a Bash bee herding run command carrying --session-model",
+            "dispatch.claude_sessions false returns the Agent payload unchanged",
+            "no claude CLI on PATH returns the Agent payload with fallback_reason claude_cli_missing",
+            "codex and pi payloads are unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "claude-session arm and its tests"
+            }
+          ],
+          "key_links": [
+            "the emitted command uses the --session-model flag cssd-1 added"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to the herding arm for herding-configured slots"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cssd-3",
+        "feature": "claude-sub-session-dispatch",
+        "title": "Document sub-session dispatch and steering",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "cssd-1",
+          "cssd-2"
+        ],
+        "decisions": [
+          "7fe67d57-462a-4090-a2bb-d0b937e31c0c",
+          "16fb3feb-5856-4cbb-a7c2-65125d6650b7",
+          "0f6ebf63-a640-4b8f-80a3-e7fea16e857e"
+        ],
+        "files": [
+          "packages/bee/AGENTS.block.md",
+          "AGENTS.md",
+          "skills/bee-swarming/references/swarming-reference.md",
+          "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+          "docs/knowledge/areas/bee-herding/index.md"
+        ],
+        "read_first": [
+          "docs/history/claude-sub-session-dispatch/CONTEXT.md",
+          "packages/bee/AGENTS.block.md"
+        ],
+        "affects_skills": [
+          "skills/bee-swarming/references/swarming-reference.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+        ],
+        "action": "Per D1-D3: in packages/bee/AGENTS.block.md, extend the 'A leader watches a worker' line: a leader may steer a Claude worker (a claude-session job or a Claude herding pane) with SendMessage to the steer_to name bee herding status prints, and still never reads its transcript. Write the knowledge concept claude-session-transport.md (what it is, the claude --bg argv, bgIsolation none, the poll decisions, steer_to, the dispatch.claude_sessions switch and the PATH fallback, the worker-outward guard reason it spawns inside bee, Pointers to claude_session.rs and prepare.rs) and link it from the area index. Add one line to swarming-reference.md on steering. Run .bee/bin/bee dev regen so AGENTS.md matches.",
+        "verify": ".bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "AGENTS.md permits steering a Claude worker with SendMessage and keeps the no-transcript rule"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+              "substantive": "concept with Pointers to claude_session.rs and prepare.rs"
+            }
+          ],
+          "key_links": [
+            "AGENTS.md matches the block after bee dev regen"
+          ],
+          "prohibitions": [
+            "Do not edit AGENTS.md by hand outside regen"
+          ]
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cssd-1 and cssd-2 write Rust and its tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each code cell writes its own tests red-first."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "cssd-3 updates doctrine and knowledge."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader read every anchor."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "required",
+          "role": "deploy",
+          "reason": "The owner asked for the full chain to release."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Standard lane; the hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "claude-sub-session-dispatch",
+    "plan_sha256": "b6dfdff0002bf2753e6c1f7d409f24252b5f68d6336faeaa413e09772cf09469",
+    "previewed_at": "2026-11-06T13:19:50.158Z",
+    "cells": [
+      {
+        "id": "cssd-1",
+        "feature": "claude-sub-session-dispatch",
+        "title": "Add a claude-session transport to herding run",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "7fe67d57-462a-4090-a2bb-d0b937e31c0c",
+          "16fb3feb-5856-4cbb-a7c2-65125d6650b7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs"
+        ],
+        "read_first": [
+          "docs/history/claude-sub-session-dispatch/CONTEXT.md",
+          "docs/history/claude-sub-session-dispatch/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1 and D2: add a claude-session transport to `bee herding run`. New flags `--session-model <model>` and optional `--session-effort <low|medium|high|xhigh|max>`; with `--session-model`, run takes this transport instead of paseo or a pane (refuse `--session-model` together with `--agent` or `--no-pane`). Follow execute_paseo (run.rs:3497) for the shape: write the inbox marker, build the herding brief and child env the same way, set BEE_HERDING_READ_ONLY=1 and apply claude_worker_guard_missing on --read-only. Spawn from inside bee, never through a shell, behind a trait like PaseoCli so tests use a fake: argv `claude --bg --name <name> --model <model> [--effort <e>] --permission-mode bypassPermissions --settings {\"worktree\":{\"bgIsolation\":\"none\"}} <prompt>` with cwd = --cwd. Name = `bee-<cell id or kind>-<short job id>`. Parse the id from the `backgrounded · <id> · <name>` line. Poll `claude agents --json --all` for that id and the mailbox result for round 1 with the same decisions the paseo loop makes (result -> done; status idle twice with no result -> TimedOutIdle; state failed or stopped, or id gone -> died; ceiling -> stop and timed out). Run `claude stop <id>` after the result or a give-up. Write `session_id` and `steer_to` (the session name) into the job record and the run JSON output, and have `bee herding status --job <id>` print `steer_to`. Per D1 for a paseo run whose provider is claude: after spawn, find the one session in `claude agents --json --all` whose cwd equals --cwd and whose startedAt is after the spawn time, and record its name as steer_to; when none or several match, omit steer_to. The claude binary is `claude` unless `herding.claude_command` names another.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee claude_session",
+        "must_haves": {
+          "truths": [
+            "a run with --session-model spawns exactly one claude --bg process with bgIsolation none and the given model",
+            "the run returns the worker's mailbox result as its JSON output, the same shape a paseo run returns",
+            "a session that goes idle twice with no result, fails, or hits the ceiling is stopped and reported, never left running",
+            "--read-only sets BEE_HERDING_READ_ONLY=1 in the session env"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/claude_session.rs",
+              "substantive": "spawn argv builder, id parser, agents-json parser, poll decisions, unit tests on a fake CLI"
+            }
+          ],
+          "key_links": [
+            "run.rs takes the claude-session transport when --session-model is given",
+            "job record and run output carry session_id and steer_to",
+            "a paseo claude run records steer_to when exactly one matching claude session is listed"
+          ],
+          "prohibitions": [
+            "No change to the paseo, herdr or tmux transports' behavior",
+            "No code comments",
+            "Never read results from claude logs"
+          ],
+          "open_choices": [
+            "How the fake CLI trait is shaped, as long as no unit test runs the real claude binary"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cssd-2",
+        "feature": "claude-sub-session-dispatch",
+        "title": "Route native Claude dispatches to sub-sessions",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "cssd-1"
+        ],
+        "decisions": [
+          "16fb3feb-5856-4cbb-a7c2-65125d6650b7",
+          "0f6ebf63-a640-4b8f-80a3-e7fea16e857e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "read_first": [
+          "docs/history/claude-sub-session-dispatch/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D2 and D3: in the runtime-claude native arm of dispatch prepare (prepare.rs:2858, the `_ =>` arm that builds the Agent payload), when the slot resolves a configured model, `dispatch.claude_sessions` in the main checkout's config is not false, and `claude` (or herding.claude_command) resolves on PATH, emit tool Bash with the herding command built the same way as the herding arm (prepare.rs:2619: --task-file - --json, --cwd for the worktree, --cell-id for cells, --read-only for gather and advisor, --ceiling from config) plus `--session-model <model>` and `--session-effort <effort>` when an effort is chosen; stdin is the herding pane prompt; channel `claude-session`; transport_ready true with a reason naming the binary. When the CLI is missing, keep the Agent payload and add fallback_reason `claude_cli_missing`. When the switch is false, the payload is byte-identical to today. A session-model escalation keeps the Agent payload. Codex and Pi arms do not change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+        "must_haves": {
+          "truths": [
+            "on runtime claude a native-model slot for cell, gather, reviewer and advisor returns a Bash bee herding run command carrying --session-model",
+            "dispatch.claude_sessions false returns the Agent payload unchanged",
+            "no claude CLI on PATH returns the Agent payload with fallback_reason claude_cli_missing",
+            "codex and pi payloads are unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "claude-session arm and its tests"
+            }
+          ],
+          "key_links": [
+            "the emitted command uses the --session-model flag cssd-1 added"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to the herding arm for herding-configured slots"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cssd-3",
+        "feature": "claude-sub-session-dispatch",
+        "title": "Document sub-session dispatch and steering",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "cssd-1",
+          "cssd-2"
+        ],
+        "decisions": [
+          "7fe67d57-462a-4090-a2bb-d0b937e31c0c",
+          "16fb3feb-5856-4cbb-a7c2-65125d6650b7",
+          "0f6ebf63-a640-4b8f-80a3-e7fea16e857e"
+        ],
+        "files": [
+          "packages/bee/AGENTS.block.md",
+          "AGENTS.md",
+          "skills/bee-swarming/references/swarming-reference.md",
+          "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+          "docs/knowledge/areas/bee-herding/index.md"
+        ],
+        "read_first": [
+          "docs/history/claude-sub-session-dispatch/CONTEXT.md",
+          "packages/bee/AGENTS.block.md"
+        ],
+        "affects_skills": [
+          "skills/bee-swarming/references/swarming-reference.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+        ],
+        "action": "Per D1-D3: in packages/bee/AGENTS.block.md, extend the 'A leader watches a worker' line: a leader may steer a Claude worker (a claude-session job or a Claude herding pane) with SendMessage to the steer_to name bee herding status prints, and still never reads its transcript. Write the knowledge concept claude-session-transport.md (what it is, the claude --bg argv, bgIsolation none, the poll decisions, steer_to, the dispatch.claude_sessions switch and the PATH fallback, the worker-outward guard reason it spawns inside bee, Pointers to claude_session.rs and prepare.rs) and link it from the area index. Add one line to swarming-reference.md on steering. Run .bee/bin/bee dev regen so AGENTS.md matches.",
+        "verify": ".bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "AGENTS.md permits steering a Claude worker with SendMessage and keeps the no-transcript rule"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+              "substantive": "concept with Pointers to claude_session.rs and prepare.rs"
+            }
+          ],
+          "key_links": [
+            "AGENTS.md matches the block after bee dev regen"
+          ],
+          "prohibitions": [
+            "Do not edit AGENTS.md by hand outside regen"
+          ]
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cssd-1 and cssd-2 write Rust and its tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each code cell writes its own tests red-first."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "cssd-3 updates doctrine and knowledge."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader read every anchor."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Standard lane hat wave."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "required",
+          "role": "deploy",
+          "reason": "The owner asked for the full chain to release."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No extraction."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Standard lane; the hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-06T13:42:24.397Z",
+    "branch": "wt/claude-sub-session-dispatch",
+    "worktree_id": "beehive--wt--claude-sub-session-dispatch",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

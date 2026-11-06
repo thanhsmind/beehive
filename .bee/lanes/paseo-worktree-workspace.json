@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-11-06T07:18:11.967Z",
-    "session": "cde25677-183a-4d8a-8d8d-f589526fe7f5"
+    "subject": "Worker đầu tiên đang viết code. Tôi chờ nó xong rồi kiểm tra kết quả.",
+    "asked_at": "2026-11-06T13:07:09.779Z",
+    "session": "98d6ea8a-e6f5-4855-a2db-2aafb0ced081"
   }
 }
