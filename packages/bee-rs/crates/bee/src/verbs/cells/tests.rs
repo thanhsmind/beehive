@@ -12101,6 +12101,63 @@ use std::time::Instant;
     }
 
     #[test]
+    fn a_blocker_dissent_on_a_parked_cell_refuses_and_names_the_answer_remedy() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        parked_fixture(root, "pk-d");
+        let before = std::fs::read(cells_dir(root).join("pk-d.json")).unwrap();
+
+        let message = thrown(record_dissent(root, "pk-d", "the plan is wrong", "split it", "blocker", None, false));
+        assert!(message.contains("bee cells answer --id pk-d --answer \"<text>\""), "{message}");
+        assert_eq!(std::fs::read(cells_dir(root).join("pk-d.json")).unwrap(), before);
+    }
+
+    #[test]
+    fn a_dropped_parked_cell_reopens_only_after_its_question_is_answered() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        parked_fixture(root, "pk-x");
+        let mut dropped = read_cell_fixture(root, "pk-x");
+        dropped["status"] = json!("dropped");
+        write_cell_fixture(root, "pk-x", &dropped);
+
+        let message = thrown(reopen_cell(root, "pk-x", "bring it back", None, false));
+        assert!(message.contains("bee cells answer --id pk-x --answer \"<text>\""), "{message}");
+        assert_eq!(read_cell_fixture(root, "pk-x")["status"], json!("dropped"));
+
+        let answered = answer_cell(root, "pk-x", "Yes.").unwrap();
+        assert_eq!(answered["status"], json!("dropped"), "an answer never undoes a drop");
+        assert_eq!(answered["trace"]["park"][0]["answer"], json!("Yes."));
+        assert_eq!(reopen_cell(root, "pk-x", "bring it back", None, false).unwrap()["status"], json!("open"));
+    }
+
+    #[test]
+    fn a_dissent_verdict_never_opens_a_cell_with_an_unanswered_park_entry() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_cell_fixture(
+            root,
+            "pk-v",
+            &json!({
+                "id": "pk-v",
+                "feature": "pk",
+                "status": "blocked",
+                "deps": [],
+                "trace": {
+                    "park": [{"question": "Which store?", "answer": null}],
+                    "dissent": [{"severity": "blocker", "claim": "c", "alternative": "a"}],
+                },
+            }),
+        );
+
+        let (cell, outcome) = record_dissent_verdict(root, "pk-v", "accept", "fair point").unwrap();
+        assert!(!outcome.released);
+        assert_eq!(cell["status"], json!("blocked"));
+        let message = thrown(reopen_cell(root, "pk-v", "go", None, false));
+        assert!(message.contains("bee cells answer --id pk-v --answer \"<text>\""), "{message}");
+    }
+
+    #[test]
     fn answer_refuses_before_logging_while_the_cells_archive_lock_is_held() {
         let tmp = cn_root();
         let root = tmp.path();

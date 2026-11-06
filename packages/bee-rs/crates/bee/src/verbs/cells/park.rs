@@ -13,14 +13,24 @@ pub(crate) fn answer_remedy(id: &str) -> String {
     format!("bee cells answer --id {id} --answer \"<text>\"")
 }
 
-pub(crate) fn refuse_parked(verb: &str, id: &str, status: Option<&Value>) -> MR<()> {
-    match status {
-        Some(Value::String(s)) if s == "parked" => Err(Fail::Thrown(format!(
-            "{verb}: cell \"{id}\" is \"parked\" on a question — only an answer moves it. Run: {}",
-            answer_remedy(id)
-        ))),
-        _ => Ok(()),
+pub(crate) fn has_open_question(trace: Option<&Value>) -> bool {
+    trace
+        .and_then(|t| t.get(PARK_KEY))
+        .and_then(Value::as_array)
+        .and_then(|a| a.last())
+        .is_some_and(|e| entry_text(e, "answer").is_none())
+}
+
+pub(crate) fn refuse_parked(verb: &str, id: &str, status: Option<&Value>, trace: Option<&Value>) -> MR<()> {
+    let parked = matches!(status, Some(Value::String(s)) if s == "parked");
+    if !parked && !has_open_question(trace) {
+        return Ok(());
     }
+    Err(Fail::Thrown(format!(
+        "{verb}: cell \"{id}\" is \"{}\" with its parked question unanswered — only an answer moves it on. Run: {}",
+        js_string_or_undefined(status),
+        answer_remedy(id)
+    )))
 }
 
 fn entry_text(entry: &Value, key: &str) -> Option<String> {
@@ -158,7 +168,10 @@ pub(crate) fn run_answer(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
     let answer = flags.req_str("answer")?.to_string();
     dispatch("cells answer", use_json, t0, move |ctx| {
         let cell = answer_cell(&ctx.root, &id, &answer)?;
-        let text = format!("Answered the parked question on {id} — the cell is open again.");
+        let text = format!(
+            "Answered the parked question on {id} — the cell is {}.",
+            js_string_or_undefined(cell.get("status"))
+        );
         Ok(Out::Emit(cell, text, 0))
     })
 }
@@ -173,7 +186,7 @@ pub(crate) fn answer_cell(root: &Path, id: &str, answer: &str) -> MR<Value> {
     let id2 = id.to_string();
     let cell = mutate_cell(root, id, "answerCell", Some("answerCell"), false, move |cell_map| {
         let status = js_string_or_undefined(cell_map.get("status"));
-        if status != "parked" {
+        if status != "parked" && !has_open_question(cell_map.get("trace")) {
             return Err(Fail::Thrown(format!(
                 "answerCell: cell \"{id2}\" is \"{status}\", not \"parked\" — only a parked cell takes an answer."
             )));
@@ -212,10 +225,14 @@ pub(crate) fn answer_cell(root: &Path, id: &str, answer: &str) -> MR<Value> {
         };
         decisions.push(Value::String(decision_id));
         cell_map.insert("decisions".into(), Value::Array(decisions));
-        cell_map.insert("status".into(), Value::String("open".into()));
+        if status == "parked" {
+            cell_map.insert("status".into(), Value::String("open".into()));
+        }
         cell_map.insert("trace".into(), Value::Object(trace));
         Ok(())
     })?;
-    clear_merge_ready_for(root, &cell);
+    if cell.get("status").and_then(Value::as_str) == Some("open") {
+        clear_merge_ready_for(root, &cell);
+    }
     Ok(cell)
 }

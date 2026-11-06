@@ -607,7 +607,7 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
                     )))
                 }
             };
-            refuse_parked("updateCell", &id, cell_map.get("status"))?;
+            refuse_parked("updateCell", &id, cell_map.get("status"), cell_map.get("trace"))?;
             let status_ok = matches!(cell_map.get("status"), Some(Value::String(s)) if s == "open" || s == "blocked");
             if !status_ok {
                 return Err(Fail::Thrown(format!(
@@ -2021,7 +2021,7 @@ pub(crate) fn claim_cell_cross_session_ex(
                 let Some(cell) = cell else {
                     return Err(Fail::Thrown(format!("claimCell: cell \"{cell_id}\" not found.")));
                 };
-                refuse_parked("claimCell", &cell_id, cell.get("status"))?;
+                refuse_parked("claimCell", &cell_id, cell.get("status"), cell.get("trace"))?;
                 let status_open = matches!(cell.get("status"), Some(Value::String(s)) if s == "open");
                 if !status_open {
                     return Err(Fail::Thrown(format!(
@@ -2681,7 +2681,7 @@ pub(crate) fn reroute_cell_core(
         None => return Err(Fail::Thrown(format!("cells reroute: cell \"{id}\" not found."))),
     };
 
-    refuse_parked("cells reroute", id, cell.get("status"))?;
+    refuse_parked("cells reroute", id, cell.get("status"), cell.get("trace"))?;
     let status = cell.get("status").and_then(Value::as_str).unwrap_or("");
     if status != "open" && status != "blocked" {
         return Err(Fail::Thrown(format!(
