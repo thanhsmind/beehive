@@ -75,6 +75,8 @@ pub(crate) fn try_mutating(verb: &str, rest: &[OsString], t0: Instant) -> Option
         "drop" => run_drop(flags, use_json, t0),
         "unclaim" => run_unclaim(flags, use_json, t0),
         "reopen" => run_reopen(flags, use_json, t0),
+        "park" => run_park(flags, use_json, t0),
+        "answer" => run_answer(flags, use_json, t0),
         // D4 (store `97ce5225`) — `tier` is gone from this table, and
         // `escalate` is what it always really was. Served here and DECLARED
         // in generated/registry_payload.json in the same change, in BOTH

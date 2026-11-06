@@ -1800,7 +1800,7 @@ pub(crate) fn unclaim_cell(
     }
 }
 
-fn release_reservations_for_unclaimed_cell(root: &Path, cell_id: &str) {
+pub(crate) fn release_reservations_for_unclaimed_cell(root: &Path, cell_id: &str) {
     let Some(root_s) = root.to_str() else { return; };
     let Ok(records) = list_path_lease_records(root) else { return; };
     let mut agents: Vec<String> = Vec::new();
@@ -1843,50 +1843,66 @@ pub(crate) fn run_reopen(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
     let reason = flags.req_str("reason")?.to_string();
     let (session_flag, force) = ownership_args(&flags)?;
     dispatch("cells reopen", use_json, t0, move |ctx| {
-        let root = ctx.root.clone();
-        if js_trim(&reason).is_empty() {
-            return Err(Fail::Thrown("reopenCell: a reason is required.".into()));
-        }
-        let root2 = root.clone();
-        let id2 = id.clone();
-        let reason2 = reason.clone();
-        let cell = mutate_cell(&root, &id, "reopenCell", Some("reopenCell"), true, move |cell_map| {
-            match cell_map.get("status") {
-                Some(Value::String(s)) if s == "open" => {
-                    return Err(Fail::Thrown(format!(
-                        "reopenCell: cell \"{id2}\" is already \"open\"."
-                    )))
-                }
-                Some(Value::String(s)) if s == "claimed" => {
-                    return Err(Fail::Thrown(format!(
-                        "reopenCell: cell \"{id2}\" is \"claimed\" — use bee cells unclaim to release the claim back to open."
-                    )))
-                }
-                _ => {}
-            }
-            let trace = merge_trace(cell_map.get("trace"))?;
-            let trace = guard_claim_ownership(
-                &root2,
-                &id2,
-                trace,
-                "reopenCell",
-                session_flag.as_deref(),
-                force,
-            )?;
-            cell_map.insert("status".into(), Value::String("open".into()));
-            let mut trace = release_trace(trace);
-            trace.insert("blocked_reason".into(), Value::Null);
-            trace.insert("dropped_reason".into(), Value::Null);
-            trace.insert("reopened_at".into(), Value::String(utc_now()));
-            trace.insert("reopened_reason".into(), Value::String(reason2.clone()));
-            cell_map.insert("trace".into(), Value::Object(trace));
-            Ok(())
-        })?;
-        // merge-ready-fact D2 — same reason as `unclaim_cell` above.
-        clear_merge_ready_for(&root, &cell);
+        let cell = reopen_cell(&ctx.root, &id, &reason, session_flag.as_deref(), force)?;
         let text = format!("Reopened {} — back to open.", js_string_or_undefined(cell.get("id")));
         Ok(Out::Emit(cell, text, 0))
     })
+}
+
+pub(crate) fn reopen_cell(
+    root: &Path,
+    id: &str,
+    reason: &str,
+    session_flag: Option<&str>,
+    force: bool,
+) -> MR<Value> {
+    if js_trim(reason).is_empty() {
+        return Err(Fail::Thrown("reopenCell: a reason is required.".into()));
+    }
+    let root2 = root.to_path_buf();
+    let id2 = id.to_string();
+    let reason2 = reason.to_string();
+    let session_flag = session_flag.map(str::to_string);
+    let cell = mutate_cell(root, id, "reopenCell", Some("reopenCell"), true, move |cell_map| {
+        match cell_map.get("status") {
+            Some(Value::String(s)) if s == "open" => {
+                return Err(Fail::Thrown(format!(
+                    "reopenCell: cell \"{id2}\" is already \"open\"."
+                )))
+            }
+            Some(Value::String(s)) if s == "claimed" => {
+                return Err(Fail::Thrown(format!(
+                    "reopenCell: cell \"{id2}\" is \"claimed\" — use bee cells unclaim to release the claim back to open."
+                )))
+            }
+            Some(Value::String(s)) if s == "parked" => {
+                return Err(Fail::Thrown(format!(
+                    "reopenCell: cell \"{id2}\" is \"parked\" on a question — reopen never answers it. Run: {}",
+                    answer_remedy(&id2)
+                )))
+            }
+            _ => {}
+        }
+        let trace = merge_trace(cell_map.get("trace"))?;
+        let trace = guard_claim_ownership(
+            &root2,
+            &id2,
+            trace,
+            "reopenCell",
+            session_flag.as_deref(),
+            force,
+        )?;
+        cell_map.insert("status".into(), Value::String("open".into()));
+        let mut trace = release_trace(trace);
+        trace.insert("blocked_reason".into(), Value::Null);
+        trace.insert("dropped_reason".into(), Value::Null);
+        trace.insert("reopened_at".into(), Value::String(utc_now()));
+        trace.insert("reopened_reason".into(), Value::String(reason2.clone()));
+        cell_map.insert("trace".into(), Value::Object(trace));
+        Ok(())
+    })?;
+    clear_merge_ready_for(root, &cell);
+    Ok(cell)
 }
 
 // ── the escalation ration (D3, decision 0012; rehomed by D5, store 97ce5225) ──

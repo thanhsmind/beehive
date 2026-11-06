@@ -12021,4 +12021,179 @@ use std::time::Instant;
         assert!(!stderr.contains("bee design gate"), "a host with no pick hears nothing: {stderr}");
     }
 
+    fn park_decisions(root: &Path) -> Vec<Value> {
+        std::fs::read_to_string(decisions_path(root))
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
 
+    fn parked_fixture(root: &Path, id: &str) {
+        write_cell_fixture(root, id, &cell(id, "open", "pk", json!([])));
+        park_cell(root, id, "Should the export include archived rows?", None, false).unwrap();
+    }
+
+    #[test]
+    fn park_sets_status_and_question_and_frees_the_claim_and_reservations() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "echo ok"}}));
+        lane_with_route(root, "pkfeat");
+        write_cell_fixture(
+            root,
+            "pk-1",
+            &cell_with_files("pk-1", "pkfeat", json!(["src/pk_one.rs", "src/pk_two.rs"])),
+        );
+        claim_cell_with_reservations(root, main_topo(root), "pk-1", "worker-pk", Some("sess-pk"), None, None)
+            .unwrap();
+        foreign_lease(root, "worker-other", "other-cell", "src/other.rs");
+        assert_eq!(held_paths(root).len(), 3);
+
+        let parked = park_cell(root, "pk-1", "  Which colour is the button?  ", Some("sess-pk"), false).unwrap();
+
+        assert_eq!(parked["status"], json!("parked"));
+        let entries = parked["trace"]["park"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["question"], json!("Which colour is the button?"));
+        assert!(entries[0]["parked_at"].as_str().is_some_and(|s| s.ends_with('Z')));
+        assert_eq!(entries[0]["answer"], Value::Null);
+        assert_eq!(parked["trace"]["worker"], Value::Null);
+        assert_eq!(parked["trace"]["claim_session"], Value::Null);
+        assert!(parked["trace"].get("attempts").is_none(), "park adds no attempts row");
+        assert!(read_claim(&control_root(root).unwrap(), "pk-1").unwrap().is_none());
+        assert_eq!(
+            held_paths(root),
+            vec![("src/other.rs".to_string(), "worker-other".to_string(), "other-cell".to_string())]
+        );
+        assert_eq!(read_cell_fixture(root, "pk-1")["status"], json!("parked"));
+        assert!(
+            claim_cell_with_reservations(root, main_topo(root), "pk-1", "worker-pk", Some("sess-pk"), None, None)
+                .is_err(),
+            "a parked cell is never claimable"
+        );
+    }
+
+    #[test]
+    fn park_refuses_an_empty_question_and_a_capped_dropped_or_parked_cell() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "pk-e", &cell("pk-e", "open", "pk", json!([])));
+        let before = std::fs::read(cells_dir(root).join("pk-e.json")).unwrap();
+        assert!(thrown(park_cell(root, "pk-e", "   ", None, false)).contains("a question is required"));
+        assert_eq!(std::fs::read(cells_dir(root).join("pk-e.json")).unwrap(), before);
+
+        for status in ["capped", "dropped"] {
+            let id = format!("pk-{status}");
+            write_cell_fixture(root, &id, &cell(&id, status, "pk", json!([])));
+            let before = std::fs::read(cells_dir(root).join(format!("{id}.json"))).unwrap();
+            let message = thrown(park_cell(root, &id, "why?", None, false));
+            assert!(message.contains(&format!("\"{status}\"")), "{message}");
+            assert_eq!(std::fs::read(cells_dir(root).join(format!("{id}.json"))).unwrap(), before);
+        }
+
+        parked_fixture(root, "pk-p");
+        let message = thrown(park_cell(root, "pk-p", "a second question?", None, false));
+        assert!(message.contains("already \"parked\""), "{message}");
+        assert!(message.contains("bee cells answer --id pk-p --answer \"<text>\""), "{message}");
+        assert_eq!(read_cell_fixture(root, "pk-p")["trace"]["park"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_parked_cell_and_its_dependent_leave_the_schedule_while_the_sibling_stays() {
+        let cells = vec![
+            json!({"id": "p", "status": "parked", "deps": [], "files": ["p.rs"]}),
+            json!({"id": "s", "status": "open", "deps": [], "files": ["s.rs"]}),
+            json!({"id": "d", "status": "open", "deps": ["p"], "files": ["d.rs"]}),
+        ];
+        let schedule = compute_schedule(&cells);
+        assert_eq!(schedule.waves, vec![vec!["s".to_string()]]);
+        assert_eq!(schedule.unsatisfiable, vec![("d".to_string(), "p".to_string(), "parked")]);
+
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "p", &cell("p", "parked", "pk", json!([])));
+        write_cell_fixture(root, "s", &cell("s", "open", "pk", json!([])));
+        write_cell_fixture(root, "d", &cell("d", "open", "pk", json!(["p"])));
+        let ready: Vec<String> = ready_cells(root, Some("pk"))
+            .unwrap()
+            .iter()
+            .map(|c| js_string_or_undefined(c.get("id")))
+            .collect();
+        assert_eq!(ready, vec!["s"]);
+    }
+
+    #[test]
+    fn answer_logs_a_decision_cites_it_stamps_the_park_entry_and_reopens_the_cell() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        parked_fixture(root, "pk-a");
+
+        let answered = answer_cell(root, "pk-a", "Yes, include them.").unwrap();
+
+        let events = park_decisions(root);
+        assert_eq!(events.len(), 1, "{events:?}");
+        let text = events[0]["decision"].as_str().unwrap();
+        assert!(text.contains("pk-a"), "{text}");
+        assert!(text.contains("Should the export include archived rows?"), "{text}");
+        assert!(text.contains("Yes, include them."), "{text}");
+        assert_eq!(events[0]["tags"], json!(["cells", "slp"]));
+        let decision_id = events[0]["id"].clone();
+
+        assert_eq!(answered["status"], json!("open"));
+        assert_eq!(answered["decisions"], json!([decision_id.clone()]));
+        let entry = &answered["trace"]["park"][0];
+        assert_eq!(entry["answer"], json!("Yes, include them."));
+        assert_eq!(entry["answer_decision"], decision_id);
+        assert!(entry["answered_at"].as_str().is_some_and(|s| s.ends_with('Z')));
+        assert_eq!(read_cell_fixture(root, "pk-a"), answered);
+        assert_eq!(
+            park_answers(&answered),
+            vec![(
+                "Should the export include archived rows?".to_string(),
+                "Yes, include them.".to_string()
+            )]
+        );
+
+        let message = thrown(answer_cell(root, "pk-a", "again"));
+        assert!(message.contains("not \"parked\""), "{message}");
+        assert_eq!(park_decisions(root).len(), 1);
+    }
+
+    #[test]
+    fn a_failed_decision_log_leaves_the_parked_cell_unchanged() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        parked_fixture(root, "pk-f");
+        let before = std::fs::read(cells_dir(root).join("pk-f.json")).unwrap();
+        std::fs::create_dir_all(decisions_path(root)).unwrap();
+
+        assert!(answer_cell(root, "pk-f", "Yes.").is_err());
+        assert_eq!(std::fs::read(cells_dir(root).join("pk-f.json")).unwrap(), before);
+    }
+
+    #[test]
+    fn reopen_refuses_a_parked_cell_and_names_the_answer_remedy() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        parked_fixture(root, "pk-r");
+        let before = std::fs::read(cells_dir(root).join("pk-r.json")).unwrap();
+
+        let message = thrown(reopen_cell(root, "pk-r", "try again", None, false));
+        assert!(message.contains("\"parked\""), "{message}");
+        assert!(message.contains("bee cells answer --id pk-r --answer \"<text>\""), "{message}");
+        assert_eq!(std::fs::read(cells_dir(root).join("pk-r.json")).unwrap(), before);
+    }
+
+    #[test]
+    fn feature_parked_cells_names_each_parked_cell_and_its_open_question() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        parked_fixture(root, "pk-q");
+        write_cell_fixture(root, "pk-o", &cell("pk-o", "open", "pk", json!([])));
+        assert_eq!(
+            feature_parked_cells(root, "pk").ok().unwrap(),
+            vec![("pk-q".to_string(), "Should the export include archived rows?".to_string())]
+        );
+    }
