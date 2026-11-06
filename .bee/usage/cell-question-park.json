@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "cell-question-park",
+  "closed_at": "2026-11-06T06:32:13.394Z",
+  "sessions": [
+    {
+      "session_id": "6eb23602-0eeb-4148-8997-775eeb370a5e",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 136,
+          "output": 26883,
+          "cache_write": 233585,
+          "cache_read": 5603839,
+          "new": 260604,
+          "cached": 5603839,
+          "total": 5864443
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5-5": {
+          "input": 256,
+          "output": 79071,
+          "cache_write": 291604,
+          "cache_read": 9703056,
+          "new": 370931,
+          "cached": 9703056,
+          "total": 10073987
+        }
+      },
+      "subagent_count": 3,
+      "started_ms": 1793940592005,
+      "ended_ms": 1793946728822,
+      "totals": {
+        "new": 631535,
+        "cached": 15306895,
+        "total": 15938430
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 260604,
+      "cached": 5603839,
+      "total": 5864443
+    },
+    "subagents": {
+      "new": 370931,
+      "cached": 9703056,
+      "total": 10073987
+    },
+    "total": {
+      "new": 631535,
+      "cached": 15306895,
+      "total": 15938430
+    }
+  }
+}

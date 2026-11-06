@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-11-06T04:50:50.293Z",
-    "session": "ca2db2f2-3c3d-449e-8137-aab31bca0ed9"
+    "kind": "gate",
+    "subject": "uat for cell-question-park and path-rigor-floor",
+    "asked_at": "2026-11-06T05:14:16.717Z",
+    "session": "6eb23602-0eeb-4148-8997-775eeb370a5e"
   }
 }

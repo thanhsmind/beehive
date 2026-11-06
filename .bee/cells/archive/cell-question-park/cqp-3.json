@@ -1,0 +1,184 @@
+{
+  "id": "cqp-3",
+  "feature": "cell-question-park",
+  "title": "Teach workers to park and leaders to keep working",
+  "lane": "standard",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "b7b5b3c7-2ca2-47ff-b2f2-ff6e2561bf53",
+    "8ed6f4a2-7d01-4b4c-95fd-ac08f408196e",
+    "e2e0e77e-099b-41ef-952a-ee2e98ba951b",
+    "16031715-955e-41ea-832f-7c7b1ebc64fc"
+  ],
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "packages/bee/agents/bee-worker.md.tmpl",
+    "packages/bee/agents/bee-comb.md.tmpl",
+    "packages/bee/prompts/worker-cell.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/cell-question-park/CONTEXT.md",
+    "docs/history/cell-question-park/plan.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [],
+  "action": "Doctrine for D1, D2 and D3. In skills/bee-swarming/SKILL.md (the worker contract, section Execute): a worker with a product question it cannot answer runs `bee cells park --id <cell> --question \"<question>\"` and returns the new token [PARKED] (question, cell id); it never stops the lane. Add [PARKED] to the worker status-token list in the same three places that list [DONE]/[BLOCKED]/[HANDOFF]/[NOOP]: skills/bee-swarming/SKILL.md, packages/bee/agents/bee-worker.md.tmpl and bee-comb.md.tmpl (description line), and packages/bee/prompts/worker-cell.md (final-token line). In the `[BLOCKED]` rescue ladder add one line: a [PARKED] cell is never re-dispatched or escalated; it waits for the answer. On the leader side: when a worker parks, the leader keeps dispatching ready cells; it sets `bee state waiting-on set --kind question` only when no ready cell remains in the lane, and lists every open parked question in its reply; the human's answer is recorded with `bee cells answer --id <cell> --answer \"<text>\"`, and the cell runs again with the answer in its brief. In skills/bee-hive/references/gates-and-delegation.md, where the waiting-on mark and questions are described, add one line that points to this rule (one home: the swarming skill). Keep each addition short. Then run the regen chain (`bee dev regen`) so rendered skill trees and the release manifest follow, and run the manifest check. The release manifest is an exclusive path: reserve it before regen. Regen also rewrites rendered skill and agent trees; list every file regen changed in the cap, and name the rendered copies as a scope deviation. path-rigor-floor prf-3 edits gates-and-delegation.md and the manifest in its own worktree; whichever merges second re-runs regen on merge.",
+  "verify": ".bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "the worker contract tells a worker with a question to park its cell, not stop the lane",
+      "the leader rule sets the waiting-on question mark only when no ready cell remains",
+      "the answer path names bee cells answer",
+      "a worker that parks returns [PARKED], and the rescue ladder never re-dispatches a [PARKED] cell"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-swarming/SKILL.md",
+        "substantive": "park and answer rule"
+      }
+    ],
+    "key_links": [
+      "gates-and-delegation.md points to the swarming rule"
+    ],
+    "prohibitions": [
+      "Do not restate the rule in a second home"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "cqp-3-worker",
+    "outcome": "Worker contract parks a question cell with [PARKED]; leader keeps working; answer via bee cells answer",
+    "files_changed": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "packages/bee/agents/bee-worker.md.tmpl",
+      "packages/bee/agents/bee-comb.md.tmpl",
+      "packages/bee/prompts/worker-cell.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "scope: packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs GOLDEN_NATIVE_CELL_PROMPT updated (one line) because the worker-cell.md edit reds native_cell_prompt_render_is_byte_identical_to_golden; reserved before the write",
+      "scope: regen rewrote rendered copies, committed with the cell: .agents, .claude, .claude-plugin, .codex-plugin and .opencode skill trees (bee-swarming/SKILL.md, bee-hive/references/gates-and-delegation.md, .bee-render.json each), .claude/agents and .opencode/agent bee-worker.md and bee-comb.md, .bee/bin/prompts/worker-cell.md, .bee/onboarding.json",
+      "found a fourth token list: the gates-and-delegation.md execution-worker line also lists the tokens; [PARKED] added there",
+      "not changed: packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs:147 still lists [DONE]/[BLOCKED]/[HANDOFF]/[NOOP]; outside cell files, a follow-up for the orchestrator",
+      "path-rigor-floor prf-3 also edits gates-and-delegation.md and the manifest; whichever merges second re-runs regen"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T03:58:55.121Z",
+    "behavior_change": false,
+    "verification_evidence": "600 files match after regen of the doctrine text; also cargo test --release -p bee -- native_cell_prompt prompts gave 9 passed in an isolated checkout of HEAD plus this diff (cqp-1 left the shared tree mid-edit), covering the worker-cell prompt golden; a wider filtered run (agent onboard render skill manifest prompt) gave 651 passed and 2 failed in herding paseo env tests (paseo.rs, run.rs) that read process PASEO vars and touch no edited file",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d422f401-8a56-46a9-99fb-b3cf6f257f2d",
+    "verify_command": ".bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-06T03:47:28.163Z",
+    "mistakes": [
+      {
+        "wrong": "first temp-check attempts used $VAR paths and a /tmp target that the write guard refuses",
+        "better": "use plain in-worktree .bee/tmp paths and rsync --files-from from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Worker contract parks a question cell with [PARKED]; leader keeps dispatching and sets the question mark only when no ready cell remains; answer path is bee cells answer",
+      "commit": "a0dab4ea6",
+      "files": [
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "packages/bee/agents/bee-worker.md.tmpl",
+        "packages/bee/agents/bee-comb.md.tmpl",
+        "packages/bee/prompts/worker-cell.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check — green:static — 600 files match after regen of the doctrine text; also cargo test --release -p bee -- native_cell_prompt prompts gave 9 passed in an isolated checkout of HEAD plus this diff (cqp-1 left the shared tree mid-edit), covering the worker-cell prompt golden; a wider filtered run (agent onboard render skill manifest prompt) gave 651 passed and 2 failed in herding paseo env tests (paseo.rs, run.rs) that read process PASEO vars and touch no edited file",
+      "deviations": [
+        "scope: packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs GOLDEN_NATIVE_CELL_PROMPT updated (one line) because the worker-cell.md edit reds native_cell_prompt_render_is_byte_identical_to_golden; reserved before the write",
+        "scope: regen rewrote rendered copies, committed with the cell: .agents, .claude, .claude-plugin, .codex-plugin and .opencode skill trees (bee-swarming/SKILL.md, bee-hive/references/gates-and-delegation.md, .bee-render.json each), .claude/agents and .opencode/agent bee-worker.md and bee-comb.md, .bee/bin/prompts/worker-cell.md, .bee/onboarding.json",
+        "found a fourth token list: the gates-and-delegation.md execution-worker line also lists the tokens; [PARKED] added there",
+        "not changed: packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs:147 still lists [DONE]/[BLOCKED]/[HANDOFF]/[NOOP]; outside cell files, a follow-up for the orchestrator",
+        "path-rigor-floor prf-3 also edits gates-and-delegation.md and the manifest; whichever merges second re-runs regen"
+      ],
+      "mistakes": [
+        "first temp-check attempts used $VAR paths and a /tmp target that the write guard refuses — use plain in-worktree .bee/tmp paths and rsync --files-from from the start — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "ownership_overrides": [
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "ca2db2f2-3c3d-449e-8137-aab31bca0ed9",
+        "owner_bypassed": null,
+        "at": "2026-11-06T03:59:44.418Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the worker contract tells a worker with a question to park its cell, not stop the lane",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "the leader rule sets the waiting-on question mark only when no ready cell remains",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "the answer path names bee cells answer",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "a worker that parks returns [PARKED], and the rescue ladder never re-dispatches a [PARKED] cell",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "gates-and-delegation.md points to the swarming rule",
+            "artifact": "skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/SKILL.md",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": "skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": "packages/bee/agents/bee-worker.md.tmpl",
+            "artifact": "packages/bee/agents/bee-worker.md.tmpl"
+          },
+          {
+            "requirement": "packages/bee/agents/bee-comb.md.tmpl",
+            "artifact": "packages/bee/agents/bee-comb.md.tmpl"
+          },
+          {
+            "requirement": "packages/bee/prompts/worker-cell.md",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-06T03:59:44.418Z",
+        "recorded_by": "ca2db2f2-3c3d-449e-8137-aab31bca0ed9",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

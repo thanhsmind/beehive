@@ -1,0 +1,450 @@
+{
+  "id": "cqp-1",
+  "feature": "cell-question-park",
+  "title": "Park a cell on a question and answer it",
+  "lane": "standard",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "b7b5b3c7-2ca2-47ff-b2f2-ff6e2561bf53",
+    "8ed6f4a2-7d01-4b4c-95fd-ac08f408196e",
+    "16031715-955e-41ea-832f-7c7b1ebc64fc"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "read_first": [
+    "docs/history/cell-question-park/CONTEXT.md",
+    "docs/history/cell-question-park/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add two cell verbs per contract decision 16031715 (D1 b7b5b3c7, D2 8ed6f4a2). Park record shape: one append-only array trace.park; each entry {question, parked_at, answer, answer_decision, answered_at}; the open question is the last entry with no answer. `bee cells park --id <cell> --question <text>` sets an open or claimed cell to status `parked`, appends a park entry, releases the cell's claim (clear the claim fields and trace.worker the way release does) and every file reservation the cell holds, adds NO attempts row, and passes guard_claim_ownership like block does (with --force-ownership). It refuses an empty question or a cell that is capped, dropped or already parked. `bee cells answer --id <cell> --answer <text>` refuses a cell that is not parked; otherwise it logs the answer as a decision BEFORE it writes the cell (tags `cells` and `slp`, both already in docs/decisions/taxonomy.json, the way dissent.rs does, so the taxonomy file never changes; the decision text names the cell id and quotes the question and the answer), appends the new decision id to the cell's `decisions`, stamps answer, answer_decision and answered_at on the open park entry, and sets status `open`. Answer needs no claim ownership: the claim was released at park. A failed decision log leaves the cell unchanged. Every refusal on a parked cell names the remedy `bee cells answer --id <cell> --answer \"<text>\"`. In schedule.rs `classify`, add a `Some(\"parked\")` arm so a dependent of a parked cell is excluded the way a dependent of a blocked cell is (today classify reads parked as pending and the in-degree count skips it, so the dependent lands in wave 1). In handlers_close.rs, `bee cells reopen` refuses a parked cell, naming the answer remedy. Copy the shape of `run_block` / `block_cell` in handlers_close.rs (rg anchor: `\"block\" => run_block(flags, use_json, t0),` in util.rs) and of `record_dissent_verdict` in dissent.rs for log-then-write. audit.rs `log_decision` returns no id today (`pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> {`): add a variant that returns the id; keep the old signature for its callers. Register both verbs in the util.rs try_mutating match AND in generated/registry_payload.json (the registry tests fail if a served verb is undeclared). The registry file is hand-edited (no generator exists): edit it by a JSON round-trip that keeps its compact byte format. Also export, through `mod park; pub(crate) use self::park::*;` in cells/mod.rs, a reader `feature_parked_cells(root, feature) -> Vec<(cell id, question)>` shaped like `feature_dissent_debt` (it reads live and archived cells) for cqp-2 and cqp-4, and a helper `park_answers(cell) -> Vec<(question, answer)>` for the brief. Check the existing status checks for a status they now meet: handlers_write.rs `let status_ok = matches!(cell_map.get(\"status\"), Some(Value::String(s)) if s == \"open\" || s == \"blocked\");` and `if status != \"open\" && status != \"blocked\" {` — a parked cell must not be claimable and must not be updatable into a running state; leave them unchanged unless a test shows a parked cell slips through. Tests red-first: park sets status and question and frees the claim and reservations; a parked cell is absent from compute_schedule's waves while its open sibling is present; a cell that depends on a parked cell is absent from every compute_schedule wave AND from ready_cells; answer logs a decision, cites it on the cell, stamps the park entry and reopens it; reopen refuses a parked cell; the refusals named above each name the answer remedy. REWORK after judge (NEEDS_REVISION): (a) block_cell has no parked guard, so `bee cells block` then `bee cells reopen` turns a parked cell open with the question unanswered — refuse block on a parked cell naming the answer remedy; (b) unclaim on a parked cell points at reopen — name the answer remedy instead; (c) claim on a parked cell (handlers_write.rs) must name the answer remedy, with a test that asserts the text, not only is_err; (d) answer logs the decision inside the mutate closure before write_cell, so a failed write leaves an uncited decision — log only after every check that can refuse has passed, as close to the write as the log-then-write rule allows, and name the residual case in the cap; (e) supervisor collect_needs_you finds features with list_cells (live store only) while feature_parked_cells reads the archive too — make both read the same set. Tests red-first for each.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells registry",
+  "must_haves": {
+    "truths": [
+      "bee cells park sets the cell status to parked, appends the question to trace.park, and releases the claim and the file reservations",
+      "a parked cell is not in the ready set while its open sibling is",
+      "a cell that depends on a parked cell is in no compute_schedule wave and not in ready_cells",
+      "bee cells answer logs a decision, appends its id to the cell decisions, stamps the answer on the park entry, and sets the cell status to open",
+      "park refuses an empty question and a capped, dropped or already-parked cell; answer refuses a cell that is not parked; reopen refuses a parked cell",
+      "every refusal on a parked cell names bee cells answer as the remedy"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+        "substantive": "park and answer verbs and the feature_parked_cells reader"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "cells.park and cells.answer declared with their params"
+      }
+    ],
+    "key_links": [
+      "util.rs try_mutating serves park and answer",
+      "answer calls the id-returning decision logger before it writes the cell"
+    ],
+    "prohibitions": [
+      "Do not change the meaning of status blocked",
+      "Do not change how classify treats any status other than parked",
+      "Do not add a tag that is not already in docs/decisions/taxonomy.json",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Put the verbs in a new park.rs file instead of handlers_close.rs"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "cqp-1b-worker",
+    "outcome": "an open park question is read from trace.park: every refusal on such a cell names bee cells answer, a dissent verdict keeps it blocked, supervisor reads live plus archive",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+    ],
+    "deviations": [
+      "round 3 (db3a131ec): refuse_parked refuses when status is parked OR the last trace.park entry has no answer; the guard moved into apply_block_mutation so block and blocker dissent share it",
+      "dissent.rs was not in the cell files; one line changed so a dissent verdict never releases a cell with an open park question; reserved before writing",
+      "answer also stamps a dropped or blocked cell that still has an unanswered park entry and keeps its status; logged as a decision touching 16031715",
+      "round 2 (c0aa8925e): claim, unclaim, update and reroute refusals name the remedy; answer probes the cells-archive lock before logging; supervisor reads parked_cells (live plus archive)",
+      "(d) residual: answer logs inside mutate_cell before write_cell; an archive transaction between the lock probe and write_cell, or a disk write failure, leaves one uncited decision row",
+      "judge advisory not in scope: capCell has no parked gate, so park then cap could cap a cell with an open question; filed to backlog",
+      "sync-ack: the swarming skill text for park and the PARKED token landed in sibling cell cqp-3; this cell is code only"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T05:13:06.030Z",
+    "behavior_change": true,
+    "verification_evidence": "520 passed 0 failed at c0aa8925e in the leader run and 523 passed in the worker run at db3a131ec; the leader then ran the full declared suite at db3a131ec: 5173 passed 0 failed 29 ignored; round-2 and round-3 tests each seen red before their fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6eb23602-0eeb-4148-8997-775eeb370a5e",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells registry",
+    "claimed_at": "2026-11-06T04:49:57.845Z",
+    "sync_ack": "the swarming skill text for park and the PARKED token landed in sibling cell cqp-3; this cell is code only",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "an open park question is read from trace.park, not status: reopen, block, blocker dissent, claim, unclaim, update and reroute refuse a cell with an unanswered park entry naming bee cells answer; a dissent verdict keeps such a cell blocked; supervisor reads parked cells from live plus archive",
+      "commit": "db3a131ec",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells registry — green:unit — 520 passed 0 failed at c0aa8925e in the leader run and 523 passed in the worker run at db3a131ec; the leader then ran the full declared suite at db3a131ec: 5173 passed 0 failed 29 ignored; round-2 and round-3 tests each seen red before their fix",
+      "deviations": [
+        "round 3 (db3a131ec): refuse_parked refuses when status is parked OR the last trace.park entry has no answer; the guard moved into apply_block_mutation so block and blocker dissent share it",
+        "dissent.rs was not in the cell files; one line changed so a dissent verdict never releases a cell with an open park question; reserved before writing",
+        "answer also stamps a dropped or blocked cell that still has an unanswered park entry and keeps its status; logged as a decision touching 16031715",
+        "round 2 (c0aa8925e): claim, unclaim, update and reroute refusals name the remedy; answer probes the cells-archive lock before logging; supervisor reads parked_cells (live plus archive)",
+        "(d) residual: answer logs inside mutate_cell before write_cell; an archive transaction between the lock probe and write_cell, or a disk write failure, leaves one uncited decision row",
+        "judge advisory not in scope: capCell has no parked gate, so park then cap could cap a cell with an open question; filed to backlog"
+      ],
+      "mistakes": [
+        "round 2 wrote the source fixes in handlers_close.rs and park.rs before the tests — write the tests first; recovered by reverse-applying the source hunks to see each test red — none",
+        "round 2 added a per-verb parked guard keyed on status, so dissent blocker and drop-then-reopen still skipped the answer — key the guard on the open entry in trace.park, not on a status other verbs can change — architecture"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "ownership_overrides": [
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "ca2db2f2-3c3d-449e-8137-aab31bca0ed9",
+        "owner_bypassed": null,
+        "at": "2026-11-06T04:06:01.602Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee cells park sets the cell status to parked, appends the question to trace.park, and releases the claim and the file reservations",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs"
+          },
+          {
+            "requirement": "a parked cell is not in the ready set while its open sibling is",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+          },
+          {
+            "requirement": "a cell that depends on a parked cell is in no compute_schedule wave and not in ready_cells",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+          },
+          {
+            "requirement": "bee cells answer logs a decision, appends its id to the cell decisions, stamps the answer on the park entry, and sets the cell status to open",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs"
+          },
+          {
+            "requirement": "park refuses an empty question and a capped, dropped or already-parked cell; answer refuses a cell that is not parked; reopen refuses a parked cell",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "every refusal on a parked cell names bee cells answer as the remedy",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "util.rs try_mutating serves park and answer",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"
+          },
+          {
+            "requirement": "answer calls the id-returning decision logger before it writes the cell",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/catalog.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          }
+        ],
+        "recorded_at": "2026-11-06T04:06:01.602Z",
+        "recorded_by": "ca2db2f2-3c3d-449e-8137-aab31bca0ed9",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee cells park sets the cell status to parked, appends the question to trace.park, and releases the claim and the file reservations",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs"
+          },
+          {
+            "requirement": "a parked cell is not in the ready set while its open sibling is",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+          },
+          {
+            "requirement": "a cell that depends on a parked cell is in no compute_schedule wave and not in ready_cells",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+          },
+          {
+            "requirement": "bee cells answer logs a decision, appends its id to the cell decisions, stamps the answer on the park entry, and sets the cell status to open",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs"
+          },
+          {
+            "requirement": "park refuses an empty question and a capped, dropped or already-parked cell; answer refuses a cell that is not parked; reopen refuses a parked cell",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "every refusal on a parked cell names bee cells answer as the remedy",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"
+          },
+          {
+            "requirement": "util.rs try_mutating serves park and answer",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"
+          },
+          {
+            "requirement": "answer calls the id-returning decision logger before it writes the cell",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+          }
+        ],
+        "recorded_at": "2026-11-06T05:13:26.227Z",
+        "recorded_by": "6eb23602-0eeb-4148-8997-775eeb370a5e",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "park.rs:83-121 sets parked, appends park entry, releases claim and reservations"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "ready_cells reads open only (handlers_select.rs:591-599); compute_schedule schedules open/claimed only"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "schedule.rs:99 classifies a parked dep; :112 excludes the dependent"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "park.rs:164-182 logs via log_decision_id before the write, cites, stamps, reopens"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "park.rs:76-95 and :148-152; reopen refuses at handlers_close.rs:1878-1883"
+          },
+          {
+            "id": "t6",
+            "status": "FAIL",
+            "evidence": "unclaim refuses a parked cell pointing at reopen (handlers_close.rs:1775-1779); claim refusal names no answer remedy; block on a parked cell then reopen skips the answer (handlers_close.rs:1630-1645)"
+          }
+        ],
+        "failure_signature": "refusals from unclaim and claim on a parked cell do not name bee cells answer; block has no parked guard",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-06T04:32:24.056Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "park.rs:111-149"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "handlers_select.rs:593; tests.rs:12170"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "schedule.rs:99,112; tests.rs:12156-12170"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "park.rs:198-216; audit.rs log_decision_id"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "park.rs:104-122,176-180; handlers_close.rs:1880"
+          },
+          {
+            "id": "t6",
+            "status": "FAIL",
+            "evidence": "dissent.rs:221-253 cells dissent --severity blocker has no parked guard; apply_block_mutation util.rs:382 sets blocked, then reopen handlers_close.rs:1880 opens it with the park question unanswered; run_drop handlers_close.rs:1728 has the same drop-then-reopen effect"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2230 -> park.rs:65-80 parked_cells"
+          }
+        ],
+        "failure_signature": "t6: blocker dissent (and drop) move a parked cell off parked, so reopen opens it with its question unanswered",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-06T05:03:11.005Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "park.rs:121,135,143-159; test park_sets_status_and_question_and_frees_the_claim_and_reservations"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "handlers_select.rs:593; schedule.rs:87-90"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "schedule.rs:99,112; handlers_select.rs:594"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "park.rs:211-230"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "park.rs:114-133,189-203,228; handlers_close.rs:1879"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "park.rs:24-34 refuse_parked keyed on status parked or unanswered last park entry; util.rs:374, handlers_close.rs:1774,1879, handlers_write.rs:610,2024,2684, dissent.rs:503"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "park.rs:75-90 parked_cells; supervisor.rs:2230"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-06T05:12:45.520Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-06T04:32:24.056Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "mistakes": [
+      {
+        "wrong": "round 2 wrote the source fixes in handlers_close.rs and park.rs before the tests",
+        "better": "write the tests first; recovered by reverse-applying the source hunks to see each test red",
+        "fix_at": "none"
+      },
+      {
+        "wrong": "round 2 added a per-verb parked guard keyed on status, so dissent blocker and drop-then-reopen still skipped the answer",
+        "better": "key the guard on the open entry in trace.park, not on a status other verbs can change",
+        "fix_at": "architecture"
+      }
+    ]
+  }
+}
