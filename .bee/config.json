@@ -430,5 +430,11 @@
       }
     }
   },
-  "handoff_context_tokens": 0
+  "handoff_context_tokens": 0,
+  "design": {
+    "packs": [
+      "web",
+      "charts"
+    ]
+  }
 }
