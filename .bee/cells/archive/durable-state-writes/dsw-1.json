@@ -1,0 +1,126 @@
+{
+  "id": "dsw-1",
+  "feature": "durable-state-writes",
+  "title": "Make bee state file writes survive a crash",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/fsutil.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/fsutil.rs",
+    "docs/history/research/forgent-xia.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In fsutil.rs, write_json_atomic and write_text_atomic must flush the tmp file's data to disk (File::sync_all) before the rename, and after a successful rename sync the parent directory so the new name is durable. append_jsonl must sync the appended data (sync_data) before it returns. Directory sync is Unix-only: on Windows skip it (opening a directory as a File fails there), gated with cfg(unix). Keep every public signature, the tmp-name scheme, the tmp cleanup on error, and the exact bytes written. A parent-directory sync failure after a successful rename returns the error to the caller (the file is already in place; the error must say the rename landed). Add unit tests in fsutil's test module: the written bytes are unchanged for both atomic writers and append_jsonl, no tmp file is left beside the target after success, and the tmp is removed when the rename fails. Measure the declared suite's wall time before and after and record both numbers in the cap proof; if the suite slows by more than 15%, stop and report instead of capping.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml fsutil",
+  "must_haves": {
+    "truths": [
+      "write_json_atomic and write_text_atomic call sync_all on the tmp file before rename",
+      "the parent directory is synced after rename on unix",
+      "append_jsonl syncs data before returning",
+      "bytes on disk are identical to before the change"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/fsutil.rs",
+        "substantive": "sync calls plus tests, no TODO stubs"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No env switch or flag that skips the sync in tests",
+      "No change to any public signature"
+    ],
+    "open_choices": [
+      "A small private helper shared by the two atomic writers"
+    ]
+  },
+  "trace": {
+    "worker": "dsw-1-worker",
+    "outcome": "State file writes now fsync the tmp file, the parent dir (unix) and appended jsonl data; bytes unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/fsutil.rs"
+    ],
+    "deviations": [
+      "found a better route: write_json_atomic now delegates to write_text_atomic, so the sync/rename/cleanup logic lives once (open choice: shared private helper)",
+      "docs/history/durable-state-writes/CONTEXT.md and plan.md are absent in both checkouts; forgent-xia.md read from the main checkout; cell action was self-contained so work proceeded",
+      "base suite already red on opencode_plugin_contracts::every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap (environment: installed opencode binary), not touched by this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T03:21:13.711Z",
+    "behavior_change": true,
+    "verification_evidence": "touched fsutil.rs only (15 fsutil tests passed); full declared suite timed base 65.06s vs after 65.25s (+0.3%), lib 4606->4609 passed, both runs carry the same one pre-existing red in opencode_plugin_contracts (installed opencode binary tool-id literal changed shape), unrelated to fsutil",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "4aeeb276-47c8-41a3-b182-a12a86b91ed3",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml fsutil",
+    "claimed_at": "2026-11-06T03:14:15.404Z",
+    "mistakes": [
+      {
+        "wrong": "wrapped suite timing in a subshell, time and cd-compound writes, refused four times by the worktree guard",
+        "better": "run plain commands with absolute paths and date stamps from the start",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "wrapped the suite timing in a subshell, time and cd-compound writes, refused four times by the worktree guard",
+        "better": "run plain commands with absolute paths and date stamps from the start",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "write_json_atomic/write_text_atomic fsync the tmp before rename and the parent dir after it on unix; append_jsonl calls sync_data; bytes and signatures unchanged",
+      "commit": "0b60c9b87",
+      "files": [
+        "packages/bee-rs/crates/bee/src/fsutil.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml fsutil — green:unit — touched fsutil.rs only (15 fsutil tests passed); full declared suite timed base 65.06s vs after 65.25s (+0.3%), lib 4606->4609 passed, both runs carry the same one pre-existing red in opencode_plugin_contracts (installed opencode binary tool-id literal changed shape), unrelated to fsutil",
+      "deviations": [
+        "found a better route: write_json_atomic now delegates to write_text_atomic, so the sync/rename/cleanup logic lives once (open choice: shared private helper)",
+        "docs/history/durable-state-writes/CONTEXT.md and plan.md are absent in both checkouts; forgent-xia.md read from the main checkout; cell action was self-contained so work proceeded",
+        "base suite already red on opencode_plugin_contracts::every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap (environment: installed opencode binary), not touched by this cell"
+      ],
+      "mistakes": [
+        "wrapped the suite timing in a subshell, time and cd-compound writes, refused four times by the worktree guard — run plain commands with absolute paths and date stamps from the start — doctrine"
+      ],
+      "baseline": "full suite base 65.06s wall, 1 failed target (opencode_plugin_contracts), lib 4606 passed"
+    },
+    "baseline": "full suite base 65.06s wall, 1 failed target (opencode_plugin_contracts), lib 4606 passed",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "write_json_atomic and write_text_atomic call sync_all on the tmp file before rename",
+            "artifact": "packages/bee-rs/crates/bee/src/fsutil.rs"
+          },
+          {
+            "requirement": "the parent directory is synced after rename on unix",
+            "artifact": "packages/bee-rs/crates/bee/src/fsutil.rs"
+          },
+          {
+            "requirement": "append_jsonl syncs data before returning",
+            "artifact": "packages/bee-rs/crates/bee/src/fsutil.rs"
+          },
+          {
+            "requirement": "bytes on disk are identical to before the change",
+            "artifact": "packages/bee-rs/crates/bee/src/fsutil.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/fsutil.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/fsutil.rs"
+          }
+        ],
+        "recorded_at": "2026-11-06T03:22:11.396Z",
+        "recorded_by": "52195278-6a88-45d4-9842-b2876284d5e4",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

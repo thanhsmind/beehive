@@ -1918,5 +1918,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-05T13:49:53.032Z"
+  },
+  "durable-state-writes": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-06T03:23:10.663Z"
   }
 }
