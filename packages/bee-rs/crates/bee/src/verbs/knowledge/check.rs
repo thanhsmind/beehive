@@ -508,6 +508,34 @@ pub(crate) fn extract_rule_refs(text: &str) -> Vec<String> {
     out
 }
 
+fn leader_doctrine_files(root: &Path) -> Vec<(String, PathBuf)> {
+    let base = if root.join("packages").join("bee").join("LEADER.md").is_file() {
+        "packages/bee"
+    } else {
+        ".bee"
+    };
+    let mut out = Vec::new();
+    let leader = root.join(base).join("LEADER.md");
+    if leader.is_file() {
+        out.push((format!("{base}/LEADER.md"), leader));
+    }
+    let mut playbooks: Vec<PathBuf> = std::fs::read_dir(root.join(base).join("playbooks"))
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.path())
+                .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "md"))
+                .collect()
+        })
+        .unwrap_or_default();
+    playbooks.sort();
+    for path in playbooks {
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            out.push((format!("{base}/playbooks/{name}"), path.clone()));
+        }
+    }
+    out
+}
+
 pub(crate) fn collect_files_recursive(dir: &Path, root: &Path, out: &mut Vec<(String, PathBuf)>) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -926,6 +954,7 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         if agents_md.is_file() && !is_exempt_tree("AGENTS.md") {
             scanned_files.push(("AGENTS.md".to_string(), agents_md));
         }
+        scanned_files.extend(leader_doctrine_files(root));
         let skills_dir = root.join("skills");
         if skills_dir.is_dir() {
             collect_files_recursive(&skills_dir, root, &mut scanned_files);

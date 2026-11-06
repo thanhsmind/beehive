@@ -52,6 +52,30 @@ use crate::version::BEE_VERSION;
         );
     }
 
+    const LEADER_LINE: &str = "Leader doctrine: read .bee/LEADER.md in full now, then LEADER.md if it exists; open a .bee/playbooks/ file only when its read-when line matches.";
+
+    #[test]
+    fn the_leader_doctrine_line_rides_the_preamble_only_when_leader_md_exists() {
+        let tmp = minimal_repo();
+        let without = render(tmp.path());
+        assert!(!without.contains("Leader doctrine"), "{without}");
+
+        write(tmp.path(), ".bee/LEADER.md", "# leader\n");
+        let with = render(tmp.path());
+        assert_eq!(with.lines().filter(|l| *l == LEADER_LINE).count(), 1, "{with}");
+        assert_eq!(with.lines().nth(2), Some(LEADER_LINE), "{with}");
+        assert_eq!(with.replacen(&format!("{LEADER_LINE}\n"), "", 1), without);
+    }
+
+    #[test]
+    fn the_leader_doctrine_line_survives_a_budget_that_drops_every_block() {
+        let tmp = minimal_repo();
+        write(tmp.path(), ".bee/LEADER.md", "# leader\n");
+        let text = build_session_preamble_within(tmp.path(), None, None, "claude", 1);
+        assert!(text.contains(LEADER_LINE), "{text}");
+        assert!(text.contains("### Omitted to fit the host limit:"), "{text}");
+    }
+
     #[test]
     fn no_mjs_spelling_survives_anywhere_in_the_preamble() {
         // Every section that could carry a command is turned ON at once, so

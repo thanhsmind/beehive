@@ -1565,7 +1565,7 @@ pub fn build_compact_capsule_with_runtime(
         "docs/history/learnings/critical-patterns.md"
     };
     sections.push(vec![format!(
-        "- Critical patterns: {pointer} — re-read the doctrine after a compaction (AGENTS.md startup step 1); this capsule carries the pointer, never the digest (D7)."
+        "- Critical patterns: {pointer} — re-read the doctrine after a compaction (.bee/LEADER.md, read in full); this capsule carries the pointer, never the digest (D7)."
     )]);
 
     sections

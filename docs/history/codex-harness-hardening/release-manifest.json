@@ -2099,7 +2099,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "4527b007e73bb55b6a41e8647b4acfa5b2d66bed35b05db019c6c7c0f03f7dab",
+      "sha256": "d06467cf4ce24fe23b892f67ce252bb067462469b0acbb3e41fb7fe80c8d38c8",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -3272,6 +3272,34 @@
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/hooks.json"
+    },
+    {
+      "path": "packages/bee/LEADER.md",
+      "sha256": "4a6d90831d44a79b035b3efa60479adea799f6c5f1ddb38342479a6f61e38e07",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/LEADER.md"
+    },
+    {
+      "path": "packages/bee/playbooks/bee-defects.md",
+      "sha256": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/playbooks/bee-defects.md"
+    },
+    {
+      "path": "packages/bee/playbooks/handoff.md",
+      "sha256": "c4555ec494f174ee425b1ebd35153c9f5aa393a9bd2c8e3c568bab4477cd6557",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/playbooks/handoff.md"
+    },
+    {
+      "path": "packages/bee/playbooks/multi-session.md",
+      "sha256": "1e820395d0daabd521c5d3b7d3a46fcbc8d24f3ce893ca43e6636693a44b6ea8",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/playbooks/multi-session.md"
     },
     {
       "path": "packages/bee/prompts/advisor.md",

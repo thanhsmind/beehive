@@ -86,6 +86,13 @@ fn fixture() -> Fixture {
     write(&root.join("packages").join("bee").join("lib").join("cells.mjs"), "// cells\n");
     write(&root.join("packages").join("bee").join("bee.mjs"), "// dispatcher\n");
     write(&root.join("packages").join("bee").join("prompts").join("worker-cell.md"), "prompt\n");
+    write(&root.join("packages").join("bee").join("LEADER.md"), "# leader doctrine\n");
+    for name in ["multi-session", "handoff", "bee-defects"] {
+        write(
+            &root.join("packages").join("bee").join("playbooks").join(format!("{name}.md")),
+            &format!("# {name}\n"),
+        );
+    }
     write(
         &root.join("packages").join("bee").join("statusline").join("statusline-command.sh"),
         "#!/bin/sh\necho hi\n",
@@ -902,6 +909,17 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     }
     assert!(fx.repo.join(".bee").join("bin").join("lib").join("cells.mjs").exists());
     assert!(fx.repo.join(".bee").join("bin").join("prompts").join("worker-cell.md").exists());
+    assert_eq!(
+        std::fs::read_to_string(fx.repo.join(".bee").join("LEADER.md")).unwrap(),
+        "# leader doctrine\n"
+    );
+    for name in ["multi-session", "handoff", "bee-defects"] {
+        assert_eq!(
+            std::fs::read_to_string(fx.repo.join(".bee").join("playbooks").join(format!("{name}.md")))
+                .unwrap(),
+            format!("# {name}\n")
+        );
+    }
 
     // config-sample-herding D3: the annotated sample is seeded verbatim
     // (embedded from the bee repo's own .bee/config-sample.json) and carries
@@ -992,6 +1010,8 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
         "lib",
         "expertise",
         "prompts",
+        "leader",
+        "playbooks",
     ];
     if statusline {
         expected.push("statusline");
@@ -3046,4 +3066,25 @@ fn vendored_binary_apply_copies_atomically_and_sets_executable() {
 
     let recheck = super::plan::compute_plan(&engine, &fx.repo, &opts);
     assert!(!recheck.plan.iter().any(|i| i["action"] == "copy_binary"));
+}
+
+#[test]
+fn leader_doctrine_files_refresh_on_drift_and_prune_stale_playbooks() {
+    let fx = fixture();
+    apply(&fx, &[]);
+    let bee_dir = fx.repo.join(".bee");
+    std::fs::write(bee_dir.join("LEADER.md"), "edited by hand\n").unwrap();
+    std::fs::remove_file(bee_dir.join("playbooks").join("handoff.md")).unwrap();
+    std::fs::write(bee_dir.join("playbooks").join("retired.md"), "old\n").unwrap();
+
+    let drifted = plan(&fx, &[]);
+    let acts = actions(&drifted, "plan");
+    assert!(acts.contains(&"copy_leader".to_string()), "{acts:?}");
+    assert_eq!(paths_for(&drifted, "plan", "copy_playbook"), vec![".bee/playbooks/handoff.md"]);
+    assert_eq!(paths_for(&drifted, "plan", "remove_playbook"), vec![".bee/playbooks/retired.md"]);
+
+    apply(&fx, &[]);
+    assert_eq!(std::fs::read_to_string(bee_dir.join("LEADER.md")).unwrap(), "# leader doctrine\n");
+    assert!(bee_dir.join("playbooks").join("handoff.md").is_file());
+    assert!(!bee_dir.join("playbooks").join("retired.md").exists());
 }

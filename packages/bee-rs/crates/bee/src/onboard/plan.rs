@@ -117,6 +117,10 @@ pub fn list_template_prompts(engine: &Engine) -> Vec<String> {
     list_files_by_suffix(&engine.templates_prompts_dir, ".md")
 }
 
+pub fn list_template_playbooks(engine: &Engine) -> Vec<String> {
+    list_files_by_suffix(&engine.playbooks_dir, ".md")
+}
+
 /// listTemplateStatusline (l. 1882): every plain file, sorted.
 pub fn list_template_statusline(engine: &Engine) -> Vec<String> {
     if !exists(&engine.templates_statusline_dir) {
@@ -275,6 +279,8 @@ const LEDGER_GROUPS: &[(&str, Option<&str>)] = &[
     ("lib", Some(".bee/bin/lib")),
     ("expertise", Some(".bee/expertise")),
     ("prompts", Some(".bee/bin/prompts")),
+    ("leader", Some(".bee/LEADER.md")),
+    ("playbooks", Some(".bee/playbooks")),
     ("repo_hooks", Some(".bee/bin/hooks")),
     ("codex_hooks", Some(".bee/bin/hooks")),
     ("statusline", Some(".bee/bin/statusline")),
@@ -325,6 +331,14 @@ pub fn build_managed_versions(
     managed.insert(
         "prompts".into(),
         hash_map(&engine.templates_prompts_dir, list_template_prompts(engine)),
+    );
+    managed.insert(
+        "leader".into(),
+        json!({ "LEADER.md": hash_file(&engine.leader_template).unwrap_or_default() }),
+    );
+    managed.insert(
+        "playbooks".into(),
+        hash_map(&engine.playbooks_dir, list_template_playbooks(engine)),
     );
     if repo_hooks {
         managed.insert("repo_hooks".into(), build_hook_versions(engine));
@@ -1059,6 +1073,39 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         stale.sort();
         for name in stale {
             plan.push(plan_item("remove_prompt", &format!(".bee/bin/prompts/{name}")));
+        }
+    }
+
+    let leader_source = read_text_if_exists(&engine.leader_template);
+    if exists(&engine.leader_template)
+        && read_text_if_exists(&repo_root.join(".bee").join("LEADER.md")) != leader_source
+    {
+        plan.push(plan_item("copy_leader", ".bee/LEADER.md"));
+    }
+    let current_playbook_names = list_template_playbooks(engine);
+    for name in &current_playbook_names {
+        let source = read_text_if_exists(&engine.playbooks_dir.join(name));
+        let target = repo_root.join(".bee").join("playbooks").join(name);
+        if read_text_if_exists(&target) != source {
+            plan.push(plan_item("copy_playbook", &format!(".bee/playbooks/{name}")));
+        }
+    }
+    if exists(&engine.playbooks_dir) {
+        let playbooks_target_dir = repo_root.join(".bee").join("playbooks");
+        let mut stale: Vec<String> = if exists(&playbooks_target_dir) {
+            read_dir_sorted(&playbooks_target_dir)
+                .into_iter()
+                .filter(|e| {
+                    e.is_file && e.name.ends_with(".md") && !current_playbook_names.contains(&e.name)
+                })
+                .map(|e| e.name)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        stale.sort();
+        for name in stale {
+            plan.push(plan_item("remove_playbook", &format!(".bee/playbooks/{name}")));
         }
     }
 

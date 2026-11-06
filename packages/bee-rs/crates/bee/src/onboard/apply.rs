@@ -435,6 +435,8 @@ pub fn apply_computed_plan(
                                     | Some("copy_helper")
                                     | Some("copy_expertise")
                                     | Some("copy_prompt")
+                                    | Some("copy_leader")
+                                    | Some("copy_playbook")
                                     | Some("copy_binary")
                             )
                         })
@@ -649,6 +651,24 @@ pub fn apply_computed_plan(
                     if !same_file && !symlink_to_other_checkout && src.is_file() {
                         let _ = copy_binary_atomic(&src, &target);
                     }
+                }
+            }
+            "copy_leader" => {
+                let _ = write_file_atomic(
+                    &target,
+                    read_text_if_exists(&engine.leader_template).as_bytes(),
+                );
+            }
+            "copy_playbook" => {
+                let name = posix_basename(rel);
+                let _ = write_file_atomic(
+                    &target,
+                    read_text_if_exists(&engine.playbooks_dir.join(name)).as_bytes(),
+                );
+            }
+            "remove_playbook" => {
+                if posix_dirname(rel) == ".bee/playbooks" {
+                    let _ = std::fs::remove_file(&target);
                 }
             }
             "remove_prompt" => {

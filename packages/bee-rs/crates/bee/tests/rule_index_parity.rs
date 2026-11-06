@@ -1,9 +1,10 @@
 // The rule-id parity fence.
 //
-// A rule id lives in THREE places: the `<!-- rule: <id> -->` markers in
-// `packages/bee/AGENTS.block.md`, the same markers in the rendered `AGENTS.md`,
-// and one row per rule in the `## AGENTS.md rule homes` section of the
-// doctrine-layer concept. `bee knowledge check` validates ref→home; nothing
+// A rule id lives in TWO places: one `<!-- rule: <id> -->` marker in the shipped
+// doctrine — `packages/bee/LEADER.md` or a file under `packages/bee/playbooks/`
+// (the thin `AGENTS.block.md` carries none, and its render in `AGENTS.md` with
+// it) — and one row per rule in the `## AGENTS.md rule homes` section of the
+// doctrine-layer concept, which names the file that carries the marker. `bee knowledge check` validates ref→home; nothing
 // validated marker↔marker↔row, and nothing at all read the spoken line the
 // invocation law depends on. A rule you can name out loud but cannot find in
 // the index is a law with no address.
@@ -33,6 +34,9 @@ use std::path::PathBuf;
 /// The generated operating block, and the source it is rendered from.
 const AGENTS_MD: &str = "AGENTS.md";
 const AGENTS_BLOCK: &str = "packages/bee/AGENTS.block.md";
+const LEADER: &str = "packages/bee/LEADER.md";
+const PLAYBOOKS_DIR: &str = "packages/bee/playbooks";
+const THIN_BLOCK_LIMIT: usize = 3000;
 
 /// The single home of the rule index.
 const INDEX: &str =
@@ -55,8 +59,8 @@ fn read(rel: &str) -> String {
 
 /// Rule ids opened by `<!-- rule: <id> -->`. A closing `<!-- /rule -->` carries
 /// no id and is skipped, exactly as `extract_rule_markers` skips it.
-fn markers(text: &str) -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
+fn marker_list(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
     let mut cursor = 0usize;
     while let Some(rel) = text[cursor..].find("<!--") {
         let start = cursor + rel + 4;
@@ -65,10 +69,38 @@ fn markers(text: &str) -> BTreeSet<String> {
         if let Some(id) = text[start..end].trim().strip_prefix("rule:") {
             let id = id.trim();
             if !id.is_empty() && !id.starts_with('/') {
-                out.insert(id.to_string());
+                out.push(id.to_string());
             }
         }
         cursor = end + 3;
+    }
+    out
+}
+
+fn markers(text: &str) -> BTreeSet<String> {
+    marker_list(text).into_iter().collect()
+}
+
+fn doctrine_files() -> Vec<String> {
+    let mut files = vec![AGENTS_BLOCK.to_string(), LEADER.to_string()];
+    let mut playbooks: Vec<String> = std::fs::read_dir(repo_root().join(PLAYBOOKS_DIR))
+        .unwrap_or_else(|e| panic!("cannot read {PLAYBOOKS_DIR}: {e}"))
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| n.ends_with(".md"))
+        .map(|n| format!("{PLAYBOOKS_DIR}/{n}"))
+        .collect();
+    playbooks.sort();
+    files.extend(playbooks);
+    files
+}
+
+fn rule_files() -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for file in doctrine_files() {
+        for id in marker_list(&read(&file)) {
+            out.push((id, file.clone()));
+        }
     }
     out
 }
@@ -92,6 +124,7 @@ fn rule_homes_section(text: &str) -> &str {
 
 struct Row {
     id: String,
+    home: Option<String>,
     /// The `spoken:` text found before this row's `applied_at:` line, if any.
     spoken: Option<String>,
 }
@@ -104,13 +137,20 @@ fn row_id(line: &str) -> Option<String> {
     rest[close + 1..].starts_with(" (").then(|| rest[..close].to_string())
 }
 
+fn row_home(line: &str) -> Option<String> {
+    let open = line.find(" (")?;
+    let inner = &line[open + 2..];
+    let end = inner.find(" § ").or_else(|| inner.find(')'))?;
+    Some(inner[..end].trim().to_string())
+}
+
 fn rows(section: &str) -> Vec<Row> {
     let mut out: Vec<Row> = Vec::new();
     let mut in_applied_at = false;
 
     for line in section.lines() {
         if let Some(id) = row_id(line) {
-            out.push(Row { id, spoken: None });
+            out.push(Row { home: row_home(line), id, spoken: None });
             in_applied_at = false;
             continue;
         }
@@ -127,18 +167,12 @@ fn rows(section: &str) -> Vec<Row> {
     out
 }
 
-// ── the two AGENTS surfaces carry the same markers ─────────────────────────
+// ── the shipped doctrine carries each rule marker once, and the block is thin ──
 
 #[test]
-fn both_agents_surfaces_carry_the_same_rule_markers() {
+fn the_rendered_block_carries_the_same_markers_as_its_source() {
     let rendered = markers(&read(AGENTS_MD));
     let source = markers(&read(AGENTS_BLOCK));
-
-    assert!(
-        !source.is_empty(),
-        "{AGENTS_BLOCK} carries no `<!-- rule: <id> -->` marker at all, so this fence is \
-         comparing two empty sets and cannot fail — the exact silence it exists to break"
-    );
 
     let missing_from_source: Vec<&str> =
         rendered.difference(&source).map(String::as_str).collect();
@@ -156,14 +190,54 @@ fn both_agents_surfaces_carry_the_same_rule_markers() {
     );
 }
 
+#[test]
+fn the_agents_block_stays_thin_and_carries_no_rule_marker() {
+    let block = read(AGENTS_BLOCK);
+    assert!(
+        block.chars().count() < THIN_BLOCK_LIMIT,
+        "{AGENTS_BLOCK} is {} chars; the block every worker loads must stay under \
+         {THIN_BLOCK_LIMIT}. FIX: move leader-only doctrine into {LEADER} or a playbook.",
+        block.chars().count()
+    );
+    assert!(
+        markers(&block).is_empty(),
+        "{AGENTS_BLOCK} carries a rule marker; rule text lives in {LEADER} or {PLAYBOOKS_DIR}/"
+    );
+}
+
+#[test]
+fn every_rule_marker_is_homed_exactly_once_across_the_shipped_doctrine() {
+    let found = rule_files();
+    assert!(
+        !found.is_empty(),
+        "{LEADER} and {PLAYBOOKS_DIR}/ carry no `<!-- rule: <id> -->` marker at all, so this fence \
+         would compare nothing"
+    );
+    let mut seen: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
+    for (id, file) in &found {
+        seen.entry(id.as_str()).or_default().push(file.as_str());
+    }
+    let duplicated: Vec<String> = seen
+        .iter()
+        .filter(|(_, files)| files.len() > 1)
+        .map(|(id, files)| format!("{id} in {}", files.join(", ")))
+        .collect();
+    assert!(
+        duplicated.is_empty(),
+        "rule marker(s) homed more than once: [{}]. A rule has exactly one home.",
+        duplicated.join("; ")
+    );
+}
+
 // ── every marked rule is indexed, and every indexed rule is marked ─────────
 
 #[test]
-fn every_marked_rule_has_an_index_row_and_every_row_a_marker() {
-    let marked = markers(&read(AGENTS_BLOCK));
+fn every_marked_rule_has_an_index_row_naming_its_file_and_every_row_a_marker() {
+    let found = rule_files();
+    let marked: BTreeSet<String> = found.iter().map(|(id, _)| id.clone()).collect();
     let index = read(INDEX);
-    let indexed: BTreeSet<String> =
-        rows(rule_homes_section(&index)).into_iter().map(|r| r.id).collect();
+    let index_rows = rows(rule_homes_section(&index));
+    let indexed: BTreeSet<String> = index_rows.iter().map(|r| r.id.clone()).collect();
 
     assert!(
         !indexed.is_empty(),
@@ -176,17 +250,33 @@ fn every_marked_rule_has_an_index_row_and_every_row_a_marker() {
 
     assert!(
         unindexed.is_empty(),
-        "rule(s) [{}] are marked in {AGENTS_BLOCK} but have no row in {INDEX} § {HEADING:?}.\n\n\
-         An unindexed rule cannot be invoked by name: the index is where a spoken id resolves to \
-         its section and its spoken form. FIX: add a row for each id above.",
+        "rule(s) [{}] are marked in {LEADER} or {PLAYBOOKS_DIR}/ but have no row in {INDEX} § \
+         {HEADING:?}.\n\nAn unindexed rule cannot be invoked by name: the index is where a \
+         spoken id resolves to its file and its spoken form. FIX: add a row for each id above.",
         unindexed.join(" "),
     );
     assert!(
         unmarked.is_empty(),
         "rule(s) [{}] have a row in {INDEX} § {HEADING:?} but no `<!-- rule: <id> -->` marker in \
-         {AGENTS_BLOCK}.\n\nThe row points at prose that no longer claims the id. FIX: mark the \
-         rule in {AGENTS_BLOCK} and regen, or drop the stale row.",
+         {LEADER} or {PLAYBOOKS_DIR}/.\n\nThe row points at prose that no longer claims the id. \
+         FIX: mark the rule and regen, or drop the stale row.",
         unmarked.join(" "),
+    );
+
+    let wrong_file: Vec<String> = found
+        .iter()
+        .filter_map(|(id, file)| {
+            let row = index_rows.iter().find(|r| &r.id == id)?;
+            (row.home.as_deref() != Some(file.as_str())).then(|| {
+                format!("{id}: row names {:?}, marker is in {file}", row.home.as_deref().unwrap_or(""))
+            })
+        })
+        .collect();
+    assert!(
+        wrong_file.is_empty(),
+        "rule row(s) in {INDEX} name the wrong file:\n  {}\n\nFIX: put the marker's file, as \
+         `(<path> § <section>)`, on each row.",
+        wrong_file.join("\n  "),
     );
 }
 
