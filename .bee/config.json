@@ -429,5 +429,6 @@
         }
       }
     }
-  }
+  },
+  "handoff_context_tokens": 0
 }
