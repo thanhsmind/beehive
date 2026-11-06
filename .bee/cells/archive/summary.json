@@ -1948,5 +1948,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-06T07:05:31.603Z"
+  },
+  "handoff-flag-doctrine": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-06T07:09:34.419Z"
   }
 }

@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "handoff-flag-doctrine",
+  "closed_at": "2026-11-06T07:09:34.464Z",
+  "sessions": [
+    {
+      "session_id": "2f346667-6330-4127-90da-e015976b38a9",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 412,
+          "output": 68648,
+          "cache_write": 212239,
+          "cache_read": 27664196,
+          "new": 281299,
+          "cached": 27664196,
+          "total": 27945495
+        }
+      },
+      "subagent_models": {
+        "claude-sonnet-5-5": {
+          "input": 4,
+          "output": 802,
+          "cache_write": 18763,
+          "cache_read": 16158,
+          "new": 19569,
+          "cached": 16158,
+          "total": 35727
+        }
+      },
+      "subagent_count": 1,
+      "started_ms": 1793947866118,
+      "ended_ms": 1793948972942,
+      "totals": {
+        "new": 300868,
+        "cached": 27680354,
+        "total": 27981222
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 281299,
+      "cached": 27664196,
+      "total": 27945495
+    },
+    "subagents": {
+      "new": 19569,
+      "cached": 16158,
+      "total": 35727
+    },
+    "total": {
+      "new": 300868,
+      "cached": 27680354,
+      "total": 27981222
+    }
+  }
+}
