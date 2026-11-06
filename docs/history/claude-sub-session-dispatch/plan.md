@@ -115,7 +115,7 @@ shipped flag and field names.
     {"stage":"deployment","classification":"required","role":"deploy","reason":"The owner asked for the full chain to release."},
     {"stage":"fact-extraction","classification":"not-applicable","role":"extraction","reason":"No extraction."},
     {"stage":"generation-fallback","classification":"not-applicable","role":"generation","reason":"Every job has a specific role."},
-    {"stage":"independent-review","classification":"not-applicable","role":"review","reason":"Independent review stays user-invoked."},
+    {"stage":"independent-review","classification":"conditional","role":"review","condition":"the standard-lane semantic judge of capped behavior_change cells at slice close","reason":"Goal-check judge tier, not a user review session."},
     {"stage":"generic-advisor","classification":"not-applicable","role":"advisor","reason":"Standard lane; the hat wave is the consult."},
     {"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"No unattended loop."},
     {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"One clear design."},
