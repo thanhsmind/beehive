@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "path-rigor-floor",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"path-rigor-floor\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 45082c5; reload the product and test \"path-rigor-floor\", then either approve uat (\"bee gate --name uat --approved true --lane path-rigor-floor\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"path-rigor-floor\" — feature is closed.",
   "created_at": "2026-11-06T03:31:14.288Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
