@@ -307,13 +307,19 @@ pub(crate) fn start_lane(
                 &s == &json!("open")
                     || &s == &json!("claimed")
                     || &s == &json!("blocked")
+                    || &s == &json!("parked")
             }
         })
         .map(|c| format!("{}({})", cell_id_disp(c), js_disp_opt(c.get("status"))))
         .collect();
     if !nonterminal.is_empty() {
+        let answer = if nonterminal.iter().any(|c| c.ends_with("(parked)")) {
+            format!(" A parked cell waits on a human answer: {}.", crate::verbs::cells::answer_remedy("<cell>"))
+        } else {
+            String::new()
+        };
         return Ok(Err(format!(
-            "startFeature: refused — feature \"{feature}\" already has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee cells drop --id ID --reason R). FIX: cap or drop each listed cell, then retry.",
+            "startFeature: refused — feature \"{feature}\" already has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee cells drop --id ID --reason R).{answer} FIX: cap or drop each listed cell, then retry.",
             nonterminal.join(", ")
         )));
     }
@@ -823,4 +829,28 @@ pub(crate) fn run_start_feature(flags: Flags, use_json: bool, t0: Instant) -> Op
         Ok(Out::Emit(Value::Object(legacy), text, 0))
     })();
     finish(&ctx, out)
+}
+
+#[cfg(test)]
+mod parked_start_tests {
+    use super::*;
+
+    #[test]
+    fn start_feature_counts_a_parked_cell_as_unfinished() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cells = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(
+            cells.join("c-1.json"),
+            r#"{"id":"c-1","feature":"demo","status":"parked","lane":"standard","title":"t"}"#,
+        )
+        .unwrap();
+        let refusal = match start_lane(root, root, "demo", None, "planning", None, &[], &[]) {
+            Ok(Err(msg)) => msg,
+            other => panic!("a parked cell must refuse the start, got {:?}", other.map(|r| r.is_ok())),
+        };
+        assert!(refusal.contains("c-1(parked)"), "{refusal}");
+        assert!(refusal.contains("bee cells answer --id <cell> --answer"), "{refusal}");
+    }
 }

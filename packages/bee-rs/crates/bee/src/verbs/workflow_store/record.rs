@@ -262,13 +262,14 @@ pub(crate) struct CellCounts {
     pub(crate) open: usize,
     pub(crate) claimed: usize,
     pub(crate) blocked: usize,
+    pub(crate) parked: usize,
     pub(crate) capped: usize,
     pub(crate) dropped: usize,
 }
 
 impl CellCounts {
     pub(crate) fn total(&self) -> usize {
-        self.open + self.claimed + self.blocked + self.capped + self.dropped
+        self.open + self.claimed + self.blocked + self.parked + self.capped + self.dropped
     }
 }
 
@@ -285,6 +286,7 @@ pub(crate) fn cell_counts_for_feature(root: &Path, feature: &str) -> CellCounts 
             Some("open") => counts.open += 1,
             Some("claimed") => counts.claimed += 1,
             Some("blocked") => counts.blocked += 1,
+            Some("parked") => counts.parked += 1,
             Some("capped") => counts.capped += 1,
             Some("dropped") => counts.dropped += 1,
             _ => {}
@@ -346,6 +348,9 @@ pub(crate) fn derive_run_state(status: &str, gates: &Value, cells: &CellCounts) 
     }
     if cells.open > 0 || cells.claimed > 0 {
         return "running";
+    }
+    if cells.parked > 0 {
+        return "awaiting-approval";
     }
     if cells.blocked > 0 {
         return "blocked";
@@ -1093,4 +1098,21 @@ pub(crate) fn update_workflow(
     let out = update_workflow_assuming_lock(root, &workflow_id, patch);
     drop(guard);
     out
+}
+
+#[cfg(test)]
+mod parked_run_state_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_lane_left_with_only_a_parked_cell_waits_on_the_human() {
+        let gates = Value::Object(
+            GATE_NAMES.iter().map(|g| (g.to_string(), json!({"state": "approved"}))).collect(),
+        );
+        let counts = CellCounts { capped: 2, parked: 1, ..CellCounts::default() };
+        assert_eq!(derive_run_state("active", &gates, &counts), "awaiting-approval");
+        let counts = CellCounts { open: 1, parked: 1, ..CellCounts::default() };
+        assert_eq!(derive_run_state("active", &gates, &counts), "running");
+    }
 }
