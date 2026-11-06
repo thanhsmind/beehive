@@ -357,7 +357,7 @@ fn parked_count(status: &JMap) -> i64 {
     status.get("cells").and_then(|c| vget(c, "parked")).and_then(Value::as_i64).unwrap_or(0)
 }
 
-fn parked_cells_blocker_line(status: &JMap) -> Option<String> {
+pub(super) fn parked_cells_blocker_line(status: &JMap) -> Option<String> {
     let parked = parked_count(status);
     (parked > 0).then(|| {
         format!(

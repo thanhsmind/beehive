@@ -315,14 +315,16 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
         let capped = vget(&cells, "capped").and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
         let arch_capped = vget(&archived, "capped").and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
         lines.push(format!(
-            "Cells: open={} claimed={} capped={} blocked={} archived={} (total capped={})",
+            "Cells: open={} claimed={} capped={} blocked={} parked={} archived={} (total capped={})",
             tpl(vget(&cells, "open")),
             tpl(vget(&cells, "claimed")),
             tpl(vget(&cells, "capped")),
             tpl(vget(&cells, "blocked")),
+            tpl(vget(&cells, "parked")),
             tpl(vget(&archived, "total")),
             jsjson::js_f64_to_string(capped + arch_capped),
         ));
+        lines.extend(super::orient::parked_cells_blocker_line(status));
     }
     match s("lanes") {
         Some(Value::Array(rows)) => {

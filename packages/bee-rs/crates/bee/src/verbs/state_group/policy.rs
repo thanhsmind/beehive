@@ -270,6 +270,25 @@ pub(crate) fn ws_err(e: ws::WsErr) -> Err2 {
 
 // ─── startLane / the default legacy body ──────────────────────────────────
 
+fn unfinished_cells(cells: &[Map<String, Value>], feature: &Value) -> Vec<String> {
+    cells
+        .iter()
+        .filter(|c| {
+            &cell_field(c, "feature") == feature
+                && matches!(cell_field(c, "status").as_str(), Some("open" | "claimed" | "blocked" | "parked"))
+        })
+        .map(|c| format!("{}({})", cell_id_disp(c), js_disp_opt(c.get("status"))))
+        .collect()
+}
+
+fn parked_answer_clause(unfinished: &[String]) -> String {
+    if unfinished.iter().any(|c| c.ends_with("(parked)")) {
+        format!(" A parked cell waits on a human answer: {}.", crate::verbs::cells::answer_remedy("<cell>"))
+    } else {
+        String::new()
+    }
+}
+
 /// state.mjs startLane — the whole lane branch, run inside the 'state' hold.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_lane(
@@ -299,28 +318,12 @@ pub(crate) fn start_lane(
     let cells = list_all_cells_for_start(root)?;
 
     // (a) nonterminal cells of THIS lane's feature.
-    let nonterminal: Vec<String> = cells
-        .iter()
-        .filter(|c| {
-            &cell_field(c, "feature") == &json!(feature) && {
-                let s = cell_field(c, "status");
-                &s == &json!("open")
-                    || &s == &json!("claimed")
-                    || &s == &json!("blocked")
-                    || &s == &json!("parked")
-            }
-        })
-        .map(|c| format!("{}({})", cell_id_disp(c), js_disp_opt(c.get("status"))))
-        .collect();
+    let nonterminal = unfinished_cells(&cells, &json!(feature));
     if !nonterminal.is_empty() {
-        let answer = if nonterminal.iter().any(|c| c.ends_with("(parked)")) {
-            format!(" A parked cell waits on a human answer: {}.", crate::verbs::cells::answer_remedy("<cell>"))
-        } else {
-            String::new()
-        };
         return Ok(Err(format!(
-            "startFeature: refused — feature \"{feature}\" already has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee cells drop --id ID --reason R).{answer} FIX: cap or drop each listed cell, then retry.",
-            nonterminal.join(", ")
+            "startFeature: refused — feature \"{feature}\" already has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee cells drop --id ID --reason R).{} FIX: cap or drop each listed cell, then retry.",
+            nonterminal.join(", "),
+            parked_answer_clause(&nonterminal)
         )));
     }
 
@@ -564,23 +567,13 @@ pub(crate) fn start_default(
 
     let prior_feature = state.get("feature").cloned().unwrap_or(Value::Null);
     if truthy(&prior_feature) {
-        let nonterminal: Vec<String> = cells
-            .iter()
-            .filter(|c| {
-                &cell_field(c, "feature") == &prior_feature && {
-                    let s = cell_field(c, "status");
-                    &s == &json!("open")
-                        || &s == &json!("claimed")
-                        || &s == &json!("blocked")
-                }
-            })
-            .map(|c| format!("{}({})", cell_id_disp(c), js_disp_opt(c.get("status"))))
-            .collect();
+        let nonterminal = unfinished_cells(&cells, &prior_feature);
         if !nonterminal.is_empty() {
             return Ok(Err(format!(
-                "startFeature: refused — prior feature \"{}\" has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee cells drop --id ID --reason R) — startFeature never auto-clears cells as cleanup. FIX: cap or drop each listed cell, then retry.",
+                "startFeature: refused — prior feature \"{}\" has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee cells drop --id ID --reason R) — startFeature never auto-clears cells as cleanup.{} FIX: cap or drop each listed cell, then retry.",
                 js_disp_opt(Some(&prior_feature)),
-                nonterminal.join(", ")
+                nonterminal.join(", "),
+                parked_answer_clause(&nonterminal)
             )));
         }
     }
@@ -849,6 +842,26 @@ mod parked_start_tests {
         let refusal = match start_lane(root, root, "demo", None, "planning", None, &[], &[]) {
             Ok(Err(msg)) => msg,
             other => panic!("a parked cell must refuse the start, got {:?}", other.map(|r| r.is_ok())),
+        };
+        assert!(refusal.contains("c-1(parked)"), "{refusal}");
+        assert!(refusal.contains("bee cells answer --id <cell> --answer"), "{refusal}");
+    }
+
+    #[test]
+    fn default_start_counts_a_prior_feature_parked_cell_as_unfinished() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cells = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(root.join(".bee").join("state.json"), r#"{"phase":"idle","feature":"prior"}"#).unwrap();
+        std::fs::write(
+            cells.join("c-1.json"),
+            r#"{"id":"c-1","feature":"prior","status":"parked","lane":"standard","title":"t"}"#,
+        )
+        .unwrap();
+        let refusal = match start_default(root, root, "next", None, "planning", None, &[], &[]) {
+            Ok(Err(msg)) => msg,
+            other => panic!("a prior parked cell must refuse the start, got {:?}", other.map(|r| r.is_ok())),
         };
         assert!(refusal.contains("c-1(parked)"), "{refusal}");
         assert!(refusal.contains("bee cells answer --id <cell> --answer"), "{refusal}");
