@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"path-rigor-floor\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"path-rigor-floor\" (lane).",
+  "next_action": "Merged into main at 45082c5; reload the product and test \"path-rigor-floor\", then either approve uat (\"bee gate --name uat --approved true --lane path-rigor-floor\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-06T03:31:14.288Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: path-rigor-floor",
+    "asked_at": "2026-11-06T04:48:38.025Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -594,12 +599,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-06T03:46:44.100Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-06T04:41:39.448Z",
-    "branch": "wt/path-rigor-floor",
-    "worktree_id": "beehive--wt--path-rigor-floor",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
