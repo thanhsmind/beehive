@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"handoff-flag-doctrine\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"handoff-flag-doctrine\" — feature is closed.",
+  "next_action": "Merged into main at 4310e1d; capture what settled, then bee close --feature handoff-flag-doctrine.",
   "created_at": "2026-11-06T07:07:55.351Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -389,13 +389,6 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-06T07:09:16.732Z",
-    "branch": "wt/handoff-flag-doctrine",
-    "worktree_id": "beehive--wt--handoff-flag-doctrine",
-    "uat": "pending",
-    "blocked_by": []
   },
   "last_scribing_run": {
     "feature": "handoff-flag-doctrine",
