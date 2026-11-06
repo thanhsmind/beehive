@@ -803,6 +803,8 @@
     "contract:owner-first-gate",
     "contract:context-mark-advisory-line",
     "sub-session",
-    "plan-check"
+    "plan-check",
+    "telemetry",
+    "contract:usage-herding-block"
   ]
 }

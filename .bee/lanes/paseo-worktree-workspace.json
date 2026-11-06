@@ -14,5 +14,10 @@
   "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-06T14:44:16.600Z",
+    "session": "98d1e9b8-f84d-4b81-a156-28fcb1f6a08a"
+  }
 }
