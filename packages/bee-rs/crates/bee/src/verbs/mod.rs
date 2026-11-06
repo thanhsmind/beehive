@@ -20,6 +20,7 @@ pub mod brief;
 pub mod blind;
 pub mod capture;
 pub mod cells;
+pub mod config;
 pub mod decisions;
 pub mod deferred_queue;
 pub mod design_group;
@@ -163,6 +164,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     // models-show-verb D1: the role table is a READ verb, so an agent never
     // has to parse .bee/config.json by hand to learn what a role means.
     if let Some(code) = models_group::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = config::try_native(args, t0) {
         return Some(code);
     }
     knowledge::try_native(args, t0)

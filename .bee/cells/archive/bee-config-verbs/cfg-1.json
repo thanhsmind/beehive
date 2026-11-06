@@ -1,0 +1,185 @@
+{
+  "id": "cfg-1",
+  "feature": "bee-config-verbs",
+  "title": "Build bee config get, set, unset, explain and validate in Rust",
+  "lane": "small",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "b82c68d2-00ef-42f2-9c07-3d86d06cb212"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/config.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    ".bee/tmp/xia-forgent/config-prior-art.md",
+    "docs/history/research/forgent-xia.md",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/state.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "docs/config-reference.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Today `bee config get|set|unset|validate` refuse with 'not built into this binary' (registry entries carry an `unavailable` gap; router.rs ~404). Build them in Rust, plus a new `bee config explain`, so an agent never hand-edits .bee/config.json. Contract (decision b82c68d2; full prior-art digest in .bee/tmp/xia-forgent/config-prior-art.md; old Node code at `git show 5c62cad02^:packages/bee/bee.mjs` lines ~6276-6470): get --key <dotted> [--local] -> json {key, present, value|null, local, warning}; text `key = <json>` or `config get: \"<key>\" is not set.` (exit nonzero not required; match Node). set --key --value [--string] [--local] -> json {key, value}; value JSON-parsed, non-JSON kept as string, --string forces string; creates parent objects. unset --key [--local] -> {key, removed}; prunes empty parents. --local targets .bee/config.local.json and warns when the tracked file also sets the key. A missing file is created as {} on set; an existing file that is invalid JSON or not an object refuses the write with zero mutation. Writes go through fsutil::write_json_atomic. set and unset REFUSE (typed error, zero mutation) any key that is, or is inside, or contains a governed key the config write guard protects: team, herding.agents, herding.agent_command, hooks — reuse the guard's own governed-key list from hooks/write_guard/guards.rs (one home; do not copy the list) and give its remedy (the user edits this mapping directly). set refuses a write that adds a model-config validation problem when such a validator exists in Rust; if none exists, record that as a deviation. explain --key -> {key, effective, source: local|tracked|unset, tracked, local} and a short text form; `unset` source means the built-in default applies (name the docs/config-reference.md section in the text). validate -> reads both files, reports parse errors and model-config problems, exit nonzero on problems. Remove the `unavailable` gap for these verbs in the registry (regenerate registry_payload.json the way `bee dev` does it; find the generator) and register explain. Update docs/config-reference.md 'Setting values' section (lines 7-21) to document the verbs instead of telling readers to hand-edit. Tests (integration, driving the real binary in a temp repo): get/set/unset round trip with dotted keys and parent pruning; --local overlay and its warning; --string; invalid-file refusal leaves bytes unchanged; each governed key refused by set and unset with the file unchanged; explain source for local, tracked and unset. If you add a new public verb surface, run bee dev regen if the repo requires it (check the release-manifest obligation the cells add guard names).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test config_verbs --test registry_contracts",
+  "verify_owner": "main (feature close) — the worker never runs this",
+  "must_haves": {
+    "truths": [
+      "bee config get, set, unset, explain and validate run instead of refusing as not built",
+      "set and unset refuse every governed key the config write guard protects and leave the file unchanged",
+      "explain names the layer the effective value comes from",
+      "docs/config-reference.md documents the verbs instead of telling readers to hand-edit"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/config.rs",
+        "substantive": "five verbs, governed-key refusal reusing the guard list"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+        "substantive": "drives the real binary"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No second copy of the governed-key list",
+      "No global config layer",
+      "No code comments (no_code_comments)"
+    ],
+    "open_choices": [
+      "Module layout of the verb code",
+      "Exact text output wording beyond the Node shapes"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "cfg-1-worker",
+    "outcome": "bee config get, set, unset, explain and validate run natively; governed keys refused via the write guard check",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/config.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+      "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+      "docs/config-reference.md"
+    ],
+    "deviations": [
+      "scope: edited tests/registry_dispatch.rs (not in cell files) — its command_unavailable fixture used config get, which this cell's own action makes runnable; moved it to herding enable, one line",
+      "governed-key refusal reuses the guard's config_governed_change_deny over the merged tracked+local config in both directions (forward gives the guard's own deny text; reverse catches adds the guard lets through), so no list is copied; a field the guard's view ignores (for example a role description) stays settable",
+      "no registry generator exists in the repo (scripts/export_registry_payload.mjs is gone); registry_payload.json was edited by a JSON round-trip that keeps its compact byte format",
+      "config get without --local reads the tracked file only, as Node did; the old forced-local routing for guards.* and hooks.* was not carried over (hooks is now governed and refused)",
+      "set and unset results carry local and warning beside the contract keys"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T03:36:59.874Z",
+    "behavior_change": false,
+    "verification_evidence": "7 + 12 passed over the touched config verbs and registry payload; also ran registry_dispatch (9), bin router:: (20) and help (32), comment-baseline and release-manifest checks, all clean; cargo was already on PATH; the full declared suite was not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "52195278-6a88-45d4-9842-b2876284d5e4",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test config_verbs --test registry_contracts",
+    "claimed_at": "2026-11-06T03:27:24.183Z",
+    "mistakes": [
+      {
+        "wrong": "ran a smoke test in Bash with shell variables and a cd compound, which the write guard refused twice",
+        "better": "drive the live check through the integration test or plain absolute paths from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "bee config get, set, unset, explain and validate run natively; set and unset refuse governed config through the write guard's own check; docs teach the verbs",
+      "commit": "51402c677",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/config.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+        "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+        "docs/config-reference.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test config_verbs --test registry_contracts — green:unit — 7 + 12 passed over the touched config verbs and registry payload; also ran registry_dispatch (9), bin router:: (20) and help (32), comment-baseline and release-manifest checks, all clean; cargo was already on PATH; the full declared suite was not run",
+      "deviations": [
+        "scope: edited tests/registry_dispatch.rs (not in cell files) — its command_unavailable fixture used config get, which this cell's own action makes runnable; moved it to herding enable, one line",
+        "governed-key refusal reuses the guard's config_governed_change_deny over the merged tracked+local config in both directions (forward gives the guard's own deny text; reverse catches adds the guard lets through), so no list is copied; a field the guard's view ignores (for example a role description) stays settable",
+        "no registry generator exists in the repo (scripts/export_registry_payload.mjs is gone); registry_payload.json was edited by a JSON round-trip that keeps its compact byte format",
+        "config get without --local reads the tracked file only, as Node did; the old forced-local routing for guards.* and hooks.* was not carried over (hooks is now governed and refused)",
+        "set and unset results carry local and warning beside the contract keys"
+      ],
+      "mistakes": [
+        "ran a smoke test in Bash with shell variables and a cd compound, which the write guard refused twice — drive the live check through the integration test or plain absolute paths from the start — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "ownership_overrides": [
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "d422f401-8a56-46a9-99fb-b3cf6f257f2d",
+        "owner_bypassed": null,
+        "at": "2026-11-06T03:40:54.990Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee config get, set, unset, explain and validate run instead of refusing as not built",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/config.rs"
+          },
+          {
+            "requirement": "set and unset refuse every governed key the config write guard protects and leave the file unchanged",
+            "artifact": "packages/bee-rs/crates/bee/tests/config_verbs.rs"
+          },
+          {
+            "requirement": "explain names the layer the effective value comes from",
+            "artifact": "packages/bee-rs/crates/bee/tests/config_verbs.rs"
+          },
+          {
+            "requirement": "docs/config-reference.md documents the verbs instead of telling readers to hand-edit",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/config.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/config.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/router.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/router.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/config_verbs.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/config_verbs.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+          },
+          {
+            "requirement": "docs/config-reference.md",
+            "artifact": "docs/config-reference.md"
+          }
+        ],
+        "recorded_at": "2026-11-06T03:40:54.990Z",
+        "recorded_by": "d422f401-8a56-46a9-99fb-b3cf6f257f2d",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
