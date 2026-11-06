@@ -149,7 +149,9 @@ bought a smaller help output at the price of a blind guard.
   zero mutation, any key that is, sits inside, or holds a key the config
   write guard governs (`team`, `herding.agents`, `herding.agent_command`,
   `hooks`). The refusal calls the guard's own check in both directions over
-  the merged tracked and local config, so the governed list has one home. A
+  the merged tracked and local config, so the governed list has one home; it
+  also refuses an add inside `team` or `herding.agents`. A field the guard's
+  view ignores (for example a role description) can still be set. A
   target file that is not a JSON object is never overwritten. `explain`
   names the layer that wins: `local`, `tracked`, or `unset` (built-in
   default). The user guide is `docs/config-reference.md`, "Setting values"
