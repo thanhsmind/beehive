@@ -689,7 +689,8 @@ handoff (`bee state handoff write --kind planned-next --writer-session <id>
 --previous-cell <capped-id> --next-cell <claimed-id>`), and hand the
 remaining work to a fresh leader through the host's leader door when one
 exists (waggledance: `waggledance_dispatch` with `leader: true` and
-`follow_up_of` naming the current run, so the successor joins the same
+`follow_up_of` naming the current run plus
+`handoff: true`, so the successor joins the same
 run family; task text naming what is done, what is next, and the user's
 standing orders),
 then release this session. The fresh leader adopts the carried claim

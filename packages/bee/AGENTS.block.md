@@ -295,7 +295,8 @@ one type per file, linked where types meet.
   a stop. Write `.bee/HANDOFF.json` and hand off only when the user
   asks for a switch, or at feature close. Then use the host's leader
   door when one exists (waggledance: `waggledance_dispatch` with
-  `leader: true` and `follow_up_of` naming the current run, so the
+  `leader: true` and `follow_up_of` naming the current run plus
+  `handoff: true`, so the
   successor joins the same run family; task text names what is done,
   what is next, and the user's standing orders), and release the
   session. Never tell the user to open a new session, never wait for a
