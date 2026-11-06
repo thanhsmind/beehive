@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"framework-feedback-rule\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"framework-feedback-rule\" — feature is closed.",
+  "next_action": "Merged into main at 7d03981; capture what settled, then bee close --feature framework-feedback-rule.",
   "created_at": "2026-11-06T07:11:35.558Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -383,13 +383,6 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-06T07:14:58.373Z",
-    "branch": "wt/framework-feedback-rule",
-    "worktree_id": "beehive--wt--framework-feedback-rule",
-    "uat": "pending",
-    "blocked_by": []
   },
   "last_scribing_run": {
     "feature": "framework-feedback-rule",
