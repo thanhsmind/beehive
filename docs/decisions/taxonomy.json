@@ -800,6 +800,7 @@
     "contract:cells-park",
     "contract:parked-cell-door",
     "contract:rigor-floor",
-    "contract:owner-first-gate"
+    "contract:owner-first-gate",
+    "contract:context-mark-advisory-line"
   ]
 }
