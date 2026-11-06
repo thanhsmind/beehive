@@ -123,6 +123,7 @@ pub(crate) mod fork;
 pub(crate) mod notify;
 pub(crate) mod broker;
 pub(crate) mod paseo;
+mod claude_session;
 pub(crate) mod paseo_state;
 pub(crate) mod pi_agent_dir;
 
@@ -1019,6 +1020,17 @@ fn fmt_ctx(n: u64) -> String {
     }
 }
 
+fn insert_steer(job_map: &mut Map<String, Value>, job_obj: &Map<String, Value>) -> String {
+    let mut disp = String::new();
+    for key in ["session_id", "steer_to"] {
+        if let Some(v) = job_obj.get(key).and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()) {
+            job_map.insert(key.into(), Value::String(v.to_string()));
+            disp.push_str(&format!(" {key}={v}"));
+        }
+    }
+    disp
+}
+
 fn insert_read_only(job_map: &mut Map<String, Value>, job_obj: &Map<String, Value>, is_paseo: bool) -> String {
     if job_obj.get("read_only").and_then(Value::as_bool) != Some(true) {
         return String::new();
@@ -1277,7 +1289,8 @@ fn collect_jobs(
                 _ => Value::Null,
             };
             job_map.insert("paseo_model_observed".into(), paseo_model_observed);
-            let usage_disp = insert_stall_reason(&mut job_map, bee_dir, &job_id, &status)
+            let usage_disp = insert_steer(&mut job_map, &job_obj)
+                + &insert_stall_reason(&mut job_map, bee_dir, &job_id, &status)
                 + &insert_read_only(&mut job_map, &job_obj, true)
                 + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
                 + &insert_events(&mut job_map, bee_dir, &job_id)
@@ -1367,7 +1380,8 @@ fn collect_jobs(
                 .unwrap_or(Value::Null),
         );
         job_map.insert("status".into(), Value::String(status.clone()));
-        let usage_disp = insert_stall_reason(&mut job_map, bee_dir, &job_id, &status)
+        let usage_disp = insert_steer(&mut job_map, &job_obj)
+            + &insert_stall_reason(&mut job_map, bee_dir, &job_id, &status)
             + &insert_read_only(&mut job_map, &job_obj, false)
             + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
             + &insert_events(&mut job_map, bee_dir, &job_id)
@@ -1849,6 +1863,25 @@ fn herdr_pane_id(flags: &[&str]) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claude_session_status_prints_the_session_to_steer() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let dir = bee_dir.join("mailbox").join("job-cs");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("job.json"),
+            r#"{"job_id":"job-cs","transport":"claude-session","session_id":"sess1","steer_to":"bee-cssd-1-abc","round":1}"#,
+        )
+        .unwrap();
+
+        let (jobs, lines) = collect_jobs(&bee_dir, tmp.path(), None, None);
+
+        assert_eq!(jobs[0]["steer_to"], "bee-cssd-1-abc");
+        assert_eq!(jobs[0]["session_id"], "sess1");
+        assert!(lines[0].contains("steer_to=bee-cssd-1-abc"), "{}", lines[0]);
+    }
 
     fn labels_for(text: &str) -> Vec<&'static str> {
         let lowered = text.to_lowercase();

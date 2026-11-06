@@ -194,6 +194,7 @@ fn non_zero_exit_surfaces_stderr_and_fails() {
         question_round: 0,
         allow_question: true,
         read_only: false,
+        claude_session: None,
     };
 
     let result = execute_no_pane(&opts);
@@ -259,6 +260,7 @@ fn no_pane_success_writes_report_and_result_files() {
         question_round: 0,
         allow_question: true,
         read_only: false,
+        claude_session: None,
     };
 
     let result = execute_no_pane(&opts);
@@ -338,6 +340,7 @@ fn no_pane_worker_written_question_result_is_preserved() {
         question_round: 0,
         allow_question: true,
         read_only: false,
+        claude_session: None,
     };
 
     let result = execute_no_pane(&opts);
@@ -408,6 +411,7 @@ fn no_pane_worker_written_blocked_result_is_preserved() {
         question_round: 0,
         allow_question: true,
         read_only: false,
+        claude_session: None,
     };
 
     let result = execute_no_pane(&opts);
