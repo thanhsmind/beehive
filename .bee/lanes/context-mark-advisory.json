@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"context-mark-advisory\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"context-mark-advisory\" — feature is closed.",
+  "next_action": "Merged into main at 4161cc4; capture what settled, then bee close --feature context-mark-advisory.",
   "created_at": "2026-11-06T06:54:32.568Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -501,13 +501,6 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-06T07:02:16.256Z",
-    "branch": "wt/context-mark-advisory",
-    "worktree_id": "beehive--wt--context-mark-advisory",
-    "uat": "pending",
-    "blocked_by": []
   },
   "last_scribing_run": {
     "feature": "context-mark-advisory",
