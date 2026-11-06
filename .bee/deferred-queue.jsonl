@@ -1228,3 +1228,4 @@
 {"ts":"2026-11-06T07:45:26.307Z","event":"complete","id":"9a25ea8f-af5e-4275-b39c-065aff483762"}
 {"ts":"2026-11-06T07:45:31.433Z","event":"complete","id":"1864b8f8-fd24-4497-8054-b7ddd7ae6ce2"}
 {"ts":"2026-11-06T07:45:36.516Z","event":"complete","id":"aaf6a355-b4ec-4a20-bd9a-78b2ff7cfc27"}
+{"ts":"2026-11-06T13:47:00.004Z","event":"add","id":"d7491416-42c5-4020-897e-a505f4ad9804","kind":"worktree-cleanup","feature":"claude-sub-session-dispatch","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--claude-sub-session-dispatch"],"reason":"Worktree beehive--wt--claude-sub-session-dispatch (branch wt/claude-sub-session-dispatch) merged into main at f5895f63b787a323048ff9efc136fe806965fcaf and kept per default (D1) — remove it with `bee worktree prune`."}
