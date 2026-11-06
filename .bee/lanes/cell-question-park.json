@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "cell-question-park",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"cell-question-park\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at e80d11a; reload the product and test \"cell-question-park\", then either approve uat (\"bee gate --name uat --approved true --lane cell-question-park\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"cell-question-park\" — feature is closed.",
   "created_at": "2026-11-06T03:31:14.112Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",

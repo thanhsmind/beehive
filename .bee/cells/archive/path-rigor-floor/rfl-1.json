@@ -1,0 +1,298 @@
+{
+  "id": "rfl-1",
+  "feature": "path-rigor-floor",
+  "title": "Refuse a cell whose paths need a higher route, and keep owner-first gates with the human",
+  "lane": "standard",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "4bf3a432-d4c3-4c6a-9b59-416d5627b2b8",
+    "f613e3c2-d396-42c3-8edd-86357e914253",
+    "f9ba8d88-f0f3-45a6-bb14-02bfb8abf005",
+    "a653682b-521f-4312-921b-68c39a5cabf9",
+    "49388de3-9a4f-4cf3-97f6-1dcff092bf29"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "read_first": [
+    "docs/history/path-rigor-floor/CONTEXT.md",
+    "docs/history/path-rigor-floor/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/state.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement contract decision a653682b (D1 4bf3a432, D2 f613e3c2) in a new module verbs/cells/rigor_floor.rs. Rows are {glob, min_lane, flags, owner_first}. Built-in rows (schema-shaped, not every SQL file): `**/migrations/**`, `**/migrate/**`, `**/alembic/versions/**`, `**/schema.sql`, `**/*.schema.sql` and `**/schema.prisma` at min_lane high-risk, flags [data-model], owner_first true; `.github/workflows/release*` and `.github/workflows/publish*` at min_lane standard, no flags, owner_first true. Repo rows come from the `.bee/config.json` key `rigor_floor` (an array of the same shape), read through read_config_raw (state.rs `pub fn read_config_raw(root: &Path) -> Map<String, Value> {`); a malformed row is skipped with a warning on stderr. For a file, the effective floor is the highest min_lane, the union of flags and the OR of owner_first over every matching row, built-in and repo alike, so a repo row can raise and never lower. Lane rank: docs < tiny < small < standard < high-risk, spike ranks as standard (workflows.rs triage_ladder_rank covers only three lanes; do not change it). Flag names must be in the route flag vocabulary in workflows.rs. Use the write guard's glob matcher: `crate::hooks::write_guard::{glob_tokens, glob_match}` (the paths module is private but re-exported by write_guard/mod.rs; design_group.rs already imports it this way); glob_match takes `&[char]`, so collect the path's chars first as paths.rs does; write_guard/tests.rs already proves `**/migrations/**` against db/migrations/001.sql. No new crate dependency. Register the module in cells/mod.rs with `mod rigor_floor;` plus `pub(crate) use self::rigor_floor::*;`. The lane vocabulary ROUTE_LANE_VALUES in workflows.rs is private, so the rank covers all six lanes itself. Export a lookup that takes the root and a list of files and returns the hits (path, row glob, row source built-in or repo, floor), and an owner-first query. Wire the check: in validate.rs beside `match assert_regen_obligation(map, \"addCell\") {` (problems are collected there, not thrown) and in handlers_write.rs beside `assert_regen_obligation(&merged, \"updateCell\")?;` (thrown before write_cell). The add seam covers single and batch add; validate_new_cell_problems has no feature argument, so read map[\"feature\"]; a cell with no feature skips the check. On update, run the lane check first, then the owner-first check below. Read the feature route (lane and flags) the way drivers/close.rs feature_route does: the lane record's route first, then the state.json route when it belongs to the feature (feature_route returns only the lane; read the flags beside it). No recorded route: no check. Refuse with the in-message token RIGOR_FLOOR (the REGEN_OBLIGATION style: `addCell: RIGOR_FLOOR — ...`; refusals carry no code field) when a hit's min_lane ranks above the route lane or a hit flag is missing from the route flags; the message names the path, the row glob, whether the row is built-in or from .bee/config.json, the floor, that an owner-first row also needs a human gate, and the remedy: `bee route --set --class <class> --lane <floor lane> --flags <route flags plus missing> --files <n>`. Owner-first at cells add/update: when a cell file hits an owner-first row and the feature's execution gate (or merged gate) is approved with actor auto in the workflow record (gates.<name>.actor), refuse with GATE_OWNER_FIRST — this closes the path where a route raised after an auto gate lets an owner-first cell in with no human gate. GATE GATE_OWNER_FIRST in set_gate.rs (contract decision 49388de3, D3 f9ba8d88): when actor is auto (`let actor = flag_value(flags, \"actor\").unwrap_or_else(|| \"user\".to_string());`) and the call approves shape, execution or --merge, collect the feature's files from the lane record's gate_preview cell packet (`if let Some(prev) = state.get(\"gate_preview\").cloned() {`) and from the feature's persisted cells (list_cells for the feature), ask the owner-first query, and on any hit refuse at every bypass level. Check once before the lock the way the uat refusal does (`if actor == \"auto\" && name == \"uat\" {`, reading the record with peek_target_record), and AGAIN against target.record() after acquire_mutation_locks and before the write, because gate_preview can change between the peek and the lock (the preview check already runs twice for this reason). The GATE_OWNER_FIRST message names the path and the row glob and tells the leader: stop; do not retry; do not pass --actor user; run `bee state waiting-on set --kind gate --subject \"<feature> owner-first gate\"`, show the gate to the human, and end the turn. An approval with actor user, a refusal (approved false), and an auto approval with no owner-first hit are unchanged. Tests red-first: add refuses a small-lane cell on db/migrations/001.sql under a small route; add passes under a high-risk route with data-model; db/migrate, alembic/versions and schema.prisma paths hit; a fixture tests/fixtures/report.sql passes; a repo config row raises a floor; a repo row with a lower lane does not lower a built-in floor; update refuses the same way; a feature with no route is not checked; unmatched paths pass; add of an owner-first cell after an auto-approved execution gate refuses GATE_OWNER_FIRST, and passes after a user-approved gate. Gate tests next to gate_refuses_uat_from_actor_auto_and_writes_nothing: auto merge refused with an owner-first file in the preview packet and nothing written, and the message names waiting-on; the same with actor user approves; auto merge with no owner-first file approves as before.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells set_gate gate",
+  "must_haves": {
+    "truths": [
+      "cells add refuses with RIGOR_FLOOR a cell on a migration path when the route lane is below high-risk or lacks data-model",
+      "cells update refuses the same cell the same way",
+      "the refusal names the path, the row glob, the row source, the floor and a bee route --set remedy with --files",
+      "a .bee/config.json rigor_floor row raises a floor and never lowers a built-in one",
+      "a fixture .sql file outside the schema-shaped rows passes",
+      "a feature with no recorded route and a cell with no matching path pass unchanged",
+      "an owner-first cell added after an auto-approved execution gate is refused with GATE_OWNER_FIRST",
+      "bee gate --merge --approved true --actor auto refuses with GATE_OWNER_FIRST when the preview packet or persisted cells touch an owner-first path, checks again after the lock, and writes nothing",
+      "the GATE_OWNER_FIRST message tells the leader to stop and set waiting-on gate",
+      "the same approval with actor user succeeds, and an auto approval with no owner-first hit succeeds as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+        "substantive": "rows, lane rank, glob lookup, owner-first query"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "substantive": "GATE_OWNER_FIRST refusal before and after the lock"
+      }
+    ],
+    "key_links": [
+      "validate.rs add path calls the floor check",
+      "handlers_write.rs update path calls the floor check before write_cell",
+      "set_gate.rs calls the owner-first query from rigor_floor.rs"
+    ],
+    "prohibitions": [
+      "Do not change triage_ladder_rank or the route verbs",
+      "Do not change the uat refusal or the bypass-level checks",
+      "Do not add a crate dependency",
+      "Do not add an exempt list or any config that lowers a floor",
+      "No code comments"
+    ],
+    "open_choices": [
+      "spike ranks as standard",
+      "no recorded route means no check"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "rfl-1-worker",
+    "outcome": "cells add/update refuse RIGOR_FLOOR below a path floor and GATE_OWNER_FIRST after an auto gate; bee gate refuses auto approval over owner-first files before and after the lock",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [
+      "the verify command ran with CARGO_TARGET_DIR=~/.cache/cargo-target-rfl1 because the shared ~/.cache/cargo-target held a stale build-script output from the cell-question-park worktree and did not compile",
+      "cells add/update tests were written after the wiring, so only the 2 gate refusal tests were seen red before set_gate.rs changed",
+      "the update test spawns its own child with --nocapture so the refusal text is readable; the shared cells_update_behavior_run helper captures it",
+      "the after-lock GATE_OWNER_FIRST re-check has no race test; it runs the same function as the pre-lock check",
+      "an unrelated .bee/onboarding.json change in the worktree was left unstaged",
+      "sync-ack: sibling cell rfl-2 carries the skill text for this behavior (skills/bee-planning/SKILL.md Route and gates-and-delegation.md)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-06T04:41:39.437Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify filter over the touched cells and gate code (676 bin tests plus integration filters, 0 failed); full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ca2db2f2-3c3d-449e-8137-aab31bca0ed9",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells set_gate gate",
+    "claimed_at": "2026-11-06T04:27:44.639Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "sync_ack": "sibling cell rfl-2 carries the skill text for this behavior (skills/bee-planning/SKILL.md Route and gates-and-delegation.md)",
+    "mistakes": [
+      {
+        "wrong": "wrote the rigor_floor wiring before its cells tests, so those tests were never seen red",
+        "better": "write the test block first",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "cells add/update refuse RIGOR_FLOOR below a path floor and GATE_OWNER_FIRST after an auto gate; bee gate refuses auto approval over owner-first files before and after the lock",
+      "commit": "bf570c98b731d7837cf835c99575605359914cf4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells set_gate gate — green:unit — the cell verify filter over the touched cells and gate code (676 bin tests plus integration filters, 0 failed); full suite not run",
+      "deviations": [
+        "the verify command ran with CARGO_TARGET_DIR=~/.cache/cargo-target-rfl1 because the shared ~/.cache/cargo-target held a stale build-script output from the cell-question-park worktree and did not compile",
+        "cells add/update tests were written after the wiring, so only the 2 gate refusal tests were seen red before set_gate.rs changed",
+        "the update test spawns its own child with --nocapture so the refusal text is readable; the shared cells_update_behavior_run helper captures it",
+        "the after-lock GATE_OWNER_FIRST re-check has no race test; it runs the same function as the pre-lock check",
+        "an unrelated .bee/onboarding.json change in the worktree was left unstaged"
+      ],
+      "mistakes": [
+        "wrote the rigor_floor wiring before its cells tests, so those tests were never seen red — write the test block first — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "validate.rs:456 rigor_floor_refusal on add; rigor_floor.rs:197-200; tests rigor_floor_refuses_a_migration_cell_under_a_small_route_and_names_the_remedy and ..._high_risk_data_model_route"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:655-657 before write_cell; test rigor_floor_refuses_an_update_the_same_way_and_leaves_the_cell_untouched"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "rigor_floor.rs:222-229 names path, glob, source, floor, owner-first note and the route --set remedy with --files"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "rigor_floor.rs:118-131 one hit per row, any short hit refuses; tests rigor_floor_repo_row_raises_a_floor and ..._never_lowers_a_built_in_floor"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "rigor_floor.rs:15-24 no row matches tests/fixtures/report.sql; test rigor_floor_built_in_rows_hit_schema_paths_and_skip_fixture_sql"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "rigor_floor.rs:235-239 no hits or no route skips; test rigor_floor_skips_a_feature_with_no_recorded_route"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "rigor_floor.rs:244-251 execution_gate_auto; test rigor_floor_refuses_an_owner_first_cell_after_an_auto_execution_gate"
+          },
+          {
+            "id": "t8",
+            "status": "PASS",
+            "evidence": "set_gate.rs:887-897 before the lock and :944-948 after, before the first write at :1023; tests for preview file and persisted cell"
+          },
+          {
+            "id": "t9",
+            "status": "PASS",
+            "evidence": "set_gate.rs:807 STOP message with bee state waiting-on set --kind gate --subject"
+          },
+          {
+            "id": "t10",
+            "status": "PASS",
+            "evidence": "set_gate.rs:887 needs actor auto; tests gate_approves_an_owner_first_merge_from_the_user and gate_approves_an_auto_merge_with_no_owner_first_file_as_before"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-06T04:44:50.764Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "cells add refuses with RIGOR_FLOOR a cell on a migration path when the route lane is below high-risk or lacks data-model",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+          },
+          {
+            "requirement": "cells update refuses the same cell the same way",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+          },
+          {
+            "requirement": "the refusal names the path, the row glob, the row source, the floor and a bee route --set remedy with --files",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs"
+          },
+          {
+            "requirement": "a .bee/config.json rigor_floor row raises a floor and never lowers a built-in one",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs"
+          },
+          {
+            "requirement": "a fixture .sql file outside the schema-shaped rows passes",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "a feature with no recorded route and a cell with no matching path pass unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs"
+          },
+          {
+            "requirement": "an owner-first cell added after an auto-approved execution gate is refused with GATE_OWNER_FIRST",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs"
+          },
+          {
+            "requirement": "bee gate --merge --approved true --actor auto refuses with GATE_OWNER_FIRST when the preview packet or persisted cells touch an owner-first path, checks again after the lock, and writes nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "the GATE_OWNER_FIRST message tells the leader to stop and set waiting-on gate",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "the same approval with actor user succeeds, and an auto approval with no owner-first hit succeeds as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "validate.rs add path calls the floor check",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+          },
+          {
+            "requirement": "handlers_write.rs update path calls the floor check before write_cell",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+          },
+          {
+            "requirement": "set_gate.rs calls the owner-first query from rigor_floor.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/rigor_floor.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          }
+        ],
+        "recorded_at": "2026-11-06T04:44:50.773Z",
+        "recorded_by": "ca2db2f2-3c3d-449e-8137-aab31bca0ed9",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
