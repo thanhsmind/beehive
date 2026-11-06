@@ -794,6 +794,12 @@
     "contract:documented-invocations",
     "contract:native-cell-golden",
     "session-care",
-    "durability"
+    "durability",
+    "contract:opencode-tool-registry",
+    "contract:bee-config-verbs",
+    "contract:cells-park",
+    "contract:parked-cell-door",
+    "contract:rigor-floor",
+    "contract:owner-first-gate"
   ]
 }

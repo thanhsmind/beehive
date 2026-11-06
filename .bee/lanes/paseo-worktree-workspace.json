@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Worker A1 xong: sửa đúng, 15/15 test fsutil xanh, bộ test chậm thêm chỉ +0,3%. Giờ tôi ghi bàn giao và chuyển phần còn lại cho phiên mới.",
-    "asked_at": "2026-11-06T03:21:57.692Z",
-    "session": "4aeeb276-47c8-41a3-b182-a12a86b91ed3"
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-06T03:39:39.504Z",
+    "session": "8c3e42e9-e215-4359-866a-bdcf0790047f"
   }
 }

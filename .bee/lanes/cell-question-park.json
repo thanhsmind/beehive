@@ -1,0 +1,359 @@
+{
+  "schema_version": "1.0",
+  "feature": "cell-question-park",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"cell-question-park\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"cell-question-park\" (lane).",
+  "created_at": "2026-11-06T03:31:14.112Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "data-model",
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 8,
+    "rationale": "new cell state + new verbs + close/merge refusal + supervisor view; public cell contract",
+    "updated_at": "2026-11-06T03:31:58.807Z",
+    "feature": "cell-question-park"
+  },
+  "gate_preview": {
+    "feature": "cell-question-park",
+    "plan_sha256": "5f8b48c8b5d6341a9a5ea2907336894e158d4863bedeef9a9ae2137bfbcadbbb",
+    "previewed_at": "2026-11-06T03:35:22.172Z",
+    "cells": [
+      {
+        "id": "cqp-1",
+        "feature": "cell-question-park",
+        "title": "Park a cell on a question and answer it",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "b7b5b3c7-2ca2-47ff-b2f2-ff6e2561bf53",
+          "8ed6f4a2-7d01-4b4c-95fd-ac08f408196e",
+          "16031715-955e-41ea-832f-7c7b1ebc64fc"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/cell-question-park/CONTEXT.md",
+          "docs/history/cell-question-park/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add two cell verbs per contract decision 16031715 (D1 b7b5b3c7, D2 8ed6f4a2). `bee cells park --id <cell> --question <text>` sets an open or claimed cell to status `parked`, writes trace.parked_question and trace.parked_at, and refuses an empty question or a cell that is capped, dropped or already parked. `bee cells answer --id <cell> --answer <text>` refuses a cell that is not parked; otherwise it logs the answer as a decision (tags cells and answer; the decision text names the cell id and quotes the question) BEFORE it writes the cell, appends the new decision id to the cell's `decisions`, moves the question into trace.park_history (question, answer decision id, time), clears trace.parked_question, and sets status `open`. A failed decision log leaves the cell unchanged. Copy the shape of `run_block` / `block_cell` in handlers_close.rs (rg anchor: `\"block\" => run_block(flags, use_json, t0),` in util.rs) and of `record_dissent_verdict` in dissent.rs for log-then-write. audit.rs `log_decision` returns no id today (`pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> {`): add a variant that returns the id; keep the old signature for its callers. Register both verbs in the util.rs try_mutating match AND in generated/registry_payload.json (the registry tests fail if a served verb is undeclared); if the registry file is produced by a regen step, run that step. Also export a reader `feature_parked_cells(root, feature) -> Vec<(cell id, question)>` from the cells module for cqp-2. Check the existing status checks for a status they now meet: handlers_write.rs `let status_ok = matches!(cell_map.get(\"status\"), Some(Value::String(s)) if s == \"open\" || s == \"blocked\");` and `if status != \"open\" && status != \"blocked\" {` — a parked cell must not be claimable and must not be updatable into a running state; leave them unchanged unless a test shows a parked cell slips through. Tests red-first: park sets status and question; a parked cell is absent from compute_schedule's ready set while its open sibling is present; a cell that depends on a parked cell is not ready; answer logs a decision, cites it on the cell and reopens it; the refusals named above.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells registry",
+        "must_haves": {
+          "truths": [
+            "bee cells park sets the cell status to parked and stores the question in trace.parked_question",
+            "a parked cell is not in the ready set while its open sibling is",
+            "a cell that depends on a parked cell is not ready",
+            "bee cells answer logs a decision, appends its id to the cell decisions, and sets the cell status to open",
+            "park refuses an empty question and a capped, dropped or already-parked cell; answer refuses a cell that is not parked"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+              "substantive": "park and answer verbs and the feature_parked_cells reader"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "cells.park and cells.answer declared with their params"
+            }
+          ],
+          "key_links": [
+            "util.rs try_mutating serves park and answer",
+            "answer calls the id-returning decision logger before it writes the cell"
+          ],
+          "prohibitions": [
+            "Do not change the meaning of status blocked",
+            "Do not change compute_schedule's ready filter",
+            "No code comments"
+          ],
+          "open_choices": [
+            "Put the verbs in a new park.rs file instead of handlers_close.rs"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cqp-2",
+        "feature": "cell-question-park",
+        "title": "Refuse close and merge on a parked cell and list it for the human",
+        "lane": "standard",
+        "role": "test",
+        "deps": [
+          "cqp-1"
+        ],
+        "decisions": [
+          "e2e0e77e-099b-41ef-952a-ee2e98ba951b",
+          "2fe6f2a3-816f-4001-bc6e-2b306c12c488",
+          "3041908c-1baa-462a-a171-12e787688c90"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+        ],
+        "read_first": [
+          "docs/history/cell-question-park/CONTEXT.md",
+          "docs/history/cell-question-park/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/park.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per contract decision 3041908c (D3 e2e0e77e, D4 2fe6f2a3), using the `feature_parked_cells` reader cqp-1 added in verbs/cells/park.rs. (1) bee close: add a door named `parked-cell` beside the dissent-debt door in drivers/close.rs (rg anchor: `let dissent = crate::verbs::cells::feature_dissent_debt(root, feature)?;`); it blocks while the feature has a parked cell and its message names every parked cell id and its question. Check both close paths that read dissent debt (close_handler reads it a second time) so a dry run and a real close agree. (2) bee worktree merge: in merge_stage in worktree/phases.rs, beside `let dissent = crate::verbs::cells::feature_dissent_debt(main_root, feature)`, refuse with code WORKTREE_MERGE_PARKED_CELL before any write, naming every parked cell and its question. (3) supervisor.rs collect_needs_you: after the waiting-on row (`if let Some((kind, subject)) = live_waiting_on(control) {`), add one ReportItem per parked cell across live features, text naming the cell id and the clipped question. Tests red-first: close refuses with the parked-cell door; merge refuses with WORKTREE_MERGE_PARKED_CELL and writes nothing (copy the write_dissenting_cell fixture style in worktree/tests.rs); the needs-you view lists a parked cell; after answer reopens the cell, the door and the refusal no longer fire for parking.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- close worktree supervisor",
+        "must_haves": {
+          "truths": [
+            "bee close blocks on a door named parked-cell that names each parked cell id and question",
+            "bee worktree merge refuses with WORKTREE_MERGE_PARKED_CELL before any write",
+            "the supervisor what-needs-you view lists one row per parked cell with its question",
+            "a feature with no parked cell closes and merges as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+              "substantive": "parked-cell door"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+              "substantive": "WORKTREE_MERGE_PARKED_CELL refusal"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+              "substantive": "parked question rows in collect_needs_you"
+            }
+          ],
+          "key_links": [
+            "close.rs and phases.rs both call feature_parked_cells",
+            "collect_needs_you calls feature_parked_cells"
+          ],
+          "prohibitions": [
+            "Do not change the dissent-debt door or refusal",
+            "No code comments"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cqp-3",
+        "feature": "cell-question-park",
+        "title": "Teach workers to park and leaders to keep working",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "b7b5b3c7-2ca2-47ff-b2f2-ff6e2561bf53",
+          "8ed6f4a2-7d01-4b4c-95fd-ac08f408196e",
+          "e2e0e77e-099b-41ef-952a-ee2e98ba951b"
+        ],
+        "files": [
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/cell-question-park/CONTEXT.md",
+          "docs/history/cell-question-park/plan.md",
+          "skills/bee-swarming/SKILL.md"
+        ],
+        "affects_skills": [
+          "skills/bee-swarming/SKILL.md",
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [],
+        "action": "Doctrine for D1, D2 and D3. In skills/bee-swarming/SKILL.md (the worker contract, section Execute): a worker with a product question it cannot answer runs `bee cells park --id <cell> --question \"<question>\"` and returns [BLOCKED]; it never stops the lane. On the leader side: when a worker parks, the leader keeps dispatching ready cells; it sets `bee state waiting-on set --kind question` only when no ready cell remains in the lane, and lists every open parked question in its reply; the human's answer is recorded with `bee cells answer --id <cell> --answer \"<text>\"`, and the cell runs again with the answer in its brief. In skills/bee-hive/references/gates-and-delegation.md, where the waiting-on mark and questions are described, add one line that points to this rule (one home: the swarming skill). Keep each addition short. Then run the regen chain (`bee dev regen`) so rendered skill trees and the release manifest follow, and run the manifest check.",
+        "verify": ".bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the worker contract tells a worker with a question to park its cell, not stop the lane",
+            "the leader rule sets the waiting-on question mark only when no ready cell remains",
+            "the answer path names bee cells answer"
+          ],
+          "artifacts": [
+            {
+              "path": "skills/bee-swarming/SKILL.md",
+              "substantive": "park and answer rule"
+            }
+          ],
+          "key_links": [
+            "gates-and-delegation.md points to the swarming rule"
+          ],
+          "prohibitions": [
+            "Do not restate the rule in a second home"
+          ]
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "test",
+          "reason": "Rerouted from code: herding agent paseo-pi-agy-flash is out of quota; decision 62df1653 (role-reroute)."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "Each cell writes its tests red-first."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "test",
+          "reason": "cqp-3 changes skill text; rerouted from docs for the same quota reason."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "required",
+          "role": "review",
+          "reason": "Gathers run on --kind gather --role review while read is out of quota."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard lane with more than five product files: the plan-step hat wave runs."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default hat seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release rides this feature."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Out of quota; gathers use review."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "herding-code",
+          "classification": "not-applicable",
+          "role": "code",
+          "reason": "Out of quota; rerouted to test."
+        },
+        {
+          "stage": "herding-read",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Out of quota; rerouted to review."
+        },
+        {
+          "stage": "herding-docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "Out of quota; rerouted to test."
+        }
+      ]
+    }
+  }
+}
