@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"bee-config-verbs\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"bee-config-verbs\" (lane).",
+  "next_action": "Merged into main at 48da717; capture what settled, then bee close --feature bee-config-verbs.",
   "created_at": "2026-11-06T03:26:45.845Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-11-06T03:26:56.430Z",
     "feature": "bee-config-verbs"
-  },
-  "merge_ready": {
-    "since": "2026-11-06T03:36:59.908Z",
-    "branch": "wt/bee-config-verbs",
-    "worktree_id": "beehive--wt--bee-config-verbs",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
