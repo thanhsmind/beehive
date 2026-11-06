@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"cell-question-park\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at bb35d75; reload the product and test \"cell-question-park\", then either approve uat (\"bee gate --name uat --approved true --lane cell-question-park\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at e80d11a; reload the product and test \"cell-question-park\", then either approve uat (\"bee gate --name uat --approved true --lane cell-question-park\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-06T03:31:14.112Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: cell-question-park",
+    "asked_at": "2026-11-06T05:13:35.592Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -817,12 +822,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-06T05:13:06.040Z",
-    "branch": "wt/cell-question-park",
-    "worktree_id": "beehive--wt--cell-question-park",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
