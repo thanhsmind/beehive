@@ -15,7 +15,7 @@ paseo-room, paseo-doctrine-downstream) come into bee:
    human decision boundaries, the merge owner and the deploy owner as
    key-value lines. bee validates it and reports its state. It never gates.
 2. Every `bee dispatch prepare` record carries a digest of the prompt it
-   built and of the protocol file at that moment. A leader can check later,
+   built and of the protocol file at that moment. A leader can check afterwards,
    for example after a resume, whether either one changed.
 3. Brief discipline: a worker never stops to offer a menu of options, and a
    reviewer or advisor brief never carries the leader's leaning. The
