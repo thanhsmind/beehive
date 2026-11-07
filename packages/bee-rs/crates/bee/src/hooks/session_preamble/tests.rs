@@ -1026,8 +1026,20 @@ use crate::version::BEE_VERSION;
         let root = tmp.path();
         pathological_store(root);
 
-        let text = build_session_preamble_within(root, None, None, "claude", 8800);
-        assert!(text.len() <= 8800, "{} bytes", text.len());
+        let full = build_session_preamble_within(root, None, None, "claude", PREAMBLE_BUDGET_BYTES);
+        let digest_start = full.find("### Critical patterns (digest)").expect("digest rides the full render");
+        let digest_end = digest_start
+            + full[digest_start..]
+                .find("\n### ")
+                .map(|offset| offset + 1)
+                .expect("a section follows the digest");
+        let digest_len = digest_end - digest_start;
+        let named_in_omitted_line = "; Critical patterns (digest) → docs/knowledge/index.md".len();
+        let budget = full.len() - digest_len + named_in_omitted_line + 8;
+        assert!(budget < full.len(), "the derived budget {budget} must sit below the digest-included render {}", full.len());
+
+        let text = build_session_preamble_within(root, None, None, "claude", budget);
+        assert!(text.len() <= budget, "{} bytes over the derived {budget}", text.len());
         assert!(!text.contains("### Recent decisions"), "{text}");
         assert!(!text.contains("### Critical patterns (digest)"), "{text}");
         assert!(text.contains("### Command surface"), "{text}");
