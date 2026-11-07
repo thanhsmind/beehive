@@ -825,6 +825,10 @@
     "contract:workspace-protocol",
     "contract:dispatch-receipt",
     "catalog",
-    "contract:protocol-init"
+    "contract:protocol-init",
+    "contract:knowledge-freshness",
+    "contract:cap-sync-door-freshness",
+    "contract:knowledge-bundle-walk",
+    "contract:knowledge-pull-rate"
   ]
 }
