@@ -779,5 +779,12 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-07T07:05:55.381Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-07T08:08:40.476Z",
+    "branch": "wt/workspace-protocol",
+    "worktree_id": "beehive--wt--workspace-protocol",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

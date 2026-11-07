@@ -823,6 +823,7 @@
     "contract:unverified-agreement-warning",
     "workspace-protocol",
     "contract:workspace-protocol",
-    "contract:dispatch-receipt"
+    "contract:dispatch-receipt",
+    "catalog"
   ]
 }
