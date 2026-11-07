@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Bee Herding — the claude-session transport, and how a leader steers a Claude worker"
-description: "The herding transport that runs a native Claude role as a visible Claude Code background session, the claude --bg argv and bgIsolation none, the poll decisions, the mailbox result channel, the steer_to name a leader sends SendMessage to, the dispatch.claude_sessions switch and the PATH fallback."
-timestamp: 2026-11-06
+description: "The herding transport that runs a native Claude role as a visible Claude Code background session, the claude --bg argv and bgIsolation none, the Paseo route that shows the session in Paseo, the poll decisions, the mailbox result channel, the steer_to name a leader sends SendMessage to, the dispatch.claude_sessions switch, the PATH fallback and the fallback reasons."
+timestamp: 2026-11-07
 bee:
   id: bee-herding-claude-session-transport
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["claude-sub-session-dispatch D1 (a herding pane keeps herding; a Claude worker may be messaged and steered with SendMessage; a native Claude role starts as a Claude Code background sub-session; Codex, Pi and Grok stay herding-only)", "claude-sub-session-dispatch D2 (every dispatch kind on a native Claude role opens a sub-session and returns its result through the bee mailbox that bee herding run reads)", "claude-sub-session-dispatch D3 (dispatch.claude_sessions false keeps the Agent payload; no claude on PATH falls back to the Agent payload with fallback_reason claude_cli_missing; a session-model escalation keeps the Agent payload)"]
-  sources: [docs/history/claude-sub-session-dispatch/CONTEXT.md, docs/history/claude-sub-session-dispatch/plan.md, docs/history/report-usage-herding/plan.md]
+  decisions: ["claude-sub-session-dispatch D1 (a herding pane keeps herding; a Claude worker may be messaged and steered with SendMessage; a native Claude role starts as a Claude Code background sub-session; Codex, Pi and Grok stay herding-only)", "claude-sub-session-dispatch D2 (every dispatch kind on a native Claude role opens a sub-session and returns its result through the bee mailbox that bee herding run reads)", "claude-sub-session-dispatch D3 (dispatch.claude_sessions false keeps the Agent payload; no claude on PATH falls back to the Agent payload with fallback_reason claude_cli_missing; a session-model escalation keeps the Agent payload)", "paseo-visible-sessions D1 (inside Paseo a --session-model run starts through paseo run; outside Paseo claude --bg does not change)", "paseo-visible-sessions D2 (the Paseo model check accepts a Claude family alias against claude-<alias>-<version>)", "paseo-visible-sessions D3 (every claude-agent fallback of a native Claude model records native_fallback_reason)"]
+  sources: [docs/history/claude-sub-session-dispatch/CONTEXT.md, docs/history/claude-sub-session-dispatch/plan.md, docs/history/report-usage-herding/plan.md, docs/history/paseo-visible-sessions/CONTEXT.md]
   authoritative_for: "bee-herding: the claude-session transport, its spawn argv and poll decisions, steer_to, and the dispatch door switch that selects it"
   owns.code: [packages/bee-rs/crates/bee/src/herding/claude_session.rs]
 ---
@@ -47,6 +47,26 @@ Why bee spawns it: a `claude` call from a shell in a worktree is refused by the 
 
 A `--read-only` run sets `BEE_HERDING_READ_ONLY=1` and refuses before spawn when the Claude worker guard is missing, as a Paseo `claude` run does (claude-read-only D1-D5).
 
+## Inside Paseo
+
+(paseo-visible-sessions D1)
+
+A `claude --bg` session shows in `claude agents` only. It does not show in the Paseo app. Inside Paseo, bee starts the sub-session through Paseo, so the owner sees it there.
+
+Inside Paseo means `PASEO_AGENT_ID` or `PASEO_CLI` is set and not empty. In that case a `--session-model` run starts through `paseo run` with these values:
+
+- provider `claude/<model>`
+- `--thinking <effort>`, from `--session-effort`
+- `--mode bypassPermissions`
+- title `bee-<cell id, or seat>-<last 12 characters of the job id>`
+- the workspace that the paseo-worktree-workspace D4 resolution picks
+
+The job record has transport `paseo`, with `session_model` and `session_effort` next to it. The Paseo loop applies: bee archives the agent when the run finishes, and `steer_to` is recorded as for any Paseo Claude run.
+
+Outside Paseo, the `claude --bg` path does not change.
+
+The Paseo model check accepts a Claude family alias (`opus`, `sonnet`, `haiku` or `fable`, with an optional `[..]` suffix) against the id Paseo reports, `claude-<alias>-<version>` (paseo-visible-sessions D2).
+
 ## The poll decisions
 
 The loop is the Paseo loop with one change in its liveness source: `claude agents --json --all` replaces `paseo inspect`. The loop checks the mailbox on every tick and asks Claude for the listing on a slower cadence.
@@ -83,11 +103,12 @@ A claude-session worker writes its own transcript, outside the leader's transcri
 - `dispatch.claude_sessions: false` in the main checkout's `.bee/config.json` keeps the old `Agent` payload, byte for byte. Absent or any other value means sessions are on.
 - When `claude` (or the binary `herding.claude_command` names) does not resolve on `PATH`, the door keeps the `Agent` payload and adds `fallback_reason: "claude_cli_missing"`.
 - A session-model escalation keeps the `Agent` payload. The escalated worker runs on the session's own model.
+- Every `claude-agent` fallback of a native Claude model records `native_fallback_reason` in `.bee/logs/dispatch.jsonl`: `escalated`, `claude_sessions_off` or `claude_cli_missing`. An escalation lands on channel `session-model` (paseo-visible-sessions D3).
 - A role configured as a herding pane stays herding. Codex and Pi payloads do not change.
 
 ## Known limits
 
-- Only local `claude --bg` sessions. Cloud and cross-machine sessions are out of scope.
+- Only local sessions: `claude --bg`, or `paseo run` inside Paseo. Cloud and cross-machine sessions are out of scope.
 - The result channel is the mailbox only. A worker that never writes `result-1.json` ends as a silent idle timeout.
 
 ## Pointers
@@ -99,3 +120,4 @@ A claude-session worker writes its own transcript, outside the leader's transcri
 - The dispatch door arm, the switch, the PATH fallback and the command builder (`claude_session_command`): `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`.
 - Paseo loop this transport copies: `docs/knowledge/areas/bee-herding/the-paseo-channel.md`.
 - Feature context and plan: `docs/history/claude-sub-session-dispatch/CONTEXT.md`, `docs/history/claude-sub-session-dispatch/plan.md`.
+- The Paseo route: `docs/history/paseo-visible-sessions/CONTEXT.md`; code in `packages/bee-rs/crates/bee/src/herding/run.rs` (`execute_paseo_steered`).

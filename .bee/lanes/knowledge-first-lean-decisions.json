@@ -1,0 +1,391 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-first-lean-decisions",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"knowledge-first-lean-decisions\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"knowledge-first-lean-decisions\" (lane).",
+  "created_at": "2026-11-07T02:59:04.847Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 30,
+    "rationale": "new audit verb and decision-log refusal change public CLI contracts; hooks plus decision store plus doctrine",
+    "updated_at": "2026-11-07T03:06:50.647Z",
+    "feature": "knowledge-first-lean-decisions"
+  },
+  "gate_preview": {
+    "feature": "knowledge-first-lean-decisions",
+    "plan_sha256": "9715297f9e2391f69f911830aa3a5d71822723613e403bf31bd4ea2dabc967e5",
+    "previewed_at": "2026-11-07T03:07:32.237Z",
+    "cells": [
+      {
+        "id": "kbc-1",
+        "feature": "knowledge-first-lean-decisions",
+        "lane": "standard",
+        "role": "code",
+        "title": "Nudge a leader to search knowledge before its first code read in a turn",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/knowledge_first.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs",
+          "packages/bee/LEADER.md",
+          ".bee/LEADER.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md"
+        ],
+        "read_first": [
+          "docs/history/knowledge-first-lean-decisions/plan.md",
+          "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md"
+        ],
+        "action": "Follow the Contract for kbc-1 in docs/history/knowledge-first-lean-decisions/plan.md. A leader code read (Read/Glob/Grep or a read-shaped Bash command on packages/, src/ or a source file, never docs/, .bee/, skills/ or *.md) in a turn with no bee knowledge search/context yet gets one PreToolUse advisory (the main.rs:917-934 shape, no permissionDecision) naming rule agents-knowledge-before-code and the exact command .bee/bin/bee knowledge search --text \"<what you need>\". Never deny. Once per turn; UserPromptSubmit (prompt-context) resets the session turn state under .bee/cache/. Silent for BEE_HERDING_WORKER and for payloads with agent_id or agent_type. The rule text lives only in packages/bee/LEADER.md as a rule block; refresh .bee/LEADER.md and the rule index. Write the behavior tests first and watch them fail.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "A leader code read with no knowledge search in the turn gets one advisory naming the exact search command",
+            "A read after bee knowledge search or context in the same turn is silent",
+            "A worker (BEE_HERDING_WORKER or agent_id payload) never gets the nudge",
+            "The nudge fires at most once per turn and re-arms at the next UserPromptSubmit",
+            "The rule text has one home in packages/bee/LEADER.md and the hook only points to it"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md"
+        ],
+        "decisions": [
+          "8b95790d"
+        ],
+        "deps": []
+      },
+      {
+        "id": "kbc-2",
+        "feature": "knowledge-first-lean-decisions",
+        "lane": "standard",
+        "role": "code",
+        "title": "Add the audit log, write gate auto-approvals to it, keep audit tags out of decisions",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/audit.rs",
+          "packages/bee-rs/crates/bee/src/lib.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/audit.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+          "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          ".gitattributes",
+          "packages/bee-rs/crates/bee/tests/audit_log.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-first-lean-decisions/plan.md"
+        ],
+        "action": "Follow the Contract for kbc-2 in docs/history/knowledge-first-lean-decisions/plan.md. Add .bee/audit.jsonl (same root resolution as the decision store, merge=union) with the closed kind set, verbs bee audit log and bee audit list, and the module API has_entry / newest_note for the doors. bee gate --actor auto appends one gate-bypass row after the stamp write. bee decisions log refuses audit-only tags (gate-bypass and the ten *-deferral kinds) naming bee audit log. decisions active/search, status recent decisions and the preamble recent decisions hide audit-only tagged rows unless --tag names that kind; never rewrite decisions.jsonl. List audit.jsonl beside decisions.jsonl in the worktree merge bookkeeping exemption and the gitattributes template. Regenerate help with bee dev regen. Tests first, seen red.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "bee audit log appends a row to .bee/audit.jsonl and bee audit list returns it; an unknown kind refuses",
+            "bee gate --actor auto writes one gate-bypass audit row and no decision",
+            "bee decisions log refuses gate-bypass and *-deferral tags and names bee audit log",
+            "decisions search hides legacy audit-tagged rows unless --tag asks for them, and decisions.jsonl is never rewritten"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "79f208dc"
+        ],
+        "deps": [
+          "kbc-1"
+        ]
+      },
+      {
+        "id": "kbc-3",
+        "feature": "knowledge-first-lean-decisions",
+        "lane": "standard",
+        "role": "code",
+        "title": "Read door deferrals from the audit log and the legacy decision rows",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "packages/bee-rs/crates/bee/tests/audit_doors.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-first-lean-decisions/plan.md"
+        ],
+        "action": "Follow the Contract for kbc-3 in docs/history/knowledge-first-lean-decisions/plan.md. Every door that reads a *-deferral decision (close.rs judge, uat, capture, knowledge-freshness, impact, routing, doc; leader_check.rs; dissent.rs; set_gate.rs capture-deferral) reads the audit log first through the kbc-2 module API, then the legacy decision rows. feature-local stays a decision tag. Every refusal text that told the agent to log a *-deferral decision names bee audit log --kind <k> --feature <f> --note instead. Tests first, seen red: an audit row satisfies each door, a legacy decision row still does.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "An audit row of each deferral kind satisfies its door",
+            "A legacy deferral decision row still satisfies its door",
+            "No door refusal text tells the agent to log a deferral decision"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "79f208dc"
+        ],
+        "deps": [
+          "kbc-2"
+        ]
+      },
+      {
+        "id": "kbc-4",
+        "feature": "knowledge-first-lean-decisions",
+        "lane": "standard",
+        "role": "code",
+        "title": "Point doctrine and skills at the audit log for bookkeeping",
+        "behavior_change": true,
+        "files": [
+          "packages/bee/LEADER.md",
+          ".bee/LEADER.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+          "skills/bee-hive/references/go-mode.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-hive/references/scout-and-ticks.md",
+          "skills/bee-shaping/references/shaping-reference.md",
+          "skills/bee-capturing/references/promotion.md",
+          "skills/bee-principle-split-never-shrink/SKILL.md",
+          "docs/knowledge/areas/decision-memory/audit-log.md"
+        ],
+        "read_first": [
+          "docs/history/knowledge-first-lean-decisions/plan.md"
+        ],
+        "action": "Follow the Contract for kbc-4 in docs/history/knowledge-first-lean-decisions/plan.md. One rule line in packages/bee/LEADER.md § Capture what settles: decisions keep rules, behavior and trade-offs; gate audit, close/merge/release/scribing/promote/handoff bookkeeping and door deferrals go to bee audit log. Remove every instruction to log a gate auto-approval audit decision (preamble render.rs, session_close nudges.rs, skills/bee-hive references) since bee gate --actor auto now writes the audit row. Replace every decisions log --tags <x>-deferral instruction in skills with bee audit log --kind <x>-deferral. Add docs/knowledge/areas/decision-memory/audit-log.md citing plan D3-D6, no raw decision ids. Refresh .bee/LEADER.md and any rendered skill copies with bee dev regen.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "No doctrine, skill, preamble or nudge text tells the agent to log a gate auto-approval or a deferral as a decision",
+            "packages/bee/LEADER.md names bee audit log as the bookkeeping home"
+          ]
+        },
+        "affects_skills": [
+          "bee-hive",
+          "bee-shaping",
+          "bee-capturing",
+          "bee-principle-split-never-shrink"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/decision-memory/audit-log.md"
+        ],
+        "decisions": [
+          "79f208dc"
+        ],
+        "deps": [
+          "kbc-2"
+        ]
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "knowledge-first-lean-decisions",
+    "plan_sha256": "9715297f9e2391f69f911830aa3a5d71822723613e403bf31bd4ea2dabc967e5",
+    "previewed_at": "2026-11-07T03:07:32.237Z",
+    "cells": [
+      {
+        "id": "kbc-1",
+        "feature": "knowledge-first-lean-decisions",
+        "lane": "standard",
+        "role": "code",
+        "title": "Nudge a leader to search knowledge before its first code read in a turn",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/knowledge_first.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs",
+          "packages/bee/LEADER.md",
+          ".bee/LEADER.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md"
+        ],
+        "read_first": [
+          "docs/history/knowledge-first-lean-decisions/plan.md",
+          "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md"
+        ],
+        "action": "Follow the Contract for kbc-1 in docs/history/knowledge-first-lean-decisions/plan.md. A leader code read (Read/Glob/Grep or a read-shaped Bash command on packages/, src/ or a source file, never docs/, .bee/, skills/ or *.md) in a turn with no bee knowledge search/context yet gets one PreToolUse advisory (the main.rs:917-934 shape, no permissionDecision) naming rule agents-knowledge-before-code and the exact command .bee/bin/bee knowledge search --text \"<what you need>\". Never deny. Once per turn; UserPromptSubmit (prompt-context) resets the session turn state under .bee/cache/. Silent for BEE_HERDING_WORKER and for payloads with agent_id or agent_type. The rule text lives only in packages/bee/LEADER.md as a rule block; refresh .bee/LEADER.md and the rule index. Write the behavior tests first and watch them fail.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "A leader code read with no knowledge search in the turn gets one advisory naming the exact search command",
+            "A read after bee knowledge search or context in the same turn is silent",
+            "A worker (BEE_HERDING_WORKER or agent_id payload) never gets the nudge",
+            "The nudge fires at most once per turn and re-arms at the next UserPromptSubmit",
+            "The rule text has one home in packages/bee/LEADER.md and the hook only points to it"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md"
+        ],
+        "decisions": [
+          "8b95790d"
+        ],
+        "deps": []
+      },
+      {
+        "id": "kbc-2",
+        "feature": "knowledge-first-lean-decisions",
+        "lane": "standard",
+        "role": "code",
+        "title": "Add the audit log, write gate auto-approvals to it, keep audit tags out of decisions",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/audit.rs",
+          "packages/bee-rs/crates/bee/src/lib.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/audit.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+          "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          ".gitattributes",
+          "packages/bee-rs/crates/bee/tests/audit_log.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-first-lean-decisions/plan.md"
+        ],
+        "action": "Follow the Contract for kbc-2 in docs/history/knowledge-first-lean-decisions/plan.md. Add .bee/audit.jsonl (same root resolution as the decision store, merge=union) with the closed kind set, verbs bee audit log and bee audit list, and the module API has_entry / newest_note for the doors. bee gate --actor auto appends one gate-bypass row after the stamp write. bee decisions log refuses audit-only tags (gate-bypass and the ten *-deferral kinds) naming bee audit log. decisions active/search, status recent decisions and the preamble recent decisions hide audit-only tagged rows unless --tag names that kind; never rewrite decisions.jsonl. List audit.jsonl beside decisions.jsonl in the worktree merge bookkeeping exemption and the gitattributes template. Regenerate help with bee dev regen. Tests first, seen red.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "bee audit log appends a row to .bee/audit.jsonl and bee audit list returns it; an unknown kind refuses",
+            "bee gate --actor auto writes one gate-bypass audit row and no decision",
+            "bee decisions log refuses gate-bypass and *-deferral tags and names bee audit log",
+            "decisions search hides legacy audit-tagged rows unless --tag asks for them, and decisions.jsonl is never rewritten"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "79f208dc"
+        ],
+        "deps": [
+          "kbc-1"
+        ]
+      },
+      {
+        "id": "kbc-3",
+        "feature": "knowledge-first-lean-decisions",
+        "lane": "standard",
+        "role": "code",
+        "title": "Read door deferrals from the audit log and the legacy decision rows",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "packages/bee-rs/crates/bee/tests/audit_doors.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-first-lean-decisions/plan.md"
+        ],
+        "action": "Follow the Contract for kbc-3 in docs/history/knowledge-first-lean-decisions/plan.md. Every door that reads a *-deferral decision (close.rs judge, uat, capture, knowledge-freshness, impact, routing, doc; leader_check.rs; dissent.rs; set_gate.rs capture-deferral) reads the audit log first through the kbc-2 module API, then the legacy decision rows. feature-local stays a decision tag. Every refusal text that told the agent to log a *-deferral decision names bee audit log --kind <k> --feature <f> --note instead. Tests first, seen red: an audit row satisfies each door, a legacy decision row still does.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "An audit row of each deferral kind satisfies its door",
+            "A legacy deferral decision row still satisfies its door",
+            "No door refusal text tells the agent to log a deferral decision"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [],
+        "decisions": [
+          "79f208dc"
+        ],
+        "deps": [
+          "kbc-2"
+        ]
+      },
+      {
+        "id": "kbc-4",
+        "feature": "knowledge-first-lean-decisions",
+        "lane": "standard",
+        "role": "code",
+        "title": "Point doctrine and skills at the audit log for bookkeeping",
+        "behavior_change": true,
+        "files": [
+          "packages/bee/LEADER.md",
+          ".bee/LEADER.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+          "skills/bee-hive/references/go-mode.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "skills/bee-hive/references/routing-and-contracts.md",
+          "skills/bee-hive/references/scout-and-ticks.md",
+          "skills/bee-shaping/references/shaping-reference.md",
+          "skills/bee-capturing/references/promotion.md",
+          "skills/bee-principle-split-never-shrink/SKILL.md",
+          "docs/knowledge/areas/decision-memory/audit-log.md"
+        ],
+        "read_first": [
+          "docs/history/knowledge-first-lean-decisions/plan.md"
+        ],
+        "action": "Follow the Contract for kbc-4 in docs/history/knowledge-first-lean-decisions/plan.md. One rule line in packages/bee/LEADER.md § Capture what settles: decisions keep rules, behavior and trade-offs; gate audit, close/merge/release/scribing/promote/handoff bookkeeping and door deferrals go to bee audit log. Remove every instruction to log a gate auto-approval audit decision (preamble render.rs, session_close nudges.rs, skills/bee-hive references) since bee gate --actor auto now writes the audit row. Replace every decisions log --tags <x>-deferral instruction in skills with bee audit log --kind <x>-deferral. Add docs/knowledge/areas/decision-memory/audit-log.md citing plan D3-D6, no raw decision ids. Refresh .bee/LEADER.md and any rendered skill copies with bee dev regen.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "No doctrine, skill, preamble or nudge text tells the agent to log a gate auto-approval or a deferral as a decision",
+            "packages/bee/LEADER.md names bee audit log as the bookkeeping home"
+          ]
+        },
+        "affects_skills": [
+          "bee-hive",
+          "bee-shaping",
+          "bee-capturing",
+          "bee-principle-split-never-shrink"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/decision-memory/audit-log.md"
+        ],
+        "decisions": [
+          "79f208dc"
+        ],
+        "deps": [
+          "kbc-2"
+        ]
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-11-07T03:43:48.594Z",
+    "branch": "wt/knowledge-first-lean-decisions",
+    "worktree_id": "beehive--wt--knowledge-first-lean-decisions",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

@@ -809,6 +809,8 @@
     "contract:doctrine-split",
     "report-usage",
     "token-accounting",
-    "thin-worker-boot"
+    "thin-worker-boot",
+    "contract:knowledge-first-nudge",
+    "contract:audit-log"
   ]
 }

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "paseo-visible-sessions",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"paseo-visible-sessions\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"paseo-visible-sessions\" — feature is closed.",
+  "created_at": "2026-11-07T02:43:00.054Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-11-07T02:42:56.855Z",
+    "feature": "paseo-visible-sessions"
+  }
+}

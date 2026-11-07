@@ -1988,5 +1988,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-07T02:26:37.089Z"
+  },
+  "paseo-visible-sessions": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-11-07T03:08:52.710Z"
   }
 }
