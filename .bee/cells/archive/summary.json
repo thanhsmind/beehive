@@ -2033,5 +2033,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-07T09:37:52.401Z"
+  },
+  "windows-ci-1107": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-11-07T10:40:35.002Z"
   }
 }

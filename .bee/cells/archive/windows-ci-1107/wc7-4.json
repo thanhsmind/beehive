@@ -1,0 +1,115 @@
+{
+  "id": "wc7-4",
+  "feature": "windows-ci-1107",
+  "title": "Pin the unix-only output spill in its test on both platforms",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "D5",
+    "6a122360-92d4-44a5-a2d1-417e2b05fac6",
+    "eeaff7c5-e3ae-4692-856e-b805f43fd199"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/output_spill.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-ci-1107/plan.md",
+    "packages/bee-rs/crates/bee/tests/output_spill.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "judge_obligation_ack": "Windows fixture for one integration test; product files only by named deviation",
+  "action": "Per D5: oversized_allowlisted_output_spills_to_a_file in tests/output_spill.rs fails on Windows because the spill capture is cfg(unix) only by cli-output-spill D3 (output_spill.rs:8-19). Split the assertion by platform: under cfg(unix) keep today’s spill assertions unchanged; under cfg(not(unix)) assert the same oversized allowlisted run exits like the unwrapped run, prints the full output unchanged, prints no '[bee] output spilled:' marker and leaves no spill file. Change test code only. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test output_spill",
+  "must_haves": {
+    "truths": [
+      "on unix an oversized allowlisted run spills to a file with one marker",
+      "on windows the same run passes through unchanged with no marker and no spill file"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/output_spill.rs",
+        "substantive": "cfg-split assertions pinning D3"
+      }
+    ],
+    "key_links": [
+      "the spill wraps the read-verb output"
+    ],
+    "prohibitions": [
+      "No product code change",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-wc7-4b",
+    "outcome": "Split the spill test by platform: unix keeps the spill assertions, non-unix asserts pass-through with no marker and no spill file; commit b7fd1a08d5d5720b89e71a122bb384e299dd78d1",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/output_spill.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T05:53:56.109Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell changes one integration test file; 8 passed on linux",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test output_spill",
+    "claimed_at": "2026-11-07T05:53:15.663Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-11-07T05:52:25.419Z",
+        "claim_session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c",
+        "claimed_at": "2026-11-07T05:49:09.055Z",
+        "acquired_at": "2026-11-07T05:46:19.003Z",
+        "worker": "w-wc7-4",
+        "verdict": "blocked",
+        "failure_signature": "0223bfb925ff",
+        "note": "Worker found the spill is cfg(unix) by cli-output-spill D3; the cell truth was wrong and is replanned as D5 (plan rev 1)"
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-07T05:53:10.747Z",
+    "reopened_reason": "Replanned as D5 (plan rev 1, gate re-approved); ready for a fresh worker",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Split the spill test by platform: unix keeps the spill assertions, non-unix asserts pass-through with no marker and no spill file; commit b7fd1a08d5d5720b89e71a122bb384e299dd78d1",
+      "commit": "b7fd1a08d5d5720b89e71a122bb384e299dd78d1",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/output_spill.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test output_spill — green:unit — the cell changes one integration test file; 8 passed on linux",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 83829,
+    "cached": 625691,
+    "total": 709520,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 83829,
+        "cached": 625691,
+        "total": 709520
+      }
+    },
+    "jobs": [
+      "job-1794030396058-1715267-1",
+      "job-1794030799144-1865943-1"
+    ]
+  }
+}

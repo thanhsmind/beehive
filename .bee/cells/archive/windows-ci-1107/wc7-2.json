@@ -1,0 +1,91 @@
+{
+  "id": "wc7-2",
+  "feature": "windows-ci-1107",
+  "title": "Expect the platform binary name in the vendored-binary onboard tests",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "6a122360-92d4-44a5-a2d1-417e2b05fac6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-ci-1107/plan.md",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "judge_obligation_ack": "Windows expectation in two onboard tests; a plan.rs change only if the plan is wrong on Windows",
+  "action": "Two Windows-only failures from CI run 42342606992. (1) onboard::tests::vendored_binary_planned_when_missing_and_hooks_expect_it asserts the copy_binary path is \".bee/bin/bee\"; on Windows the plan names \".bee/bin/bee.exe\", which is the correct vendored name there (hooks try bee then bee.exe). Make the test expect the platform name (\".bee/bin/bee\" plus std::env::consts::EXE_SUFFIX). (2) onboard::tests::hook_wiring_does_not_depend_on_a_vendored_binary_and_never_stacks writes a fake .bee/bin/bee.exe (\"MZ\") and asserts the re-plan has 0 items; on Windows it has 1. Find which item it is (most likely copy_binary, because on Windows bee.exe is the vendored name and its bytes differ from the current binary). The test's claim is that vendoring never re-wires hooks: keep that claim, and assert it on the hook items only, or vendor the fake at the name that is NOT the platform's vendored path, whichever keeps the test honest on both platforms. If the item is a hook re-wire, that is a product bug in onboard/plan.rs; fix it there instead. Linux behaviour unchanged. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::tests::",
+  "must_haves": {
+    "truths": [
+      "the vendored-binary test expects the platform binary name",
+      "the never-stacks test still proves vendoring does not re-wire hooks"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "substantive": "platform-aware expectations in both tests"
+      }
+    ],
+    "key_links": [
+      "compute_plan emits copy_binary"
+    ],
+    "prohibitions": [
+      "No weakening of the no-re-wire claim",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-wc7-2",
+    "outcome": "Both onboard tests now expect the platform vendored binary name; plan.rs unchanged (item was copy_binary, not a hook re-wire). Commit 18db105f152d9bfa08694cb0efa6cfe2c714628e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T05:51:31.726Z",
+    "behavior_change": false,
+    "verification_evidence": "107 passed on Linux; the two edited tests live in that module. The full-suite run had one comment_baseline failure that passed on isolated re-run (another worker was editing the checkout).",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::tests::",
+    "claimed_at": "2026-11-07T05:46:13.095Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Both onboard tests now expect the platform vendored binary name; plan.rs unchanged (item was copy_binary, not a hook re-wire). Commit 18db105f152d9bfa08694cb0efa6cfe2c714628e",
+      "commit": "18db105f152d9bfa08694cb0efa6cfe2c714628e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::tests:: — green:unit — 107 passed on Linux; the two edited tests live in that module. The full-suite run had one comment_baseline failure that passed on isolated re-run (another worker was editing the checkout).",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 53790,
+    "cached": 665040,
+    "total": 718830,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 53790,
+        "cached": 665040,
+        "total": 718830
+      }
+    },
+    "jobs": [
+      "job-1794030392254-1713988-1"
+    ]
+  }
+}

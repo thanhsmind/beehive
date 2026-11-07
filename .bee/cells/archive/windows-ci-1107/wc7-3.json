@@ -1,0 +1,92 @@
+{
+  "id": "wc7-3",
+  "feature": "windows-ci-1107",
+  "title": "Run the merge full-suite door tests on Windows",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "6a122360-92d4-44a5-a2d1-417e2b05fac6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/merge_full_suite.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-ci-1107/plan.md",
+    "packages/bee-rs/crates/bee/tests/merge_full_suite.rs",
+    "docs/history/full-suite-once/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "judge_obligation_ack": "Windows fixture for an integration test file; product files only by named deviation",
+  "action": "Four Windows-only failures in tests/merge_full_suite.rs from CI run 42342606992: a_fresh_green_record_merges_and_the_door_runs_no_test panics 'bee test itself ran the suite' (line about 162); a_code_feature_with_no_test_record_is_refused_naming_bee_test_in_the_worktree, a_red_record_is_refused and a_later_docs_only_commit_keeps_the_record_fresh (WORKTREE_MERGE_WORKTREE_DIRTY) follow. Find why the fixture's declared test command does not run or does not write its marker on Windows (a sh-only command, a path with backslashes in a shell string, LF assumptions, or files the fixture writes into the worktree that git then sees as dirty, e.g. through core.autocrlf), and make the fixture run on Windows: a command form that runs under the shell bee uses on Windows, and core.autocrlf false in the fixture repos if line endings make the tree dirty. If bee test or worktree merge itself is wrong on Windows, stop and report [BLOCKED] naming the product file and line instead of editing it. Linux behaviour unchanged. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test merge_full_suite",
+  "must_haves": {
+    "truths": [
+      "the fixture's test command runs under the shell bee uses on each platform",
+      "the fixture worktree is clean after its own commits on Windows"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/merge_full_suite.rs",
+        "substantive": "platform-correct test command and line-ending stable fixture"
+      }
+    ],
+    "key_links": [
+      "bee test writes .bee/logs/test-results.json that worktree merge reads"
+    ],
+    "prohibitions": [
+      "No product code change without a [BLOCKED] report",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-wc7-3",
+    "outcome": "Fixture now single-quotes forward-slash paths for Git Bash, strips the \\\\?\\ prefix and pins core.autocrlf false; Linux 10/10 pass, Windows unproven until CI; commit 07c75bf60",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/merge_full_suite.rs"
+    ],
+    "deviations": [
+      "sync-ack: test fixture change only; no skill behavior changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T05:49:00.188Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test merge_full_suite — green:unit — Linux run of the one touched integration test file; Windows proof is CI on the branch",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test merge_full_suite",
+    "claimed_at": "2026-11-07T05:46:16.222Z",
+    "sync_ack": "test fixture change only; no skill behavior changes",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Fixture now single-quotes forward-slash paths for Git Bash, strips the \\\\?\\ prefix and pins core.autocrlf false; Linux 10/10 pass, Windows unproven until CI; commit 07c75bf60",
+      "commit": "2aabd89f7fa6c2a01942a80d5ab822cf2123f75a",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/merge_full_suite.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test merge_full_suite — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test merge_full_suite — green:unit — Linux run of the one touched integration test file; Windows proof is CI on the branch",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 61726,
+    "cached": 483388,
+    "total": 545114,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 61726,
+        "cached": 483388,
+        "total": 545114
+      }
+    },
+    "jobs": [
+      "job-1794030394175-1714720-1"
+    ]
+  }
+}

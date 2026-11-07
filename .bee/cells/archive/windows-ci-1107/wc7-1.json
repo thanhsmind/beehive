@@ -1,0 +1,100 @@
+{
+  "id": "wc7-1",
+  "feature": "windows-ci-1107",
+  "title": "Escape the temp path in the steer_to listing fixture and pin LF in the worktree restore test",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "6a122360-92d4-44a5-a2d1-417e2b05fac6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-ci-1107/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "judge_obligation_ack": "test-fixture-only change; the two named tests pin it on both platforms",
+  "action": "Two Windows-only failures from CI run 42342606992. (1) Per D1: herding::run::tests::claude_session_paseo_claude_run_records_the_one_matching_session_as_steer_to fails on Windows with steer_to Null because paseo_claude_run_with_listing (run.rs about line 13688) replaces CWD in a JSON listing with the raw cwd display string; a Windows path holds backslashes, so the listing is not valid JSON. Replace CWD with the cwd encoded as a JSON string body (serde_json::to_string of the display string, outer quotes stripped), so every test that uses the helper gets a valid listing on every platform. Check sibling helpers in the same test module that splice CWD the same way and fix them the same way. (2) Per D2: verbs::worktree::tests::uncommitted_bee_store_changes_on_main_with_conflict_restores_main (tests.rs about line 2729) reads \"main conflict\\r\\n\" on Windows; the fixture repo inherits core.autocrlf. Turn off core.autocrlf in the fixture repo that test uses (prefer the shared fixture init if it is the one place, so every worktree test is line-ending stable). Change test code only. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- claude_session_paseo_claude_run uncommitted_bee_store_changes_on_main",
+  "must_haves": {
+    "truths": [
+      "the steer_to listing fixture is valid JSON when the cwd holds backslashes",
+      "the worktree restore test does not depend on core.autocrlf"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "the listing fixture JSON-escapes the cwd"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "the fixture repo sets core.autocrlf false"
+      }
+    ],
+    "key_links": [
+      "paseo_claude_run_with_listing feeds the steer_to tests"
+    ],
+    "prohibitions": [
+      "No product code change",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-wc7-1",
+    "outcome": "Escaped the cwd in the steer_to listing fixture and set core.autocrlf false in the three main-repo worktree fixtures; commit 2aabd89f7",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: test fixture change only; no skill behavior changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T05:48:59.997Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- claude_session_paseo_claude_run uncommitted_bee_store_changes_on_main — green:unit — 6 passed 0 failed; the two named tests cover the changed fixtures (Linux only)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- claude_session_paseo_claude_run uncommitted_bee_store_changes_on_main",
+    "claimed_at": "2026-11-07T05:45:57.581Z",
+    "sync_ack": "test fixture change only; no skill behavior changes",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Escaped the cwd in the steer_to listing fixture and set core.autocrlf false in the three main-repo worktree fixtures; commit 2aabd89f7",
+      "commit": "2aabd89f7fa6c2a01942a80d5ab822cf2123f75a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- claude_session_paseo_claude_run uncommitted_bee_store_changes_on_main — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- claude_session_paseo_claude_run uncommitted_bee_store_changes_on_main — green:unit — 6 passed 0 failed; the two named tests cover the changed fixtures (Linux only)",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 39268,
+    "cached": 375243,
+    "total": 414511,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 39268,
+        "cached": 375243,
+        "total": 414511
+      }
+    },
+    "jobs": [
+      "job-1794030390314-1713376-1"
+    ]
+  }
+}
