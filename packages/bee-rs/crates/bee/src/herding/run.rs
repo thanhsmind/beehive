@@ -3657,6 +3657,10 @@ fn execute_paseo_steered(
         "read_only": opts.read_only,
         "transport": "paseo",
     });
+    if let (Value::Object(m), Some(session)) = (&mut job_value, &opts.claude_session) {
+        m.insert("session_model".into(), Value::String(session.model.clone()));
+        m.insert("session_effort".into(), session.effort.clone().map_or(Value::Null, Value::String));
+    }
     stamp_feature(&mut job_value, opts.feature.as_deref());
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
@@ -3765,7 +3769,7 @@ fn execute_paseo_steered(
     };
 
     let agent_name = opts.agent.as_deref().unwrap_or("paseo");
-    let argv = paseo::run_argv(
+    let mut argv = paseo::run_argv(
         spec,
         &opts.job_id,
         &opts.cwd.display().to_string(),
@@ -3775,6 +3779,11 @@ fn execute_paseo_steered(
         opts.cell_id.as_deref(),
         workspace.as_deref(),
     );
+    if opts.claude_session.is_some() {
+        if let Some(at) = argv.iter().position(|a| a == "--title") {
+            argv[at + 1] = cs::session_name(opts.cell_id.as_deref(), opts.seat.as_deref(), &opts.job_id);
+        }
+    }
     let spawned_at_ms = now_ms();
     let run_res = cli.call_as_caller(&argv);
     let agent_id = match run_res {
@@ -3913,6 +3922,25 @@ const CLAUDE_SESSION_AGENTS_EVERY_TICKS: u32 = 10;
 
 fn spawn_refused(message: String) -> ExecResult {
     ExecResult { outcome: RunOutcome::SpawnFailed(message), pane_id: None, closed_pane: false }
+}
+
+fn execute_session_model(
+    opts: &Options,
+    session: &ClaudeSessionSpec,
+    claude: &dyn ClaudeCli,
+    paseo_cli: &dyn PaseoCli,
+) -> ExecResult {
+    if !paseo::inside_paseo() {
+        return execute_claude_session(opts, session, claude);
+    }
+    let spec = PaseoSpec {
+        provider: "claude".to_string(),
+        model: Some(session.model.clone()),
+        thinking: session.effort.clone(),
+        mode: Some("bypassPermissions".to_string()),
+        isolated_config: false,
+    };
+    execute_paseo_steered(opts, &spec, paseo_cli, Some(claude))
 }
 
 fn execute_claude_session(opts: &Options, session: &ClaudeSessionSpec, cli: &dyn ClaudeCli) -> ExecResult {
@@ -4494,6 +4522,14 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
     }
 }
 
+fn claude_alias_names(alias: &str, observed: &str) -> bool {
+    let (family, suffix) = alias.split_once('[').unwrap_or((alias, ""));
+    let (obs_id, obs_suffix) = observed.split_once('[').unwrap_or((observed, ""));
+    ["opus", "sonnet", "haiku", "fable"].contains(&family)
+        && suffix == obs_suffix
+        && obs_id.strip_prefix(&format!("claude-{family}-")).is_some_and(|version| !version.is_empty())
+}
+
 fn record_observed_model(
     bee_dir: &Path,
     job_id: &str,
@@ -4509,7 +4545,10 @@ fn record_observed_model(
 
     let model_matches = match (cfg_model, info.model.as_deref()) {
         (Some(cfg), Some(obs)) => {
-            cfg == obs || obs.ends_with(&format!("/{cfg}")) || cfg.ends_with(&format!("/{obs}"))
+            cfg == obs
+                || obs.ends_with(&format!("/{cfg}"))
+                || cfg.ends_with(&format!("/{obs}"))
+                || claude_alias_names(cfg, obs)
         }
         _ => true,
     };
@@ -6270,7 +6309,7 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     let (transport, transport_name) = if opts.no_pane {
         (None, "no-pane")
     } else if opts.claude_session.is_some() {
-        (None, "claude-session")
+        (None, if paseo::inside_paseo() { "paseo" } else { "claude-session" })
     } else if paseo_spec.is_some() || is_paseo_continue {
         (None, "paseo")
     } else {
@@ -6303,8 +6342,9 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     let result = if opts.no_pane {
         execute_no_pane(&opts)
     } else if let Some(ref session) = opts.claude_session {
-        let cli = RealClaudeCli::new(cs::claude_command(&main_cfg));
-        execute_claude_session(&opts, session, &cli)
+        let claude = RealClaudeCli::new(cs::claude_command(&main_cfg));
+        let cli = RealPaseoCli::new(paseo::paseo_command(&main_cfg)).with_timeout(Duration::from_secs(15));
+        execute_session_model(&opts, session, &claude, &cli)
     } else if is_paseo_continue {
         let cmd = paseo::paseo_command(&main_cfg);
         let cli = RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(15));
@@ -13648,6 +13688,158 @@ mod tests {
         let claude_fake = FakeClaudeCli::new(Ok(listing.replace("CWD", &opts.cwd.display().to_string())));
         let _ = execute_paseo_steered(&opts, &spec, &paseo_fake, Some(&claude_fake));
         read_job(&mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id))
+    }
+
+    fn paseo_session_fake() -> FakePaseoCli {
+        FakePaseoCli::new(
+            Ok("0.12.0\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-session\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+    }
+
+    fn inside_paseo_session_run(
+        opts: &mut Options,
+        session: &ClaudeSessionSpec,
+        paseo_fake: &FakePaseoCli,
+        claude_fake: &FakeClaudeCli,
+    ) -> ExecResult {
+        opts.claude_session = Some(session.clone());
+        paseo::set_inside_paseo_for_test(true);
+        let res = execute_session_model(opts, session, claude_fake, paseo_fake);
+        paseo::set_inside_paseo_for_test(false);
+        res
+    }
+
+    #[test]
+    fn session_model_inside_paseo_starts_the_session_with_paseo_run_and_never_spawns_claude() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.cell_id = Some("cssd-1".to_string());
+        seed_done_result(tmp.path(), &opts.job_id);
+        let session = ClaudeSessionSpec { model: "opus".to_string(), effort: Some("high".to_string()) };
+        let paseo_fake = paseo_session_fake();
+        let claude_fake = FakeClaudeCli::new(Ok("[]".to_string()));
+
+        let res = inside_paseo_session_run(&mut opts, &session, &paseo_fake, &claude_fake);
+
+        assert!(matches!(res.outcome, RunOutcome::Result(_)), "{:?}", res.outcome);
+        assert_eq!(res.pane_id.as_deref(), Some("paseo-agent-session"));
+        let argv = run_call(&paseo_fake).expect("paseo run called");
+        assert!(argv.windows(2).any(|w| w[0] == "--provider" && w[1] == "claude/opus"), "{argv:?}");
+        assert!(argv.windows(2).any(|w| w[0] == "--thinking" && w[1] == "high"), "{argv:?}");
+        assert!(argv.windows(2).any(|w| w[0] == "--mode" && w[1] == "bypassPermissions"), "{argv:?}");
+        let title = cs::session_name(Some("cssd-1"), None, &opts.job_id);
+        assert_eq!(title, "bee-cssd-1-job-1");
+        assert!(argv.windows(2).any(|w| w[0] == "--title" && w[1] == title), "{argv:?}");
+        assert!(claude_fake.spawns.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn session_model_inside_paseo_without_effort_passes_no_thinking_and_titles_by_seat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.seat = Some("advisor".to_string());
+        seed_done_result(tmp.path(), &opts.job_id);
+        let session = ClaudeSessionSpec { model: "haiku".to_string(), effort: None };
+        let paseo_fake = paseo_session_fake();
+        let claude_fake = FakeClaudeCli::new(Ok("[]".to_string()));
+
+        let _ = inside_paseo_session_run(&mut opts, &session, &paseo_fake, &claude_fake);
+
+        let argv = run_call(&paseo_fake).expect("paseo run called");
+        assert!(!argv.iter().any(|a| a == "--thinking"), "{argv:?}");
+        assert!(argv.windows(2).any(|w| w[0] == "--title" && w[1] == "bee-advisor-job-1"), "{argv:?}");
+    }
+
+    #[test]
+    fn session_model_inside_paseo_job_record_carries_transport_paseo_with_model_and_effort() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        seed_done_result(tmp.path(), &opts.job_id);
+        let session = ClaudeSessionSpec { model: "opus".to_string(), effort: Some("high".to_string()) };
+
+        let _ = inside_paseo_session_run(
+            &mut opts,
+            &session,
+            &paseo_session_fake(),
+            &FakeClaudeCli::new(Ok("[]".to_string())),
+        );
+
+        let job = read_job(&mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id));
+        assert_eq!(job["transport"], "paseo");
+        assert_eq!(job["session_model"], "opus");
+        assert_eq!(job["session_effort"], "high");
+        assert_eq!(job["paseo_agent_id"], "paseo-agent-session");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn session_model_inside_paseo_read_only_refuses_before_spawn_without_the_worker_guard() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_claude_guard(tmp.path(), "stage-tools", "x/.bee/bin/bee hook worker-guard; exit 0");
+        let mut opts = test_options(tmp.path(), false);
+        opts.read_only = true;
+        let session = ClaudeSessionSpec { model: "opus".to_string(), effort: None };
+        let paseo_fake = paseo_session_fake();
+        let claude_fake = FakeClaudeCli::new(Ok("[]".to_string()));
+
+        let res = inside_paseo_session_run(&mut opts, &session, &paseo_fake, &claude_fake);
+
+        assert!(matches!(res.outcome, RunOutcome::SpawnFailed(_)), "{:?}", res.outcome);
+        assert!(run_call(&paseo_fake).is_none());
+        assert!(claude_fake.spawns.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn session_model_outside_paseo_keeps_the_claude_bg_path_and_makes_no_paseo_call() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_done_result(tmp.path(), &opts.job_id);
+        let paseo_fake = paseo_session_fake();
+        let claude_fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+
+        let res = execute_session_model(&opts, &claude_session_spec(), &claude_fake, &paseo_fake);
+
+        assert!(matches!(res.outcome, RunOutcome::Result(_)), "{:?}", res.outcome);
+        assert_eq!(claude_fake.spawns.lock().unwrap().len(), 1);
+        assert!(paseo_fake.calls.lock().unwrap().is_empty());
+        assert!(paseo_fake.caller_calls.lock().unwrap().is_empty());
+        let job = read_job(&mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id));
+        assert_eq!(job["transport"], "claude-session");
+    }
+
+    fn observed_model_mismatches(configured: &str, observed: &str) -> bool {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, "job-1");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(mailbox::job_path(&bee_dir, "job-1"), "{}").unwrap();
+        let spec = PaseoSpec {
+            provider: "claude".to_string(),
+            model: Some(configured.to_string()),
+            thinking: None,
+            mode: None,
+            isolated_config: false,
+        };
+        let info = paseo::PaseoInspect {
+            model: Some(observed.to_string()),
+            thinking: None,
+            mode: None,
+            ..Default::default()
+        };
+        record_observed_model(&bee_dir, "job-1", "agent-1", &info, Some(&spec))
+    }
+
+    #[test]
+    fn claude_family_alias_matches_the_observed_versioned_model_id() {
+        assert!(!observed_model_mismatches("opus", "claude-opus-5-5"));
+        assert!(!observed_model_mismatches("opus[1m]", "claude-opus-5-5[1m]"));
+        assert!(!observed_model_mismatches("fable", "claude-fable-5-1"));
+        assert!(observed_model_mismatches("sonnet", "claude-opus-5-5"));
+        assert!(observed_model_mismatches("opus[1m]", "claude-opus-5-5"));
+        assert!(observed_model_mismatches("opus", "claude-opusx-5-5"));
     }
 
     #[test]

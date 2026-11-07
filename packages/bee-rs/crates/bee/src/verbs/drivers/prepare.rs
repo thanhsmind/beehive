@@ -2668,6 +2668,9 @@ pub(crate) fn prepare_dispatch_wire(
     let marker_header = format!("[bee-tier: {marker_role}] {extra_markers}");
 
     if is_escalated {
+        if runtime == "claude" {
+            extra_fallback_reason = Some("escalated");
+        }
         if runtime == "codex" {
             tool = "spawn_agent".into();
             payload = codex_spawn_payload(&subject, ESCALATION_WORD, &prompt_body, None, None, &extra_markers);
@@ -2983,6 +2986,8 @@ pub(crate) fn prepare_dispatch_wire(
                 tool = "Agent".into();
                 if claude_session_candidate.is_some() {
                     extra_fallback_reason = Some("claude_cli_missing");
+                } else if runtime == "claude" && matches!(&resolved, Resolved::Model { model, .. } if !model.is_empty()) {
+                    extra_fallback_reason = Some("claude_sessions_off");
                 }
                 payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
                 payload.insert(
@@ -6819,7 +6824,7 @@ mod claude_session_door_tests {
     fn dispatch(root: &Path, runtime: &str, kind: &str, role: Option<&str>, cell: Option<&str>) -> Value {
         let _armed = ClaudeSessionsArmed::on();
         let worker = cell.map(|_| "w");
-        let out = prepare_dispatch_with_role(root, runtime, kind, role, cell, worker, false, None, None, false, None)
+        let out = prepare_dispatch_with_role(root, runtime, kind, role, cell, worker, false, None, None, true, None)
             .unwrap();
         let Prepared::Value(v) = out else { panic!("expected an envelope for {kind}") };
         v
@@ -6924,9 +6929,15 @@ mod claude_session_door_tests {
             assert_eq!(a["tool"], json!("Agent"), "{kind}");
             assert_eq!(a["payload"], b["payload"], "{kind}");
             assert_eq!(a["payload"]["model"], json!(match kind { "gather" => "haiku", "reviewer" => "opus", _ => "fable" }));
-            assert!(a.get("fallback_reason").is_none(), "{kind}");
+            assert_eq!(a["fallback_reason"], json!("claude_sessions_off"), "{kind}");
             assert_eq!(a["economics"]["channel"], json!("claude-agent"), "{kind}");
+            assert_eq!(last_dispatch_record(&off)["native_fallback_reason"], json!("claude_sessions_off"), "{kind}");
         }
+    }
+
+    fn last_dispatch_record(root: &Path) -> Value {
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        serde_json::from_str(log.lines().last().unwrap()).unwrap()
     }
 
     #[test]
@@ -6965,13 +6976,14 @@ mod claude_session_door_tests {
         assert_eq!(control["tool"], json!("Bash"), "the control really opens a session");
         let _armed = ClaudeSessionsArmed::on();
         let Prepared::Value(escalated) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-2"), Some("w"), false, None, None, false, None).unwrap()
+            prepare_dispatch(&root, "claude", "cell", Some("c-2"), Some("w"), false, None, None, true, None).unwrap()
         else {
             panic!("expected an envelope")
         };
         assert_eq!(escalated["tool"], json!("Agent"));
         assert_eq!(escalated["economics"]["channel"], json!("session-model"));
-        assert!(escalated.get("fallback_reason").is_none());
+        assert_eq!(escalated["fallback_reason"], json!("escalated"));
+        assert_eq!(last_dispatch_record(&root)["native_fallback_reason"], json!("escalated"));
     }
 
     #[test]
