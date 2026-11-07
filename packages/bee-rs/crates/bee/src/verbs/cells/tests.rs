@@ -9778,6 +9778,41 @@ use std::time::Instant;
     }
 
     #[test]
+    fn sync_door_refuses_a_file_under_a_suspect_directory_anchor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src", true);
+        sdd_touch(root, "src/a.rs", &[], "sdd-10");
+        sdd_cell(root, "sdd-10");
+
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_sync("sdd-10", vec![], None), false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert!(refusal.contains("src/a.rs"), "must name the touched path: {refusal}");
+        assert!(refusal.contains("areas/demo/concept.md (suspect)"), "{refusal}");
+        assert!(refusal.contains("bee knowledge confirm --id demo-concept"), "{refusal}");
+    }
+
+    #[test]
+    fn sync_door_passes_a_sibling_path_that_only_shares_the_directory_prefix_text() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src/a")).unwrap();
+        std::fs::write(root.join("src/a/x.rs"), "x0\n").unwrap();
+        std::fs::write(root.join("src/ab.rs"), "ab0\n").unwrap();
+        sdd_git_init(root);
+        sdd_commit(root, &["src/a/x.rs", "src/ab.rs"], "dirs", "dirs");
+        let base = sdd_head(root);
+        sdd_write_concept(root, "src/a, src/b.rs", Some(base.as_str()));
+        sdd_commit(root, &[SDD_CONCEPT], "concept", "concept");
+        sdd_touch(root, "src/b.rs", &[], "other");
+        sdd_touch(root, "src/ab.rs", &[], "sdd-11");
+        sdd_cell(root, "sdd-11");
+
+        let capped = cap_cell_from_flags(root, &cap_flags_sync("sdd-11", vec![], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
     fn sync_door_passes_an_unverified_concept() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();

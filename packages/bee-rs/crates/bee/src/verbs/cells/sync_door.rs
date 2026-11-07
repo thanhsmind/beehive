@@ -7,18 +7,12 @@
 
 use super::*;
 use crate::verbs::knowledge::{
-    bee_of, grade_bundle, load_areas, load_ownership, matches_owned, str_field, AreaOwnership, RuleHome, ORPHAN, SUSPECT,
+    anchor_covers, bee_of, grade_bundle, load_areas, load_ownership, matches_owned, str_field, AreaOwnership, RuleHome, ORPHAN, SUSPECT,
 };
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-/// sync_refusal — runs the four cap-time sync checks:
-/// (a) ownership: touched code in an area with non-empty owns.skills must touch at least one owned skill
-/// (b) applied_at: touched rule home must touch every applied_at file
-/// (c) prediction: affects_skills prediction must equal touched skills/** paths (skipped on legacy cells)
-///
-/// Returns None when clean, Some(refusal_message) on failure.
 pub(crate) fn sync_refusal(
     root: &Path,
     history_root: &Path,
@@ -149,11 +143,10 @@ fn freshness_refusal(history_root: &Path, id: &str, touched: &[String]) -> Optio
         if touched_norm.contains(&concept_path) {
             continue;
         }
-        let hit: Vec<String> = grade
-            .anchors
+        let hit: Vec<String> = touched_norm
             .iter()
-            .map(|a| normalize_cell_path(a))
-            .filter(|a| touched_norm.contains(a))
+            .filter(|t| grade.anchors.iter().any(|a| anchor_covers(a, t)))
+            .cloned()
             .collect();
         if hit.is_empty() {
             continue;
