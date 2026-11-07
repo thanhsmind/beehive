@@ -1,0 +1,134 @@
+{
+  "id": "pw-1",
+  "feature": "paseo-worktree-workspace",
+  "title": "Add Paseo workspace helpers and drop agent-scope env from every paseo child",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-worktree-workspace/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/path_identity.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "In herding/paseo.rs add, as pub items: (a) `AGENT_SCOPE_VARS: [&str; 2] = [\"PASEO_AGENT_ID\", \"PASEO_AGENT_CWD\"]`. (b) `inside_paseo() -> bool` per D1: true when PASEO_AGENT_ID or PASEO_CLI is set and non-empty; under cfg(test) it reads a thread_local seam that defaults to false (same pattern as TEST_DISCOVERY at the top of the file) plus a cfg(test) setter `set_inside_paseo_for_test(bool)`. (c) `first_json_document(stdout: &str) -> Option<Value>` per D6: pull the existing scan out of `parse_run_agent_id` (paseo.rs:219-233; the same loop repeats near lines 265, 351, 486, 503, 622) into this one helper, start at `{` OR `[`, and keep the skip-a-failed-parse-and-continue behavior so `[login-shell-env] {` noise is skipped; make `parse_run_agent_id` use it with unchanged results (switch the other copies only where results stay identical). (d) argv builders `workspace_ls_argv()` = [workspace, ls, --json], `project_ls_argv()` = [project, ls, --json], `workspace_create_argv(path: &str, project: Option<&str>)` = [workspace, create, --path, <path>, --isolation, local, (--project, <id>), --json], `workspace_archive_argv(id)` = [workspace, archive, <id>, --json] (do not reuse `archive_argv`, which archives an agent). (e) Path compare: use `crate::path_identity::canonical_paths_equal` (path_identity.rs:200); add no new compare helper. (f) `ensure_workspace(cli: &dyn PaseoCli, main_root: &Path, dir: &Path) -> Result<String, String>` per D2: call workspace ls; if an array row has `cwd` equal to `dir` by canonical_paths_equal, return its `workspaceId`; else call project ls and take the `projectId` whose `path` equals main_root (None when no match); call workspace create; return the `workspaceId` of the first JSON document; every failure is Err carrying paseo's own error text (`error.message` of a JSON error object when present, else the raw text). (g) `archive_workspace(cli: &dyn PaseoCli, id: &str) -> Result<(), String>`. D5, all spawners: in `run_with_deadline` and the no-timeout branch of `RealPaseoCli::call` (paseo.rs), in `RealWaitSource::arm` (run.rs, `Command::new(&self.command)` near line 4093), in `RealSteerRunner::steer` (paseo_steer.rs:108) and in `run_probe_command_bounded` (verbs/drivers/prepare.rs:3110), `env_remove` each AGENT_SCOPE_VARS entry. D5 worker env: in run.rs `execute_paseo`, the block that turns `child_env` into `env_pairs` (near line 3556) — extract a small pub(crate) fn `paseo_env_pairs(child_env: BTreeMap<String,String>) -> Vec<(String,String)>` that drops AGENT_SCOPE_VARS keys, and use it there. Unit tests: first_json_document skips multi-line `[login-shell-env] {` noise and plain log lines and returns an object or an array; parse_run_agent_id results unchanged; ensure_workspace reuses a ls row whose cwd is a symlink of dir (temp dir + std::os::unix::fs::symlink under cfg(unix)); ensure_workspace creates with --project <id> when project ls matches main_root and without --project when none matches; ensure_workspace returns Err with paseo's message on a create error object; argv shapes; paseo_env_pairs drops both vars and keeps others; RealPaseoCli on `sh -c 'echo ${PASEO_AGENT_ID:-absent}'` (or equivalent) with PASEO_AGENT_ID set in the process env prints absent — any test that sets or reads process env vars holds `crate::hooks::herding_env_lock()` (hooks/mod.rs:123) and restores the env after. No test calls a real paseo binary. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+  "must_haves": {
+    "truths": [
+      "ensure_workspace reuses an existing workspace whose cwd is the same directory through a symlink",
+      "ensure_workspace passes --project <projectId> of the main checkout, and omits --project when none matches",
+      "first_json_document reads a JSON object or array after wrapper log lines, and parse_run_agent_id is unchanged",
+      "a paseo child process does not see PASEO_AGENT_ID or PASEO_AGENT_CWD (runner, wait source, steer runner, prepare probe)",
+      "inside_paseo is false in unit tests unless the seam sets it",
+      "paseo_env_pairs carries neither agent-scope variable"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "substantive": "workspace helpers, inside_paseo seam, env scrub, and their tests"
+      }
+    ],
+    "key_links": [
+      "RealPaseoCli is the runner every helper uses in production"
+    ],
+    "prohibitions": [
+      "No change to existing argv builders' output",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pw-1",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "deviations": [
+      "Executed inline by the leader after escalation: the paseo-pi-flash worker timed out idle after 900 s with no write",
+      "sync-ack: internal transport helpers; no skill-facing behavior changes; the concept update rides pw-4"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T03:55:39.029Z",
+    "behavior_change": false,
+    "verification_evidence": "742, 69 and 4 passed, 0 failed; the cell touches herding and the prepare probe only",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "044d1be3-eaab-465f-9d39-51b17cae4eb9",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+    "claimed_at": "2026-10-15T03:31:35.717Z",
+    "sync_ack": "internal transport helpers; no skill-facing behavior changes; the concept update rides pw-4",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Paseo workspace helpers (ensure, archive, argv, first_json_document, inside_paseo seam) and agent-scope env scrub on every paseo spawner and worker --env",
+      "commit": "4ee4a8995",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare — green:unit — 742, 69 and 4 passed, 0 failed; the cell touches herding and the prepare probe only",
+      "deviations": [
+        "Executed inline by the leader after escalation: the paseo-pi-flash worker timed out idle after 900 s with no write"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "ensure_workspace reuses an existing workspace whose cwd is the same directory through a symlink",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "ensure_workspace passes --project <projectId> of the main checkout, and omits --project when none matches",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "first_json_document reads a JSON object or array after wrapper log lines, and parse_run_agent_id is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "a paseo child process does not see PASEO_AGENT_ID or PASEO_AGENT_CWD (runner, wait source, steer runner, prepare probe)",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "inside_paseo is false in unit tests unless the seam sets it",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "paseo_env_pairs carries neither agent-scope variable",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-10-15T04:14:14.659Z",
+        "recorded_by": "044d1be3-eaab-465f-9d39-51b17cae4eb9",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

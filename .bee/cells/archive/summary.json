@@ -1993,5 +1993,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-11-07T03:08:52.710Z"
+  },
+  "paseo-worktree-workspace": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-11-07T05:23:40.681Z"
   }
 }

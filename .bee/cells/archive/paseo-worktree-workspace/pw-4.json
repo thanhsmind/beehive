@@ -1,0 +1,112 @@
+{
+  "id": "pw-4",
+  "feature": "paseo-worktree-workspace",
+  "title": "Document Paseo worktree workspaces",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "pw-1",
+    "pw-2",
+    "pw-3"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-worktree-workspace/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Add a section to the Paseo channel concept in its existing style (ASD-STE100, short sentences): when bee counts as inside Paseo; worktree new ensures and records the workspace (reuse by cwd, project id from project ls, local isolation, printed id, warn-only); merge cleanup, prune and unregister archive it; herding runs pass --workspace and refuse inside Paseo instead of joining the caller workspace; every paseo child drops PASEO_AGENT_ID and PASEO_AGENT_CWD so the worker is not a child agent; JSON is read past wrapper log lines. Cite the feature's decision store id (find it with `bee decisions search --text paseo_workspace_id`). Add verbs/worktree/paseo_ws.rs to Pointers. Also state: a human `bee worktree new` in a Paseo terminal (PASEO_CLI set) also registers a workspace; `herding fork` still imports into the caller workspace (out of scope); a failed archive prints its FIX command; the JSON key is `paseoWorkspace`.",
+  "verify": "rg -n 'paseo_workspace_id|--workspace|PASEO_AGENT_CWD|paseo_ws.rs' docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+  "must_haves": {
+    "truths": [
+      "The concept names the worktree lifecycle in Paseo and the run workspace rule",
+      "Pointers list paseo_ws.rs"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "a section for worktree workspaces"
+      }
+    ],
+    "key_links": [
+      "the section cites the decision"
+    ],
+    "prohibitions": [
+      "No code comments added anywhere"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pw-4",
+    "outcome": "Paseo channel concept gains a Worktree workspaces section (D1-D6, decision 57793b86) and paseo_ws.rs pointer",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "deviations": [
+      "Also rewrote the parent-cascade lines (How a run executes, Agent archival heading and body) and added --workspace to the run argv list — D5 makes workers non-children, so the old D10 text was now false — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T04:03:18.555Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell; verify matched 9 lines; bee knowledge check 0 errors and bee knowledge index --check 0 stale also run",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "044d1be3-eaab-465f-9d39-51b17cae4eb9",
+    "verify_command": "rg -n 'paseo_workspace_id|--workspace|PASEO_AGENT_CWD|paseo_ws.rs' docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "claimed_at": "2026-10-15T04:01:23.812Z",
+    "mistakes": [
+      {
+        "wrong": "a shared-index stage command was refused by the concurrent-worker guard",
+        "better": "use a path-scoped commit from the start when siblings are live",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Paseo channel concept gains a Worktree workspaces section (D1-D6, decision 57793b86) and paseo_ws.rs pointer",
+      "commit": "34e21d3ed",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+      ],
+      "tests": "rg -n 'paseo_workspace_id|--workspace|PASEO_AGENT_CWD|paseo_ws.rs' docs/knowledge/areas/bee-herding/the-paseo-channel.md — green:static — docs-only cell; verify matched 9 lines; bee knowledge check 0 errors and bee knowledge index --check 0 stale also run",
+      "deviations": [
+        "Also rewrote the parent-cascade lines (How a run executes, Agent archival heading and body) and added --workspace to the run argv list — D5 makes workers non-children, so the old D10 text was now false — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "a shared-index stage command was refused by the concurrent-worker guard — use a path-scoped commit from the start when siblings are live — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The concept names the worktree lifecycle in Paseo and the run workspace rule",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "Pointers list paseo_ws.rs",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-15T04:14:14.690Z",
+        "recorded_by": "044d1be3-eaab-465f-9d39-51b17cae4eb9",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
