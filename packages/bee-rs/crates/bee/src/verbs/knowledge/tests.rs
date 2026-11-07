@@ -3182,6 +3182,131 @@ mod freshness_tests {
         }
     }
 
+    fn merged_branch_repo(root: &Path) -> (String, String, String) {
+        init_repo(root);
+        put(root, "src/a.rs", "a1\n");
+        put(root, "src/b.rs", "b1\n");
+        let base = commit(root, "base");
+        git(root, &["checkout", "-q", "-b", "side"]);
+        put(root, "src/a.rs", "a2\n");
+        let side_one = commit(root, "side changes a");
+        put(root, "src/side.rs", "s\n");
+        let side_two = commit(root, "side adds a file");
+        git(root, &["checkout", "-q", "main"]);
+        put(root, "notes.txt", "n\n");
+        commit(root, "main moves on");
+        git(root, &["merge", "-q", "--no-ff", "side", "-m", "merge side"]);
+        let _ = side_two;
+        (base, side_one, git(root, &["rev-parse", "HEAD"]))
+    }
+
+    #[test]
+    fn a_verified_commit_on_a_merged_branch_is_not_suspect_for_changes_that_precede_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let (base, side_one, _) = merged_branch_repo(&root);
+        put(&root, &area_path("onside"), &concept("onside", Some(&["src/a.rs"]), Some(&side_one), "Body.\n"));
+        put(&root, &area_path("early"), &concept("early", Some(&["src/b.rs"]), Some(&base), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        assert_eq!(graded["areas/demo/onside.md"].grade, CONFIRMED, "{:?}", graded["areas/demo/onside.md"].changed);
+        assert_eq!(graded["areas/demo/early.md"].grade, CONFIRMED);
+    }
+
+    #[test]
+    fn an_anchor_change_on_the_merged_branch_after_the_verified_commit_is_suspect() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let (base, side_one, _) = merged_branch_repo(&root);
+        put(&root, &area_path("early_a"), &concept("early_a", Some(&["src/a.rs"]), Some(&base), "Body.\n"));
+        put(&root, &area_path("dir"), &concept("dir", Some(&["src"]), Some(&side_one), "Body.\n"));
+        put(&root, &area_path("calm"), &concept("calm", Some(&["src/b.rs"]), Some(&side_one), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        assert_eq!(graded["areas/demo/early_a.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/early_a.md"].changed, vec!["src/a.rs".to_string()]);
+        assert_eq!(graded["areas/demo/dir.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/calm.md"].grade, CONFIRMED);
+    }
+
+    #[test]
+    fn a_directory_anchor_covers_every_file_under_it_and_nothing_beside_it() {
+        assert!(anchor_covers("src", "src/a.rs"));
+        assert!(anchor_covers("./src/", "src/deep/a.rs"));
+        assert!(anchor_covers("src/a.rs", "src/a.rs"));
+        assert!(!anchor_covers("src", "src2/a.rs"));
+        assert!(!anchor_covers("src/a.rs", "src/a.rs.bak"));
+    }
+
+    fn counted_calls(root: &Path, vcs: &[&str]) -> (Vec<Vec<String>>, BTreeMap<String, Grade>) {
+        let mut text_concepts: Vec<(String, Map<String, Value>)> = Vec::new();
+        for (n, vc) in vcs.iter().enumerate() {
+            let rel = format!("areas/demo/k{n}.md");
+            put(root, &format!("docs/knowledge/{rel}"), &concept(&format!("k{n}"), Some(&["src/a.rs"]), Some(vc), "Body.\n"));
+            text_concepts.push((rel, bee_of(&parse_concept_data(root, n))));
+        }
+        let refs: Vec<(&str, &Map<String, Value>)> = text_concepts.iter().map(|(p, b)| (p.as_str(), b)).collect();
+        let calls: std::cell::RefCell<Vec<Vec<String>>> = std::cell::RefCell::new(Vec::new());
+        let runner = |cwd: &Path, args: &[&str]| {
+            calls.borrow_mut().push(args.iter().map(|a| a.to_string()).collect());
+            crate::verbs::worktree::run_git(cwd, args)
+        };
+        let graded = grade_bundle_with(root, &refs, &runner);
+        (calls.into_inner(), graded)
+    }
+
+    fn parse_concept_data(root: &Path, n: usize) -> Map<String, Value> {
+        let text = read(root, &format!("docs/knowledge/areas/demo/k{n}.md"));
+        match parse_frontmatter(&text) {
+            Fm::Parsed { data, .. } => data,
+            _ => panic!("fixture concept does not parse"),
+        }
+    }
+
+    fn calls_to(calls: &[Vec<String>], verb: &str) -> usize {
+        calls.iter().filter(|c| c.iter().any(|a| a == verb)).count()
+    }
+
+    #[test]
+    fn grading_a_bundle_costs_one_log_and_at_most_one_merge_base_per_distinct_verified_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        let mut shas = Vec::new();
+        for n in 0..3 {
+            put(&root, "src/a.rs", &format!("v{n}\n"));
+            shas.push(commit(&root, &format!("c{n}")));
+        }
+        let first_zero = "0000000000000000000000000000000000000001";
+        let last_f = "ffffffffffffffffffffffffffffffffffffffff";
+
+        let (calls, graded) = counted_calls(&root, &[&shas[0]]);
+        assert_eq!((calls_to(&calls, "log"), calls_to(&calls, "merge-base")), (1, 0), "{calls:?}");
+        assert_eq!(graded["areas/demo/k0.md"].grade, SUSPECT);
+
+        let (calls, _) = counted_calls(&root, &[&shas[0], &shas[1]]);
+        assert_eq!((calls_to(&calls, "log"), calls_to(&calls, "merge-base")), (1, 1), "{calls:?}");
+
+        for unknown in [first_zero, last_f] {
+            let vcs = [shas[0].as_str(), shas[1].as_str(), unknown];
+            let (calls, graded) = counted_calls(&root, &vcs);
+            assert_eq!(calls_to(&calls, "log"), 1, "{calls:?}");
+            assert!(calls_to(&calls, "merge-base") <= 3, "{calls:?}");
+            assert_eq!(calls.len(), calls_to(&calls, "log") + calls_to(&calls, "merge-base"), "{calls:?}");
+            assert_eq!(graded["areas/demo/k2.md"].grade, UNVERIFIED);
+            assert!(graded["areas/demo/k2.md"].reason.as_deref().unwrap().contains("unknown to git"));
+            assert_eq!(graded["areas/demo/k0.md"].grade, SUSPECT);
+            assert_eq!(graded["areas/demo/k1.md"].grade, SUSPECT);
+        }
+
+        let only_unknown = [first_zero];
+        let (calls, graded) = counted_calls(&root, &only_unknown);
+        assert!(calls.len() <= 1, "{calls:?}");
+        assert!(graded["areas/demo/k0.md"].reason.as_deref().unwrap().contains("unknown to git"));
+    }
+
     fn seed_repo(root: &Path) {
         init_repo(root);
         put(root, "src/a.rs", "a\n");

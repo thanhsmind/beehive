@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::verbs::reservations::{js_trim, keys_known, FlagV, Flags};
-use crate::verbs::worktree::run_git;
+use crate::verbs::worktree::{run_git, GitOut};
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -80,41 +80,103 @@ fn base_grade(bee: &Map<String, Value>) -> Grade {
     }
 }
 
-fn ancestry_reason(vc: &str, status: Option<i32>, stderr: &str) -> Option<String> {
-    match status {
-        Some(0) => None,
-        Some(1) => Some(format!(
-            "verified_commit {} is not an ancestor of HEAD (rewritten by squash or rebase, or from another branch)",
-            short(vc)
-        )),
-        None => Some("git is unavailable".to_string()),
-        Some(_) if stderr.contains("not a git repository") => Some("the checkout is not a git repository".to_string()),
-        Some(_) => Some(format!("verified_commit {} is unknown to git", short(vc))),
+fn git_unavailable(status: Option<i32>, stderr: &str) -> Option<String> {
+    if status.is_none() {
+        Some("git is unavailable".to_string())
+    } else if stderr.contains("not a git repository") {
+        Some("the checkout is not a git repository".to_string())
+    } else {
+        None
     }
 }
 
-fn touched_commits(stdout: &str) -> Vec<(String, HashSet<String>)> {
-    let mut commits: Vec<(String, HashSet<String>)> = Vec::new();
+fn not_ancestor_reason(vc: &str) -> String {
+    format!(
+        "verified_commit {} is not an ancestor of HEAD (rewritten by squash or rebase, or from another branch)",
+        short(vc)
+    )
+}
+
+fn unknown_reason(vc: &str) -> String {
+    format!("verified_commit {} is unknown to git", short(vc))
+}
+
+struct LoggedCommit {
+    hash: String,
+    parents: Vec<String>,
+    files: HashSet<String>,
+}
+
+fn parse_log(stdout: &str) -> Vec<LoggedCommit> {
+    let mut commits: Vec<LoggedCommit> = Vec::new();
     for line in stdout.lines() {
-        let line = line.trim_end();
-        if line.is_empty() {
-            continue;
-        }
-        let hash_line = matches!(line.len(), 40 | 64) && line.bytes().all(|b| b.is_ascii_hexdigit());
-        if hash_line {
-            commits.push((line.to_string(), HashSet::new()));
-        } else if let Some(last) = commits.last_mut() {
-            last.1.insert(line.to_string());
+        if let Some(head) = line.strip_prefix('\u{1}') {
+            let mut ids = head.split_whitespace().map(str::to_string);
+            let Some(hash) = ids.next() else { continue };
+            commits.push(LoggedCommit { hash, parents: ids.collect(), files: HashSet::new() });
+        } else if !line.trim().is_empty() {
+            if let Some(last) = commits.last_mut() {
+                last.files.insert(line.trim_end().to_string());
+            }
         }
     }
     commits
 }
 
-fn anchor_touched(files: &HashSet<String>, anchor: &str, is_dir: bool) -> bool {
-    files.contains(anchor) || (is_dir && files.iter().any(|f| f.strip_prefix(anchor).is_some_and(|rest| rest.starts_with('/'))))
+pub(crate) fn anchor_covers(anchor: &str, path: &str) -> bool {
+    let anchor = norm_anchor(anchor);
+    path == anchor || path.strip_prefix(anchor).is_some_and(|rest| rest.starts_with('/'))
+}
+
+pub(crate) type GitRunner<'a> = &'a dyn Fn(&Path, &[&str]) -> GitOut;
+
+fn common_base(
+    checkout: &Path,
+    run: GitRunner,
+    distinct: &[String],
+    dead: &mut HashMap<String, String>,
+) -> Option<String> {
+    let mut base: Option<String> = None;
+    let mut base_is_vc = false;
+    for vc in distinct {
+        let Some(current) = base.clone() else {
+            base = Some(vc.clone());
+            base_is_vc = true;
+            continue;
+        };
+        let result = run(checkout, &["merge-base", &current, vc]);
+        let stderr = result.stderr.as_deref().unwrap_or("");
+        if let Some(reason) = git_unavailable(result.status, stderr) {
+            for vc in distinct {
+                dead.insert(vc.clone(), reason.clone());
+            }
+            return None;
+        }
+        let text = result.stdout.as_deref().unwrap_or("").trim().to_string();
+        if result.status == Some(0) && is_sha(&text) {
+            base = Some(text);
+            base_is_vc = false;
+        } else if base_is_vc && stderr.contains(&current) {
+            dead.insert(current.clone(), unknown_reason(&current));
+            base = Some(vc.clone());
+        } else if stderr.contains(vc.as_str()) {
+            dead.insert(vc.clone(), unknown_reason(vc));
+        } else {
+            dead.insert(vc.clone(), format!("verified_commit {} shares no history with the other verified commits", short(vc)));
+        }
+    }
+    base
 }
 
 pub(crate) fn grade_bundle(checkout: &Path, concepts: &[(&str, &Map<String, Value>)]) -> BTreeMap<String, Grade> {
+    grade_bundle_with(checkout, concepts, &run_git)
+}
+
+pub(crate) fn grade_bundle_with(
+    checkout: &Path,
+    concepts: &[(&str, &Map<String, Value>)],
+    run: GitRunner,
+) -> BTreeMap<String, Grade> {
     let mut out: BTreeMap<String, Grade> = BTreeMap::new();
     let mut candidates: Vec<&str> = Vec::new();
     for (rel, bee) in concepts {
@@ -155,69 +217,80 @@ pub(crate) fn grade_bundle(checkout: &Path, concepts: &[(&str, &Map<String, Valu
             distinct.push(vc);
         }
     }
-    let mut ancestry: HashMap<String, Option<String>> = HashMap::new();
-    for vc in &distinct {
-        let result = run_git(checkout, &["merge-base", "--is-ancestor", vc, "HEAD"]);
-        ancestry.insert(vc.clone(), ancestry_reason(vc, result.status, result.stderr.as_deref().unwrap_or("")));
-    }
-    let mut live: Vec<&String> = distinct.iter().filter(|vc| ancestry[*vc].is_none()).collect();
-    live.sort();
+    distinct.sort();
 
-    let mut window_reason: Option<String> = None;
-    let mut commits: Vec<(String, HashSet<String>)> = Vec::new();
-    if !live.is_empty() {
-        let base = if live.len() == 1 {
-            Some(live[0].clone())
+    let mut dead: HashMap<String, String> = HashMap::new();
+    let base = common_base(checkout, run, &distinct, &mut dead);
+    let live: Vec<&String> = distinct.iter().filter(|vc| !dead.contains_key(*vc)).collect();
+
+    let mut commits: Vec<LoggedCommit> = Vec::new();
+    if let (Some(base), false) = (base, live.is_empty()) {
+        let exclude = format!("{base}^@");
+        let result = run(
+            checkout,
+            &["-c", "core.quotepath=false", "log", "--format=%x01%H %P", "--name-only", "HEAD", "--not", &exclude],
+        );
+        if result.status == Some(0) {
+            commits = parse_log(result.stdout.as_deref().unwrap_or(""));
         } else {
-            let mut args: Vec<&str> = vec!["merge-base", "--octopus"];
-            args.extend(live.iter().map(|s| s.as_str()));
-            let result = run_git(checkout, &args);
-            let text = result.stdout.as_deref().unwrap_or("").trim().to_string();
-            (result.status == Some(0) && is_sha(&text)).then_some(text)
+            let stderr = result.stderr.as_deref().unwrap_or("");
+            for vc in &live {
+                let reason = git_unavailable(result.status, stderr).unwrap_or_else(|| {
+                    if live.len() == 1 {
+                        unknown_reason(vc)
+                    } else {
+                        "git log over the verified range failed".to_string()
+                    }
+                });
+                dead.insert((*vc).clone(), reason);
+            }
+        }
+    }
+
+    let index: HashMap<&str, usize> = commits.iter().enumerate().map(|(i, c)| (c.hash.as_str(), i)).collect();
+    let mut windows: HashMap<String, Vec<usize>> = HashMap::new();
+    for vc in &distinct {
+        if dead.contains_key(vc) {
+            continue;
+        }
+        let start = index.get(vc.as_str()).copied().or_else(|| commits.iter().position(|c| c.hash.starts_with(vc.as_str())));
+        let Some(start) = start else {
+            dead.insert(vc.clone(), not_ancestor_reason(vc));
+            continue;
         };
-        match base {
-            None => window_reason = Some("git could not find a common base for the verified commits".to_string()),
-            Some(base) => {
-                let range = format!("{base}..HEAD");
-                let result = run_git(
-                    checkout,
-                    &["-c", "core.quotepath=false", "log", "--format=%H", "--name-only", "--first-parent", "-m", &range],
-                );
-                if result.status == Some(0) {
-                    commits = touched_commits(result.stdout.as_deref().unwrap_or(""));
-                } else {
-                    window_reason = Some("git log over the verified range failed".to_string());
+        let mut reached = vec![false; commits.len()];
+        let mut stack = vec![start];
+        reached[start] = true;
+        while let Some(i) = stack.pop() {
+            for parent in &commits[i].parents {
+                if let Some(&p) = index.get(parent.as_str()) {
+                    if !reached[p] {
+                        reached[p] = true;
+                        stack.push(p);
+                    }
                 }
             }
         }
+        windows.insert(vc.clone(), (0..commits.len()).filter(|i| !reached[*i]).collect());
     }
 
     for rel in candidates {
         let Some(grade) = out.get_mut(rel) else { continue };
         let vc = grade.verified_commit.clone().unwrap_or_default();
-        if let Some(reason) = ancestry.get(&vc).cloned().flatten() {
-            grade.reason = Some(reason);
-            continue;
-        }
-        if let Some(reason) = &window_reason {
+        if let Some(reason) = dead.get(&vc) {
             grade.reason = Some(reason.clone());
             continue;
         }
-        let window_end = commits
-            .iter()
-            .position(|(hash, _)| *hash == vc || hash.starts_with(&vc))
-            .unwrap_or(commits.len());
         let concept_path = format!("docs/knowledge/{rel}");
-        let window = &commits[..window_end];
+        let window = &windows[&vc];
         let changed: Vec<String> = grade
             .anchors
             .iter()
             .filter(|anchor| {
-                let norm = norm_anchor(anchor);
-                let is_dir = checkout.join(norm).is_dir();
-                window
-                    .iter()
-                    .any(|(_, files)| !files.contains(&concept_path) && anchor_touched(files, norm, is_dir))
+                window.iter().any(|&i| {
+                    let files = &commits[i].files;
+                    !files.contains(&concept_path) && files.iter().any(|f| anchor_covers(anchor, f))
+                })
             })
             .cloned()
             .collect();
