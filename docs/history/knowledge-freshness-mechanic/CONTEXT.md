@@ -110,6 +110,7 @@ feature) and before glossary or event catalogue.
 
 ### Deferred To Planning
 
+<!-- bee:not-a-deferral: all three were answered by planning — plan.md Discovery and Approach (rev 2): the timings row carries the env-bound feature; work/ moves by git mv and both walks skip it; seed coverage is reported in kfm-6's cap -->
 - [ ] How timings rows learn their feature — a new field written by the
   dispatcher from the bound lane, or a join on lane start/close windows.
 - [ ] Whether `work/` moves by `git mv` in this feature or is left in place
@@ -117,13 +118,14 @@ feature) and before glossary or event catalogue.
   context walks can exclude cheaply.
 - [ ] Seed coverage: how many area concepts have zero resolving Pointers
   paths after seeding (they grade `unverified` with no anchors).
+<!-- /bee:not-a-deferral -->
 
 ## Deferred Ideas
 
-- Cut bee's own areas to map + invariants (map ticket 002) — next feature,
-  bee-only content work.
+- Cut bee's own areas to map + invariants (map ticket 002) — the next
+  feature, bee-only content work, shaped from the map once this one closes.
 - Glossary (ticket 004) and event catalogue (ticket 003) — wait on pull
-  rate (D5).
+  rate (D5); trigger `bee-knowledge-report-shows-a-pull-rate-r__28fb074d`.
 - Pattern freshness — patterns keep a date only (agent-suspected, on the map).
 
 ## Handoff Note
