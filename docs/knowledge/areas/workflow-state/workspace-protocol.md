@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["workspace-protocol D1-D12 (7c24685b-ecf3-4be9-badb-a49cdfa2130c; `bee decisions search --text WORKSPACE_PROTOCOL`)", "571f8857-4289-4b06-bd07-88293c390d90 (the contract decision: file format, states, digests, verify states)", "protocol-init-from-project D1-D8 (init renders from the project; narrows D4)"]
+  decisions: ["workspace-protocol D1-D12 (`bee decisions search --text WORKSPACE_PROTOCOL`)", "protocol-init-from-project D1-D8 (init renders from the project; narrows D4)"]
   sources: ["docs/history/workspace-protocol/CONTEXT.md (D1-D12)", "docs/history/workspace-protocol/plan.md", "workspace-protocol cells wsp-1..wsp-4", "docs/history/protocol-init-from-project/CONTEXT.md (D1-D8)"]
   authoritative_for: "workflow-state: WORKSPACE_PROTOCOL.md, bee protocol, the prepare digests, bee dispatch verify, the purpose leaning lint"
 ---
