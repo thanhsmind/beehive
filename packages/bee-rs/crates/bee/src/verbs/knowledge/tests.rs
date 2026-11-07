@@ -3561,4 +3561,128 @@ mod freshness_tests {
         let _cwd = Cwd::enter(&root);
         assert!(run_verb(&["check", "--json"]).is_some());
     }
+
+    fn session_record(root: &Path, id: &str, lane: Option<&str>) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut rec = json!({"id": id, "last_heartbeat": "2026-11-07T00:00:00.000Z"});
+        if let Some(l) = lane {
+            rec["lane"] = json!(l);
+        }
+        std::fs::write(dir.join(format!("{id}.json")), rec.to_string()).unwrap();
+    }
+
+    fn timings_log(root: &Path, text: &str) {
+        let dir = root.join(".bee").join("logs");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("timings.jsonl"), text).unwrap();
+    }
+
+    #[test]
+    fn timings_feature_reads_the_bound_lane_of_the_env_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        session_record(tmp.path(), "s-bound", Some("alpha"));
+        session_record(tmp.path(), "s-free", None);
+        assert_eq!(crate::verbs::timing_feature(tmp.path(), Some("s-bound")), Some("alpha".to_string()));
+        assert_eq!(crate::verbs::timing_feature(tmp.path(), Some("s-free")), None);
+        assert_eq!(crate::verbs::timing_feature(tmp.path(), Some("s-missing")), None);
+    }
+
+    #[test]
+    fn timings_feature_is_null_without_an_env_session_even_with_one_live_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        session_record(tmp.path(), "s-only", Some("alpha"));
+        assert_eq!(crate::verbs::timing_feature(tmp.path(), None), None);
+    }
+
+    #[test]
+    fn timings_row_keeps_the_four_keys_and_adds_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        session_record(tmp.path(), "s-bound", Some("alpha"));
+        let row = crate::verbs::timing_row(tmp.path(), "knowledge show", 7, true, "2026-11-07T00:00:00.000Z", Some("s-bound"));
+        assert_eq!(
+            row,
+            json!({"ts": "2026-11-07T00:00:00.000Z", "cmd": "knowledge show", "ms": 7, "ok": true, "feature": "alpha"})
+        );
+        let bare = crate::verbs::timing_row(tmp.path(), "status", 3, true, "2026-11-07T00:00:00.000Z", None);
+        assert_eq!(bare["feature"], Value::Null);
+        assert_eq!(bare["cmd"], "status");
+    }
+
+    #[test]
+    fn timings_pull_rate_groups_by_feature_and_skips_malformed_rows() {
+        let tmp = tempfile::tempdir().unwrap();
+        let row = |cmd: &str, feature: Option<&str>| {
+            let mut v = json!({"ts": "2026-11-07T00:00:00.000Z", "cmd": cmd, "ms": 1, "ok": true});
+            if let Some(f) = feature {
+                v["feature"] = json!(f);
+            }
+            format!("{v}\n")
+        };
+        let mut log = String::new();
+        log += &row("knowledge search", Some("alpha"));
+        log += &row("knowledge context", Some("alpha"));
+        log += &row("knowledge show", Some("alpha"));
+        log += &row("status", Some("alpha"));
+        log += &row("knowledge search", Some("beta"));
+        log += &row("status", Some("beta"));
+        log += &row("status", Some("beta"));
+        log += &row("status", Some("beta"));
+        log += &row("knowledge show", None);
+        log += &row("knowledge check", None);
+        log += "{not json\n";
+        log += "[1,2]\n";
+        log += "\n";
+        timings_log(tmp.path(), &log);
+
+        let (section, lines) = build_pull_rate(tmp.path());
+        let rows = section["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 3, "{section}");
+        assert_eq!(rows[0]["feature"], "alpha");
+        assert_eq!(rows[0]["search"], 1);
+        assert_eq!(rows[0]["context"], 1);
+        assert_eq!(rows[0]["show"], 1);
+        assert_eq!(rows[0]["pulls"], 3);
+        assert_eq!(rows[0]["calls"], 4);
+        assert_eq!(rows[0]["rate"], 0.75);
+        assert_eq!(rows[1]["feature"], "beta");
+        assert_eq!(rows[1]["pulls"], 1);
+        assert_eq!(rows[1]["calls"], 4);
+        assert_eq!(rows[1]["rate"], 0.25);
+        assert_eq!(rows[2]["feature"], "(unbound)");
+        assert_eq!(rows[2]["show"], 1);
+        assert_eq!(rows[2]["calls"], 2);
+        assert_eq!(rows[2]["rate"], 0.5);
+        assert_eq!(section["total"]["search"], 2);
+        assert_eq!(section["total"]["pulls"], 5);
+        assert_eq!(section["total"]["calls"], 10);
+        assert_eq!(section["total"]["rate"], 0.5);
+        assert_eq!(section["malformed_count"], 2);
+        assert_eq!(lines[0], "Pull rate");
+        assert!(lines.iter().any(|l| l.contains("alpha") && l.contains("0.75")), "{lines:?}");
+        assert!(lines.iter().any(|l| l.contains("(unbound)")), "{lines:?}");
+        assert!(lines.iter().any(|l| l.contains("total")), "{lines:?}");
+    }
+
+    #[test]
+    fn timings_pull_rate_rounds_to_three_decimals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut log = String::from("{\"cmd\":\"knowledge search\",\"feature\":\"a\"}\n");
+        log += "{\"cmd\":\"status\",\"feature\":\"a\"}\n";
+        log += "{\"cmd\":\"status\",\"feature\":\"a\"}\n";
+        timings_log(tmp.path(), &log);
+        let (section, _) = build_pull_rate(tmp.path());
+        assert_eq!(section["rows"][0]["rate"], 0.333);
+    }
+
+    #[test]
+    fn timings_pull_rate_over_a_missing_log_is_an_empty_table() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (section, lines) = build_pull_rate(tmp.path());
+        assert_eq!(section["rows"].as_array().unwrap().len(), 0);
+        assert_eq!(section["total"]["calls"], 0);
+        assert_eq!(section["total"]["rate"], 0.0);
+        assert_eq!(section["malformed_count"], 0);
+        assert_eq!(lines[0], "Pull rate");
+    }
 }

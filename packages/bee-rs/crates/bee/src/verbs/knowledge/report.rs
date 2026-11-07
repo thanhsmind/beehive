@@ -425,6 +425,82 @@ pub(crate) fn build_outcomes(root: &Path) -> (Value, Vec<String>) {
     (Value::Object(outcomes), lines)
 }
 
+const PULL_CMDS: [&str; 3] = ["knowledge search", "knowledge context", "knowledge show"];
+const UNBOUND: &str = "(unbound)";
+
+fn pull_row(feature: Option<&str>, counts: &[usize; 5]) -> Value {
+    let [search, context, show, calls, _] = *counts;
+    let pulls = search + context + show;
+    let mut row = Map::new();
+    if let Some(f) = feature {
+        row.insert("feature".into(), Value::String(f.to_string()));
+    }
+    row.insert("search".into(), Value::from(search));
+    row.insert("context".into(), Value::from(context));
+    row.insert("show".into(), Value::from(show));
+    row.insert("pulls".into(), Value::from(pulls));
+    row.insert("calls".into(), Value::from(calls));
+    row.insert("rate".into(), rate(pulls, calls));
+    Value::Object(row)
+}
+
+fn pull_line(label: &str, row: &Value) -> String {
+    format!(
+        "  {label:<28} {:>6} {:>7} {:>5} {:>6} {:>6} {:>6}",
+        row["search"], row["context"], row["show"], row["pulls"], row["calls"], row["rate"]
+    )
+}
+
+pub(crate) fn build_pull_rate(root: &Path) -> (Value, Vec<String>) {
+    let text = std::fs::read_to_string(root.join(".bee").join("logs").join("timings.jsonl")).unwrap_or_default();
+    let mut groups: std::collections::BTreeMap<String, [usize; 5]> = std::collections::BTreeMap::new();
+    let mut unbound = [0usize; 5];
+    let mut total = [0usize; 5];
+    let mut malformed = 0usize;
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let parsed = serde_json::from_str::<Value>(line).ok();
+        let Some(cmd) = parsed.as_ref().and_then(|v| v.get("cmd")).and_then(Value::as_str) else {
+            malformed += 1;
+            continue;
+        };
+        let feature = parsed.as_ref().and_then(|v| v.get("feature")).and_then(Value::as_str);
+        let slot = match feature {
+            Some(f) => groups.entry(f.to_string()).or_insert([0; 5]),
+            None => &mut unbound,
+        };
+        for target in [slot, &mut total] {
+            if let Some(i) = PULL_CMDS.iter().position(|c| *c == cmd) {
+                target[i] += 1;
+            }
+            target[3] += 1;
+        }
+    }
+
+    let mut rows: Vec<Value> = groups.iter().map(|(f, c)| pull_row(Some(f), c)).collect();
+    if unbound[3] > 0 {
+        rows.push(pull_row(Some(UNBOUND), &unbound));
+    }
+    let total_row = pull_row(None, &total);
+
+    let mut lines = vec![
+        "Pull rate".to_string(),
+        format!("  {:<28} {:>6} {:>7} {:>5} {:>6} {:>6} {:>6}", "feature", "search", "context", "show", "pulls", "calls", "rate"),
+    ];
+    for row in &rows {
+        lines.push(pull_line(row["feature"].as_str().unwrap_or_default(), row));
+    }
+    lines.push(pull_line("total", &total_row));
+    if malformed > 0 {
+        lines.push(format!("  {malformed} malformed timings row(s) skipped"));
+    }
+
+    let mut section = Map::new();
+    section.insert("rows".into(), Value::Array(rows));
+    section.insert("total".into(), total_row);
+    section.insert("malformed_count".into(), Value::from(malformed));
+    (Value::Object(section), lines)
+}
+
 // ─── routing ────────────────────────────────────────────────────────────
 
 pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -441,6 +517,8 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     let (measured, unmeasured, evidence_ladder, mut lines) = build_report(&ctx.root, &concepts);
     let (outcomes, outcome_lines) = build_outcomes(&ctx.root);
     lines.extend(outcome_lines);
+    let (pull_rate, pull_lines) = build_pull_rate(&ctx.root);
+    lines.extend(pull_lines);
 
     let mut result = Map::new();
     let measured_count = measured.len();
@@ -451,6 +529,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     result.insert("unmeasured_count".into(), Value::from(unmeasured_count));
     result.insert("evidence_ladder".into(), evidence_ladder);
     result.insert("outcomes".into(), outcomes);
+    result.insert("pull_rate".into(), pull_rate);
     Some(ctx.emit(&Value::Object(result), &lines.join("\n"), 0))
 }
 
