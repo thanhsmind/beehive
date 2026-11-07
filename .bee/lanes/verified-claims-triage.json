@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"verified-claims-triage\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"verified-claims-triage\" (lane).",
+  "next_action": "Merged into main at a9d2d9d; capture what settled, then bee close --feature verified-claims-triage.",
   "created_at": "2026-11-07T06:30:39.300Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-07T06:38:06.889Z",
     "feature": "verified-claims-triage"
-  },
-  "merge_ready": {
-    "since": "2026-11-07T06:34:27.974Z",
-    "branch": "wt/verified-claims-triage",
-    "worktree_id": "beehive--wt--verified-claims-triage",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
