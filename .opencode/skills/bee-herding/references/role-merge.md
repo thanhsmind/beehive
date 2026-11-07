@@ -79,8 +79,13 @@ worktree is **finished** iff all four hold:
 anymore** — before it stages the merge, it runs a zero-mutation proof check
 over the feature's capped cells (D7/D8): every capped cell must carry a
 recorded proof line, or the merge refuses (`WORKTREE_MERGE_PROOF_DEBT`) before
-touching main at all. No `commands.test` spawn happens here. CI runs the full
-declared suite against every push — the one deterministic net.
+touching main at all. No `commands.test` spawn happens here. For a feature
+whose diff touches code, the merge also reads the worktree's fresh green
+`bee test` record — the full suite, run once per feature at its end (rule
+`agents-proof-at-cap`) — and refuses without it
+(`WORKTREE_MERGE_FULL_SUITE_MISSING|RED|STALE`). This role never runs that
+suite for the feature: it reports the refusal. CI runs the full declared suite
+against every push — the one deterministic net.
 
 **A pane row's `agent_status`/`agent_session` are never read as evidence a
 worktree is finished** — this role does not consult them at all. An agent goes idle the
