@@ -713,7 +713,43 @@ mod tests {
     }
 
     #[test]
+    fn thin_peer_boot_is_on_by_default_and_off_for_an_explicit_false() {
+        let _guard = crate::hooks::herding_env_lock();
+        for (switch, registers) in [(None, false), (Some(false), true)] {
+            let _env = crate::hooks::tests::MarkerEnv::set(Some("1"));
+            let tmp = tempfile::tempdir().unwrap();
+            vendored_repo(tmp.path());
+            if let Some(on) = switch {
+                std::fs::write(
+                    tmp.path().join(".bee").join("config.json"),
+                    json!({"dispatch": {"thin_peer_boot": on}}).to_string(),
+                )
+                .unwrap();
+            }
+            let outcome = run(&[], &payload_for(tmp.path()));
+            assert!(matches!(outcome, Outcome::Done(_)));
+            assert_eq!(tmp.path().join(".bee").join("sessions").exists(), registers, "{switch:?}");
+        }
+    }
+
+    #[test]
+    fn an_explicit_false_in_the_main_config_local_keeps_a_linked_worktree_session_registered() {
+        let _guard = crate::hooks::herding_env_lock();
+        let _env = crate::hooks::tests::MarkerEnv::set(Some("1"));
+        let repo = crate::hooks::tests::linked_repo();
+        std::fs::write(
+            repo.main.join(".bee").join("config.local.json"),
+            json!({"dispatch": {"thin_peer_boot": false}}).to_string(),
+        )
+        .unwrap();
+        let outcome = run(&[], &payload_for(&repo.work));
+        assert!(matches!(outcome, Outcome::Done(_)));
+        assert!(repo.main.join(".bee").join("sessions").join("s1.json").is_file());
+    }
+
+    #[test]
     fn missing_vendored_lib_exits_zero_natively() {
+        let _env = crate::hooks::UnherdedEnv::new();
         // Root resolves (a .git dir) but the vendored state.mjs is absent —
         // the presence-gate arm.
         let tmp = tempfile::tempdir().unwrap();
@@ -725,6 +761,7 @@ mod tests {
 
     #[test]
     fn disabled_hook_exits_zero_natively() {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         vendored_repo(tmp.path());
         std::fs::write(
@@ -746,6 +783,7 @@ mod tests {
     /// the session record it registers.
     #[test]
     fn enabled_hook_runs_natively_and_exits_zero() {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         vendored_repo(tmp.path());
         let outcome = run(&[], &payload_for(tmp.path()));
@@ -768,6 +806,7 @@ mod tests {
     /// returned the fallback; so does this, and the hook still runs.
     #[test]
     fn corrupt_config_runs_fail_open_and_warns() {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         vendored_repo(tmp.path());
         std::fs::write(tmp.path().join(".bee").join("config.json"), "{broken").unwrap();
@@ -959,6 +998,7 @@ mod tests {
 
     #[test]
     fn the_session_record_persists_the_start_source_and_restamps_on_a_later_heartbeat() {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         vendored_repo(tmp.path());
         let record = tmp.path().join(".bee").join("sessions").join("s1.json");
@@ -980,6 +1020,7 @@ mod tests {
 
     #[test]
     fn a_session_record_omits_source_when_the_payload_carries_none() {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         vendored_repo(tmp.path());
         let payload = payload_with(tmp.path(), "", Some("s1"));
@@ -992,6 +1033,7 @@ mod tests {
 
     #[test]
     fn an_empty_source_heartbeat_leaves_a_previously_stamped_source_untouched() {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         vendored_repo(tmp.path());
         let record = tmp.path().join(".bee").join("sessions").join("s1.json");

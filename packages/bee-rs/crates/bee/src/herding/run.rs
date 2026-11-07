@@ -2920,7 +2920,7 @@ pub(crate) fn resolve_paseo_workspace(
     })
 }
 
-const THIN_PEER_CLAUDE_ENV: [(&str, &str); 4] = [
+pub(crate) const THIN_PEER_CLAUDE_ENV: [(&str, &str); 4] = [
     ("CLAUDE_CODE_DISABLE_CLAUDE_MDS", "1"),
     ("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1"),
     ("ENABLE_CLAUDEAI_MCP_SERVERS", "false"),
@@ -2936,8 +2936,7 @@ pub(crate) fn thin_peer_env(
     is_claude: bool,
     agent_env: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
-    let on = cfg.pointer("/dispatch/thin_peer_boot").and_then(Value::as_bool) == Some(true);
-    if !(on && is_claude) {
+    if !(crate::hooks::thin_peer_switch_on(cfg) && is_claude) {
         return agent_env.clone();
     }
     let mut env: BTreeMap<String, String> =
@@ -13366,6 +13365,7 @@ mod tests {
     ];
 
     fn paseo_run_argv_with_config(provider: &str, switch: Option<bool>, agent_env: Value) -> Vec<String> {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         let mut opts = test_options(tmp.path(), false);
         opts.agent = Some("w".to_string());
@@ -13417,10 +13417,16 @@ mod tests {
     }
 
     #[test]
-    fn thin_peer_switch_off_or_absent_leaves_a_claude_agent_unchanged() {
-        for switch in [None, Some(false)] {
-            let pairs = env_pairs(&paseo_run_argv_with_config("claude", switch, serde_json::json!({})));
-            assert!(!pairs.iter().any(|p| THIN_KEYS.iter().any(|k| p.starts_with(&format!("{k}=")))), "{pairs:?}");
+    fn thin_peer_switch_false_leaves_a_claude_agent_unchanged() {
+        let pairs = env_pairs(&paseo_run_argv_with_config("claude", Some(false), serde_json::json!({})));
+        assert!(!pairs.iter().any(|p| THIN_KEYS.iter().any(|k| p.starts_with(&format!("{k}=")))), "{pairs:?}");
+    }
+
+    #[test]
+    fn thin_peer_switch_absent_gives_a_paseo_claude_agent_the_four_env_pairs() {
+        let pairs = env_pairs(&paseo_run_argv_with_config("claude", None, serde_json::json!({})));
+        for (k, v) in THIN_PEER_CLAUDE_ENV {
+            assert!(pairs.contains(&format!("{k}={v}")), "{k} missing: {pairs:?}");
         }
     }
 
@@ -13448,11 +13454,16 @@ mod tests {
         assert_eq!(merged.get("ENABLE_CLAUDEAI_MCP_SERVERS").map(String::as_str), Some("true"));
         assert_eq!(merged.get("CLAUDE_CODE_DISABLE_BUNDLED_SKILLS").map(String::as_str), Some("1"));
         assert_eq!(thin_peer_env(&on, false, &agent), agent);
-        assert_eq!(thin_peer_env(&serde_json::json!({}), true, &agent), agent);
+        let off = serde_json::json!({"dispatch": {"thin_peer_boot": false}});
+        assert_eq!(thin_peer_env(&off, true, &agent), agent);
+        let absent = thin_peer_env(&serde_json::json!({}), true, &agent);
+        assert_eq!(absent, merged);
+        assert_eq!(thin_peer_env(&serde_json::json!({}), false, &agent), agent);
     }
 
     #[test]
     fn claude_session_switch_on_sets_the_four_env_vars_for_the_session() {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
         std::fs::write(tmp.path().join(".bee").join("config.json"), r#"{"dispatch":{"thin_peer_boot":true}}"#).unwrap();
@@ -13466,6 +13477,29 @@ mod tests {
         let spawns = fake.spawns.lock().unwrap();
         for (k, v) in THIN_PEER_CLAUDE_ENV {
             assert_eq!(spawns[0].2.get(k).map(String::as_str), Some(v), "{k}");
+        }
+    }
+
+    #[test]
+    fn thin_peer_claude_session_env_follows_the_default_and_an_explicit_false() {
+        let _env = crate::hooks::UnherdedEnv::new();
+        for (config, thin) in [(None, true), (Some(r#"{"dispatch":{"thin_peer_boot":false}}"#), false)] {
+            let tmp = tempfile::tempdir().unwrap();
+            std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+            if let Some(c) = config {
+                std::fs::write(tmp.path().join(".bee").join("config.json"), c).unwrap();
+            }
+            let opts = test_options(tmp.path(), false);
+            seed_done_result(tmp.path(), &opts.job_id);
+            let fake = FakeClaudeCli::new(FakeClaudeCli::listing("working", "busy"));
+
+            let res = run_claude_session(&opts, &fake);
+
+            assert!(matches!(res.outcome, RunOutcome::Result(_)));
+            let spawns = fake.spawns.lock().unwrap();
+            for (k, v) in THIN_PEER_CLAUDE_ENV {
+                assert_eq!(spawns[0].2.get(k).map(String::as_str), thin.then_some(v), "{k}");
+            }
         }
     }
 

@@ -102,14 +102,15 @@ pub(crate) fn herding_worker_marker_set() -> bool {
 /// not answer.
 pub(crate) const PEER_BOOT: &str = include_str!("../../../../../bee/prompts/peer-boot.md");
 
+pub(crate) fn thin_peer_switch_on(cfg: &serde_json::Value) -> bool {
+    cfg.pointer("/dispatch/thin_peer_boot").and_then(serde_json::Value::as_bool) != Some(false)
+}
+
 pub(crate) fn thin_peer_boot(root: &std::path::Path) -> bool {
     herding_worker_marker_set()
-        && matches!(
-            crate::state::read_config_raw(root)
-                .get("dispatch")
-                .and_then(|d| d.get("thin_peer_boot")),
-            Some(serde_json::Value::Bool(true))
-        )
+        && thin_peer_switch_on(&serde_json::Value::Object(crate::state::read_config_raw(
+            &session_init::control_root_for(root),
+        )))
 }
 
 fn thin_peer_hook_open(name: &str) -> bool {
@@ -145,6 +146,44 @@ pub(crate) fn herding_env_lock() -> std::sync::MutexGuard<'static, ()> {
     LOCK.get_or_init(|| std::sync::Mutex::new(()))
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+pub(crate) struct UnherdedEnv {
+    _lock: std::sync::MutexGuard<'static, ()>,
+    prior: Vec<(&'static str, Option<OsString>)>,
+}
+
+#[cfg(test)]
+impl UnherdedEnv {
+    pub(crate) fn new() -> Self {
+        let lock = herding_env_lock();
+        let thin = crate::herding::run::THIN_PEER_CLAUDE_ENV.iter().map(|(k, _)| *k);
+        let prior = ["BEE_HERDING_WORKER", "BEE_HERDING_JOB_ID"]
+            .into_iter()
+            .chain(thin)
+            .map(|key| {
+                let before = std::env::var_os(key);
+                // SAFETY: the guard holds `herding_env_lock` for its life.
+                unsafe { std::env::remove_var(key) };
+                (key, before)
+            })
+            .collect();
+        Self { _lock: lock, prior }
+    }
+}
+
+#[cfg(test)]
+impl Drop for UnherdedEnv {
+    fn drop(&mut self) {
+        for (key, before) in self.prior.drain(..) {
+            // SAFETY: see `new`.
+            match before {
+                Some(v) => unsafe { std::env::set_var(key, v) },
+                None => unsafe { std::env::remove_var(key) },
+            }
+        }
+    }
 }
 
 /// Dispatch `bee hook <name> [args...]`. Returns None when argv is not a
@@ -308,6 +347,47 @@ mod tests {
         }
     }
 
+    pub(crate) struct LinkedRepo {
+        _dirs: (tempfile::TempDir, tempfile::TempDir),
+        pub(crate) main: std::path::PathBuf,
+        pub(crate) work: std::path::PathBuf,
+    }
+
+    pub(crate) fn linked_repo() -> LinkedRepo {
+        let dirs = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let main = dunce::canonicalize(dirs.0.path()).unwrap();
+        let work = dunce::canonicalize(dirs.1.path()).unwrap();
+        let gitdir = main.join(".git").join("worktrees").join("fixture");
+        std::fs::create_dir_all(&gitdir).unwrap();
+        std::fs::write(work.join(".git"), format!("gitdir: {}\n", gitdir.to_string_lossy())).unwrap();
+        std::fs::write(gitdir.join("gitdir"), format!("{}\n", work.join(".git").to_string_lossy())).unwrap();
+        for root in [&main, &work] {
+            std::fs::create_dir_all(root.join(".bee")).unwrap();
+            std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        }
+        LinkedRepo { _dirs: dirs, main, work }
+    }
+
+    #[test]
+    fn an_explicit_false_in_the_main_config_turns_the_hook_off_for_a_linked_worktree() {
+        let _env = UnherdedEnv::new();
+        let _marker = MarkerEnv::set(Some("1"));
+        let repo = linked_repo();
+        assert!(thin_peer_boot(&repo.work), "absent everywhere is on");
+        std::fs::write(
+            repo.main.join(".bee").join("config.local.json"),
+            r#"{"dispatch":{"thin_peer_boot":false}}"#,
+        )
+        .unwrap();
+        assert!(!thin_peer_boot(&repo.work), "false only in the main config.local.json is off");
+        std::fs::write(
+            repo.main.join(".bee").join("config.json"),
+            r#"{"dispatch":{"thin_peer_boot":true}}"#,
+        )
+        .unwrap();
+        assert!(!thin_peer_boot(&repo.work), "the local overlay wins over a tracked true");
+    }
+
     #[test]
     fn peer_boot_is_short_and_carries_no_dynamic_value() {
         assert!(PEER_BOOT.len() < 1500, "{} bytes", PEER_BOOT.len());
@@ -316,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn thin_peer_boot_needs_both_the_switch_and_the_marker() {
+    fn thin_peer_boot_needs_the_marker_and_is_on_unless_the_switch_is_false() {
         let _guard = herding_worker_env_lock();
         let on = tempfile::tempdir().unwrap();
         thin_repo(on.path(), Some(true));
@@ -328,10 +408,21 @@ mod tests {
             let _env = MarkerEnv::set(Some("1"));
             assert!(thin_peer_boot(on.path()));
             assert!(!thin_peer_boot(off.path()));
-            assert!(!thin_peer_boot(absent.path()));
+            assert!(thin_peer_boot(absent.path()), "an absent switch is on");
         }
         let _env = MarkerEnv::set(None);
         assert!(!thin_peer_boot(on.path()), "no marker, no thin boot");
+        assert!(!thin_peer_boot(absent.path()), "no marker, no thin boot");
+    }
+
+    #[test]
+    fn thin_peer_switch_is_off_only_for_an_explicit_false() {
+        assert!(thin_peer_switch_on(&serde_json::json!({})));
+        assert!(thin_peer_switch_on(&serde_json::json!({"dispatch": {}})));
+        assert!(thin_peer_switch_on(&serde_json::json!({"dispatch": {"thin_peer_boot": true}})));
+        assert!(thin_peer_switch_on(&serde_json::json!({"dispatch": {"thin_peer_boot": "no"}})));
+        assert!(thin_peer_switch_on(&serde_json::json!({"dispatch": {"thin_peer_boot": null}})));
+        assert!(!thin_peer_switch_on(&serde_json::json!({"dispatch": {"thin_peer_boot": false}})));
     }
 
     #[test]
