@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"windows-ci-1107\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"windows-ci-1107\" (lane).",
+  "next_action": "Merged into main at 5cdec75; capture what settled, then bee close --feature windows-ci-1107.",
   "created_at": "2026-11-07T05:44:40.995Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -663,12 +663,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-07T05:53:56.169Z",
-    "branch": "wt/windows-ci-1107",
-    "worktree_id": "beehive--wt--windows-ci-1107",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
