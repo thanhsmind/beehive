@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"report-usage-herding\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"report-usage-herding\" (lane).",
+  "next_action": "Merged into main at cd4e3e6; capture what settled, then bee close --feature report-usage-herding.",
   "created_at": "2026-11-07T00:49:18.316Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": "one verb gains a source; tests in the same file; two doc lines",
     "updated_at": "2026-11-07T00:49:22.626Z",
     "feature": "report-usage-herding"
-  },
-  "merge_ready": {
-    "since": "2026-11-07T01:00:53.681Z",
-    "branch": "wt/report-usage-herding",
-    "worktree_id": "beehive--wt--report-usage-herding",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
