@@ -1,0 +1,119 @@
+{
+  "id": "pvs-3",
+  "feature": "paseo-visible-sessions",
+  "lane": "small",
+  "role": "docs",
+  "title": "Document the Paseo route of the claude-session transport",
+  "files": [
+    "docs/history/paseo-visible-sessions/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+    "docs/knowledge/areas/bee-herding/index.md",
+    "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl"
+  ],
+  "read_first": [
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/pvs/CONTEXT.md (finished text for docs/history/paseo-visible-sessions/CONTEXT.md; copy it byte for byte)",
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+    "git show bd14cfb56 af791d0b0 (the two code commits this documents)"
+  ],
+  "decisions": [
+    "360fb6b0-a3bb-4528-9d17-52629e7d9850",
+    "b55f955f-f304-4a9b-ae4c-17dcbfc9e720",
+    "dba6cc91-8c40-4bc7-9711-fca37a4a1f24"
+  ],
+  "action": "Outcome: (1) create docs/history/paseo-visible-sessions/CONTEXT.md with the exact text of /mnt/data/Projects/goglbe/beehive/.bee/tmp/pvs/CONTEXT.md. (2) In docs/knowledge/areas/bee-herding/claude-session-transport.md add a section 'Inside Paseo' that says: inside Paseo (PASEO_AGENT_ID or PASEO_CLI set and not empty) a --session-model run starts through paseo run with provider claude/<model>, --thinking <effort>, --mode bypassPermissions, title bee-<cell or seat>-<job tail>, in the workspace the paseo-worktree-workspace D4 resolution picks; the job record has transport paseo plus session_model and session_effort; the paseo loop, archive on finish and steer_to apply; outside Paseo the claude --bg path is unchanged (cite paseo-visible-sessions D1). Add that the Paseo model check accepts a Claude family alias against claude-<alias>-<version> (paseo-visible-sessions D2). In the fallbacks section, say every claude-agent fallback of a native model records native_fallback_reason: escalated, claude_sessions_off, claude_cli_missing, and that an escalation lands on channel session-model (paseo-visible-sessions D3). Update the frontmatter description, decisions list (add paseo-visible-sessions D1-D3), sources (add docs/history/paseo-visible-sessions/CONTEXT.md), timestamp 2026-11-07, and the Known limits line so it no longer says only local claude --bg sessions. Update the matching index.md line. Cite history D-numbers, never raw store ids, in area docs. Write in ASD-STE100 plain English. (3) Restore packages/bee-rs/crates/bee/.bee/logs/timings.jsonl to its committed content with git checkout (a test run left it modified); do not commit changes to it. One commit.",
+  "must_haves": [
+    "docs/history/paseo-visible-sessions/CONTEXT.md exists with the given text",
+    "claude-session-transport.md has the Inside Paseo section citing paseo-visible-sessions D1, D2, D3",
+    "git status in the worktree is clean after the commit"
+  ],
+  "verify": ".bee/bin/bee knowledge check",
+  "acceptance": "A reader of the bee-herding area learns that inside Paseo sub-sessions show in Paseo.",
+  "deps": [],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-pvs-3",
+    "outcome": "Documented the Paseo route (CONTEXT, Inside Paseo section, index line); timings.jsonl restored; commit 07f890653",
+    "files_changed": [
+      "docs/history/paseo-visible-sessions/CONTEXT.md",
+      "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+      "docs/knowledge/areas/bee-herding/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T03:04:07.439Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change; 0 OKF errors, 0 profile errors; git status clean after commit",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "c1281463-6993-41cd-a8e4-50fbd92b2251",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-07T03:03:22.802Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Documented the Paseo route (CONTEXT, Inside Paseo section, index line); timings.jsonl restored; commit 07f890653",
+      "commit": "07f890653450918fd0ccec2bceea432037f7e7a5",
+      "files": [
+        "docs/history/paseo-visible-sessions/CONTEXT.md",
+        "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+        "docs/knowledge/areas/bee-herding/index.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — docs-only change; 0 OKF errors, 0 profile errors; git status clean after commit",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "docs/history/paseo-visible-sessions/CONTEXT.md exists with the given text",
+            "artifact": "docs/history/paseo-visible-sessions/CONTEXT.md"
+          },
+          {
+            "requirement": "claude-session-transport.md has the Inside Paseo section citing paseo-visible-sessions D1, D2, D3",
+            "artifact": "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+          },
+          {
+            "requirement": "git status in the worktree is clean after the commit",
+            "artifact": "docs/knowledge/areas/bee-herding/index.md"
+          },
+          {
+            "requirement": "docs/history/paseo-visible-sessions/CONTEXT.md",
+            "artifact": "docs/history/paseo-visible-sessions/CONTEXT.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/claude-session-transport.md",
+            "artifact": "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/bee-herding/index.md",
+            "artifact": "docs/knowledge/areas/bee-herding/index.md"
+          }
+        ],
+        "recorded_at": "2026-11-07T03:04:29.638Z",
+        "recorded_by": "c1281463-6993-41cd-a8e4-50fbd92b2251",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 39820,
+    "cached": 251587,
+    "total": 291407,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 39820,
+        "cached": 251587,
+        "total": 291407
+      }
+    },
+    "jobs": [
+      "job-1794020607208-441651-1"
+    ]
+  }
+}

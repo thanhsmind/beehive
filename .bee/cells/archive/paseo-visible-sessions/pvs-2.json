@@ -1,0 +1,126 @@
+{
+  "id": "pvs-2",
+  "feature": "paseo-visible-sessions",
+  "lane": "small",
+  "role": "code",
+  "title": "Record why a native Claude dispatch fell back to claude-agent",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs (claude_session_candidate ~2509, claude_sessions_enabled ~729, the claude-agent branch ~2981, dispatch record native_fallback_reason ~3224, envelope fallback_reason ~3269, tests ~6830-6990)"
+  ],
+  "decisions": [
+    "dba6cc91-8c40-4bc7-9711-fca37a4a1f24"
+  ],
+  "action": "Outcome: on runtime claude, when the resolved route is a native model (Resolved::Model with a non-empty model) but prepare returns channel claude-agent, the .bee/logs/dispatch.jsonl record carries native_fallback_reason naming the cause: escalated (is_escalated), claude_sessions_off (dispatch.claude_sessions false or sessions not armed), or claude_cli_missing (existing). The envelope fallback_reason follows the same value. A dispatch that never had a native model gets no reason. Contract: channel choice unchanged; existing claude_cli_missing behavior unchanged; no code comments.",
+  "must_haves": [
+    "red-first test: an escalated native-model claude dispatch logs native_fallback_reason escalated",
+    "red-first test: dispatch.claude_sessions false logs native_fallback_reason claude_sessions_off",
+    "existing tests that assert no fallback_reason on claude-session and herding channels stay green"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+  "acceptance": "A claude-agent fallback in dispatch.jsonl always says why.",
+  "deps": [],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-pvs-2",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "deviations": [
+      "an escalated dispatch lands on channel session-model, not claude-agent; it still gets native_fallback_reason escalated"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T03:02:48.728Z",
+    "behavior_change": false,
+    "verification_evidence": "change confined to prepare.rs and its in-file tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "c1281463-6993-41cd-a8e4-50fbd92b2251",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+    "claimed_at": "2026-11-07T03:02:45.185Z",
+    "ownership_overrides": [
+      {
+        "verb": "unclaimCell",
+        "forced_by": "c1281463-6993-41cd-a8e4-50fbd92b2251",
+        "owner_bypassed": null,
+        "at": "2026-11-07T03:02:44.995Z"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "mistakes": [
+      {
+        "wrong": "cell pvs-2 premise said an escalated dispatch lands on channel claude-agent",
+        "better": "the leader should have read the escalation branch before writing the cell",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "done",
+      "commit": "af791d0b0630ebbed3c1b538ec1206095c75c1ef",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare — green:unit — change confined to prepare.rs and its in-file tests",
+      "deviations": [
+        "an escalated dispatch lands on channel session-model, not claude-agent; it still gets native_fallback_reason escalated"
+      ],
+      "mistakes": [
+        "cell pvs-2 premise said an escalated dispatch lands on channel claude-agent — the leader should have read the escalation branch before writing the cell — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "red-first test: an escalated native-model claude dispatch logs native_fallback_reason escalated",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "red-first test: dispatch.claude_sessions false logs native_fallback_reason claude_sessions_off",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "existing tests that assert no fallback_reason on claude-session and herding channels stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T03:04:29.627Z",
+        "recorded_by": "c1281463-6993-41cd-a8e4-50fbd92b2251",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 67613,
+    "cached": 1114482,
+    "total": 1182095,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 67613,
+        "cached": 1114482,
+        "total": 1182095
+      }
+    },
+    "jobs": [
+      "job-1794019539597-331173-1"
+    ]
+  }
+}
