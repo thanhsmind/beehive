@@ -1263,3 +1263,17 @@
 {"ts":"2026-11-07T09:24:05.026Z","event":"add","id":"ff2ff705-4cb2-40c6-b07e-4bad43f4befb","kind":"promote","feature":"protocol-init-from-project","cells":[],"areas":[],"files":["docs/history/protocol-init-from-project/promote-proposals.md"],"reason":"Promote proposal for \"protocol-init-from-project\" awaiting apply — docs/history/protocol-init-from-project/promote-proposals.md."}
 {"ts":"2026-11-07T09:28:25.720Z","event":"add","id":"9a6e319e-8a7b-4fc0-a0b3-9ad5dff1750e","kind":"promote","feature":"workspace-protocol","cells":[],"areas":[],"files":["docs/history/workspace-protocol/promote-proposals.md"],"reason":"Promote proposal for \"workspace-protocol\" awaiting apply — docs/history/workspace-protocol/promote-proposals.md."}
 {"ts":"2026-11-07T09:37:52.404Z","event":"add","id":"99235bdc-8519-4bde-8e24-aa9f1353969e","kind":"promote","feature":"release-2-86-0","cells":[],"areas":[],"files":["docs/history/release-2-86-0/promote-proposals.md"],"reason":"Promote proposal for \"release-2-86-0\" awaiting apply — docs/history/release-2-86-0/promote-proposals.md."}
+{"ts":"2026-11-07T10:30:39.047Z","event":"complete","id":"d7491416-42c5-4020-897e-a505f4ad9804"}
+{"ts":"2026-11-07T10:30:43.754Z","event":"complete","id":"7645a89a-5673-4e49-96b7-d3a6bfb8b5a2"}
+{"ts":"2026-11-07T10:30:48.789Z","event":"complete","id":"53c0a9b7-c681-44a2-8ab6-098073b7e2c1"}
+{"ts":"2026-11-07T10:30:55.581Z","event":"complete","id":"8ba624bb-b42c-4086-a55e-79595878bdcf"}
+{"ts":"2026-11-07T10:30:55.591Z","event":"complete","id":"3ed1d213-9a63-4562-8acb-4edea25cb5ec"}
+{"ts":"2026-11-07T10:30:58.965Z","event":"complete","id":"34b8f076-3330-45fb-aa97-0242b13c56c8"}
+{"ts":"2026-11-07T10:31:02.567Z","event":"complete","id":"c10f9cbd-50db-433e-9293-191611e38270"}
+{"ts":"2026-11-07T10:31:05.919Z","event":"complete","id":"89341835-f0c4-4d34-a569-4db4f7e247da"}
+{"ts":"2026-11-07T10:31:10.096Z","event":"complete","id":"66578f64-fb5a-41bb-8f49-29566be1fe69"}
+{"ts":"2026-11-07T10:31:14.286Z","event":"complete","id":"49ab0f10-fee1-45b2-b437-c264a389cc7a"}
+{"ts":"2026-11-07T10:31:17.670Z","event":"complete","id":"2cf34f29-a7f8-4939-97d8-4ee8c5a71c83"}
+{"ts":"2026-11-07T10:31:17.685Z","event":"complete","id":"ef1f920c-d29d-4516-9e0b-3a0bc0facb7f"}
+{"ts":"2026-11-07T10:31:20.909Z","event":"complete","id":"6ba00bff-7944-49d4-8906-e24a68f14783"}
+{"ts":"2026-11-07T10:31:24.654Z","event":"complete","id":"59bf4709-c2c7-4413-92db-3b04629adc28"}

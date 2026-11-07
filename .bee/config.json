@@ -148,8 +148,9 @@
         "effort": "high"
       },
       "deploy": {
-        "model": "sonnet",
-        "description": "publish an approved release from main, wait for CI, and verify release assets"
+        "description": "publish an approved release from main, wait for CI, and verify release assets",
+        "kind": "herding",
+        "agent": "paseo-pi-agy-flash"
       },
       "plan": {
         "model": "opus",
