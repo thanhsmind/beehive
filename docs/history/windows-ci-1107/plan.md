@@ -26,6 +26,7 @@ pushed branch is the live proof.
 - D2 (`6a122360`): a test that compares git-written file bytes turns off `core.autocrlf` in its fixture repo.
 - D3 (`6a122360`): the vendored binary name is platform-specific (`.bee/bin/bee.exe` on Windows); onboard tests expect the platform name.
 - D4 (`6a122360`): `merge_full_suite` and `output_spill` fixtures run on Windows; a product change only where the product is wrong on Windows.
+- D5 (`eeaff7c5`, plan rev 1): the spill test pins cli-output-spill D3 on both platforms: unix spills, windows passes through unchanged.
 
 ## Load-bearing claims
 
@@ -186,11 +187,11 @@ All four cells touch disjoint files and run in parallel.
   {
     "id": "wc7-4",
     "feature": "windows-ci-1107",
-    "title": "Make the output spill test hold on Windows",
+    "title": "Pin the unix-only output spill in its test on both platforms",
     "lane": "small",
     "role": "code",
     "deps": [],
-    "decisions": ["D4", "6a122360-92d4-44a5-a2d1-417e2b05fac6"],
+    "decisions": ["D4", "D5", "6a122360-92d4-44a5-a2d1-417e2b05fac6", "eeaff7c5-e3ae-4692-856e-b805f43fd199"],
     "files": [
       "packages/bee-rs/crates/bee/tests/output_spill.rs"
     ],
@@ -201,17 +202,17 @@ All four cells touch disjoint files and run in parallel.
     "affects_skills": [],
     "affects_specs": [],
     "judge_obligation_ack": "Windows fixture for one integration test; product files only by named deviation",
-    "action": "One Windows-only failure in tests/output_spill.rs from CI run 42342606992: oversized_allowlisted_output_spills_to_a_file (line about 71) finds no '[bee] output spilled:' marker; stdout is the full help text, so the spill did not fire on Windows. Find why: the fixture threshold vs Windows output size, the config the fixture writes (path form, line endings), the allowlist match of the argv, or how the spill decides it runs. Fix the fixture if it is the fixture. If the spill code is wrong on Windows (for example an argv or path compare that fails with backslashes or .exe), stop and report [BLOCKED] naming the product file and line instead of editing it. Linux behaviour unchanged. No code comments.",
+    "action": "Per D5: oversized_allowlisted_output_spills_to_a_file in tests/output_spill.rs fails on Windows because the spill capture is cfg(unix) only by cli-output-spill D3 (output_spill.rs:8-19). Split the assertion by platform: under cfg(unix) keep today\u2019s spill assertions unchanged; under cfg(not(unix)) assert the same oversized allowlisted run exits like the unwrapped run, prints the full output unchanged, prints no \u0027[bee] output spilled:\u0027 marker and leaves no spill file. Change test code only. No code comments.",
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test output_spill",
     "must_haves": {
       "truths": [
-        "an oversized allowlisted run spills to a file on every platform"
+        "on unix an oversized allowlisted run spills to a file with one marker", "on windows the same run passes through unchanged with no marker and no spill file"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/tests/output_spill.rs", "substantive": "platform-correct spill fixture"}
+        {"path": "packages/bee-rs/crates/bee/tests/output_spill.rs", "substantive": "cfg-split assertions pinning D3"}
       ],
       "key_links": ["the spill wraps the read-verb output"],
-      "prohibitions": ["No product code change without a [BLOCKED] report", "No code comments"]
+      "prohibitions": ["No product code change", "No code comments"]
     }
   }
 ]
