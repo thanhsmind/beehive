@@ -380,5 +380,12 @@
         ]
       }
     ]
+  },
+  "merge_ready": {
+    "since": "2026-11-07T03:43:48.594Z",
+    "branch": "wt/knowledge-first-lean-decisions",
+    "worktree_id": "beehive--wt--knowledge-first-lean-decisions",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
