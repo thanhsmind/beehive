@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-11-07T03:23:18.736Z",
+    "subject": "Đang đo xem một lần chạy toàn bộ test mất bao lâu, và ai đang gọi nó.",
+    "asked_at": "2026-11-07T03:54:31.228Z",
     "session": "70bdca3d-712b-4fa1-838b-6e13f9fecfa7"
   }
 }

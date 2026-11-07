@@ -14,12 +14,7 @@
   "next_action": "Merged into main at f8b8819; reload the product and test \"knowledge-first-lean-decisions\", then either approve uat (\"bee gate --name uat --approved true --lane knowledge-first-lean-decisions\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-07T02:59:04.847Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: knowledge-first-lean-decisions",
-    "asked_at": "2026-11-07T03:44:27.401Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -385,5 +380,12 @@
         ]
       }
     ]
+  },
+  "merge_ready": {
+    "since": "2026-11-07T03:54:23.659Z",
+    "branch": "wt/knowledge-first-lean-decisions",
+    "worktree_id": "beehive--wt--knowledge-first-lean-decisions",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
