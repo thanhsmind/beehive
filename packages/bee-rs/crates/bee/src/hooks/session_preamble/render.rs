@@ -162,7 +162,7 @@ pub fn bypass_banner_lines(level: &str) -> Vec<String> {
             "Only reading a secret-shaped file and a review P1 finding still pause for the human."
         };
         lines.push(format!(
-            "  The agent does NOT stop for these gates — it records the recommended choice, logs a one-line audit decision, and continues. {tail}"
+            "  The agent does NOT stop for these gates — it records the recommended choice with bee gate --actor auto, which writes the audit row itself, and continues. {tail}"
         ));
     }
     lines

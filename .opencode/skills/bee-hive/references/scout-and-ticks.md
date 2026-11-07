@@ -46,7 +46,7 @@ Route: class=<c> | lane=<l> | flags=<n> [<names>] | files=<n>
 
 Mode-gate records in `plan.md` and cells cite this line rather than re-deriving it. `cells claim` emits a one-line stderr warning when the claimed cell's feature has no route record — soft enforcement: a safety net that catches a missed record, never the trigger that prompts one; the record is written at triage time, not discovered missing at claim time.
 
-**The re-lane checkpoint below updates this same record in place — never a second record.** A demotion rewrites `lane` (and `flags`/`product_files` when the touch set changed) on the existing record and logs the audit decision exactly as the checkpoint already does; one route per feature, for its whole life, always current.
+**The re-lane checkpoint below updates this same record in place — never a second record.** A demotion rewrites `lane` (and `flags`/`product_files` when the touch set changed) on the existing record and logs the audit row exactly as the checkpoint already does; one route per feature, for its whole life, always current.
 
 ### Re-lane checkpoint (evidence-based demotion)
 
@@ -75,16 +75,14 @@ It fires on whichever path came first, and a feature that passed through explori
 - **At most once per feature.** Not once per path, not once per slice, not once per lane change.
 - **It uses the scouted touch set.** A checkpoint that re-argues flag counts to land under a threshold is the triage rule's existing prohibition wearing a new name, and the answer is still `standard`.
 
-**Log it or it did not happen.** A demotion writes a one-line audit decision naming the evidence counts:
+**Log it or it did not happen.** A demotion writes a one-line audit row naming the evidence counts:
 
 ```bash
-.bee/bin/bee decisions log \
-  --decision "re-laned <from> → <to> (evidence checkpoint): <feature>" \
-  --rationale "<n> product files scouted, 0 hard-gate flags, 0 open gray areas" \
-  --relation none
+.bee/bin/bee audit log --kind routing-deferral --feature <feature> \
+  --note "re-laned <from> → <to> (evidence checkpoint): <n> product files scouted, 0 hard-gate flags, 0 open gray areas"
 ```
 
-Alongside the decision, `bee route --set` rewrites the same route record's `lane` in place ("Route record" above) — never a second record — so the decision log and the route record agree on the target lane.
+Alongside the row, `bee route --set` rewrites the same route record's `lane` in place ("Route record" above) — never a second record — so the audit log and the route record agree on the target lane.
 
 Then emit the re-lane tick (Progress ticks below) and continue on the new lane — its gates, ceremony, and worker shape from that point are the target lane's, exactly as if triage had picked it.
 

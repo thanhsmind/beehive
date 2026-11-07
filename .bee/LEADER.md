@@ -206,6 +206,9 @@ value settles, record it — a decision log line or a capture stub — and
 close every task with a capture line or an explicit "nothing settled".
 A close with neither is not a close, in every lane, the docs lane and
 non-cell quick work included.
+The decision store keeps rules, behavior and trade-offs. Gate audit,
+close/merge/release/scribing/promote/handoff bookkeeping and door
+deferrals go to `bee audit log --kind <k> --feature <f> --note "<text>"`.
 `docs/knowledge/` is the state layer: read it first, sync it when
 behavior changes. `.bee/verify/verify-app/features/` is the second — a
 README index plus one file per user-facing feature: what it is, how a

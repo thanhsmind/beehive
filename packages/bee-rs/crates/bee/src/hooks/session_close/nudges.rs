@@ -454,9 +454,8 @@ setting the gate. "
         "⚡ GATE BYPASS ({level}): you are stopping mid-{phase} with Gate {gate_no} \
 (shape+execution) still pending, but bypass level \"{level}\" requires auto-approval at \
 this lane — do NOT ask the human. {consult_sentence}Set the gate yourself now: \
-bee state gate --merge --approved true ; log a one-line \
-audit decision (bee decisions log --decision \"auto-approved Gate \
-{gate_no} (bypass): <choice>\" --rationale \"<why>\" --relation none); post the short \"⚡ auto-approved \
+bee state gate --merge --approved true --actor auto --bypass-level {level} --reason \"<why>\" (it \
+writes the audit row itself); post the short \"⚡ auto-approved \
 Gate {gate_no} (bypass)\" line; then CONTINUE to the next phase. Do not re-emit the \
 gate question. (If you genuinely need information only the human holds — not a \
 rubber-stamp — ask that specific question instead; this net blocks once, then steps \

@@ -4,7 +4,7 @@
   "managed": {
     "agents_block": "3cf65fa743041756f7f1f972f2eec5ff349fc2acb01bf33237aeb551ba22f944",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
-    "gitattributes_block": "6b45725311706710fbde882c308f5fe127fb73f9bbf1d19851d649c04644bb67",
+    "gitattributes_block": "bf8af2a075bfc5b44b2679bf03258aadcb6b3d40424ffa31427f00e7e971369b",
     "helpers": {},
     "lib": {},
     "expertise": {
@@ -43,7 +43,7 @@
       "worker-cell.md": "3616571edbf569baf524da709a3e558a6cb96df0ccf415bde93922ee41409d2b"
     },
     "leader": {
-      "LEADER.md": "4a6d90831d44a79b035b3efa60479adea799f6c5f1ddb38342479a6f61e38e07"
+      "LEADER.md": "4b0034c9d7b3929fe86ab55e9333661fa29c49f92e84d559a8ef0bb1165f100b"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
@@ -145,5 +145,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-06T15:50:17.526Z"
+  "updated_at": "2026-11-07T03:40:13.257Z"
 }
