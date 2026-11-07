@@ -181,6 +181,7 @@ struct Options {
     /// caller has one — carried into the ack schema the brief shows, never
     /// invented when absent.
     cell_id: Option<String>,
+    feature: Option<String>,
     /// `--seat <name>` (pi-stage-dispatch D3): seat name of the detached run
     /// (e.g. `hat-facts-gaps`), written into the result-inbox marker and the
     /// JSON result envelope.
@@ -314,6 +315,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut expertise_raw: Option<&str> = None;
     let mut nickname: Option<&str> = None;
     let mut cell_id: Option<&str> = None;
+    let mut feature: Option<&str> = None;
     let mut seat: Option<&str> = None;
     let mut inbox_session: Option<&str> = None;
     let mut no_pane = false;
@@ -396,6 +398,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
             }
             "--cell-id" => {
                 cell_id = flags.get(i + 1).copied();
+                i += 2;
+            }
+            "--feature" => {
+                feature = flags.get(i + 1).copied();
                 i += 2;
             }
             "--seat" => {
@@ -486,6 +492,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     };
 
     let nickname = nickname.map(str::to_string).unwrap_or_else(|| job_id.clone());
+    let feature = resolve_job_feature(&main_root, feature, cell_id);
 
     Ok(Options {
         task: task_text,
@@ -505,6 +512,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         caller_is_worker: std::env::var("BEE_HERDING_WORKER").as_deref() == Ok("1"),
         nickname,
         cell_id: cell_id.map(str::to_string),
+        feature,
         seat: seat.map(str::to_string),
         inbox_session: inbox_session.map(str::to_string),
         pane_env_passthrough: resolve_pane_env_passthrough_from(|k| std::env::var(k).ok()),
@@ -2539,6 +2547,25 @@ fn wait_for_round_driven(
     )
 }
 
+fn resolve_job_feature(main_root: &Path, flag: Option<&str>, cell_id: Option<&str>) -> Option<String> {
+    let clean = |f: &str| Some(f.trim().to_string()).filter(|f| !f.is_empty());
+    flag.and_then(clean)
+        .or_else(|| {
+            let path = main_root.join(".bee").join("cells").join(format!("{}.json", cell_id?));
+            let crate::fsutil::ReadJson::Parsed(cell) = crate::fsutil::read_json(&path) else { return None };
+            cell.get("feature").and_then(Value::as_str).and_then(clean)
+        })
+        .or_else(|| {
+            crate::verbs::state_group::session_binding(None, main_root).ok().and_then(|(_, lane)| lane)
+        })
+}
+
+fn stamp_feature(job: &mut Value, feature: Option<&str>) {
+    if let (Some(feature), Value::Object(m)) = (feature, job) {
+        m.insert("feature".into(), Value::String(feature.to_string()));
+    }
+}
+
 fn resolve_leader_session() -> Option<String> {
     resolve_leader_session_from(|k| std::env::var(k).ok())
 }
@@ -2647,6 +2674,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         "question_round": opts.question_round,
         "read_only": opts.read_only,
     });
+    stamp_feature(&mut job_value, opts.feature.as_deref());
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
         return ExecResult {
@@ -3259,7 +3287,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
     };
     let brief = mailbox::render_brief(&spec);
 
-    let job_value = serde_json::json!({
+    let mut job_value = serde_json::json!({
         "job_id": opts.job_id,
         "task": opts.task,
         "cwd": opts.cwd.display().to_string(),
@@ -3280,6 +3308,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         "question_round": opts.question_round,
         "read_only": opts.read_only,
     });
+    stamp_feature(&mut job_value, opts.feature.as_deref());
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
         return ExecResult {
@@ -3628,6 +3657,7 @@ fn execute_paseo_steered(
         "read_only": opts.read_only,
         "transport": "paseo",
     });
+    stamp_feature(&mut job_value, opts.feature.as_deref());
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
         return ExecResult {
@@ -3944,6 +3974,7 @@ fn execute_claude_session_paced(
         "session_model": session.model,
         "session_effort": session.effort,
     });
+    stamp_feature(&mut job_value, opts.feature.as_deref());
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
         return spawn_refused(format!("could not write {}: {e}", job_file_path.display()));
@@ -7715,6 +7746,7 @@ mod tests {
             has_explicit_expertise: false,
             nickname: "job-1".to_string(),
             cell_id: None,
+            feature: None,
             seat: None,
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
@@ -7800,6 +7832,7 @@ mod tests {
             has_explicit_expertise: false,
             nickname: "job-1".to_string(),
             cell_id: None,
+            feature: None,
             seat: None,
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
@@ -12761,6 +12794,59 @@ mod tests {
         assert!(job_data.get("leader_session").is_some());
         assert_eq!(job_data.get("question_of").and_then(Value::as_str), Some("job-parent"));
         assert_eq!(job_data.get("question_round").and_then(Value::as_u64), Some(2));
+    }
+
+    #[test]
+    fn execute_new_and_no_pane_stamp_the_feature_and_leave_no_key_without_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let read = |job_id: &str| -> Value {
+            let path = mailbox::job_path(&main_root.join(".bee"), job_id);
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+        };
+
+        let mut opts = test_options(main_root, true);
+        opts.job_id = "job-feat-pane".to_string();
+        opts.feature = Some("dispatching-feature".to_string());
+        execute_new(&opts, &PanicHerdr);
+        assert_eq!(read("job-feat-pane").get("feature").and_then(Value::as_str), Some("dispatching-feature"));
+
+        opts.job_id = "job-feat-nopane".to_string();
+        opts.no_pane = true;
+        execute_no_pane(&opts);
+        assert_eq!(read("job-feat-nopane").get("feature").and_then(Value::as_str), Some("dispatching-feature"));
+
+        let mut bare = test_options(main_root, true);
+        bare.job_id = "job-feat-none".to_string();
+        execute_new(&bare, &PanicHerdr);
+        assert!(read("job-feat-none").get("feature").is_none());
+    }
+
+    #[test]
+    fn the_job_feature_comes_from_the_flag_then_the_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let cells = main_root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c-1.json"), r#"{"id":"c-1","feature":"cell-feature"}"#).unwrap();
+
+        assert_eq!(
+            resolve_job_feature(main_root, Some(" flag-feature "), Some("c-1")).as_deref(),
+            Some("flag-feature")
+        );
+        assert_eq!(resolve_job_feature(main_root, None, Some("c-1")).as_deref(), Some("cell-feature"));
+        assert_eq!(resolve_job_feature(main_root, Some("  "), Some("c-1")).as_deref(), Some("cell-feature"));
+        assert_eq!(resolve_job_feature(main_root, None, Some("c-missing")), None);
+        assert_eq!(resolve_job_feature(main_root, None, None), None);
+    }
+
+    #[test]
+    fn parse_options_carries_the_feature_flag_into_the_options() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_string_lossy().into_owned();
+        let flags = ["--task", "t", "--main-root", root.as_str(), "--feature", "flag-feature"];
+        let opts = parse_options(&flags).unwrap();
+        assert_eq!(opts.feature.as_deref(), Some("flag-feature"));
     }
 
     #[test]

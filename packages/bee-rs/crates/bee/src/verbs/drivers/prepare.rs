@@ -746,6 +746,7 @@ fn shell_token(token: &str) -> String {
 fn claude_session_command(
     cwd: Option<&str>,
     cell_id: Option<&str>,
+    feature: Option<&str>,
     read_only: bool,
     model: &str,
     effort: Option<&str>,
@@ -757,6 +758,9 @@ fn claude_session_command(
     }
     if let Some(id) = cell_id {
         command.push_str(&format!(" --cell-id \"{id}\""));
+    }
+    if let Some(feature) = feature {
+        command.push_str(&format!(" --feature \"{feature}\""));
     }
     command.push_str(&format!(" --session-model {}", shell_token(model)));
     if let Some(effort) = effort {
@@ -2733,6 +2737,11 @@ pub(crate) fn prepare_dispatch_wire(
                         command.push('"');
                     }
                 }
+                if let Some(feature) = resolved_feature.as_deref() {
+                    command.push_str(" --feature \"");
+                    command.push_str(feature);
+                    command.push('"');
+                }
                 if (kind == "gather" || kind == "advisor") && !is_deployment {
                     command.push_str(" --read-only");
                 }
@@ -2955,6 +2964,7 @@ pub(crate) fn prepare_dispatch_wire(
                 let command = claude_session_command(
                     cwd.as_deref(),
                     if kind == "cell" { cell_id } else { None },
+                    resolved_feature.as_deref(),
                     (kind == "gather" || kind == "advisor") && !is_deployment,
                     claude_session_model.unwrap_or_default(),
                     effort_choice.as_ref().and_then(|c| c.effort.as_deref()),
@@ -6473,7 +6483,7 @@ mod pi_native_door_tests {
                 let command = v["payload"]["command"].as_str().expect("command");
                 assert!(!command.contains("--no-pane"), "{runtime} {kind} herding command must not contain --no-pane: {command}");
                 let expected = match kind {
-                    "cell" => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --cell-id \"c-1\"",
+                    "cell" => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --cell-id \"c-1\" --feature \"f\"",
                     "gather" | "advisor" => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --read-only",
                     _ => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\"",
                 };
@@ -6822,7 +6832,7 @@ mod claude_session_door_tests {
         let root = repo(&tmp, &config("", &bin));
         w_cell(&root, "c-1");
         for (kind, role, cell, model, flags) in [
-            ("cell", "generation", Some("c-1"), "sonnet", " --cell-id \"c-1\" --session-model sonnet"),
+            ("cell", "generation", Some("c-1"), "sonnet", " --cell-id \"c-1\" --feature \"f\" --session-model sonnet"),
             ("gather", "extraction", None, "haiku", " --session-model haiku --read-only"),
             ("reviewer", "review", None, "opus", " --session-model opus"),
             ("advisor", "advisor", None, "fable", " --session-model fable --read-only"),
@@ -6873,11 +6883,11 @@ mod claude_session_door_tests {
     #[test]
     fn the_session_command_carries_cwd_effort_and_ceiling() {
         assert_eq!(
-            claude_session_command(Some("/w/t"), Some("c-1"), true, "opus[1m]", Some("high"), Some(900)),
-            ".bee/bin/bee herding run --task-file - --json --cwd \"/w/t\" --cell-id \"c-1\" --session-model 'opus[1m]' --session-effort high --read-only --ceiling 900"
+            claude_session_command(Some("/w/t"), Some("c-1"), Some("feat"), true, "opus[1m]", Some("high"), Some(900)),
+            ".bee/bin/bee herding run --task-file - --json --cwd \"/w/t\" --cell-id \"c-1\" --feature \"feat\" --session-model 'opus[1m]' --session-effort high --read-only --ceiling 900"
         );
         assert_eq!(
-            claude_session_command(None, None, false, "claude-sonnet-5-5", None, None),
+            claude_session_command(None, None, None, false, "claude-sonnet-5-5", None, None),
             ".bee/bin/bee herding run --task-file - --json --session-model claude-sonnet-5-5"
         );
     }
@@ -6977,6 +6987,40 @@ mod claude_session_door_tests {
         assert_ne!(v["economics"]["channel"], json!("claude-session"));
         assert!(v.get("fallback_reason").is_none());
         assert!(!v["payload"].to_string().contains("--session-model"));
+    }
+
+    #[test]
+    fn every_herding_command_carries_the_feature_it_resolved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = stub_cli(&tmp);
+        let root = repo(&tmp, &config("", &bin));
+        let _armed = ClaudeSessionsArmed::on();
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "advisor", Some("advisor"), None, None, false, None, None, false, None, None,
+            Some("flag-feature"), None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            v["payload"]["command"],
+            json!(".bee/bin/bee herding run --task-file - --json --feature \"flag-feature\" --session-model fable --read-only")
+        );
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let herding_cfg = r#"{"team":{"claude":{"advisor":{"kind":"herding","agent":"pi-agent"}}},"herding":{"agents":{"pi-agent":["pi","-a"]}}}"#;
+        let pane = repo(&tmp2, herding_cfg);
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &pane, "claude", "advisor", Some("advisor"), None, None, false, None, None, false, None, None,
+            Some("flag-feature"), None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            v["payload"]["command"],
+            json!(".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --feature \"flag-feature\" --read-only")
+        );
     }
 
     #[test]

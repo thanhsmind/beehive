@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
   decisions: ["close-usage-summary D1 (2d3abd12)", "close-usage-record D1 (e97cc9d4)", "usage-in-bee-store D1 (62331863)", "report-usage-verb (af457159)"]
-  sources: ["docs/knowledge/work/usage-in-bee-store/delivery.md", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs", "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs", "packages/bee-rs/crates/bee/src/verbs/mailbox.rs", "packages/bee-rs/crates/bee/src/verbs/report.rs"]
+  sources: ["docs/knowledge/work/usage-in-bee-store/delivery.md", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs", "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs", "docs/history/herding-job-feature/plan.md", "packages/bee-rs/crates/bee/src/herding/run.rs", "packages/bee-rs/crates/bee/src/hooks/activity.rs", "packages/bee-rs/crates/bee/src/verbs/mailbox.rs", "packages/bee-rs/crates/bee/src/verbs/report.rs"]
   authoritative_for: "workflow-state: the close usage record — accounting, home, and persistence"
 ---
 
@@ -67,6 +67,19 @@ tool can read it back.
   linked sessions, including any with no tokens inside the window.
   `bee close` reaches the same transcripts by feature instead of by
   leader (`collect_herding_usage`).
+- **The job's feature is the join key (herding-job-feature plan,
+  `docs/history/herding-job-feature/plan.md`).** A herded job's feature has
+  one home, `job.json` `feature`. `bee herding run` stamps it from
+  `--feature`, else the `--cell-id` cell's feature, else the calling
+  session's bound lane, and writes no key when none resolves; `bee
+  dispatch prepare` puts `--feature` on every `herding run` command it
+  returns once it has resolved a feature. The activity hook labels the
+  job's `activity.json` from that stamp before any worktree-grant or
+  directory-name rule, and `herding_jobs` in `bee close` joins on it
+  before falling back to the `activity.json` label. A main-checkout
+  reviewer, advisor or scout is therefore counted by the feature that
+  dispatched it, not by whatever `.bee/state.json` held at hook time. A job
+  with no stamp keeps the old label.
 
 ## Edge Cases Settled
 
@@ -94,4 +107,8 @@ tool can read it back.
 - Per-task report (`bee report usage`): `verbs/report_usage.rs`
   (`herded_transcripts` for the mailbox join), over `aggregate_usage` in
   `hooks/session_close/perf.rs`.
+- Job feature stamp: `herding/run.rs` (`resolve_job_feature`,
+  `stamp_feature`), `verbs/drivers/prepare.rs` (`--feature` on the herding
+  command), `hooks/activity.rs` (`resolve_herded_feature`),
+  `verbs/drivers/close.rs` (`herding_jobs`).
 - Delivery trace: `docs/knowledge/work/usage-in-bee-store/delivery.md`.

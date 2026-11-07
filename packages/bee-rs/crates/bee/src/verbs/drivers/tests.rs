@@ -1648,7 +1648,7 @@ use std::time::Instant;
         let payload = v.get("payload").unwrap();
         assert_eq!(
             payload.get("command"),
-            Some(&json!(".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""))
+            Some(&json!(".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\" --feature \"f\""))
         );
         let stdin = payload.get("stdin").unwrap().as_str().unwrap();
         assert!(!stdin.is_empty());
@@ -1682,7 +1682,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(
             v.get("payload").unwrap().get("command"),
-            Some(&json!(".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""))
+            Some(&json!(".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\" --feature \"f\""))
         );
     }
 
@@ -1719,7 +1719,7 @@ use std::time::Instant;
         assert_eq!(
             v.get("payload").unwrap().get("command"),
             Some(&json!(format!(
-                ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\" --cell-id \"c-1\""
+                ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\" --cell-id \"c-1\" --feature \"demo\""
             )))
         );
     }
@@ -1749,7 +1749,7 @@ use std::time::Instant;
         assert_eq!(
             v.get("payload").unwrap().get("command"),
             Some(&json!(
-                ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\" --cell-id \"c-1\""
+                ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\" --cell-id \"c-1\" --feature \"f\""
             ))
         );
     }
@@ -1779,7 +1779,7 @@ use std::time::Instant;
         let cmd_cell = v_cell["payload"]["command"].as_str().unwrap();
         assert_eq!(
             cmd_cell,
-            ".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""
+            ".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\" --feature \"f\""
         );
 
         for (kind, role) in [("gather", "generation"), ("reviewer", "review"), ("advisor", "advisor")] {
