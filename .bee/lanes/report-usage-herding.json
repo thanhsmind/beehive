@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "report-usage-herding",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"report-usage-herding\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature report-usage-herding",
+  "next_action": "bee close finished \"report-usage-herding\" — feature is closed.",
   "created_at": "2026-11-07T00:49:18.316Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
