@@ -1232,6 +1232,100 @@ use crate::version::BEE_VERSION;
         assert_eq!(bundled.matches("bee knowledge search --text").count(), 1, "{bundled}");
     }
 
+    fn git_in(root: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git").args(args).current_dir(root).output().unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn commit_all(root: &Path, message: &str) -> String {
+        git_in(root, &["add", "-A"]);
+        git_in(root, &["commit", "-q", "-m", message]);
+        git_in(root, &["rev-parse", "HEAD"])
+    }
+
+    fn area_concept(id: &str, anchor: &str, verified: Option<&str>) -> String {
+        let mut text = format!(
+            "---\ntype: bee.area\ntitle: {id}\ndescription: {id}\nbee:\n  id: {id}\n  lifecycle: active\n  anchors: [{anchor}]\n"
+        );
+        if let Some(vc) = verified {
+            text.push_str(&format!("  verified_at: 2026-01-01\n  verified_commit: {vc}\n"));
+        }
+        text.push_str("---\nBody.\n");
+        text
+    }
+
+    fn four_grade_bundle(root: &Path) {
+        git_in(root, &["init", "-q"]);
+        git_in(root, &["config", "user.email", "fresh@example.com"]);
+        git_in(root, &["config", "user.name", "preamble tests"]);
+        git_in(root, &["config", "commit.gpgsign", "false"]);
+        write(root, "src/a.rs", "a1\n");
+        write(root, "src/b.rs", "b1\n");
+        let first = commit_all(root, "code");
+        write(root, "docs/knowledge/areas/demo/conf.md", &area_concept("conf", "src/a.rs", Some(&first)));
+        write(root, "docs/knowledge/areas/demo/susp.md", &area_concept("susp", "src/b.rs", Some(&first)));
+        write(root, "docs/knowledge/areas/demo/orph.md", &area_concept("orph", "src/gone.rs", Some(&first)));
+        write(root, "docs/knowledge/areas/demo/unv.md", &area_concept("unv", "src/a.rs", None));
+        write(root, "docs/knowledge/patterns/p.md", "---\ntype: bee.pattern\ntitle: P\n---\nx\n");
+        commit_all(root, "concepts");
+        write(root, "src/b.rs", "b2\n");
+        commit_all(root, "change b");
+    }
+
+    const FRESHNESS_PREFIX: &str = "- knowledge: ";
+
+    fn freshness_line_of(lines: &[String]) -> Option<&String> {
+        lines.iter().find(|l| l.starts_with(FRESHNESS_PREFIX))
+    }
+
+    #[test]
+    fn the_project_map_counts_the_area_grades_in_one_line() {
+        let tmp = minimal_repo();
+        four_grade_bundle(tmp.path());
+
+        let lines = project_map_lines(tmp.path(), true);
+        assert_eq!(
+            freshness_line_of(&lines).map(String::as_str),
+            Some("- knowledge: 1 confirmed, 1 suspect, 1 orphan, 1 unverified — suspect first: bee knowledge check"),
+            "{lines:?}"
+        );
+        assert_eq!(lines.iter().filter(|l| l.starts_with(FRESHNESS_PREFIX)).count(), 1);
+
+        let text = render(tmp.path());
+        assert!(
+            text.contains("- knowledge: 1 confirmed, 1 suspect, 1 orphan, 1 unverified — suspect first: bee knowledge check"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn the_freshness_line_is_absent_without_a_bundle_and_with_zero_area_concepts() {
+        let tmp = minimal_repo();
+        assert!(freshness_line_of(&project_map_lines(tmp.path(), false)).is_none());
+
+        write(tmp.path(), "docs/knowledge/patterns/only.md", "---\ntype: bee.pattern\ntitle: P\n---\nx\n");
+        let lines = project_map_lines(tmp.path(), true);
+        assert!(freshness_line_of(&lines).is_none(), "{lines:?}");
+        assert!(!render(tmp.path()).contains(FRESHNESS_PREFIX));
+    }
+
+    #[test]
+    fn a_budget_past_its_limit_prints_the_skipped_form() {
+        let tmp = minimal_repo();
+        four_grade_bundle(tmp.path());
+
+        let lines = project_map_lines_within(tmp.path(), true, std::time::Duration::ZERO);
+        assert_eq!(
+            freshness_line_of(&lines).map(String::as_str),
+            Some("- knowledge: freshness skipped (slow) — bee knowledge check"),
+            "{lines:?}"
+        );
+
+        let roomy = project_map_lines_within(tmp.path(), true, std::time::Duration::from_secs(30));
+        assert!(freshness_line_of(&roomy).unwrap().contains("1 confirmed, 1 suspect"), "{roomy:?}");
+    }
+
     #[test]
     fn the_bundle_digest_counts_reverses_and_rewrites_its_links() {
         let tmp = minimal_repo();

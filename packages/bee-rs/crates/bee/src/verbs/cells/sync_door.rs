@@ -17,7 +17,6 @@ use std::path::Path;
 /// (a) ownership: touched code in an area with non-empty owns.skills must touch at least one owned skill
 /// (b) applied_at: touched rule home must touch every applied_at file
 /// (c) prediction: affects_skills prediction must equal touched skills/** paths (skipped on legacy cells)
-/// (d) freshness: a touched path anchored by a suspect or orphan concept of history_root's bundle refuses unless the concept is touched too
 ///
 /// Returns None when clean, Some(refusal_message) on failure.
 pub(crate) fn sync_refusal(

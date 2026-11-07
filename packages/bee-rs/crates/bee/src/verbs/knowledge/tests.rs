@@ -3428,6 +3428,122 @@ mod freshness_tests {
         assert!(!none.notes.iter().any(|n| n.contains("seed-anchors")));
     }
 
+    fn pattern_concept() -> String {
+        "---\ntype: bee.pattern\ntitle: Body pattern\ndescription: Body pattern\ntimestamp: 2026-01-01\nbee:\n  id: pat\n  lifecycle: active\n---\nBody of the pattern.\n".to_string()
+    }
+
+    #[test]
+    fn search_rows_carry_the_grade_of_an_area_concept_and_patterns_print_pattern() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let first = four_grade_repo(&root);
+        put(&root, "docs/knowledge/patterns/pat.md", &pattern_concept());
+        let dir = root.join("docs").join("knowledge");
+
+        let hits = search_bundle(&dir, "body", 20).unwrap();
+        let find = |suffix: &str| hits.iter().find(|h| h.path.ends_with(suffix)).unwrap();
+
+        let conf = find("areas/demo/conf.md");
+        assert_eq!(conf.grade, Some(CONFIRMED));
+        assert_eq!(conf.verified_at.as_deref(), Some("2026-01-01"));
+        assert_eq!(conf.verified_commit.as_deref(), Some(first.as_str()));
+        assert!(hit_line(conf).contains(" — [confirmed @ 2026-01-01] — "), "{}", hit_line(conf));
+
+        let susp = find("areas/demo/susp.md");
+        assert_eq!(susp.grade, Some(SUSPECT));
+        assert!(hit_line(susp).contains(" — [suspect @ 2026-01-01] — "), "{}", hit_line(susp));
+
+        let unv = find("areas/demo/unv.md");
+        assert_eq!(unv.grade, Some(UNVERIFIED));
+        assert!(hit_line(unv).contains(" — [unverified @ never] — "), "{}", hit_line(unv));
+        assert!(hit_line(find("areas/demo/anchorless.md")).contains(" — [unverified @ never] — "));
+
+        let pat = find("patterns/pat.md");
+        assert_eq!(pat.grade, None);
+        assert!(hit_line(pat).contains(" — [pattern] — "), "{}", hit_line(pat));
+        assert!(!hit_line(pat).contains(" @ "), "{}", hit_line(pat));
+
+        let row = hit_row(susp);
+        assert_eq!(row["grade"], json!("suspect"));
+        assert_eq!(row["verified_at"], json!("2026-01-01"));
+        assert_eq!(row["verified_commit"], json!(first));
+        let prow = hit_row(pat);
+        assert_eq!(prow["grade"], Value::Null);
+        assert_eq!(prow["verified_at"], Value::Null);
+        assert_eq!(prow["verified_commit"], Value::Null);
+    }
+
+    #[test]
+    fn show_prints_the_freshness_line_and_carries_it_in_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let first = four_grade_repo(&root);
+        put(&root, "docs/knowledge/patterns/pat.md", &pattern_concept());
+        let dir = root.join("docs").join("knowledge");
+
+        let susp = show_concept(&dir, "susp").unwrap();
+        let bee_line = susp.lines.iter().position(|l| l.starts_with("bee.id:")).unwrap();
+        let fresh_line = susp.lines.iter().position(|l| l.starts_with("freshness: suspect @ 2026-01-01")).unwrap();
+        let links_line = susp.lines.iter().position(|l| l.starts_with("links_out:")).unwrap();
+        assert!(bee_line < fresh_line && fresh_line < links_line, "{:?}", susp.lines);
+        assert!(susp.lines[fresh_line].contains("src/b.rs"), "{}", susp.lines[fresh_line]);
+        let value = show_value(susp);
+        assert_eq!(value["grade"], json!("suspect"));
+        assert_eq!(value["verified_at"], json!("2026-01-01"));
+        assert_eq!(value["verified_commit"], json!(first));
+
+        let conf = show_concept(&dir, "conf").unwrap();
+        assert!(conf.lines.iter().any(|l| l == "freshness: confirmed @ 2026-01-01"), "{:?}", conf.lines);
+        assert_eq!(show_value(conf)["grade"], json!("confirmed"));
+
+        let pat = show_concept(&dir, "pat").unwrap();
+        assert!(!pat.lines.iter().any(|l| l.starts_with("freshness:")), "{:?}", pat.lines);
+        let pvalue = show_value(pat);
+        assert_eq!(pvalue["grade"], Value::Null);
+        assert_eq!(pvalue["verified_commit"], Value::Null);
+    }
+
+    #[test]
+    fn context_entries_carry_the_grade_and_a_stale_entry_names_its_anchor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        four_grade_repo(&root);
+        put(
+            &root,
+            "docs/knowledge/item.md",
+            "---\ntype: bee.work-item\ntitle: Item\ndescription: item\nbee:\n  id: w1\n  lifecycle: active\n  required_context: [areas/demo/conf.md, areas/demo/susp.md, areas/demo/orph.md]\n---\nitem body\n",
+        );
+        let dir = root.join("docs").join("knowledge");
+        let manifest = built(&dir, "w1", 100000.0);
+        let entry = |suffix: &str| {
+            manifest["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|e| e["path"].as_str().unwrap().ends_with(suffix))
+                .unwrap()
+                .clone()
+        };
+
+        let conf = entry("areas/demo/conf.md");
+        assert_eq!(conf["grade"], json!("confirmed"));
+        assert_eq!(conf["verified_at"], json!("2026-01-01"));
+        assert!(!conf["reason"].as_str().unwrap().contains("(grade:"), "{conf}");
+
+        let susp = entry("areas/demo/susp.md");
+        assert_eq!(susp["grade"], json!("suspect"));
+        assert_eq!(susp["reason"], json!("required_context depth 1 via item.md (grade: suspect — src/b.rs)"));
+
+        let orph = entry("areas/demo/orph.md");
+        assert_eq!(orph["grade"], json!("orphan"));
+        assert!(orph["reason"].as_str().unwrap().ends_with(" (grade: orphan — src/gone.rs)"), "{orph}");
+
+        let item = entry("item.md");
+        assert_eq!(item["grade"], Value::Null);
+        assert_eq!(item["verified_at"], Value::Null);
+        assert_eq!(item["reason"], json!("work item"));
+    }
+
     #[test]
     fn check_runs_natively_from_the_repo() {
         let tmp = tempfile::tempdir().unwrap();

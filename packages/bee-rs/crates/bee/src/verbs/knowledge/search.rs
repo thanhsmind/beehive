@@ -51,7 +51,7 @@ use crate::state::read_config_raw;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{js_number_flag, js_trim, keys_known, parse_flags, FlagV, Flags};
 use serde_json::{json, Map, Number, Value};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -138,6 +138,53 @@ pub(crate) struct SearchHit {
     pub(crate) hits: usize,
     pub(crate) timestamp: String,
     pub(crate) why: String,
+    pub(crate) grade: Option<&'static str>,
+    pub(crate) verified_at: Option<String>,
+    pub(crate) verified_commit: Option<String>,
+}
+
+pub(crate) fn is_area_concept(data: &Map<String, Value>) -> bool {
+    data.get("type").and_then(Value::as_str) == Some("bee.area")
+}
+
+pub(crate) fn grade_area_concepts(checkout: &Path, concepts: &[&Concept]) -> BTreeMap<String, Grade> {
+    let bees: Vec<(&str, Map<String, Value>)> = concepts
+        .iter()
+        .filter(|c| is_area_concept(&c.data))
+        .map(|c| (c.path.as_str(), bee_of(&c.data)))
+        .collect();
+    let refs: Vec<(&str, &Map<String, Value>)> = bees.iter().map(|(path, bee)| (*path, bee)).collect();
+    grade_bundle(checkout, &refs)
+}
+
+pub(crate) fn insert_grade_keys(
+    map: &mut Map<String, Value>,
+    grade: Option<&str>,
+    verified_at: Option<&str>,
+    verified_commit: Option<&str>,
+) {
+    let opt = |v: Option<&str>| v.map(|s| Value::String(s.to_string())).unwrap_or(Value::Null);
+    map.insert("grade".into(), opt(grade));
+    map.insert("verified_at".into(), opt(verified_at));
+    map.insert("verified_commit".into(), opt(verified_commit));
+}
+
+pub(crate) fn hit_line(hit: &SearchHit) -> String {
+    let mark = match hit.grade {
+        Some(grade) => format!("{grade} @ {}", hit.verified_at.as_deref().unwrap_or("never")),
+        None => "pattern".to_string(),
+    };
+    format!("{} — {} — [{mark}] — {}", hit.path, hit.title, hit.why)
+}
+
+pub(crate) fn hit_row(hit: &SearchHit) -> Value {
+    let mut row = Map::new();
+    row.insert("path".into(), Value::String(hit.path.clone()));
+    row.insert("title".into(), Value::String(hit.title.clone()));
+    row.insert("hits".into(), Value::from(hit.hits));
+    row.insert("why".into(), Value::String(hit.why.clone()));
+    insert_grade_keys(&mut row, hit.grade, hit.verified_at.as_deref(), hit.verified_commit.as_deref());
+    Value::Object(row)
 }
 
 /// bee.pattern + bee.area concepts only (D2); every other type (including
@@ -187,6 +234,9 @@ pub(crate) fn search_bundle(dir: &Path, text: &str, limit: usize) -> Option<Vec<
             hits: hit_count,
             timestamp,
             why: parts.join("; "),
+            grade: None,
+            verified_at: None,
+            verified_commit: None,
         });
     }
 
@@ -200,6 +250,20 @@ pub(crate) fn search_bundle(dir: &Path, text: &str, limit: usize) -> Option<Vec<
             .then_with(|| a.path.cmp(&b.path))
     });
     hits.truncate(limit);
+
+    let shown: Vec<&Concept> = concepts
+        .iter()
+        .filter(|c| hits.iter().any(|h| h.path == format!("docs/knowledge/{}", c.path)))
+        .collect();
+    let graded = grade_area_concepts(checkout_of(dir)?, &shown);
+    for hit in hits.iter_mut() {
+        let rel = hit.path.strip_prefix("docs/knowledge/").unwrap_or(&hit.path);
+        if let Some(grade) = graded.get(rel) {
+            hit.grade = Some(grade.grade);
+            hit.verified_at = grade.verified_at.clone();
+            hit.verified_commit = grade.verified_commit.clone();
+        }
+    }
     Some(hits)
 }
 
@@ -240,13 +304,8 @@ pub(crate) fn run_search(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     let mut lines: Vec<String> = Vec::new();
     let mut rows: Vec<Value> = Vec::new();
     for hit in &hits {
-        lines.push(format!("{} — {} — {}", hit.path, hit.title, hit.why));
-        let mut row = Map::new();
-        row.insert("path".into(), Value::String(hit.path.clone()));
-        row.insert("title".into(), Value::String(hit.title.clone()));
-        row.insert("hits".into(), Value::from(hit.hits));
-        row.insert("why".into(), Value::String(hit.why.clone()));
-        rows.push(Value::Object(row));
+        lines.push(hit_line(hit));
+        rows.push(hit_row(hit));
     }
     if rows.is_empty() {
         lines.push(zero_hit_note(&text));

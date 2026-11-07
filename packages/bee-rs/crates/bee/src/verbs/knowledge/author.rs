@@ -125,6 +125,20 @@ pub(crate) struct ShowResult {
     pub(crate) links_out: Vec<String>,
     pub(crate) links_in: Vec<String>,
     pub(crate) lines: Vec<String>,
+    pub(crate) grade: Option<&'static str>,
+    pub(crate) verified_at: Option<String>,
+    pub(crate) verified_commit: Option<String>,
+}
+
+pub(crate) fn show_value(res: ShowResult) -> Value {
+    let mut result = Map::new();
+    result.insert("path".into(), Value::String(res.path));
+    result.insert("data".into(), Value::Object(res.data));
+    result.insert("body".into(), Value::String(res.body));
+    result.insert("links_out".into(), Value::Array(res.links_out.into_iter().map(Value::String).collect()));
+    result.insert("links_in".into(), Value::Array(res.links_in.into_iter().map(Value::String).collect()));
+    insert_grade_keys(&mut result, res.grade, res.verified_at.as_deref(), res.verified_commit.as_deref());
+    Value::Object(result)
 }
 
 #[derive(Debug)]
@@ -219,6 +233,31 @@ pub(crate) fn show_concept(dir: &Path, id: &str) -> Result<ShowResult, ShowError
         }
     }
 
+    let mut grade_out: Option<&'static str> = None;
+    let mut verified_at: Option<String> = None;
+    let mut verified_commit: Option<String> = None;
+    if is_area_concept(&target.data) {
+        if let Some(checkout) = checkout_of(dir) {
+            let grade = grade_concept(checkout, &target.path, &bee);
+            let mut line = format!("freshness: {} @ {}", grade.grade, grade.verified_at.as_deref().unwrap_or("never"));
+            let id = bee.get("id").and_then(Value::as_str).unwrap_or("");
+            match grade.grade {
+                SUSPECT => line.push_str(&format!(" — {}", stale_anchor_message(&grade, id))),
+                ORPHAN => line.push_str(&format!(" — {}", orphan_anchor_message(&grade))),
+                UNVERIFIED => {
+                    if let Some(reason) = &grade.reason {
+                        line.push_str(&format!(" — {reason}"));
+                    }
+                }
+                _ => {}
+            }
+            lines.push(line);
+            grade_out = Some(grade.grade);
+            verified_at = grade.verified_at;
+            verified_commit = grade.verified_commit;
+        }
+    }
+
     if links_out.is_empty() {
         lines.push("links_out: (none)".to_string());
     } else {
@@ -249,6 +288,9 @@ pub(crate) fn show_concept(dir: &Path, id: &str) -> Result<ShowResult, ShowError
         links_out,
         links_in,
         lines,
+        grade: grade_out,
+        verified_at,
+        verified_commit,
     })
 }
 
@@ -406,19 +448,8 @@ pub(crate) fn run_show(flags: Flags, json: bool, pre_json: bool, t0: Instant) ->
 
     match show_concept(&dir, &id) {
         Ok(res) => {
-            let mut result = Map::new();
-            result.insert("path".into(), Value::String(res.path));
-            result.insert("data".into(), Value::Object(res.data));
-            result.insert("body".into(), Value::String(res.body));
-            result.insert(
-                "links_out".into(),
-                Value::Array(res.links_out.into_iter().map(Value::String).collect()),
-            );
-            result.insert(
-                "links_in".into(),
-                Value::Array(res.links_in.into_iter().map(Value::String).collect()),
-            );
-            Some(ctx.emit(&Value::Object(result), &res.lines.join("\n"), 0))
+            let text = res.lines.join("\n");
+            Some(ctx.emit(&show_value(res), &text, 0))
         }
         Err(ShowError::NotFound(id)) => Some(ctx.fail(&format!("concept not found: {id}"))),
         Err(ShowError::BundleError) => None,

@@ -277,9 +277,46 @@ pub(crate) fn knowledge_context_lines(root: &Path, record: &JMap) -> Vec<String>
 
 /// inject.mjs projectMapLines (D5/D10 + okf-integration-close-f4 D2).
 pub(crate) fn project_map_lines(root: &Path, bundle: bool) -> Vec<String> {
+    project_map_lines_within(root, bundle, FRESHNESS_BUDGET)
+}
+
+const FRESHNESS_BUDGET: std::time::Duration = std::time::Duration::from_millis(500);
+
+const FRESHNESS_PULL: &str = "bee knowledge check";
+
+fn freshness_map_line(root: &Path, budget: std::time::Duration) -> Option<String> {
+    let root = root.to_path_buf();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let areas: Vec<(String, JMap)> = collect_concepts(&root)
+            .into_iter()
+            .filter(|c| c.path.starts_with("areas/") && !c.data.is_empty())
+            .map(|c| (c.path, c.data.get("bee").and_then(Value::as_object).cloned().unwrap_or_default()))
+            .collect();
+        let counts = (!areas.is_empty()).then(|| {
+            let refs: Vec<(&str, &JMap)> = areas.iter().map(|(rel, bee)| (rel.as_str(), bee)).collect();
+            let graded: Vec<(String, crate::verbs::knowledge::Grade)> =
+                crate::verbs::knowledge::grade_bundle(&resolve_product_root(&root), &refs).into_iter().collect();
+            crate::verbs::knowledge::freshness_counts(&graded)
+        });
+        let _ = tx.send(counts);
+    });
+    match rx.recv_timeout(budget) {
+        Ok(None) => None,
+        Ok(Some([confirmed, suspect, orphan, unverified])) => Some(format!(
+            "- knowledge: {confirmed} confirmed, {suspect} suspect, {orphan} orphan, {unverified} unverified — suspect first: {FRESHNESS_PULL}"
+        )),
+        Err(_) => Some(format!("- knowledge: freshness skipped (slow) — {FRESHNESS_PULL}")),
+    }
+}
+
+pub(crate) fn project_map_lines_within(root: &Path, bundle: bool, budget: std::time::Duration) -> Vec<String> {
     let mut lines = vec!["### Project map".to_string()];
     let body = if bundle { bundle_project_map_lines(root) } else { spec_project_map_lines(root) };
     lines.extend(body);
+    if bundle {
+        lines.extend(freshness_map_line(root, budget));
+    }
     if let Some(backlog) = read_backlog_counts(root) {
         lines.push(format!(
             "- PBI: {} done / {} in-flight / {} proposed",
