@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-outcome-measure\" started at phase \"exploring\" (lane).",
-  "next_action": "close",
+  "next_action": "Merged into main at a642b94; reload the product and test \"knowledge-outcome-measure\", then either approve uat (\"bee gate --name uat --approved true --lane knowledge-outcome-measure\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-07T05:40:13.881Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: knowledge-outcome-measure",
+    "asked_at": "2026-11-07T05:59:57.130Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -258,13 +263,6 @@
         ]
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-11-07T05:55:56.690Z",
-    "branch": "wt/knowledge-outcome-measure",
-    "worktree_id": "beehive--wt--knowledge-outcome-measure",
-    "uat": "pending",
-    "blocked_by": []
   },
   "last_scribing_run": {
     "feature": "knowledge-outcome-measure",
