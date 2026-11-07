@@ -57,6 +57,7 @@ fn spill_files(root: &Path) -> Vec<PathBuf> {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn oversized_allowlisted_output_spills_to_a_file() {
     let tmp = tempfile::tempdir().unwrap();
@@ -103,6 +104,29 @@ fn oversized_allowlisted_output_spills_to_a_file() {
         String::from_utf8_lossy(&spilled).starts_with(head),
         "the printed head is the leading whole lines of the spilled output"
     );
+}
+
+#[cfg(not(unix))]
+#[test]
+fn oversized_allowlisted_output_passes_through_unchanged_without_a_spill() {
+    let tmp = tempfile::tempdir().unwrap();
+    let expected = full_help_bytes(tmp.path());
+    let (_held, root) = fixture(Some(THRESHOLD));
+
+    let out = help_all(&root);
+    assert!(
+        out.status.success(),
+        "a pass-through run keeps the verb's exit code"
+    );
+    assert_eq!(
+        out.stdout, expected,
+        "without the spill capture the bytes are the unwrapped bytes"
+    );
+    assert!(
+        !String::from_utf8_lossy(&out.stdout).contains("[bee] output spilled:"),
+        "no marker line is printed"
+    );
+    assert!(spill_files(&root).is_empty(), "no spill file is written");
 }
 
 #[test]

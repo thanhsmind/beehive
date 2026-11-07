@@ -58,9 +58,20 @@ struct Fixture {
 
 const ID: &str = "repo--wt--demo";
 
+fn plain(path: PathBuf) -> PathBuf {
+    match path.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+        Some(rest) => PathBuf::from(rest),
+        None => path,
+    }
+}
+
+fn shell_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 fn fixture(test_command: Option<&str>) -> Fixture {
     let tmp = tempfile::tempdir().unwrap();
-    let base = tmp.path().canonicalize().unwrap();
+    let base = plain(tmp.path().canonicalize().unwrap());
     let main = base.join("repo");
     std::fs::create_dir_all(&main).unwrap();
     let marker = base.join("suite-ran");
@@ -68,8 +79,9 @@ fn fixture(test_command: Option<&str>) -> Fixture {
     git(&main, &["init", "-q", "-b", "main"]);
     git(&main, &["config", "user.email", "t@example.com"]);
     git(&main, &["config", "user.name", "t"]);
+    git(&main, &["config", "core.autocrlf", "false"]);
     let command = test_command.map(str::to_string).unwrap_or_else(|| {
-        format!("test ! -e {} && touch {}", red_flag.display(), marker.display())
+        format!("test ! -e '{}' && touch '{}'", shell_path(&red_flag), shell_path(&marker))
     });
     write(&main, ".bee/onboarding.json", r#"{"version":1,"completed":true}"#);
     write(
