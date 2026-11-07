@@ -54,6 +54,19 @@ tool can read it back.
   Input = fresh + cache write + cache read, Cache = the cached part,
   Total = Input + Output; a missing transcript is a typed error, never
   zeros. AGENTS.md names it the first token source.
+- **Herded sessions in the per-task report (report-usage-herding plan,
+  contract RUH-2).** A herded worker — a claude-session sub-session or a
+  pane — writes its own transcript, outside the leader's `subagents/`.
+  `bee report usage` reads every `.bee/mailbox/<job>/` under the control
+  root whose `job.json` `leader_session` equals the leader transcript's
+  file stem, and adds that job's `activity.json` `transcript_path` (and its
+  `subagents/`) to the same per-model rows, window-filtered, each
+  transcript once. A job of another leader, with no `leader_session`, or
+  with a missing transcript is skipped. The report prints
+  `Herded Sessions: <n>` (`herding_sessions` in `--json`); `n` counts the
+  linked sessions, including any with no tokens inside the window.
+  `bee close` reaches the same transcripts by feature instead of by
+  leader (`collect_herding_usage`).
 
 ## Edge Cases Settled
 
@@ -78,6 +91,7 @@ tool can read it back.
   `hooks/session_close/perf.rs` (`rollup_transcript`).
 - Record write, schema `bee-usage/v1`, and the letter line:
   `verbs/drivers/close.rs`, `verbs/mailbox.rs`.
-- Per-task report (`bee report usage`): `verbs/report.rs`, over
-  `aggregate_usage` in `hooks/session_close/perf.rs`.
+- Per-task report (`bee report usage`): `verbs/report_usage.rs`
+  (`herded_transcripts` for the mailbox join), over `aggregate_usage` in
+  `hooks/session_close/perf.rs`.
 - Delivery trace: `docs/knowledge/work/usage-in-bee-store/delivery.md`.
