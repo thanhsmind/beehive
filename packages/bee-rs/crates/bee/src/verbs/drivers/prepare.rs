@@ -3235,8 +3235,32 @@ pub(crate) fn prepare_dispatch_wire(
     // envelope — stays byte-identical to before this key existed.
     let brief_sha256 = brief.map(crate::verbs::reservations::sha256_hex);
 
+    let prompt_sha256 = ["prompt", "stdin", "message"]
+        .iter()
+        .find_map(|key| payload.get(*key).and_then(Value::as_str))
+        .map(crate::verbs::reservations::sha256_hex);
+    let protocol_sha256 = crate::verbs::protocol::protocol_sha256(root);
+    let digest_value = |digest: &Option<String>| digest.clone().map_or(Value::Null, Value::String);
+
+    let purpose_leaning = if matches!(kind, "reviewer" | "advisor")
+        && !orig_role.is_some_and(|r| r.starts_with("hat-"))
+    {
+        purpose
+            .map(js_trim)
+            .filter(|p| !p.is_empty())
+            .and_then(|p| lint_leaning_stems(p).err())
+            .map(|refusal| serde_json::json!({ "reason": refusal["reason"], "fix": refusal["fix"] }))
+    } else {
+        None
+    };
+
     let mut record = Map::new();
     record.insert("dispatch_id".into(), Value::String(dispatch_id.clone()));
+    record.insert("prompt_sha256".into(), digest_value(&prompt_sha256));
+    record.insert("protocol_sha256".into(), digest_value(&protocol_sha256));
+    if purpose_leaning.is_some() {
+        record.insert("purpose_leaning".into(), Value::Bool(true));
+    }
     if let Some(digest) = &brief_sha256 {
         record.insert("brief_sha256".into(), Value::String(digest.clone()));
     }
@@ -3295,6 +3319,11 @@ pub(crate) fn prepare_dispatch_wire(
     envelope.insert("tool".into(), Value::String(tool));
     envelope.insert("payload".into(), Value::Object(payload));
     envelope.insert("dispatch_id".into(), Value::String(dispatch_id));
+    envelope.insert("prompt_sha256".into(), digest_value(&prompt_sha256));
+    envelope.insert("protocol_sha256".into(), digest_value(&protocol_sha256));
+    if let Some(leaning) = purpose_leaning {
+        envelope.insert("purpose_leaning".into(), leaning);
+    }
     // The same digest the logged record carries, on the artifact the CALLER
     // holds: an orchestrator firing three lanes reads it straight off each
     // returned envelope instead of re-reading the log to find out what it
@@ -4235,6 +4264,13 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                         }
                     }
 
+                    if let (false, Some(leaning)) = (use_json, result.get("purpose_leaning")) {
+                        eprintln!(
+                            "warning: --purpose carries leaning language ({}) — {}",
+                            leaning["reason"].as_str().unwrap_or_default(),
+                            leaning["fix"].as_str().unwrap_or_default()
+                        );
+                    }
                     let text = jsjson::stringify_pretty(&result);
                     Ok(Out::Emit(result, text, 0))
                 }
@@ -5113,6 +5149,88 @@ pub(crate) fn authorize_dispatch_permit(
         "issuer_session": rec_session,
         "feature": feat,
     }))
+}
+
+pub(crate) fn verify_dispatch(root: &Path, dispatch_id: &str, prompt_file: Option<&str>) -> (Value, u8) {
+    let refuse = |reason: &str, fix: String| {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String(reason.into()));
+        r.insert("fix".into(), Value::String(fix));
+        (Value::Object(r), 1u8)
+    };
+    let log = std::fs::read_to_string(root.join(".bee").join("logs").join("dispatch.jsonl")).unwrap_or_default();
+    let record = log
+        .lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .find(|v| v["source"] == "prepare" && v["dispatch_id"] == dispatch_id);
+    let Some(record) = record else {
+        return refuse(
+            "dispatch_not_found",
+            format!(
+                "no prepare record with dispatch id {dispatch_id} in {}/.bee/logs/dispatch.jsonl (the control root). Check the id from the prepare output, or run the command from the checkout that holds the bee store.",
+                root.display()
+            ),
+        );
+    };
+    let protocol = match (
+        record["protocol_sha256"].as_str(),
+        crate::verbs::protocol::protocol_sha256(root),
+    ) {
+        (Some(then), Some(now)) if then == now => "same",
+        (Some(_), Some(_)) => "changed",
+        (None, Some(_)) => "appeared",
+        (Some(_), None) => "removed",
+        (None, None) => "absent",
+    };
+    let prompt = match (prompt_file, record["prompt_sha256"].as_str()) {
+        (None, _) => "not_checked",
+        (Some(_), None) => "unrecorded",
+        (Some(path), Some(recorded)) => match std::fs::read(path) {
+            Err(e) => {
+                return refuse(
+                    "prompt_file_unreadable",
+                    format!("could not read --prompt-file {path}: {e}. Save the carried prompt field byte-exact, e.g. jq -j '.payload.prompt // .payload.stdin', then re-run."),
+                )
+            }
+            Ok(bytes) => match String::from_utf8(bytes) {
+                Ok(text) if crate::verbs::reservations::sha256_hex(&text) == recorded => "match",
+                _ => "mismatch",
+            },
+        },
+    };
+    let mut out = Map::new();
+    out.insert("ok".into(), Value::Bool(true));
+    out.insert("dispatch_id".into(), Value::String(dispatch_id.into()));
+    out.insert("protocol".into(), Value::String(protocol.into()));
+    out.insert("prompt".into(), Value::String(prompt.into()));
+    (Value::Object(out), 0)
+}
+
+pub(crate) fn run_dispatch_verify(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !crate::verbs::reservations::keys_known(&flags, &["dispatch-id", "prompt-file"]) {
+        return None;
+    }
+    let ctx = match ctx_serving_granted("dispatch verify", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let Some(dispatch_id) = flags.truthy_str("dispatch-id") else {
+        return finish(&ctx, Ok(Out::Thrown("dispatch verify: --dispatch-id is required.".to_string())));
+    };
+    let (value, code) = verify_dispatch(&ctx.root, dispatch_id, flags.truthy_str("prompt-file"));
+    let text = if use_json || value["ok"] != true {
+        jsjson::stringify_pretty(&value)
+    } else {
+        format!(
+            "dispatch {dispatch_id}\nprotocol: {}\nprompt: {}",
+            value["protocol"].as_str().unwrap_or_default(),
+            value["prompt"].as_str().unwrap_or_default()
+        )
+    };
+    finish(&ctx, Ok(Out::Emit(value, text, code.into())))
 }
 
 pub(crate) fn run_dispatch_authorize(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -7093,5 +7211,266 @@ mod claude_session_door_tests {
             json!(".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --read-only")
         );
         assert_eq!(v["economics"]["channel"], json!("herding-exec"));
+    }
+}
+
+#[cfg(test)]
+mod dispatch_receipt_tests {
+    use super::*;
+    use crate::verbs::reservations::sha256_hex;
+    use serde_json::json;
+
+    const MODELS: &str =
+        r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus","advisor":"fable","hat-risks":"opus"}}}"#;
+    const HERDING: &str = r#"{"team":{"claude":{"advisor":{"kind":"herding","agent":"pi-agent"}}},"herding":{"agents":{"pi-agent":["pi","-a"]}}}"#;
+    const PROTOCOL_V1: &str = "# Workspace protocol\n\nPROJECT_CRITICALITY: medium\n";
+    fn leaning() -> String {
+        format!("{} we ship it", LEANING_VERDICT_STEMS[0])
+    }
+
+    const OLD_ID: &str = "11111111-1111-4111-8111-111111111111";
+
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)] {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    fn prep(root: &Path, kind: &str, role: Option<&str>, purpose: Option<&str>) -> Value {
+        match prepare_dispatch_with_role(root, "claude", kind, role, None, None, false, None, purpose, true, None).unwrap() {
+            Prepared::Value(v) => v,
+            Prepared::Thrown(m) => panic!("{m}"),
+        }
+    }
+
+    fn last_record(root: &Path) -> Value {
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        serde_json::from_str(log.lines().last().unwrap()).unwrap()
+    }
+
+    fn is_hex64(v: &Value) -> bool {
+        v.as_str().is_some_and(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+    }
+
+    fn id_of(v: &Value) -> String {
+        v["dispatch_id"].as_str().unwrap().to_string()
+    }
+
+    fn save(tmp: &tempfile::TempDir, name: &str, bytes: &[u8]) -> String {
+        let path = tmp.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
+    fn verify(root: &Path, id: &str, file: Option<&str>) -> Value {
+        let (v, code) = verify_dispatch(root, id, file);
+        assert_eq!(code, 0, "{v}");
+        v
+    }
+
+    #[test]
+    fn every_prepare_record_and_envelope_carries_the_prompt_digest_of_the_agent_prompt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        std::fs::create_dir_all(root.join(".bee/cells")).unwrap();
+        std::fs::write(
+            root.join(".bee/cells/c-1.json"),
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        )
+        .unwrap();
+        for kind in ["gather", "reviewer", "advisor", "cell"] {
+            let v = match kind {
+                "cell" => match prepare_dispatch_with_role(&root, "claude", "cell", None, Some("c-1"), Some("w"), false, None, None, true, None).unwrap() {
+                    Prepared::Value(v) => v,
+                    Prepared::Thrown(m) => panic!("{m}"),
+                },
+                _ => prep(&root, kind, None, None),
+            };
+            let prompt = v["payload"]["prompt"].as_str().unwrap_or_else(|| panic!("{kind} carries an Agent prompt"));
+            assert!(is_hex64(&v["prompt_sha256"]), "{kind}");
+            assert_eq!(v["prompt_sha256"], json!(sha256_hex(prompt)), "{kind}");
+            let record = last_record(&root);
+            assert_eq!(record["prompt_sha256"], v["prompt_sha256"], "{kind}");
+            assert_eq!(record["dispatch_id"], v["dispatch_id"], "{kind}");
+            assert_eq!(record["protocol_sha256"], Value::Null, "{kind}");
+            assert_eq!(v["protocol_sha256"], Value::Null, "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_herding_bash_payload_digests_its_stdin() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, HERDING);
+        let _armed = ClaudeSessionsArmed::on();
+        let v = prep(&root, "advisor", Some("advisor"), None);
+        assert_eq!(v["tool"], json!("Bash"));
+        let stdin = v["payload"]["stdin"].as_str().unwrap();
+        assert_eq!(v["prompt_sha256"], json!(sha256_hex(stdin)));
+        assert_eq!(last_record(&root)["prompt_sha256"], v["prompt_sha256"]);
+    }
+
+    #[test]
+    fn the_protocol_digest_is_null_without_the_file_and_the_file_digest_with_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        assert_eq!(prep(&root, "gather", None, None)["protocol_sha256"], Value::Null);
+        std::fs::write(root.join("WORKSPACE_PROTOCOL.md"), PROTOCOL_V1).unwrap();
+        let v = prep(&root, "gather", None, None);
+        assert_eq!(v["protocol_sha256"], json!(sha256_hex(PROTOCOL_V1)));
+        assert_eq!(last_record(&root)["protocol_sha256"], v["protocol_sha256"]);
+    }
+
+    #[test]
+    fn verify_walks_the_protocol_through_same_changed_and_removed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        let file = root.join("WORKSPACE_PROTOCOL.md");
+        std::fs::write(&file, PROTOCOL_V1).unwrap();
+        let id = id_of(&prep(&root, "gather", None, None));
+        let report = verify(&root, &id, None);
+        assert_eq!(report["protocol"], json!("same"));
+        assert_eq!(report["prompt"], json!("not_checked"));
+        std::fs::write(&file, format!("{PROTOCOL_V1}MERGE_OWNER: human\n")).unwrap();
+        assert_eq!(verify(&root, &id, None)["protocol"], json!("changed"));
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(verify(&root, &id, None)["protocol"], json!("removed"));
+    }
+
+    #[test]
+    fn verify_reports_appeared_and_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        let id = id_of(&prep(&root, "gather", None, None));
+        assert_eq!(verify(&root, &id, None)["protocol"], json!("absent"));
+        std::fs::write(root.join("WORKSPACE_PROTOCOL.md"), PROTOCOL_V1).unwrap();
+        assert_eq!(verify(&root, &id, None)["protocol"], json!("appeared"));
+    }
+
+    #[test]
+    fn a_saved_prompt_round_trips_to_match_and_an_edit_or_non_utf8_file_mismatches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        let v = prep(&root, "reviewer", None, None);
+        let id = id_of(&v);
+        let prompt = v["payload"]["prompt"].as_str().unwrap();
+        let exact = save(&tmp, "exact.txt", prompt.as_bytes());
+        assert_eq!(verify(&root, &id, Some(&exact))["prompt"], json!("match"));
+        let edited = save(&tmp, "edited.txt", format!("{prompt} ").as_bytes());
+        assert_eq!(verify(&root, &id, Some(&edited))["prompt"], json!("mismatch"));
+        let binary = save(&tmp, "binary.bin", &[0xff, 0xfe, 0x00, 0x80]);
+        assert_eq!(verify(&root, &id, Some(&binary))["prompt"], json!("mismatch"));
+    }
+
+    #[test]
+    fn a_herding_stdin_saved_byte_exact_round_trips_to_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, HERDING);
+        let _armed = ClaudeSessionsArmed::on();
+        let v = prep(&root, "advisor", Some("advisor"), None);
+        let saved = save(&tmp, "stdin.txt", v["payload"]["stdin"].as_str().unwrap().as_bytes());
+        assert_eq!(verify(&root, &id_of(&v), Some(&saved))["prompt"], json!("match"));
+    }
+
+    #[test]
+    fn a_record_without_a_prompt_digest_reads_as_unrecorded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        let log = root.join(".bee/logs/dispatch.jsonl");
+        std::fs::create_dir_all(log.parent().unwrap()).unwrap();
+        std::fs::write(
+            &log,
+            format!("{{\"ts\":\"2026-01-01T00:00:00.000Z\",\"source\":\"prepare\",\"dispatch_id\":\"{OLD_ID}\",\"kind\":\"gather\"}}\n"),
+        )
+        .unwrap();
+        let file = save(&tmp, "p.txt", b"anything");
+        let report = verify(&root, OLD_ID, Some(&file));
+        assert_eq!(report["prompt"], json!("unrecorded"));
+        assert_eq!(report["protocol"], json!("absent"));
+        assert_eq!(verify(&root, OLD_ID, None)["prompt"], json!("not_checked"));
+    }
+
+    #[test]
+    fn an_unknown_dispatch_id_refuses_with_a_fix_naming_the_control_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        prep(&root, "gather", None, None);
+        let (v, code) = verify_dispatch(&root, OLD_ID, None);
+        assert_eq!(code, 1);
+        assert_eq!(v["ok"], json!(false));
+        assert_eq!(v["type"], json!("refused"));
+        assert_eq!(v["reason"], json!("dispatch_not_found"));
+        assert!(v["fix"].as_str().unwrap().contains(&root.display().to_string()), "{v}");
+    }
+
+    #[test]
+    fn verify_matches_only_prepare_lines_and_takes_the_newest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        let log = root.join(".bee/logs/dispatch.jsonl");
+        std::fs::create_dir_all(log.parent().unwrap()).unwrap();
+        std::fs::write(
+            &log,
+            format!(
+                "{{\"source\":\"prepare\",\"dispatch_id\":\"{OLD_ID}\",\"prompt_sha256\":\"{}\"}}\n{{\"source\":\"guard\",\"dispatch_id\":\"{OLD_ID}\"}}\n",
+                sha256_hex("kept")
+            ),
+        )
+        .unwrap();
+        let file = save(&tmp, "p.txt", b"kept");
+        assert_eq!(verify(&root, OLD_ID, Some(&file))["prompt"], json!("match"));
+    }
+
+    #[test]
+    fn a_leaning_reviewer_or_advisor_purpose_warns_and_still_returns_the_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        for kind in ["reviewer", "advisor"] {
+            let v = prep(&root, kind, None, Some(&leaning()));
+            assert!(v["payload"]["prompt"].as_str().is_some_and(|p| !p.is_empty()), "{kind}");
+            assert_eq!(v["purpose_leaning"]["reason"], json!("brief_leaning_language"), "{kind}");
+            assert!(v["purpose_leaning"]["fix"].as_str().unwrap().contains(LEANING_VERDICT_STEMS[0]), "{kind}");
+            assert_eq!(last_record(&root)["purpose_leaning"], json!(true), "{kind}");
+            assert!(is_hex64(&v["prompt_sha256"]), "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_leaning_purpose_changes_nothing_but_the_warning() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        let plain = prep(&root, "reviewer", None, Some("Review the shape of the plan"));
+        let leaning = prep(&root, "reviewer", None, Some(&format!("{} the shape of the plan", LEANING_VERDICT_STEMS[0])));
+        assert_eq!(plain["payload"]["subagent_type"], leaning["payload"]["subagent_type"]);
+        assert_eq!(plain["economics"], leaning["economics"]);
+    }
+
+    #[test]
+    fn a_clean_purpose_a_hat_role_and_other_kinds_carry_no_purpose_leaning() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, MODELS);
+        let clean = prep(&root, "reviewer", None, Some("Plan-step hat wave over docs/history/x/plan.md"));
+        assert!(clean.get("purpose_leaning").is_none());
+        assert!(last_record(&root).get("purpose_leaning").is_none());
+        let hat = prep(&root, "reviewer", Some("hat-risks"), Some(&leaning()));
+        assert!(hat.get("purpose_leaning").is_none(), "{hat}");
+        assert!(last_record(&root).get("purpose_leaning").is_none());
+        let gather = prep(&root, "gather", None, Some(&leaning()));
+        assert!(gather.get("purpose_leaning").is_none());
+        let empty = prep(&root, "advisor", None, Some("   "));
+        assert!(empty.get("purpose_leaning").is_none());
+    }
+
+    #[test]
+    fn the_brief_file_leaning_refusal_is_unchanged() {
+        let text = format!("# Brief\n\n{} option A.\n", LEANING_VERDICT_STEMS[0]);
+        let refusal = lint_brief(&text).unwrap_err();
+        assert_eq!(refusal["reason"], json!("brief_leaning_language"));
+        assert_eq!(refusal["phrase"], json!(LEANING_VERDICT_STEMS[0]));
+        assert_eq!(lint_leaning_stems(&text).unwrap_err(), refusal);
+        assert!(lint_leaning_stems("Which option fits the constraints?").is_ok());
     }
 }

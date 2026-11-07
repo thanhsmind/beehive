@@ -63,6 +63,7 @@ Contract:
 - At each meaningful step (read done, red test seen, green, committed) record one progress note with `.bee/bin/bee herding notify --kind progress --job {{cell_id}} --step <word> --text "<note, at most 120 characters>"`; a note never ends the turn.
 {{/if}}
 - Execute only the assigned cell. Do not select or accept other work.
+- Never stop to offer the leader a menu of implementation options: choose inside the cell's scope and record the choice as a departure. A decision outside the scope is one short yes/no question, returned through `[PARKED]` or `[BLOCKED]`.
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
 - Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
 - Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: {{cell_id}}` (the words "cell:" then the id — a bare id alone fails the cap).
