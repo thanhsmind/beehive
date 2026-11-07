@@ -244,6 +244,7 @@ Phase plan (one slice):
 | kfm-4 | Retire delivery records and move work/ out of the bundle | knowledge/promote.rs, knowledge/walk.rs, knowledge/tests.rs, session_preamble/knowledge.rs, session_preamble/render.rs, session_preamble/tests.rs, drivers/tests.rs, skills/bee-hive/references/scout-and-ticks.md, release-manifest.json, docs/knowledge/work/* (deleted), docs/history/knowledge-work/* (new), docs/knowledge/areas/* and patterns/* (path strings only), docs/knowledge/index.md, docs/knowledge/*/index.md | kfm-1 | promote proposes patterns and area bullets only; `bee knowledge check --json` has zero dangling_source rows and `index --check` is green; the preamble no longer announces a work-item anchor; `context --work <closed feature>` still answers from docs/history | knowledge, session_preamble and drivers tests, check, index --check and manifest check green |
 | kfm-5 | Count knowledge pulls per feature | verbs/mod.rs, knowledge/report.rs, knowledge/tests.rs | kfm-4 | every timings row carries the env-bound feature or null; `bee knowledge report` prints a pull-rate table per feature: search, context, show, total pulls, all calls, rate | knowledge tests green |
 | kfm-6 | Write the homes rule and re-confirm step, and seed bee's own anchors | docs/knowledge/areas/okf-profile/freshness-and-document-homes.md (new), okf-profile/index.md, okf-profile/overview.md, okf-profile/context-and-promote.md, okf-profile/concept-model-and-authoring.md, skills/bee-capturing/SKILL.md, docs/knowledge/areas/*, docs/knowledge/index.md, release-manifest.json | kfm-1, kfm-2, kfm-3, kfm-4, kfm-5 | a new OKF concept states the four homes, the grade rule by pointer, the cap step, the seed step for a host and the pull-rate measure; bee-capturing names re-confirm; every area concept with a resolving backticked repo path carries `bee.anchors` and a baseline commit, and `knowledge check` grades it | `bee knowledge check` 0 errors, `index --check` and `bee dev release-manifest --check` green |
+| kfm-7 | Derive the preamble pathological-budget fixture bound from the render (fix-first, plan rev 1) | session_preamble/tests.rs | kfm-1 | the tighter-budget preamble test is green again with a bound computed from the digest section length, not a literal; drop order and PREAMBLE_BUDGET_BYTES unchanged | session_preamble tests green |
 
 ```json
 [
@@ -286,7 +287,7 @@ Phase plan (one slice):
         "every knowledge verb run inside a granted worktree reads and writes that worktree's docs/knowledge",
         "bee knowledge check prints the freshness count line, carries the freshness object in --json, emits stale_anchor and orphan_anchor warnings and the seed NOTE, and never grades patterns/",
         "bee knowledge seed-anchors writes bee.anchors plus a baseline verified_commit and verified_at only to areas/ concepts without anchors, skips .bee/, docs/ and generated paths, and keeps every written file canonical",
-        "bee knowledge confirm --id and --path stamp verified_at and verified_commit and every refusal names its remedy",
+        "knowledge confirm (by id, or by anchored path) stamps verified_at and verified_commit and every refusal names its remedy",
         "the registry served-vs-declared test scans knowledge verbs"
       ],
       "artifacts": [
@@ -457,7 +458,7 @@ Phase plan (one slice):
         "docs/knowledge/work/ no longer exists and docs/history/knowledge-work/ holds the moved files",
         "both bundle walks ignore a top-level work/ directory and the preamble announces no work-item anchor",
         "bee knowledge check --json reports zero dangling_source rows after the move",
-        "bee knowledge context --work on a closed feature still returns a manifest from the docs/history anchor"
+        "knowledge context for a closed feature still returns a manifest from the docs/history anchor"
       ],
       "artifacts": [
         {"path": "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs", "substantive": "top-level work/ skipped in the verbs' bundle walk"},
@@ -572,6 +573,47 @@ Phase plan (one slice):
         "Do not write a glossary or an event catalogue",
         "Do not hand-edit frontmatter the seed verb writes",
         "Do not seed patterns/",
+        "No code comments"
+      ],
+      "open_choices": []
+    },
+    "behavior_change": false
+  },
+  {
+    "id": "kfm-7",
+    "feature": "knowledge-freshness-mechanic",
+    "title": "Derive the preamble pathological-budget fixture bound from the render",
+    "lane": "standard",
+    "role": "code",
+    "deps": ["kfm-1"],
+    "decisions": ["da4ccfeb-495d-471d-af2f-80f8cec4d3c0"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/knowledge-freshness-mechanic/plan.md",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Fix-first cell (never build on red). kfm-1 added two verb names to the command surface and the test `a_tighter_budget_drops_the_digest_next_and_keeps_the_command_surface` in hooks/session_preamble/tests.rs went red: its hard-coded budget 8800 sat 12 bytes above the pathological fixture's floor, and the new names push the kept-surface render to 8813 bytes. The contract (decision da4ccfeb, contract:session-preamble-budget) is the DROP ORDER — recent decisions, then the critical-patterns digest, then command surface, then project map — not the number 8800. Rewrite that test (and its sibling `an_over_budget_render_drops_recent_decisions_first_and_names_where_to_fetch_it` only if it shares the brittle constant) so the budget is derived from the render: render once at PREAMBLE_BUDGET_BYTES, measure the byte length of the `### Critical patterns (digest)` section, and set the tighter budget to (that render's length − digest length + a small slack such as 8) so that the digest no longer fits but the command surface still does; keep every existing assertion about which sections remain and the Omitted line. Red-first: confirm the test is red at HEAD before the change and green after; the sibling budget tests and `the_preamble_budget_sits_below_the_host_inline_limit` stay untouched and green. Never widen a literal budget by hand.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- session_preamble",
+    "must_haves": {
+      "truths": [
+        "a_tighter_budget_drops_the_digest_next_and_keeps_the_command_surface is green at HEAD and its budget is computed from the render, not a literal",
+        "every other session_preamble test is unchanged and green",
+        "PREAMBLE_BUDGET_BYTES and the drop order are unchanged"
+      ],
+      "artifacts": [
+        {"path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs", "substantive": "the tighter-budget test derives its bound from the digest section length"}
+      ],
+      "key_links": [
+        "the derived budget sits strictly between the kept-surface render size and the digest-included render size"
+      ],
+      "prohibitions": [
+        "Do not change budget.rs or any renderer code",
+        "Do not widen a literal budget constant",
         "No code comments"
       ],
       "open_choices": []
