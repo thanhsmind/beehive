@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Lần push đó chỉ đẩy một commit ghi chép của bee, không có code. Worktree chỉ vướng file log thời gian. Tôi trả file đó về như cũ rồi merge l",
-    "asked_at": "2026-11-07T02:22:44.595Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-11-07T02:26:47.582Z",
     "session": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce"
   }
 }
