@@ -1,8 +1,10 @@
 use crate::hooks::session_close::{aggregate_usage, claude_projects_root, event_ms, js_date_parse, ms_to_iso, read_jsonl};
+use crate::fsutil::{read_json, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -77,7 +79,12 @@ fn run(opts: &Opts, t0: Instant) -> ExitCode {
         Roots::None => return emit_no_root_error(&cwd, CMD, opts.json, t0),
     };
     let now_ms = chrono::Utc::now().timestamp_millis() as f64;
-    match resolve_transcript(opts).and_then(|path| build(&path, opts, now_ms)) {
+    let control = crate::hooks::session_init::control_root_for(&root);
+    let built = resolve_transcript(opts).and_then(|path| {
+        let herded = herded_transcripts(&control, &path);
+        build(&path, &herded, opts, now_ms)
+    });
+    match built {
         Ok(report) => {
             if opts.json {
                 println!("{}", jsjson::stringify_pretty(&render_json(&report)));
@@ -191,6 +198,7 @@ struct UsageReport {
     end_ms: f64,
     rows: Vec<Row>,
     subagent_files: usize,
+    herding_sessions: usize,
 }
 
 impl UsageReport {
@@ -215,7 +223,7 @@ fn bad_time(flag: &str, raw: &str) -> Fail {
     }
 }
 
-fn build(transcript: &Path, opts: &Opts, now_ms: f64) -> Result<UsageReport, Fail> {
+fn build(transcript: &Path, herded: &[PathBuf], opts: &Opts, now_ms: f64) -> Result<UsageReport, Fail> {
     let main_events = read_jsonl(transcript);
     let corr = opts.get("corr").map(str::to_string);
     let end_ms = match opts.get("until") {
@@ -244,14 +252,17 @@ fn build(transcript: &Path, opts: &Opts, now_ms: f64) -> Result<UsageReport, Fai
     }
 
     let mut rows: Vec<(String, Row)> = Vec::new();
-    merge_into(&mut rows, &windowed(&main_events, start_ms, end_ms));
     let mut subagent_files = 0usize;
-    for file in subagent_paths(transcript) {
-        let events = read_jsonl(&file);
-        if !events.is_empty() {
-            subagent_files += 1;
-        }
+    for (i, path) in std::iter::once(transcript).chain(herded.iter().map(PathBuf::as_path)).enumerate() {
+        let events = if i == 0 { main_events.clone() } else { read_jsonl(path) };
         merge_into(&mut rows, &windowed(&events, start_ms, end_ms));
+        for file in subagent_paths(path) {
+            let events = read_jsonl(&file);
+            if !events.is_empty() {
+                subagent_files += 1;
+            }
+            merge_into(&mut rows, &windowed(&events, start_ms, end_ms));
+        }
     }
 
     Ok(UsageReport {
@@ -262,7 +273,39 @@ fn build(transcript: &Path, opts: &Opts, now_ms: f64) -> Result<UsageReport, Fai
         end_ms,
         rows: rows.into_iter().map(|(_, r)| r).collect(),
         subagent_files,
+        herding_sessions: herded.len(),
     })
+}
+
+fn herded_transcripts(control: &Path, leader: &Path) -> Vec<PathBuf> {
+    let Some(leader_id) = leader.file_stem().map(|s| s.to_string_lossy().into_owned()) else { return Vec::new() };
+    let Ok(entries) = std::fs::read_dir(control.join(".bee").join("mailbox")) else { return Vec::new() };
+    let mut jobs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+    jobs.sort();
+    let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let mut seen: HashSet<PathBuf> = HashSet::from([canonical(leader)]);
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for job in jobs {
+        let ReadJson::Parsed(meta) = read_json(&job.join("job.json")) else { continue };
+        if meta.get("leader_session").and_then(Value::as_str) != Some(leader_id.as_str()) {
+            continue;
+        }
+        let ReadJson::Parsed(activity) = read_json(&job.join("activity.json")) else { continue };
+        let Some(path) = activity
+            .get("transcript_path")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .filter(|p| p.is_file())
+        else {
+            continue;
+        };
+        if seen.insert(canonical(&path)) {
+            paths.push(path);
+        }
+    }
+    paths
 }
 
 fn windowed(events: &[Value], start_ms: f64, end_ms: f64) -> Vec<Value> {
@@ -372,12 +415,13 @@ fn render_text(r: &UsageReport) -> String {
         iso(r.end_ms)
     ));
     out.push_str(&format!(
-        "- **Total Tokens:** {} (Input: {} | Output: {} | Cache: {})\n\n",
+        "- **Total Tokens:** {} (Input: {} | Output: {} | Cache: {})\n",
         n(t.total),
         n(t.input),
         n(t.output),
         n(t.cache)
     ));
+    out.push_str(&format!("- **Herded Sessions:** {}\n\n", r.herding_sessions));
     out.push_str("#### Token Breakdown by Model:\n");
     out.push_str("| Model Name | Input Tokens | Output Tokens | Total Tokens | Accounting Source |\n");
     out.push_str("| :--- | :--- | :--- | :--- | :--- |\n");
@@ -443,6 +487,7 @@ fn render_json(r: &UsageReport) -> Value {
     );
     m.insert("transcript".into(), Value::String(r.transcript.display().to_string()));
     m.insert("subagent_files".into(), Value::from(r.subagent_files));
+    m.insert("herding_sessions".into(), Value::from(r.herding_sessions));
     Value::Object(m)
 }
 
@@ -511,7 +556,7 @@ mod tests {
             ev("assistant", T2, "opus", "r2", 20, 2, 0, 0),
         ];
         let (_tmp, path) = fixture(&main, &[]);
-        let r = build(&path, &opts(&[("corr", "t-abc123"), ("until", "2026-10-23T01:30:00Z")]), NOW).unwrap();
+        let r = build(&path, &[], &opts(&[("corr", "t-abc123"), ("until", "2026-10-23T01:30:00Z")]), NOW).unwrap();
         assert_eq!(mi(r.start_ms), 1_792_717_800_000);
         assert_eq!(r.rows.len(), 1);
         let row = &r.rows[0];
@@ -535,6 +580,7 @@ mod tests {
         let (_tmp, path) = fixture(&main, &[]);
         let r = build(
             &path,
+            &[],
             &opts(&[("since", "2026-10-23T01:05:00Z"), ("until", "2026-10-23T01:15:00Z")]),
             NOW,
         )
@@ -552,7 +598,7 @@ mod tests {
         ];
         let sub = vec![ev("assistant", T0, "opus", "s1", 50, 4, 1, 200)];
         let (_tmp, path) = fixture(&main, &[&sub]);
-        let r = build(&path, &opts(&[("corr", "t-def456")]), NOW).unwrap();
+        let r = build(&path, &[], &opts(&[("corr", "t-def456")]), NOW).unwrap();
         assert_eq!(r.subagent_files, 1);
         assert_eq!(r.rows.len(), 1);
         let row = &r.rows[0];
@@ -571,7 +617,7 @@ mod tests {
             ev("assistant", T0, "opus", "r1", 100, 10, 0, 0),
         ];
         let (_tmp, path) = fixture(&main, &[]);
-        let r = build(&path, &opts(&[("corr", "t-abc")]), NOW).unwrap();
+        let r = build(&path, &[], &opts(&[("corr", "t-abc")]), NOW).unwrap();
         assert_eq!(n(r.rows[0].input), 100);
         assert_eq!(n(r.rows[0].output), 10);
     }
@@ -591,6 +637,7 @@ mod tests {
         let (_tmp, path) = fixture(&main, &[&sub]);
         let r = build(
             &path,
+            &[],
             &opts(&[("corr", "t-abc"), ("until", "2026-10-23T01:15:00Z")]),
             NOW,
         )
@@ -608,7 +655,7 @@ mod tests {
             ev("assistant", T0, "opus", "r1", 100, 10, 5, 1000),
         ];
         let (_tmp, path) = fixture(&main, &[]);
-        let r = build(&path, &opts(&[("corr", "t-abc123"), ("task", "build the thing")]), NOW).unwrap();
+        let r = build(&path, &[], &opts(&[("corr", "t-abc123"), ("task", "build the thing")]), NOW).unwrap();
         let text = render_text(&r);
         assert!(text.starts_with("### [COMPLETION-REPORT] Task: build the thing / t-abc123\n"), "{text}");
         assert!(text.contains("- **Correlation ID:** t-abc123\n"), "{text}");
@@ -622,7 +669,7 @@ mod tests {
     fn the_json_report_carries_the_same_numbers() {
         let main = vec![user(T0, "t-abc"), ev("assistant", T0, "opus", "r1", 100, 10, 5, 1000)];
         let (_tmp, path) = fixture(&main, &[]);
-        let r = build(&path, &opts(&[("corr", "t-abc")]), NOW).unwrap();
+        let r = build(&path, &[], &opts(&[("corr", "t-abc")]), NOW).unwrap();
         let v = render_json(&r);
         assert_eq!(v["correlation_id"], "t-abc");
         assert_eq!(v["total"]["input"], 1105);
@@ -651,8 +698,112 @@ mod tests {
     fn a_bad_time_flag_is_refused() {
         let main = vec![user(T0, "t-abc"), ev("assistant", T0, "opus", "r1", 1, 1, 0, 0)];
         let (_tmp, path) = fixture(&main, &[]);
-        assert_eq!(build(&path, &opts(&[("since", "yesterday")]), NOW).err().unwrap().kind, "bad_time");
-        assert_eq!(build(&path, &opts(&[("until", "soon")]), NOW).err().unwrap().kind, "bad_time");
+        assert_eq!(build(&path, &[], &opts(&[("since", "yesterday")]), NOW).err().unwrap().kind, "bad_time");
+        assert_eq!(build(&path, &[], &opts(&[("until", "soon")]), NOW).err().unwrap().kind, "bad_time");
+    }
+
+    fn herd_job(control: &Path, job: &str, leader: Option<&str>, transcript: Option<&Path>) {
+        let dir = control.join(".bee").join("mailbox").join(job);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut j = json!({"job_id": job});
+        if let Some(l) = leader {
+            j["leader_session"] = json!(l);
+        }
+        std::fs::write(dir.join("job.json"), j.to_string()).unwrap();
+        if let Some(t) = transcript {
+            std::fs::write(dir.join("activity.json"), json!({"transcript_path": t}).to_string()).unwrap();
+        }
+    }
+
+    fn leader_and_control() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let (tmp, path) = fixture(&[user(T0, "t-abc"), ev("assistant", T0, "opus", "r1", 100, 10, 0, 0)], &[]);
+        let control = tmp.path().join("control");
+        std::fs::create_dir_all(&control).unwrap();
+        (tmp, path, control)
+    }
+
+    fn herded_report(path: &Path, control: &Path, extra: &[(&'static str, &str)]) -> UsageReport {
+        let mut pairs = vec![("corr", "t-abc"), ("until", "2026-10-23T01:30:00Z")];
+        pairs.extend_from_slice(extra);
+        build(path, &herded_transcripts(control, path), &opts(&pairs), NOW).unwrap()
+    }
+
+    #[test]
+    fn a_herded_job_of_this_leader_adds_its_tokens_to_the_model_row() {
+        let (tmp, path, control) = leader_and_control();
+        let worker = tmp.path().join("worker.jsonl");
+        write_jsonl(&worker, &[ev("assistant", T1, "opus", "w1", 40, 4, 0, 0)]);
+        let wsub = tmp.path().join("worker").join("subagents");
+        std::fs::create_dir_all(&wsub).unwrap();
+        write_jsonl(&wsub.join("agent-0.jsonl"), &[ev("assistant", T1, "sonnet", "w2", 7, 1, 0, 0)]);
+        herd_job(&control, "job-1", Some("sess"), Some(&worker));
+        let r = herded_report(&path, &control, &[]);
+        assert_eq!(r.herding_sessions, 1);
+        let opus = r.rows.iter().find(|row| row.model == "opus").unwrap();
+        assert_eq!(n(opus.input), 140);
+        assert_eq!(n(opus.output), 14);
+        assert_eq!(n(r.rows.iter().find(|row| row.model == "sonnet").unwrap().input), 7);
+        assert_eq!(render_json(&r)["herding_sessions"], 1);
+    }
+
+    #[test]
+    fn a_job_of_another_leader_or_with_no_leader_adds_nothing() {
+        let (tmp, path, control) = leader_and_control();
+        let worker = tmp.path().join("worker.jsonl");
+        write_jsonl(&worker, &[ev("assistant", T1, "opus", "w1", 40, 4, 0, 0)]);
+        herd_job(&control, "job-other", Some("someone-else"), Some(&worker));
+        herd_job(&control, "job-none", None, Some(&worker));
+        let r = herded_report(&path, &control, &[]);
+        assert_eq!(r.herding_sessions, 0);
+        assert_eq!(n(r.rows[0].input), 100);
+    }
+
+    #[test]
+    fn herded_events_outside_the_window_are_excluded() {
+        let (tmp, path, control) = leader_and_control();
+        let worker = tmp.path().join("worker.jsonl");
+        write_jsonl(
+            &worker,
+            &[
+                ev("assistant", "2026-10-22T23:00:00.000Z", "opus", "w0", 500, 50, 0, 0),
+                ev("assistant", T1, "opus", "w1", 40, 4, 0, 0),
+                ev("assistant", "2026-10-23T02:00:00.000Z", "opus", "w2", 600, 60, 0, 0),
+            ],
+        );
+        herd_job(&control, "job-1", Some("sess"), Some(&worker));
+        let r = herded_report(&path, &control, &[]);
+        assert_eq!(n(r.rows[0].input), 140);
+    }
+
+    #[test]
+    fn a_herded_job_with_a_missing_transcript_is_skipped_without_error() {
+        let (tmp, path, control) = leader_and_control();
+        herd_job(&control, "job-gone", Some("sess"), Some(&tmp.path().join("nope.jsonl")));
+        herd_job(&control, "job-noactivity", Some("sess"), None);
+        let r = herded_report(&path, &control, &[]);
+        assert_eq!(r.herding_sessions, 0);
+        assert_eq!(n(r.rows[0].input), 100);
+    }
+
+    #[test]
+    fn a_transcript_named_by_two_jobs_or_the_leader_itself_counts_once() {
+        let (tmp, path, control) = leader_and_control();
+        let worker = tmp.path().join("worker.jsonl");
+        write_jsonl(&worker, &[ev("assistant", T1, "opus", "w1", 40, 4, 0, 0)]);
+        herd_job(&control, "job-1", Some("sess"), Some(&worker));
+        herd_job(&control, "job-2", Some("sess"), Some(&worker));
+        herd_job(&control, "job-self", Some("sess"), Some(&path));
+        let r = herded_report(&path, &control, &[]);
+        assert_eq!(r.herding_sessions, 1);
+        assert_eq!(n(r.rows[0].input), 140);
+    }
+
+    #[test]
+    fn the_text_report_has_no_herding_line_and_the_json_count_is_zero_without_jobs() {
+        let (_tmp, path, control) = leader_and_control();
+        let r = herded_report(&path, &control, &[]);
+        assert_eq!(render_json(&r)["herding_sessions"], 0);
+        assert!(render_text(&r).contains("- **Herded Sessions:** 0\n"), "{}", render_text(&r));
     }
 
     #[test]
