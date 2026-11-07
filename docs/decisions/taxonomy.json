@@ -813,6 +813,8 @@
     "contract:knowledge-first-nudge",
     "contract:audit-log",
     "test-scope",
-    "owner-rule"
+    "owner-rule",
+    "contract:full-suite-verify-refusal",
+    "contract:feature-full-suite-proof"
   ]
 }

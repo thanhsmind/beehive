@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-first-lean-decisions\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 5d015f6; reload the product and test \"knowledge-first-lean-decisions\", then either approve uat (\"bee gate --name uat --approved true --lane knowledge-first-lean-decisions\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at f8b8819; reload the product and test \"knowledge-first-lean-decisions\", then either approve uat (\"bee gate --name uat --approved true --lane knowledge-first-lean-decisions\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-07T02:59:04.847Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: knowledge-first-lean-decisions",
-    "asked_at": "2026-11-07T03:56:28.798Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for knowledge-first-lean-decisions (2.82.0 shipped)",
+    "asked_at": "2026-11-07T04:23:37.820Z",
+    "session": "d6c1fe47-33cd-466a-85c3-5d043ba692c0"
   },
   "route": {
     "class": "feature",
