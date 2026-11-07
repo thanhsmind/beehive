@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "paseo-visible-sessions",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"paseo-visible-sessions\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 5e32ec7; capture what settled, then bee close --feature paseo-visible-sessions.",
+  "next_action": "bee close finished \"paseo-visible-sessions\" — feature is closed.",
   "created_at": "2026-11-07T02:43:00.054Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
