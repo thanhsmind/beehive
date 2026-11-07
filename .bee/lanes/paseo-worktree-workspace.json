@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "paseo-worktree-workspace",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"paseo-worktree-workspace\" started at phase \"exploring\".",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "bee close finished \"paseo-worktree-workspace\" — feature is closed.",
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
