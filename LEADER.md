@@ -108,7 +108,11 @@ The rules for the numbers:
 - **Tokens come from telemetry only.** Never estimate, never average,
   never round a guess. The first source is `bee report usage --corr
   <t-hex>`: it prints the header and the per-model table for the task
-  window, and the leader pastes its output. The fallbacks, in order:
+  window, and the leader pastes its output. It also reads each herded
+  worker session of this leader through the job mailbox
+  (`.bee/mailbox/<job>/`: `leader_session` and `activity.json`
+  `transcript_path`) and prints their count on the `Herded Sessions`
+  line. The fallbacks, in order:
   the feature's `.bee/usage/<feature>.json` (`bee-usage/v1`, written by
   a green `bee close`); the session's latest `bee-perf/v1` row in
   `~/.config/beehive/performance.jsonl` (written at each turn end, main
@@ -128,8 +132,11 @@ The rules for the numbers:
   say so on one line. A source that is missing gets "not recorded",
   never a number.
 - **Workers do not report this.** Cells and workers report to the
-  leader as before; their tokens are already in the leader's
-  `subagent_models` and transcript. Only the leader composes the block.
+  leader as before. Tokens of a subagent are already in the leader's
+  `subagent_models` and transcript. Tokens of a herded session (a
+  claude-session sub-session or a pane) are in its own transcript:
+  `bee report usage` reads them through the job mailbox. Only the
+  leader composes the block.
 
 ## ASD-STE100 Simplified Technical English
 

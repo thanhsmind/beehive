@@ -9,7 +9,7 @@ bee:
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
   decisions: ["claude-sub-session-dispatch D1 (a herding pane keeps herding; a Claude worker may be messaged and steered with SendMessage; a native Claude role starts as a Claude Code background sub-session; Codex, Pi and Grok stay herding-only)", "claude-sub-session-dispatch D2 (every dispatch kind on a native Claude role opens a sub-session and returns its result through the bee mailbox that bee herding run reads)", "claude-sub-session-dispatch D3 (dispatch.claude_sessions false keeps the Agent payload; no claude on PATH falls back to the Agent payload with fallback_reason claude_cli_missing; a session-model escalation keeps the Agent payload)"]
-  sources: [docs/history/claude-sub-session-dispatch/CONTEXT.md, docs/history/claude-sub-session-dispatch/plan.md]
+  sources: [docs/history/claude-sub-session-dispatch/CONTEXT.md, docs/history/claude-sub-session-dispatch/plan.md, docs/history/report-usage-herding/plan.md]
   authoritative_for: "bee-herding: the claude-session transport, its spawn argv and poll decisions, steer_to, and the dispatch door switch that selects it"
   owns.code: [packages/bee-rs/crates/bee/src/herding/claude_session.rs]
 ---
@@ -68,6 +68,14 @@ Steering is not a transcript read. The rule that a leader never reads a worker's
 
 `steer_to` also covers a Claude worker that runs in a Paseo pane. After a Paseo `claude` spawn, bee lists the Claude sessions and records `steer_to` only when exactly one session in the run's `--cwd` started after the spawn. With none or several, bee omits `steer_to`.
 
+## Worker tokens in the completion report
+
+A claude-session worker writes its own transcript, outside the leader's transcript and its `subagents/` directory. `bee report usage` reads it through the job mailbox: every `.bee/mailbox/<job>/` under the control root (a worktree reads the main checkout's mailbox) whose `job.json` `leader_session` equals the leader transcript's file stem, and whose `activity.json` `transcript_path` exists, adds that transcript and its `subagents/*.jsonl` to the same per-model rows, inside the same window.
+
+- Each transcript path counts once. A job of another leader, a job with no `leader_session` and a job with a missing transcript are skipped without error.
+- `bee report usage` prints the number of herded sessions it counted (`Herded Sessions` in text, `herding_sessions` in `--json`).
+- This is a usage read of the worker's own transcript. The rule that a leader never reads a worker's transcript to steer it stays in force.
+
 ## The dispatch door switch and fallbacks
 
 (claude-sub-session-dispatch D3)
@@ -87,6 +95,7 @@ Steering is not a transcript read. The rule that a leader never reads a worker's
 - Transport helpers, argv builders, id and listing parsers, poll watch: `packages/bee-rs/crates/bee/src/herding/claude_session.rs`.
 - The run path and its poll loop (`execute_claude_session`, `wait_for_round_claude`): `packages/bee-rs/crates/bee/src/herding/run.rs`.
 - The status line that prints `steer_to`: `packages/bee-rs/crates/bee/src/herding.rs`.
+- The herded-session read in the completion report (`herded_transcripts`): `packages/bee-rs/crates/bee/src/verbs/report_usage.rs`.
 - The dispatch door arm, the switch, the PATH fallback and the command builder (`claude_session_command`): `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`.
 - Paseo loop this transport copies: `docs/knowledge/areas/bee-herding/the-paseo-channel.md`.
 - Feature context and plan: `docs/history/claude-sub-session-dispatch/CONTEXT.md`, `docs/history/claude-sub-session-dispatch/plan.md`.
