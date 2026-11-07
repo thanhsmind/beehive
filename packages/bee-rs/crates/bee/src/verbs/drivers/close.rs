@@ -661,39 +661,29 @@ pub(crate) fn judge_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     Ok(DebtSummary { count: ids.len(), ids })
 }
 
-/// hpf-1: mirrors `has_capture_deferral_decision` below — a logged decision
-/// tagged `judge-deferral` naming the feature lifts the judge-debt
-/// refusal, the same escape D1 gave the scribing-debt door.
-pub(crate) fn has_judge_deferral_decision(root: &Path, feature: &str) -> D<bool> {
+pub(crate) fn deferral_reason(root: &Path, kind: &str, feature: &str) -> D<Option<String>> {
+    if crate::audit::has_entry(root, kind, feature) {
+        return Ok(Some(crate::audit::newest_note(root, kind, feature).unwrap_or_default()));
+    }
     let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
     let filtered = crate::verbs::decisions::filter_decision_events(
         active,
         &crate::verbs::decisions::DecisionFilters {
-            tag: Some("judge-deferral".to_string()),
+            tag: Some(kind.to_string()),
             feature: Some(feature.to_string()),
             ..Default::default()
         },
     )
     .map_err(|_| Delegate)?;
-    Ok(!filtered.is_empty())
+    Ok(filtered.last().map(|d| d.get("decision").and_then(Value::as_str).unwrap_or_default().to_string()))
 }
 
-/// uat-stop-placement D2 (docs/history/uat-stop-placement/CONTEXT.md):
-/// mirrors `has_judge_deferral_decision` above — a logged decision tagged
-/// `uat-deferral` naming the feature lifts the close-time uat-door
-/// refusal, the same escape shape `judge-debt` already established.
+pub(crate) fn has_judge_deferral_decision(root: &Path, feature: &str) -> D<bool> {
+    Ok(deferral_reason(root, "judge-deferral", feature)?.is_some())
+}
+
 pub(crate) fn has_uat_deferral_decision(root: &Path, feature: &str) -> D<bool> {
-    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
-    let filtered = crate::verbs::decisions::filter_decision_events(
-        active,
-        &crate::verbs::decisions::DecisionFilters {
-            tag: Some("uat-deferral".to_string()),
-            feature: Some(feature.to_string()),
-            ..Default::default()
-        },
-    )
-    .map_err(|_| Delegate)?;
-    Ok(!filtered.is_empty())
+    Ok(deferral_reason(root, "uat-deferral", feature)?.is_some())
 }
 
 // uat-stop-placement D4.4/D2, docs/history/uat-approval-reaches-the-door/
@@ -818,45 +808,12 @@ pub(crate) fn enqueue_promote_deferred_record(root: &Path, feature: &str, propos
     );
 }
 
-/// D1 escape hatch: a logged decision tagged `capture-deferral` whose
-/// decision/rationale/alternatives text names the feature lifts the
-/// scribing-debt refusal. Reuses the decisions verb's own read model
-/// (crate::verbs::decisions::active_decisions + filter_decision_events)
-/// rather than hand-parsing decisions.jsonl a second way — same tag-exact,
-/// whole-token feature match `decisions active --tag --feature` already
-/// uses. Cite: CONTEXT.md D1 (precedent: decision c8e25271).
 pub(crate) fn has_capture_deferral_decision(root: &Path, feature: &str) -> D<bool> {
-    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
-    let filtered = crate::verbs::decisions::filter_decision_events(
-        active,
-        &crate::verbs::decisions::DecisionFilters {
-            tag: Some("capture-deferral".to_string()),
-            feature: Some(feature.to_string()),
-            ..Default::default()
-        },
-    )
-    .map_err(|_| Delegate)?;
-    Ok(!filtered.is_empty())
+    Ok(deferral_reason(root, "capture-deferral", feature)?.is_some())
 }
 
-/// D1 escape hatch for the knowledge-freshness door below: mirrors
-/// `has_capture_deferral_decision` above, tagged `knowledge-freshness-deferral`
-/// instead of `capture-deferral` — but returns the deferring decision's own
-/// `decision` text (not just a bool) so the door's detail line can quote the
-/// reason, never a silent pass (D1: "an explicit recorded deferral with
-/// reason, never a silent pass").
 pub(crate) fn has_knowledge_freshness_deferral_decision(root: &Path, feature: &str) -> D<Option<String>> {
-    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
-    let filtered = crate::verbs::decisions::filter_decision_events(
-        active,
-        &crate::verbs::decisions::DecisionFilters {
-            tag: Some("knowledge-freshness-deferral".to_string()),
-            feature: Some(feature.to_string()),
-            ..Default::default()
-        },
-    )
-    .map_err(|_| Delegate)?;
-    Ok(filtered.last().and_then(|d| d.get("decision")).and_then(Value::as_str).map(|s| s.to_string()))
+    deferral_reason(root, "knowledge-freshness-deferral", feature)
 }
 
 // ── D1: knowledge-freshness close door ──────────────────────────────────────
@@ -939,7 +896,7 @@ pub(crate) fn build_knowledge_freshness_door(root: &Path, feature: &str) -> D<Do
             door: "knowledge-freshness",
             blocking: false,
             detail: format!(
-                "deferred — {} stale pointer(s) in touched area(s)/work bundle ({}); a logged knowledge-freshness-deferral decision names \"{feature}\": {reason}",
+                "deferred — {} stale pointer(s) in touched area(s)/work bundle ({}); a logged knowledge-freshness-deferral record names \"{feature}\": {reason}",
                 blocking_items.len(),
                 blocking_items.join("; ")
             ),
@@ -1013,24 +970,8 @@ pub(crate) fn feature_stamped_decision_ids(root: &Path, feature: &str) -> D<Vec<
         .collect())
 }
 
-/// D1 escape hatch for the impact door below: mirrors
-/// `has_knowledge_freshness_deferral_decision` exactly, tagged
-/// `impact-deferral` instead — returns the deferring decision's own
-/// `decision` text so the door's detail line can quote the reason, never a
-/// silent pass (D1: "an explicit recorded deferral with reason, never a
-/// silent pass").
 pub(crate) fn has_impact_deferral_decision(root: &Path, feature: &str) -> D<Option<String>> {
-    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
-    let filtered = crate::verbs::decisions::filter_decision_events(
-        active,
-        &crate::verbs::decisions::DecisionFilters {
-            tag: Some("impact-deferral".to_string()),
-            feature: Some(feature.to_string()),
-            ..Default::default()
-        },
-    )
-    .map_err(|_| Delegate)?;
-    Ok(filtered.last().and_then(|d| d.get("decision")).and_then(Value::as_str).map(|s| s.to_string()))
+    deferral_reason(root, "impact-deferral", feature)
 }
 
 /// doc-impact-synthesis D1b: does a sweep hit's root-relative file fall
@@ -1090,7 +1031,7 @@ pub(crate) fn build_impact_door(root: &Path, feature: &str) -> D<Door> {
             door: "impact",
             blocking: false,
             detail: format!(
-                "deferred — {} citing doc(s) of decision(s) touched by \"{feature}\" ({}); a logged impact-deferral decision names \"{feature}\": {reason}",
+                "deferred — {} citing doc(s) of decision(s) touched by \"{feature}\" ({}); a logged impact-deferral record names \"{feature}\": {reason}",
                 blocking_items.len(),
                 blocking_items.join("; ")
             ),
@@ -1122,36 +1063,12 @@ pub(crate) fn build_impact_door(root: &Path, feature: &str) -> D<Door> {
 // escapes below already use for `feature-local`, and `matches_whole_token`
 // for both the plain-form and short8 citation checks.
 
-/// D2 escape hatch: mirrors `has_impact_deferral_decision` exactly, tagged
-/// `routing-deferral` instead.
 pub(crate) fn has_routing_deferral_decision(root: &Path, feature: &str) -> D<Option<String>> {
-    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
-    let filtered = crate::verbs::decisions::filter_decision_events(
-        active,
-        &crate::verbs::decisions::DecisionFilters {
-            tag: Some("routing-deferral".to_string()),
-            feature: Some(feature.to_string()),
-            ..Default::default()
-        },
-    )
-    .map_err(|_| Delegate)?;
-    Ok(filtered.last().and_then(|d| d.get("decision")).and_then(Value::as_str).map(|s| s.to_string()))
+    deferral_reason(root, "routing-deferral", feature)
 }
 
-/// D3 escape hatch: mirrors `has_impact_deferral_decision` exactly, tagged
-/// `doc-deferral` instead.
 pub(crate) fn has_doc_deferral_decision(root: &Path, feature: &str) -> D<Option<String>> {
-    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
-    let filtered = crate::verbs::decisions::filter_decision_events(
-        active,
-        &crate::verbs::decisions::DecisionFilters {
-            tag: Some("doc-deferral".to_string()),
-            feature: Some(feature.to_string()),
-            ..Default::default()
-        },
-    )
-    .map_err(|_| Delegate)?;
-    Ok(filtered.last().and_then(|d| d.get("decision")).and_then(Value::as_str).map(|s| s.to_string()))
+    deferral_reason(root, "doc-deferral", feature)
 }
 
 /// The bare numeric suffix of a `D<n>` id (`"D12"` -> `Some(12)`).
@@ -1310,7 +1227,7 @@ pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
             door: "routing",
             blocking: false,
             detail: format!(
-                "deferred — {} unrouted locked D-ID(s) ({}); a logged routing-deferral decision names \"{feature}\": {reason}",
+                "deferred — {} unrouted locked D-ID(s) ({}); a logged routing-deferral record names \"{feature}\": {reason}",
                 unrouted.len(),
                 unrouted.join(", ")
             ),
@@ -1674,7 +1591,7 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool)
             door: "doc-deferral",
             blocking: false,
             detail: format!(
-                "deferred — {} deferral line(s) with no registered trigger ({}); a logged doc-deferral decision names \"{feature}\": {reason}",
+                "deferred — {} deferral line(s) with no registered trigger ({}); a logged doc-deferral record names \"{feature}\": {reason}",
                 new_items.len(),
                 messages.join("; ")
             ),
@@ -1739,13 +1656,13 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
             "clear".to_string()
         } else if scribing_blocking {
             format!(
-                "pending — {} behavior_change cell(s) uncaptured ({}); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"{feature}\" to defer it",
+                "pending — {} behavior_change cell(s) uncaptured ({}); run bee-capturing to record the capture, or run bee audit log --kind capture-deferral --feature {feature} --note \"<why>\" to defer it",
                 scribing.count,
                 js_join(&scribing.ids, ", ")
             )
         } else {
             format!(
-                "deferred — {} behavior_change cell(s) uncaptured ({}); a logged capture-deferral decision names \"{feature}\"",
+                "deferred — {} behavior_change cell(s) uncaptured ({}); a logged capture-deferral record names \"{feature}\"",
                 scribing.count,
                 js_join(&scribing.ids, ", ")
             )
@@ -1828,7 +1745,7 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
                 "clear".to_string()
             } else if judge_deferred {
                 format!(
-                    "deferred — {} behavior_change cell(s) capped with no judge record ({}); a logged judge-deferral decision names \"{feature}\"",
+                    "deferred — {} behavior_change cell(s) capped with no judge record ({}); a logged judge-deferral record names \"{feature}\"",
                     judge.count,
                     js_join(&judge.ids, ", ")
                 )
@@ -1905,20 +1822,20 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
             "clear".to_string()
         } else if dissent_deferred {
             format!(
-                "deferred — {} cell(s) carry a dissent with no verdict ({}); a logged dissent-deferral decision names \"{feature}\"",
+                "deferred — {} cell(s) carry a dissent with no verdict ({}); a logged dissent-deferral record names \"{feature}\"",
                 dissent.count,
                 js_join(&dissent.ids, ", ")
             )
         } else if !dissent_archived.is_empty() {
             format!(
-                "{} cell(s) carry a dissent with no verdict ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells dissent-verdict to record a verdict, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it",
+                "{} cell(s) carry a dissent with no verdict ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells dissent-verdict to record a verdict, or run bee audit log --kind dissent-deferral --feature {feature} --note \"<why>\" to defer it",
                 dissent.count,
                 js_join(&dissent.ids, ", "),
                 dissent_archived.len(),
             )
         } else {
             format!(
-                "{} cell(s) carry a dissent with no verdict ({}); run bee cells dissent-verdict to record a verdict, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it",
+                "{} cell(s) carry a dissent with no verdict ({}); run bee cells dissent-verdict to record a verdict, or run bee audit log --kind dissent-deferral --feature {feature} --note \"<why>\" to defer it",
                 dissent.count,
                 js_join(&dissent.ids, ", ")
             )
@@ -1979,20 +1896,20 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
             "clear".to_string()
         } else if leader_check_deferred {
             format!(
-                "deferred — {} cell(s) capped with no leader check ({}); a logged leader-check-deferral decision names \"{feature}\"",
+                "deferred — {} cell(s) capped with no leader check ({}); a logged leader-check-deferral record names \"{feature}\"",
                 leader_check.count,
                 js_join(&leader_check.ids, ", ")
             )
         } else if !leader_check_archived.is_empty() {
             format!(
-                "{} cell(s) capped with no leader check ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells leader-check to record a check, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it",
+                "{} cell(s) capped with no leader check ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells leader-check to record a check, or run bee audit log --kind leader-check-deferral --feature {feature} --note \"<why>\" to defer it",
                 leader_check.count,
                 js_join(&leader_check.ids, ", "),
                 leader_check_archived.len(),
             )
         } else {
             format!(
-                "{} cell(s) capped with no leader check ({}); run bee cells leader-check to record a check, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it",
+                "{} cell(s) capped with no leader check ({}); run bee cells leader-check to record a check, or run bee audit log --kind leader-check-deferral --feature {feature} --note \"<why>\" to defer it",
                 leader_check.count,
                 js_join(&leader_check.ids, ", ")
             )
@@ -2070,7 +1987,7 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
                 } else if gate_approved {
                     "clear".to_string()
                 } else if uat_deferred {
-                    format!("deferred — the uat gate for \"{feature}\" is not yet approved; a logged uat-deferral decision names \"{feature}\"")
+                    format!("deferred — the uat gate for \"{feature}\" is not yet approved; a logged uat-deferral record names \"{feature}\"")
                 } else {
                     format!(
                         "pending — the uat gate for \"{feature}\" is not yet approved; the product is on main now — reload it, test it, then bee gate --name uat --approved true, or fix in the worktree and merge again"
@@ -2955,7 +2872,7 @@ pub(crate) fn close_handler(
                 debt.count,
                 js_join(&debt.ids, ", ")
             ),
-            format!("remedy: run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"{feature}\" to defer it."),
+            format!("remedy: run bee-capturing to record the capture, or run bee audit log --kind capture-deferral --feature {feature} --note \"<why>\" to defer it."),
             format!("next: settle the capture debt above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
@@ -3025,9 +2942,9 @@ pub(crate) fn close_handler(
             })
         });
         let remedy = if archived {
-            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells dissent-verdict to record a verdict for each dissent, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it.")
+            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells dissent-verdict to record a verdict for each dissent, or run bee audit log --kind dissent-deferral --feature {feature} --note \"<why>\" to defer it.")
         } else {
-            format!("remedy: run bee cells dissent-verdict to record a verdict for each dissent on the cells above, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it.")
+            format!("remedy: run bee cells dissent-verdict to record a verdict for each dissent on the cells above, or run bee audit log --kind dissent-deferral --feature {feature} --note \"<why>\" to defer it.")
         };
         let lines = vec![
             format!(
@@ -3131,9 +3048,9 @@ pub(crate) fn close_handler(
             })
         });
         let remedy = if archived {
-            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells leader-check to record a check for each cell, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it (or bee cells reopen if a recorded gap needs rework).")
+            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells leader-check to record a check for each cell, or run bee audit log --kind leader-check-deferral --feature {feature} --note \"<why>\" to defer it (or bee cells reopen if a recorded gap needs rework).")
         } else {
-            format!("remedy: run bee cells leader-check to record a check for each cell above, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it (or bee cells reopen if a recorded gap needs rework).")
+            format!("remedy: run bee cells leader-check to record a check for each cell above, or run bee audit log --kind leader-check-deferral --feature {feature} --note \"<why>\" to defer it (or bee cells reopen if a recorded gap needs rework).")
         };
         let lines = vec![
             format!(
@@ -3217,7 +3134,7 @@ pub(crate) fn close_handler(
             format!(
                 "{CLOSE_KNOWLEDGE_FRESHNESS_PREFIX} \"{feature}\" — close stops at the knowledge-freshness door: {freshness_detail}"
             ),
-            "remedy: fix each pointer above (bee knowledge check names the same findings), or log a decision tagged knowledge-freshness-deferral naming this feature with the reason.".to_string(),
+            format!("remedy: fix each pointer above (bee knowledge check names the same findings), or run bee audit log --kind knowledge-freshness-deferral --feature {feature} --note \"<why>\"."),
             format!("next: settle the stale pointer(s) above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
@@ -3243,7 +3160,7 @@ pub(crate) fn close_handler(
             .unwrap_or_default();
         let lines = vec![
             format!("{CLOSE_IMPACT_PREFIX} \"{feature}\" — close stops at the impact door: {impact_detail}"),
-            "remedy: fix or annotate each citing doc above, or log a decision tagged impact-deferral naming this feature with the reason.".to_string(),
+            format!("remedy: fix or annotate each citing doc above, or run bee audit log --kind impact-deferral --feature {feature} --note \"<why>\"."),
             format!("next: settle the citation(s) above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
@@ -3269,7 +3186,7 @@ pub(crate) fn close_handler(
             .unwrap_or_default();
         let lines = vec![
             format!("{CLOSE_ROUTING_PREFIX} \"{feature}\" — close stops at the routing door: {routing_detail}"),
-            "remedy: cite the unrouted D-ID(s) in a docs/knowledge/ bundle file, or log a decision tagged routing-deferral naming this feature with the reason.".to_string(),
+            format!("remedy: cite the unrouted D-ID(s) in a docs/knowledge/ bundle file, or run bee audit log --kind routing-deferral --feature {feature} --note \"<why>\"."),
             format!("next: settle the unrouted D-ID(s) above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
@@ -3295,7 +3212,7 @@ pub(crate) fn close_handler(
             format!(
                 "{CLOSE_DOC_DEFERRAL_PREFIX} \"{feature}\" — close stops at the doc-deferral door: {doc_deferral_detail}"
             ),
-            "remedy: register the condition with `bee triggers add --decision <id> --condition \"...\"` and cite it inline, or log a decision tagged doc-deferral naming this feature with the reason.".to_string(),
+            format!("remedy: register the condition with `bee triggers add --decision <id> --condition \"...\"` and cite it inline, or run bee audit log --kind doc-deferral --feature {feature} --note \"<why>\"."),
             format!("next: settle the deferral line(s) above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
@@ -5430,6 +5347,46 @@ mod tests {
         // A uat-deferral decision naming a DIFFERENT feature never lifts
         // THIS feature's block.
         assert!(!has_uat_deferral_decision(root, "elsewhere").unwrap());
+    }
+
+    #[test]
+    fn every_deferral_reader_takes_an_audit_row_and_a_legacy_decision_row() {
+        let kinds = [
+            "knowledge-freshness-deferral",
+            "impact-deferral",
+            "routing-deferral",
+            "doc-deferral",
+        ];
+        let read: [fn(&Path, &str) -> D<Option<String>>; 4] = [
+            has_knowledge_freshness_deferral_decision,
+            has_impact_deferral_decision,
+            has_routing_deferral_decision,
+            has_doc_deferral_decision,
+        ];
+        for (kind, read) in kinds.iter().zip(read) {
+            let audit = tempfile::tempdir().unwrap();
+            assert_eq!(read(audit.path(), "demo").unwrap(), None);
+            crate::audit::append(audit.path(), kind, "demo", None, "audit reason", "test", None).unwrap();
+            assert_eq!(read(audit.path(), "demo").unwrap(), Some("audit reason".to_string()), "{kind}");
+            assert_eq!(read(audit.path(), "elsewhere").unwrap(), None, "{kind}");
+
+            let legacy = tempfile::tempdir().unwrap();
+            w(
+                legacy.path(),
+                ".bee/decisions.jsonl",
+                &format!("{{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-11-01T00:00:00.000Z\",\"decision\":\"legacy reason for demo\",\"rationale\":\"r\",\"tags\":[\"{kind}\"],\"scope\":\"repo\"}}\n"),
+            );
+            assert_eq!(read(legacy.path(), "demo").unwrap(), Some("legacy reason for demo".to_string()), "{kind}");
+        }
+    }
+
+    #[test]
+    fn the_capture_door_reader_takes_an_audit_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(!has_capture_deferral_decision(tmp.path(), "demo").unwrap());
+        crate::audit::append(tmp.path(), "capture-deferral", "demo", None, "later", "test", None).unwrap();
+        assert!(has_capture_deferral_decision(tmp.path(), "demo").unwrap());
+        assert!(!has_capture_deferral_decision(tmp.path(), "elsewhere").unwrap());
     }
 
     /// End to end: `bee close` on a standard-lane feature under

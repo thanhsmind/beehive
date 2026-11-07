@@ -172,7 +172,7 @@ pub(crate) fn scribing_debt_close_door(
         return Ok(Ok(ScribingDoor::Clear));
     }
     Ok(Err(format!(
-        "set: refusing to enter \"compounding-complete\" for feature \"{feature}\" \u{2014} {} capped behavior_change cell(s) have not been synced to their area spec: {}.\n\"compounding-complete\" asserts that scribing already ran for them. It has not.\nFIX: run bee-capturing to merge the settled behavior, then `bee state scribing-run --feature {feature} ...` to stamp it.\nIf the behavior genuinely belongs in no spec, retry with --waive-scribing-debt \u{2014} it is permitted, but it logs a decision naming every cell you waived; the same escape bee close accepts also works here \u{2014} log a decision tagged capture-deferral naming \"{feature}\" first.",
+        "set: refusing to enter \"compounding-complete\" for feature \"{feature}\" \u{2014} {} capped behavior_change cell(s) have not been synced to their area spec: {}.\n\"compounding-complete\" asserts that scribing already ran for them. It has not.\nFIX: run bee-capturing to merge the settled behavior, then `bee state scribing-run --feature {feature} ...` to stamp it.\nIf the behavior genuinely belongs in no spec, retry with --waive-scribing-debt \u{2014} it is permitted, but it logs a decision naming every cell you waived; the same escape bee close accepts also works here \u{2014} run bee audit log --kind capture-deferral --feature {feature} --note \"<why>\" first.",
         debt.count,
         js_join(&debt.ids, ", "),
     )))
@@ -203,7 +203,7 @@ pub(crate) fn scribing_debt_swap_door(
         return Ok(Ok(ScribingDoor::Clear));
     }
     Ok(Err(format!(
-        "set: refusing to swap away from feature \"{outgoing_feature}\" \u{2014} {} capped behavior_change cell(s) have not been synced to their area spec: {}.\nSetting --feature abandons \"{outgoing_feature}\" without ever reaching its close \u{2014} the scribing debt would go silent, with no session left to hit the compounding-complete wall for it.\nFIX: run bee-capturing to merge the settled behavior into its area spec, then `bee state scribing-run --feature {outgoing_feature} ...` to stamp it.\nIf the behavior genuinely belongs in no spec, retry with --waive-scribing-debt \u{2014} it is permitted, but it logs a decision naming every cell you waived; the same escape bee close accepts also works here \u{2014} log a decision tagged capture-deferral naming \"{outgoing_feature}\" first.",
+        "set: refusing to swap away from feature \"{outgoing_feature}\" \u{2014} {} capped behavior_change cell(s) have not been synced to their area spec: {}.\nSetting --feature abandons \"{outgoing_feature}\" without ever reaching its close \u{2014} the scribing debt would go silent, with no session left to hit the compounding-complete wall for it.\nFIX: run bee-capturing to merge the settled behavior into its area spec, then `bee state scribing-run --feature {outgoing_feature} ...` to stamp it.\nIf the behavior genuinely belongs in no spec, retry with --waive-scribing-debt \u{2014} it is permitted, but it logs a decision naming every cell you waived; the same escape bee close accepts also works here \u{2014} run bee audit log --kind capture-deferral --feature {outgoing_feature} --note \"<why>\" first.",
         debt.count,
         js_join(&debt.ids, ", "),
     )))
@@ -1067,6 +1067,27 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
         })?;
     } else if target.lane().is_some() {
         durable_stamp_unreachable = true;
+    }
+    if actor == "auto" {
+        let gate_names = if merge { "shape, execution".to_string() } else { name.clone() };
+        let note = format!(
+            "gate {gate_names} set to {approved} by auto: {}",
+            reason.as_deref().unwrap_or_default()
+        );
+        crate::audit::append(
+            root,
+            "gate-bypass",
+            routed_feature.as_deref().unwrap_or_default(),
+            None,
+            &note,
+            "bee gate",
+            bypass_level.as_deref(),
+        )
+        .map_err(|e| {
+            Err2::Msg(format!(
+                "gate: the gate was set but its audit row could not be written ({e}). FIX: run `bee audit log --kind gate-bypass --feature <f> --note \"{note}\"`."
+            ))
+        })?;
     }
     drop(locks);
     // merge-ready-fact D2: `bee gate --name uat` is the one verb that flips

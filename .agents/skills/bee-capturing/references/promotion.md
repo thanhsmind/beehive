@@ -177,7 +177,10 @@ bee decisions log --decision "..." --rationale "..." --relation supersedes:<id>|
 ```
 
 - Log only decisions with forward force: conventions adopted,
-  approaches rejected with reasons, constraints discovered.
+  approaches rejected with reasons, constraints discovered. Gate audit,
+  close/merge/release/scribing/promote/handoff bookkeeping and every
+  `*-deferral` door note go to
+  `bee audit log --kind <k> --feature <f> --note "<text>"`, never to a decision.
 - `--relation` is required: `supersedes:<id>` retires an earlier
   decision here (or use `bee decisions supersede` instead — never
   rewrite the log), `touches:<id>` notes a related one without

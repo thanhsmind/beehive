@@ -174,7 +174,8 @@ pub(crate) fn run_active_or_search(
             cell: nonempty(cell),
             feature: nonempty(feature),
         };
-        let mut decisions = filter_decision_events(active_decisions(&ctx.root, all)?, &filters)?;
+        let visible = crate::audit::hide_audit_tagged(active_decisions(&ctx.root, all)?, filters.tag.as_deref());
+        let mut decisions = filter_decision_events(visible, &filters)?;
         if let Some(n) = recent {
             let take = if n >= decisions.len() as f64 { decisions.len() } else { n as usize };
             decisions.truncate(take);
@@ -570,6 +571,13 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     }
     if js_trim(&p.rationale).is_empty() {
         return Ok(Out::Thrown("logDecision: rationale is required.".into()));
+    }
+    let requested_tags: Vec<String> =
+        p.tags.iter().flatten().map(|t| js_trim(t).to_lowercase()).collect();
+    if let Some(tag) = crate::audit::first_audit_only_tag(&requested_tags) {
+        return Ok(Out::Thrown(format!(
+            "decisions log: --tags {tag} is an audit kind, not a decision tag — bookkeeping goes to the audit log. FIX: run `bee audit log --kind {tag} --feature <f> --note \"<text>\"` instead."
+        )));
     }
     for (field, value) in [
         ("decision", Some(p.decision.as_str())),

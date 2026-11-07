@@ -97,7 +97,7 @@ pub(crate) const HANDOFF_ACTION_CHARS: usize = 400;
 /// two-line header; this bounds it so a future verb explosion is caught
 /// here rather than silently paid for on every session.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) const COMMAND_SURFACE_BUDGET_CHARS: usize = 2660;
+pub(crate) const COMMAND_SURFACE_BUDGET_CHARS: usize = 2700;
 
 /// One line per command GROUP, path-sorted (dotted name, ascending) for
 /// byte-stability across regenerations that reorder the source array. A
@@ -925,7 +925,8 @@ pub fn build_session_preamble_within(
         blocks.push(("Critical patterns (digest)", digest_start, lines.len()));
     }
 
-    let decisions = active_decisions(root, Some(3));
+    let decisions: Vec<Value> =
+        crate::audit::hide_audit_tagged(active_decisions(root, None), None).into_iter().take(3).collect();
     if !decisions.is_empty() {
         let decisions_start = lines.len();
         lines.push(String::new());

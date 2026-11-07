@@ -15,6 +15,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
+pub mod audit;
 pub mod backlog;
 pub mod brief;
 pub mod blind;
@@ -98,6 +99,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = decisions::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = audit::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = backlog::try_native(args, t0) {

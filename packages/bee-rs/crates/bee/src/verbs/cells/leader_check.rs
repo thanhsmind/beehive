@@ -17,7 +17,7 @@
 // 5. D4: Applies to every lane and every capped cell.
 // 6. D5: Grandfathered by LEADER_CHECK_DOOR_INTRODUCED_AT.
 // 7. D6: Reached by two doors: bee close and bee worktree merge.
-// 8. D7: Named escape: a logged decision tagged leader-check-deferral.
+// 8. D7: Named escape: a leader-check-deferral record.
 
 #![allow(unused_imports)]
 #![allow(dead_code)]
@@ -462,24 +462,11 @@ pub(crate) fn feature_leader_check_debt(
     Ok(crate::verbs::drivers::DebtSummary { count: ids.len(), ids })
 }
 
-/// D7: The named escape — a logged decision tagged `leader-check-deferral`
-/// naming the feature lifts the refusal at BOTH doors.
 pub(crate) fn has_leader_check_deferral_decision(
     root: &Path,
     feature: &str,
 ) -> Result<bool, crate::verbs::drivers::Delegate> {
-    let active = crate::verbs::decisions::active_decisions(root, false)
-        .map_err(|_| crate::verbs::drivers::Delegate)?;
-    let filtered = crate::verbs::decisions::filter_decision_events(
-        active,
-        &crate::verbs::decisions::DecisionFilters {
-            tag: Some("leader-check-deferral".to_string()),
-            feature: Some(feature.to_string()),
-            ..Default::default()
-        },
-    )
-    .map_err(|_| crate::verbs::drivers::Delegate)?;
-    Ok(!filtered.is_empty())
+    Ok(crate::verbs::drivers::deferral_reason(root, "leader-check-deferral", feature)?.is_some())
 }
 
 #[cfg(test)]

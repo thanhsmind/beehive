@@ -49,6 +49,7 @@ pub const PORTED: &[&str] = &[
     "decisions tag",
     "decisions redact",
     "decisions archive",
+    "audit log|list",
     "capture count",
     "capture list",
     "capture add",

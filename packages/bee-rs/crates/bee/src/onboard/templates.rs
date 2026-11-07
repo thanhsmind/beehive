@@ -27,6 +27,7 @@ pub const GITIGNORE_MARKER_END: &str = "# BEE:END";
 pub const GITATTRIBUTES_BLOCK_PATTERNS: &[&str] = &[
     ".bee/decisions.jsonl merge=union",
     ".bee/decisions-archive.jsonl merge=union",
+    ".bee/audit.jsonl merge=union",
     ".bee/backlog.jsonl merge=union",
     ".bee/review-candidates.jsonl merge=union",
     ".bee/deferred-queue.jsonl merge=union",

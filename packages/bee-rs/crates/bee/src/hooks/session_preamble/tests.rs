@@ -493,6 +493,21 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("### Recent decisions\n- «a» (2026-01-01)"), "{text}");
     }
 
+    #[test]
+    fn recent_decisions_skip_rows_tagged_with_an_audit_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/state.json", r#"{"phase":"planning"}"#);
+        write(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"type\":\"decide\",\"id\":\"d1\",\"decision\":\"real rule\",\"date\":\"2026-01-01\"}\n{\"type\":\"decide\",\"id\":\"d2\",\"decision\":\"gate audit line\",\"date\":\"2026-01-02\",\"tags\":[\"gate-bypass\"]}\n",
+        );
+        let text = render(root);
+        assert!(text.contains("real rule"), "{text}");
+        assert!(!text.contains("gate audit line"), "{text}");
+    }
+
     /// model-role-split D6 (store 97ce5225), closing the gap mrs-14 named.
     ///
     /// A cell marked the NEW way — `escalate: true`, no `tier` key at all —

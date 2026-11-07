@@ -4,7 +4,7 @@
   "skills": [
     {
       "name": "bee-capturing",
-      "sha256": "242f6676cd103ab4dbd96be0a4b44919e4a1cf4cbadbad320ad79ec8e315d5b1"
+      "sha256": "20727d8d5d9f6649e425157e6aeec6f2ac45574b490ffbc330d13eb3a7c2d7fc"
     },
     {
       "name": "bee-deploying",
@@ -28,7 +28,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "52781a784d45b540cba332de1d2c310df04d138ca22814f9f56d12240e4b1338"
+      "sha256": "ffe41a67e8901e4c7106ef3956564c65cacea44ee0cf07b991f530085add2a54"
     },
     {
       "name": "bee-how",

@@ -366,7 +366,7 @@ pub(crate) fn merge_stage(
                 return Err(refuse_merge(
                     "WORKTREE_MERGE_DISSENT_DEBT",
                     format!(
-                        "worktree {id}'s feature \"{feature}\" has {} cell(s) carrying a dissent with no recorded verdict ({}) — \"bee worktree merge\" refuses until each one is answered: bee cells dissent-verdict --id <id> --verdict accept|reject|escalate --reason \"<why>\". To defer instead, log a decision tagged dissent-deferral naming \"{feature}\" — the same escape \"bee close\"'s dissent-debt door reads.",
+                        "worktree {id}'s feature \"{feature}\" has {} cell(s) carrying a dissent with no recorded verdict ({}) — \"bee worktree merge\" refuses until each one is answered: bee cells dissent-verdict --id <id> --verdict accept|reject|escalate --reason \"<why>\". To defer instead, run bee audit log --kind dissent-deferral --feature {feature} --note \"<why>\" — the same escape \"bee close\"'s dissent-debt door reads.",
                         dissent.count,
                         crate::verbs::drivers::js_join(&dissent.ids, ", "),
                     ),
@@ -419,7 +419,7 @@ pub(crate) fn merge_stage(
                 return Err(refuse_merge(
                     "WORKTREE_MERGE_LEADER_CHECK_DEBT",
                     format!(
-                        "worktree {id}'s feature \"{feature}\" has {} cell(s) capped with no leader check ({}) — \"bee worktree merge\" refuses until each one is checked: bee cells leader-check. To defer instead, log a decision tagged leader-check-deferral naming \"{feature}\" — the same escape \"bee close\"'s leader-check door reads.",
+                        "worktree {id}'s feature \"{feature}\" has {} cell(s) capped with no leader check ({}) — \"bee worktree merge\" refuses until each one is checked: bee cells leader-check. To defer instead, run bee audit log --kind leader-check-deferral --feature {feature} --note \"<why>\" — the same escape \"bee close\"'s leader-check door reads.",
                         leader_check.count,
                         crate::verbs::drivers::js_join(&leader_check.ids, ", "),
                     ),

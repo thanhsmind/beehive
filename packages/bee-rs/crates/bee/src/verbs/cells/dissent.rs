@@ -578,32 +578,11 @@ pub(crate) fn feature_dissent_debt(
     Ok(crate::verbs::drivers::DebtSummary { count: ids.len(), ids })
 }
 
-/// The named escape, the fourth of its shape: a logged decision tagged
-/// `dissent-deferral` whose text names the feature lifts the dissent-debt
-/// refusal at BOTH doors. Mirrors `has_judge_deferral_decision`,
-/// `has_capture_deferral_decision` and `has_uat_deferral_decision`
-/// (drivers/close.rs) exactly: the decisions verb's own read model, the same
-/// tag-exact, whole-token feature match the decisions read path already uses,
-/// and no new matching rule. It lives here rather than beside its three
-/// siblings only because the merge door must reach the SAME escape. An escape
-/// that worked at one door and not the other would be neither the judge-debt
-/// shape a2affcba names nor the proof-debt shape merge has.
 pub(crate) fn has_dissent_deferral_decision(
     root: &Path,
     feature: &str,
 ) -> Result<bool, crate::verbs::drivers::Delegate> {
-    let active = crate::verbs::decisions::active_decisions(root, false)
-        .map_err(|_| crate::verbs::drivers::Delegate)?;
-    let filtered = crate::verbs::decisions::filter_decision_events(
-        active,
-        &crate::verbs::decisions::DecisionFilters {
-            tag: Some("dissent-deferral".to_string()),
-            feature: Some(feature.to_string()),
-            ..Default::default()
-        },
-    )
-    .map_err(|_| crate::verbs::drivers::Delegate)?;
-    Ok(!filtered.is_empty())
+    Ok(crate::verbs::drivers::deferral_reason(root, "dissent-deferral", feature)?.is_some())
 }
 
 #[cfg(test)]
