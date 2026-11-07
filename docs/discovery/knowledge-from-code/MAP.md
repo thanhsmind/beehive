@@ -1,0 +1,67 @@
+# Knowledge from code — discovery map
+
+## Destination
+
+A document-homes rule, built as a portable bee mechanic: four kinds of
+knowledge live in docs/knowledge (vision, glossary, area map with
+boundaries and invariants, decisions, patterns), three live in code
+(verify features and tests, generated contracts, runnable runbooks);
+every knowledge entry anchors to code and carries a freshness grade
+derived from git; updates ride the cap and close doors; the mechanic
+ships to every host through onboarding. Arrived means the mechanic is
+in the binary and skills, and bee's own bundle has been cut to it.
+
+## Notes
+
+- Owner framing (2026-11-07): knowledge is the new-hire onboarding
+  layer beside code. Code is the always-current document; knowledge
+  supplements it with what code cannot say; the agent pulls it when it
+  needs more understanding, and must be able to see how fresh it is.
+- Measured on 2026-11-07, before this map: bundle 524k words (areas
+  327k, patterns 81k, work 116k); 95 of 139 area concepts pointed at
+  code that had changed since the concept was last touched; knowledge
+  search invoked 89 times in 35,478 CLI calls; promote proposals 400
+  generated, 40 unapplied; 114 capped cells never scribed.
+- The 2026-11-07 pointer sweep (commit 9861c1b43) repointed 398 dead
+  pointers; it fixed addresses, not the narrative.
+- Verify features (`.bee/verify/verify-app/features/`) are the
+  behaviour-spec home the owner accepted: tests of features, anchored
+  to code as the newest document.
+
+## Decisions so far
+
+- D1 (2b11f025): knowledge is the onboarding layer, pulled on demand,
+  freshness visible at pull time — logged before this map.
+- D2 (93e1001d): document homes rule — four kinds in OKF, three in
+  code, every area entry anchored.
+- D3 (27ad96a5): freshness derived from git — verified_at +
+  verified_commit, grades confirmed / suspect / orphan, printed by
+  search, show, context, preamble.
+- D4 (e7e80d78): updates ride existing doors — cap sync door
+  re-confirms anchored concepts, promote proposes patterns and
+  invariant bullets only, work/ leaves the bundle.
+- D5 (28fb074d): delete before write — first slice removes work/ and
+  cuts areas; glossary and event catalogue wait on measurement.
+- D6 (e7e133dc): pull rate is the measure, reported per feature.
+- D7 (6a502ad0): the mechanic is portable through onboarding; bee's
+  content cut is a separate bee-only slice.
+
+## Not yet specified
+
+- What an anchor is, exactly — tickets/001-anchor-definition.md
+- How the area cut preserves the reasons buried in narrative —
+  tickets/002-area-cut-without-losing-reasons.md
+- Whether an event catalogue can be generated from code —
+  tickets/003-event-catalogue-from-code.md (research, deferred by D5)
+- Glossary form and home — tickets/004-glossary-form.md (deferred by D5)
+- Whether patterns need a freshness grade at all, or only a date
+  (agent-suspected: date only, patterns are events)
+- Whether the preamble's critical-patterns digest shrinks once areas
+  carry invariants (agent-suspected)
+
+## Out of scope
+
+- Pushing the knowledge context manifest into every cell brief
+  (rejected in D1; pull model).
+- Instrumenting cell outcomes by knowledge-used arm before pull rate is
+  read (rejected in D6).
