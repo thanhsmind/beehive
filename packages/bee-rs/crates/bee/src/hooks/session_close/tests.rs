@@ -2295,3 +2295,138 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(lines[0]["text"], "change the third thing");
     }
 
+
+    fn claude_turn(user: &str, assistant_texts: &[&str]) -> Vec<Value> {
+        let mut events = vec![json!({"type":"user","message":{"content":user}})];
+        for text in assistant_texts {
+            events.push(json!({"type":"assistant","message":{"content":[{"type":"text","text":text}]}}));
+        }
+        events
+    }
+
+    #[test]
+    fn agreement_without_a_verified_label_warns() {
+        let events = claude_turn("use a cache?", &["You're right, a cache is the way to go."]);
+        let warning = unverified_agreement_warning(&events).expect("warns");
+        assert!(warning.contains("agents-verify-before-agreeing"), "{warning}");
+        assert!(!warning.contains('\n'));
+    }
+
+    #[test]
+    fn agreement_with_a_verified_label_stays_quiet() {
+        let events = claude_turn("use a cache?", &["Good idea. [verified] the loader reads the file twice."]);
+        assert_eq!(unverified_agreement_warning(&events), None);
+    }
+
+    #[test]
+    fn a_conditional_first_reaction_stays_quiet() {
+        let events = claude_turn("use a cache?", &["Sounds right; checking the loader first."]);
+        assert_eq!(unverified_agreement_warning(&events), None);
+    }
+
+    #[test]
+    fn vietnamese_agreement_without_a_label_warns() {
+        let events = claude_turn("dùng cache nhé?", &["Ý này hợp lý, em làm luôn."]);
+        assert!(unverified_agreement_warning(&events).is_some());
+    }
+
+    #[test]
+    fn a_reply_with_no_agreement_phrase_stays_quiet() {
+        let events = claude_turn("use a cache?", &["The loader reads the file twice, so a cache helps."]);
+        assert_eq!(unverified_agreement_warning(&events), None);
+    }
+
+    #[test]
+    fn agreement_in_an_earlier_turn_stays_quiet() {
+        let mut events = claude_turn("use a cache?", &["You're right, a cache is the way to go."]);
+        events.extend(claude_turn("now rename it", &["Renamed the function."]));
+        assert_eq!(unverified_agreement_warning(&events), None);
+    }
+
+    #[test]
+    fn agreement_in_any_message_of_the_last_turn_warns() {
+        let mut events = claude_turn("use a cache?", &["I agree with that plan."]);
+        events.push(json!({"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{}}]}}));
+        events.push(json!({"type":"user","message":{"content":[{"type":"tool_result","content":"ok"}]}}));
+        events.push(json!({"type":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}));
+        assert!(unverified_agreement_warning(&events).is_some());
+    }
+
+    #[test]
+    fn codex_shaped_agreement_without_a_label_warns() {
+        let events = vec![
+            json!({"type":"event_msg","payload":{"type":"task_started"}}),
+            json!({"type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"Makes sense, I will wire it up."}]}}),
+        ];
+        assert!(unverified_agreement_warning(&events).is_some());
+    }
+
+    #[test]
+    fn codex_agreement_before_the_last_turn_start_stays_quiet() {
+        let events = vec![
+            json!({"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Makes sense."}]}}),
+            json!({"type":"event_msg","payload":{"type":"task_started"}}),
+            json!({"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Wired it up."}]}}),
+        ];
+        assert_eq!(unverified_agreement_warning(&events), None);
+    }
+
+    #[cfg(unix)]
+    fn stdout_of(f: impl FnOnce()) -> String {
+        use std::os::fd::AsRawFd;
+        let sink = tempfile::tempfile().unwrap();
+        let saved = unsafe { libc::dup(1) };
+        unsafe { libc::dup2(sink.as_raw_fd(), 1) };
+        f();
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        unsafe { libc::dup2(saved, 1) };
+        unsafe { libc::close(saved) };
+        use std::io::{Read, Seek};
+        let mut sink = sink;
+        sink.rewind().unwrap();
+        let mut out = String::new();
+        sink.read_to_string(&mut out).unwrap();
+        out
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_hook_output_carries_the_unverified_agreement_warning() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[
+                r#"{"type":"user","message":{"content":"use a cache?"}}"#,
+                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"You're right, a cache is the way to go."}]}}"#,
+            ],
+        );
+        let stdin = serde_json::to_string(&json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        }))
+        .unwrap();
+
+        let mut result = Err(());
+        let out = stdout_of(|| result = run_inner(&[], &stdin));
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        assert_eq!(result, Ok(()));
+        assert!(out.contains("agents-verify-before-agreeing"), "{out}");
+        assert!(!out.contains("\"decision\":\"block\""), "{out}");
+    }

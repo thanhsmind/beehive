@@ -150,6 +150,7 @@ A plain question needs neither.
 - Never agree with a proposal until its key assumption is `[verified]`;
   the first reaction to an unchecked idea is conditional ("sounds
   right; checking X first").
+  The Stop hook warns when a reply agrees without a `[verified]` label.
 - When the user's direction conflicts with the code, never say "you are
   wrong": state the goal, what the code does and why with file:line,
   then the options.
