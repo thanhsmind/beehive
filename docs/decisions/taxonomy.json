@@ -824,6 +824,7 @@
     "workspace-protocol",
     "contract:workspace-protocol",
     "contract:dispatch-receipt",
-    "catalog"
+    "catalog",
+    "contract:protocol-init"
   ]
 }
