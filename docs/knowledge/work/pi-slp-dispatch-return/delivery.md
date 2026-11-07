@@ -7,7 +7,7 @@ bee:
   id: pi-slp-dispatch-return-delivery
   lifecycle: active
   required_context: [docs/history/pi-slp-dispatch-return/CONTEXT.md, docs/history/pi-slp-dispatch-return/plan.md]
-  sources: [docs/history/pi-slp-dispatch-return/CONTEXT.md, docs/history/pi-slp-dispatch-return/plan.md, .bee/cells/psdr-1.json, .bee/cells/psdr-2.json]
+  sources: [docs/history/pi-slp-dispatch-return/CONTEXT.md, docs/history/pi-slp-dispatch-return/plan.md, cell psdr-1 (trace purged from .bee/cells/), cell psdr-2 (trace purged from .bee/cells/)]
 ---
 
 # pi-slp-dispatch-return — Delivery

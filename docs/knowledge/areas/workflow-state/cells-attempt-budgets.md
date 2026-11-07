@@ -102,7 +102,7 @@ against the unit's new attempts (self-correcting-loop D2).
 
 - Self-correcting loop (B26-B32, R41-R50): attempt ledger `appendAttempt` /
   exported `normalizeFailureSignature` in
-  `packages/bee/lib/cells.mjs` (byte-mirrored to `.bee/bin/lib/`),
+  `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly packages/bee/lib/cells.mjs) (byte-mirrored to `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it)),
   invoked from `recordVerify` (both outcomes) and `blockCell`; lifetime
   budgets `checkCellBudgets` runs inside `claimCellCrossSession`'s O_EXCL
   critical section with unwind-on-refusal, typed `CELL_BUDGET_EXHAUSTED` /
@@ -113,8 +113,8 @@ against the unit's new attempts (self-correcting-loop D2).
   pah-2 precedent), behavior-class completion teeth (evidence length +
   tolerant duplicate scan) in `capCell`; judge-verdict schema
   `validateJudgeVerdict` / `deriveModelIndependence` in new
-  `packages/bee/lib/judge.mjs` (byte-mirrored to
-  `.bee/bin/lib/`), recorder `recordJudgeVerdict` in `cells.mjs`, CLI verb
+  `packages/bee-rs/crates/bee/src/verbs/cells/judge.rs` (formerly packages/bee/lib/judge.mjs) (byte-mirrored to
+  `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it)), recorder `recordJudgeVerdict` in `cells.mjs`, CLI verb
   `cells judge-record --id --file <verdict.json> [--builder-model]
   [--judge-model]`; goal-check judge-tier table single-homed in
   `skills/bee-hive/references/routing-and-contracts.md` with a one-line
@@ -123,5 +123,5 @@ against the unit's new attempts (self-correcting-loop D2).
   `AGENTS.md` + `templates/AGENTS.block.md`, the scribing skill — today `bee-capturing`). Evidence:
   `docs/history/self-correcting-loop/CONTEXT.md` (D1-D6, Validating
   amendments Δ1-Δ6, decisions 84e49851/1cb27fbf); traces
-  `.bee/cells/scl-{1..5}.json`; reports
+  cell traces scl-{1..5} (purged from .bee/cells/); reports
   `docs/history/self-correcting-loop/reports/scl-{1..5}.md`.

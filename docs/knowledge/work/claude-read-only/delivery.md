@@ -7,7 +7,7 @@ bee:
   id: claude-read-only-delivery
   lifecycle: active
   required_context: [docs/history/claude-read-only/CONTEXT.md, docs/history/claude-read-only/plan.md]
-  sources: [docs/history/claude-read-only/CONTEXT.md, docs/history/claude-read-only/plan.md, .bee/cells/cro-1.json]
+  sources: [docs/history/claude-read-only/CONTEXT.md, docs/history/claude-read-only/plan.md, cell cro-1 (trace purged from .bee/cells/)]
 ---
 
 # claude-read-only — Delivery

@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [docs/history/leader-check-windows-paths/plan.md]
-  sources: [docs/history/leader-check-windows-paths/plan.md, .bee/cells/lcwp-1.json]
+  sources: [docs/history/leader-check-windows-paths/plan.md, cell lcwp-1 (trace purged from .bee/cells/)]
 ---
 
 # leader-check-windows-paths — Delivery

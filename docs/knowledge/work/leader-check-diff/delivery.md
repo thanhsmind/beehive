@@ -7,7 +7,7 @@ bee:
   id: leader-check-diff-delivery
   lifecycle: active
   required_context: [.bee/lanes/leader-check-diff.json]
-  sources: [.bee/lanes/leader-check-diff.json, .bee/cells/lcdiff-1.json]
+  sources: [.bee/lanes/leader-check-diff.json, cell lcdiff-1 (trace purged from .bee/cells/)]
 ---
 
 # leader-check-diff — Delivery

@@ -7,7 +7,7 @@ bee:
   id: paseo-leverage-delivery
   lifecycle: active
   required_context: [docs/history/paseo-leverage/CONTEXT.md, docs/history/paseo-leverage/plan.md]
-  sources: [docs/history/paseo-leverage/CONTEXT.md, docs/history/paseo-leverage/plan.md, .bee/cells/pl-1.json, .bee/cells/pl-2.json, .bee/cells/pl-3.json, .bee/cells/pl-4.json, .bee/cells/pl-5.json, .bee/cells/pl-6.json, .bee/cells/pl-7.json]
+  sources: [docs/history/paseo-leverage/CONTEXT.md, docs/history/paseo-leverage/plan.md, cell pl-1 (trace purged from .bee/cells/), cell pl-2 (trace purged from .bee/cells/), cell pl-3 (trace purged from .bee/cells/), cell pl-4 (trace purged from .bee/cells/), cell pl-5 (trace purged from .bee/cells/), cell pl-6 (trace purged from .bee/cells/), cell pl-7 (trace purged from .bee/cells/)]
 ---
 
 # paseo-leverage — Delivery

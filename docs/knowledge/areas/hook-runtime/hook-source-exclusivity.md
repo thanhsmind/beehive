@@ -64,11 +64,11 @@ after the package is known inactive. User and foreign hook entries survive.
 ## Pointers (implementation)
 
 - Doctor row: `doctorHookSourcesCodex` in `the bee binary`.
-  Both-present regression test: `packages/bee/tests/test_bee_cli.mjs`
+  Both-present regression test: packages/bee/tests/test_bee_cli.mjs (retired with the Node runtime, 2026-08-02)
   (single-source baseline + both-present fixture). Evidence:
-  `.bee/cells/i54-closeout-5.json`.
+  cell i54-closeout-5 (trace purged from .bee/cells/).
 
-- Parity evidence: `.bee/cells/codex-hook-state-parity-{2,3}.json` and
+- Parity evidence: cell traces codex-hook-state-parity-{2,3} (purged from .bee/cells/) and
   `docs/history/codex-hook-state-parity/reports/`.
 
 - Evidence: `docs/history/codex-runtime-parity/` (red-baseline.md, cell reports);

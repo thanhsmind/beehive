@@ -111,6 +111,6 @@ location with a friendly label; a location with no label is labelled by its own 
   (`ENTRY_FIELD_SPEC`, `resolveInScope`, `listInScope`, `buildDigest`, `mergeDigests`,
   `normalizeTitle`, `clusterEntries`, `rankClusters`)
 - **P4** — Source-repository list: `.bee/config.json` → `dogfood_repos`, normalized in
-  `packages/bee/lib/state.mjs`
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs)
 - **P5** — Credential / instruction patterns and the neutralizer:
-  `packages/bee/lib/decisions.mjs`
+  `packages/bee-rs/crates/bee/src/verbs/decisions/mod.rs` (formerly packages/bee/lib/decisions.mjs)

@@ -214,28 +214,28 @@ because a refusal turns one broken file into a blocked install.
 
 All Rust paths below are relative to `packages/bee-rs/crates/bee/`.
 
-- `src/onboard/hooks_wiring.rs:584-598` — `statusline_opt_in()`, the anchored and
+- `packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs:584-598` — `statusline_opt_in()`, the anchored and
   bare-relative detection of R3.
-- `src/onboard/source.rs:56` — `templates_statusline_dir`, the canonical source
+- `packages/bee-rs/crates/bee/src/onboard/source.rs:56` — `templates_statusline_dir`, the canonical source
   directory.
-- `src/onboard/plan.rs:537-546` — plan stage 3b, the `copy_statusline` items;
+- `packages/bee-rs/crates/bee/src/onboard/plan.rs:537-546` — plan stage 3b, the `copy_statusline` items;
   `list_template_statusline()` (l. 81) walks the canonical directory, and
   `build_managed_versions()` / `subset_managed()` (l. 236, l. 298) carry the
   conditional `statusline` key.
-- `src/onboard/apply.rs:372-378` — the `copy_statusline` apply case.
+- `packages/bee-rs/crates/bee/src/onboard/apply.rs:372-378` — the `copy_statusline` apply case.
 - `packages/bee/statusline/statusline-command.sh` — the canonical script, one file.
-- `src/devtools/statusline.rs` — `bee dev statusline`, the token/cost line the
+- `packages/bee-rs/crates/bee/src/devtools/statusline.rs` — `bee dev statusline`, the token/cost line the
   script appends when it resolves a bee binary.
-- `tests/statusline_contract.rs` — the standing guard: canonical/vendored
+- `packages/bee-rs/crates/bee/tests/statusline_contract.rs` — the standing guard: canonical/vendored
   byte-equality plus the script's binary lookup.
-- `src/onboard/hooks_wiring.rs:1023` — statusline detection test cases;
-  `src/onboard/tests.rs` covers the full vendoring plan, apply, and convergence lifecycle.
+- `packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs:1023` — statusline detection test cases;
+  `packages/bee-rs/crates/bee/src/onboard/tests.rs` covers the full vendoring plan, apply, and convergence lifecycle.
 - Host-side settings contract: `.claude/settings.json` → `statusLine.command`.
-- Second runtime, machine-level: `src/onboard/templates.rs:179`
-  (`CODEX_STATUS_LINE_BLOCK`), `src/onboard/hooks_wiring.rs:521-546`
+- Second runtime, machine-level: `packages/bee-rs/crates/bee/src/onboard/templates.rs:179`
+  (`CODEX_STATUS_LINE_BLOCK`), `packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs:521-546`
   (`codex_user_config_path()`, `codex_statusline_missing()`,
-  `codex_statusline_next_text()`), `src/onboard/plan.rs:679-680` (the
+  `codex_statusline_next_text()`), `packages/bee-rs/crates/bee/src/onboard/plan.rs:679-680` (the
   `ensure_codex_statusline` action — `~/.codex/config.toml`, never repoRoot-joined).
 - Pi active-branch status: `.pi/extensions/bee-guard/` (module `model-usage.ts`, entry `index.ts`) owns aggregation and
-  lifecycle refresh. `tests/pi_plugin_contracts.rs` drives the real extension
+  lifecycle refresh. `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs` drives the real extension
   through restore, completed-turn, branch-change, and empty-branch cases.

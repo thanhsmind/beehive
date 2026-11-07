@@ -130,13 +130,13 @@ one owner, generated ids that never collide however many sessions run at once.
 ## Pointers (implementation)
 
 - Store and fold: `foldPbis`, `pbiAdd`, `pbiStatus`, `pbiAmend`, `listPbis`, `PBI_STATUSES` in
-  `.bee/bin/lib/backlog.mjs` (mirrored at `packages/bee/lib/backlog.mjs`).
+  `packages/bee-rs/crates/bee/src/verbs/backlog.rs` (formerly .bee/bin/lib/backlog.mjs) (mirrored at `packages/bee-rs/crates/bee/src/verbs/backlog.rs` (formerly packages/bee/lib/backlog.mjs)).
 - Generated view: `renderBacklogMd` in the same file; `backlog render --write|--check` in
   `.bee/bin/bee`.
-- Write-guard: `DIRECT_EDIT_DENY` in `.bee/bin/lib/guards.mjs` (mirrored at
-  `packages/bee/lib/guards.mjs`).
-- One-time migration and its invariant check: `scripts/migrate_backlog_pbis.mjs`,
-  `scripts/backlog_uniqueness.mjs`.
+- Write-guard: `DIRECT_EDIT_DENY` in `packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs` (formerly .bee/bin/lib/guards.mjs) (mirrored at
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs` (formerly packages/bee/lib/guards.mjs)).
+- One-time migration and its invariant check: scripts/migrate_backlog_pbis.mjs (retired with the Node runtime, 2026-08-02),
+  scripts/backlog_uniqueness.mjs (retired with the Node runtime, 2026-08-02).
 - Verb prose and merge rules: formerly the scribing reference's "Product Backlog" section;
   the surviving capture discipline lives in `skills/bee-capturing/SKILL.md` and
   `skills/bee-capturing/references/citations.md` (backlog rows cite decision ids).

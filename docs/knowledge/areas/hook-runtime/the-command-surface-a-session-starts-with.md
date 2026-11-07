@@ -105,8 +105,8 @@ line (e.g. "133 of 145"), generated from the catalog like everything else.
 
 ## Pointers (implementation)
 
-- Section render + size budget: `hooks/session_preamble/budget.rs`
-  (`PREAMBLE_BUDGET_BYTES`), tests in `hooks/session_preamble/tests.rs`.
+- Section render + size budget: `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs`
+  (`PREAMBLE_BUDGET_BYTES`), tests in `packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs`.
   Cell `csc-1`, commit 7fc5439b.
 - Unknown-flag refusal + nearest spelling: `unknown_flags` / `nearest_flag` in
   `router.rs`, sharing `catalog::distance`. Cells `csc-2` (commit 0576f250) and

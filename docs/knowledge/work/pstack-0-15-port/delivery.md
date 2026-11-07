@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer, workflow-state, worktree-parallelism, human-mailbox]
   required_context: [docs/history/pstack-0-15-port/CONTEXT.md, docs/history/pstack-0-15-port/plan.md]
-  sources: [docs/history/pstack-0-15-port/CONTEXT.md, docs/history/pstack-0-15-port/plan.md, .bee/cells/p15-1.json, .bee/cells/p15-2.json, .bee/cells/p15-3.json]
+  sources: [docs/history/pstack-0-15-port/CONTEXT.md, docs/history/pstack-0-15-port/plan.md, cell p15-1 (trace purged from .bee/cells/), cell p15-2 (trace purged from .bee/cells/), cell p15-3 (trace purged from .bee/cells/)]
 ---
 
 # pstack-0-15-port — Delivery

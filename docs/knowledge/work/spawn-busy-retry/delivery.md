@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [feedback-digest]
   required_context: [docs/history/spawn-busy-retry/plan.md]
-  sources: [docs/history/spawn-busy-retry/plan.md, .bee/cells/sbr-1.json]
+  sources: [docs/history/spawn-busy-retry/plan.md, cell sbr-1 (trace purged from .bee/cells/)]
 ---
 
 # spawn-busy-retry — Delivery

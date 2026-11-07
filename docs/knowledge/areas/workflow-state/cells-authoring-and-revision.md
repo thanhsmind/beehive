@@ -421,22 +421,22 @@ has been seen to go RED for the right reason.
   `skills/bee-planning/references/planning-reference.md`, and
   `skills/bee-planning/references/edge-dimensions.md` (the twelve dimensions,
   now scoped to high-risk/hard-gate). No source predicate implements these;
-  the enforcing door is `testCellDebt` in `packages/bee/lib/state.mjs`.
-  Evidence: traces `.bee/cells/wc-3.json`, `.bee/cells/wc-6.json`,
-  `.bee/cells/wc-7.json`; reports
+  the enforcing door is `testCellDebt` in `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs).
+  Evidence: traces cell wc-3 (trace purged from .bee/cells/), cell wc-6 (trace purged from .bee/cells/),
+  cell wc-7 (trace purged from .bee/cells/); reports
   `docs/history/worker-conformance/reports/wc-{3,6,7}.md`.
-- Batch slice creation: `addCells` in `packages/bee/lib/cells.mjs`,
+- Batch slice creation: `addCells` in `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly packages/bee/lib/cells.mjs),
   CLI `bee cells add --stdin` (JSON array). Evidence: dispatcher-unify
   cells-batch-add suite rows (v0.1.27).
 - Cell revision: `updateCell` + `UPDATE_FIELD_VALIDATORS`/`UPDATE_FROZEN_HINTS`
-  in `packages/bee/lib/cells.mjs`; CLI `bee cells update --id ID
+  in `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly packages/bee/lib/cells.mjs); CLI `bee cells update --id ID
   --file patch.json | --stdin` (byte-mirrored to `.bee/bin/`). Evidence: cell
-  `.bee/cells/cuv-1.json` (commit 127abb0), 7 suite checks.
+  cell cuv-1 (trace purged from .bee/cells/) (commit 127abb0), 7 suite checks.
 - Derived regen obligation: `deriveManifestScope` + `REGEN_ACK_FIELD`
-  (`regen_obligation_ack`) in `packages/bee/lib/cells.mjs`,
+  (`regen_obligation_ack`) in `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly packages/bee/lib/cells.mjs),
   enforced in `addCells`/`updateCell`; roots parsed from
-  `scripts/release_manifest.mjs` and `scripts/ledger_parity.mjs`. Evidence:
-  12 suite rows in `packages/bee/tests/test_bee_cli.mjs` +
+  `packages/bee-rs/crates/bee/src/devtools/release_manifest.rs` (formerly scripts/release_manifest.mjs) and scripts/ledger_parity.mjs (retired with the Node runtime, 2026-08-02). Evidence:
+  12 suite rows in packages/bee/tests/test_bee_cli.mjs (retired with the Node runtime, 2026-08-02) +
   mutation red, commit e4ae329 (cell ro-1, 2026-07-23).
 - Ceiling-tier budget refusal (B51/R102): `set_tier` and `ceiling_share_after`
   with `CEILING_SHARE_REFUSAL_MAX` (0.4) in

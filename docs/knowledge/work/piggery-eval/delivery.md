@@ -7,7 +7,7 @@ bee:
   id: piggery-eval-delivery
   lifecycle: active
   required_context: [docs/history/piggery-eval/CONTEXT.md, docs/history/piggery-eval/plan.md]
-  sources: [docs/history/piggery-eval/CONTEXT.md, docs/history/piggery-eval/plan.md, .bee/cells/pe-1.json]
+  sources: [docs/history/piggery-eval/CONTEXT.md, docs/history/piggery-eval/plan.md, cell pe-1 (trace purged from .bee/cells/)]
 ---
 
 # piggery-eval — Delivery

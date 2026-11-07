@@ -98,7 +98,7 @@ tests actually pin.
   `changed_uses_locale_order_while_missing_uses_code_units`. The manifest's own
   path list is ordered by `sort_by_locale`, proven by
   `code_unit_sort_would_not_reproduce_the_manifest`.
-- The heading guard's call site: `hooks/write_guard/detectors.rs:159`.
+- The heading guard's call site: `packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs:159`.
 - Evidence: traces `.bee/cells/archive/js-parity-cleanup/jp-5.json` (1004 passed) and `.bee/cells/archive/js-parity-cleanup/jp-9.json`
   (1006 passed), both 2026-08-04; the correction originates in judge decision
   bc2e2d44.

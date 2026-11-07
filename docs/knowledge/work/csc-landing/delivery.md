@@ -7,7 +7,7 @@ bee:
   id: csc-landing-delivery
   lifecycle: active
   required_context: [.bee/lanes/csc-landing.json]
-  sources: [.bee/lanes/csc-landing.json, .bee/cells/csl-1.json]
+  sources: [.bee/lanes/csc-landing.json, cell csl-1 (trace purged from .bee/cells/)]
 ---
 
 # csc-landing — Delivery

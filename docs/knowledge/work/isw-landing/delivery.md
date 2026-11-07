@@ -7,7 +7,7 @@ bee:
   id: isw-landing-delivery
   lifecycle: active
   required_context: [.bee/lanes/isw-landing.json]
-  sources: [.bee/lanes/isw-landing.json, .bee/cells/isl-1.json]
+  sources: [.bee/lanes/isw-landing.json, cell isl-1 (trace purged from .bee/cells/)]
 ---
 
 # isw-landing — Delivery

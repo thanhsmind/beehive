@@ -220,36 +220,36 @@ and proceeds rather than refusing, so missing history is never punished.
 ## Pointers (implementation)
 
 - Fresh-session flow (B15/B16): two-kind handoff (`readHandoff` normalization,
-  strict `writeHandoff`, `adoptHandoff`) in `packages/bee/lib/state.mjs`;
+  strict `writeHandoff`, `adoptHandoff`) in `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs);
   CLI `state.handoff.write/adopt/show`; source-gated adoption + session
-  registration in `packages/bee/hooks/bee-session-init.mjs`; pure kind-branch rendering in
+  registration in `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (formerly packages/bee/hooks/bee-session-init.mjs); pure kind-branch rendering in
   `lib/inject.mjs` (`handoffOutcome` param); `claimNextCell`/`claimCellCrossSession`
   in `lib/cells.mjs` + `featureBacklogRank` in `lib/backlog.mjs`; CLI
   `cells.claim-next` and `orient` (the two production `sweepExpiredClaims`
   triggers; `status` shares `orient`'s run body but never sweeps); live-owner
   lane guard in the cross-lane fallback pool (`listSessionRecords` in
   `lib/claims.mjs` + `heartbeatStale` membership check in `claimNextCell`,
-  GH #20, trace `.bee/cells/cnlg-1.json`). Evidence:
-  traces `.bee/cells/fsh-{9,10,11}.json`, commits 79e800e, d419e0e, 9931fc6;
+  GH #20, trace cell cnlg-1 (trace purged from .bee/cells/)). Evidence:
+  traces cell traces fsh-{9,10,11} (purged from .bee/cells/), commits 79e800e, d419e0e, 9931fc6;
   `docs/history/fresh-session-handoff/reports/validation-s4.md` (incl. the
   orchestrator's retro-RED probe for fsh-11).
 - Per-workflow mailbox (multisession-native D5, msn-15): `writeMailboxHandoff`/
   `adoptMailboxHandoff`/`listHandoffMailbox`/`newestOpenHandoffMailboxRecord`
-  in `packages/bee/lib/state.mjs`; `state handoff write/show/adopt`
+  in `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs); `state handoff write/show/adopt`
   resolve their target workflow (`--lane`, the calling session's bound lane,
   or the default record's live workflow) in `bee`; `rebuildHandoffProjection`
   in `state-projection.mjs`, registered in `rebuildAllProjections` (see
   `workflow-records-and-projections.md` for that aggregator). Proves invariant
   9: one paused workflow never blocks or leaks into another's own mailbox.
-  Evidence: trace `.bee/cells/multisession-native-15.json`, commit 60d0419;
+  Evidence: trace cell multisession-native-15 (trace purged from .bee/cells/), commit 60d0419;
   advisor digest
   `docs/history/multisession-native/reports/advisor-digest-slice3.md`
   condition G.
 - Sanctioned-writer reclassification (R77, msn-24): dated deprecation notes on
   `writeHandoff`/`adoptHandoff` and on `rebuildHandoffProjection`'s own header
   in `state.mjs`/`state-projection.mjs`; the grep-audit test in
-  `packages/bee/tests/test_state.mjs`. Evidence: trace
-  `.bee/cells/multisession-native-24.json`, commit cee2d5f; advisor digest
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/tests/test_state.mjs). Evidence: trace
+  cell multisession-native-24 (trace purged from .bee/cells/), commit cee2d5f; advisor digest
   `docs/history/multisession-native/reports/advisor-digest-slice5.md`
   condition E.
 - Recorded start manner and the adoption door (B47/R97): the `source` field on

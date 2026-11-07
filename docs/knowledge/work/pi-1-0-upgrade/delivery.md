@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [docs/history/pi-1-0-upgrade/CONTEXT.md, docs/history/pi-1-0-upgrade/plan.md]
-  sources: [docs/history/pi-1-0-upgrade/CONTEXT.md, docs/history/pi-1-0-upgrade/plan.md, .bee/cells/p1u-1.json, .bee/cells/p1u-2.json, .bee/cells/p1u-3.json, .bee/cells/p1u-4.json, .bee/cells/p1u-5.json, .bee/cells/p1u-6.json, .bee/cells/p1u-7.json, .bee/cells/p1u-8.json, .bee/cells/p1u-9.json, .bee/cells/p1u-10.json, .bee/cells/p1u-11.json, .bee/cells/p1u-12.json, .bee/cells/p1u-13.json, .bee/cells/p1u-14.json]
+  sources: [docs/history/pi-1-0-upgrade/CONTEXT.md, docs/history/pi-1-0-upgrade/plan.md, cell p1u-1 (trace purged from .bee/cells/), cell p1u-2 (trace purged from .bee/cells/), cell p1u-3 (trace purged from .bee/cells/), cell p1u-4 (trace purged from .bee/cells/), cell p1u-5 (trace purged from .bee/cells/), cell p1u-6 (trace purged from .bee/cells/), cell p1u-7 (trace purged from .bee/cells/), cell p1u-8 (trace purged from .bee/cells/), cell p1u-9 (trace purged from .bee/cells/), cell p1u-10 (trace purged from .bee/cells/), cell p1u-11 (trace purged from .bee/cells/), cell p1u-12 (trace purged from .bee/cells/), cell p1u-13 (trace purged from .bee/cells/), cell p1u-14 (trace purged from .bee/cells/)]
 ---
 
 # pi-1-0-upgrade — Delivery

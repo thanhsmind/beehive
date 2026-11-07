@@ -205,14 +205,14 @@ found the gap the previous round's own count had missed.
   `packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs`. All six
   scribing-debt scan copies call through it: `scribing_debt` in
   `verbs/drivers/close.rs`; `scribing_debt` and `global_scribing_debt` in
-  `hooks/session_preamble/store.rs`; `scribing_debt` in
-  `hooks/chain_nudge.rs`; `scribing_debt` and `global_scribing_debt` in
+  `packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs`; `scribing_debt` in
+  `packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs`; `scribing_debt` and `global_scribing_debt` in
   `verbs/status_full/cells.rs`. The promote-proposal path,
   `unapplied_promote_proposals` in `verbs/status_full/mod.rs`, reconciles
   the same way. Evidence: trace `.bee/cells/archive/traceable-runs/trun-9.json` — three cap
   rounds; the first wired only `drivers/close.rs` and the promote path,
-  the second wired `hooks/session_preamble/store.rs` and
-  `hooks/chain_nudge.rs`, the third wired `verbs/status_full/cells.rs`.
+  the second wired `packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs` and
+  `packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs`, the third wired `verbs/status_full/cells.rs`.
 - Recorded deviations, not fixed (Open Gaps above): the materialized
   `scribe` record's empty `areas` field, and its lazy, next-scan
   materialization instead of a cap-time hook — both in

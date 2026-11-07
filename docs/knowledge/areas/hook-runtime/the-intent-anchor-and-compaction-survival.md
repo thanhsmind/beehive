@@ -177,21 +177,21 @@ orientation ended with zero edits to that suite.
 
 ## Pointers (implementation)
 
-- Store and renderers: `packages/bee/lib/intent.mjs`
+- Store and renderers: packages/bee/lib/intent.mjs (retired with the Node runtime, 2026-08-02)
   (`writeIntent`/`readIntent`/`advanceIntent`/`clearIntent`, `precompactBlock`,
-  `resumeBlock`), mirrored to `.bee/bin/lib/`.
+  `resumeBlock`), mirrored to `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it).
 - CLI: the `intent` group in `command-registry.mjs` + `bee`.
-- Checkpoints: `packages/bee/hooks/bee-session-close.mjs` (compaction re-assertion, the
-  survival warning, and the forced anchor nudge), `packages/bee/hooks/bee-prompt-context.mjs`
-  (the deduped anchor nudge on every prompt), and `packages/bee/hooks/bee-session-init.mjs`
+- Checkpoints: `packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs` (formerly packages/bee/hooks/bee-session-close.mjs) (compaction re-assertion, the
+  survival warning, and the forced anchor nudge), `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs` (formerly packages/bee/hooks/bee-prompt-context.mjs)
+  (the deduped anchor nudge on every prompt), and `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (formerly packages/bee/hooks/bee-session-init.mjs)
   (compact/resume lead — `ANCHOR_LEAD_SOURCES`/`intentLeadBlock`, unchanged by
   the capsule).
 - Nudge predicate and dedup key: `anchorMissing()` in
-  `packages/bee/lib/compaction.mjs` (`key: "anchor-missing-nudge"`,
+  `packages/bee-rs/crates/bee/src/hooks/compaction.rs` (formerly packages/bee/lib/compaction.mjs) (`key: "anchor-missing-nudge"`,
   `hash: "<sessionId>:<feature>:<cell>"`), reused by both checkpoints and by the
   read-only `state compact-check` verb.
-- Proof: `packages/bee/tests/test_intent.mjs` (incl. the
-  two-boundary simulation), the intent rows in `hooks/test_hook_contracts.mjs`,
-  `scripts/tests/test_compaction_advisories.mjs` (the nudge and survival-warning
+- Proof: packages/bee/tests/test_intent.mjs (retired with the Node runtime, 2026-08-02) (incl. the
+  two-boundary simulation), the intent rows in `packages/bee-rs/crates/bee/tests/hook_contracts.rs` (formerly hooks/test_hook_contracts.mjs),
+  scripts/tests/test_compaction_advisories.mjs (retired with the Node runtime, 2026-08-02) (the nudge and survival-warning
   rows against the real hooks), and `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`
   (`pi_lifecycle_end_to_end_onboarded_repo_parity` proving intent retention and dispatch rendering).

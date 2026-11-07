@@ -115,12 +115,12 @@ stopped by another. The logic was migrated and the message was not, and nothing 
 
 ## Pointers (implementation)
 
-- `scripts/okf_instructions_fence.mjs` — classifier, exemptions with their reasons, `--check`,
+- scripts/okf_instructions_fence.mjs (retired with the Node runtime, 2026-08-02) — classifier, exemptions with their reasons, `--check`,
   `--selftest`, `--json`.
 - Was wired as two chain entries in the retired Node runner, pinned in its manifest guard;
   both were deleted with the Rust port. The live chain is the declared `commands.test`
   (`.bee/bin/bee test`), which runs `packages/bee-rs/crates/bee/tests/*.rs` — cargo discovers
   them, so there is no suite registry to pin a check in.
-- The nudge it caught: `packages/bee/hooks/bee-session-close.mjs`, asserted end-to-end in
-  `hooks/test_hook_contracts.mjs`.
-- Its sibling: `scripts/okf_specs_fence.mjs` (`specs-read-only-fence.md`).
+- The nudge it caught: `packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs` (formerly packages/bee/hooks/bee-session-close.mjs), asserted end-to-end in
+  `packages/bee-rs/crates/bee/tests/hook_contracts.rs` (formerly hooks/test_hook_contracts.mjs).
+- Its sibling: `packages/bee-rs/crates/bee/tests/specs_fence.rs` (formerly scripts/okf_specs_fence.mjs) (`specs-read-only-fence.md`).

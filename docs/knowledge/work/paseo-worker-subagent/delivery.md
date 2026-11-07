@@ -7,7 +7,7 @@ bee:
   id: paseo-worker-subagent-delivery
   lifecycle: active
   required_context: [docs/history/paseo-worker-subagent/plan.md]
-  sources: [docs/history/paseo-worker-subagent/plan.md, .bee/cells/pwsa-1.json]
+  sources: [docs/history/paseo-worker-subagent/plan.md, cell pwsa-1 (trace purged from .bee/cells/)]
 ---
 
 # paseo-worker-subagent — Delivery

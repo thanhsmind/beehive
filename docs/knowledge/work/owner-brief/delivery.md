@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [decision-memory]
   required_context: [docs/history/owner-brief/CONTEXT.md, docs/history/owner-brief/plan.md]
-  sources: [docs/history/owner-brief/CONTEXT.md, docs/history/owner-brief/plan.md, .bee/cells/ob-1.json, .bee/cells/ob-2.json, .bee/cells/ob-3.json, .bee/cells/ob-4.json]
+  sources: [docs/history/owner-brief/CONTEXT.md, docs/history/owner-brief/plan.md, cell ob-1 (trace purged from .bee/cells/), cell ob-2 (trace purged from .bee/cells/), cell ob-3 (trace purged from .bee/cells/), cell ob-4 (trace purged from .bee/cells/)]
 ---
 
 # owner-brief — Delivery

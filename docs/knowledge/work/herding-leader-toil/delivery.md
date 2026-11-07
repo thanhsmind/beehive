@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding, workflow-state, worktree-parallelism]
   required_context: [docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md]
-  sources: [docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md, .bee/cells/hlt-1.json, .bee/cells/hlt-2.json, .bee/cells/hlt-3.json, .bee/cells/hlt-4.json, .bee/cells/hlt-5.json, .bee/cells/hlt-6.json, .bee/cells/hlt-7.json]
+  sources: [docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md, cell hlt-1 (trace purged from .bee/cells/), cell hlt-2 (trace purged from .bee/cells/), cell hlt-3 (trace purged from .bee/cells/), cell hlt-4 (trace purged from .bee/cells/), cell hlt-5 (trace purged from .bee/cells/), cell hlt-6 (trace purged from .bee/cells/), cell hlt-7 (trace purged from .bee/cells/)]
 ---
 
 # herding-leader-toil — Delivery

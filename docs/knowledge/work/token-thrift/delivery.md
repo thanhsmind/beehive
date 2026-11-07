@@ -7,7 +7,7 @@ bee:
   id: token-thrift-delivery
   lifecycle: active
   required_context: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/plan.md]
-  sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/plan.md, .bee/cells/tt-1.json, .bee/cells/tt-2.json, .bee/cells/tt-3.json, .bee/cells/tt-4.json]
+  sources: [docs/history/token-thrift/CONTEXT.md, docs/history/token-thrift/plan.md, cell tt-1 (trace purged from .bee/cells/), cell tt-2 (trace purged from .bee/cells/), cell tt-3 (trace purged from .bee/cells/), cell tt-4 (trace purged from .bee/cells/)]
 ---
 
 # token-thrift — Delivery

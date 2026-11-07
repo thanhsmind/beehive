@@ -97,7 +97,7 @@ now says so. The PBI's remaining scope is `emitFrontmatter` alone.
 
 ## Pointers (implementation)
 
-- Guard: `packages/bee/hooks/bee-write-guard.mjs`, internals-reach branch (inline-eval
+- Guard: `packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs` (formerly packages/bee/hooks/bee-write-guard.mjs), internals-reach branch (inline-eval
   detection + `bin/lib`/`templates/lib` import scan).
 - Helpers this gap affects: `scribingTarget` and `emitFrontmatter` in
   `bin/lib/knowledge.mjs`.

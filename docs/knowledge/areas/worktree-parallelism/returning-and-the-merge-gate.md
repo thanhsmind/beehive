@@ -370,7 +370,7 @@ gap:
   lease is free, the requester becomes processor and merges directly** — an empty
   queue resolves on the first iteration with no real sleep at all, so a solo merge is
   **byte-identical** to pre-D9 behavior: proven by the full 159-case
-  `scripts/tests/test_worktree_cli.mjs` regression suite passing unmodified. **When the lease
+  `packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs` (formerly scripts/tests/test_worktree_cli.mjs) regression suite passing unmodified. **When the lease
   is held, the requester enqueues and bounded-waits** (`--queue-wait-ms`, default
   180s), polling every 500ms. **A timeout returns a typed
   `{ok: false, code: 'INTEGRATION_QUEUE_TIMEOUT', merged: false}` result whose text
@@ -403,10 +403,10 @@ gap:
   has never required session identity to run solo, and this cell does not change that.
 - Tests: `test_integration_queue.mjs` (14 checks, deterministic seams — a virtual `now`
   drives dead-processor takeover, no real sleeps), `test_worktree_store.mjs` (+4, the
-  `checkProcessorLease`/`onVerifyTick` wiring), and `scripts/tests/test_worktree_merge_queue.mjs`
+  `checkProcessorLease`/`onVerifyTick` wiring), and `packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs` (formerly scripts/tests/test_worktree_merge_queue.mjs)
   (15 checks, real two-OS-process CLI dispatch proving serialization, no-lock-held-
   across-verify, the timeout path, and the byte-identical solo surface). Evidence: trace
-  `.bee/cells/multisession-native-22.json`, commit 546d532.
+  cell multisession-native-22 (trace purged from .bee/cells/), commit 546d532.
 
 **The issue-#56 acceptance suite (msn-23) indexes this and every other
 multisession-native invariant.** `test_msn_invariants.mjs` is one numbered, named
@@ -423,7 +423,7 @@ ops — queue processing and the merge-verify child — not a blanket "zero `spa
 under any lock" claim, which is false today (short git plumbing legitimately runs via
 `spawnSync` while holding `'worktree-admin'`). The suite prints a verbatim
 `"15/15 PASS: invariants 1,2,...,15 all green"` summary line. Evidence: trace
-`.bee/cells/multisession-native-23.json`, commit 06cd209; advisor digest
+cell multisession-native-23 (trace purged from .bee/cells/), commit 06cd209; advisor digest
 `docs/history/multisession-native/reports/advisor-digest-slice5.md`.
 
 ## Where the uat door sits: `uat_stop` (uat-stop-placement D1-D5, 2026-08-18)
@@ -632,23 +632,23 @@ its own open item.
   passed, 0 failed.
 - The three-phase merge (D10b): `mergeFeatureWorktree` / `mergeFeatureWorktreeStage`
   (phase 1) / `mergeFeatureWorktreeFinish` (phase 3) / `checkMergeFence` (the four-part
-  check, advisor condition C2) in `packages/bee/lib/worktree-store.mjs`.
+  check, advisor condition C2) in `packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs` (formerly packages/bee/lib/worktree-store.mjs).
   Deterministic-seam regression tests replace the old sleep-based lock-duration proof: an
   injected verify script self-checks the lock's absence during phase 2, and another
   self-tampers the staged tree mid-verify to prove the fence catches it, both red-first
-  against the pre-fix code. Evidence: trace `.bee/cells/multisession-native-2.json`,
+  against the pre-fix code. Evidence: trace cell multisession-native-2 (trace purged from .bee/cells/),
   commit b8fc926.
 - The integration queue (D9 invariant 12, msn-22): `runThroughQueue` / `tryBecomeProcessor`
-  / `checkProcessorLeaseEpoch` in `packages/bee/lib/integration-queue.mjs`;
+  / `checkProcessorLeaseEpoch` in `packages/bee-rs/crates/bee/src/integration_queue.rs` (formerly packages/bee/lib/integration-queue.mjs);
   `runVerifyChild` (the async verify-child replacement for `spawnSync`) and the
   `onVerifyTick`/`checkProcessorLease` hooks in `worktree-store.mjs`; CLI wiring
   (`--queue-wait-ms`, the `INTEGRATION_QUEUE_TIMEOUT` text) in `handleWorktreeMerge`,
   `the bee binary`. Evidence: trace
-  `.bee/cells/multisession-native-22.json`, commit 546d532.
-- The acceptance suite (D9, msn-23): `packages/bee/tests/test_msn_invariants.mjs`
+  cell multisession-native-22 (trace purged from .bee/cells/), commit 546d532.
+- The acceptance suite (D9, msn-23): packages/bee/tests/test_msn_invariants.mjs (retired with the Node runtime, 2026-08-02)
   (index, 15 numbered entries) plus its two fresh Worker-concurrency race harnesses
   (`race_lease_child.mjs`, invariants 5/6). Evidence: trace
-  `.bee/cells/multisession-native-23.json`, commit 06cd209.
+  cell multisession-native-23 (trace purged from .bee/cells/), commit 06cd209.
 - The `uat_stop` placement policy (uat-stop-placement D1, D2): `UatStop`,
   `uat_stop_config`, `uat_gate_applies_to_lane` in
   `packages/bee-rs/crates/bee/src/uat.rs` — one module the merge side and the

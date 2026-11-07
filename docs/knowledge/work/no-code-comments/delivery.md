@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime, doctrine-layer]
   required_context: [docs/history/no-code-comments/CONTEXT.md, docs/history/no-code-comments/plan.md]
-  sources: [docs/history/no-code-comments/CONTEXT.md, docs/history/no-code-comments/plan.md, .bee/cells/ncc-1.json, .bee/cells/ncc-2.json, .bee/cells/ncc-3.json, .bee/cells/ncc-4.json]
+  sources: [docs/history/no-code-comments/CONTEXT.md, docs/history/no-code-comments/plan.md, cell ncc-1 (trace purged from .bee/cells/), cell ncc-2 (trace purged from .bee/cells/), cell ncc-3 (trace purged from .bee/cells/), cell ncc-4 (trace purged from .bee/cells/)]
 ---
 
 # no-code-comments — Delivery

@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer, bee-herding]
   required_context: [docs/history/agent-shell-rename/plan.md]
-  sources: [docs/history/agent-shell-rename/plan.md, .bee/cells/asr-1.json, .bee/cells/asr-2.json]
+  sources: [docs/history/agent-shell-rename/plan.md, cell asr-1 (trace purged from .bee/cells/), cell asr-2 (trace purged from .bee/cells/)]
 ---
 
 # agent-shell-rename — Delivery

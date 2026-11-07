@@ -53,7 +53,7 @@ its decomposition map is locked as F2's input (D30).
 Condensed from `docs/history/okf-foundation/plan.md`'s slice exit states:
 
 - **S1** — `bee knowledge check --json` exits 0 on the skeleton; full chain green.
-- **S2** — `knowledge check` joins `scripts/run_verify.mjs` as a chain suite.
+- **S2** — `knowledge check` joins `packages/bee-rs/crates/bee/src/verbs/test_runner.rs` (formerly scripts/run_verify.mjs) as a chain suite.
 - **S3** — `index`/`list` generators: regenerating the bundle's indexes changes zero bytes;
   a stale index is detected by `index --check`.
 - **S4** — Data: `advisor-protocol` migrated (coverage report D35, stub + anchor map D37),

@@ -84,9 +84,9 @@ emits `codex exec --sandbox read-only --ephemeral -` to guarantee filesystem rea
   `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`.
 - Doc: the Spawn row in `skills/bee-swarming/references/swarming-reference.md`.
 - Historical Node implementations (historical evidence):
-  `packages/bee/lib/dispatch-prepare.mjs`, `packages/bee/lib/dispatch-guard.mjs`,
-  `scripts/tests/test_dispatch_prepare.mjs`, and `hooks/test_model_guard.mjs`.
-- Evidence: `.bee/cells/i54-closeout-1.json`,
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` (formerly packages/bee/lib/dispatch-prepare.mjs), `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (formerly packages/bee/lib/dispatch-guard.mjs),
+  `packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs` (formerly scripts/tests/test_dispatch_prepare.mjs), and `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (formerly hooks/test_model_guard.mjs).
+- Evidence: cell i54-closeout-1 (trace purged from .bee/cells/),
   `docs/history/i54-closeout/reports/validation-canary.md`,
   `docs/history/i54-closeout/reports/i54-closeout-1.md`.
 

@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/paseo-wait-deadline/CONTEXT.md]
-  sources: [docs/history/paseo-wait-deadline/CONTEXT.md, .bee/cells/pwd-1.json]
+  sources: [docs/history/paseo-wait-deadline/CONTEXT.md, cell pwd-1 (trace purged from .bee/cells/)]
 ---
 
 # paseo-wait-deadline — Delivery

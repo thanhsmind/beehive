@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [docs/history/bee-deploying-skill/CONTEXT.md, docs/history/bee-deploying-skill/plan.md]
-  sources: [docs/history/bee-deploying-skill/CONTEXT.md, docs/history/bee-deploying-skill/plan.md, .bee/cells/dep-1.json, .bee/cells/dep-2.json, .bee/cells/dep-3.json]
+  sources: [docs/history/bee-deploying-skill/CONTEXT.md, docs/history/bee-deploying-skill/plan.md, cell dep-1 (trace purged from .bee/cells/), cell dep-2 (trace purged from .bee/cells/), cell dep-3 (trace purged from .bee/cells/)]
 ---
 
 # bee-deploying-skill — Delivery

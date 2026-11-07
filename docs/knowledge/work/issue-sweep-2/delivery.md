@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state, worktree-parallelism]
   required_context: [docs/history/issue-sweep-2/CONTEXT.md, docs/history/issue-sweep-2/plan.md]
-  sources: [docs/history/issue-sweep-2/CONTEXT.md, docs/history/issue-sweep-2/plan.md, .bee/cells/is2-1.json, .bee/cells/is2-2.json, .bee/cells/is2-3.json]
+  sources: [docs/history/issue-sweep-2/CONTEXT.md, docs/history/issue-sweep-2/plan.md, cell is2-1 (trace purged from .bee/cells/), cell is2-2 (trace purged from .bee/cells/), cell is2-3 (trace purged from .bee/cells/)]
 ---
 
 # issue-sweep-2 — Delivery

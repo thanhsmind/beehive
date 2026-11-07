@@ -158,8 +158,8 @@ the one carve-out.
 
 ## Pointers (implementation)
 
-- `packages/bee/scripts/plugin_distribution.mjs` and
-  `packages/bee/scripts/tests/test_plugin_distribution.mjs` — shared strict
+- `packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs` (formerly packages/bee/scripts/plugin_distribution.mjs) and
+  `packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs` (formerly packages/bee/scripts/tests/test_plugin_distribution.mjs) — shared strict
   planner/prover and the 22-case transaction suite used by both installers.
-- Fresh-host handler-delivery proof: `.bee/cells/codex-hook-state-parity-5.json`
+- Fresh-host handler-delivery proof: cell codex-hook-state-parity-5 (trace purged from .bee/cells/)
   and `docs/history/codex-hook-state-parity/reports/codex-hook-state-parity-5.md`.

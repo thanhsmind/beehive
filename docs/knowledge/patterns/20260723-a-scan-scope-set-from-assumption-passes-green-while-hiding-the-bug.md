@@ -23,7 +23,7 @@ can produce.
 
 **Three instances in a single session, all by the same author, all the same shape:**
 
-- An audit command written to sweep the instruction surfaces silently omitted `hooks/` — which is
+- An audit command written to sweep the instruction surfaces silently omitted `packages/bee-rs/crates/bee/src/hooks/` (formerly hooks/) — which is
   exactly where the P1 was. The subagent running it noticed the omission and measured that directory
   separately; had it simply obeyed, the audit would have reported the gap closed.
 - A census guarding a write-time rule was scoped to `lib/**` from memory. It passed green on a tree

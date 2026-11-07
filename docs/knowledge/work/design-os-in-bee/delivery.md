@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [docs/history/design-os-in-bee/CONTEXT.md, docs/history/design-os-in-bee/plan.md]
-  sources: [docs/history/design-os-in-bee/CONTEXT.md, docs/history/design-os-in-bee/plan.md, .bee/cells/dob-1.json, .bee/cells/dob-2.json, .bee/cells/dob-3.json, .bee/cells/dob-4.json, .bee/cells/dob-5.json, .bee/cells/dob-6.json, .bee/cells/dob-7.json, .bee/cells/dob-8.json]
+  sources: [docs/history/design-os-in-bee/CONTEXT.md, docs/history/design-os-in-bee/plan.md, cell dob-1 (trace purged from .bee/cells/), cell dob-2 (trace purged from .bee/cells/), cell dob-3 (trace purged from .bee/cells/), cell dob-4 (trace purged from .bee/cells/), cell dob-5 (trace purged from .bee/cells/), cell dob-6 (trace purged from .bee/cells/), cell dob-7 (trace purged from .bee/cells/), cell dob-8 (trace purged from .bee/cells/)]
 ---
 
 # design-os-in-bee — Delivery

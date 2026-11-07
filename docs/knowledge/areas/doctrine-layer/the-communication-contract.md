@@ -201,7 +201,7 @@ where more words are warranted, never elsewhere.
   rule.
 - The two silence switches are `quiet: true` and `ship_visibility: "off"` in `.bee/config.json`.
 - Reachability of rule 17 from the always-loaded layer — never its emission — is enforced by
-  `scripts/tests/test_always_loaded_rules.mjs`; see
+  `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_always_loaded_rules.mjs); see
   `areas/doctrine-layer/placement-and-anchoring.md` (B6/R4).
 - Landed by feature `tick-contract-inline` (decisions T1, T2, T6; cells tci-1, tci-3). Evidence:
-  `.bee/cells/tci-1.json`, `.bee/cells/tci-3.json`.
+  cell tci-1 (trace purged from .bee/cells/), cell tci-3 (trace purged from .bee/cells/).

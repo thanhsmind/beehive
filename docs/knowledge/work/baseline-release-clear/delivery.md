@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [.bee/logs/scribing-runs.jsonl, .bee/lanes/baseline-release-clear.json]
-  sources: [.bee/logs/scribing-runs.jsonl, .bee/lanes/baseline-release-clear.json, .bee/cells/brc-1.json]
+  sources: [.bee/logs/scribing-runs.jsonl, .bee/lanes/baseline-release-clear.json, cell brc-1 (trace purged from .bee/cells/)]
 ---
 
 # baseline-release-clear — Delivery

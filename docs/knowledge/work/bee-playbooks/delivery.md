@@ -7,7 +7,7 @@ bee:
   id: bee-playbooks-delivery
   lifecycle: active
   required_context: [docs/history/bee-playbooks/CONTEXT.md, docs/history/bee-playbooks/plan.md]
-  sources: [docs/history/bee-playbooks/CONTEXT.md, docs/history/bee-playbooks/plan.md, .bee/cells/bpb-1.json, .bee/cells/bpb-2.json, .bee/cells/bpb-3.json]
+  sources: [docs/history/bee-playbooks/CONTEXT.md, docs/history/bee-playbooks/plan.md, cell bpb-1 (trace purged from .bee/cells/), cell bpb-2 (trace purged from .bee/cells/), cell bpb-3 (trace purged from .bee/cells/)]
 ---
 
 # bee-playbooks — Delivery

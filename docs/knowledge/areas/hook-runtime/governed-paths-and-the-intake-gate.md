@@ -535,7 +535,7 @@ permitted write is the commoner one.
   list is `.bee/`, `docs/history/`, `plans/`, `AGENTS.md`; the intake list is
   unchanged: `.bee/`, `docs/`, `plans/`, `AGENTS.md`. The gated-phase
   boundary and idle/terminal-intake consumers are named per-list in
-  `write_guard/checks.rs`; the legacy `packages/bee/lib/guards.mjs` this
+  `write_guard/checks.rs`; the legacy `packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs` (formerly packages/bee/lib/guards.mjs) this
   Pointer used to name no longer exists in this repo (Node fully retired) —
   session-close-nudge parity is now whatever the Rust port's own nudge path
   reads, not a separate `NUDGE_ALLOWED` mirror.
@@ -593,7 +593,7 @@ permitted write is the commoner one.
   `pre_gate_main_write_denied_for_code_features_on_main_during_exploring_and_planning`
   in `write_guard/tests.rs` and
   `pre_gate_main_write_pi_extension_blocks_early_source_writes` in
-  `tests/pi_plugin_contracts.rs`.
+  `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`.
 
 ## Open Gaps
 

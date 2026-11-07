@@ -104,7 +104,7 @@ self-blocks.
 
 **Pruning a worker's transient files protects a cell only while that cell is
 not known-capped.** The keep-set the prune consults asks one question per
-cell — does `.bee/cells/<id>.json` parse and carry status `capped`? — and both
+cell — does cell <id> (trace purged from .bee/cells/) parse and carry status `capped`? — and both
 of its passes, the `workers[]` receipt pass and the cell-file pass, consult
 that same predicate, so the two cannot drift into disagreeing about the same
 cell. Unknown state protects: a missing or unparseable cell file keeps the
@@ -192,7 +192,7 @@ implementation shipped.
 
 **A session's own record now carries its workspace, stamped once and reused
 by its claims (multisession-native D2/D3, msn-19).** Trigger: session
-creation, or claiming a cell file. What happens: `packages/bee/hooks/bee-session-init.mjs`
+creation, or claiming a cell file. What happens: `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (formerly packages/bee/hooks/bee-session-init.mjs)
 creates the session record at `resolveContext.controlRoot` rather than the
 writing checkout's own root — closing the gap the `18c` adapter comment had
 flagged as deferred to a later cell — and lazily auto-registers that
@@ -610,16 +610,16 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
 ## Pointers (implementation)
 
 - Ship visibility (R77): `shipVisibility(root)` + `SHIP_VISIBILITY_VALUES` in
-  `packages/bee/lib/state.mjs`; status field in `the bee binary`;
-  preamble line in `packages/bee/lib/inject.mjs`; suite
-  `scripts/tests/test_ship_visibility.mjs`; commits 5d46f40f, f0460a67.
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs); status field in `the bee binary`;
+  preamble line in packages/bee/lib/inject.mjs (retired with the Node runtime, 2026-08-02); suite
+  scripts/tests/test_ship_visibility.mjs (retired with the Node runtime, 2026-08-02); commits 5d46f40f, f0460a67.
 - Lanes (B12): lane store + `resolvePipeline` + lane-mode `startFeature` in
-  `packages/bee/lib/state.mjs`; `bindSessionLane`/`unbindSessionLane`
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs); `bindSessionLane`/`unbindSessionLane`
   in `lib/claims.mjs`; CLI: `--lane` on `state.set/gate/scribing-run`,
   `--as-lane/--session-id/--paths` on `state.start-feature`, `state.lanes`,
   `state.session.list/bind/unbind` (`lib/command-registry.mjs` + `bee`,
   runExample rows in `test_bee_cli.mjs`). Evidence: traces
-  `.bee/cells/fsh-{3,4}.json`, commits 257d6b5, 6fa4f89;
+  cell traces fsh-{3,4} (purged from .bee/cells/), commits 257d6b5, 6fa4f89;
   `docs/history/fresh-session-handoff/reports/validation-s2.md`.
 - Bind existence check (R58) and the guard's git-first scan (R59):
   `bind_lane_missing` + the `lane_missing_refusal` reuse in
@@ -630,15 +630,15 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   lgd-1/lgd-2, commits 896959ea, 0a5ec197, released in v2.4.8.
 - Lock-serialized bind/unbind (D10a): `bindSessionLane`/`unbindSessionLane`
   read-modify-write moved inside `acquireSessionsLock` in
-  `packages/bee/lib/claims.mjs`, same bounded-retry/typed
+  `packages/bee-rs/crates/bee/src/verbs/cells/claims.rs` (formerly packages/bee/lib/claims.mjs), same bounded-retry/typed
   `LOCK_BUSY` shape as `heartbeatSession`'s own lock hold. Two forced-
   interleaving regression tests (`_raceSeam` hook, same style as
   `lock.mjs`'s `_takeoverSeam`/`_postRenameSeam`) in
-  `packages/bee/tests/test_claims.mjs`, proven red-first against
+  `packages/bee-rs/crates/bee/src/verbs/cells/claims.rs` (formerly packages/bee/tests/test_claims.mjs), proven red-first against
   a reconstructed pre-fix build (10/10 rounds failing both directions).
-  Evidence: trace `.bee/cells/multisession-native-1.json`, commit c794eda.
+  Evidence: trace cell multisession-native-1 (trace purged from .bee/cells/), commit c794eda.
 - Active workers (D6): `activeWorkers(root, {excludeSessionId})` in
-  `packages/bee/lib/claims.mjs`; `startFeature`'s worker
+  `packages/bee-rs/crates/bee/src/verbs/cells/claims.rs` (formerly packages/bee/lib/claims.mjs); `startFeature`'s worker
   precondition (default and `startLane`) reads it instead of
   `state.workers`; `buildStatus`/`renderStatusText` in `bee` gain a
   `workers` field/line sourced from it. `stateWorkerMutate` and
@@ -647,15 +647,15 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   `test_cli_state.mjs`/`test_state.mjs` (precondition coverage: hand-written
   entry no longer blocks, a live other session's claim still does, C3
   self-exclusion holds). Evidence: trace
-  `.bee/cells/multisession-native-8.json`, commit c435add.
+  cell multisession-native-8 (trace purged from .bee/cells/), commit c435add.
 - Default/lane writes routed through their workflow record: see
   `workflow-records-and-projections.md` Pointers for `resolveMutationTarget`,
   `writeLaneRecordThroughProjection`/`writeStateRecordThroughProjection`, and
   the `workflow:<id>` lock they acquire.
-- Session workspace stamping (R76): `packages/bee/hooks/bee-session-init.mjs`
+- Session workspace stamping (R76): `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (formerly packages/bee/hooks/bee-session-init.mjs)
   (control-plane session creation + lazy workspace auto-register);
   `createSession`/`claimCellFile` in `lib/claims.mjs`. Evidence: trace
-  `.bee/cells/multisession-native-19.json`, commit 09e1ed0. Full workspace
+  cell multisession-native-19 (trace purged from .bee/cells/), commit 09e1ed0. Full workspace
   registry and write-policy mechanics:
   `areas/worktree-parallelism/control-plane-topology.md`.
 - Route-less claim escalation (B52/R103): the per-(feature, session) counter at

@@ -7,7 +7,7 @@ bee:
   id: leader-check-door-delivery
   lifecycle: active
   required_context: [docs/history/leader-check-door/CONTEXT.md, docs/history/leader-check-door/plan.md]
-  sources: [docs/history/leader-check-door/CONTEXT.md, docs/history/leader-check-door/plan.md, .bee/cells/lcd-1.json, .bee/cells/lcd-2.json, .bee/cells/lcd-3.json, .bee/cells/lcd-4.json]
+  sources: [docs/history/leader-check-door/CONTEXT.md, docs/history/leader-check-door/plan.md, cell lcd-1 (trace purged from .bee/cells/), cell lcd-2 (trace purged from .bee/cells/), cell lcd-3 (trace purged from .bee/cells/), cell lcd-4 (trace purged from .bee/cells/)]
 ---
 
 # leader-check-door — Delivery

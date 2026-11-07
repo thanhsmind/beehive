@@ -7,7 +7,7 @@ bee:
   id: ui-ux-pro-max-a11y-port-delivery
   lifecycle: active
   required_context: [.bee/lanes/ui-ux-pro-max-a11y-port.json]
-  sources: [.bee/lanes/ui-ux-pro-max-a11y-port.json, .bee/cells/uxp-1.json]
+  sources: [.bee/lanes/ui-ux-pro-max-a11y-port.json, cell uxp-1 (trace purged from .bee/cells/)]
 ---
 
 # ui-ux-pro-max-a11y-port — Delivery

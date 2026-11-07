@@ -502,7 +502,7 @@ active is immediately readable, and setting one makes `run_state` read
 hand (awaiting-human D2/D4, ah-2, 2026-08-14).** Trigger: the human sends any
 message, the agent clears the mark explicitly after acting on the answer, or
 the mark's age crosses the stale threshold. What happens: the
-`UserPromptSubmit` hook (`hooks/prompt_context.rs`) clears both the default
+`UserPromptSubmit` hook (`packages/bee-rs/crates/bee/src/hooks/prompt_context.rs`) clears both the default
 record's mark and the current feature's workflow-record mark, best-effort,
 inside its own failure boundary — a clearing error is logged and never fails
 the hook or the turn (the same try-once discipline B20 already documents for
@@ -577,7 +577,7 @@ alongside `run_state`; `status_full/orient.rs` treats a live mark as a
 **blocker** and also exposes it at `where.waiting_on`, so a routing reader
 can tell the run is stopped on a person rather than running; the text
 renderer (`status_full/render.rs`) prints it; the session preamble
-(`hooks/session_preamble/render.rs`, `waiting_on_note`) names it at session
+(`packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs`, `waiting_on_note`) names it at session
 start using the same liveness check (`waiting_on_is_live`) every other
 reader shares. Every pre-existing `bee status --json` key keeps its name,
 type, and meaning — additive only, per the same published-contract
@@ -587,7 +587,7 @@ discipline R109's own `run_state` exposure already follows.
 right after its phase line (awaiting-human D1, ah-3 rework, 2026-08-14).** A
 fresh repo-wide census of every `run_state`/`waiting_on`/phase-and-gate
 reporting site (`docs/history/awaiting-human/reports/ah-3-rework.md`) found
-`build_compact_capsule` (`hooks/compaction.rs`) already reading `waiting_on`
+`build_compact_capsule` (`packages/bee-rs/crates/bee/src/hooks/compaction.rs`) already reading `waiting_on`
 via `read_state_failopen` but not yet naming it to the reader. What
 happens: the capsule appends `- Waiting on human — {kind}: {subject}`
 immediately after its `- Phase: … | Mode: … | Feature: … | Lane: …` line,
@@ -674,7 +674,7 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   `waiting_on`, additively: `bee status --json` (`build.rs`), `bee orient`
   (a live mark is a blocker, also at `where.waiting_on`), the text
   renderer, the session preamble, and the post-compaction capsule
-  (`hooks/compaction.rs`, `build_compact_capsule`, reusing
+  (`packages/bee-rs/crates/bee/src/hooks/compaction.rs`, `build_compact_capsule`, reusing
   `session_preamble::waiting_on_note`); no pre-existing `bee status --json`
   key changes name, type, or meaning (awaiting-human D1/D5, ah-3; capsule
   added by ah-3 rework, commit `c5dc3d70`). `bee status --brief` is
@@ -860,25 +860,25 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
 
 - Workflow record store: `createWorkflow`/`readWorkflow`/`updateWorkflow`/
   `listWorkflows`/`withWorkflowLock`/`updateWorkflowAssumingLock` in
-  `packages/bee/lib/workflow-store.mjs` (byte-mirrored to
-  `.bee/bin/lib/`). 13 tests in `test_workflow_store.mjs`, red-first proven
+  `packages/bee-rs/crates/bee/src/verbs/workflow_store/mod.rs` (formerly packages/bee/lib/workflow-store.mjs) (byte-mirrored to
+  `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it)). 13 tests in `test_workflow_store.mjs`, red-first proven
   (constant lock name broke cross-workflow isolation; silent-default
   `readWorkflow` broke the typed-refusal tests). Evidence: trace
-  `.bee/cells/multisession-native-5.json`, commit 1e7b538.
+  cell multisession-native-5 (trace purged from .bee/cells/), commit 1e7b538.
 - Feature-start workflow creation: `seedLegacyWorkflows`,
   `checkNoLiveWorkflowForFeature`, `checkNoSameFeatureClaimedCells` in
-  `packages/bee/lib/state.mjs`. New msn-6 concurrency test proves
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs). New msn-6 concurrency test proves
   two different features' workflow-record creation never share a lock; new
   msn-6 C1 test proves a mid-flight legacy `state.json` survives as a
   workflow record after an unrelated feature's lane start and is never
   duplicated on a later start. Evidence: trace
-  `.bee/cells/multisession-native-6.json`, commit f4fe163.
+  cell multisession-native-6 (trace purged from .bee/cells/), commit f4fe163.
 - Projections: `rebuildStateProjection`/`rebuildLaneProjection`/
-  `rebuildAllProjections` in `packages/bee/lib/state-projection.mjs`;
+  `rebuildAllProjections` in packages/bee/lib/state-projection.mjs (retired with the Node runtime, 2026-08-02);
   `bee-state-sync.mjs` (hook) rewritten onto a full idempotent rebuild; new
   verb `bee state rebuild-projections`. Invariant proof (delete → rebuild →
   byte-identical) in `test_state_projection.mjs`. Evidence: trace
-  `.bee/cells/multisession-native-7.json`, commit 1c4d45d.
+  cell multisession-native-7 (trace purged from .bee/cells/), commit 1c4d45d.
 - Plan-rev-scoped gates: `workflowGatesToApprovedGates` in
   `state-projection.mjs`; `handleStateGate`'s gate stamping (standalone
   `--name` and merged `--merge`, `findGateStamp` normalizing the stamp array)
@@ -886,12 +886,12 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   `state plan-rev bump` verb, in `the bee binary` +
   `lib/command-registry.mjs`. Proved red-first (a `plan_rev` bump flips only
   the targeted workflow's projected execution boolean; a sibling workflow is
-  untouched). Evidence: trace `.bee/cells/multisession-native-9.json`, commit
+  untouched). Evidence: trace cell multisession-native-9 (trace purged from .bee/cells/), commit
   2dd834f. Widened so `--merge` stamps both `shape` and `execution` together
   (validation-diet D2/D15): `bee state gate --merge --approved true` flips
   both fields in one call, mutually exclusive with `--name`; a plain `--name`
-  approval is byte-for-byte unchanged. Evidence: trace `.bee/cells/vd-3.json`;
-  6 new tests in `packages/bee/tests/test_state_projection.mjs` proving one
+  approval is byte-for-byte unchanged. Evidence: trace cell vd-3 (trace purged from .bee/cells/);
+  6 new tests in packages/bee/tests/test_state_projection.mjs (retired with the Node runtime, 2026-08-02) proving one
   `--merge` call flips both gates, `--merge --name` refuses together, and
   `plan-rev bump` revokes both gates when approved via `--merge`.
 - Default-path routing through the workflow record: `writeStateRecordThroughProjection`,
@@ -900,7 +900,7 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   in `workflow-store.mjs`. Two deterministic seam tests proving zero
   cross-workflow `LOCK_BUSY` and decoupling from both the `sessions` lock and
   a different feature's own workflow lock. Evidence: trace
-  `.bee/cells/multisession-native-10.json`, commit e7f365a; decision recorded
+  cell multisession-native-10 (trace purged from .bee/cells/), commit e7f365a; decision recorded
   in `.bee/decisions.jsonl` at feature close (ce89afc5).
 - Advisor consult record for this whole slice: `docs/history/multisession-native/reports/advisor-digest-slice2.md`
   (conditions C1-C5, findings F5/F7/F8, verdict proceed-with-conditions).
@@ -908,13 +908,13 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   from every workflow/session/claim site this file and `bee` own; see
   `areas/worktree-parallelism/control-plane-topology.md` for the resolver,
   the declared plane split, and the msn-18 honest-block re-slice that swept
-  it in. Evidence: traces `.bee/cells/multisession-native-{18a,18b,18c}.json`,
+  it in. Evidence: traces cell traces multisession-native-{18a,18b,18c} (purged from .bee/cells/),
   commits 5d0ec3c, a1431448, d69d81e.
 - Legacy handoff projection's audited writer set (msn-24): see
   `areas/workflow-state/handoff.md` (R77) for the full behavior; the
   grep-audit test itself lives in
-  `packages/bee/tests/test_state.mjs`. Evidence: trace
-  `.bee/cells/multisession-native-24.json`, commit cee2d5f.
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/tests/test_state.mjs). Evidence: trace
+  cell multisession-native-24 (trace purged from .bee/cells/), commit cee2d5f.
 - Per-record lock order (R79/R80, GH #70): `withMutationLock`'s `if (wf)`
   branch nests `withStoreLock(root, 'state', fn)` inside
   `withWorkflowLock(ctrlRoot, wf.id, …)` for default-record mutations, and a
@@ -927,7 +927,7 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   `withWorkflowLock(…, () => withStoreLock(root, 'state', body))` with
   `updateWorkflowAssumingLock` inside, closing the one live inverse-order
   edge (D9). Fix vendored byte-identical into `.bee/bin/bee` (D10, `md5sum`
-  parity with `the bee binary`). Proof: `scripts/tests/test_state_projection_race.mjs`
+  parity with `the bee binary`). Proof: scripts/tests/test_state_projection_race.mjs (retired with the Node runtime, 2026-08-02)
   — real OS child processes (never in-process async) asserting mutual
   exclusion between a `'state'`-locked writer and a `workflow:<id>`-locked
   writer, an exact-count lost-update assertion, and a negative control (the
@@ -1010,7 +1010,7 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   `clear_and_reap_waiting_on_best_effort`,
   `clear_workflow_waiting_on`/`clear_default_state_waiting_on`, and
   `reap_stale_waiting_on` (the dual-condition reap, mirroring
-  `cells/claims.rs`'s reclaim rule) in `hooks/prompt_context.rs` and
+  `cells/claims.rs`'s reclaim rule) in `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs` and
   `workflow_store/record.rs`. Evidence: trace `.bee/cells/archive/awaiting-human/ah-2.json`,
   commit `39facee4`. Rework (ah-2, commit `b7b422f9`): the human-message
   path proved through the real `prompt_context::run` hook entry point, not
@@ -1019,16 +1019,16 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   and
   `run_survives_a_failing_clear_without_failing_the_hook_or_skipping_its_output`
   (the latter a real `.bee/`-directory permission-based write failure
-  injection, `#[cfg(unix)]`) in `hooks/prompt_context.rs`'s own test module.
+  injection, `#[cfg(unix)]`) in `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs`'s own test module.
 - The reporting surfaces (R127, D1/D5, ah-3): the `waiting_on` key in
   `status_full/build.rs`, the blocker + `where.waiting_on` in
   `status_full/orient.rs`, the text line in `status_full/render.rs`, and
-  `waiting_on_note` in `hooks/session_preamble/render.rs`. Evidence: trace
+  `waiting_on_note` in `packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs`. Evidence: trace
   `.bee/cells/archive/awaiting-human/ah-3.json`, commit `fe0b8885`. Rework (ah-3, commit
   `c5dc3d70`): full census in
   `docs/history/awaiting-human/reports/ah-3-rework.md` found and wired a
   fifth surface, the post-compaction capsule's
-  `build_compact_capsule` (`hooks/compaction.rs`), reusing
+  `build_compact_capsule` (`packages/bee-rs/crates/bee/src/hooks/compaction.rs`), reusing
   `session_preamble::waiting_on_note`; tests
   `the_capsule_names_a_live_wait_right_after_the_phase_line` and
   `the_capsule_stays_silent_without_a_live_wait` in the same file. A sixth

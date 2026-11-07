@@ -165,16 +165,16 @@ itself a signal worth reading.
 
 ## Pointers (implementation)
 
-- **P8** — Tests: `packages/bee/tests/test_lib.mjs` (124 assertions, incl. a
+- **P8** — Tests: packages/bee/tests/test_lib.mjs (retired with the Node runtime, 2026-08-02) (124 assertions, incl. a
   table-driven payload sweep over every allowed field, the ranking matrix, and a control-byte sweep
   over vendored sources)
 - **P9** — Filing + scoped, gated commit: `the bee binary` `handleBacklogAdd` /
   `commitBacklogRow` (mirrored to `.bee/bin/bee` and the plugin/skill trees via
-  `packages/bee/scripts/bee onboard --apply`); the queue-submission/self-observation
+  `packages/bee-rs/crates/bee/src/main.rs onboard --apply` (formerly packages/bee/scripts/bee)); the queue-submission/self-observation
   distinction is the `--queue-submit` flag (default false); the merge-in-progress check resolves
   the real git-dir (`git rev-parse --git-dir`) and looks for `MERGE_HEAD` there before attempting
   the commit. `lib/command-registry.mjs`'s `backlog.add` entry documents the flag. Example
-  coverage in `packages/bee/tests/test_bee_cli.mjs` (`backlog.add` example, run
+  coverage in packages/bee/tests/test_bee_cli.mjs (retired with the Node runtime, 2026-08-02) (`backlog.add` example, run
   against a directory with no version control to prove the silent-skip path) and the real-git
-  fixture tests in `packages/bee/tests/test_cli_cells.mjs` (queue-submit
+  fixture tests in `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs` (formerly packages/bee/tests/test_cli_cells.mjs) (queue-submit
   omitted/true, and the merge-in-progress skip).

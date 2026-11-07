@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [docs/history/effort-at-the-door/CONTEXT.md, docs/history/effort-at-the-door/plan.md]
-  sources: [docs/history/effort-at-the-door/CONTEXT.md, docs/history/effort-at-the-door/plan.md, .bee/cells/ead-1.json, .bee/cells/ead-2.json, .bee/cells/ead-3.json]
+  sources: [docs/history/effort-at-the-door/CONTEXT.md, docs/history/effort-at-the-door/plan.md, cell ead-1 (trace purged from .bee/cells/), cell ead-2 (trace purged from .bee/cells/), cell ead-3 (trace purged from .bee/cells/)]
 ---
 
 # effort-at-the-door — Delivery

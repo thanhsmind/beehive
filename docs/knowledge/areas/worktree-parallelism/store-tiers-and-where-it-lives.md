@@ -95,6 +95,6 @@ against the pre-change catalog until the worker pointed it at the new build.
   `performCleanup`; claim-next tap in `templates/lib/cells.mjs`; guard tap in
   `templates/lib/guards.mjs` (`resolveHoldTopology` in all three, same shape).
 - Tests: resolver P40 regression, grant-resolve, worktree-store unit, worktree CLI e2e,
-  `scripts/tests/test_worktree_holds.mjs` (seam), `scripts/tests/test_worktree_holds_race.mjs`
+  `packages/bee-rs/crates/bee/tests/concurrency.rs` (formerly scripts/tests/test_worktree_holds.mjs) (seam), `packages/bee-rs/crates/bee/tests/concurrency.rs` (formerly scripts/tests/test_worktree_holds_race.mjs)
   (concurrency), claim-next foreign-skip rows in `test_cli_cells.mjs`, guard net + foreign
   rows in `templates/tests/test_guards.mjs` (all discovered by the verify pipeline).

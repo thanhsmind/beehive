@@ -342,7 +342,7 @@ recovery.
 ## Pointers (implementation)
 
 - Catalog + renderer: `packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs`
-  — the Rust port of the deleted Node `packages/bee/hooks/catalog.mjs`
+  — the Rust port of the deleted Node `packages/bee-rs/crates/bee/src/catalog.rs` (formerly packages/bee/hooks/catalog.mjs)
   (retired at the R6 cutover, commit 5c62cad0). It exports `Runtime {
   Claude, Codex }`, `Target { Plugin, Repo }`, and the `ALLOWED_DIFFERENCES`
   table; `render_projection`/`render_projection_text` take an explicit
@@ -454,5 +454,5 @@ recovery.
   identity is the acting CLI session (`verbs/reservations/reserve.rs`);
   the belt forwards OpenCode's own `input.sessionID` as `session_id`
   (`.opencode/plugins/bee-guard.ts`); the mismatch is evaluated by
-  `find_session_conflicts` (`hooks/write_guard/checks.rs`). Evidence for all
+  `find_session_conflicts` (`packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs`). Evidence for all
   three gaps: `docs/history/opencode-support/discovery.md` (oc-12).

@@ -95,10 +95,10 @@ cell dispatch, directing callers to configured herding/CLI routes.
 - Native spawn guard: `evaluate_codex_spawn` (returns `codex-spawn-unmarked` with exit 2 when markers are absent or hidden) in `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`.
 - Doctor attestation: `read_attestation` and `run_attest` in `packages/bee-rs/crates/bee/src/doctor.rs`.
 - Historical Node implementation (historical evidence):
-  `classifyNativeTransport` in `packages/bee/lib/dispatch-guard.mjs`,
-  `scripts/tests/test_native_probe.mjs`, and `scripts/canary_codex.mjs`.
-- Evidence: `.bee/cells/cnt-2.json`, `.bee/cells/cnt-3.json`, `.bee/cells/cnt-4.json`,
-  `.bee/cells/cnt-5.json`, `docs/history/codex-native-transport/`.
+  `classifyNativeTransport` in `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (formerly packages/bee/lib/dispatch-guard.mjs),
+  scripts/tests/test_native_probe.mjs (retired with the Node runtime, 2026-08-02), and `scripts/codex-parity-canary.sh` (formerly scripts/canary_codex.mjs).
+- Evidence: cell cnt-2 (trace purged from .bee/cells/), cell cnt-3 (trace purged from .bee/cells/), cell cnt-4 (trace purged from .bee/cells/),
+  cell cnt-5 (trace purged from .bee/cells/), `docs/history/codex-native-transport/`.
 
 ## Open Gaps
 

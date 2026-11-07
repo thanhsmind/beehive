@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding, hook-runtime]
   required_context: [docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md]
-  sources: [docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, .bee/cells/pph-1.json, .bee/cells/pph-2.json, .bee/cells/pph-3.json, .bee/cells/pph-4.json, .bee/cells/pph-5.json, .bee/cells/pph-6.json, .bee/cells/pph-7.json]
+  sources: [docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, cell pph-1 (trace purged from .bee/cells/), cell pph-2 (trace purged from .bee/cells/), cell pph-3 (trace purged from .bee/cells/), cell pph-4 (trace purged from .bee/cells/), cell pph-5 (trace purged from .bee/cells/), cell pph-6 (trace purged from .bee/cells/), cell pph-7 (trace purged from .bee/cells/)]
 ---
 
 # paseo-pi-hardening — Delivery

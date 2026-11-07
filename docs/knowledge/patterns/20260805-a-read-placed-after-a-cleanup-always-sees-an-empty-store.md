@@ -24,7 +24,7 @@ its own input.
 The instance: the soft promote door (`bee knowledge promote`, run in-process at `bee close`) was
 inserted after `auto_archive_on_close`, at the line the plan pinned. With `cells_archive_on_close`
 at its default `true`, close moves the just-capped cells into `.bee/cells/archive/` before
-`build_promotion` scans `.bee/cells/*.json` — so every real close proposed nothing. The happy-path
+`build_promotion` scans cell traces * (purged from .bee/cells/) — so every real close proposed nothing. The happy-path
 test passed only because it had been written with archiving disabled, which hid the ordering defect
 from the one test built to catch it.
 

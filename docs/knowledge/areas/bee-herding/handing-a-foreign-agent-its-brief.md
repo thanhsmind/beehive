@@ -86,7 +86,7 @@ and `round`: `{state, event, tool_name?, tool_use_id?, at (RFC3339), job_id,
 round}`. The hook reads `round` as the highest `brief-N.txt` present in the
 mailbox, never from an env var — the export fires once at spawn and would go
 stale across a `--continue` round. The state vocabulary and the
-same-`tool_use_id` unblock rule are `hooks/activity.rs`'s, unchanged.
+same-`tool_use_id` unblock rule are `packages/bee-rs/crates/bee/src/hooks/activity.rs`'s, unchanged.
 
 The run verb reads that record BEFORE the screen classifier at all three wait
 points — the ready gate, pointer delivery, and the round poll (D3): `blocked`
@@ -343,7 +343,7 @@ permit.
   `DeliveryError::NeverAcked` (cells hps-11, hps-14).
 - The activity record: writer is the herded sink in
   `packages/bee-rs/crates/bee/src/hooks/activity.rs` (the marker pass-through
-  is in `hooks/mod.rs`); reader is `activity_path` / `parse_activity_text` /
+  is in `packages/bee-rs/crates/bee/src/hooks/mod.rs`); reader is `activity_path` / `parse_activity_text` /
   `ACTIVITY_FRESHNESS_SECS` in `herding/mailbox.rs`, wired through
   `status_with_activity` in `herding/run.rs`.
 - A fresh spawn whose caller has `BEE_DISPATCH_ID` set also exports

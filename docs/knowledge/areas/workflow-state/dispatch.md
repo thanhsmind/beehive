@@ -415,15 +415,15 @@ pretending to be behaviour.
 ## Pointers (implementation)
 
 - Unified dispatcher and catalog: `the bee binary`,
-  `packages/bee/lib/command-registry.mjs`, and
-  `packages/bee/lib/validate-args.mjs`, mirrored under `.bee/bin/`.
-  Evidence: `.bee/cells/hia-1.json`, `.bee/cells/hia-2.json`, and
+  `packages/bee-rs/crates/bee/src/registry.rs` (formerly packages/bee/lib/command-registry.mjs), and
+  packages/bee/lib/validate-args.mjs (retired with the Node runtime, 2026-08-02), mirrored under `.bee/bin/`.
+  Evidence: cell hia-1 (trace purged from .bee/cells/), cell hia-2 (trace purged from .bee/cells/), and
   `docs/history/harness-integration-adopt/reports/`.
 - Unified dispatcher (all nine groups): `the bee binary` owns
-  registry + handlers; dispatcher-unify (`.bee/cells/du-{1..6}.json`,
+  registry + handlers; dispatcher-unify (cell traces du-{1..6} (purged from .bee/cells/),
   `docs/history/dispatcher-unify/`) first made every legacy per-group script a
   2-line forwarder with byte-identical output, then shim-retire (D1, decision
-  bbc6bcea; `.bee/cells/shim-retire-{1..6}.json`) deleted those forwarders
+  bbc6bcea; cell traces shim-retire-{1..6} (purged from .bee/cells/)) deleted those forwarders
   outright — `bee` is now the sole shipped CLI, no forwarders remain.
 - Holdout arm (R21): `knowledge_arm`, `knowledge_holdout_percent` and
   `cell_learned_context` in
@@ -454,14 +454,14 @@ pretending to be behaviour.
   `.bee/cells/archive/slp-contract-original-request/scor-5.json`.
 - Unknown-flag rejection (R14): `main()` in `the bee binary` (mirrored
   `.bee/bin/bee`), firing after `validate()` and before every handler
-  dispatch; registry gaps declared in `packages/bee/lib/command-registry.mjs`
+  dispatch; registry gaps declared in `packages/bee-rs/crates/bee/src/registry.rs` (formerly packages/bee/lib/command-registry.mjs)
   (`cells.claim`/`claim-next` `--isolate`, `state.gate` `--owner`,
   `state.start-feature` `--isolate`, `config.get`/`set`/`unset` `--local`,
   `cells.verify`/`cap`/`block`/`unclaim`/`reopen` `--session-id`/
   `--force-ownership` via the shared `ownershipFlags()` helper). Red-first
-  regression: `packages/bee/scripts/tests/test_bee_cli.mjs` (295 passed/1
+  regression: packages/bee/scripts/tests/test_bee_cli.mjs (retired with the Node runtime, 2026-08-02) (295 passed/1
   failed before the fix, 296 passed after). Evidence:
-  `.bee/cells/packages-engine-move-3.json`,
+  cell packages-engine-move-3 (trace purged from .bee/cells/),
   `docs/history/packages-engine-move/reports/packages-engine-move-3.md`.
 - Intent anchor and purpose verbatim retention (R15): verified in
   `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` and proven across the Pi

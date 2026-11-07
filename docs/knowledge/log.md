@@ -2,7 +2,7 @@
 
 - Bundle created under `docs/knowledge/` (D17): `index.md` hand-seeded (root frontmatter carries
   only `okf_version`, per D4/OKF §9), this `log.md` opened. The format core —
-  `.bee/bin/lib/knowledge.mjs`, the `bee knowledge check` verb, the emitter-first frontmatter
+  `packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs` (formerly .bee/bin/lib/knowledge.mjs), the `bee knowledge check` verb, the emitter-first frontmatter
   codec, and the two-level OKF-error/profile-warning checker (D4/D13) — shipped in cell okf-1
   (feature `okf-foundation`, slice S1). This entry, the skeleton, and the Bee OKF Profile area
   spec (`docs/specs/okf-profile.md`) are cell okf-2.
@@ -16,8 +16,8 @@
   `triggers.md`, `consult-loop.md`, `slots-and-tiers.md`), frontmatter carried per D33. The
   legacy path is now a pointer stub carrying the full anchor map (D37: 26 anchors — B1-B4,
   R1-R9, E1-E6, P1-P7 — each mapped to its owning concept). Coverage is machine-checked by
-  `scripts/okf_migrate.mjs --check advisor-protocol` (D35), now a chain suite in
-  `scripts/run_verify.mjs`; the session-close capture nudge scans `docs/knowledge/**/*.md`
+  scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) (D35), now a chain suite in
+  `packages/bee-rs/crates/bee/src/verbs/test_runner.rs` (formerly scripts/run_verify.mjs); the session-close capture nudge scans `docs/knowledge/**/*.md`
   mtimes alongside `docs/specs/` (D34).
 - Critical patterns migrated, work item + plan authored, templates published (cell okf-6, slice
   S4b): `docs/history/learnings/critical-patterns.md`'s 47 dated pattern entries re-authored into
@@ -25,9 +25,9 @@
   judged per entry — 42 pitfall, 5 practice), each canonical by construction (generated via
   `emitFrontmatter`, zero `not_canonical` findings). The legacy path is now a pointer stub
   carrying the full 47-anchor map (D37: `PAT1`-`PAT47`). Coverage is machine-checked by the new
-  `scripts/okf_migrate.mjs --check-patterns` (D35, additive — critical-patterns.md is a flat
+  scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) (D35, additive — critical-patterns.md is a flat
   dated list, not a nine-section BA spec, so it does not fit `--check`'s `ANCHOR_REGISTRY`/area
-  shape), now a chain suite in `scripts/run_verify.mjs`. This feature's own work item and plan
+  shape), now a chain suite in `packages/bee-rs/crates/bee/src/verbs/test_runner.rs` (formerly scripts/run_verify.mjs). This feature's own work item and plan
   now live as concepts too: `work/okf-foundation/work-item.md` (`bee.work-item`, D26, condensed
   from `CONTEXT.md`) and `work/okf-foundation/plan.md` (`bee.plan`, condensed from the frozen
   `plan.md`, carrying `bee.review_status: Approved`, D36). `docs/specs/okf-profile.md` gained a
@@ -50,7 +50,7 @@
   starts the source really carries — a bold-lead continuation inside B8 and the unnumbered
   verify-ladder bullet after R17 — are pinned as unparsed rather than invented into anchors
   (D10); each still travels with the anchor whose block it sits in, so the F11 fidelity floor
-  measures it. Coverage is machine-checked by `scripts/okf_migrate.mjs --check doctrine-layer`
+  measures it. Coverage is machine-checked by scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02)
   (D35), now a chain suite. Two gate defects surfaced and were closed in the same cell: the
   stub-row parser and the `bee.sources` claim matcher had not been widened alongside f2-4's
   letter-suffixed ids (so `B3a`/`B7a` could never be claimed by anything), and F12's drift
@@ -101,7 +101,7 @@
   (verbatim re-homing). RED-FIRST: with the R4 claim deliberately removed from
   `concurrency-and-hermetic-runs.md`'s `bee.sources`, `--check verify-pipeline` failed with the
   real coverage-loss finding (`LOST in concepts: R4`), then was restored to green. Coverage is
-  machine-checked by `scripts/okf_migrate.mjs --check verify-pipeline` (D35), now a chain suite.
+  machine-checked by scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) (D35), now a chain suite.
 
 - Fifth area migrated (cell f2-7, feature `okf-migration-f2`, slice S4c):
   `docs/specs/performance-log.md` re-authored into three `bee.area` concepts, split by TOPIC
@@ -129,7 +129,7 @@
   min/median/max 1.000 (verbatim re-homing). RED-FIRST: with the R4 claim deliberately removed from
   `sections-lifecycle-and-measurement.md`'s `bee.sources`, `--check performance-log` failed with
   the real coverage-loss finding (`LOST in concepts: R4`), then was restored to green. Coverage is
-  machine-checked by `scripts/okf_migrate.mjs --check performance-log` (D35), now a chain suite.
+  machine-checked by scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) (D35), now a chain suite.
 
 - Sixth area migrated (cell f2-8, feature `okf-migration-f2`, slice S4d):
   `docs/specs/feedback-digest.md` re-authored into four `bee.area` concepts, split by TOPIC rather
@@ -163,7 +163,7 @@
   RED-FIRST: with the R4 claim deliberately removed from `cross-repo-trust-boundary.md`'s
   `bee.sources`, `--check feedback-digest` failed with the real coverage-loss finding (`LOST in
   concepts: R4`), then was restored to green. Coverage is machine-checked by
-  `scripts/okf_migrate.mjs --check feedback-digest` (D35), now a chain suite.
+  scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) (D35), now a chain suite.
 
 - Seventh area migrated, and the largest so far (cell f2-9, feature `okf-migration-f2`, slice
   S4e): `docs/specs/onboarding.md` re-authored into eight `bee.area` concepts, split by TOPIC
@@ -209,8 +209,8 @@
   RED-FIRST: with the `R20b` claim deliberately removed from
   `installer-entrypoints-and-source-staging.md`'s `bee.sources`, `--check onboarding` failed with
   the real coverage-loss finding (`LOST in concepts: R20b`), then was restored to green. Coverage
-  is machine-checked by `scripts/okf_migrate.mjs --check onboarding` (D35), now a chain suite.
-  `scripts/tests/test_okf_pins.mjs`' section 12 — the guard that proves the extractor is not blind by
+  is machine-checked by scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) (D35), now a chain suite.
+  scripts/tests/test_okf_pins.mjs (retired with the Node runtime, 2026-08-02)' section 12 — the guard that proves the extractor is not blind by
   requiring a NON-ZERO unparsed-block count from this very spec — now reads those same bytes from
   the committed, hash-verified source copy rather than the path this cell turned into a stub: the
   assertion follows the bytes, never the convenience.
@@ -262,7 +262,7 @@
   is as loud as a drifting pin — while the committed copy at
   `docs/history/okf-migration-f2/sources/hook-runtime.md` is the pinned bytes' only content
   address. An undeclared disagreement, a `repaired_from` that does not match, or a repair with no
-  stated reason are all still `PIN_SHA_MISMATCH`; `scripts/tests/test_okf_pins.mjs` section 15 asserts
+  stated reason are all still `PIN_SHA_MISMATCH`; scripts/tests/test_okf_pins.mjs (retired with the Node runtime, 2026-08-02) section 15 asserts
   every one of those from both sides, asserts the branch is inert on an unrepaired pin, and
   asserts the property the repair exists to create — every derived id distinct, with `R14` and
   `R14a` carrying their own separate texts so the floor measures each individually.
@@ -279,7 +279,7 @@
   RED-FIRST: with the `R14a` claim deliberately removed from `write-guard-request-shapes.md`'s
   `bee.sources`, `--check hook-runtime` failed with the real coverage-loss finding (`LOST in
   concepts: R14a`), then was restored to green. Coverage is machine-checked by
-  `scripts/okf_migrate.mjs --check hook-runtime` (D35), now a chain suite (73 suites).
+  scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) (D35), now a chain suite (73 suites).
 
 - Ninth area migrated, and the only one of the eleven that genuinely needed a THIRD anchor
   scheme (cell f2-11, feature `okf-migration-f2`, slice S5): `docs/specs/worktree-parallelism.md`
@@ -312,7 +312,7 @@
   hyphen). Nothing is invented: the structure the author actually wrote IS the ground truth,
   exactly as `flat-pattern-list` already treats a `## [YYYYMMDD] …` heading as an anchor.
 - Three boundaries hold the scheme in place, each a test before it was a line of code
-  (`scripts/tests/test_okf_pins.mjs` section 27). A `## ` heading becomes an anchor; a `###`
+  (scripts/tests/test_okf_pins.mjs (retired with the Node runtime, 2026-08-02) section 27). A `## ` heading becomes an anchor; a `###`
   SUBHEADING does not — its prose travels with the section containing it, so the fidelity floor
   measures it there, and the subheading itself is still REPORTED as an unparsed block so a
   subheading-heavy shape this scheme cannot see stays visible. A source with ZERO `## ` headings
@@ -351,7 +351,7 @@
   with the `S-boundary-out-of-scope` claim deliberately removed from `overview.md`'s
   `bee.sources`, `--check worktree-parallelism` failed with the real coverage-loss finding
   (`LOST in concepts: S-boundary-out-of-scope`), then was restored to green. Coverage is
-  machine-checked by `scripts/okf_migrate.mjs --check worktree-parallelism` (D35), now a chain
+  machine-checked by scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) (D35), now a chain
   suite (74 suites). Every registered area now declares a scheme, so `--verify-pins` reports no
   `SKIP-REFUSED` line at all — the PIN_NO_SCHEME refusal stays asserted against an ad-hoc pin,
   because the property is "an undecided shape is refused BY NAME", not "some area is still
@@ -416,7 +416,7 @@
 - **The migration is complete** — last group of the split area (cell f2-13, feature
   `okf-migration-f2`): the remaining **136** anchors of `docs/specs/workflow-state.md` are
   authored, the pointer stub carries the full 140-anchor map, and
-  `scripts/okf_migrate.mjs --check workflow-state` is wired into the verify chain green at
+  scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02) is wired into the verify chain green at
   **140 anchors, 140 owned, 0 duplicated, 0 lost**, fidelity min/median/max **1.000**. Every
   area that lived in `docs/specs/` is now a knowledge bundle concept set; `docs/specs/` holds
   only pointer stubs plus `reading-map.md` and `okf-profile.md`.
@@ -481,7 +481,7 @@
   session preamble), and `migration-and-coverage-gates.md` (the coverage report, the
   content-addressed pin, the unparsed report, the fidelity floor, the drift telemetry, the
   pointer-stub anchor map). The legacy path is now a D37 pointer stub carrying the full 24-row
-  anchor map. Coverage is machine-checked by `scripts/okf_migrate.mjs --check okf-profile`,
+  anchor map. Coverage is machine-checked by scripts/okf_migrate.mjs (retired with the Node runtime, 2026-08-02),
   pinned to blob `9267d3e` at `53d8111`: **24 anchors, 24 owned, 0 duplicated, 0 lost**;
   fidelity min/median/max all 1.000 against the 0.60 floor (F11), with no concept edited and no
   threshold touched. The gate was proven RED first — one anchor unclaimed reports
@@ -503,7 +503,7 @@
   `expected_counts.unparsed_blocks: 17` is asserted precisely so a future fence-aware extractor
   becomes a loud failure instead of a silent reshaping.
 - **The fence's named exception SHRANK by one.** `okf-profile.md` was a named exception in
-  `scripts/okf_specs_fence.mjs` protecting the interval between f3-4 and this migration. That
+  `packages/bee-rs/crates/bee/tests/specs_fence.rs` (formerly scripts/okf_specs_fence.mjs) protecting the interval between f3-4 and this migration. That
   interval is over, and the exception was REMOVED rather than relabelled: leaving it would have
   been a name-based pass that keeps saying yes if the stub's `migrated_to` is ever dropped —
   precisely the silent-rot the structural stub branch exists to prevent. The file now passes as

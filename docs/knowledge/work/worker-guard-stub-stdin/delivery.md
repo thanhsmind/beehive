@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [docs/history/worker-guard-stub-stdin/plan.md]
-  sources: [docs/history/worker-guard-stub-stdin/plan.md, .bee/cells/wgs-1.json]
+  sources: [docs/history/worker-guard-stub-stdin/plan.md, cell wgs-1 (trace purged from .bee/cells/)]
 ---
 
 # worker-guard-stub-stdin — Delivery

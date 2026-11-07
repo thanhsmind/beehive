@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/herding-cap-check/CONTEXT.md]
-  sources: [docs/history/herding-cap-check/CONTEXT.md, .bee/cells/hcapc-1.json]
+  sources: [docs/history/herding-cap-check/CONTEXT.md, cell hcapc-1 (trace purged from .bee/cells/)]
 ---
 
 # herding-cap-check — Delivery

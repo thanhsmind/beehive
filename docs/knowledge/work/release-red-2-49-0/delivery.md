@@ -7,7 +7,7 @@ bee:
   id: release-red-2-49-0-delivery
   lifecycle: active
   required_context: [docs/history/release-red-2-49-0/plan.md]
-  sources: [docs/history/release-red-2-49-0/plan.md, .bee/cells/rr49-1.json]
+  sources: [docs/history/release-red-2-49-0/plan.md, cell rr49-1 (trace purged from .bee/cells/)]
 ---
 
 # release-red-2-49-0 — Delivery

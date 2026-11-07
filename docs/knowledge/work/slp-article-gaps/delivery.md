@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [docs/history/slp-article-gaps/CONTEXT.md]
-  sources: [docs/history/slp-article-gaps/CONTEXT.md, .bee/cells/sag-1.json, .bee/cells/sag-2.json]
+  sources: [docs/history/slp-article-gaps/CONTEXT.md, cell sag-1 (trace purged from .bee/cells/), cell sag-2 (trace purged from .bee/cells/)]
 ---
 
 # slp-article-gaps — Delivery

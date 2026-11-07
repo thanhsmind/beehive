@@ -241,7 +241,7 @@ overlays `.bee/config.json` exactly as every other key. A host that onboards bee
 gets the hook code and the doctrine line and refuses nothing until it sets the
 key — `scripts/` exists in most hosts, and an always-on arm would refuse a host's
 own code the moment it installed bee. The store the key is read FROM follows the
-worktree grant (`hooks/adapter.rs`): a GRANTED feature worktree reads its own
+worktree grant (`packages/bee-rs/crates/bee/src/hooks/adapter.rs`): a GRANTED feature worktree reads its own
 `.bee/config.json`, so a branch that predates the key is never refused; an
 UNGRANTED worktree reads main's store, so main's key decides for it.
 
@@ -297,7 +297,7 @@ exit 2 on stderr like every other write-guard deny.
 **The known limitation.** The comment predicate is a line predicate, not a
 parser: a line that STARTS with `//` or `#` inside a string literal counts as a
 comment. One such line exists today
-(`hooks/session_close/html.rs`, a `// expand a project row…` line inside an
+(`packages/bee-rs/crates/bee/src/hooks/session_close/html.rs`, a `// expand a project row…` line inside an
 embedded script string). A false red there is fixed by rewriting the string —
 never by an allowlist.
 
@@ -315,7 +315,7 @@ fence as the bin unit test
 `devtools::comment_baseline::tests::every_code_file_is_at_or_below_its_comment_baseline`,
 and the end-to-end refusal as
 `a_comment_guard_deny_reaches_the_host_as_exit_two_on_stderr`
-(`tests/hook_contracts.rs`). The baseline and its test are this repository's own
+(`packages/bee-rs/crates/bee/tests/hook_contracts.rs`). The baseline and its test are this repository's own
 and never ship to a host.
 
 <!-- bee:not-a-deferral: D6 records the batched cleanup as separate grooming work; nothing here promises a date -->
@@ -339,10 +339,10 @@ lowers the baseline (69326d15).
 
 ## Pointers (implementation)
 
-- Batch guard: `packages/bee/hooks/bee-write-guard.mjs` (`extractApplyPatchTargets`).
+- Batch guard: `packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs` (formerly packages/bee/hooks/bee-write-guard.mjs) (`extractApplyPatchTargets`).
 
-- CLI-shape guard incl. 3-token verb resolution: `packages/bee/hooks/bee-write-guard.mjs`
-  against the `command-registry.mjs` catalog. Evidence: `.bee/cells/du-2.json`,
+- CLI-shape guard incl. 3-token verb resolution: `packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs` (formerly packages/bee/hooks/bee-write-guard.mjs)
+  against the `command-registry.mjs` catalog. Evidence: cell du-2 (trace purged from .bee/cells/),
   `docs/history/dispatcher-unify/`.
 
 - Help exemption: `check_cli_shape` in
@@ -378,10 +378,10 @@ lowers the baseline (69326d15).
   exit 2 + stderr). The advisory reservation branch below it emits
   `additionalContext` only, no verdict. Tests: `write_guard/tests.rs`
   (`ask_long_header_is_auto_fixed`, `intent_reservation_allows_with_warning`).
-  Provenance: `.bee/cells/ag-1.json`, commit 52dad26 (Node original).
+  Provenance: cell ag-1 (trace purged from .bee/cells/), commit 52dad26 (Node original).
 - Heading counting unit and the ASCII-only repair (B28/R27):
   `textutil::utf16_len` (`packages/bee-rs/crates/bee/src/textutil.rs:51`) called
-  at `hooks/write_guard/detectors.rs:159` — the crate's only caller of that
+  at `packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs:159` — the crate's only caller of that
   helper, with the reason written beside the call; the repair's ASCII guard and
   the delegation fall-through are at `detectors.rs:201-207`, the rewrite itself
   at `detectors.rs:207-215`. Full text-measurement rule:
@@ -401,6 +401,6 @@ lowers the baseline (69326d15).
   (`write_guard/guards.rs`) and `apply_patch_added_lines`
   (`write_guard/detectors.rs`). Tests: the `comment_guard_*` cases in
   `write_guard/tests.rs`, `a_comment_guard_deny_reaches_the_host_as_exit_two_on_stderr`
-  (`tests/hook_contracts.rs`), and the ratchet in `comment_baseline.rs`'s own
+  (`packages/bee-rs/crates/bee/tests/hook_contracts.rs`), and the ratchet in `comment_baseline.rs`'s own
   test module. Provenance: feature `no-code-comments`, cells ncc-1 through ncc-4
   (`docs/history/no-code-comments/CONTEXT.md`).

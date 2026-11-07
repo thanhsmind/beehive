@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [docs/history/run-git-stdin-thread/CONTEXT.md, docs/history/run-git-stdin-thread/plan.md]
-  sources: [docs/history/run-git-stdin-thread/CONTEXT.md, docs/history/run-git-stdin-thread/plan.md, .bee/cells/rgs-1.json]
+  sources: [docs/history/run-git-stdin-thread/CONTEXT.md, docs/history/run-git-stdin-thread/plan.md, cell rgs-1 (trace purged from .bee/cells/)]
 ---
 
 # run-git-stdin-thread — Delivery

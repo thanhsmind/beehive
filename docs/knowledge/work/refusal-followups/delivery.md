@@ -7,7 +7,7 @@ bee:
   id: refusal-followups-delivery
   lifecycle: active
   required_context: [docs/history/refusal-followups/plan.md]
-  sources: [docs/history/refusal-followups/plan.md, .bee/cells/rfu-1.json]
+  sources: [docs/history/refusal-followups/plan.md, cell rfu-1 (trace purged from .bee/cells/)]
 ---
 
 # refusal-followups — Delivery

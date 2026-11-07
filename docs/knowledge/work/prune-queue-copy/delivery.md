@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [docs/history/prune-queue-copy/CONTEXT.md, docs/history/prune-queue-copy/plan.md]
-  sources: [docs/history/prune-queue-copy/CONTEXT.md, docs/history/prune-queue-copy/plan.md, .bee/cells/pqc-1.json]
+  sources: [docs/history/prune-queue-copy/CONTEXT.md, docs/history/prune-queue-copy/plan.md, cell pqc-1 (trace purged from .bee/cells/)]
 ---
 
 # prune-queue-copy — Delivery

@@ -104,16 +104,16 @@ record a Claude transcript produces (codex-parity-completion cpc-3).
 ## Pointers (implementation)
 
 - Opportunistic coordination refresh (B20, R19): `heartbeatTouch` (session
-  heartbeat + `renewClaimTTL`) in `packages/bee/lib/claims.mjs`,
-  `renewHoldsBySession` in `packages/bee/lib/reservations.mjs`,
+  heartbeat + `renewClaimTTL`) in `packages/bee-rs/crates/bee/src/verbs/cells/claims.rs` (formerly packages/bee/lib/claims.mjs),
+  `renewHoldsBySession` in `packages/bee-rs/crates/bee/src/verbs/reservations/mod.rs` (formerly packages/bee/lib/reservations.mjs),
   composed at the checkpoint call site (not imported by `claims.mjs` itself)
-  in `packages/bee/hooks/bee-prompt-context.mjs` (UserPromptSubmit) and
-  `packages/bee/hooks/bee-state-sync.mjs` (PostToolUse/Stop), each inside its own
+  in `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs` (formerly packages/bee/hooks/bee-prompt-context.mjs) (UserPromptSubmit) and
+  `packages/bee-rs/crates/bee/src/hooks/state_sync.rs` (formerly packages/bee/hooks/bee-state-sync.mjs) (PostToolUse/Stop), each inside its own
   try/catch separate from the checkpoint's primary job; both hook copies
   mirrored under `.bee/bin/hooks/`. Coordination lock primitive:
   `withStoreLock` (`options.maxAttempts`/`retryDelayMs` power the checkpoint's
-  try-once mode) in `packages/bee/lib/lock.mjs`. Suite:
-  `scripts/tests/test_heartbeat_touch.mjs` (throttle no-op, real-hook-driven
+  try-once mode) in `packages/bee-rs/crates/bee/src/lock.rs` (formerly packages/bee/lib/lock.mjs). Suite:
+  scripts/tests/test_heartbeat_touch.mjs (retired with the Node runtime, 2026-08-02) (throttle no-op, real-hook-driven
   refresh, touch-throw fail-open, `LOCK_BUSY` silent skip, renewal-vs-adopt
-  gate skip). Evidence: `.bee/cells/msh-5.json`,
+  gate skip). Evidence: cell msh-5 (trace purged from .bee/cells/),
   `docs/history/multi-session-hardening/reports/msh-5.md`.

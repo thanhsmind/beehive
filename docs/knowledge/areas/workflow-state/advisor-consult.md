@@ -107,7 +107,7 @@ consult budget.
   now names the key on sight — and any role `team.<runtime>` carries is
   configurable).
 - Adviser (worker consult): `resolveAdvisor` + `MODEL_NORMALIZE_SLOTS` in
-  `packages/bee/lib/state.mjs` (byte-mirrored to `.bee/bin/lib/`);
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs) (byte-mirrored to `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it));
   slot `team.<runtime>.advisor` in `.bee/config.json`; worker protocol in
   `skills/bee-swarming/references/worker-details.md` ("Advisor consult in
   full"); dispatch-time
@@ -115,13 +115,13 @@ consult budget.
   `skills/bee-swarming/SKILL.md`
   and `references/swarming-reference.md`; consult record = `advisor-consult
   <cell-id>: <advisor>` description prefix in `.bee/logs/dispatch.jsonl`.
-  Evidence: commits 14e0e1b, 68d3a0d, 33aaad7; traces `.bee/cells/adv-{1,2,3}.json`;
+  Evidence: commits 14e0e1b, 68d3a0d, 33aaad7; traces cell traces adv-{1,2,3} (purged from .bee/cells/);
   transport proofs `docs/history/advisor/reports/validation-advisor-consult.md`.
 - Advisor config tolerance: `STALE_ADVISOR_KEY_WARNING` (copy names the
   top-level key; the nested `team.<runtime>.advisor` slot is separate and
   valid), `hasStaleAdvisorKey`
-  in `packages/bee/lib/state.mjs` (byte-mirrored to
-  `.bee/bin/lib/state.mjs`); surfaced by `the bee binary`
-  (`status` group) and `packages/bee/scripts/bee onboard` (`staleAdvisorNotices`).
+  in `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs) (byte-mirrored to
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly .bee/bin/lib/state.mjs)); surfaced by `the bee binary`
+  (`status` group) and `packages/bee-rs/crates/bee/src/main.rs onboard` (formerly packages/bee/scripts/bee) (`staleAdvisorNotices`).
   Evidence: fanout-delegation cells fanout-1/fanout-4 (commits 0056eda,
   79d96df).

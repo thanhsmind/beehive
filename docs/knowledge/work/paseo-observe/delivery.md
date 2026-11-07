@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/paseo-observe/CONTEXT.md, docs/history/paseo-observe/plan.md]
-  sources: [docs/history/paseo-observe/CONTEXT.md, docs/history/paseo-observe/plan.md, .bee/cells/po-1.json, .bee/cells/po-2.json, .bee/cells/po-3.json, .bee/cells/po-4.json, .bee/cells/po-5.json]
+  sources: [docs/history/paseo-observe/CONTEXT.md, docs/history/paseo-observe/plan.md, cell po-1 (trace purged from .bee/cells/), cell po-2 (trace purged from .bee/cells/), cell po-3 (trace purged from .bee/cells/), cell po-4 (trace purged from .bee/cells/), cell po-5 (trace purged from .bee/cells/)]
 ---
 
 # paseo-observe — Delivery

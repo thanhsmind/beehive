@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md]
-  sources: [docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md, .bee/cells/ppi-1.json, .bee/cells/ppi-2.json, .bee/cells/ppi-3.json, .bee/cells/ppi-4.json]
+  sources: [docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md, cell ppi-1 (trace purged from .bee/cells/), cell ppi-2 (trace purged from .bee/cells/), cell ppi-3 (trace purged from .bee/cells/), cell ppi-4 (trace purged from .bee/cells/)]
 ---
 
 # paseo-pi — Delivery

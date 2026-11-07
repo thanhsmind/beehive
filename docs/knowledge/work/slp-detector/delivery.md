@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/slp-detector/CONTEXT.md, docs/history/slp-detector/plan.md]
-  sources: [docs/history/slp-detector/CONTEXT.md, docs/history/slp-detector/plan.md, .bee/cells/det-1.json, .bee/cells/det-2.json, .bee/cells/det-3.json, .bee/cells/det-4.json]
+  sources: [docs/history/slp-detector/CONTEXT.md, docs/history/slp-detector/plan.md, cell det-1 (trace purged from .bee/cells/), cell det-2 (trace purged from .bee/cells/), cell det-3 (trace purged from .bee/cells/), cell det-4 (trace purged from .bee/cells/)]
 ---
 
 # slp-detector — Delivery

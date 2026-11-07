@@ -7,7 +7,7 @@ bee:
   id: skill-trigger-cases-delivery
   lifecycle: active
   required_context: [docs/history/skill-trigger-cases/CONTEXT.md, docs/history/skill-trigger-cases/plan.md]
-  sources: [docs/history/skill-trigger-cases/CONTEXT.md, docs/history/skill-trigger-cases/plan.md, .bee/cells/skt-1.json, .bee/cells/skt-2.json]
+  sources: [docs/history/skill-trigger-cases/CONTEXT.md, docs/history/skill-trigger-cases/plan.md, cell skt-1 (trace purged from .bee/cells/), cell skt-2 (trace purged from .bee/cells/)]
 ---
 
 # skill-trigger-cases — Delivery

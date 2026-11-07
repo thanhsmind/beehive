@@ -359,7 +359,7 @@ the close and never changes close's exit code — a `None` promote outcome (the
 retired Node delegate arm) and a `Thrown` outcome (e.g. an `unknown_work`
 refusal) both degrade to the same one warning line. `build_promotion` runs
 BEFORE `archive_feature_for_close` retires the closing feature's cells, since
-`build_promotion` mines `.bee/cells/*.json` and a door that ran after
+`build_promotion` mines cell traces * (purged from .bee/cells/) and a door that ran after
 retirement would scan an empty directory. Nothing this door writes lands under
 `docs/knowledge/` — `promote` still only proposes (B5/D38 in
 `context-and-promote.md`).
@@ -789,23 +789,23 @@ Adding cells checks each cell of the batch against the approved packet and refus
 
 - Record: `.bee/state.json` (CLI-owned). Verbs: `bee state`
   (`start-feature` — new; set/gate/worker/scribing-run — existing);
-  `startFeature()` + `isKnownPhase` in `packages/bee/lib/state.mjs`
-  (byte-mirrored to `.bee/bin/lib/state.mjs`).
+  `startFeature()` + `isKnownPhase` in `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs)
+  (byte-mirrored to `packages/bee-rs/crates/bee/src/state.rs` (formerly .bee/bin/lib/state.mjs)).
 - Phase-owned routing: generic `state set --owner <pre-phase>` in
   `the bee binary` and `.bee/bin/bee`; required-owner
   metadata in both command registries; phase-aware callers in exploring,
   planning, and compounding (there is no `validating` phase — validation-diet
   D3 retired it; the merged gate's execution component is carried by
   `planning`). Review stays local to its review
-  record. Proof: state/CLI suites, `.bee/cells/codex-hook-state-parity-1.json`,
+  record. Proof: state/CLI suites, cell codex-hook-state-parity-1 (trace purged from .bee/cells/),
   and `docs/history/codex-hook-state-parity/reports/codex-hook-state-parity-1.md`.
-- Tests: 15 start-feature rows in `packages/bee/tests/test_lib.mjs`.
-- Evidence: commit `928abf1`; trace `.bee/cells/codex-parity-5.json`.
+- Tests: 15 start-feature rows in packages/bee/tests/test_lib.mjs (retired with the Node runtime, 2026-08-02).
+- Evidence: commit `928abf1`; trace cell codex-parity-5 (trace purged from .bee/cells/).
 - Workflow-record creation on start (D1) and plan-rev-scoped gates (D7,
   widened by validation-diet D15): see `workflow-records-and-projections.md`
   Pointers — `seedLegacyWorkflows`, `createWorkflow`,
   `workflowGatesToApprovedGates`, and the `plan-rev bump` verb. Evidence:
-  traces `.bee/cells/multisession-native-{6,9}.json`, commits f4fe163,
+  traces cell traces multisession-native-{6,9} (purged from .bee/cells/), commits f4fe163,
   2dd834f.
 - Lane-closing write (R85, merge-closes-the-lane D2): the tail of the green,
   non-dry-run path in `close_handler`
@@ -821,22 +821,22 @@ Adding cells checks each cell of the batch against the approved packet and refus
   `approved_for_plan_rev` on both fields via `findGateStamp` (D15); a plain
   `--name` approval is byte-for-byte unchanged. `handleStateGate` in
   `the bee binary` + `.bee/bin/bee`. Evidence: trace
-  `.bee/cells/vd-3.json`; `test_cli_state.mjs`, `test_state_projection.mjs`,
+  cell vd-3 (trace purged from .bee/cells/); `test_cli_state.mjs`, `test_state_projection.mjs`,
   `test_bee_cli.mjs` all green.
-- Terminal-phase parity (B2a/R79): `scripts/tests/test_terminal_phase_parity.mjs`
-  — scans `packages/bee/lib` and `.bee/bin/lib` for top-level
+- Terminal-phase parity (B2a/R79): scripts/tests/test_terminal_phase_parity.mjs (retired with the Node runtime, 2026-08-02)
+  — scans `packages/bee-rs/crates/bee/src/` (formerly packages/bee/lib) and `packages/bee-rs/crates/bee/src/` (formerly .bee/bin/lib) for top-level
   `const <NAME> = new Set([...])` under `TERMINAL_PHASES` / `NO_WORK_PHASES` /
   `TERMINAL_LANE_PHASES`, and compares all 12 discovered declarations (6
   canonical + their 6 mirrored twins) against `KNOWN_PHASES` in
-  `packages/bee/lib/state.mjs`. The six canonical sites: `lib/guards.mjs:151`,
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs). The six canonical sites: `lib/guards.mjs:151`,
   `lib/compaction.mjs:81`, `lib/scratch.mjs:62` (`TERMINAL_PHASES`);
   `lib/inject.mjs:235`, `lib/intent.mjs:49` (`NO_WORK_PHASES`);
   `lib/recovery.mjs:40` (`TERMINAL_LANE_PHASES`). `guards.mjs` is the copy
-  governing write-denial. Evidence: trace `.bee/cells/dch-6.json`.
+  governing write-denial. Evidence: trace cell dch-6 (trace purged from .bee/cells/).
 - Close-door threshold + ledger fallback: `scribingDebt`,
-  `bestScribingStampMs`, `readScribingLedger` in `packages/bee/lib/cells.mjs`
-  (mirrored `.bee/bin/lib/cells.mjs`). Evidence: trace
-  `.bee/cells/sss-1.json`, decision `5b2f963d`.
+  `bestScribingStampMs`, `readScribingLedger` in `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly packages/bee/lib/cells.mjs)
+  (mirrored `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly .bee/bin/lib/cells.mjs)). Evidence: trace
+  cell sss-1 (trace purged from .bee/cells/), decision `5b2f963d`.
 - Native terminal-state door (R21a, both escapes): the compounding-complete
   write in `packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs`
   reuses the same debt counter and deferral-decision reader the separate
@@ -863,11 +863,11 @@ Adding cells checks each cell of the batch against the approved packet and refus
   The record field is documented beside `plan_rev` in
   `verbs/workflow_store/record.rs` (`base_workflow_defaults`), deliberately
   unseeded. Help text for both spellings lives in
-  `src/generated/registry_payload.json` (hand-edited — no generator exists in
+  `packages/bee-rs/crates/bee/src/generated/registry_payload.json` (hand-edited — no generator exists in
   this repo, decision `3358743e`), with `catalog.rs`'s `PINNED_FLAG_COUNT` at
   180 for the one new flag name `--verdict`. Proof: the six
   `plan-conflicts` rows in `verbs/state_group/tests.rs`, plus
-  `tests/registry_contracts.rs` and `tests/registry_dispatch.rs`. Hygiene note:
+  `packages/bee-rs/crates/bee/tests/registry_contracts.rs` and `packages/bee-rs/crates/bee/tests/registry_dispatch.rs`. Hygiene note:
   `plan_conflicts.rs` carries a file-wide `allow(unused_imports)` taken from the
   module it was split out of — it hides a real unused import from the compiler
   and is worth narrowing whenever the file is next touched (koh-8).
@@ -884,13 +884,13 @@ Adding cells checks each cell of the batch against the approved packet and refus
   `write_through_projection` and the durable gate stamp already take: there
   is no `plan_rev` to compare and no record a derive could have written to,
   so the precondition does not apply. Help text for both `gate` spellings is
-  hand-edited in `src/generated/registry_payload.json`; koh-9 adds no flag
+  hand-edited in `packages/bee-rs/crates/bee/src/generated/registry_payload.json`; koh-9 adds no flag
   name, so `catalog.rs`'s `PINNED_FLAG_COUNT` stays 180. Proof: the ten
   `koh9-*` rows in `verbs/state_group/set_gate.rs`'s own test module, beside
   the advisor-precondition cases they are modelled on.
 - Approvals-map shape coercion (B53/R104): `spread_gates` in
   `packages/bee-rs/crates/bee/src/state.rs:100-121` — one match arm for an
   object, one wildcard arm returning `default_gates()`; re-exported for
-  `state_group`, and `hooks/compaction.rs`'s masking fallback deleted with the
+  `state_group`, and `packages/bee-rs/crates/bee/src/hooks/compaction.rs`'s masking fallback deleted with the
   old error branch. Evidence: trace `.bee/cells/archive/js-parity-cleanup/jp-4.json` (999 passed, 0 failed,
   2026-08-04); locked by js-parity-cleanup D2.

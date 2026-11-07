@@ -78,8 +78,8 @@ someone's unfinished intent, while an unset key is a decision.
 
 - Shared reader: `doc_viewer_prefix` in `packages/bee-rs/crates/bee/src/state.rs`
   (with `warn_half_set_doc_viewer` beside it). Injectors:
-  `hooks/session_preamble/budget.rs` (the "Doc links" section) and
-  `hooks/compaction.rs` (capsule item 10b). Contract text: `AGENTS.md`,
+  `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs` (the "Doc links" section) and
+  `packages/bee-rs/crates/bee/src/hooks/compaction.rs` (capsule item 10b). Contract text: `AGENTS.md`,
   `packages/bee/AGENTS.block.md`, and the Communication contract in
   `skills/bee-hive/references/routing-and-contracts.md` (plus their vendored
   copies). Key documentation: `docs/config-reference.md` (`doc_viewer`).

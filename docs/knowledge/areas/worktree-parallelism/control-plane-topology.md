@@ -242,7 +242,7 @@ new store, structurally isolated the same way `workflow-store.mjs` and
   later failure); `performCleanup` unregisters it alongside the grant.
   `claims.mjs`'s `createSession`/`claimCellFile` stamp and carry `workspace_id`
   on every session and claim, auto-looked-up from the acting session's own
-  record. `packages/bee/hooks/bee-session-init.mjs` re-roots session creation onto
+  record. `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (formerly packages/bee/hooks/bee-session-init.mjs) re-roots session creation onto
   `resolveContext.controlRoot` — closing the gap `18c`'s adapter comment had
   flagged as deferred — and lazily auto-registers the workspace on first
   touch.
@@ -294,7 +294,7 @@ lane-path-only `resolveContext` re-resolution. `multisession-native-21`
 collapses all three into **one** upfront `resolveWriteTopology` (wrapping
 `resolveContext(root)`, fail-open) that every branch — lane-bound or not —
 now reads from, feeding `resolvePipeline`'s session → bound-lane → default
-routing uniformly. `packages/bee/hooks/bee-write-guard.mjs` passes the adapter's
+routing uniformly. `packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs` (formerly packages/bee/hooks/bee-write-guard.mjs) passes the adapter's
 already-resolved `ctx.controlRoot` straight through instead of leaving
 `guards.mjs` to re-derive it.
 
@@ -339,7 +339,7 @@ class (c) above only ever fires for a session-identified caller; (3) `bee`'s
 more release per advisor digest slice5 condition E, reclassified as a projection
 writer rather than removed. The workspace-ownership deny half reuses
 `test_guards.mjs`'s existing deny-class-(c) proof rather than re-deriving it; the lease
-half is fresh. Evidence: trace `.bee/cells/multisession-native-23.json`, commit
+half is fresh. Evidence: trace cell multisession-native-23 (trace purged from .bee/cells/), commit
 06cd209; advisor digest
 `docs/history/multisession-native/reports/advisor-digest-slice5.md`.
 
@@ -355,20 +355,20 @@ execution workers only after the session itself has entered the worktree.
 ## Where it lives (reading map)
 
 - Resolver: `resolveContext`/`resolveRootsCore`/`resolveRoots` (compat
-  wrapper) in `packages/bee/lib/state.mjs`. `controlRootFor(root)`
+  wrapper) in `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs). `controlRootFor(root)`
   (same file) is the shared helper every re-rooted call site in this concept
-  uses; `reservations.mjs` and `packages/bee/hooks/adapter.mjs` each carry their own
+  uses; `reservations.mjs` and `packages/bee-rs/crates/bee/src/hooks/adapter.rs` (formerly packages/bee/hooks/adapter.mjs) each carry their own
   minimal, cycle-safe, fail-open replica for structural-isolation reasons
   documented above.
 - Onboarding migration: `detectWorktreeMigration`/`applyWorktreeMigration` in
-  `packages/bee/scripts/bee onboard`; five fixture scenarios in
+  `packages/bee-rs/crates/bee/src/main.rs onboard` (formerly packages/bee/scripts/bee); five fixture scenarios in
   `test_bee onboard` (happy path, conflict abort with zero mutations,
   re-run idempotency, identical-content dedup, zero footprint on an
   ordinary/main checkout).
 - Workspace registry: `workspace-store.mjs`
   (`registerWorkspace`/`unregisterWorkspace`/`claimWriteOwnership`/
   `attachWorkspace`); wiring in `worktree-store.mjs` and `claims.mjs`;
-  `packages/bee/hooks/bee-session-init.mjs`. Tests: `test_workspace_store.mjs`,
+  `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (formerly packages/bee/hooks/bee-session-init.mjs). Tests: `test_workspace_store.mjs`,
   `test_worktree_store.mjs`, plus 3 rows in `test_claims.mjs` — including a
   real exactly-one-owner race proven through the lock.
 - Write policy: `applyWritePolicy` in `state.mjs`; `startFeature`'s default
@@ -377,7 +377,7 @@ execution workers only after the session itself has entered the worktree.
   heartbeat blocks a start" test replaced by two tests distinguishing that
   from the new actually-live-owner behavior).
 - Unified write guard: `resolveWriteTopology`/`checkWrite` in `guards.mjs`;
-  `ctx.controlRoot` threaded from `packages/bee/hooks/bee-write-guard.mjs`. 7 new tests in
+  `ctx.controlRoot` threaded from `packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs` (formerly packages/bee/hooks/bee-write-guard.mjs). 7 new tests in
   `test_guards.mjs` (same-workspace lease scoping, ownership deny + its exact
   scoping boundaries, legacy no-records byte-identical, corrupt-workspace
   fail-closed, linked-worktree topology, never-waits regression).
@@ -395,8 +395,8 @@ execution workers only after the session itself has entered the worktree.
   (conditions 1-7, verdict proceed-with-conditions); the re-slice decision is
   `.bee/decisions.jsonl` id `89a4a87b`.
 - Acceptance suite (D9 invariant 15, msn-23):
-  `packages/bee/tests/test_msn_invariants.mjs` (see
+  packages/bee/tests/test_msn_invariants.mjs (retired with the Node runtime, 2026-08-02) (see
   `returning-and-the-merge-gate.md`'s Pointers for the suite's full index).
-  Evidence: trace `.bee/cells/multisession-native-23.json`, commit 06cd209;
+  Evidence: trace cell multisession-native-23 (trace purged from .bee/cells/), commit 06cd209;
   advisor digest
   `docs/history/multisession-native/reports/advisor-digest-slice5.md`.

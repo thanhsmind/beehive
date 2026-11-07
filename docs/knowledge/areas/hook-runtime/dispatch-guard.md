@@ -130,7 +130,7 @@ caller — and charged a round trip for every guess.
   at six names with a "+N more" count and never rendering a slot's effort
   value (fbbadad5, which re-rendered dispatch-door-upfront D2's original
   four-tier line in role language after the model-role split). The line is
-  built from one home — `hooks/model_guard::dispatch_door_lines` — the same
+  built from one home — `packages/bee-rs/crates/bee/src/hooks/model_guard.rs::dispatch_door_lines` (formerly hooks/model_guard) — the same
   resolver the preparation verb reads, so the block never disagrees with
   what a dispatch would get: an unconfigured project shows the runtime
   defaults, a slot backed by a pane worker shows "pane worker (agent)
@@ -262,5 +262,5 @@ decision auditable.
   `marker_plus_param_agreement_rules`, `an_inferred_cli_tier_is_still_refused`.
 - Claude model-param allowlist advisor fold (B16, "Choice only"):
   `configured_model_set`, folding the resolved advisor model into the union.
-  Evidence: `.bee/cells/cnt-7.json`,
+  Evidence: cell cnt-7 (trace purged from .bee/cells/),
   `docs/history/codex-native-transport/reports/cnt-7.md`.

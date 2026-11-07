@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [docs/history/pstack-playbook-rules/CONTEXT.md, docs/history/pstack-playbook-rules/plan.md]
-  sources: [docs/history/pstack-playbook-rules/CONTEXT.md, docs/history/pstack-playbook-rules/plan.md, .bee/cells/ppr-1.json]
+  sources: [docs/history/pstack-playbook-rules/CONTEXT.md, docs/history/pstack-playbook-rules/plan.md, cell ppr-1 (trace purged from .bee/cells/)]
 ---
 
 # pstack-playbook-rules — Delivery

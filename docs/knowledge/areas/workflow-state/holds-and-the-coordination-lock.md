@@ -391,10 +391,10 @@ drift from it.
 ## Pointers (implementation)
 
 - Hold enforcement (B14): `findSessionConflicts` + optional `session` field in
-  `packages/bee/lib/reservations.mjs`; phase-independent deny +
+  `packages/bee-rs/crates/bee/src/verbs/reservations/mod.rs` (formerly packages/bee/lib/reservations.mjs); phase-independent deny +
   fail-closed corrupt-store branch in `lib/guards.mjs` `checkWrite`;
-  `payload.session_id` threaded at `packages/bee/hooks/bee-write-guard.mjs`; `--session` on
-  the reservations verb. Evidence: traces `.bee/cells/fsh-{7,8}.json`, commits
+  `payload.session_id` threaded at `packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs` (formerly packages/bee/hooks/bee-write-guard.mjs); `--session` on
+  the reservations verb. Evidence: traces cell traces fsh-{7,8} (purged from .bee/cells/), commits
   255757d, 4969e8c; `docs/history/fresh-session-handoff/reports/validation-s3.md`.
 - Contention telemetry: `appendContentionTelemetry` in `lock.mjs`, called from
   both `withStoreLock` (retrying async path) and
@@ -402,44 +402,44 @@ drift from it.
   lock_wait_ms, holder_session, caller_session, workflow_id, workspace_id,
   resource, result}` written to `.bee/logs/contention.jsonl` via a plain
   `fs.appendFileSync`, mirroring `bee`'s own `timings.jsonl`
-  `recordTiming`. Evidence: `scripts/tests/test_store_lock.mjs` scenario (i);
-  trace `.bee/cells/multisession-native-3.json`, commit 2d66ccc.
+  `recordTiming`. Evidence: `packages/bee-rs/crates/bee/src/lock.rs` (formerly scripts/tests/test_store_lock.mjs) scenario (i);
+  trace cell multisession-native-3 (trace purged from .bee/cells/), commit 2d66ccc.
 - Status contention summary: `buildContentionSummary` in `bee`, reading
   through `readTranscriptTail` (`lib/recovery.mjs`) for the bounded,
   windowed, never-throws read. Evidence:
-  `packages/bee/tests/test_contention_status.mjs` (seeded
+  `packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs` (formerly packages/bee/tests/test_contention_status.mjs) (seeded
   fixture aggregation, text-render mention, absent-log silence, malformed-
   line skip, 8MB garbage-head tail-window proof); trace
-  `.bee/cells/multisession-native-4.json`, commit 1865cae.
+  cell multisession-native-4 (trace purged from .bee/cells/), commit 1865cae.
 - Per-workflow lock order (D1/C4): `withMutationLock` in
-  `packages/bee/lib/state.mjs` (locks per-workflow instead of
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs) (locks per-workflow instead of
   the blanket `state` lock every state-mutation verb held through
   `multisession-native-9`); two deterministic seam tests proving zero
   cross-workflow `LOCK_BUSY` and decoupling from the `sessions` lock. Trace
-  `.bee/cells/multisession-native-10.json`, commit e7f365a. See
+  cell multisession-native-10 (trace purged from .bee/cells/), commit e7f365a. See
   `workflow-records-and-projections.md` Pointers for the full write path.
 - Sharded lease store: `acquireLeases`/`releaseLease`/`renewLease`/
   `renewLeasesBySession`/`sweepExpiredLeases`/`listLeases` in
-  `packages/bee/lib/lease-store.mjs` (imports only node
+  `packages/bee-rs/crates/bee/src/lease_store.rs` (formerly packages/bee/lib/lease-store.mjs) (imports only node
   builtins, `fsutil.mjs`, and `lock.mjs` — proven never to import
   `claims.mjs`/`state.mjs`/`reservations.mjs` by a static source-scan test,
   mirroring `workflow-store.mjs`'s own C4 proof). 12 tests in
   `test_lease_store.mjs` cover the round-trip, partial-acquire rollback (zero
   residue), disjoint-resource non-contention, hash-sort determinism under
   reversed request order, and TTL never-expires semantics. Evidence: trace
-  `.bee/cells/multisession-native-11.json`, commit ad19826.
+  cell multisession-native-11 (trace purged from .bee/cells/), commit ad19826.
 - Lease/claim fencing (msn-12): `LEASE_FENCE_STALE` in `lease-store.mjs`'s
   `renewLease`/`releaseLease`. Red-first: new refusal tests captured failing
   against pristine `lease-store.mjs`, then green after the implementation.
-  Evidence: trace `.bee/cells/multisession-native-12.json`, commit 8c002a1.
+  Evidence: trace cell multisession-native-12 (trace purged from .bee/cells/), commit 8c002a1.
 - Intent vs write lease (msn-13): `RESERVATION_KINDS`, `isHardConflict` in
-  `packages/bee/lib/reservations.mjs`; classification wired into
+  `packages/bee-rs/crates/bee/src/verbs/reservations/mod.rs` (formerly packages/bee/lib/reservations.mjs); classification wired into
   `guards.mjs`'s `checkWrite` (swarming-phase branch) and `reserve()`'s own
   conflict pre-check; `--kind` flag on `bee reservations reserve`; equivalent
   `kind` field added to `lease-store.mjs` as forward groundwork. Red-first
   regression test proved a pre-existing intent record could otherwise refuse
   a fellow worker's exact `reserve()` call through the pre-check chokepoint.
-  Evidence: trace `.bee/cells/multisession-native-13.json`, commit debe0d9.
+  Evidence: trace cell multisession-native-13 (trace purged from .bee/cells/), commit debe0d9.
 - Reservations shim over the lease store (msn-16): `reserve`/`release`/
   `sweepExpired`/`renewHoldsBySession`/`listReservations`/`findConflicts`/
   `findSessionConflicts`/`leaseToReservation` in `reservations.mjs`;
@@ -449,14 +449,14 @@ drift from it.
   cross-worktree mirror write and the foreign-hold deny both still hold
   through the shim (`bee`'s `withHoldsLock` seam at the
   `findForeignHolds`/reserve/`insertHold` call site, untouched). Evidence:
-  trace `.bee/cells/multisession-native-16.json`, commit 81a936c; advisor
+  trace cell multisession-native-16 (trace purged from .bee/cells/), commit 81a936c; advisor
   consult for this whole slice:
   `docs/history/multisession-native/reports/advisor-digest-slice3.md`
   (conditions A-G, verdict proceed-with-conditions).
 - Leases onto the control plane + workspace-scoped conflict (R75):
   `reservations.mjs`'s own `findMainRoot`/`controlRootFor` replica (trace
-  `.bee/cells/multisession-native-18b.json`, commit a1431448); the write
+  cell multisession-native-18b (trace purged from .bee/cells/), commit a1431448); the write
   guard's `workspace_id` read in `guards.mjs` `checkWrite` (trace
-  `.bee/cells/multisession-native-21.json`, commit 3f56916). Full topology
+  cell multisession-native-21 (trace purged from .bee/cells/), commit 3f56916). Full topology
   resolver and the guard's three deny classes:
   `areas/worktree-parallelism/control-plane-topology.md`.

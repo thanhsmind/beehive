@@ -7,7 +7,7 @@ bee:
   id: trigger-cache-path-delivery
   lifecycle: active
   required_context: [.bee/lanes/trigger-cache-path.json]
-  sources: [.bee/lanes/trigger-cache-path.json, .bee/cells/tcp-1.json]
+  sources: [.bee/lanes/trigger-cache-path.json, cell tcp-1 (trace purged from .bee/cells/)]
 ---
 
 # trigger-cache-path — Delivery

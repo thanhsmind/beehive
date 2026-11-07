@@ -8,7 +8,7 @@ bee:
   id: pattern-20260819-a-test-that-derives-its-fixture-from-the-constant-under-test-only-proves-the-code-agrees-with-itself
   lifecycle: active
   areas: [workflow-state, rust-runtime]
-  sources: [".bee/cells/ddb-1.json", "original feature: doc-deferral-baseline"]
+  sources: [.bee/cells/ddb-1.json, "original feature: doc-deferral-baseline"]
   polarity: pitfall
   critical: true
   evidence: wired

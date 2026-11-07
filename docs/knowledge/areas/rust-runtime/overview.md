@@ -69,7 +69,7 @@ The interpreted reference is retired: no `.mjs` file remains anywhere in the rep
 
 ## Pointers (implementation)
 
-- Compiled runtime: one crate, `packages/bee-rs/crates/bee` — commands and hooks under `src/verbs/` and `src/hooks/`, readers/stores/locks under crate root modules (`state.rs`, `roots.rs`, `nested_checkout.rs`, and peers). No `crates/queen-bee` or `crates/bee-core` split exists; the port consolidated into this one crate.
+- Compiled runtime: one crate, `packages/bee-rs/crates/bee` — commands and hooks under `packages/bee-rs/crates/bee/src/verbs/` (formerly src/verbs/) and `packages/bee-rs/crates/bee/src/hooks/` (formerly src/hooks/), readers/stores/locks under crate root modules (`state.rs`, `roots.rs`, `nested_checkout.rs`, and peers). No `crates/queen-bee` or `crates/bee-core` split exists; the port consolidated into this one crate.
 - Live binary: `.bee/bin/bee` IS the compiled binary (an ELF executable) built from that crate — there is no interpreted `.mjs` reference anywhere in the repository (D10's exit criterion; `fd -e mjs .` returns nothing).
 - Review derivation cache: `.bee/runtime/review-git-cache.json`; ancestry answered in-process via `gix`.
 - Locked decisions: `docs/history/rust-port/CONTEXT.md` (D1, D3, D5, D9, D10); addendum decision `a7d7b3d5`.

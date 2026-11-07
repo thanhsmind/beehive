@@ -7,7 +7,7 @@ bee:
   id: orient-merged-worktree-delivery
   lifecycle: active
   required_context: [docs/history/orient-merged-worktree/plan.md]
-  sources: [docs/history/orient-merged-worktree/plan.md, .bee/cells/omw-1.json]
+  sources: [docs/history/orient-merged-worktree/plan.md, cell omw-1 (trace purged from .bee/cells/)]
 ---
 
 # orient-merged-worktree — Delivery

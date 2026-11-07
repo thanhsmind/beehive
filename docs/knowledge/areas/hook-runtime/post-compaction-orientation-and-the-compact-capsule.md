@@ -185,17 +185,17 @@ adopted.
 ## Pointers (implementation)
 
 - Builder: `buildCompactCapsule(root, {sessionId, handoffOutcome})` in
-  `packages/bee/lib/compaction.mjs`, alongside
+  `packages/bee-rs/crates/bee/src/hooks/compaction.rs` (formerly packages/bee/lib/compaction.mjs), alongside
   `appendCompactionRecord`, `readCompactionCounts`, `survivalWarning`,
   `anchorMissing`, `compactCheck`, and `CAPSULE_MUTED_CHECKS` (the anchor-mute
-  list). Mirrored to `.bee/bin/lib/`.
+  list). Mirrored to `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it).
 - CLI: `state compact-log`, `state compact-check`, and `state compact-capsule` in
   `command-registry.mjs` + `bee` — each reachable independent of whether any
   lifecycle checkpoint fires.
-- Wiring: `packages/bee/hooks/bee-session-init.mjs` (the compaction-resume branch; computes and
-  passes `handoffOutcome` through to the builder), `packages/bee/hooks/bee-session-close.mjs`
+- Wiring: `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (formerly packages/bee/hooks/bee-session-init.mjs) (the compaction-resume branch; computes and
+  passes `handoffOutcome` through to the builder), `packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs` (formerly packages/bee/hooks/bee-session-close.mjs)
   (the pre-compaction log append and survival notice).
-- Golden fixture: `scripts/fixtures/preamble-golden.txt`.
-- Proof: `scripts/tests/test_compact_capsule.mjs`, `scripts/tests/test_compaction_module.mjs`,
-  `scripts/tests/test_compaction_advisories.mjs`, and the compaction-resume rows in
-  `hooks/test_hook_contracts.mjs`.
+- Golden fixture: scripts/fixtures/preamble-golden.txt (retired with the Node runtime, 2026-08-02).
+- Proof: scripts/tests/test_compact_capsule.mjs (retired with the Node runtime, 2026-08-02), scripts/tests/test_compaction_module.mjs (retired with the Node runtime, 2026-08-02),
+  scripts/tests/test_compaction_advisories.mjs (retired with the Node runtime, 2026-08-02), and the compaction-resume rows in
+  `packages/bee-rs/crates/bee/tests/hook_contracts.rs` (formerly hooks/test_hook_contracts.mjs).

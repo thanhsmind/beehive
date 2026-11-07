@@ -126,7 +126,7 @@ against isolated fixtures, asserting that a denied action changed nothing.
   verdict (exit 1) (pi-parity-review-fixes D5, D6).
 
 - Doctor resolves hook handlers at HOST topology: each handler filename is
-  checked at both `.bee/bin/hooks/` and `hooks/` (dual-location, evidence
+  checked at both `.bee/bin/hooks/` and `packages/bee-rs/crates/bee/src/hooks/` (formerly hooks/) (dual-location, evidence
   names which resolved) — a normal host repo without the dev repo's root
   hooks/ dir is judged correctly (pre-162-fixes p162-1).
 
@@ -189,17 +189,17 @@ Pointers: `packages/bee-rs/crates/bee/src/doctor.rs` (`runtime_checks_with_env`,
   the binary, which is exactly the case the old comparison could not see
   (cell dfv-1).
 
-- `scripts/lib/run-module-worker.mjs` — shared isolated runner for nested test
+- scripts/lib/run-module-worker.mjs (retired with the Node runtime, 2026-08-02) — shared isolated runner for nested test
   entrypoints used by the hook, command, onboarding, and metadata suites.
 
-- `scripts/tests/test_portable_paths.mjs` and `hooks/test_hook_contracts.mjs` — real
+- `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_portable_paths.mjs) and `packages/bee-rs/crates/bee/tests/hook_contracts.rs` (formerly hooks/test_hook_contracts.mjs) — real
   external integration remains external; assertions grade concrete exit status,
   stdout, and stderr even when the execution environment adds a launch warning.
 
-- Suites: `hooks/test_hook_contracts.mjs` (modes: default, `--baseline`,
-  `--catalog-only`, `--repo-route-only`), `hooks/test_write_guard.mjs`,
-  `hooks/test_model_guard.mjs`; parity check in
-  `packages/bee/scripts/tests/test_bee onboard`.
+- Suites: `packages/bee-rs/crates/bee/tests/hook_contracts.rs` (formerly hooks/test_hook_contracts.mjs) (modes: default, `--baseline`,
+  `--catalog-only`, `--repo-route-only`), `packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs` (formerly hooks/test_write_guard.mjs),
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (formerly hooks/test_model_guard.mjs); parity check in
+  `packages/bee-rs/crates/bee/tests/ onboard` (formerly packages/bee/scripts/tests/test_bee).
 
 ## Open Gaps
 

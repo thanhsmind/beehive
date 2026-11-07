@@ -80,7 +80,7 @@ under:
   ku-8; the bar itself: `critical-bar.md`).
 - `bee knowledge promote --work <id> [--json]` — the loop closer (D38): finished work **proposes**
   the knowledge it earned. It reads the work item's concept and the **capped** cell traces of that
-  feature from `.bee/cells/*.json` (a read of the runtime store — D2 permits reads and forbids
+  feature from cell traces * (purged from .bee/cells/) (a read of the runtime store — D2 permits reads and forbids
   writes) and prints three proposals: a delivery draft, candidate area spec-sync bullets, and
   candidate pitfall patterns. It writes nothing (B5, in `context-and-promote.md`).
 - `bee knowledge show --id <bee.id> [--json]` — reads ONE concept whole: metadata, every `bee.*`

@@ -156,7 +156,7 @@ it either: merge keeps the worktree on purpose, for the user's acceptance test.
   floor constant `RECLAIMABLE_WORKTREES_SHOWN_FLOOR` (1) in
   `packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs:104`; the orientation
   blocker line at `verbs/status_full/orient.rs:252-258` and the preamble section
-  at `hooks/session_preamble/render.rs:337-346`, wired in
+  at `packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs:337-346`, wired in
   `session_preamble/budget.rs:581-585`. Both read the one scan and share the one
   floor, so the two surfaces cannot disagree. Tests:
   `session_preamble/tests.rs:357` (two or more name the count and the command)

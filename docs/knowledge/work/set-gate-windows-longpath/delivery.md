@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [docs/history/set-gate-windows-longpath/plan.md]
-  sources: [docs/history/set-gate-windows-longpath/plan.md, .bee/cells/sgl-1.json]
+  sources: [docs/history/set-gate-windows-longpath/plan.md, cell sgl-1 (trace purged from .bee/cells/)]
 ---
 
 # set-gate-windows-longpath — Delivery

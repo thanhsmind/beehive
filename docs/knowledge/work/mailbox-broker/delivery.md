@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/mailbox-broker/CONTEXT.md, docs/history/mailbox-broker/plan.md]
-  sources: [docs/history/mailbox-broker/CONTEXT.md, docs/history/mailbox-broker/plan.md, .bee/cells/mb-1.json, .bee/cells/mb-2.json, .bee/cells/mb-3.json, .bee/cells/mb-4.json, .bee/cells/mb-5.json]
+  sources: [docs/history/mailbox-broker/CONTEXT.md, docs/history/mailbox-broker/plan.md, cell mb-1 (trace purged from .bee/cells/), cell mb-2 (trace purged from .bee/cells/), cell mb-3 (trace purged from .bee/cells/), cell mb-4 (trace purged from .bee/cells/), cell mb-5 (trace purged from .bee/cells/)]
 ---
 
 # mailbox-broker — Delivery

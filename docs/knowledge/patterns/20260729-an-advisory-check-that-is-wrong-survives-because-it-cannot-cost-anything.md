@@ -15,7 +15,7 @@ bee:
 
 # An advisory check that is wrong survives, because it cannot cost anything
 
-The pointer check in `scripts/skill_lint.mjs` searched for a parenthetical containing
+The pointer check in scripts/skill_lint.mjs (retired with the Node runtime, 2026-08-02) searched for a parenthetical containing
 exactly one quoted heading. The line it was checking reads
 `("Silent Bookkeeping", "Progress ticks")` — a pointer any reader follows without
 trouble. So the check reported `bee-hive/SKILL.md has no pointer to "Progress ticks"`,

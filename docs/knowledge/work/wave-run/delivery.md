@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [docs/history/wave-run/CONTEXT.md]
-  sources: [docs/history/wave-run/CONTEXT.md, .bee/cells/wvr-1.json]
+  sources: [docs/history/wave-run/CONTEXT.md, cell wvr-1 (trace purged from .bee/cells/)]
 ---
 
 # wave-run — Delivery

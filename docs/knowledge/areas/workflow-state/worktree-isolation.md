@@ -190,7 +190,7 @@ checkout at all, nothing about this behavior changes today's write.
   `skills/bee-swarming/SKILL.md`,
   `skills/bee-swarming/references/swarming-reference.md`, and
   `skills/bee-swarming/references/worker-details.md`. Evidence: capped cells
-  `.bee/cells/worktree-isolation-{1..4}.json`, reports
+  cell traces worktree-isolation-{1..4} (purged from .bee/cells/), reports
   `docs/history/worktree-isolation/reports/`.
 - Concurrency-aware shared-checkout refusal (B21/R36): detection primitive
   `has_any_shared_nested_checkout` (directory-scan) in
@@ -206,8 +206,8 @@ checkout at all, nothing about this behavior changes today's write.
   `control_root_for` in `verbs/reservations/leases.rs`) so the concurrency
   check can consult a coordination root that differs from the physical
   checkout, while the on-disk scan stays physical-root-scoped. Evidence:
-  capped cells `.bee/cells/wcg-1.json`,
-  `.bee/cells/wcg-2.json`, `.bee/cells/port-1.json` (relocation +
+  capped cells cell wcg-1 (trace purged from .bee/cells/),
+  cell wcg-2 (trace purged from .bee/cells/), cell port-1 (trace purged from .bee/cells/) (relocation +
   control-root scoping), reports
   `docs/history/worktree-concurrency-guard/reports/`, and the Rust
   `hooks::write_guard` test suite (`tests.rs`, including the bidirectional

@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/ci-green-fixes/CONTEXT.md, docs/history/ci-green-fixes/plan.md]
-  sources: [docs/history/ci-green-fixes/CONTEXT.md, docs/history/ci-green-fixes/plan.md, .bee/cells/cgf-1.json, .bee/cells/cgf-2.json]
+  sources: [docs/history/ci-green-fixes/CONTEXT.md, docs/history/ci-green-fixes/plan.md, cell cgf-1 (trace purged from .bee/cells/), cell cgf-2 (trace purged from .bee/cells/)]
 ---
 
 # ci-green-fixes — Delivery

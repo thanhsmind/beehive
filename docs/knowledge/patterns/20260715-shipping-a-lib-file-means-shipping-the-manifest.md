@@ -31,7 +31,7 @@ ask which standing repo-wide guards hash the files you touched, run their regen 
 cell, and put their `--check` in that cell's verify.
 
 > **SUPERSEDED — this headline previously read:** *"the regen is part of the FEATURE, owned by
-> its last cell or its close step"*, scoped to `templates/lib/` or `.bee/bin/lib/`. Both halves
+> its last cell or its close step"*, scoped to `templates/lib/` or `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it). Both halves
 > were wrong and both were followed faithfully. `compaction-hardening` revision 1 cited this
 > pattern **by name** and routed the whole chain to its last cell — exactly what the headline
 > said and exactly what recurrence #2 had already condemned three paragraphs below it. Revision 2
@@ -85,11 +85,11 @@ before ending the session, with no exception for "it was just a citation" or "th
 passed". The next session opened on the red baseline and paid the repair.
 
 **Recurred 2026-07-23 (compaction-hardening D24) — FIFTH instance, and the trigger itself was
-scoped wrong.** The earlier recorded trigger was "any file under `templates/lib/` or `.bee/bin/lib/`
-changes" — but `scripts/release_manifest.mjs` was measured to actually hash `skills/**` and
+scoped wrong.** The earlier recorded trigger was "any file under `templates/lib/` or `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it)
+changes" — but `packages/bee-rs/crates/bee/src/devtools/release_manifest.rs` (formerly scripts/release_manifest.mjs) was measured to actually hash `skills/**` and
 `hooks/**` in full, including the rendered plugin/skill projection trees themselves, not only the
 shared lib directory. A cell touching only `hooks/**` moves `release_manifest --check` and does
-**not** move `ledger_parity --check` (which covers only `.bee/bin/lib` and the shared helpers) — so
+**not** move `ledger_parity --check` (which covers only `packages/bee-rs/crates/bee/src/` (formerly .bee/bin/lib) and the shared helpers) — so
 two cells in the same feature each carried exactly the check that stays green for a hooks-only
 change and omitted the one that actually goes red. The ordering matters too: the plugin/skill tree
 render must run **before** the manifest write, because the onboarding apply step never renders
@@ -99,9 +99,9 @@ directory," check what the manifest script's own hash list actually covers — a
 assumption can pass green while hiding the exact bug it exists to catch.
 
 **Recurred 2026-07-23 (herding-dispatch-lock-toggle, cell hdlt-1) — SIXTH instance, first in a
-`small`-lane feature.** A single `small`-lane cell added `skills/bee-hive/templates/lib/herding.mjs`
+`small`-lane feature.** A single `small`-lane cell added `packages/bee-rs/crates/bee/src/herding.rs` (formerly skills/bee-hive/templates/lib/herding.mjs)
 and wired it into `bee.mjs`; its own targeted verify (`test_herding_cli.mjs`) went green and the
-cell capped clean. The orchestrator's mandatory wave-close full-chain run (`scripts/run_verify.mjs`,
+cell capped clean. The orchestrator's mandatory wave-close full-chain run (`packages/bee-rs/crates/bee/src/verbs/test_runner.rs` (formerly scripts/run_verify.mjs),
 required even for a one-cell `small`-lane wave) then failed the same four-deep set this pattern
 already names: `.bee/bin` mirror, both plugin skill-route trees, and the release manifest — fixed
 with the same three commands (`onboard_bee.mjs --apply`, `render_plugin_skill_trees.mjs`,

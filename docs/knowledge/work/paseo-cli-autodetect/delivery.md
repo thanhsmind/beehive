@@ -7,7 +7,7 @@ bee:
   id: paseo-cli-autodetect-delivery
   lifecycle: active
   required_context: [docs/history/paseo-cli-autodetect/plan.md]
-  sources: [docs/history/paseo-cli-autodetect/plan.md, .bee/cells/pcad-1.json]
+  sources: [docs/history/paseo-cli-autodetect/plan.md, cell pcad-1 (trace purged from .bee/cells/)]
 ---
 
 # paseo-cli-autodetect — Delivery

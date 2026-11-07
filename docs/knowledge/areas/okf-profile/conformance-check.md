@@ -35,7 +35,7 @@ The profile-error severity exists because the chain runs this verb **without** `
 an invariant parked in `warnings` is decorative. Exactly the findings that guard *one subject, one
 readable authority* live there — see the profile-error table in B2.
 
-**B2 — Exact finding codes emitted by `.bee/bin/lib/knowledge.mjs`.**
+**B2 — Exact finding codes emitted by `packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs` (formerly .bee/bin/lib/knowledge.mjs).**
 
 OKF-error codes (each finding also carries `file` and a human `message`):
 
@@ -149,7 +149,7 @@ runtime state, though reads from it are permitted.
 
 ## Pointers (implementation)
 
-- Checker + emitter-first codec + concept model: `.bee/bin/lib/knowledge.mjs` (mirrored from
-  `packages/bee/lib/knowledge.mjs` — `scripts/tests/test_lib_mirror.mjs:196` enforces the
+- Checker + emitter-first codec + concept model: `packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs` (formerly .bee/bin/lib/knowledge.mjs) (mirrored from
+  `packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs` (formerly packages/bee/lib/knowledge.mjs) — scripts/tests/test_lib_mirror.mjs (retired with the Node runtime, 2026-08-02) enforces the
   mirror). `checkBundle` is the two-level check; `emitFrontmatter`/`parseFrontmatter` are the D12
   codec; `CONCEPT_TYPES`/`LIFECYCLES`/`PROFILE_REQUIRED` are the D18/D19 tables.

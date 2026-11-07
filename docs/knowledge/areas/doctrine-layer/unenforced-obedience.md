@@ -56,7 +56,7 @@ all is caught, and a worker that misreports one is not. The remaining gap is
 covered by evidence discipline, not by a guard. And the set shrinks when a mechanism becomes possible: in the same
 feature, three formerly markdown-only rules moved to enforcement — the
 containment deny's harness-owned allowlist judges the resolved write target
-(guard-hardening E1), hand-edits to the CLI-owned stores `.bee/cells/*.json`,
+(guard-hardening E1), hand-edits to the CLI-owned stores cell traces * (purged from .bee/cells/),
 `.bee/lanes/*.json`, and `.bee/onboarding.json` are refused with the owning
 verb named (E2), and `grep`/`find` invocations are denied by this repo's
 `.claude/settings.json` permissions rather than by CLAUDE.md prose alone (E3).

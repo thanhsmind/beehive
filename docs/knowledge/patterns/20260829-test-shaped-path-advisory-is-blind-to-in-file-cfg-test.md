@@ -17,7 +17,7 @@ bee:
 
 `bee cells finish` prints a "touches no test-shaped path — consider adding
 test coverage" advisory keyed on a path heuristic (does the diff touch
-something that LOOKS like a test path — `tests/`, `*_test.rs`, etc). Rust's
+something that LOOKS like a test path — `packages/bee-rs/crates/bee/tests/` (formerly tests/), `*_test.rs`, etc). Rust's
 dominant convention keeps unit tests inside the same file as the code they
 cover, behind an in-file `#[cfg(test)] mod tests { ... }` block — so a cell
 whose entire diff is new tests, added as a `#[cfg(test)]` module in
@@ -26,7 +26,7 @@ whose entire diff is new tests, added as a `#[cfg(test)]` module in
 test-only cell in this codebase is expected to trip it.
 
 **Why the path heuristic misses it.** The matcher reads file PATHS only. A
-path like `src/verbs/drivers/close.rs` carries no lexical signal that the
+path like `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs` carries no lexical signal that the
 lines added inside it are `#[test]`/`#[cfg(test)]` — the signal lives in
 diff CONTENT, not in the path.
 

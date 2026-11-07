@@ -225,7 +225,7 @@ not thereby agreed that every future commit should become slower.
 
 - `.bee/config-sample.json` — the annotated, copyable configuration reference
   (`_doc` block per top-level key); `.bee/config-sample-cli-executors.json` —
-  full external-command executor examples; `scripts/tests/test_config_samples_safe.mjs`
+  full external-command executor examples; scripts/tests/test_config_samples_safe.mjs (retired with the Node runtime, 2026-08-02)
   keeps both inert (never diffs against the live `.bee/config.json`).
 
 - Verification skill pair and the copy-only render: skills `bee-verifying` and

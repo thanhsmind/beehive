@@ -105,9 +105,9 @@ impossible to record; pre-existing records are never mutated by the check
 
 ## Pointers (implementation)
 
-- Computed schedule (B17/B18, R26/R27): `packages/bee/lib/schedule.mjs`
+- Computed schedule (B17/B18, R26/R27): `packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs` (formerly packages/bee/lib/schedule.mjs)
   (`computeSchedule`, `detectCycles` — pure, Kahn layering + greedy `pathsOverlap`
-  packing, Tarjan SCC for cycles; byte-mirrored to `.bee/bin/lib/`); cycle refusal
+  packing, Tarjan SCC for cycles; byte-mirrored to `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it)); cycle refusal
   wired in `cells.mjs` `addCell`/`addCells`/`updateCell` via `assertNoCycle`;
   CLI verb `bee cells schedule` (`command-registry.mjs` `cells.schedule`,
   `handleCellsSchedule` in both dispatcher copies); consumer prose in
@@ -117,4 +117,4 @@ impossible to record; pre-existing records are never mutated by the check
   D1 — its feasibility matrix retired with no replacement, D6). Tests: schedule + cycle-refusal rows in
   `templates/tests/test_lib.mjs` (321 passing), verb example in
   `templates/tests/test_bee_cli.mjs` (132 passing). Evidence: commits 390165a,
-  9e2156e, 5003503, 79217ae; traces `.bee/cells/parallel-scheduler-{1..4}.json`.
+  9e2156e, 5003503, 79217ae; traces cell traces parallel-scheduler-{1..4} (purged from .bee/cells/).

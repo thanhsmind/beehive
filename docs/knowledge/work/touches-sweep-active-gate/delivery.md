@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [docs/history/touches-sweep-active-gate/CONTEXT.md]
-  sources: [docs/history/touches-sweep-active-gate/CONTEXT.md, .bee/cells/tsag-1.json]
+  sources: [docs/history/touches-sweep-active-gate/CONTEXT.md, cell tsag-1 (trace purged from .bee/cells/)]
 ---
 
 # touches-sweep-active-gate — Delivery

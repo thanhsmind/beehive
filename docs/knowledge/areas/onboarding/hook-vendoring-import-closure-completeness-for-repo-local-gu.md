@@ -56,9 +56,9 @@ because it is syntax-only and does not detect a missing relative-import module.
 ## Pointers (implementation)
 
 - Vendored-hook list: `HOOK_FILENAMES` in
-  `packages/bee/scripts/bee onboard`.
-- Regression suite: `scripts/tests/test_hook_vendor_closure.mjs` (static
+  `packages/bee-rs/crates/bee/src/main.rs onboard` (formerly packages/bee/scripts/bee).
+- Regression suite: scripts/tests/test_hook_vendor_closure.mjs (retired with the Node runtime, 2026-08-02) (static
   import-closure parse + fresh-install/subprocess proof).
-- Evidence: `.bee/cells/i54-closeout-9.json`,
+- Evidence: cell i54-closeout-9 (trace purged from .bee/cells/),
   `docs/history/i54-closeout/reports/validation-canary.md` (section 1, P5).
 

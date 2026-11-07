@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [docs/history/windows-path-tests/plan.md]
-  sources: [docs/history/windows-path-tests/plan.md, .bee/cells/wpt-1.json]
+  sources: [docs/history/windows-path-tests/plan.md, cell wpt-1 (trace purged from .bee/cells/)]
 ---
 
 # windows-path-tests — Delivery

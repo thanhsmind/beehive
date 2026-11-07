@@ -7,7 +7,7 @@ bee:
   id: open-issues-sweep-delivery
   lifecycle: active
   required_context: [docs/history/open-issues-sweep/CONTEXT.md, docs/history/open-issues-sweep/plan.md]
-  sources: [docs/history/open-issues-sweep/CONTEXT.md, docs/history/open-issues-sweep/plan.md, .bee/cells/ois-1.json, .bee/cells/ois-2.json, .bee/cells/ois-3.json, .bee/cells/ois-4.json, .bee/cells/ois-5.json, .bee/cells/ois-6.json, .bee/cells/ois-7.json, .bee/cells/ois-8.json, .bee/cells/ois-9.json, .bee/cells/ois-10.json, .bee/cells/ois-11.json]
+  sources: [docs/history/open-issues-sweep/CONTEXT.md, docs/history/open-issues-sweep/plan.md, cell ois-1 (trace purged from .bee/cells/), cell ois-2 (trace purged from .bee/cells/), cell ois-3 (trace purged from .bee/cells/), cell ois-4 (trace purged from .bee/cells/), cell ois-5 (trace purged from .bee/cells/), cell ois-6 (trace purged from .bee/cells/), cell ois-7 (trace purged from .bee/cells/), cell ois-8 (trace purged from .bee/cells/), cell ois-9 (trace purged from .bee/cells/), cell ois-10 (trace purged from .bee/cells/), cell ois-11 (trace purged from .bee/cells/)]
 ---
 
 # open-issues-sweep — Delivery

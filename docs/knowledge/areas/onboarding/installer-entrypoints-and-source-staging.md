@@ -39,7 +39,7 @@ onboarding engine's own script happens to sit (packages-restructure D1-D3;
 decision e0f3e40e). The engine itself later moved out of the skill tree it
 renders (packages-engine-move D1; decision 80b64c20): `bee onboard`,
 `plugin_distribution.mjs`, and their three test suites now live at
-`packages/bee/scripts/`, so `packages/bee/` is the complete standard code set
+`packages/bee-rs/crates/bee/src/devtools/` (formerly packages/bee/scripts/), so `packages/bee/` is the complete standard code set
 — payload *and* engine — and `skills/` is instruction-only in fact, not just
 intent. The canonical entrypoint is
 `.bee/bin/bee onboard --repo-root <repo-root>`, run from
@@ -114,11 +114,11 @@ each call site.
 ## Pointers (implementation)
 
 - `packages/bee/` — the vendored payload's single standard layout (`bee`,
-  `lib/`, `tests/`, `agents/`, `statusline/`, `AGENTS.block.md`), with
+  `lib/`, `packages/bee-rs/crates/bee/tests/` (formerly tests/), `agents/`, `statusline/`, `AGENTS.block.md`), with
   `packages/bee/hooks/` as its hook-catalog subtree (hook modules, `catalog.mjs`,
   `claude-hooks.json`, `hooks.json`, and their test suites) and
-  `packages/bee/scripts/` as the onboarding/distribution engine subtree
-  (`bee onboard`, `plugin_distribution.mjs`, `tests/`) — moved out of the
+  `packages/bee-rs/crates/bee/src/devtools/` (formerly packages/bee/scripts/) as the onboarding/distribution engine subtree
+  (`bee onboard`, `plugin_distribution.mjs`, `packages/bee-rs/crates/bee/tests/` (formerly tests/)) — moved out of the
   skill tree it renders (packages-engine-move D1; decision 80b64c20); `skills/`
   now carries instruction-only content (`SKILL.md` + references only, no
   runnable engine of its own) — no version marker of its own travels inside a
@@ -128,17 +128,17 @@ each call site.
   self-relative resolution retired). `scripts/install.ps1`'s bootstrap
   sparse-checkout set is `skills packages .claude-plugin .codex-plugin
   docs/history/codex-harness-hardening` (`scripts/install.sh`'s full clone is
-  unaffected by the move). Evidence: `.bee/cells/packages-restructure-1.json`,
-  `.bee/cells/packages-restructure-2.json` (packages-restructure D1-D3;
+  unaffected by the move). Evidence: cell packages-restructure-1 (trace purged from .bee/cells/),
+  cell packages-restructure-2 (trace purged from .bee/cells/) (packages-restructure D1-D3;
   decision e0f3e40e).
-- `scripts/lib/run-module-worker.mjs` — shared isolated test-entrypoint runner;
+- scripts/lib/run-module-worker.mjs (retired with the Node runtime, 2026-08-02) — shared isolated test-entrypoint runner;
   preserves arguments, environment, stdout, stderr, and exit status without
   changing the production entrypoint.
-- `packages/bee/scripts/tests/test_bee onboard` — the complete onboarding
+- `packages/bee-rs/crates/bee/tests/ onboard` (formerly packages/bee/scripts/tests/test_bee) — the complete onboarding
   suite keeps its real and fixture-local entrypoints and all prior assertions
   while routing nested Node launches through the shared runner.
 - `scripts/install.sh`, `scripts/install.ps1`, `.codex-plugin/plugin.json`,
   `.claude-plugin/marketplace.json`, and the release inventory/tuple tests —
   package wiring, cross-platform entrypoints, metadata, inventory, and staged
-  cachebuster proof. Evidence: `.bee/cells/codex-hook-state-parity-3.json` and
+  cachebuster proof. Evidence: cell codex-hook-state-parity-3 (trace purged from .bee/cells/) and
   `docs/history/codex-hook-state-parity/reports/codex-hook-state-parity-3.md`.

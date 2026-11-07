@@ -99,7 +99,7 @@ clear commands, then `; +N more` (token-thrift D7).
 **Already in place, before this feature:**
 
 - The per-turn reminder is deduped by hash. `should_inject` in
-  `hooks/prompt_context.rs` injects again only when the hash changes, or when
+  `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs` injects again only when the hash changes, or when
   30 minutes (`INJECT_INTERVAL_MS`) have passed since the last injection.
 - Per-turn text is appended. It never edits earlier text, so the cached
   prefix of the host request stays the same.
@@ -161,7 +161,7 @@ transcript, nothing is added and the hook never fails or slows the turn.
   `fit_blocks`, `compose_with_drops`, `build_session_preamble_within`,
   `open_maps_lines`). The stdout budget: `compose_output_budgeted` in
   `packages/bee-rs/crates/bee/src/hooks/session_init.rs`. Tests:
-  `hooks/session_preamble/tests.rs`
+  `packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs`
   (`the_preamble_stays_inside_its_budget_however_big_the_store_gets`).
 - Grouped dispatch door: `dispatch_door_lines` in
   `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`. Tests:

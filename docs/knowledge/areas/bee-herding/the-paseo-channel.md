@@ -264,7 +264,7 @@ When that call answers, the daemon is up and the agent itself failed (for exampl
 
 Two rules hold for every herded worker (open-issues-sweep D3 and D13, issues #103, #112, #116):
 - A worker started with a dispatch permit (`BEE_DISPATCH_ID` in the pane passthrough) keeps the passthrough `BEE_SESSION_ID`, so `bee dispatch authorize` matches the issuer session. Every other leader session variable is stripped. Inside a herded worker, `bee state session release` with no `--session-id` releases nothing.
-- Under `BEE_HERDING_WORKER`, every hook stays silent except `bee hook write-guard`, which still refuses a whole-tree git verb (stash, reset, checkout, restore, clean, add, commit without paths) while more than one worker is live in the checkout (`hooks/write_guard/worker_tree.rs`).
+- Under `BEE_HERDING_WORKER`, every hook stays silent except `bee hook write-guard`, which still refuses a whole-tree git verb (stash, reset, checkout, restore, clean, add, commit without paths) while more than one worker is live in the checkout (`packages/bee-rs/crates/bee/src/hooks/write_guard/worker_tree.rs`).
 
 On the `pi` runtime, `bee doctor` adds a report-only `paseo_ready` row when any `team.pi` slot configures a Paseo agent (paseo-pi-hardening D7, store `fb38df99`, contract store `28ffec0f`).
 The check verifies these conditions:

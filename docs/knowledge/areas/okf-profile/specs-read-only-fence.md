@@ -131,11 +131,11 @@ same filename *without* a marker fails as new content.
 - Its two forms: `the_classifier_bites_in_every_direction` (the self-test) and
   `the_compatibility_surface_carries_no_new_content` (this repo's surface).
 - **It was absent between the R6 Node cutover and 2026-08-03.** The original,
-  `scripts/okf_specs_fence.mjs`, was deleted with the runtime and never ported, and this page
+  `packages/bee-rs/crates/bee/tests/specs_fence.rs` (formerly scripts/okf_specs_fence.mjs), was deleted with the runtime and never ported, and this page
   went on describing it as running. Four specs sat in the surface as new content for weeks with
   nothing red — this concept's own silent-rot failure, happening to the fence itself. Recorded
   here rather than quietly fixed, because a guard that was once absent is worth knowing about
   when reading anything it was supposed to have been guarding.
 - The shared bundle-mode predicate and product-root resolver:
-  `packages/bee/lib/knowledge.mjs` (`bundleMode`) and
-  `packages/bee/lib/state.mjs` (`resolveProductRoot`).
+  `packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs` (formerly packages/bee/lib/knowledge.mjs) (`bundleMode`) and
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs) (`resolveProductRoot`).

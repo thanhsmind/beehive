@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [docs/history/design-os-checks/CONTEXT.md, docs/history/design-os-checks/plan.md]
-  sources: [docs/history/design-os-checks/CONTEXT.md, docs/history/design-os-checks/plan.md, .bee/cells/doc-1.json, .bee/cells/doc-2.json, .bee/cells/doc-3.json]
+  sources: [docs/history/design-os-checks/CONTEXT.md, docs/history/design-os-checks/plan.md, cell doc-1 (trace purged from .bee/cells/), cell doc-2 (trace purged from .bee/cells/), cell doc-3 (trace purged from .bee/cells/)]
 ---
 
 # design-os-checks — Delivery

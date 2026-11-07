@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [onboarding, hook-runtime]
   required_context: [docs/history/pi-extension-split/CONTEXT.md, docs/history/pi-extension-split/plan.md]
-  sources: [docs/history/pi-extension-split/CONTEXT.md, docs/history/pi-extension-split/plan.md, .bee/cells/pes-1.json, .bee/cells/pes-2.json, .bee/cells/pes-3.json, .bee/cells/pes-4.json]
+  sources: [docs/history/pi-extension-split/CONTEXT.md, docs/history/pi-extension-split/plan.md, cell pes-1 (trace purged from .bee/cells/), cell pes-2 (trace purged from .bee/cells/), cell pes-3 (trace purged from .bee/cells/), cell pes-4 (trace purged from .bee/cells/)]
 ---
 
 # pi-extension-split — Delivery

@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [dispatch]
   required_context: [docs/history/dispatch-cell-id-flag/CONTEXT.md]
-  sources: [docs/history/dispatch-cell-id-flag/CONTEXT.md, .bee/cells/dcif-1.json]
+  sources: [docs/history/dispatch-cell-id-flag/CONTEXT.md, cell dcif-1 (trace purged from .bee/cells/)]
 ---
 
 # dispatch-cell-id-flag — Delivery

@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [docs/history/cli-output-spill/CONTEXT.md]
-  sources: [docs/history/cli-output-spill/CONTEXT.md, .bee/cells/cos-1.json]
+  sources: [docs/history/cli-output-spill/CONTEXT.md, cell cos-1 (trace purged from .bee/cells/)]
 ---
 
 # cli-output-spill — Delivery

@@ -52,7 +52,7 @@ erratum, D6). The session preamble's project map additionally carries one always
 naming the verb for mid-flow symptoms ("Hit a symptom mid-flow? Pull it: `bee knowledge search
 --text …`"), so the retrieval move is taught before the symptom ever appears (knowledge-usable U1,
 cell ku-1, 2026-08-10). The registry entry lives in the hand-maintained registry payload; no regen chain
-exists for it — the gap is recorded in the ks-1 trace, with `tests/registry_contracts.rs` as the
+exists for it — the gap is recorded in the ks-1 trace, with `packages/bee-rs/crates/bee/tests/registry_contracts.rs` as the
 drift net.
 
 **B5 — `promote` proposes; it never writes (D38).** `bee knowledge promote --work <id>` resolves
@@ -220,8 +220,8 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
   survives, byte for byte, when neither anchor exists.
 
 - **`promote` reaches retired cells, and takes its areas from the scribing ledger when the work
-  item names none (decision 86d96c9f).** Mining reads `.bee/cells/*.json` AND
-  `.bee/cells/archive/<feature>/*.json`, deduped by cell id with the live copy winning, so a
+  item names none (decision 86d96c9f).** Mining reads cell traces * (purged from .bee/cells/) AND
+  cell traces archive/<feature>/* (purged from .bee/cells/), deduped by cell id with the live copy winning, so a
   feature whose cells already retired still proposes — before this, every closed feature mined
   zero cells and therefore proposed nothing. When the resolved work item declares no `bee.areas`
   — which is every feature reached through the history fallback — the area list comes from that
@@ -261,9 +261,9 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
 ## Pointers (implementation)
 
 - Proposal builder (B5): `buildPromotion` in the same module, with `readCappedCellTraces` as its
-  read-only view of `.bee/cells/` and `.bee/cells/archive/<feature>/`. Neither function writes; the CLI handler
+  read-only view of `.bee/cells/` and cell archive/<feature>/ (trace purged from .bee/cells/). Neither function writes; the CLI handler
   (`handleKnowledgePromote` in `.bee/bin/bee`) only prints what they return.
-- CLI wiring: `.bee/bin/lib/command-registry.mjs` (the `knowledge` group) +
+- CLI wiring: `packages/bee-rs/crates/bee/src/registry.rs` (formerly .bee/bin/lib/command-registry.mjs) (the `knowledge` group) +
   `.bee/bin/bee` dispatch (`HANDLERS`).
 - Shared anchor resolver (B9): `resolve_anchor` in
   `packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs`; consumed by `context.rs`, `promote.rs`,

@@ -7,7 +7,7 @@ bee:
   id: finding-recheck-trigger-delivery
   lifecycle: active
   required_context: [docs/history/finding-recheck-trigger/plan.md]
-  sources: [docs/history/finding-recheck-trigger/plan.md, .bee/cells/frt-1.json, .bee/cells/frt-2.json, .bee/cells/frt-3.json]
+  sources: [docs/history/finding-recheck-trigger/plan.md, cell frt-1 (trace purged from .bee/cells/), cell frt-2 (trace purged from .bee/cells/), cell frt-3 (trace purged from .bee/cells/)]
 ---
 
 # finding-recheck-trigger — Delivery

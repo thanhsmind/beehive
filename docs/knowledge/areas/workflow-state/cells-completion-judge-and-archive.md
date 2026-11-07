@@ -700,42 +700,42 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
 ## Pointers (implementation)
 
 - Dependency cross-check at the cap door (B39/R58): `capCell` in
-  `packages/bee/lib/cells.mjs` (byte-mirrored to `.bee/bin/lib/cells.mjs`),
+  `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly packages/bee/lib/cells.mjs) (byte-mirrored to `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly .bee/bin/lib/cells.mjs)),
   around the `queryRegistry(registry, cellFiles, { level: 1 })` call. The map
-  is `scripts/impact-registry.json`; `queryRegistry` is resolved by
+  is scripts/impact-registry.json (retired with the Node verify pipeline, 2026-08-02); `queryRegistry` is resolved by
   `await import('../../../scripts/impact_registry.mjs')` **inside** the
   existing guarded `try/catch` at the point of use — never a top-level import,
-  so a fixture vendoring only `.bee/bin/lib/` with no sibling `scripts/` tree
+  so a fixture vendoring only `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it) with no sibling `scripts/` tree
   hits the same catch as a missing or malformed map and skips silently.
   `capCell`'s `withStoreLock` callback is `async` to carry that await. The
   warning follows the `ratioWarning` shape in the same module. Evidence:
-  traces `.bee/cells/dch-1.json`, `.bee/cells/dch-8.json`.
+  traces cell dch-1 (trace purged from .bee/cells/), cell dch-8 (trace purged from .bee/cells/).
 - Behavior-change resolution (B40/R59): `resolveDeclaredBehaviorChange` at
-  `packages/bee/lib/cells.mjs:1821`, consulted at the cap read
+  `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs:1821` (formerly packages/bee/lib/cells.mjs), consulted at the cap read
   (`cells.mjs:1869`) only when the top-level field is `undefined`. Evidence:
-  trace `.bee/cells/dch-2.json`.
-- Tests: `packages/bee/tests/test_cells.mjs` (the registry-warning rows and the
-  two behavior-change resolution rows), `packages/bee/tests/test_cli_cells.mjs`.
-- The two loosened doors (B41/R89): `capCell` in `packages/bee/lib/cells.mjs`
-  (byte-mirrored to `.bee/bin/lib/cells.mjs`) — the `behaviorEvidenceWarning`
+  trace cell dch-2 (trace purged from .bee/cells/).
+- Tests: `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs` (formerly packages/bee/tests/test_cells.mjs) (the registry-warning rows and the
+  two behavior-change resolution rows), `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs` (formerly packages/bee/tests/test_cli_cells.mjs).
+- The two loosened doors (B41/R89): `capCell` in `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly packages/bee/lib/cells.mjs)
+  (byte-mirrored to `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs` (formerly .bee/bin/lib/cells.mjs)) — the `behaviorEvidenceWarning`
   branch (`cells.mjs:1969-1975`) and the `recordedProofWarning` branch
   (`:2186-2190`); the surviving non-empty `files_changed` refusal sits
   immediately below the second at `:2191-2195`. Throw count inside `capCell`
   went 18 → 16.
 - The absence-of-proof marker (B42/R90/R91): `proofUnrecorded` at
-  `packages/bee/lib/cells.mjs:2228-2237`, written as `trace.proof:
+  `packages/bee-rs/crates/bee/src/verbs/cells/mod.rs:2228-2237` (formerly packages/bee/lib/cells.mjs), written as `trace.proof:
   "unrecorded"` at `:2273`; the workspace exemption is `isNoTestCommand` from
   the config reader applied to `commands.test`. Both doors read
-  it in `packages/bee/lib/state.mjs`: `featureVerifyDebt` (`:2502-2560`) and
+  it in `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs): `featureVerifyDebt` (`:2502-2560`) and
   `testCellDebt` (`:2570-2640`).
 - The feature coverage door (B43/R93): `testCellDebt` in
-  `packages/bee/lib/state.mjs` — the withdrawn-unit skip sits before the
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs) — the withdrawn-unit skip sits before the
   `testCellCount += 1` increment; the debt doors table is `DEBT_DOORS` in the
-  same module. Evidence: traces `.bee/cells/wc-1.json`, `.bee/cells/wc-2.json`,
-  `.bee/cells/wc-2c.json`, `.bee/cells/wc-4.json`; reports
+  same module. Evidence: traces cell wc-1 (trace purged from .bee/cells/), cell wc-2 (trace purged from .bee/cells/),
+  cell wc-2c (trace purged from .bee/cells/), cell wc-4 (trace purged from .bee/cells/); reports
   `docs/history/worker-conformance/reports/`.
-- Tests for all of the above: `packages/bee/tests/test_cells.mjs` (marker
-  table rows) and `packages/bee/tests/test_bee_cli.mjs` (end-to-end door rows
+- Tests for all of the above: `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs` (formerly packages/bee/tests/test_cells.mjs) (marker
+  table rows) and packages/bee/tests/test_bee_cli.mjs (retired with the Node runtime, 2026-08-02) (end-to-end door rows
   driving real add/claim/verify/cap without hand-writing the marker, plus the
   per-door bypass rows).
 - The registered-worker completion door (B44/R94): `registered_worker_for_cell`

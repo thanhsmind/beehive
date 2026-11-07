@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [docs/history/pstack-verify-trust/CONTEXT.md, docs/history/pstack-verify-trust/plan.md]
-  sources: [docs/history/pstack-verify-trust/CONTEXT.md, docs/history/pstack-verify-trust/plan.md, .bee/cells/pvt-1.json]
+  sources: [docs/history/pstack-verify-trust/CONTEXT.md, docs/history/pstack-verify-trust/plan.md, cell pvt-1 (trace purged from .bee/cells/)]
 ---
 
 # pstack-verify-trust — Delivery

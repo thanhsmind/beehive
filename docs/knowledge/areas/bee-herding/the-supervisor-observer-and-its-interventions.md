@@ -115,7 +115,7 @@ with no final result for its current round (D3, `936eb9a8`).
   event per job and budget kind.
 - **test-on-unstable-contract** — the cell cites a decision tagged
   `contract:<name>` whose derived status is Unsettled, and the job's diff
-  touches a test path (`tests/`, `spec/`, `*_test.*`, `*.test.*`,
+  touches a test path (`packages/bee-rs/crates/bee/tests/` (formerly tests/), `spec/`, `*_test.*`, `*.test.*`,
   `*_tests.*`). One event per job and contract.
 - **boundary-approach** — the job's diff touches a path outside the cell's
   non-empty declared `files`. One event per job and path.
@@ -161,7 +161,7 @@ A session inside a **linked worktree** hears the supervisor too. The prompt
 hook bails to `Outcome::Delegate` far above the ordinary delivery code for a
 worktree session, so the pending-delivery read is lifted ABOVE that bail and
 the worktree path takes the same delivery through its own
-`worktree_delivery` (`hooks/prompt_context.rs`); a session id is all it
+`worktree_delivery` (`packages/bee-rs/crates/bee/src/hooks/prompt_context.rs`); a session id is all it
 needs, and no session id or nothing addressed to it delivers nothing and
 writes nothing. Delivery is therefore not a main-checkout privilege —
 which matters, because feature work is exactly what lives in a worktree

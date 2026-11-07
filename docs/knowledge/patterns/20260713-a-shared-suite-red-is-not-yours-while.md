@@ -17,7 +17,7 @@ bee:
 
 When a cell's verify runs the full shared suite, a red observed while another
 cell is claimed-but-uncapped may be the sibling's mid-flight state, not your
-defect. Check `.bee/cells/*.json` for in-flight siblings before diagnosing;
+defect. Check cell traces * (purged from .bee/cells/) for in-flight siblings before diagnosing;
 re-run after they cap. Never "fix" files outside your cell's scope to green it.
 
 **The trap, learned by walking into it (okf-integration-close-f4, 2026-07-22).** This heuristic

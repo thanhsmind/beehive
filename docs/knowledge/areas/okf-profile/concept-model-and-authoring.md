@@ -243,7 +243,7 @@ are different verbs. What a new concept still owes is an inbound link — the or
   screen snapshots under `docs/specs/visuals/<area>/`, and the Scribe discipline (`bee-capturing`) still requires one for
   every UI area whose screen visibly changed. The bundle profile defines no equivalent location,
   and `docs/specs/` is read-only for new content once a repo has migrated (G2 —
-  `scripts/okf_specs_fence.mjs` fails the chain), so in bundle mode there is nowhere legitimate to
+  `packages/bee-rs/crates/bee/tests/specs_fence.rs` (formerly scripts/okf_specs_fence.mjs) fails the chain), so in bundle mode there is nowhere legitimate to
   put the image. Recorded rather than filled: inventing a path here would decide a profile
   question — is a binary asset a concept, a sibling of one, or out of the bundle entirely? — that
   no decision has settled. **Until it is settled, a bundle-mode UI area with a changed screen
@@ -367,8 +367,8 @@ comma, or other reserved character; both forms round-trip.
 ## Pointers (implementation)
 
 - The bundle-mode predicate and the frontmatter emitter: `bundleMode`,
-  `emitFrontmatter` in `.bee/bin/lib/knowledge.mjs` (mirrored at
-  `packages/bee/lib/knowledge.mjs`).
+  `emitFrontmatter` in `packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs` (formerly .bee/bin/lib/knowledge.mjs) (mirrored at
+  `packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs` (formerly packages/bee/lib/knowledge.mjs)).
 - `scribingTarget` (the scribing-target resolver) is **dead surface**, kept only
   as a reference: it has no runtime caller, no CLI verb, and is absent from the
   command registry. Its only reachable path was an internals-reach `node -e`
@@ -376,11 +376,11 @@ comma, or other reserved character; both forms round-trip.
   like it enforced is a convention the scribe follows, not a gate — see
   `docs/handbook/stages/scribing.md`.
 - The product-root resolution both doc trees share: `resolveProductRoot` in
-  `.bee/bin/lib/state.mjs` — the same resolver the session preamble (`inject.mjs`), the backlog
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly .bee/bin/lib/state.mjs) — the same resolver the session preamble (`inject.mjs`), the backlog
   and the session-close hook already use.
 - The scribe's own routing prose: `skills/bee-capturing/SKILL.md` ("Scribe" section).
 - Coverage for the gate, its three refusals and the repo-divorce topology:
-  `packages/bee/tests/test_bundle_mode.mjs`.
+  packages/bee/tests/test_bundle_mode.mjs (retired with the Node runtime, 2026-08-02).
 
 ### `bee.plan` — `docs/knowledge/work/okf-foundation/plan.md` (live)
 
@@ -416,7 +416,7 @@ rewired (declared here, executed in F2). A `bee.plan`'s `required_context` typic
 at its own work item, since the plan only makes sense alongside the outcome/scope it implements.
 
 ### `bee.delivery` — worked example (illustrative; not a committed concept — okf-foundation is not
-closed yet), grounded in cell okf-5's real cap trace (`.bee/cells/okf-5.json`)
+closed yet), grounded in cell okf-5's real cap trace (cell okf-5 (trace purged from .bee/cells/))
 
 ```yaml
 ---
@@ -445,7 +445,7 @@ bee:
 ## Verify
 ```
 
-A `bee.delivery`'s `sources` may cite a cell trace file directly (`.bee/cells/<id>.json`) — a
+A `bee.delivery`'s `sources` may cite a cell trace file directly (cell <id> (trace purged from .bee/cells/)) — a
 `.bee/*.json` path is outside the bundle and is never itself a concept (D2/D23), but `sources` is
 free-text provenance, not a `required_context` link target, so citing it is not a dangling-target
 finding. `areas` names the subsystem(s) the delivered work touched, matching one or more

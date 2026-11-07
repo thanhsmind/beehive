@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [docs/history/pi-tests-unix-stubs/plan.md]
-  sources: [docs/history/pi-tests-unix-stubs/plan.md, .bee/cells/pts-1.json]
+  sources: [docs/history/pi-tests-unix-stubs/plan.md, cell pts-1 (trace purged from .bee/cells/)]
 ---
 
 # pi-tests-unix-stubs — Delivery

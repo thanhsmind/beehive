@@ -7,7 +7,7 @@ bee:
   id: worker-outward-guard-delivery
   lifecycle: active
   required_context: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/worker-outward-guard/plan.md]
-  sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/worker-outward-guard/plan.md, .bee/cells/wog-1.json, .bee/cells/wog-2.json]
+  sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/worker-outward-guard/plan.md, cell wog-1 (trace purged from .bee/cells/), cell wog-2 (trace purged from .bee/cells/)]
 ---
 
 # worker-outward-guard — Delivery

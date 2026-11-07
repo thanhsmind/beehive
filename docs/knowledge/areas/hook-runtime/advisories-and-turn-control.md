@@ -88,7 +88,7 @@ falls through to the advisory path with a visible log, never a crash.
 block `agents-knowledge-before-code` in `packages/bee/LEADER.md` § Start a
 session; the hook only points to it. On a leader's PreToolUse, the write-guard
 checks whether the call is a code read: Read, Glob or Grep whose path is under
-`packages/` or `src/` or is a source file, or a Bash command (`rg`, `grep`,
+`packages/` or `packages/bee-rs/crates/bee/src/` (formerly src/) or is a source file, or a Bash command (`rg`, `grep`,
 `cat`, `sed`, `head`, `tail`, `fd`, `find`, `less`, `bat`) whose path argument
 is. Anything under `docs/`, `.bee/` or `skills/`, and any `*.md` file, is not a
 code read. When the session's current turn has neither a knowledge lookup nor a
@@ -161,13 +161,13 @@ non-empty `agent_id` or `agent_type` (a native subagent) is skipped.
   `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs`. Suite:
   `packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs`.
 
-- Shared adapter: `packages/bee/hooks/adapter.mjs` (`encodeAdvisory`; `encodeBlock` — the
+- Shared adapter: `packages/bee-rs/crates/bee/src/hooks/adapter.rs` (formerly packages/bee/hooks/adapter.mjs) (`encodeAdvisory`; `encodeBlock` — the
   deliberate turn-control inverse used ONLY by the gate-bypass net); the eight
   handlers `packages/bee/hooks/bee-*.mjs`, including the paired Codex native-subagent audit
   handler and its vendored mirror.
 
-- Gate-bypass net (B15, R14): `maybeBypassBlock` in `packages/bee/hooks/bee-session-close.mjs`
+- Gate-bypass net (B15, R14): `maybeBypassBlock` in `packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs` (formerly packages/bee/hooks/bee-session-close.mjs)
   (fire matrix `PHASE_GATE` + `levelCoversGate`; loop-guard via
-  `shouldInject`/`markInjected` in `packages/bee/lib/inject.mjs`
+  `shouldInject`/`markInjected` in packages/bee/lib/inject.mjs (retired with the Node runtime, 2026-08-02)
   keyed `sessionId:phase:gate:level`; level via `bypassLevel` in
-  `.../lib/state.mjs`). Suite: `hooks/test_bypass_stop_net.mjs`.
+  `.../lib/state.mjs`). Suite: hooks/test_bypass_stop_net.mjs (retired with the Node runtime, 2026-08-02).

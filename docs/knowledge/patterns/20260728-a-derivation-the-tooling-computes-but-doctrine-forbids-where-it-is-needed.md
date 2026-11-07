@@ -15,14 +15,14 @@ bee:
 
 # A derivation the tooling already computes is worthless where doctrine forbids it
 
-`vd-2` exported a new helper from `packages/bee/lib/state.mjs`. Its verify —
+`vd-2` exported a new helper from `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs). Its verify —
 `test_guards.mjs && test_bee_write_guard_hook.mjs` — passed. Meanwhile
 `test_misc.mjs`'s exact-set export census went red and stayed red until a
 whole repair cell (`vd-5`) was authored to un-export the helper.
 
 The registry knew. `node scripts/impact_registry.mjs --query packages/bee/lib/state.mjs`
-names `packages/bee/tests/test_misc.mjs` as a **direct** edge, and
-`scripts/run_verify.mjs:813-909` already implements `--impacted-from-git`
+names packages/bee/tests/test_misc.mjs (retired with the Node runtime, 2026-08-02) as a **direct** edge, and
+`packages/bee-rs/crates/bee/src/verbs/test_runner.rs:813-909` (formerly scripts/run_verify.mjs) already implements `--impacted-from-git`
 against that same registry. The derivation was computed, committed, and
 sitting on disk the entire time.
 
@@ -36,7 +36,7 @@ sibling-suite decision fell back to whatever the cell's author happened to
 remember.
 
 The proof that it is memory and not method: `vd-1` and `vd-2` edited the same
-file, `packages/bee/lib/state.mjs`, in the same slice, hours apart. `vd-1`
+file, `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs), in the same slice, hours apart. `vd-1`
 listed `test_misc.mjs` in its verify. `vd-2` did not. Same file, same
 registry edge, opposite guesses, and nothing in between them to notice.
 
@@ -48,7 +48,7 @@ the coverage it removed, and if the answer is "the author remembers," the
 coverage is gone. Wire the derivation into the door rather than the
 instructions: the cap door can run `queryRegistry(registry, cell.files, {level:1})`
 and require every returned suite to appear in `cell.verify`, reusing
-`scripts/impact_registry.mjs:449-486` with no new logic. A deferred
+scripts/impact_registry.mjs (retired with the Node runtime, 2026-08-02) with no new logic. A deferred
 regeneration obligation (`regen_obligation_ack: wave-barrier`) has the same
 shape and needs the same treatment — the **next claim**, not the eventual
 close, is where a stale-artifact check belongs, because that is the last

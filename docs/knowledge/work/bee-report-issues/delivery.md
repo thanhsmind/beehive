@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [feedback-digest, doctrine-layer]
   required_context: [docs/history/bee-report-issues/CONTEXT.md, docs/history/bee-report-issues/plan.md]
-  sources: [docs/history/bee-report-issues/CONTEXT.md, docs/history/bee-report-issues/plan.md, .bee/cells/bri-1.json, .bee/cells/bri-2.json, .bee/cells/bri-3.json]
+  sources: [docs/history/bee-report-issues/CONTEXT.md, docs/history/bee-report-issues/plan.md, cell bri-1 (trace purged from .bee/cells/), cell bri-2 (trace purged from .bee/cells/), cell bri-3 (trace purged from .bee/cells/)]
 ---
 
 # bee-report-issues — Delivery

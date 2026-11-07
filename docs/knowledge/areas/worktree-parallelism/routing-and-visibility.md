@@ -66,7 +66,7 @@ fallback for the last:
    brief skips this check (pi-slp-dispatch-return D1): the run already sets
    the pane cwd, and a bare `[BLOCKED]` token is not a result file.
 3. **The write guard denies.** The containment check
-   (`hooks/write_guard/hook_local.rs`) is the backstop no annotation or
+   (`packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs`) is the backstop no annotation or
    self-check can race past. Its deny names something the caller can do
    (pi-slp-operations D3): a main-checkout path names the same relative path
    inside the current worktree ("write <path> instead"); a main `.bee/` path
@@ -86,7 +86,7 @@ unconditional; claim and claim-next semantics are otherwise unchanged.
 ## Contention is triage data, never a user question (worktree-first-enforcement, 2026-08-16)
 
 Cross-worktree same-path leases are advisory by design — a hard deny needs the holder's
-`workspace_id` to match the acting session's (`hooks/write_guard/checks.rs:366-374`) — so
+`workspace_id` to match the acting session's (`packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs:366-374`) — so
 two worktrees may edit the same file and queue at `bee worktree merge` instead of at
 reserve time. What that leaves open is semantic overlap: a backlog item whose files an
 in-flight cell already holds is likely to be swallowed by that cell, and doing it anyway

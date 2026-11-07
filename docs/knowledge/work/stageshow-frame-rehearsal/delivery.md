@@ -7,7 +7,7 @@ bee:
   id: stageshow-frame-rehearsal-delivery
   lifecycle: active
   required_context: [.bee/lanes/stageshow-frame-rehearsal.json]
-  sources: [.bee/lanes/stageshow-frame-rehearsal.json, .bee/cells/sfr-1.json, .bee/cells/sfr-2.json]
+  sources: [.bee/lanes/stageshow-frame-rehearsal.json, cell sfr-1 (trace purged from .bee/cells/), cell sfr-2 (trace purged from .bee/cells/)]
 ---
 
 # stageshow-frame-rehearsal — Delivery

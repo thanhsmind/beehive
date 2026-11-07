@@ -120,7 +120,7 @@ route to the external path until it earns its own proof (decisions 34398e69,
   out of the skill in the consolidation); RED→GREEN record in the compounding
   skill's creation log under `docs/decisions/skills/`, amendment 2026-07-17.
 - B8/R12 implementation: `resolveTier(root, slot, runtime, {for:'gather'|'cell'})`
-  in `packages/bee/lib/state.mjs` (default `'cell'`, refusal
+  in `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs) (default `'cell'`, refusal
   `{type:'refused', reason:'cli_tier_gather_only'}`); the cli gather branch +
   `<<<BEE_DIGEST … BEE_DIGEST>>>` delimiter contract in
   `skills/bee-hive/references/routing-and-contracts.md` § Delegation contract,

@@ -149,16 +149,16 @@ this door (see the bypass ladder in `gates.md`, R25).
 
 - Review records: `.bee/reviews/<id>.json` (sessions) + `.bee/review-candidates.jsonl`
   (ledger), CLI `bee reviews` (create/list/show/record/candidate add/
-  candidates/status), lib `packages/bee/lib/reviews.mjs`
+  candidates/status), lib `packages/bee-rs/crates/bee/src/verbs/reviews.rs` (formerly packages/bee/lib/reviews.mjs)
   (`deriveCandidateStatus`, `readReviewStrict`; byte-mirrored to `.bee/bin/`).
   Status surface: `review` block in `the bee binary` (`status` group).
   Coverage derivation uses status-first `git merge-base --is-ancestor` +
   `git rev-list --count`: a concrete Git answer wins over an attached auxiliary
   launch warning, while missing/inconclusive output yields `review stale`.
-  Tests: review-od checks in `packages/bee/tests/test_lib.mjs`
+  Tests: review-od checks in packages/bee/tests/test_lib.mjs (retired with the Node runtime, 2026-08-02)
   (including codex-sandbox-baseline-6 coverage). Evidence: commits cc1c34d,
   e4f51a2, da2e165; traces
-  `.bee/cells/review-od-{1,2,3}.json`; acceptance map
+  cell traces review-od-{1,2,3} (purged from .bee/cells/); acceptance map
   `docs/history/review-on-demand/reports/uat-scenarios.md`.
 - P1 approval door (B7/R29): `unresolved_p1_refusal` in
   `packages/bee-rs/crates/bee/src/verbs/reviews.rs`, checked only on the

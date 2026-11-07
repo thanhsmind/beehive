@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/occupancy-test-pane-fixture/plan.md]
-  sources: [docs/history/occupancy-test-pane-fixture/plan.md, .bee/cells/otpf-1.json]
+  sources: [docs/history/occupancy-test-pane-fixture/plan.md, cell otpf-1 (trace purged from .bee/cells/)]
 ---
 
 # occupancy-test-pane-fixture — Delivery

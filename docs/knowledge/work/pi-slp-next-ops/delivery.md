@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [docs/history/pi-slp-next-ops/CONTEXT.md, docs/history/pi-slp-next-ops/plan.md]
-  sources: [docs/history/pi-slp-next-ops/CONTEXT.md, docs/history/pi-slp-next-ops/plan.md, .bee/cells/nop-1.json, .bee/cells/nop-2.json, .bee/cells/nop-3.json]
+  sources: [docs/history/pi-slp-next-ops/CONTEXT.md, docs/history/pi-slp-next-ops/plan.md, cell nop-1 (trace purged from .bee/cells/), cell nop-2 (trace purged from .bee/cells/), cell nop-3 (trace purged from .bee/cells/)]
 ---
 
 # pi-slp-next-ops — Delivery

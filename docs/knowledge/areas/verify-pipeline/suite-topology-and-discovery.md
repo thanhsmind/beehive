@@ -15,7 +15,7 @@ bee:
 # Verify Pipeline — Suite Topology and Discovery
 
 > **Archived (2026-08-10).** Everything below describes the retired Node
-> runner (`scripts/run_verify.mjs`) — deleted with the Rust port. The LIVE
+> runner (`packages/bee-rs/crates/bee/src/verbs/test_runner.rs` (formerly scripts/run_verify.mjs)) — deleted with the Rust port. The LIVE
 > verify chain is one declared command: `commands.test` in
 > `.bee/config.json` runs `cargo test --release` over the crate's 14 suites.
 > No door runs it (test-doctrine D7): a cell proves itself with its related
@@ -42,7 +42,7 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   to a shared file.
 - **Shared fixture helper.** Suites import their temp-repo bootstrap,
   cell factory, and check-runner from one helper
-  (`scripts/lib/test-fixture.mjs`) instead of duplicating setup. Each suite
+  (scripts/lib/test-fixture.mjs (retired with the Node runtime, 2026-08-02)) instead of duplicating setup. Each suite
   file owns its own temp root; cross-suite state sharing is prohibited.
 - **Convention-based discovery.** The runner discovers suites by glob
   (`test_*.mjs` under the four test roots) plus a small EXTRA list for
@@ -87,7 +87,7 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 - **Impact-registry-scoped dev loop (ci-owned-verify D3/D4/D5).** The dev
   loop's own broader command, `commands.test`, runs `run_verify.mjs
   --impacted <files>` / `--impacted-from-git`, mapping changed files through
-  the committed `scripts/impact-registry.json` (derived, never
+  the committed scripts/impact-registry.json (retired with the Node verify pipeline, 2026-08-02) (derived, never
   hand-authored — `impact_registry.mjs --write`/`--check` regenerates and
   byte-compares it) to the exact suites they can affect; a changed suite
   selects itself, unmapped changed files are listed loudly rather than
@@ -261,13 +261,13 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 
 ## Pointers (implementation)
 
-- **P1** — `scripts/run_verify.mjs` — discovery roots, EXTRA/EXCLUDE, serial
+- **P1** — `packages/bee-rs/crates/bee/src/verbs/test_runner.rs` (formerly scripts/run_verify.mjs) — discovery roots, EXTRA/EXCLUDE, serial
   convention, pool.
-- **P2** — `scripts/tests/test_verify_manifest.mjs` — floor + existence + membership guard.
-- **P3** — `scripts/lib/test-fixture.mjs` — shared fixture/check-runner,
+- **P2** — scripts/tests/test_verify_manifest.mjs (retired with the Node runtime, 2026-08-02) — floor + existence + membership guard.
+- **P3** — scripts/lib/test-fixture.mjs (retired with the Node runtime, 2026-08-02) — shared fixture/check-runner,
   including the `BEE_CHECK_ONLY` name filter and its exported predicate.
-- **P4** — `packages/bee/tests/` — per-module suites (11 files).
-- **P5** — `scripts/tests/test_scan_set_hygiene.mjs` — the standing check
+- **P4** — `packages/bee-rs/crates/bee/tests/` (formerly packages/bee/tests/) — per-module suites (11 files).
+- **P5** — `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_scan_set_hygiene.mjs) — the standing check
   behind R8. Check 1 flags any file under `scripts/tests/**` or
   `packages/bee/**` that derives a path list from `git ls-files` and reads
   from it with no `existsSync` guard in the enclosing function; check 2 is the
@@ -275,10 +275,10 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   `areas/doctrine-layer/placement-and-anchoring.md` (R3). Both carry negative
   controls under `--selftest`. Registered by the discovery convention alone
   (P1) — `run_verify.mjs` was not edited to add it.
-- **P6** — `scripts/tests/test_portable_paths.mjs` — the existence filter plus
+- **P6** — `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_portable_paths.mjs) — the existence filter plus
   the `git status --porcelain` union (R8), following the sibling filter in
-  `scripts/tests/test_doctrine_parity.mjs`; `gitImpactedFiles()` /
-  `statusPorcelainFiles()` in `scripts/run_verify.mjs` are the union source.
+  `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_doctrine_parity.mjs); `gitImpactedFiles()` /
+  `statusPorcelainFiles()` in `packages/bee-rs/crates/bee/src/verbs/test_runner.rs` (formerly scripts/run_verify.mjs) are the union source.
 - **P7** — `.github/workflows/ci.yml` — the `on:` block: `schedule` with
   `cron: '0 23 * * *'` (23:00 UTC = 06:00 Asia/Ho_Chi_Minh) plus
   `workflow_dispatch`, and `push` and `pull_request` triggers.

@@ -7,7 +7,7 @@ bee:
   id: pi-slp-operations-delivery
   lifecycle: active
   required_context: [docs/history/pi-slp-operations/CONTEXT.md, docs/history/pi-slp-operations/plan.md]
-  sources: [docs/history/pi-slp-operations/CONTEXT.md, docs/history/pi-slp-operations/plan.md, .bee/cells/rfx-1.json, .bee/cells/rfx-2.json, .bee/cells/rfx-3.json, .bee/cells/rfx-4.json]
+  sources: [docs/history/pi-slp-operations/CONTEXT.md, docs/history/pi-slp-operations/plan.md, cell rfx-1 (trace purged from .bee/cells/), cell rfx-2 (trace purged from .bee/cells/), cell rfx-3 (trace purged from .bee/cells/), cell rfx-4 (trace purged from .bee/cells/)]
 ---
 
 # pi-slp-operations — Delivery

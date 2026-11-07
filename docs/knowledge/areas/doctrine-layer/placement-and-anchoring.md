@@ -204,24 +204,24 @@ rule. It says nothing whatever about whether the rule was then obeyed
 - Master copy of the standing sheet: `packages/bee/AGENTS.block.md`;
   the rendered per-project copy sits between the `<!-- BEE:START -->` /
   `<!-- BEE:END -->` markers in each host's root `AGENTS.md`.
-- B1's copy-into-project step: `packages/bee/scripts/bee onboard`
+- B1's copy-into-project step: `packages/bee-rs/crates/bee/src/main.rs onboard` (formerly packages/bee/scripts/bee)
   (`update_agents_block` plan item).
-- Anchor tests (B4/R2): `packages/bee/tests/test_lib.mjs` — the
+- Anchor tests (B4/R2): packages/bee/tests/test_lib.mjs (retired with the Node runtime, 2026-08-02) — the
   `census:` checks, including the delegation-layer anchor and the on-demand
   review anchors, plus the native Codex empty-wait anchor across the master,
   root, canonical procedure, and writable `.claude` surfaces.
-- Retired-stage currency check (B5/R3): `scripts/tests/test_scan_set_hygiene.mjs`,
+- Retired-stage currency check (B5/R3): `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_scan_set_hygiene.mjs),
   check 2. Retired tokens are derived from `LEGACY_PHASE_COERCIONS` in
-  `packages/bee/lib/state.mjs` (`{ validating: 'planning' }` today), never
+  `packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs) (`{ validating: 'planning' }` today), never
   hard-coded. Scanned surfaces: `skills/**/SKILL.md`, `skills/**/references/**`,
   `docs/knowledge/**`, `docs/specs/**`, `AGENTS.md`, `CLAUDE.md`. Exceptions:
   `docs/decisions/**`, `docs/history/**`, and the coercion path itself. The two
   residuals it was written for: `skills/bee-researching/references/research-brief-template.md`
   (proof obligations now route to `bee-planning`'s shape gate) and
-  `packages/bee/hooks/test_write_guard.mjs` (the fixture row that hand-built the
-  retired phase value). Evidence: traces `.bee/cells/dch-5.json`,
-  `.bee/cells/dch-7.json`.
-- Every-turn reachability check (B6/R4): implemented by `scripts/tests/test_always_loaded_rules.mjs`,
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs` (formerly packages/bee/hooks/test_write_guard.mjs) (the fixture row that hand-built the
+  retired phase value). Evidence: traces cell dch-5 (trace purged from .bee/cells/),
+  cell dch-7 (trace purged from .bee/cells/).
+- Every-turn reachability check (B6/R4): implemented by `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_always_loaded_rules.mjs),
   deleted with the Node runtime at the Rust port and NOT ported — no test in the
   declared `commands.test` chain enforces it today. Recorded here as the contract
   a port must re-arm. Its one seed is `EVERY_TURN_PHRASES` (six wording patterns); the rule
@@ -237,7 +237,7 @@ rule. It says nothing whatever about whether the rule was then obeyed
   critical rule 17 from the block, each turn the suite red naming
   `skills/bee-hive/references/routing-and-contracts.md` "Progress ticks —
   worked examples" as the unreachable every-turn section.
-- Size-law regression guard (R6): `scripts/tests/test_instruction_size_law.mjs` —
+- Size-law regression guard (R6): `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_instruction_size_law.mjs) —
   fails the build if any byte or line ceiling on instruction text reappears
   anywhere under `scripts/`, and separately proves the two surviving meaning
   guards still exit non-zero on a seeded violation. It matches on the shape of
@@ -248,7 +248,7 @@ rule. It says nothing whatever about whether the rule was then obeyed
   `packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs` pins the
   byte-identical render, so an edit made to `AGENTS.md` alone is dropped by the
   next regen. The Node suite that first held this guard,
-  `scripts/tests/test_agents_budget.mjs`, was deleted by the Rust port. It
+  `packages/bee-rs/crates/bee/tests/instruction_laws.rs` (formerly scripts/tests/test_agents_budget.mjs), was deleted by the Rust port. It
   guarded the 17-rule roster and the same render, with no size threshold;
   `EXPECTED_RULE_COUNT` moved 16→17 by appending, so
   `TERMINAL_HOME_RULES [1, 5, 6, 11]` was unaffected. The rule cost ~1,850 bytes
@@ -259,5 +259,5 @@ rule. It says nothing whatever about whether the rule was then obeyed
   `Full rule: bee-hive skill, critical rule N` citation off by one; both were
   removed outright rather than repointed, the block stating those rules more
   fully than the hive one-liners it was citing.
-- Evidence: traces `.bee/cells/tci-1.json`, `.bee/cells/tci-3.json`; reports
+- Evidence: traces cell tci-1 (trace purged from .bee/cells/), cell tci-3 (trace purged from .bee/cells/); reports
   under `docs/history/tick-contract-inline/reports/`.

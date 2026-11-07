@@ -7,7 +7,7 @@ bee:
   id: windows-json-path-delivery
   lifecycle: active
   required_context: [docs/history/windows-json-path/CONTEXT.md, docs/history/windows-json-path/plan.md]
-  sources: [docs/history/windows-json-path/CONTEXT.md, docs/history/windows-json-path/plan.md, .bee/cells/wjp-1.json]
+  sources: [docs/history/windows-json-path/CONTEXT.md, docs/history/windows-json-path/plan.md, cell wjp-1 (trace purged from .bee/cells/)]
 ---
 
 # windows-json-path — Delivery

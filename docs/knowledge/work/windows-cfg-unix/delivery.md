@@ -7,7 +7,7 @@ bee:
   id: windows-cfg-unix-delivery
   lifecycle: active
   required_context: [docs/history/windows-cfg-unix/CONTEXT.md, docs/history/windows-cfg-unix/plan.md]
-  sources: [docs/history/windows-cfg-unix/CONTEXT.md, docs/history/windows-cfg-unix/plan.md, .bee/cells/wcu-1.json]
+  sources: [docs/history/windows-cfg-unix/CONTEXT.md, docs/history/windows-cfg-unix/plan.md, cell wcu-1 (trace purged from .bee/cells/)]
 ---
 
 # windows-cfg-unix — Delivery

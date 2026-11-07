@@ -293,33 +293,33 @@ red.
 
 ## Pointers (implementation)
 
-- Session coordination (B11/R17/R18): `packages/bee/lib/claims.mjs`
-  (byte-mirrored to `.bee/bin/lib/`) — sessions under `.bee/sessions/`, claims
+- Session coordination (B11/R17/R18): `packages/bee-rs/crates/bee/src/verbs/cells/claims.rs` (formerly packages/bee/lib/claims.mjs)
+  (byte-mirrored to `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it)) — sessions under `.bee/sessions/`, claims
   under `.bee/claims/`, per-claim gate `<cell>.adopting`; race orchestrator
-  `packages/bee/tests/race_claims_child.mjs` (3 scenarios using
+  packages/bee/tests/race_claims_child.mjs (retired with the Node runtime, 2026-08-02) (3 scenarios using
   barrier-synchronized isolated Worker racers in `test_lib.mjs`). Evidence:
-  traces `.bee/cells/fsh-{1,2}.json` (win32 +
+  traces cell traces fsh-{1,2} (purged from .bee/cells/) (win32 +
   linux probe PASS lines), commits 0224f6c, edfac87; validation
   `docs/history/fresh-session-handoff/reports/validation-s1.md`.
 - Multi-session hardening (B11/B21-B24, R36-R40): coordination lock primitive
-  `withStoreLock` in `packages/bee/lib/lock.mjs` (byte-mirrored
-  to `.bee/bin/lib/`), O_EXCL acquire with stale-holder takeover by atomic
-  rename, forked-racer suite `scripts/tests/test_store_lock.mjs`; `cells claim --id`
+  `withStoreLock` in `packages/bee-rs/crates/bee/src/lock.rs` (formerly packages/bee/lib/lock.mjs) (byte-mirrored
+  to `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it)), O_EXCL acquire with stale-holder takeover by atomic
+  rename, forked-racer suite `packages/bee-rs/crates/bee/src/lock.rs` (formerly scripts/tests/test_store_lock.mjs); `cells claim --id`
   re-backed by the same claim-file gate `claim-next` uses
   (`claimCellCrossSession` in `lib/cells.mjs`), forked-racer suite
-  `scripts/tests/test_claim_race.mjs`; session id self-derivation `resolveSessionId`
+  `packages/bee-rs/crates/bee/tests/concurrency.rs` (formerly scripts/tests/test_claim_race.mjs); session id self-derivation `resolveSessionId`
   in `lib/claims.mjs`; claim-clearing release on cap/unclaim/block/drop/reopen
   via `clearClaim` in `lib/claims.mjs`; reservation read-modify-write and
   session auto-derive under the lock in `lib/reservations.mjs`
   (`reserve`/`release`/`sweepExpired`), forked-racer suite
-  `scripts/tests/test_reservation_race.mjs`; ownership guard on cell mutators
+  `packages/bee-rs/crates/bee/tests/concurrency.rs` (formerly scripts/tests/test_reservation_race.mjs); ownership guard on cell mutators
   (`checkClaimOwnership`/`guardClaimOwnership`, `--force-ownership`, the
   `trace.ownership_overrides` audit key kept apart from `trace.deviations`)
   in `lib/cells.mjs`; throttled heartbeat-and-lease renewal
   (`heartbeatTouch`, `renewClaimTTL` in `lib/claims.mjs`,
   `renewHoldsBySession` in `lib/reservations.mjs`) wired into
-  `packages/bee/hooks/bee-prompt-context.mjs` and `packages/bee/hooks/bee-state-sync.mjs` in try-once
-  mode, suite `scripts/tests/test_heartbeat_touch.mjs`; state logical
+  `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs` (formerly packages/bee/hooks/bee-prompt-context.mjs) and `packages/bee-rs/crates/bee/src/hooks/state_sync.rs` (formerly packages/bee/hooks/bee-state-sync.mjs) in try-once
+  mode, suite scripts/tests/test_heartbeat_touch.mjs (retired with the Node runtime, 2026-08-02); state logical
   read-modify-write verbs (`startFeature` in `lib/state.mjs`;
   `handleStateSet`/`handleStateGate`/`stateWorkerMutate`/
   `handleStateScribingRun` in `bee`) serialized under the same lock,
@@ -328,16 +328,16 @@ red.
   + `references/swarming-reference.md`; the
   four new suites added to `.bee/config.json` `commands.test`. Evidence:
   `docs/history/multi-session-hardening/CONTEXT.md` (D1-D7, Δ1-Δ6); traces
-  `.bee/cells/msh-{1..7}.json`; reports
+  cell traces msh-{1..7} (purged from .bee/cells/); reports
   `docs/history/multi-session-hardening/reports/msh-{1..7}.md`.
 - Claim fencing (multisession-native D4/D9 invariant 10): `fence_epoch`
   stamped in `claimCellFile` and bumped in `adoptClaim` (the SAME atomic
   write as the ownership rewrite); `CLAIM_FENCE_STALE` refusal in
   `renewClaimTTL`/`releaseClaim`, all in
-  `packages/bee/lib/claims.mjs` (byte-mirrored to
-  `.bee/bin/lib/`). Red-first: new refusal tests captured failing against
+  `packages/bee-rs/crates/bee/src/verbs/cells/claims.rs` (formerly packages/bee/lib/claims.mjs) (byte-mirrored to
+  `.bee/bin/lib/` (the Node-era vendored mirror, retired 2026-08-02; the single `.bee/bin/bee` binary replaces it)). Red-first: new refusal tests captured failing against
   pristine `claims.mjs`, then green after the implementation. Evidence:
-  trace `.bee/cells/multisession-native-12.json`, commit 8c002a1; advisor
+  trace cell multisession-native-12 (trace purged from .bee/cells/), commit 8c002a1; advisor
   digest `docs/history/multisession-native/reports/advisor-digest-slice3.md`
   condition F.
 - Red-base claim refusal (B45/R96): `classify_red_base` and `red_base_refusal`

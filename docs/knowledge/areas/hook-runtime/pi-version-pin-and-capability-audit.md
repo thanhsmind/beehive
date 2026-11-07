@@ -223,7 +223,7 @@ Nothing in the range earns `delete`.
   attributes to 0.85.1.
 - **The codex sibling page has two dead pointers.** It names
   `PROBED_CODEX_VERSION` as a constant "in the bee binary" and
-  `scripts/canary_codex.mjs` as the canary. Neither exists at this commit:
+  `scripts/codex-parity-canary.sh` (formerly scripts/canary_codex.mjs) as the canary. Neither exists at this commit:
   `rg 'PROBED' packages/bee-rs/crates/bee/src` and `fd -t f 'canary_codex*'`
   both return nothing. The mechanism that survived the Rust port is the
   attestation record read at `doctor.rs:772-784`. Recorded here rather than

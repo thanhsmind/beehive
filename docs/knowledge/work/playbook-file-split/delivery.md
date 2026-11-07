@@ -7,7 +7,7 @@ bee:
   id: playbook-file-split-delivery
   lifecycle: active
   required_context: [docs/history/playbook-file-split/CONTEXT.md]
-  sources: [docs/history/playbook-file-split/CONTEXT.md, .bee/cells/pfs-1.json, .bee/cells/pfs-2.json]
+  sources: [docs/history/playbook-file-split/CONTEXT.md, cell pfs-1 (trace purged from .bee/cells/), cell pfs-2 (trace purged from .bee/cells/)]
 ---
 
 # playbook-file-split — Delivery

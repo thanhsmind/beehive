@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [docs/history/agent-anti-patterns/CONTEXT.md]
-  sources: [docs/history/agent-anti-patterns/CONTEXT.md, .bee/cells/aap-1.json, .bee/cells/aap-2.json]
+  sources: [docs/history/agent-anti-patterns/CONTEXT.md, cell aap-1 (trace purged from .bee/cells/), cell aap-2 (trace purged from .bee/cells/)]
 ---
 
 # agent-anti-patterns — Delivery

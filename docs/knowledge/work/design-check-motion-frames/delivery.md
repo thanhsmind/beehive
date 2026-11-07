@@ -7,7 +7,7 @@ bee:
   id: design-check-motion-frames-delivery
   lifecycle: active
   required_context: [.bee/lanes/design-check-motion-frames.json]
-  sources: [.bee/lanes/design-check-motion-frames.json, .bee/cells/dcm-1.json]
+  sources: [.bee/lanes/design-check-motion-frames.json, cell dcm-1 (trace purged from .bee/cells/)]
 ---
 
 # design-check-motion-frames — Delivery

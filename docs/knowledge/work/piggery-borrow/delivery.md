@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding, hook-runtime]
   required_context: [docs/history/piggery-borrow/CONTEXT.md, docs/history/piggery-borrow/plan.md]
-  sources: [docs/history/piggery-borrow/CONTEXT.md, docs/history/piggery-borrow/plan.md, .bee/cells/pbr-1.json, .bee/cells/pbr-2.json, .bee/cells/pbr-3.json, .bee/cells/pbr-4.json, .bee/cells/pbr-5.json, .bee/cells/pbr-6.json, .bee/cells/pbr-7.json]
+  sources: [docs/history/piggery-borrow/CONTEXT.md, docs/history/piggery-borrow/plan.md, cell pbr-1 (trace purged from .bee/cells/), cell pbr-2 (trace purged from .bee/cells/), cell pbr-3 (trace purged from .bee/cells/), cell pbr-4 (trace purged from .bee/cells/), cell pbr-5 (trace purged from .bee/cells/), cell pbr-6 (trace purged from .bee/cells/), cell pbr-7 (trace purged from .bee/cells/)]
 ---
 
 # piggery-borrow — Delivery

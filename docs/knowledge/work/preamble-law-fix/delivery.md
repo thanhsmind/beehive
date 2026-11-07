@@ -7,7 +7,7 @@ bee:
   id: preamble-law-fix-delivery
   lifecycle: active
   required_context: [docs/history/preamble-law-fix/CONTEXT.md, docs/history/preamble-law-fix/plan.md]
-  sources: [docs/history/preamble-law-fix/CONTEXT.md, docs/history/preamble-law-fix/plan.md, .bee/cells/plf-1.json]
+  sources: [docs/history/preamble-law-fix/CONTEXT.md, docs/history/preamble-law-fix/plan.md, cell plf-1 (trace purged from .bee/cells/)]
 ---
 
 # preamble-law-fix — Delivery

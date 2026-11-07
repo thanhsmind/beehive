@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [docs/history/set-gate-windows-json/plan.md]
-  sources: [docs/history/set-gate-windows-json/plan.md, .bee/cells/sgw-1.json]
+  sources: [docs/history/set-gate-windows-json/plan.md, cell sgw-1 (trace purged from .bee/cells/)]
 ---
 
 # set-gate-windows-json — Delivery

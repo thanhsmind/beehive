@@ -7,7 +7,7 @@ bee:
   id: paseo-system-prompts-delivery
   lifecycle: active
   required_context: [docs/history/paseo-system-prompts/plan.md]
-  sources: [docs/history/paseo-system-prompts/plan.md, .bee/cells/psp-1.json]
+  sources: [docs/history/paseo-system-prompts/plan.md, cell psp-1 (trace purged from .bee/cells/)]
 ---
 
 # paseo-system-prompts — Delivery

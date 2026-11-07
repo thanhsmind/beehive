@@ -49,7 +49,7 @@ govern the working residue of a cell rather than its content.
   (read-only, trace the runtime path, name the sources that came up empty).
   `perf` is the eighth enum value; it is safe beside the `mode`-carries-a-class
   leak (`close.rs`, `uat.rs`) only because it is absent from
-  `ROUTE_LANE_VALUES`, and `tests/route_class_parity.rs` now pins the vocabulary
+  `ROUTE_LANE_VALUES`, and `packages/bee-rs/crates/bee/tests/route_class_parity.rs` now pins the vocabulary
   across all four documents that name it, reading both lists out of
   `workflows.rs` as text rather than re-declaring them. The plan cites the
   playbook by name and anchor and never transcribes it: a copied step list goes
@@ -291,7 +291,7 @@ govern the working residue of a cell rather than its content.
   Every prompt, skill, product-description page, guide page and display string
   that showed `— green —` moved to a qualified value, the worker brief states
   the three meanings where a worker writes the line, and an allowlist fence in
-  `tests/proof_gate.rs` reads the vocabulary constant out of the source and
+  `packages/bee-rs/crates/bee/tests/proof_gate.rs` reads the vocabulary constant out of the source and
   fails when a listed site loses its qualified value or drops its anchor.
   Untouched by design (D6): the line's three-segment shape, `commands.test`,
   what any door RUNS, and the `red` rule.

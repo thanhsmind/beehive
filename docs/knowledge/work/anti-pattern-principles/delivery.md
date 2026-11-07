@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [docs/history/anti-pattern-principles/CONTEXT.md]
-  sources: [docs/history/anti-pattern-principles/CONTEXT.md, .bee/cells/app-1.json]
+  sources: [docs/history/anti-pattern-principles/CONTEXT.md, cell app-1 (trace purged from .bee/cells/)]
 ---
 
 # anti-pattern-principles — Delivery

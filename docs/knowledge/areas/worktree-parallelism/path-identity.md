@@ -64,6 +64,6 @@ Two strings can name the same directory without being the same string. Every pla
 
 ## Pointers (implementation)
 
-- `packages/bee/lib/path-identity.mjs` (`canonicalPathsEqual`, its `platformPath` and case-probe injection seams).
-- Consumed at `packages/bee/lib/worktree-store.mjs`'s `resolveWorktreeById` bidirectional gitdir check, threaded through the merge entry points' options.
-- Tests: `scripts/tests/test_path_identity.mjs`.
+- `packages/bee-rs/crates/bee/src/path_identity.rs` (formerly packages/bee/lib/path-identity.mjs) (`canonicalPathsEqual`, its `platformPath` and case-probe injection seams).
+- Consumed at `packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs` (formerly packages/bee/lib/worktree-store.mjs)'s `resolveWorktreeById` bidirectional gitdir check, threaded through the merge entry points' options.
+- Tests: scripts/tests/test_path_identity.mjs (retired with the Node runtime, 2026-08-02).

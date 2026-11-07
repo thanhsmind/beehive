@@ -7,7 +7,7 @@ bee:
   id: pi-1-4-capability-audit-delivery
   lifecycle: active
   required_context: [docs/history/pi-1-4-capability-audit/CONTEXT.md]
-  sources: [docs/history/pi-1-4-capability-audit/CONTEXT.md, .bee/cells/p14-1.json]
+  sources: [docs/history/pi-1-4-capability-audit/CONTEXT.md, cell p14-1 (trace purged from .bee/cells/)]
 ---
 
 # pi-1-4-capability-audit — Delivery

@@ -7,7 +7,7 @@ bee:
   id: live-proof-evidence-delivery
   lifecycle: active
   required_context: [docs/history/live-proof-evidence/CONTEXT.md, docs/history/live-proof-evidence/plan.md]
-  sources: [docs/history/live-proof-evidence/CONTEXT.md, docs/history/live-proof-evidence/plan.md, .bee/cells/lpe-1.json, .bee/cells/lpe-2.json]
+  sources: [docs/history/live-proof-evidence/CONTEXT.md, docs/history/live-proof-evidence/plan.md, cell lpe-1 (trace purged from .bee/cells/), cell lpe-2 (trace purged from .bee/cells/)]
 ---
 
 # live-proof-evidence — Delivery

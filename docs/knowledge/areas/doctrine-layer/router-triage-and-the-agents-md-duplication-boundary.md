@@ -115,7 +115,7 @@ rule never disappears — only its elaboration moves.
   verb were added — this registry already existed and `bee knowledge check` already validated it;
   what was missing was one sentence per rule. The spoken line MUST stay indented: `parse_agents_rule_homes`
   reads any line opening with a dash as a new rule row, so a sibling bullet would report one rule
-  as two. `tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
+  as two. `packages/bee-rs/crates/bee/tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
   the markers in `packages/bee/AGENTS.block.md`, and the rows here — plus the spoken line's presence.
   Every spoken line also carries its reason, placed last after an em dash, and every numbered step in
   the nine class playbooks (`skills/bee-planning/playbooks/<class>.md`) states why it holds or points
@@ -160,7 +160,7 @@ rule never disappears — only its elaboration moves.
   (judgement-rules D1-D4)**, without touching this concept's own pinned wording: the fan-out rule
   (old 13, new 12) dropped its `>3 files` numeric proxy in favor of "digest, not verbatim" (D2), and
   the `## Red flags — stop and re-route` section was deleted from the standing sheet (D4) — the
-  router's own four router-only red flags are unaffected. `packages/bee/tests/test_misc.mjs`'s
+  router's own four router-only red flags are unaffected. packages/bee/tests/test_misc.mjs (retired with the Node runtime, 2026-08-02)'s
   mutation harness moved in lockstep: `assertFanOutAnchors` now checks the compressed rule-12 anchor
   set, and the reshaped rule-15-pointer census (the unnumbered line under rule 14) keeps running
   `assertOrderedWaitContract` against `routing-and-contracts.md` plus the `bee-swarming` copies.
@@ -178,8 +178,8 @@ rule never disappears — only its elaboration moves.
   (`doctrine-layer/unenforced-obedience.md`); full text stays for semantic every-turn rules (L1b)
   and for every canonical-home sentence other documents cite (L1c), per block-lean L1a-L1d
   (`docs/history/block-lean/CONTEXT.md`). One honest caveat: the two wording guards this document
-  names as enforcing every-turn reachability and pinned strings (`packages/bee/tests/test_misc.mjs`,
-  `scripts/tests/test_gate_bypass_doctrine.mjs`, listed under Pointers) have been dead since the R6
+  names as enforcing every-turn reachability and pinned strings (packages/bee/tests/test_misc.mjs (retired with the Node runtime, 2026-08-02),
+  scripts/tests/test_gate_bypass_doctrine.mjs (retired with the Node runtime, 2026-08-02), listed under Pointers) have been dead since the R6
   cutover — both trees were deleted and the instruction-layer suites were never re-pointed
   (`plans/cutover-readiness.md` records the gap) — so the L1d not-every-turn classification was
   applied manually and recorded in the block-lean CONTEXT rather than checked by automation.
@@ -456,6 +456,6 @@ plugin trees, not just `skills/`.
   onboarding vendors them to `.bee/LEADER.md` and `.bee/playbooks/` (`onboard/plan.rs`, `onboard/apply.rs`),
   and `verbs/knowledge/check.rs` resolves `(rule: id)` references against them.
 - `skills/bee-hive/references/routing-and-contracts.md` — where deferred detail lands.
-- `scripts/tests/test_gate_bypass_doctrine.mjs`, `packages/bee/tests/test_misc.mjs` — the
+- scripts/tests/test_gate_bypass_doctrine.mjs (retired with the Node runtime, 2026-08-02), packages/bee/tests/test_misc.mjs (retired with the Node runtime, 2026-08-02) — the
   suites enforcing the pinned wording.
-- `scripts/tests/test_skill_pointers.mjs` — the gate required by R8.
+- `packages/bee-rs/crates/bee/tests/pointer_integrity.rs` (formerly scripts/tests/test_skill_pointers.mjs) — the gate required by R8.

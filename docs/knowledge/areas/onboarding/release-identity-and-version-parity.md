@@ -268,32 +268,32 @@ the cause was found.
   instruction: `CLAUDE.md` ("Release").
 - Source-identity geometry and the falsifiable anchor (R17 post-move):
   `ENGINE_DIR`/`PLUGIN_ROOT`/`SKILLS_ROOT` constants and the `identityOk`
-  check in `packages/bee/scripts/bee onboard` (`computeSkillSync`'s
+  check in `packages/bee-rs/crates/bee/src/main.rs onboard` (formerly packages/bee/scripts/bee) (`computeSkillSync`'s
   identity-anchor block); `classifySource` itself in
-  `packages/bee/lib/source-identity.mjs` is unchanged (packages-engine-move
+  packages/bee/lib/source-identity.mjs (retired with the Node runtime, 2026-08-02) is unchanged (packages-engine-move
   C3) — only its two call sites (`readSourceReleaseIdentity`,
   `computeSkillSync`) now build `hiveDir` from `SKILLS_ROOT`. Regression:
-  `packages/bee/scripts/tests/test_bee onboard`,
-  `packages/bee/scripts/tests/test_split_brain_regression.mjs` (rewritten
+  `packages/bee-rs/crates/bee/tests/ onboard` (formerly packages/bee/scripts/tests/test_bee),
+  packages/bee/scripts/tests/test_split_brain_regression.mjs (retired with the Node runtime, 2026-08-02) (rewritten
   stale-launcher scenario now asserts a synced projection carries no launcher
   and an engine copy invoked from a projection-shaped root reports
-  `blocked_no_source`). Evidence: `.bee/cells/packages-engine-move-1.json`,
+  `blocked_no_source`). Evidence: cell packages-engine-move-1 (trace purged from .bee/cells/),
   `docs/history/packages-engine-move/reports/packages-engine-move-1.md`.
 - Release-version single-source (decision cba8b832; reshaped by the R6 Node
   cutover, 2026-08-01): `BEE_VERSION` is embedded at compile time in
   `packages/bee-rs/crates/bee/src/version.rs:1-27` via
   `parse_version(PLUGIN_MANIFEST)`, which reads `.claude-plugin/plugin.json`'s
   `.version`; `.codex-plugin/plugin.json` mirrors the same literal. The old
-  Node registry (`scripts/lib/release-tuple.mjs`) and writer
-  (`scripts/bump_version.mjs`) were deleted with the Node tree — the live bump
+  Node registry (scripts/lib/release-tuple.mjs (retired with the Node runtime, 2026-08-02)) and writer
+  (scripts/bump_version.mjs (retired with the Node runtime, 2026-08-02)) were deleted with the Node tree — the live bump
   procedure is: edit both plugin manifests' `.version`, `cargo build --release
   --manifest-path packages/bee-rs/Cargo.toml`, copy the built binary to
   `.bee/bin/bee`, then `bee dev regen`. Plugin manifests keep a literal
   `.version` because external plugin systems read them as raw JSON and cannot
   import a compiled constant.
 - Release manifest payload/hook roles (packages-restructure D5-D6; decision
-  a25ef382; cell packages-restructure-3): `scripts/release_manifest.mjs` walks
-  `packages/bee/` (excluding its `hooks/` subtree) under a new role,
+  a25ef382; cell packages-restructure-3): `packages/bee-rs/crates/bee/src/devtools/release_manifest.rs` (formerly scripts/release_manifest.mjs) walks
+  `packages/bee/` (excluding its `packages/bee-rs/crates/bee/src/hooks/` (formerly hooks/) subtree) under a new role,
   `package_payload` (78 records) — replacing the payload's old implicit
   coverage via the `skills/` walk — and walks `packages/bee/hooks/` under the
   pre-existing role `plugin_hook`, unchanged in name (18 records).
@@ -310,9 +310,9 @@ the cause was found.
   already did, rather than installing with the guard file silently absent.
 - Skill-sync version stamp (R29): `SKILLS_VERSION_STAMP` constant
   (`.bee-skills-version.json`) and the stamp-first/legacy-marker-fallback read
-  in `computeSkillSyncTarget` (`packages/bee/scripts/bee onboard:1271-1281`)
+  in `computeSkillSyncTarget` (`packages/bee-rs/crates/bee/src/main.rs onboard:1271-1281` (formerly packages/bee/scripts/bee))
   and the analogous global-root read (`:1461-1471`). Evidence:
-  `.bee/cells/packages-restructure-1.json`.
+  cell packages-restructure-1 (trace purged from .bee/cells/).
 - Stamp-trap resolution (R29): the read this stamp-first/legacy-fallback
   logic performs is the one that decides whether a target trips the stamp
   trap named in R29's own text above — `onboard/skills.rs:420-458`. Evidence:
@@ -324,11 +324,11 @@ the cause was found.
   `listTemplateLibModules()` set (section 3c, immediately after the existing
   `copy_lib`/`RETIRED_HELPERS` items it mirrors); apply executes it with the
   same exact-dirname safety `remove_helper` uses. Regression coverage:
-  `packages/bee/scripts/tests/test_bee onboard` ("stale lib" block).
+  `packages/bee-rs/crates/bee/tests/ onboard` (formerly packages/bee/scripts/tests/test_bee) ("stale lib" block).
 - Extra-file-only drift tolerance (R28): the verify node snippet at the tail of
   `scripts/install.sh` (piped after `printf '%s' "$STATUS" | node -e '...'`),
   reading `s.onboarding.drift_detail` (populated by `computeRuntimeDrift`,
   `the bee binary`). Regression test:
-  `scripts/tests/test_installers_e2e.mjs` ("extra unmanaged .mjs in .bee/bin/lib/
+  scripts/tests/test_installers_e2e.mjs (retired with the Node runtime, 2026-08-02) ("extra unmanaged .mjs in .bee/bin/lib/
   does not hard-fail install.sh's verify step" case). Evidence:
-  `.bee/cells/installer-verify-extra-drift-1.json`.
+  cell installer-verify-extra-drift-1 (trace purged from .bee/cells/).

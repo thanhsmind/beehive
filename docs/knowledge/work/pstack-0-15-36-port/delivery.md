@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [docs/history/pstack-0-15-36-port/CONTEXT.md]
-  sources: [docs/history/pstack-0-15-36-port/CONTEXT.md, .bee/cells/p1536-1.json]
+  sources: [docs/history/pstack-0-15-36-port/CONTEXT.md, cell p1536-1 (trace purged from .bee/cells/)]
 ---
 
 # pstack-0-15-36-port — Delivery

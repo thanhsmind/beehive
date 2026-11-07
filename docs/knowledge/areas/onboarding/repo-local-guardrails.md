@@ -159,11 +159,11 @@ asymmetry named above for the second runtime does not repeat here
 ## Pointers (implementation)
 
 - Self-recognition (R9): `repoOwnsHookCatalog()` in
-  `packages/bee/scripts/bee onboard`, checked before both the
+  `packages/bee-rs/crates/bee/src/main.rs onboard` (formerly packages/bee/scripts/bee), checked before both the
   `--repo-hooks` and codex-hybrid Codex-projection branches. Checks
-  `packages/bee/hooks/catalog.mjs` OR the legacy `hooks/catalog.mjs` (repo-root,
+  `packages/bee-rs/crates/bee/src/catalog.rs` (formerly packages/bee/hooks/catalog.mjs) OR the legacy `packages/bee-rs/crates/bee/src/catalog.rs` (formerly hooks/catalog.mjs) (repo-root,
   pre-packages-restructure) — an OR fallback, never a forced migration.
-- `packages/bee/scripts/bee onboard` — `renderCodexHookEntries()`,
+- `packages/bee-rs/crates/bee/src/main.rs onboard` (formerly packages/bee/scripts/bee) — `renderCodexHookEntries()`,
   `mergeCodexHooks()`, `isBeeCodexHookEntry()` (any-transport bee-entry
   matcher), `merge_codex_hooks` plan/apply action, `.codex/hooks.json`
   pseudo-entry in `buildManagedVersions`; `READING_MAP_STUB`/

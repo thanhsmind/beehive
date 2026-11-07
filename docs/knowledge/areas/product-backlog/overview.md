@@ -124,18 +124,18 @@ project.
 
 ## Pointers (implementation)
 
-- **P1** — Counting/reordering/badges: `packages/bee/lib/backlog.mjs`
+- **P1** — Counting/reordering/badges: `packages/bee-rs/crates/bee/src/verbs/backlog.rs` (formerly packages/bee/lib/backlog.mjs)
   (`readBacklogCounts`, `rankBacklog`, `renderBacklogBadges`); CLI:
   `bee backlog counts|rank|badges`.
-- **P2** — Submission: `packages/bee/lib/backlog.mjs`
+- **P2** — Submission: `packages/bee-rs/crates/bee/src/verbs/backlog.rs` (formerly packages/bee/lib/backlog.mjs)
   (`proposePbiRow`), `the bee binary`
-  (`handleBacklogPropose`), `packages/bee/lib/command-registry.mjs`
+  (`handleBacklogPropose`), `packages/bee-rs/crates/bee/src/registry.rs` (formerly packages/bee/lib/command-registry.mjs)
   (`backlog.propose` entry); CLI: `bee backlog propose --story "<s>" --cos "<c>"
   [--feature <slug>]`. Mirrored to `.bee/bin/**` and the plugin/skill trees via
-  `packages/bee/scripts/bee onboard --apply`. Tests:
-  `packages/bee/tests/test_cli_cells.mjs`,
-  `packages/bee/tests/test_bee_cli.mjs`.
+  `packages/bee-rs/crates/bee/src/main.rs onboard --apply` (formerly packages/bee/scripts/bee). Tests:
+  `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs` (formerly packages/bee/tests/test_cli_cells.mjs),
+  packages/bee/tests/test_bee_cli.mjs (retired with the Node runtime, 2026-08-02).
 - **P3** — Known counting defect (Open Gaps, first bullet):
-  `packages/bee/lib/backlog.mjs` `normalizeStatus`/
+  `packages/bee-rs/crates/bee/src/verbs/backlog.rs` (formerly packages/bee/lib/backlog.mjs) `normalizeStatus`/
   `readBacklogCounts` (exact-match only, no tolerance for a trailing
   annotation) — filed as friction `.bee/backlog.jsonl` 2026-07-23T10:20:34.557Z.

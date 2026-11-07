@@ -24,7 +24,7 @@ tool can read it back.
 - **Accounting (D1 · 2d3abd12).** For each session record bound to the
   closing feature — plus the calling session, de-duplicated — `bee close`
   reads that session's transcript with `rollup_transcript`
-  (`hooks/session_close/perf.rs`) and prints a token-usage section: main
+  (`packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs`) and prints a token-usage section: main
   tokens, subagent tokens, and a grand total. A session with no readable
   transcript is skipped and counted as skipped rather than silently
   dropped. `usage_session_ids` resolves against the **control root**, not
@@ -101,14 +101,14 @@ tool can read it back.
 ## Pointers (implementation)
 
 - Accounting and the token-usage section: `verbs/drivers/close.rs`,
-  `hooks/session_close/perf.rs` (`rollup_transcript`).
+  `packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs` (`rollup_transcript`).
 - Record write, schema `bee-usage/v1`, and the letter line:
   `verbs/drivers/close.rs`, `verbs/mailbox.rs`.
 - Per-task report (`bee report usage`): `verbs/report_usage.rs`
   (`herded_transcripts` for the mailbox join), over `aggregate_usage` in
-  `hooks/session_close/perf.rs`.
+  `packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs`.
 - Job feature stamp: `herding/run.rs` (`resolve_job_feature`,
   `stamp_feature`), `verbs/drivers/prepare.rs` (`--feature` on the herding
-  command), `hooks/activity.rs` (`resolve_herded_feature`),
+  command), `packages/bee-rs/crates/bee/src/hooks/activity.rs` (`resolve_herded_feature`),
   `verbs/drivers/close.rs` (`herding_jobs`).
 - Delivery trace: `docs/knowledge/work/usage-in-bee-store/delivery.md`.

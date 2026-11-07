@@ -186,11 +186,11 @@ nothing had ever looked.
 
 ## Pointers (implementation)
 
-- `scripts/tests/test_skill_pointers.mjs` — the check, with `--selftest` carrying the negative controls.
+- `packages/bee-rs/crates/bee/tests/pointer_integrity.rs` (formerly scripts/tests/test_skill_pointers.mjs) — the check, with `--selftest` carrying the negative controls.
 - `.bee/bin/bee test` (the declared `commands.test`) — cargo's own `crates/bee/tests/*.rs` discovery, which makes registration unnecessary.
-- `scripts/okf_instructions_fence.mjs` — the sibling instruction-surface check whose reporting style
+- scripts/okf_instructions_fence.mjs (retired with the Node runtime, 2026-08-02) — the sibling instruction-surface check whose reporting style
   this one follows.
-- Advisory sibling: `scripts/skill_lint.mjs`. Its reachability check carries the multi-heading
+- Advisory sibling: scripts/skill_lint.mjs (retired with the Node runtime, 2026-08-02). Its reachability check carries the multi-heading
   matcher (R7) in `pointsTo()` / `parentheticals()` — paragraph-scoped so an unbalanced `(` cannot
   swallow the file, depth-tracked so a nested parenthetical does not truncate its parent, and
   whitespace-normalised so a heading wrapped across lines still matches. Its `ANCHOR_RE` (check 1)
@@ -198,4 +198,4 @@ nothing had ever looked.
   of the verify chain.
 - The reachability roster inside that lint is a literal three-entry list, which is the opposite bet
   from the derived every-turn check in `areas/doctrine-layer/placement-and-anchoring.md` (B6).
-- Landed by `tick-contract-inline` decision T4, cell tci-2 (trace `.bee/cells/tci-2.json`).
+- Landed by `tick-contract-inline` decision T4, cell tci-2 (trace cell tci-2 (trace purged from .bee/cells/)).

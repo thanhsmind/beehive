@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [docs/history/release-2-55-0/CONTEXT.md, docs/history/release-2-55-0/plan.md]
-  sources: [docs/history/release-2-55-0/CONTEXT.md, docs/history/release-2-55-0/plan.md, .bee/cells/rel550-1.json]
+  sources: [docs/history/release-2-55-0/CONTEXT.md, docs/history/release-2-55-0/plan.md, cell rel550-1 (trace purged from .bee/cells/)]
 ---
 
 # release-2-55-0 — Delivery

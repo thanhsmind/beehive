@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [human-mailbox]
   required_context: [docs/history/mistake-fix-at/CONTEXT.md, docs/history/mistake-fix-at/plan.md]
-  sources: [docs/history/mistake-fix-at/CONTEXT.md, docs/history/mistake-fix-at/plan.md, .bee/cells/mfa-1.json, .bee/cells/mfa-2.json, .bee/cells/mfa-3.json, .bee/cells/mfa-4.json]
+  sources: [docs/history/mistake-fix-at/CONTEXT.md, docs/history/mistake-fix-at/plan.md, cell mfa-1 (trace purged from .bee/cells/), cell mfa-2 (trace purged from .bee/cells/), cell mfa-3 (trace purged from .bee/cells/), cell mfa-4 (trace purged from .bee/cells/)]
 ---
 
 # mistake-fix-at — Delivery

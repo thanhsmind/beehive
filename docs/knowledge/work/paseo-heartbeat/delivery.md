@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/paseo-heartbeat/CONTEXT.md, docs/history/paseo-heartbeat/plan.md]
-  sources: [docs/history/paseo-heartbeat/CONTEXT.md, docs/history/paseo-heartbeat/plan.md, .bee/cells/phb-1.json, .bee/cells/phb-2.json, .bee/cells/phb-3.json, .bee/cells/phb-4.json]
+  sources: [docs/history/paseo-heartbeat/CONTEXT.md, docs/history/paseo-heartbeat/plan.md, cell phb-1 (trace purged from .bee/cells/), cell phb-2 (trace purged from .bee/cells/), cell phb-3 (trace purged from .bee/cells/), cell phb-4 (trace purged from .bee/cells/)]
 ---
 
 # paseo-heartbeat — Delivery

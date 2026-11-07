@@ -76,5 +76,5 @@ A test suite whose entire dependency closure is byte-identical to the last green
 
 ## Pointers (implementation)
 
-- `scripts/run_verify.mjs` (cache logic, flags), `.bee/logs/verify-cache.json` (store), `scripts/impact-registry.json` (closures), `scripts/tests/test_verify_cache.mjs` (8-behavior proof), `scripts/tests/test_run_verify_impacted.mjs` (hermetic --no-cache spawns).
+- `packages/bee-rs/crates/bee/src/verbs/test_runner.rs` (formerly scripts/run_verify.mjs) (cache logic, flags), `.bee/logs/verify-cache.json` (store), scripts/impact-registry.json (retired with the Node verify pipeline, 2026-08-02) (closures), scripts/tests/test_verify_cache.mjs (retired with the Node runtime, 2026-08-02) (8-behavior proof), scripts/tests/test_run_verify_impacted.mjs (retired with the Node runtime, 2026-08-02) (hermetic --no-cache spawns).
 - History: `docs/history/test-batching-finish/` (tbf-1/2/4 reports).

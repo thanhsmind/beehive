@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/paseo-answers/CONTEXT.md, docs/history/paseo-answers/plan.md]
-  sources: [docs/history/paseo-answers/CONTEXT.md, docs/history/paseo-answers/plan.md, .bee/cells/pa-1.json, .bee/cells/pa-2.json, .bee/cells/pa-3.json, .bee/cells/pa-4.json]
+  sources: [docs/history/paseo-answers/CONTEXT.md, docs/history/paseo-answers/plan.md, cell pa-1 (trace purged from .bee/cells/), cell pa-2 (trace purged from .bee/cells/), cell pa-3 (trace purged from .bee/cells/), cell pa-4 (trace purged from .bee/cells/)]
 ---
 
 # paseo-answers — Delivery

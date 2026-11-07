@@ -59,5 +59,5 @@ alongside the manual named-section path owned by
 
 ## Pointers (implementation)
 
-- **P7** — Tests: `packages/bee/tests/test_perf.mjs`, and the
-  perf blocks in `packages/bee/tests/test_bee_cli.mjs`.
+- **P7** — Tests: `packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs` (formerly packages/bee/tests/test_perf.mjs), and the
+  perf blocks in packages/bee/tests/test_bee_cli.mjs (retired with the Node runtime, 2026-08-02).

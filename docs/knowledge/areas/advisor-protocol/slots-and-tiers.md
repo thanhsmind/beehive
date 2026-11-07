@@ -151,18 +151,18 @@ bee:
   (`drivers/tests.rs`), which walks `DISPATCH_RUNTIMES` × `DISPATCH_KINDS` from
   the constants, so a runtime or kind added later fails until it is labelled.
   Chokepoint repair for dispatches that never called prepare:
-  `repair_dispatch_label` in `hooks/model_guard.rs` — repair-only, never a deny,
+  `repair_dispatch_label` in `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` — repair-only, never a deny,
   silent on every resolution failure. Provenance: cells `ddi-1` (commit
   537b9e85), `dlc-1` (ba295066) and `dlc-2` (4a22210e).
 
 - **P3 —** Read-only validation: `validateModelsConfig` (advice-class token
   blocklist) + `validateAgentFilesDrift`, same lib; suite
-  `scripts/tests/test_config_validate.mjs`.
+  `packages/bee-rs/crates/bee/src/verbs/config.rs` (formerly scripts/tests/test_config_validate.mjs).
 - **P4 —** Guard allowlist fold (E6, cnt-7): `configuredModelSet` in
-  `packages/bee/lib/dispatch-guard.mjs` (mirrored in
-  `.bee/bin/lib/dispatch-guard.mjs`) calls `resolveAdvisor(root, 'claude')`
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (formerly packages/bee/lib/dispatch-guard.mjs) (mirrored in
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (formerly .bee/bin/lib/dispatch-guard.mjs)) calls `resolveAdvisor(root, 'claude')`
   directly, since the adviser slot is deliberately not a `CONFIGURABLE_SLOTS`
-  member. Canary rows: `hooks/test_model_guard.mjs` rows 21-22.
+  member. Canary rows: `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (formerly hooks/test_model_guard.mjs) rows 21-22.
 - **P5 —** Resolution: `resolveAdvisor` (state.mjs); external gather contract:
   `skills/bee-hive/references/routing-and-contracts.md` (cli gather branch)
   and `docs/knowledge/areas/doctrine-layer/helper-classes-and-transports.md`
@@ -171,7 +171,7 @@ bee:
   prepare's native branch): capability classification and the doctor unlock
   row are specced in `docs/specs/hook-runtime.md`; the resolver's native leaf
   and explicit-fallback composite sit beside `resolveAdvisor`/`resolveTier`
-  (`packages/bee/lib/state.mjs`); `prepareDispatch`'s
+  (`packages/bee-rs/crates/bee/src/state.rs` (formerly packages/bee/lib/state.mjs)); `prepareDispatch`'s
   native branch and `deriveEconomics`'s `native-requested` status share
-  `packages/bee/lib/dispatch-prepare.mjs` with R8's
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` (formerly packages/bee/lib/dispatch-prepare.mjs) with R8's
   `evaluateDispatch`.
