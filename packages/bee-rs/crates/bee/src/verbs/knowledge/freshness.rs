@@ -130,14 +130,20 @@ pub(crate) fn anchor_covers(anchor: &str, path: &str) -> bool {
 
 pub(crate) type GitRunner<'a> = &'a dyn Fn(&Path, &[&str]) -> GitOut;
 
+struct CommonBase {
+    base: Option<String>,
+    unbounded: bool,
+}
+
 fn common_base(
     checkout: &Path,
     run: GitRunner,
     distinct: &[String],
     dead: &mut HashMap<String, String>,
-) -> Option<String> {
+) -> CommonBase {
     let mut base: Option<String> = None;
     let mut base_is_vc = false;
+    let mut unbounded = false;
     for vc in distinct {
         let Some(current) = base.clone() else {
             base = Some(vc.clone());
@@ -150,7 +156,7 @@ fn common_base(
             for vc in distinct {
                 dead.insert(vc.clone(), reason.clone());
             }
-            return None;
+            return CommonBase { base: None, unbounded: false };
         }
         let text = result.stdout.as_deref().unwrap_or("").trim().to_string();
         if result.status == Some(0) && is_sha(&text) {
@@ -162,10 +168,12 @@ fn common_base(
         } else if stderr.contains(vc.as_str()) {
             dead.insert(vc.clone(), unknown_reason(vc));
         } else {
-            dead.insert(vc.clone(), format!("verified_commit {} shares no history with the other verified commits", short(vc)));
+            unbounded = true;
+            base = Some(vc.clone());
+            base_is_vc = true;
         }
     }
-    base
+    CommonBase { base, unbounded }
 }
 
 pub(crate) fn grade_bundle(checkout: &Path, concepts: &[(&str, &Map<String, Value>)]) -> BTreeMap<String, Grade> {
@@ -220,16 +228,17 @@ pub(crate) fn grade_bundle_with(
     distinct.sort();
 
     let mut dead: HashMap<String, String> = HashMap::new();
-    let base = common_base(checkout, run, &distinct, &mut dead);
+    let CommonBase { base, unbounded } = common_base(checkout, run, &distinct, &mut dead);
     let live: Vec<&String> = distinct.iter().filter(|vc| !dead.contains_key(*vc)).collect();
 
     let mut commits: Vec<LoggedCommit> = Vec::new();
     if let (Some(base), false) = (base, live.is_empty()) {
         let exclude = format!("{base}^@");
-        let result = run(
-            checkout,
-            &["-c", "core.quotepath=false", "log", "--format=%x01%H %P", "--name-only", "HEAD", "--not", &exclude],
-        );
+        let mut args = vec!["-c", "core.quotepath=false", "log", "--format=%x01%H %P", "--name-only", "HEAD"];
+        if !unbounded {
+            args.extend(["--not", exclude.as_str()]);
+        }
+        let result = run(checkout, &args);
         if result.status == Some(0) {
             commits = parse_log(result.stdout.as_deref().unwrap_or(""));
         } else {

@@ -3232,6 +3232,46 @@ mod freshness_tests {
     }
 
     #[test]
+    fn verified_commits_from_unrelated_histories_joined_into_head_stay_graded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        put(&root, "src/a.rs", "a1\n");
+        put(&root, "src/b.rs", "b1\n");
+        let main_root = commit(&root, "main root");
+        git(&root, &["checkout", "-q", "--orphan", "other"]);
+        git(&root, &["rm", "-rf", "-q", "."]);
+        put(&root, "lib/c.rs", "c1\n");
+        let other_root = commit(&root, "other root");
+        put(&root, "lib/c.rs", "c2\n");
+        commit(&root, "other changes c");
+        git(&root, &["checkout", "-q", "main"]);
+        git(&root, &["merge", "-q", "--allow-unrelated-histories", "--no-ff", "other", "-m", "join other"]);
+        put(&root, "src/b.rs", "b2\n");
+        commit(&root, "main changes b");
+        put(&root, &area_path("main_calm"), &concept("main_calm", Some(&["src/a.rs"]), Some(&main_root), "Body.\n"));
+        put(&root, &area_path("main_stale"), &concept("main_stale", Some(&["src/b.rs"]), Some(&main_root), "Body.\n"));
+        put(&root, &area_path("other_stale"), &concept("other_stale", Some(&["lib/c.rs"]), Some(&other_root), "Body.\n"));
+        put(&root, &area_path("other_calm"), &concept("other_calm", Some(&["src/a.rs"]), Some(&other_root), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        for name in ["main_calm", "main_stale", "other_stale", "other_calm"] {
+            let g = &graded[&format!("areas/demo/{name}.md")];
+            assert_ne!(g.grade, UNVERIFIED, "{name}: {:?}", g.reason);
+        }
+        assert_eq!(graded["areas/demo/main_calm.md"].grade, CONFIRMED);
+        assert_eq!(graded["areas/demo/main_stale.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/main_stale.md"].changed, vec!["src/b.rs".to_string()]);
+        assert_eq!(graded["areas/demo/other_stale.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/other_stale.md"].changed, vec!["lib/c.rs".to_string()]);
+        assert_eq!(graded["areas/demo/other_calm.md"].grade, SUSPECT);
+
+        let (calls, _) = counted_calls(&root, &[&main_root, &other_root]);
+        assert_eq!((calls_to(&calls, "log"), calls_to(&calls, "merge-base")), (1, 1), "{calls:?}");
+    }
+
+    #[test]
     fn a_directory_anchor_covers_every_file_under_it_and_nothing_beside_it() {
         assert!(anchor_covers("src", "src/a.rs"));
         assert!(anchor_covers("./src/", "src/deep/a.rs"));
