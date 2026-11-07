@@ -858,6 +858,9 @@ fn resolve_herded_feature(ctrl: &Path, job_id: &str) -> Option<String> {
     let ReadJson::Parsed(Value::Object(job)) = read_json(&job_file) else {
         return None;
     };
+    if let Some(f) = job.get("feature").and_then(Value::as_str).map(str::trim).filter(|f| !f.is_empty()) {
+        return Some(f.to_string());
+    }
     let cwd_str = job.get("cwd").and_then(Value::as_str)?.trim();
     if cwd_str.is_empty() {
         return None;
@@ -2376,6 +2379,77 @@ mod tests {
         ok(fire(&repo, event("UserPromptSubmit", "s-regular")));
         let rec_reg = activity(&repo, "s-regular");
         assert_eq!(rec_reg.get("feature").and_then(Value::as_str), Some("stale-main-feature"));
+    }
+
+    #[test]
+    fn a_job_stamped_with_a_feature_is_labelled_with_it_before_every_other_rule() {
+        let repo = repo();
+        std::fs::write(
+            repo.root.join(".bee").join("state.json"),
+            serde_json::json!({ "feature": "stale-main-feature" }).to_string(),
+        )
+        .unwrap();
+
+        let dir_main = mailbox_dir(&repo.root, "job-stamped-main");
+        std::fs::create_dir_all(&dir_main).unwrap();
+        std::fs::write(
+            dir_main.join("job.json"),
+            serde_json::json!({
+                "job_id": "job-stamped-main",
+                "cwd": repo.root.display().to_string(),
+                "feature": "dispatching-feature"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        brief(&repo, "job-stamped-main", 1);
+        ok(fire_herded(&repo, Some("job-stamped-main"), event("UserPromptSubmit", "s-stamped-main")));
+        assert_eq!(
+            mailbox_record(&repo, "job-stamped-main").get("feature").and_then(Value::as_str),
+            Some("dispatching-feature")
+        );
+
+        let dir_wt = mailbox_dir(&repo.root, "job-stamped-wt");
+        std::fs::create_dir_all(&dir_wt).unwrap();
+        std::fs::write(
+            dir_wt.join("job.json"),
+            serde_json::json!({
+                "job_id": "job-stamped-wt",
+                "cwd": "/path/to/repo--wt--directory-feature",
+                "feature": "dispatching-feature"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        brief(&repo, "job-stamped-wt", 1);
+        ok(fire_herded(&repo, Some("job-stamped-wt"), event("UserPromptSubmit", "s-stamped-wt")));
+        assert_eq!(
+            mailbox_record(&repo, "job-stamped-wt").get("feature").and_then(Value::as_str),
+            Some("dispatching-feature")
+        );
+    }
+
+    #[test]
+    fn a_main_cwd_job_without_a_feature_key_keeps_the_state_fallback() {
+        let repo = repo();
+        std::fs::write(
+            repo.root.join(".bee").join("state.json"),
+            serde_json::json!({ "feature": "stale-main-feature" }).to_string(),
+        )
+        .unwrap();
+        let dir = mailbox_dir(&repo.root, "job-old");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("job.json"),
+            serde_json::json!({ "job_id": "job-old", "cwd": repo.root.display().to_string() }).to_string(),
+        )
+        .unwrap();
+        brief(&repo, "job-old", 1);
+        ok(fire_herded(&repo, Some("job-old"), event("UserPromptSubmit", "s-old")));
+        assert_eq!(
+            mailbox_record(&repo, "job-old").get("feature").and_then(Value::as_str),
+            Some("stale-main-feature")
+        );
     }
 
     #[test]

@@ -2506,7 +2506,17 @@ fn herding_jobs(control: &Path, feature: &str) -> Vec<(String, Option<PathBuf>)>
     let Ok(entries) = std::fs::read_dir(control.join(".bee").join("mailbox")) else { return jobs };
     for entry in entries.flatten() {
         let ReadJson::Parsed(activity) = read_json(&entry.path().join("activity.json")) else { continue };
-        if activity.get("feature").and_then(Value::as_str) != Some(feature) {
+        let stamped = match read_json(&entry.path().join("job.json")) {
+            ReadJson::Parsed(job) => job
+                .get("feature")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|f| !f.is_empty())
+                .map(str::to_string),
+            _ => None,
+        };
+        let job_feature = stamped.as_deref().or_else(|| activity.get("feature").and_then(Value::as_str));
+        if job_feature != Some(feature) {
             continue;
         }
         let transcript = activity
@@ -6064,6 +6074,48 @@ mod tests {
         assert_eq!(record["herding_sessions"][0]["models"]["sonnet"]["total"].as_f64(), Some(6100.0));
         assert_eq!(record["sessions"].as_array().unwrap().len(), 2);
         assert!(close_usage_line(&usage).unwrap().contains("herding 6.1k"));
+    }
+
+    fn write_stamped_herding_job(
+        root: &Path,
+        job: &str,
+        stamped: Option<&str>,
+        labelled: &str,
+        transcript: &str,
+        body: &str,
+    ) {
+        write_herding_job(root, job, labelled, transcript, Some(body));
+        let stamp = stamped.map(|f| format!(r#","feature":"{f}""#)).unwrap_or_default();
+        w(root, &format!(".bee/mailbox/{job}/job.json"), &format!(r#"{{"job_id":"{job}"{stamp}}}"#));
+    }
+
+    #[test]
+    fn a_job_stamped_with_a_feature_is_counted_by_that_feature_not_by_its_activity_label() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        write_stamped_herding_job(root, "job-1", Some("demo"), "other-feature", "pane-1", &usage_event("sonnet", "p1", 1000, 100, 0, 5000));
+
+        let demo = collect_close_usage(root, "demo", Some("s-call"));
+        assert_eq!(demo.herding.len(), 1);
+        assert_eq!(demo.herding[0].job_id, "job-1");
+        assert_eq!(demo.value()["herding"]["total"].as_f64(), Some(6100.0));
+
+        let other = collect_close_usage(root, "other-feature", Some("s-call"));
+        assert!(other.herding.is_empty());
+    }
+
+    #[test]
+    fn a_job_without_a_stamped_feature_is_still_counted_by_its_activity_label() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        write_stamped_herding_job(root, "job-1", None, "demo", "pane-1", &usage_event("sonnet", "p1", 1000, 100, 0, 5000));
+
+        let demo = collect_close_usage(root, "demo", Some("s-call"));
+        assert_eq!(demo.herding.len(), 1);
+        let other = collect_close_usage(root, "other-feature", Some("s-call"));
+        assert!(other.herding.is_empty());
     }
 
     #[test]
