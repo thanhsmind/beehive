@@ -1206,6 +1206,7 @@ pub(crate) fn run_merge_with_caller(
             "queue-wait-ms",
             "skip-uat",
             "detached",
+            "full-suite-waiver",
         ],
     ) {
         return None;
@@ -1274,6 +1275,15 @@ pub(crate) fn run_merge_with_caller(
     let ctx = match prelude("worktree merge", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
+    };
+    let full_suite_waiver = match flags.get("full-suite-waiver") {
+        None => None,
+        Some(FlagV::S(reason)) if !js_trim(reason).is_empty() => Some(js_trim(reason).to_string()),
+        Some(_) => {
+            return Some(ctx.fail(
+                "--full-suite-waiver needs a non-empty reason: bee worktree merge --id <id> --full-suite-waiver \"<why the full suite is waived>\".",
+            ))
+        }
     };
     if ctx.kind == "linked-valid" {
         let worktree_root = ctx.work_root.clone();
@@ -1356,6 +1366,10 @@ pub(crate) fn run_merge_with_caller(
     // decided before the first lock, same as every other gate below, and
     // refuses (rather than guesses) on an invalid config value.
     let cleanup = resolve_cleanup_on_merge(&main_root, cleanup_flag, no_cleanup_flag)?;
+
+    if let Err(message) = full_suite::check(&main_root, &id, full_suite_waiver.as_deref()) {
+        return Some(ctx.fail(&message));
+    }
 
     // ── every delegation gate, decided BEFORE the first lock ──────────────
     // Campaign rule 2: lock.rs appends a `result: "acquired"` row to

@@ -198,6 +198,7 @@ mod registry;
 mod git;
 mod companion;
 mod create;
+mod full_suite;
 mod merge;
 mod phases;
 mod handlers;
