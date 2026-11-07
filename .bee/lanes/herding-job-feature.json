@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-job-feature",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-job-feature\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature herding-job-feature",
+  "next_action": "bee close finished \"herding-job-feature\" — feature is closed.",
   "created_at": "2026-11-07T02:08:27.451Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
