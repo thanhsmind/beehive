@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: Workflow State — the workspace protocol file, dispatch receipts, and brief discipline
-description: "One optional root file names the human decision boundaries, the merge owner and the deploy owner; bee validates it and reports its state but never gates on it. Every dispatch prepare record carries a digest of the prompt and of that file, dispatch verify compares them later, and two prompt lines plus a warn-only purpose lint keep menus and leaning out of briefs."
+description: "One optional root file names the human decision boundaries, the merge owner and the deploy owner; bee validates it and reports its state but never gates on it. Every dispatch prepare record carries a digest of the prompt and of that file, dispatch verify compares them after the dispatch, and two prompt lines plus a warn-only purpose lint keep menus and leaning out of briefs."
 timestamp: 2026-11-07
 bee:
   id: workflow-state-workspace-protocol
