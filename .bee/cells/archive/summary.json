@@ -2023,5 +2023,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-07T09:24:05.023Z"
+  },
+  "workspace-protocol": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-11-07T09:28:25.717Z"
   }
 }

@@ -1,0 +1,215 @@
+{
+  "id": "wsp-2",
+  "feature": "workspace-protocol",
+  "title": "Record prompt and protocol digests at dispatch and add dispatch verify",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "wsp-1"
+  ],
+  "decisions": [
+    "D7",
+    "D8",
+    "D11",
+    "d3d064ea",
+    "aa45854c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "read_first": [
+    "docs/history/workspace-protocol/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "action": "D7: at the record build site in prepare.rs (near the dispatch_id insert, ~line 3239) insert `prompt_sha256` = sha256_hex of the text field the returned payload carries to the worker (`prompt` for Agent/spawn payloads, `stdin` for Bash herding/cli payloads, the codex message field where that is the carrier — compute it from the final payload map, not from `prompt_body`, so the digest equals what the worker gets) and `protocol_sha256` = crate::verbs::protocol::protocol_sha256(root) (null when None). Add both to the envelope beside dispatch_id. Every kind gets them. Keep brief_sha256 and every other key unchanged. D8: add `bee dispatch verify --dispatch-id <id> [--prompt-file <path>] [--json]` routed beside prepare in close.rs: read .bee/logs/dispatch.jsonl newest-first, take the first `source: prepare` line with that dispatch_id; protocol state: same/changed/appeared/removed/absent from recorded vs current protocol_sha256; prompt state: not_checked without --prompt-file, unrecorded when the record has no prompt_sha256, else match/mismatch over the file bytes; unknown id → {ok:false, type:\"refused\", reason:\"dispatch_not_found\", fix}. Declare it in registry_payload.json and add `prompt_sha256`/`protocol_sha256` to the prepare description there. D11: for kind reviewer and advisor with a non-empty --purpose and a --role that does not start with `hat-`, run ONLY the leaning-stem arm (`first_leaning_stem_outside_tagged` in brief_lint.rs, made pub(crate) or wrapped in a thin pub(crate) fn there; never the four-section shape arm, never a copied stem list); on a hit put `purpose_leaning` (the refusal's reason and fix) in the envelope, print it as one warning line in text mode, set `purpose_leaning: true` on the dispatch record, and build the payload exactly as without it; never refuse. Tests: prepare record and envelope carry a 64-hex prompt_sha256 equal to sha256 of payload prompt; the digest equals sha256 of `payload.prompt` for an Agent payload and of `payload.stdin` for a herding Bash payload; a round-trip test saves that field to a file and `dispatch verify --prompt-file` says match; protocol_sha256 null without the file and equal to the file digest with it (read from the control root); verify gives same, then changed after editing the file, removed after deleting it; prompt match and mismatch; verify also gives appeared (no file at prepare, file now) and absent (no file then or now); prompt unrecorded for a record without prompt_sha256 (hand-append one old-shape line in the test log); a non-UTF-8 --prompt-file is mismatch; verify run with a worktree cwd reads the control root's log; unknown id refuses with a fix naming the control root; a reviewer purpose that lint_brief rejects still returns a payload plus purpose_leaning; a clean one-line purpose such as `Plan-step hat wave over docs/history/x/plan.md` has no purpose_leaning key; a leaning purpose under `--role hat-risks` has no purpose_leaning key. Existing prepare tests stay green. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee dispatch && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "every prepare record and envelope carries prompt_sha256 and protocol_sha256",
+      "bee dispatch verify reports protocol same/changed/appeared/removed/absent and prompt match/mismatch/not_checked/unrecorded",
+      "a leaning reviewer or advisor purpose yields purpose_leaning and never a refusal",
+      "the --brief-file leaning refusal is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "digests, verify, purpose lint and tests"
+      }
+    ],
+    "key_links": [
+      "prepare calls protocol::protocol_sha256",
+      "purpose lint calls the brief_lint stem arm only"
+    ],
+    "prohibitions": [
+      "No second hasher",
+      "No second leaning rule list",
+      "No refusal on --purpose",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-wsp-2b",
+    "outcome": "Raised PINNED_FLAG_COUNT to 240 and COMMAND_SURFACE_BUDGET_CHARS to 2750 per aa45854c; the full workspace suite is green; commit f90d0646c064b239ce1b43cdd60f8b5e2539aaef",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T08:06:59.227Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell's proof command over the whole workspace, exit 0 (4776 passed, 0 failed in the bee unit binary; no failures in any other binary)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee dispatch && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-11-07T08:02:51.761Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Raised PINNED_FLAG_COUNT to 240 and COMMAND_SURFACE_BUDGET_CHARS to 2750 per aa45854c; the full workspace suite is green; commit f90d0646c064b239ce1b43cdd60f8b5e2539aaef",
+      "commit": "f90d0646c064b239ce1b43cdd60f8b5e2539aaef",
+      "files": [
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee dispatch && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — the cell's proof command over the whole workspace, exit 0 (4776 passed, 0 failed in the bee unit binary; no failures in any other binary)",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every prepare record and envelope carries prompt_sha256 and protocol_sha256",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "bee dispatch verify reports protocol same/changed/appeared/removed/absent and prompt match/mismatch/not_checked/unrecorded",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a leaning reviewer or advisor purpose yields purpose_leaning and never a refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "the --brief-file leaning refusal is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+          },
+          {
+            "requirement": "prepare calls protocol::protocol_sha256",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "purpose lint calls the brief_lint stem arm only",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+          },
+          {
+            "requirement": "dispatch verify is routed and declared",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-11-07T07:22:44.333Z",
+        "recorded_by": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "gap",
+        "answers": [
+          {
+            "requirement": "every prepare record and envelope carries prompt_sha256 and protocol_sha256",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "GAP: the full suite is red on catalog::tests::distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision (238 to 240) and hooks::session_preamble::tests::the_command_surface_section_stays_inside_its_character_budget (2707 over 2700); raise PINNED_FLAG_COUNT to 240 and COMMAND_SURFACE_BUDGET_CHARS to 2750 per decision aa45854c",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T08:02:45.695Z",
+        "recorded_by": "23d97bd6-0b5e-4474-8f73-2101e642cbf0"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every prepare record and envelope carries prompt_sha256 and protocol_sha256",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "bee dispatch verify reports protocol same/changed/appeared/removed/absent and prompt match/mismatch/not_checked/unrecorded",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a leaning reviewer or advisor purpose yields purpose_leaning and never a refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "the --brief-file leaning refusal is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+          },
+          {
+            "requirement": "prepare calls protocol::protocol_sha256",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "purpose lint calls the brief_lint stem arm only",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+          },
+          {
+            "requirement": "flag pin raised to 240 per aa45854c",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "command surface budget raised to 2750 per aa45854c",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T08:10:53.970Z",
+        "recorded_by": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-07T08:02:45.695Z",
+    "reopened_reason": "every prepare record and envelope carries prompt_sha256 and protocol_sha256: packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs; GAP: the full suite is red on catalog::tests::distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision (238 to 240) and hooks::session_preamble::tests::the_command_surface_section_stays_inside_its_character_budget (2707 over 2700); raise PINNED_FLAG_COUNT to 240 and COMMAND_SURFACE_BUDGET_CHARS to 2750 per decision aa45854c: packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  },
+  "usage": {
+    "new": 198411,
+    "cached": 3635339,
+    "total": 3833750,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 198411,
+        "cached": 3635339,
+        "total": 3833750
+      }
+    },
+    "jobs": [
+      "job-1794035715319-2260615-1",
+      "job-1794038575360-2560389-1"
+    ]
+  }
+}
