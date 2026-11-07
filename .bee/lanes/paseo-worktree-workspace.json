@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Đã có kết quả thử nghiệm; đang ghi lỗi tìm được vào backlog.",
-    "asked_at": "2026-11-07T00:46:31.086Z",
+    "subject": "Chỉ là file log thời gian do lần chạy test ghi ra. Tôi trả nó về như cũ rồi merge lại.",
+    "asked_at": "2026-11-07T01:05:37.809Z",
     "session": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce"
   }
 }

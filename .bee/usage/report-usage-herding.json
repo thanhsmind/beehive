@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "report-usage-herding",
+  "closed_at": "2026-11-07T01:24:06.446Z",
+  "sessions": [
+    {
+      "session_id": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 202,
+          "output": 33315,
+          "cache_write": 127704,
+          "cache_read": 9552513,
+          "new": 161221,
+          "cached": 9552513,
+          "total": 9713734
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794012290078,
+      "ended_ms": 1794014645282,
+      "totals": {
+        "new": 161221,
+        "cached": 9552513,
+        "total": 9713734
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 161221,
+      "cached": 9552513,
+      "total": 9713734
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 266082,
+      "cached": 11021911,
+      "total": 11287993
+    },
+    "herding": {
+      "new": 104861,
+      "cached": 1469398,
+      "total": 1574259,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 46,
+          "output": 17508,
+          "cache_write": 87307,
+          "cache_read": 1469398,
+          "new": 104861,
+          "cached": 1469398,
+          "total": 1574259
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "9b65b97b-e503-44c4-a5e8-31a776261848",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 46,
+          "output": 17508,
+          "cache_write": 87307,
+          "cache_read": 1469398,
+          "new": 104861,
+          "cached": 1469398,
+          "total": 1574259
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794012605355,
+      "ended_ms": 1794013252490,
+      "totals": {
+        "new": 104861,
+        "cached": 1469398,
+        "total": 1574259
+      },
+      "job_id": "job-1794012603176-3552887-1"
+    }
+  ]
+}

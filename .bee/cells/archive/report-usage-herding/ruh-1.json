@@ -1,0 +1,51 @@
+{
+  "id": "ruh-1",
+  "feature": "report-usage-herding",
+  "lane": "small",
+  "role": "code",
+  "title": "Count herded worker sessions in bee report usage",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/report_usage.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "LEADER.md",
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+  ],
+  "read_first": [
+    "docs/history/report-usage-herding/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Follow the Contract in docs/history/report-usage-herding/plan.md. bee report usage must add, for every .bee/mailbox/<job>/ under the control root whose job.json leader_session equals the leader transcript file stem and whose activity.json transcript_path exists, that transcript plus its subagents/*.jsonl, window-filtered, merged into the same per-model rows, each transcript path counted once. Skip non-matching or missing jobs silently. Add a herding-session count to text and --json output. Mirror how collect_herding_usage/herding_jobs in verbs/drivers/close.rs read activity.json, and resolve the control root the same way close does (a worktree reads the main checkout mailbox). Update the report usage help text in generated/registry_payload.json, the LEADER.md waggledance token rule (worker tokens: herded sessions are read through the job mailbox), and the claude-session-transport concept. Write tests first and watch them fail.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml report_usage",
+  "must_haves": {
+    "truths": [
+      "A herded job whose leader_session matches adds its transcript tokens to the model row",
+      "A job of another leader, or with no leader_session, adds nothing",
+      "Events outside the window are excluded from herded transcripts too",
+      "A job whose transcript_path is missing is skipped without error",
+      "No transcript is counted twice"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+  ],
+  "deps": [],
+  "status": "dropped",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "verify_command": null,
+    "dropped_reason": "added before the lane existed; re-added after start-feature"
+  }
+}

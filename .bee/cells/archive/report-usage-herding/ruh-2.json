@@ -1,0 +1,118 @@
+{
+  "id": "ruh-2",
+  "feature": "report-usage-herding",
+  "lane": "small",
+  "role": "code",
+  "title": "Count herded worker sessions in bee report usage",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/report_usage.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "LEADER.md",
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+  ],
+  "read_first": [
+    "docs/history/report-usage-herding/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Follow the Contract in docs/history/report-usage-herding/plan.md. bee report usage must add, for every .bee/mailbox/<job>/ under the control root whose job.json leader_session equals the leader transcript file stem and whose activity.json transcript_path exists, that transcript plus its subagents/*.jsonl, window-filtered, merged into the same per-model rows, each transcript path counted once. Skip non-matching or missing jobs silently. Add a herding-session count to text and --json output. Mirror how collect_herding_usage/herding_jobs in verbs/drivers/close.rs read activity.json, and resolve the control root the same way close does (a worktree reads the main checkout mailbox). Update the report usage help text in generated/registry_payload.json, the LEADER.md waggledance token rule (worker tokens: herded sessions are read through the job mailbox), and the claude-session-transport concept. Write tests first and watch them fail.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml report_usage",
+  "must_haves": {
+    "truths": [
+      "A herded job whose leader_session matches adds its transcript tokens to the model row",
+      "A job of another leader, or with no leader_session, adds nothing",
+      "Events outside the window are excluded from herded transcripts too",
+      "A job whose transcript_path is missing is skipped without error",
+      "No transcript is counted twice"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+  ],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "ruh-worker",
+    "outcome": "bee report usage now merges herded worker sessions (job mailbox leader_session match, deduped, window-filtered) into the model rows and prints a herding-session count; registry help, LEADER.md and the transport concept updated; commit b6bbf91da",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/report_usage.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "LEADER.md",
+      "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T01:00:53.619Z",
+    "behavior_change": true,
+    "verification_evidence": "16 report_usage tests incl. 5 new herding ones; red shown with the reader stubbed. Full suite: 2 unrelated herding::run thin_peer tests fail only under this worker's ambient BEE_HERDING_*/CLAUDE_CODE_* env, pass under env -i",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml report_usage",
+    "claimed_at": "2026-11-07T00:49:57.095Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee report usage now merges herded worker sessions (job mailbox leader_session match, deduped, window-filtered) into the model rows and prints a herding-session count; registry help, LEADER.md and the transport concept updated; commit b6bbf91da",
+      "commit": "b6bbf91daa9065bece742722e54d342589ce77c0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/report_usage.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "LEADER.md",
+        "docs/knowledge/areas/bee-herding/claude-session-transport.md"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml report_usage — green:unit — 16 report_usage tests incl. 5 new herding ones; red shown with the reader stubbed. Full suite: 2 unrelated herding::run thin_peer tests fail only under this worker's ambient BEE_HERDING_*/CLAUDE_CODE_* env, pass under env -i",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 209 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A herded job whose leader_session matches adds its transcript tokens to the model row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_usage.rs a_herded_job_of_this_leader_adds_its_tokens_to_the_model_row; live run on probe window: new binary 623878/5154 vs old 520289/3361, delta = sub-session 103589/1793"
+          },
+          {
+            "requirement": "A job of another leader, or with no leader_session, adds nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_usage.rs a_job_of_another_leader_or_with_no_leader_adds_nothing"
+          },
+          {
+            "requirement": "Events outside the window are excluded from herded transcripts too",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_usage.rs herded_events_outside_the_window_are_excluded"
+          },
+          {
+            "requirement": "A job whose transcript_path is missing is skipped without error",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_usage.rs a_herded_job_with_a_missing_transcript_is_skipped_without_error"
+          },
+          {
+            "requirement": "No transcript is counted twice",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_usage.rs a_transcript_named_by_two_jobs_or_the_leader_itself_counts_once"
+          }
+        ],
+        "recorded_at": "2026-11-07T01:05:06.148Z",
+        "recorded_by": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 104861,
+    "cached": 1469398,
+    "total": 1574259,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 104861,
+        "cached": 1469398,
+        "total": 1574259
+      }
+    },
+    "jobs": [
+      "job-1794012603176-3552887-1"
+    ]
+  }
+}
