@@ -325,15 +325,28 @@ pub(crate) fn lint_brief(brief: &str) -> Result<(), Value> {
     }
 
     if let Some(stem) = first_leaning_stem_outside_tagged(&lines, &fences) {
-        return Err(brief_refusal(
-            "brief_leaning_language",
-            &[("phrase".into(), Value::String(stem.to_string()))],
-            format!(
-                "the brief carries leaning language — the phrase \"{stem}\" states a verdict, and a lane handed a verdict returns it back. Cut that phrase and let the question stand on its own, then re-run the dispatch."
-            ),
-        ));
+        return Err(leaning_refusal(stem));
     }
     lint_brief_shape(&lines, &fences)
+}
+
+fn leaning_refusal(stem: &str) -> Value {
+    brief_refusal(
+        "brief_leaning_language",
+        &[("phrase", Value::String(stem.to_string()))],
+        format!(
+            "the brief carries leaning language — the phrase \"{stem}\" states a verdict, and a lane handed a verdict returns it back. Cut that phrase and let the question stand on its own, then re-run the dispatch."
+        ),
+    )
+}
+
+pub(crate) fn lint_leaning_stems(text: &str) -> Result<(), Value> {
+    let lines: Vec<&str> = text.lines().collect();
+    let fences = scan_fences(&lines);
+    match first_leaning_stem_outside_tagged(&lines, &fences) {
+        Some(stem) => Err(leaning_refusal(stem)),
+        None => Ok(()),
+    }
 }
 
 /// ARM 2 — the four sections, in order, and no enumerated candidates under

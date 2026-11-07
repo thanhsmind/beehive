@@ -2961,6 +2961,29 @@ use std::time::Instant;
     }
 
     #[test]
+    fn dispatch_verify_from_a_granted_worktree_reads_the_control_roots_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        let root = psd1_store_root(&granted);
+        std::fs::write(main.join("WORKSPACE_PROTOCOL.md"), "# Workspace protocol\n").unwrap();
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, true, None, None, None, None, None, None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let id = v["dispatch_id"].as_str().unwrap();
+        assert!(!granted.join(".bee").join("logs").join("dispatch.jsonl").exists());
+        let (report, code) = verify_dispatch(&root, id, None);
+        assert_eq!(code, 0, "{report}");
+        assert_eq!(report["protocol"], json!("same"));
+        let (missing, code) = verify_dispatch(&root, "no-such-id", None);
+        assert_eq!(code, 1);
+        assert!(missing["fix"].as_str().unwrap().contains(&root.display().to_string()), "{missing}");
+    }
+
+    #[test]
     fn non_cell_dispatch_from_a_granted_worktree_runs_in_that_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, granted) = dp1_worktree_fixture(tmp.path());
