@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"protocol-init-from-project\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"protocol-init-from-project\" (lane).",
+  "next_action": "Merged into main at 695e0ee; capture what settled, then bee close --feature protocol-init-from-project.",
   "created_at": "2026-11-07T09:12:27.146Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -517,12 +517,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-11-07T09:22:14.357Z",
-    "branch": "wt/protocol-init-from-project",
-    "worktree_id": "beehive--wt--protocol-init-from-project",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
