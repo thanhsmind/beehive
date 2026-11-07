@@ -4064,6 +4064,16 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
                 _ => None,
             }
         }
+        "protocol" => {
+            let sub = args.get(1)?.to_str()?;
+            let toks: Vec<&str> =
+                args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
+            if toks.iter().any(|t| *t == "--help") {
+                return None;
+            }
+            let (flags, use_json) = parse_flags(&toks)?;
+            crate::verbs::protocol::run(sub, flags, use_json, t0)
+        }
         _ => None,
     }
 }
