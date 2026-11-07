@@ -141,6 +141,9 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         let _ctx = read_hook_context(HOOK_NAME, argv, stdin);
         return Outcome::Done(ExitCode::SUCCESS);
     }
+    if let Some(store_root) = &roots.store_root {
+        crate::hooks::write_guard::reset_knowledge_turn(store_root, &payload);
+    }
     if roots.worktree_resolution != "ordinary" {
         // Linked-worktree topology pulls the grants/control-root surface —
         // delegated wholesale for now, with ONE read lifted above the bail.

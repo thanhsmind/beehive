@@ -914,6 +914,14 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         return Ok(emit);
     }
 
+    if denial.is_none() {
+        if let Some(note) =
+            knowledge_first::observe(ctx, &root, &store_root_pb, &tool_name, &tool_input)
+        {
+            reservation_warnings.push(note);
+        }
+    }
+
     if denial.is_none() && !reservation_warnings.is_empty() {
         let joined = reservation_warnings.join("\n");
         let mut hso = Map::new();

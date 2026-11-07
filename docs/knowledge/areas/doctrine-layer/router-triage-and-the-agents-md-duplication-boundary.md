@@ -281,6 +281,10 @@ Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages
 - `agents-name-applied-principles` (packages/bee/LEADER.md § Judgment and deviation):
   spoken: name each principle you applied and the decision it changed — or say plainly it changed nothing
   - applied_at:
+- `agents-knowledge-before-code` (packages/bee/LEADER.md § Start a session):
+  spoken: search the knowledge store before your first code read of a turn, because a search answers in milliseconds what a code hunt answers in dozens of tool calls
+  - applied_at:
+    - `docs/knowledge/areas/hook-runtime/advisories-and-turn-control.md`
 
 The list is kept by hand because `packages/bee/LEADER.md` and the playbooks
 carry no frontmatter. A `bee.applied_at` key on this concept would not serve:

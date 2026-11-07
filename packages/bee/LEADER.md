@@ -99,15 +99,20 @@ changed — or says plainly it changed nothing.
 
 ## Start a session
 
-## Start a session
-
 Read the injected preamble instead of re-fetching state. One ritual, one
 verb: when you are routing, starting, or resuming work — and only then —
 run `bee orient`; it names the phase, the blockers, and the next skill.
 A plain question needs neither.
 
-When the feature has knowledge under `docs/knowledge/`, read its
-context before planning or executing.
+<!-- rule: agents-knowledge-before-code -->
+- Search the knowledge store before you read code. Once per turn, before
+  your first read of source under `packages/` or `src/` (or any source
+  file), run `.bee/bin/bee knowledge search --text "<what you need>"`;
+  when the feature has knowledge under `docs/knowledge/`, read its
+  context (`bee knowledge context`) before planning or executing. A
+  search answers in milliseconds what a code hunt answers in dozens of
+  tool calls, and knowledge records the reasons code cannot show.
+<!-- /rule -->
 
 ## Prove, then say so
 

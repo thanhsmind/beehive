@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-runtime-parity D1, D2", "4c1c5921 (GitHub #18 — the gate-bypass net mechanized at runtime as a loop-guarded turn-control block)", "validation-diet D1-D3 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)"]
-  sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "post-advisor-hardening cells pah-1/pah-3 (onboarding-generator drift check + B15 consult instruction, 2026-07-18)", "docs/specs/hook-runtime.md#B2", "docs/specs/hook-runtime.md#B10", "docs/specs/hook-runtime.md#B15", "docs/specs/hook-runtime.md#R4", "docs/specs/hook-runtime.md#R10", "docs/specs/hook-runtime.md#R14", "docs/specs/hook-runtime.md#P4", "docs/specs/hook-runtime.md#P5", "codex-loop-p0 cell clp-1 (the prompt reminder threads sessionId and stops reporting the on-demand review gate outside a review session; trace in `.bee/cells/`, 2026-07-23)", "loop-seams-1112 cell ls-1 (advisor issue #54 — both surfaces, terminal owes no gate, per-session dedup; trace in `.bee/cells/`, 2026-07-23)", "validation-diet cell vd-1 (trace in .bee/cells/, report docs/history/validation-diet/reports/vd-1.md, 2026-07-28 — the bypass net's fire matrix narrowed to the single phase now carrying the merged approval, since the standalone feasibility phase it used to also cover is retired)"]
+  decisions: ["codex-runtime-parity D1, D2", "4c1c5921 (GitHub #18 — the gate-bypass net mechanized at runtime as a loop-guarded turn-control block)", "validation-diet D1-D3 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "knowledge-first-lean-decisions D1, D2 (docs/history/knowledge-first-lean-decisions/plan.md, 2026-11-07)"]
+  sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "post-advisor-hardening cells pah-1/pah-3 (onboarding-generator drift check + B15 consult instruction, 2026-07-18)", "docs/specs/hook-runtime.md#B2", "docs/specs/hook-runtime.md#B10", "docs/specs/hook-runtime.md#B15", "docs/specs/hook-runtime.md#R4", "docs/specs/hook-runtime.md#R10", "docs/specs/hook-runtime.md#R14", "docs/specs/hook-runtime.md#P4", "docs/specs/hook-runtime.md#P5", "codex-loop-p0 cell clp-1 (the prompt reminder threads sessionId and stops reporting the on-demand review gate outside a review session; trace in `.bee/cells/`, 2026-07-23)", "loop-seams-1112 cell ls-1 (advisor issue #54 — both surfaces, terminal owes no gate, per-session dedup; trace in `.bee/cells/`, 2026-07-23)", "validation-diet cell vd-1 (trace in .bee/cells/, report docs/history/validation-diet/reports/vd-1.md, 2026-07-28 — the bypass net's fire matrix narrowed to the single phase now carrying the merged approval, since the standalone feasibility phase it used to also cover is retired)", "knowledge-first-lean-decisions cell kbc-1 (trace in .bee/cells/, 2026-11-07 — the knowledge-before-code nudge)"]
   authoritative_for: "hook-runtime: the advisory contract and the gate-bypass turn-control exception"
 ---
 
@@ -83,6 +83,27 @@ deduped and degrades to the ordinary advisory, so a turn that genuinely cannot
 proceed is never trapped in a loop. Fail-open is unchanged: any internal failure
 falls through to the advisory path with a visible log, never a crash.
 
+**B16 — A leader's first code read in a turn gets one knowledge-first nudge
+(knowledge-first-lean-decisions D1, D2).** The rule lives in one place, the rule
+block `agents-knowledge-before-code` in `packages/bee/LEADER.md` § Start a
+session; the hook only points to it. On a leader's PreToolUse, the write-guard
+checks whether the call is a code read: Read, Glob or Grep whose path is under
+`packages/` or `src/` or is a source file, or a Bash command (`rg`, `grep`,
+`cat`, `sed`, `head`, `tail`, `fd`, `find`, `less`, `bat`) whose path argument
+is. Anything under `docs/`, `.bee/` or `skills/`, and any `*.md` file, is not a
+code read. When the session's current turn has neither a knowledge lookup nor a
+nudge yet, the guard emits one advisory — `additionalContext` and
+`systemMessage`, no `permissionDecision` — naming the rule id and the command
+`.bee/bin/bee knowledge search --text "<what you need>"`, and marks the turn
+nudged. A Bash command that runs `bee knowledge search` or `bee knowledge
+context` marks the turn searched instead, and the rest of the turn stays silent.
+The nudge never denies and fires at most once per turn. The turn state is a
+per-session file under `.bee/cache/`; the prompt-context hook clears it at every
+UserPromptSubmit, so the next turn re-arms the nudge, and a session with no state
+counts as a fresh turn. A worker never hears it: a herded pane
+(`BEE_HERDING_WORKER`) never reaches this path, and a payload carrying a
+non-empty `agent_id` or `agent_type` (a native subagent) is skipped.
+
 ## Business Rules
 
 - R3a — The prompt reminder speaks for the ACTING SESSION, and reports only
@@ -133,6 +154,12 @@ falls through to the advisory path with a visible log, never a crash.
   parent session's waiting state or activity journal.
 
 ## Pointers (implementation)
+
+- Knowledge-first nudge (B16): `packages/bee-rs/crates/bee/src/hooks/write_guard/knowledge_first.rs`
+  (`observe`, `reset_turn`), called from `run_native_with_roots` in
+  `.../write_guard/main.rs`; the turn reset is in
+  `packages/bee-rs/crates/bee/src/hooks/prompt_context.rs`. Suite:
+  `packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs`.
 
 - Shared adapter: `packages/bee/hooks/adapter.mjs` (`encodeAdvisory`; `encodeBlock` — the
   deliberate turn-control inverse used ONLY by the gate-bypass net); the eight
