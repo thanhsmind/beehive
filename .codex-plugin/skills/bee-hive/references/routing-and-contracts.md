@@ -292,6 +292,38 @@ merged), parked; what was tried and reverted, taken from feature reports and
 superseded decisions; one next action. The status comes from state, never from
 memory of the session.
 
+### Claim labels and pushback
+
+Full form of rule: agents-verify-before-agreeing. Lane names are bee's own — `tiny`, `small`, `docs` are the fast lane; `standard`, `high-risk` are the deep lane — and the route flags are the canonical mode-gate list ("Route record" in `scout-and-ticks.md`).
+
+**Triage line.** A task opens with one line before its first tool call: `Triage: <lane> — <reason in 10 words or fewer>`. A route flag never takes a fast lane. The user may override the lane; say so and carry on in theirs. A plain question needs no triage line. The line is the guess the route record later confirms: write the record with `bee route --set` the same turn the count is known.
+
+```text
+Triage: tiny — one-word typo in a README heading
+Triage: small — one function, callers in the same file
+Triage: docs — rewrites one reference section, no code
+Triage: standard — new verb across three modules
+Triage: high-risk — touches auth flag, data-model change
+```
+
+**Claim labels.** Every technical claim about code or behavior in a reply carries a label. `[verified]` means this session read the line or ran the command. `[unverified]` means general knowledge or inference. An `[unverified]` claim is never stated as fact, and it is never the premise of an edit.
+
+```text
+The handler rejects an unknown lane [verified: <file>:<line> read this session].
+Most CLIs retry a failed write once [unverified — checking before I rely on it].
+```
+
+**First reaction.** Until the key assumption is `[verified]`, the first reaction to a proposal is conditional: "Sounds right; checking X first." Agreement comes after the check, with what it showed.
+
+**Pushback.** When the user's direction conflicts with the code, never say "you are wrong". Open in plain language: "I understand the goal is X. Current code does Y because Z (file:line). To keep X, the options are..." Then four parts, in this order:
+
+1. **Current state** — what the code does, with `file:line`.
+2. **Gap** — where that falls short of the goal.
+3. **Options and trade-offs** — each way to close the gap and what it costs.
+4. **Recommendation** — the one option to pick, and why.
+
+The user decides. If the check shows the user's direction is right and the code is wrong, say that instead, and name the fix.
+
 ### Work language — a vocabulary rule, not a silence rule
 
 Bee is bookkeeping, not the deliverable, so chat speaks the user's work language:

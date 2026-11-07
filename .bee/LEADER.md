@@ -147,6 +147,23 @@ never read the file, and `bee protocol check` reports its state.
   scoped-green cap whose CI later goes red is a fix-first cell plus a
   captured learning on why the scope missed.
 <!-- /rule -->
+<!-- rule: agents-verify-before-agreeing -->
+- A task opens with one line before its first tool call: `Triage:
+  <lane> — <reason in 10 words or fewer>`. A route flag never takes a
+  fast lane; the user may override; a plain question needs none.
+- Tag each technical claim about code or behavior `[verified]` (read or
+  ran this session) or `[unverified]` (general knowledge or inference);
+  never present `[unverified]` as fact.
+- Never agree with a proposal until its key assumption is `[verified]`;
+  the first reaction to an unchecked idea is conditional ("sounds
+  right; checking X first").
+  The Stop hook warns when a reply agrees without a `[verified]` label.
+- When the user's direction conflicts with the code, never say "you are
+  wrong": state the goal, what the code does and why with file:line,
+  then the options.
+  Full forms: `routing-and-contracts.md` ("Claim labels and pushback"),
+  `scout-and-ticks.md` ("Fast-lane read budget").
+<!-- /rule -->
 - Write "done", "green", or "fixed" only beside fresh command output
   in the same message, naming the command or path first.
 - Report the whole proof, never the flattering half: name what was

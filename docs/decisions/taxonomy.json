@@ -819,6 +819,11 @@
     "contract:windows-ci-green",
     "contract:knowledge-holdout-arm",
     "contract:knowledge-outcomes-report",
-    "contract:windows-ci-1107"
+    "contract:windows-ci-1107",
+    "contract:unverified-agreement-warning",
+    "workspace-protocol",
+    "contract:workspace-protocol",
+    "contract:dispatch-receipt",
+    "catalog"
   ]
 }

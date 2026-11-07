@@ -1,0 +1,790 @@
+{
+  "schema_version": "1.0",
+  "feature": "workspace-protocol",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"workspace-protocol\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"workspace-protocol\" (lane).",
+  "created_at": "2026-11-07T06:57:06.510Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 7,
+    "rationale": null,
+    "updated_at": "2026-11-07T06:57:03.194Z",
+    "feature": "workspace-protocol"
+  },
+  "gate_preview": {
+    "feature": "workspace-protocol",
+    "plan_sha256": "24bf3e9a06b04cbd8ed310bdcbcc108f66deb87202f9eb0093340dda23f5be89",
+    "previewed_at": "2026-11-07T07:06:13.557Z",
+    "cells": [
+      {
+        "id": "wsp-1",
+        "feature": "workspace-protocol",
+        "title": "Add the workspace protocol check, init and doctor row",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/workspace-protocol/CONTEXT.md",
+          "docs/knowledge/areas/workflow-state/dispatch.md",
+          "packages/bee-rs/crates/bee/src/registry.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "/mnt/data/Projects/refs/slp/paseo-pi-team/templates/WORKSPACE_PROTOCOL.example.md",
+          "/mnt/data/Projects/refs/slp/paseo-pi-team/cli/lib/workspace-protocol.mjs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/dispatch.md"
+        ],
+        "action": "New module verbs/protocol.rs, the ONE home that reads WORKSPACE_PROTOCOL.md. Contract: pub(crate) `PROTOCOL_FILE = \"WORKSPACE_PROTOCOL.md\"`; `parse(text) -> BTreeMap<String, ProtocolValue>` per D1 (scalar or list); `protocol_state(root) -> ProtocolReport { state: missing|unreadable|invalid|valid, issues: Vec<String>, keys, sha256: Option<String> }` per D2 and D3 (FULL_TEST compared against .bee/config.json commands.test read through the existing config reader; string or array joined with \" && \"); `protocol_sha256(control_root) -> Option<String>` using crate::verbs::reservations::sha256_hex over the file bytes (None when missing or unreadable) — wsp-2 calls this; `TEMPLATE` per D4. Verbs: `bee protocol check [--json]` prints state, issues, keys, sha256; exit 0 for every state. `bee protocol init [--json]` writes TEMPLATE to <root>/WORKSPACE_PROTOCOL.md only when absent; an existing file returns a typed refusal {ok:false, type:\"refused\", reason:\"protocol_exists\", path, fix} and leaves the bytes untouched. Wire the verb group through the same router style as `dispatch` in close.rs and declare both verbs and their flags in generated/registry_payload.json (hand-edited, no generator — gates.md:866); if the top-level verb router lives outside close.rs, wire `protocol` there too and name the extra file as a deviation (the registry contract test must stay green; update its pins if it counts verbs). doctor.rs: one row `workspace-protocol` per D5 — missing/valid status `ok`, invalid/unreadable status `advisory` (assert that exact string) with issues and fix `bee protocol check`; never blocking. Tests: parse a paseo-pi-team style fenced file (lists, trailing # comment kept, unknown keys kept); parse a `- key: value` paseo-doctrine style file reads no keys and gives invalid with three issues; missing file is missing; non-UTF-8 bytes is unreadable; init then check is valid; init twice refuses and keeps the first bytes; init prints the review-and-edit next-step line; FULL_TEST equal is fine, different is one issue naming commands.test; a duplicate key gives a `duplicate key` issue and the last value; a scalar HUMAN_DECISION_BOUNDARIES gives an issue naming the `- item` list form; a `<...>` or ` | ` placeholder value gives a placeholder issue (so a copied unfilled paseo template is invalid); a list ends at a blank line; the doctor row always prints, ok with the init hint when missing, advisory and never blocking when invalid. Root: the control root (main checkout holding the bee store), the same root prepare uses. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+        "must_haves": {
+          "truths": [
+            "bee protocol check reports missing, unreadable, invalid or valid and exits 0 for each",
+            "a valid protocol needs MERGE_OWNER, DEPLOY_OWNER and at least one HUMAN_DECISION_BOUNDARIES item",
+            "a FULL_TEST that differs from commands.test is an issue",
+            "bee protocol init writes a file that checks valid and never overwrites an existing file",
+            "the doctor row never blocks overall_status",
+            "protocol_sha256(root) is the one digest helper"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+              "substantive": "parser, state, digest, template, verbs and tests"
+            }
+          ],
+          "key_links": [
+            "doctor.rs calls protocol_state",
+            "registry_payload.json declares protocol check and protocol init"
+          ],
+          "prohibitions": [
+            "No gate or refusal of any other verb on protocol state",
+            "No second parser of the file",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "wsp-3",
+        "feature": "workspace-protocol",
+        "title": "Forbid option menus in worker briefs and leaning in advisor briefs",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "D6",
+          "D9",
+          "D10",
+          "D12"
+        ],
+        "files": [
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee/prompts/advisor.md",
+          "packages/bee/LEADER.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/workspace-protocol/CONTEXT.md",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee/prompts/advisor.md",
+          "packages/bee/prompts/reviewer.md",
+          "packages/bee/LEADER.md",
+          "/mnt/data/Projects/refs/slp/paseo-room/protocol/workspace-protocol.template.md"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [],
+        "action": "worker-cell.md: add one Contract bullet per D9 (never stop to offer the leader a menu of implementation options; choose inside the cell's scope and record it as a departure; a decision outside the scope is one short yes/no question through [PARKED] or [BLOCKED]). Put it where it renders for every shape, not inside a native_bookkeeping block. advisor.md: add, right after the first line, the reviewer.md line 4 sentence per D10. packages/bee/LEADER.md: in the section on starting a session or on dispatch, add the D6 rule in two or three ASD-STE100 sentences: when WORKSPACE_PROTOCOL.md exists at the repo root, read it in full before routing work; copy the boundaries a cell touches into that cell's brief; name each listed boundary the plan touches in the Gate 2 message (under bypass, in the auto-approval reason and the closing report); a boundary adds no new stop — the gate_bypass level decides as for every gate; workers never read the file; `bee protocol check` reports its state. gates-and-delegation.md Delegation contract: one short paragraph — a reviewer or advisor brief carries the artifact, the constraints and the open question, never the leader's preferred answer (prepare warns with purpose_leaning); a worker brief never asks for a menu. Then run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) once from the worktree so the vendored copies match, and commit the regenerated files with this cell. Run the prompt render tests and fix any byte pin that asserts the exact old prompt text by updating the expected text, never by weakening the assertion. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prompt && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the rendered worker-cell prompt forbids an option menu in every shape",
+            "the advisor prompt forbids the orchestrator's verdict, leaning or expected findings",
+            "the leader doctrine names WORKSPACE_PROTOCOL.md, the excerpt rule, the Gate 2 naming rule with no new stop, and that workers never read it"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "the no-menu contract line"
+            }
+          ],
+          "key_links": [
+            "gates-and-delegation.md cites purpose_leaning"
+          ],
+          "prohibitions": [
+            "No rule to stop narrowing review lenses (D12)",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "wsp-2",
+        "feature": "workspace-protocol",
+        "title": "Record prompt and protocol digests at dispatch and add dispatch verify",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "wsp-1"
+        ],
+        "decisions": [
+          "D7",
+          "D8",
+          "D11"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/workspace-protocol/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/dispatch.md"
+        ],
+        "action": "D7: at the record build site in prepare.rs (near the dispatch_id insert, ~line 3239) insert `prompt_sha256` = sha256_hex of the text field the returned payload carries to the worker (`prompt` for Agent/spawn payloads, `stdin` for Bash herding/cli payloads, the codex message field where that is the carrier — compute it from the final payload map, not from `prompt_body`, so the digest equals what the worker gets) and `protocol_sha256` = crate::verbs::protocol::protocol_sha256(root) (null when None). Add both to the envelope beside dispatch_id. Every kind gets them. Keep brief_sha256 and every other key unchanged. D8: add `bee dispatch verify --dispatch-id <id> [--prompt-file <path>] [--json]` routed beside prepare in close.rs: read .bee/logs/dispatch.jsonl newest-first, take the first `source: prepare` line with that dispatch_id; protocol state: same/changed/appeared/removed/absent from recorded vs current protocol_sha256; prompt state: not_checked without --prompt-file, unrecorded when the record has no prompt_sha256, else match/mismatch over the file bytes; unknown id → {ok:false, type:\"refused\", reason:\"dispatch_not_found\", fix}. Declare it in registry_payload.json and add `prompt_sha256`/`protocol_sha256` to the prepare description there. D11: for kind reviewer and advisor with a non-empty --purpose and a --role that does not start with `hat-`, run ONLY the leaning-stem arm (`first_leaning_stem_outside_tagged` in brief_lint.rs, made pub(crate) or wrapped in a thin pub(crate) fn there; never the four-section shape arm, never a copied stem list); on a hit put `purpose_leaning` (the refusal's reason and fix) in the envelope, print it as one warning line in text mode, set `purpose_leaning: true` on the dispatch record, and build the payload exactly as without it; never refuse. Tests: prepare record and envelope carry a 64-hex prompt_sha256 equal to sha256 of payload prompt; the digest equals sha256 of `payload.prompt` for an Agent payload and of `payload.stdin` for a herding Bash payload; a round-trip test saves that field to a file and `dispatch verify --prompt-file` says match; protocol_sha256 null without the file and equal to the file digest with it (read from the control root); verify gives same, then changed after editing the file, removed after deleting it; prompt match and mismatch; verify also gives appeared (no file at prepare, file now) and absent (no file then or now); prompt unrecorded for a record without prompt_sha256 (hand-append one old-shape line in the test log); a non-UTF-8 --prompt-file is mismatch; verify run with a worktree cwd reads the control root's log; unknown id refuses with a fix naming the control root; a reviewer purpose that lint_brief rejects still returns a payload plus purpose_leaning; a clean one-line purpose such as `Plan-step hat wave over docs/history/x/plan.md` has no purpose_leaning key; a leaning purpose under `--role hat-risks` has no purpose_leaning key. Existing prepare tests stay green. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee dispatch && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+        "must_haves": {
+          "truths": [
+            "every prepare record and envelope carries prompt_sha256 and protocol_sha256",
+            "bee dispatch verify reports protocol same/changed/appeared/removed/absent and prompt match/mismatch/not_checked/unrecorded",
+            "a leaning reviewer or advisor purpose yields purpose_leaning and never a refusal",
+            "the --brief-file leaning refusal is unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "digests, verify, purpose lint and tests"
+            }
+          ],
+          "key_links": [
+            "prepare calls protocol::protocol_sha256",
+            "purpose lint calls the brief_lint stem arm only"
+          ],
+          "prohibitions": [
+            "No second hasher",
+            "No second leaning rule list",
+            "No refusal on --purpose",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "wsp-4",
+        "feature": "workspace-protocol",
+        "title": "Document the workspace protocol and dispatch receipts",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "wsp-1",
+          "wsp-2",
+          "wsp-3"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8",
+          "D9",
+          "D10",
+          "D11",
+          "D12"
+        ],
+        "files": [
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+          "docs/knowledge/index.md"
+        ],
+        "read_first": [
+          "docs/history/workspace-protocol/CONTEXT.md",
+          "docs/knowledge/areas/workflow-state/dispatch.md",
+          "docs/knowledge/index.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+        ],
+        "action": "Write one concept in the bee.area frontmatter style of its neighbours (ASD-STE100, short sentences): the root file and its key format, the four states and three required keys, why test commands stay in commands.test, check/init/doctor row, the leader readership rule, the prepare digests and dispatch verify with its states, the warn-only purpose lint and why it cannot refuse, the no-menu and no-leaning prompt lines, and D12. Cite the decision store id (`bee decisions search --text WORKSPACE_PROTOCOL`) as `workspace-protocol D1-D12`. Pointers: verbs/protocol.rs, verbs/drivers/prepare.rs, doctor.rs, the two prompts. Add the concept to docs/knowledge/index.md under workflow-state.",
+        "verify": "rg -n 'WORKSPACE_PROTOCOL.md|prompt_sha256|dispatch verify|purpose_leaning' docs/knowledge/areas/workflow-state/workspace-protocol.md && rg -n 'workspace-protocol.md' docs/knowledge/index.md",
+        "must_haves": {
+          "truths": [
+            "the concept names the file, the verbs, the receipt and the brief rules",
+            "the index lists the concept"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+              "substantive": "the concept"
+            }
+          ],
+          "key_links": [
+            "the concept cites the decision"
+          ],
+          "prohibitions": [
+            "No code comments added anywhere"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "wsp-1 and wsp-2 add Rust verbs and prepare keys."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride each code cell; the live proof is the leader's."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "wsp-3 changes prompts and doctrine; wsp-4 writes the concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done; gathers only on demand."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-11-07T07:06:15.665Z",
+    "feature": "workspace-protocol",
+    "newest_decision_id": "3d03daf0-14f6-4a67-807b-dd20730015de",
+    "plan_sha256": "24bf3e9a06b04cbd8ed310bdcbcc108f66deb87202f9eb0093340dda23f5be89",
+    "advisor": "hat-wave:facts-gaps+alternatives+user-impact",
+    "digest_head": "# Hat wave synthesis — workspace-protocol\n\nThree seats ran on the drafted plan (herding jobs, read-only). The leader\ntook each finding below into CONTEXT.md and plan.md before Gate 2.\n\n| Seat | Finding | Taken as |\n|---|---|---|\n| facts-gaps F1 (blocker) | `prompt_body` is not the text the payload carries | D7: hash the carried field (`prompt`, `stdin`, codex message), from the final payload; claim 4 re-anchored |\n| facts-gaps F2 (blocker) | `lint_brief` also runs a four-section shape check, so "
+  },
+  "approved_cell_packet": {
+    "feature": "workspace-protocol",
+    "plan_sha256": "24bf3e9a06b04cbd8ed310bdcbcc108f66deb87202f9eb0093340dda23f5be89",
+    "previewed_at": "2026-11-07T07:06:13.557Z",
+    "cells": [
+      {
+        "id": "wsp-1",
+        "feature": "workspace-protocol",
+        "title": "Add the workspace protocol check, init and doctor row",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/workspace-protocol/CONTEXT.md",
+          "docs/knowledge/areas/workflow-state/dispatch.md",
+          "packages/bee-rs/crates/bee/src/registry.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "/mnt/data/Projects/refs/slp/paseo-pi-team/templates/WORKSPACE_PROTOCOL.example.md",
+          "/mnt/data/Projects/refs/slp/paseo-pi-team/cli/lib/workspace-protocol.mjs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/dispatch.md"
+        ],
+        "action": "New module verbs/protocol.rs, the ONE home that reads WORKSPACE_PROTOCOL.md. Contract: pub(crate) `PROTOCOL_FILE = \"WORKSPACE_PROTOCOL.md\"`; `parse(text) -> BTreeMap<String, ProtocolValue>` per D1 (scalar or list); `protocol_state(root) -> ProtocolReport { state: missing|unreadable|invalid|valid, issues: Vec<String>, keys, sha256: Option<String> }` per D2 and D3 (FULL_TEST compared against .bee/config.json commands.test read through the existing config reader; string or array joined with \" && \"); `protocol_sha256(control_root) -> Option<String>` using crate::verbs::reservations::sha256_hex over the file bytes (None when missing or unreadable) — wsp-2 calls this; `TEMPLATE` per D4. Verbs: `bee protocol check [--json]` prints state, issues, keys, sha256; exit 0 for every state. `bee protocol init [--json]` writes TEMPLATE to <root>/WORKSPACE_PROTOCOL.md only when absent; an existing file returns a typed refusal {ok:false, type:\"refused\", reason:\"protocol_exists\", path, fix} and leaves the bytes untouched. Wire the verb group through the same router style as `dispatch` in close.rs and declare both verbs and their flags in generated/registry_payload.json (hand-edited, no generator — gates.md:866); if the top-level verb router lives outside close.rs, wire `protocol` there too and name the extra file as a deviation (the registry contract test must stay green; update its pins if it counts verbs). doctor.rs: one row `workspace-protocol` per D5 — missing/valid status `ok`, invalid/unreadable status `advisory` (assert that exact string) with issues and fix `bee protocol check`; never blocking. Tests: parse a paseo-pi-team style fenced file (lists, trailing # comment kept, unknown keys kept); parse a `- key: value` paseo-doctrine style file reads no keys and gives invalid with three issues; missing file is missing; non-UTF-8 bytes is unreadable; init then check is valid; init twice refuses and keeps the first bytes; init prints the review-and-edit next-step line; FULL_TEST equal is fine, different is one issue naming commands.test; a duplicate key gives a `duplicate key` issue and the last value; a scalar HUMAN_DECISION_BOUNDARIES gives an issue naming the `- item` list form; a `<...>` or ` | ` placeholder value gives a placeholder issue (so a copied unfilled paseo template is invalid); a list ends at a blank line; the doctor row always prints, ok with the init hint when missing, advisory and never blocking when invalid. Root: the control root (main checkout holding the bee store), the same root prepare uses. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+        "must_haves": {
+          "truths": [
+            "bee protocol check reports missing, unreadable, invalid or valid and exits 0 for each",
+            "a valid protocol needs MERGE_OWNER, DEPLOY_OWNER and at least one HUMAN_DECISION_BOUNDARIES item",
+            "a FULL_TEST that differs from commands.test is an issue",
+            "bee protocol init writes a file that checks valid and never overwrites an existing file",
+            "the doctor row never blocks overall_status",
+            "protocol_sha256(root) is the one digest helper"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+              "substantive": "parser, state, digest, template, verbs and tests"
+            }
+          ],
+          "key_links": [
+            "doctor.rs calls protocol_state",
+            "registry_payload.json declares protocol check and protocol init"
+          ],
+          "prohibitions": [
+            "No gate or refusal of any other verb on protocol state",
+            "No second parser of the file",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "wsp-3",
+        "feature": "workspace-protocol",
+        "title": "Forbid option menus in worker briefs and leaning in advisor briefs",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "D6",
+          "D9",
+          "D10",
+          "D12"
+        ],
+        "files": [
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee/prompts/advisor.md",
+          "packages/bee/LEADER.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/workspace-protocol/CONTEXT.md",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee/prompts/advisor.md",
+          "packages/bee/prompts/reviewer.md",
+          "packages/bee/LEADER.md",
+          "/mnt/data/Projects/refs/slp/paseo-room/protocol/workspace-protocol.template.md"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [],
+        "action": "worker-cell.md: add one Contract bullet per D9 (never stop to offer the leader a menu of implementation options; choose inside the cell's scope and record it as a departure; a decision outside the scope is one short yes/no question through [PARKED] or [BLOCKED]). Put it where it renders for every shape, not inside a native_bookkeeping block. advisor.md: add, right after the first line, the reviewer.md line 4 sentence per D10. packages/bee/LEADER.md: in the section on starting a session or on dispatch, add the D6 rule in two or three ASD-STE100 sentences: when WORKSPACE_PROTOCOL.md exists at the repo root, read it in full before routing work; copy the boundaries a cell touches into that cell's brief; name each listed boundary the plan touches in the Gate 2 message (under bypass, in the auto-approval reason and the closing report); a boundary adds no new stop — the gate_bypass level decides as for every gate; workers never read the file; `bee protocol check` reports its state. gates-and-delegation.md Delegation contract: one short paragraph — a reviewer or advisor brief carries the artifact, the constraints and the open question, never the leader's preferred answer (prepare warns with purpose_leaning); a worker brief never asks for a menu. Then run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) once from the worktree so the vendored copies match, and commit the regenerated files with this cell. Run the prompt render tests and fix any byte pin that asserts the exact old prompt text by updating the expected text, never by weakening the assertion. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prompt && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the rendered worker-cell prompt forbids an option menu in every shape",
+            "the advisor prompt forbids the orchestrator's verdict, leaning or expected findings",
+            "the leader doctrine names WORKSPACE_PROTOCOL.md, the excerpt rule, the Gate 2 naming rule with no new stop, and that workers never read it"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "the no-menu contract line"
+            }
+          ],
+          "key_links": [
+            "gates-and-delegation.md cites purpose_leaning"
+          ],
+          "prohibitions": [
+            "No rule to stop narrowing review lenses (D12)",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "wsp-2",
+        "feature": "workspace-protocol",
+        "title": "Record prompt and protocol digests at dispatch and add dispatch verify",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "wsp-1"
+        ],
+        "decisions": [
+          "D7",
+          "D8",
+          "D11"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/workspace-protocol/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/dispatch.md"
+        ],
+        "action": "D7: at the record build site in prepare.rs (near the dispatch_id insert, ~line 3239) insert `prompt_sha256` = sha256_hex of the text field the returned payload carries to the worker (`prompt` for Agent/spawn payloads, `stdin` for Bash herding/cli payloads, the codex message field where that is the carrier — compute it from the final payload map, not from `prompt_body`, so the digest equals what the worker gets) and `protocol_sha256` = crate::verbs::protocol::protocol_sha256(root) (null when None). Add both to the envelope beside dispatch_id. Every kind gets them. Keep brief_sha256 and every other key unchanged. D8: add `bee dispatch verify --dispatch-id <id> [--prompt-file <path>] [--json]` routed beside prepare in close.rs: read .bee/logs/dispatch.jsonl newest-first, take the first `source: prepare` line with that dispatch_id; protocol state: same/changed/appeared/removed/absent from recorded vs current protocol_sha256; prompt state: not_checked without --prompt-file, unrecorded when the record has no prompt_sha256, else match/mismatch over the file bytes; unknown id → {ok:false, type:\"refused\", reason:\"dispatch_not_found\", fix}. Declare it in registry_payload.json and add `prompt_sha256`/`protocol_sha256` to the prepare description there. D11: for kind reviewer and advisor with a non-empty --purpose and a --role that does not start with `hat-`, run ONLY the leaning-stem arm (`first_leaning_stem_outside_tagged` in brief_lint.rs, made pub(crate) or wrapped in a thin pub(crate) fn there; never the four-section shape arm, never a copied stem list); on a hit put `purpose_leaning` (the refusal's reason and fix) in the envelope, print it as one warning line in text mode, set `purpose_leaning: true` on the dispatch record, and build the payload exactly as without it; never refuse. Tests: prepare record and envelope carry a 64-hex prompt_sha256 equal to sha256 of payload prompt; the digest equals sha256 of `payload.prompt` for an Agent payload and of `payload.stdin` for a herding Bash payload; a round-trip test saves that field to a file and `dispatch verify --prompt-file` says match; protocol_sha256 null without the file and equal to the file digest with it (read from the control root); verify gives same, then changed after editing the file, removed after deleting it; prompt match and mismatch; verify also gives appeared (no file at prepare, file now) and absent (no file then or now); prompt unrecorded for a record without prompt_sha256 (hand-append one old-shape line in the test log); a non-UTF-8 --prompt-file is mismatch; verify run with a worktree cwd reads the control root's log; unknown id refuses with a fix naming the control root; a reviewer purpose that lint_brief rejects still returns a payload plus purpose_leaning; a clean one-line purpose such as `Plan-step hat wave over docs/history/x/plan.md` has no purpose_leaning key; a leaning purpose under `--role hat-risks` has no purpose_leaning key. Existing prepare tests stay green. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee dispatch && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+        "must_haves": {
+          "truths": [
+            "every prepare record and envelope carries prompt_sha256 and protocol_sha256",
+            "bee dispatch verify reports protocol same/changed/appeared/removed/absent and prompt match/mismatch/not_checked/unrecorded",
+            "a leaning reviewer or advisor purpose yields purpose_leaning and never a refusal",
+            "the --brief-file leaning refusal is unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "digests, verify, purpose lint and tests"
+            }
+          ],
+          "key_links": [
+            "prepare calls protocol::protocol_sha256",
+            "purpose lint calls the brief_lint stem arm only"
+          ],
+          "prohibitions": [
+            "No second hasher",
+            "No second leaning rule list",
+            "No refusal on --purpose",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "wsp-4",
+        "feature": "workspace-protocol",
+        "title": "Document the workspace protocol and dispatch receipts",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "wsp-1",
+          "wsp-2",
+          "wsp-3"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8",
+          "D9",
+          "D10",
+          "D11",
+          "D12"
+        ],
+        "files": [
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+          "docs/knowledge/index.md"
+        ],
+        "read_first": [
+          "docs/history/workspace-protocol/CONTEXT.md",
+          "docs/knowledge/areas/workflow-state/dispatch.md",
+          "docs/knowledge/index.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+        ],
+        "action": "Write one concept in the bee.area frontmatter style of its neighbours (ASD-STE100, short sentences): the root file and its key format, the four states and three required keys, why test commands stay in commands.test, check/init/doctor row, the leader readership rule, the prepare digests and dispatch verify with its states, the warn-only purpose lint and why it cannot refuse, the no-menu and no-leaning prompt lines, and D12. Cite the decision store id (`bee decisions search --text WORKSPACE_PROTOCOL`) as `workspace-protocol D1-D12`. Pointers: verbs/protocol.rs, verbs/drivers/prepare.rs, doctor.rs, the two prompts. Add the concept to docs/knowledge/index.md under workflow-state.",
+        "verify": "rg -n 'WORKSPACE_PROTOCOL.md|prompt_sha256|dispatch verify|purpose_leaning' docs/knowledge/areas/workflow-state/workspace-protocol.md && rg -n 'workspace-protocol.md' docs/knowledge/index.md",
+        "must_haves": {
+          "truths": [
+            "the concept names the file, the verbs, the receipt and the brief rules",
+            "the index lists the concept"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+              "substantive": "the concept"
+            }
+          ],
+          "key_links": [
+            "the concept cites the decision"
+          ],
+          "prohibitions": [
+            "No code comments added anywhere"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "wsp-1 and wsp-2 add Rust verbs and prepare keys."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride each code cell; the live proof is the leader's."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "wsp-3 changes prompts and doctrine; wsp-4 writes the concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done; gathers only on demand."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-11-07T07:05:55.381Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-07T08:08:40.476Z",
+    "branch": "wt/workspace-protocol",
+    "worktree_id": "beehive--wt--workspace-protocol",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

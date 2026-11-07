@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.84.0",
+  "bee_version": "2.85.0",
   "managed": {
     "agents_block": "3cf65fa743041756f7f1f972f2eec5ff349fc2acb01bf33237aeb551ba22f944",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
@@ -43,7 +43,7 @@
       "worker-cell.md": "385e1802d49e4469a050d273b8659f7915e9cb99e6d05d6be5b66a2ba3e8cd21"
     },
     "leader": {
-      "LEADER.md": "3d1364e7161e390e70b86514e9d8c0c4cd770cf3e1e9d25f7fe2fb139c26b69a"
+      "LEADER.md": "b617b39304f57e112297d32ab23267878260f227033ad3da47716b105cf2bd08"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
@@ -111,7 +111,7 @@
     }
   },
   "agents_sync": {
-    "bee_version": "2.84.0",
+    "bee_version": "2.85.0",
     "files": [
       ".claude/agents/bee-comb.md",
       ".claude/agents/bee-elder.md",
@@ -145,5 +145,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-07T07:55:55.043Z"
+  "updated_at": "2026-11-07T08:11:22.138Z"
 }
