@@ -1207,5 +1207,12 @@
         }
       ]
     }
+  },
+  "merge_ready": {
+    "since": "2026-11-07T20:11:29.612Z",
+    "branch": "wt/knowledge-freshness-mechanic",
+    "worktree_id": "beehive--wt--knowledge-freshness-mechanic",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
