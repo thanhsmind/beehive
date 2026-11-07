@@ -5,8 +5,8 @@
   "phase": "exploring",
   "approved_gates": {
     "context": true,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
@@ -30,8 +30,8 @@
   },
   "gate_preview": {
     "feature": "knowledge-freshness-mechanic",
-    "plan_sha256": "7fd450099e9bfcf5b7ff936318b8c91a920c66ad8cff6330172283848c82e0bb",
-    "previewed_at": "2026-11-07T14:20:46.393Z",
+    "plan_sha256": "a8588ed92d7d2da27f9b91f0a2b51bfc716b82c1ac41db26d824caf8df30d3a2",
+    "previewed_at": "2026-11-07T14:34:17.520Z",
     "cells": [
       {
         "id": "kfm-1",
@@ -50,45 +50,53 @@
           "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
-          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
         ],
         "read_first": [
           "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
           "docs/history/knowledge-freshness-mechanic/plan.md",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/frontmatter.rs",
-          "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
-          "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+          "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
         ],
         "affects_skills": [],
         "affects_specs": [],
-        "action": "Add a freshness grade to the knowledge bundle (D3 27ad96a5, D8 4148025d). New module verbs/knowledge/freshness.rs exports one reader `grade_concept(root, concept) -> Grade { grade: confirmed|suspect|orphan|unverified, verified_at: Option<String>, verified_commit: Option<String>, anchors: Vec<String>, changed: Vec<String>, reason: Option<String> }` over three new frontmatter fields under `bee`: `anchors` (flat list of repo-relative paths), `verified_at` (ISO date) and `verified_commit` (full sha). Grade rule, exactly: `orphan` when any anchor path is missing on disk; else `unverified` when there are no anchors, or verified_commit is absent or does not resolve (`git cat-file -e <sha>^{commit}` fails), or git is unavailable — `reason` names which; else `suspect` when any anchor was changed by a commit in `verified_commit..HEAD` that did NOT also touch the concept file (use `git log --format=%H <verified_commit>..HEAD -- <anchor>` and, for each such commit, `git show --name-only --format= <sha>` to test whether the concept path is in it); else `confirmed`. Shell to git through verbs/worktree/git.rs `run_git` (anchor: `pub(crate) fn run_git(cwd: &Path, args: &[&str]) -> GitOut {`). In check.rs, after the existing profile pass, grade every concept under areas/ and patterns/ (never work/, never index.md) and emit: one summary line `freshness: <n> confirmed, <n> suspect, <n> orphan, <n> unverified` in text, a `freshness` object in --json with those counts plus `rows: [{path, grade, verified_at, verified_commit, changed, reason}]`, and one profile WARNING row per suspect concept (code `stale_anchor`, message naming the changed anchor paths and the remedy `bee knowledge confirm --id <id>`) and per orphan concept (code `orphan_anchor`, naming the missing path). Unverified is counted, never warned. Two new verbs routed in routing.rs (anchor: `\"check\" => run_check(flags, json, pre_json, t0),`) and declared in generated/registry_payload.json as `{name, invoke, description}` rows like the existing `knowledge.check` row (the registry tests fail on an undeclared served verb; edit the JSON by a round-trip that keeps its byte format): `bee knowledge anchors seed [--dry-run]` walks areas/ and patterns/, and for every concept with NO `bee.anchors` key collects the backticked repo-relative paths in its body that exist on disk (same backtick-path shape dangling_source_candidate accepts; skip paths under .bee/ and docs/), writes them as `bee.anchors` through the canonical emitter (frontmatter.rs `emit_scalar`/`is_plain_safe` — a seeded file must report zero not_canonical), leaves `verified_*` unset, and prints per-file counts plus how many concepts got zero anchors; `bee knowledge confirm --id <bee.id>` refuses an unknown id or a concept with no anchors, otherwise sets `bee.verified_at` to today (UTC, ISO date) and `bee.verified_commit` to the current HEAD sha and re-emits canonically. Tests red-first in knowledge/tests.rs on a fixture repo with real git commits: each of the four grades; an anchor changed in a commit that also touched the concept grades confirmed; an unknown verified_commit grades unverified with a reason; seed writes anchors only where absent and the file stays canonical; confirm stamps both fields and refuses an unknown id; check's --json carries the freshness object and the stale_anchor / orphan_anchor rows.",
+        "action": "Add the freshness grade to the knowledge bundle (D3 27ad96a5, D8 4148025d) exactly by the Grade rule and the Seeding paragraph in plan.md Approach. New module verbs/knowledge/freshness.rs exports: (1) `bundle_root(root, feature: Option<&str>) -> PathBuf` — the docs/knowledge directory of the checkout the command runs in, built the way drivers/close.rs `docs_root_for_feature` picks a granted worktree's tree (anchor: `pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {`); every knowledge verb that reads or writes concepts (check, list, search, show, context, new, seed-anchors, confirm) resolves its bundle through it, so a command run inside a granted worktree reads and writes that worktree's docs tree; (2) `grade_bundle(checkout_root, concepts) -> BTreeMap<rel_path, Grade>` and `grade_concept(checkout_root, rel_path, bee: &Map<String, Value>) -> Grade` where `Grade { grade: confirmed|suspect|orphan|unverified, verified_at: Option<String>, verified_commit: Option<String>, anchors: Vec<String>, changed: Vec<String>, reason: Option<String> }` — the signature takes the bundle-relative path and the parsed `bee` map, not walk::Concept, so the session preamble's own Concept type can call it; implement the one-pass rule from plan.md: one `git log --format=%H --name-only --first-parent -m <oldest verified_commit>..HEAD` through verbs/worktree/git.rs `run_git` (anchor: `pub(crate) fn run_git(cwd: &Path, args: &[&str]) -> GitOut {`) plus one `git merge-base --is-ancestor <vc> HEAD` per distinct verified_commit, never a git call per anchor; a concept's repo path for the same-commit exemption is `docs/knowledge/<rel>`. Three frontmatter fields under `bee`: `anchors` (flat list), `verified_at` (ISO date), `verified_commit` (full sha); every write goes through the canonical emitter (frontmatter.rs `emit_scalar` / `is_plain_safe`) and a written file must report zero not_canonical. In check.rs, after the profile pass, grade every concept under areas/ only (never patterns/, never work/, never index.md) and emit: text summary line `freshness: <n> confirmed, <n> suspect, <n> orphan, <n> unverified`; `--json` object `freshness: {confirmed, suspect, orphan, unverified, rows: [{path, grade, verified_at, verified_commit, changed, reason}]}`; one profile WARNING per suspect concept (code `stale_anchor`, message naming the changed anchors and the remedy `bee knowledge confirm --id <bee.id>`) and per orphan concept (code `orphan_anchor`, naming the missing path and the remedy: fix bee.anchors); unverified is counted, never warned; when areas/ has concepts and none carries bee.anchors, print one NOTE `no concept carries bee.anchors — run bee knowledge seed-anchors once`. Two new single-token verbs routed in routing.rs (anchor: `\"check\" => run_check(flags, json, pre_json, t0),`) and declared in generated/registry_payload.json as `{name, invoke, description}` rows beside `knowledge.check` (round-trip the JSON keeping its byte format): `bee knowledge seed-anchors [--dry-run]` walks areas/ only and, for every concept with NO `bee.anchors` key, collects the backticked repo-relative paths in its body that exist under the checkout (same backtick-path shape `dangling_source_candidate` accepts), skipping any path under `.bee/`, `docs/`, or containing a `/generated/` segment; writes them as `bee.anchors`; sets `bee.verified_commit` to `git log -1 --format=%H -- docs/knowledge/<rel>` and `bee.verified_at` to that commit's ISO date (a concept with no commit gets anchors only); prints per-file counts and how many concepts got zero anchors. `bee knowledge confirm (--id <bee.id>)+ | --path <repo path>` stamps `verified_at` (today, UTC) and `verified_commit` (current HEAD of the checkout) on each named concept, or on every areas/ concept whose anchors contain --path; refusals, each naming its remedy: unknown id → `no concept with bee.id <id> — bee knowledge list`; concept with no anchors → `<path> has no bee.anchors — run bee knowledge seed-anchors or add anchors`; --path matching no concept → `no concept anchors <path>`; confirm never clears orphan and says so when the grade stays orphan. Extend tests/registry_dispatch.rs `every_namespace_the_dispatcher_serves_is_declared_in_the_registry` (anchor: `for verb in match_arm_verbs(&crate_src(\"devtools/mod.rs\"), \"pub fn try_native\", 5) {`) to also scan verbs/knowledge/routing.rs's match arms as `bee knowledge <verb>`, so an undeclared knowledge verb fails the test. Tests red-first in knowledge/tests.rs on a fixture repo with real git commits: each of the four grades; anchor changed in a commit that also touched the concept → confirmed; a present sha that is not an ancestor of HEAD → unverified with a reason; a merge commit touching an anchor is seen; seed writes anchors and the baseline commit only where anchors are absent and the file stays canonical; confirm stamps both fields, handles --path, and each refusal names its remedy; a confirm run from a granted worktree writes the worktree's concept and leaves main untouched; check's --json carries the freshness object, the stale_anchor / orphan_anchor rows and the seed NOTE.",
         "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge registry",
         "must_haves": {
           "truths": [
-            "grade_concept returns confirmed, suspect, orphan or unverified by the rule in plan.md Approach, and never confirmed when git is unavailable",
+            "grade_concept returns confirmed, suspect, orphan or unverified by the rule in plan.md Approach, with unverified for a present-but-non-ancestor sha and for an unavailable git",
             "an anchor changed in a commit that also touched the concept file does not make the concept suspect",
-            "bee knowledge check prints the freshness count line, carries the freshness object in --json, and emits stale_anchor and orphan_anchor warnings",
-            "bee knowledge anchors seed writes bee.anchors only to concepts without one and keeps every written file canonical",
-            "bee knowledge confirm --id stamps verified_at and verified_commit and refuses an unknown id"
+            "grading the whole bundle makes at most one git log call plus one merge-base call per distinct verified_commit",
+            "every knowledge verb run inside a granted worktree reads and writes that worktree's docs/knowledge",
+            "bee knowledge check prints the freshness count line, carries the freshness object in --json, emits stale_anchor and orphan_anchor warnings and the seed NOTE, and never grades patterns/",
+            "bee knowledge seed-anchors writes bee.anchors plus a baseline verified_commit and verified_at only to areas/ concepts without anchors, skips .bee/, docs/ and generated paths, and keeps every written file canonical",
+            "bee knowledge confirm --id and --path stamp verified_at and verified_commit and every refusal names its remedy",
+            "the registry served-vs-declared test scans knowledge verbs"
           ],
           "artifacts": [
             {
               "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
-              "substantive": "grade_concept reader plus the seed and confirm verbs"
+              "substantive": "bundle_root, grade_bundle, grade_concept, seed-anchors and confirm"
             },
             {
               "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
-              "substantive": "knowledge.anchors.seed and knowledge.confirm declared"
+              "substantive": "knowledge.seed-anchors and knowledge.confirm declared"
             }
           ],
           "key_links": [
-            "check.rs calls grade_concept for every areas/ and patterns/ concept",
-            "routing.rs serves anchors seed and confirm"
+            "check.rs calls grade_bundle for every areas/ concept",
+            "routing.rs serves seed-anchors and confirm",
+            "tests/registry_dispatch.rs scans verbs/knowledge/routing.rs"
           ],
           "prohibitions": [
-            "Do not grade or seed anything under docs/knowledge/work/",
+            "Do not grade or seed anything under docs/knowledge/patterns/ or docs/knowledge/work/",
             "Do not change any existing finding code or its wording",
+            "Do not run one git invocation per anchor",
             "No code comments"
           ],
           "open_choices": [
@@ -128,14 +136,14 @@
         ],
         "affects_skills": [],
         "affects_specs": [],
-        "action": "Make the freshness grade visible at every pull point (D1 2b11f025, D3 27ad96a5), using only `grade_concept` from kfm-1 — never a second grading rule. search.rs: `SearchHit` (anchor: `pub(crate) struct SearchHit {`) gains grade, verified_at and verified_commit; the text line becomes `<path> — <title> — [<grade> @ <verified_at or never>] — <why>` and the JSON row (anchor: `row.insert(\"why\".into(), Value::String(hit.why.clone()));`) gains `grade`, `verified_at`, `verified_commit`. author.rs `run_show` prints a `freshness:` line after the metadata and adds the same three keys to its JSON. context.rs: every manifest entry (ranks 1-5) carries `grade` and `verified_at`; a suspect or orphan entry's inclusion reason ends with ` (grade: suspect — <first changed anchor>)` so the agent sees it in the reason column; ranking is unchanged. session_preamble: render.rs `knowledge_context_lines` (anchor: `pub(crate) fn knowledge_context_lines(root: &Path, record: &JMap) -> Vec<String> {`) adds ONE line `- knowledge: <n> confirmed, <m> suspect, <k> orphan, <u> unverified — suspect first: bee knowledge check` computed over areas/ and patterns/; the line is omitted when the bundle is absent, and the preamble byte budget must not grow by more than that one line (existing budget tests stay green). Tests red-first: a search row and a show output carry the grade of a fixture concept in each of two grades; a context manifest entry carries grade and the suspect reason suffix; the preamble line counts a fixture bundle correctly and is absent without a bundle.",
+        "action": "Make the freshness grade visible at every pull point (D1 2b11f025, D3 27ad96a5), using only freshness::grade_bundle / grade_concept from kfm-1 — never a second grading rule. search.rs: `SearchHit` (anchor: `pub(crate) struct SearchHit {`) gains grade, verified_at and verified_commit; the text line becomes `<path> — <title> — [<grade> @ <verified_at or never>] — <why>` and the JSON row (anchor: `row.insert(\"why\".into(), Value::String(hit.why.clone()));`) gains `grade`, `verified_at`, `verified_commit`; a patterns/ hit prints `[pattern]` in place of a grade. author.rs `run_show` prints a `freshness:` line after the metadata and adds the same three keys to its JSON. context.rs: every manifest entry carries `grade` and `verified_at`; a suspect or orphan entry's inclusion reason ends with ` (grade: <grade> — <first changed or missing anchor>)`; ranking is unchanged. session_preamble: in render.rs `project_map_lines` (anchor: `pub(crate) fn project_map_lines(root: &Path, bundle: bool) -> Vec<String> {`), NOT in the per-feature knowledge_context_lines, add ONE line `- knowledge: <n> confirmed, <m> suspect, <k> orphan, <u> unverified — suspect first: bee knowledge check` computed over areas/ with grade_bundle; omit the line when the bundle is absent or areas/ holds zero concepts; wrap the computation in a 500 ms budget and past it print `- knowledge: freshness skipped (slow) — bee knowledge check` instead; bridge the preamble's own Concept (path + parsed data) to grade_concept's (rel_path, bee map) signature. The preamble byte budget tests stay green. Tests red-first: a search row and a show output carry the grade of a fixture concept in two grades; a patterns hit prints [pattern]; a context manifest entry carries grade and the suspect suffix; the preamble line counts a fixture bundle, is absent without a bundle and with zero area concepts, and the skipped form renders when the budget is exceeded (inject the budget).",
         "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble",
         "must_haves": {
           "truths": [
             "knowledge search text and JSON rows carry grade, verified_at and verified_commit",
             "knowledge show prints the grade and carries it in JSON",
-            "knowledge context entries carry grade and a suspect or orphan entry names its first changed anchor in the reason",
-            "the session preamble prints one freshness count line and nothing else new"
+            "knowledge context entries carry grade and a suspect or orphan entry names its first changed or missing anchor in the reason",
+            "the session preamble's project map prints one freshness count line, omitted for no bundle or zero area concepts, and a skipped note past 500 ms"
           ],
           "artifacts": [
             {
@@ -144,11 +152,12 @@
             }
           ],
           "key_links": [
-            "search.rs, author.rs, context.rs and render.rs all call freshness::grade_concept"
+            "search.rs, author.rs, context.rs and render.rs all call freshness::grade_bundle or grade_concept"
           ],
           "prohibitions": [
             "Do not change search ranking or context ranking",
             "Do not add a second grading rule anywhere",
+            "Do not put the count line in knowledge_context_lines",
             "No code comments"
           ],
           "open_choices": []
@@ -158,7 +167,7 @@
       {
         "id": "kfm-3",
         "feature": "knowledge-freshness-mechanic",
-        "title": "Refuse a cap that leaves an anchored concept unconfirmed",
+        "title": "Refuse a cap that leaves a suspect or orphan concept unconfirmed",
         "lane": "standard",
         "role": "code",
         "deps": [
@@ -169,6 +178,7 @@
         ],
         "files": [
           "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
           "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
           "skills/bee-swarming/SKILL.md",
           "docs/history/codex-harness-hardening/release-manifest.json"
@@ -184,19 +194,20 @@
           "skills/bee-swarming/SKILL.md"
         ],
         "affects_specs": [],
-        "action": "Add check (d) to the cap-time sync door (D4 e7e80d78) in sync_door.rs `sync_refusal` (anchor: `pub(crate) fn sync_refusal(root: &Path, cell: &Map<String, Value>, touched: &[String]) -> Option<String> {`), after check (c): for every areas/ or patterns/ concept whose `bee.anchors` (normalized with normalize_cell_path) intersects `touched`, the cap passes when the concept's own path is in `touched` (edited or confirmed in this cell's commit) OR `grade_concept` returns confirmed; otherwise refuse with `capCell: SYNC_DOOR — cell \"<id>\" touches <paths> anchored by knowledge concept(s) <concept paths> that are not re-confirmed. FIX: bee knowledge confirm --id <bee.id> (then commit the concept with the cell), edit the concept, or pass --sync-ack \"<reason>\" to cap anyway (the reason is recorded on trace.sync_ack and trace.deviations).` The existing `--sync-ack` escape in handlers_close.rs covers (d) with no new flag. A bundle with no concepts, or a repo without docs/knowledge/, makes (d) a no-op. In skills/bee-swarming/SKILL.md, under the worker contract (\"Execute\"), add the step: before committing, run `bee knowledge check --json` and for every suspect concept anchored by a file you changed, either fix the concept or run `bee knowledge confirm --id <id>`, and commit the concept file with the cell — one sentence, cited to this feature's CONTEXT.md D4, no second copy of the grade rule. Because skills/ is hashed by the release manifest, run `bee dev regen` and include the regenerated manifest. Tests red-first in cells/tests.rs with a fixture repo and bundle: a cap touching an anchored file with the concept unconfirmed refuses and names the concept and the confirm remedy; the same cap passes when the concept file is in the touched set; passes after `knowledge confirm` with the concept committed; passes with --sync-ack and records the reason; a touched file anchored by no concept passes untouched.",
-        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells::tests::sync && .bee/bin/bee dev release-manifest --check",
+        "action": "Add check (d) to the cap-time sync door (D4 e7e80d78) by the Cap door paragraph in plan.md Approach. sync_door.rs `sync_refusal` (anchor: `pub(crate) fn sync_refusal(root: &Path, cell: &Map<String, Value>, touched: &[String]) -> Option<String> {`) gains a `history_root: &Path` parameter (the checkout whose HEAD the cell committed into), and handlers_close.rs passes the `history_root` it already builds touched_set from (anchor: `if let Some(refusal) = sync_refusal(root, &cell_map, &touched_set) {`). Check (d), after (c): grade the areas/ concepts of `history_root`'s docs/knowledge with freshness::grade_bundle; for every concept whose `bee.anchors` (normalized with normalize_cell_path) intersects `touched`, the cap passes when the concept's own repo path is in `touched`, or its grade is confirmed or unverified; it refuses on suspect or orphan with `capCell: SYNC_DOOR — cell \"<id>\" touches <paths> anchored by knowledge concept(s): <concept path> (<grade>)…. FIX: for suspect, bee knowledge confirm --id <bee.id> (or --path <file>), then add the concept file to the cell's files and reservation and commit it with the cell; for orphan, fix the concept's bee.anchors; or pass --sync-ack \"<reason>\" to cap anyway (the reason is recorded on trace.sync_ack and trace.deviations).` A missing docs/knowledge/ or an empty areas/ makes (d) a no-op. The existing --sync-ack escape covers (d) with no new flag. In skills/bee-swarming/SKILL.md, under the worker contract (\"Execute\"), add one step before the commit: run `bee knowledge check --json`; for every suspect concept anchored by a file you changed, fix the concept or run `bee knowledge confirm --id <id>`, reserve and commit the concept file with the cell — cite this feature's CONTEXT.md D4 by path, no second copy of the grade rule. Because skills/ is hashed by the release manifest, run `cargo build --release --manifest-path packages/bee-rs/Cargo.toml` then `bee dev regen` and include the regenerated manifest. Tests red-first in cells/tests.rs, every test name starting with `sync_door_`, on a fixture repo with a bundle and real commits: a cap touching an anchored file with the concept suspect refuses and names the concept, the grade and the confirm remedy; the same for orphan with the anchors remedy; an unverified concept passes; passes when the concept file is in the touched set; passes after `knowledge confirm` with the concept committed; passes with --sync-ack and records the reason; a touched file anchored by no concept passes; a repo without a bundle caps as before; a cell committed in a granted worktree is graded against the worktree's bundle, not main's.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells::tests::sync_door && .bee/bin/bee dev release-manifest --check",
         "must_haves": {
           "truths": [
-            "a cap whose touched files anchor an unconfirmed concept refuses, naming the concept and bee knowledge confirm as the remedy",
-            "a cap passes when the concept is in the touched set, confirmed at that commit, or escaped with --sync-ack",
+            "a cap whose touched files anchor a suspect or orphan concept refuses, naming the concept, its grade and the remedy for that grade",
+            "a cap passes when the concept is unverified, in the touched set, confirmed at that commit, or escaped with --sync-ack",
+            "the door grades the worktree's bundle when the cell committed in a granted worktree",
             "a repo without a bundle caps exactly as before",
-            "the bee-swarming worker contract names the re-confirm step"
+            "the bee-swarming worker contract names the re-confirm step and the reservation"
           ],
           "artifacts": [
             {
               "path": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
-              "substantive": "check (d) over bee.anchors using freshness::grade_concept"
+              "substantive": "check (d) over bee.anchors using freshness::grade_bundle against history_root"
             },
             {
               "path": "skills/bee-swarming/SKILL.md",
@@ -204,12 +215,14 @@
             }
           ],
           "key_links": [
-            "sync_door.rs calls knowledge::freshness::grade_concept",
+            "handlers_close.rs passes history_root into sync_refusal",
+            "sync_door.rs calls knowledge::freshness::grade_bundle",
             "the release manifest hash for skills/bee-swarming/SKILL.md matches the edited file"
           ],
           "prohibitions": [
             "Do not change checks (a), (b) or (c) or their wording",
             "Do not add a new cap flag",
+            "Do not refuse on unverified",
             "No code comments"
           ],
           "open_choices": []
@@ -222,7 +235,9 @@
         "title": "Retire delivery records and move work/ out of the bundle",
         "lane": "standard",
         "role": "code",
-        "deps": [],
+        "deps": [
+          "kfm-1"
+        ],
         "decisions": [
           "e7e80d78-f172-410d-b142-7b2bd464105e",
           "28fb074d-82c5-4962-85ba-a430b13b9292"
@@ -231,8 +246,16 @@
           "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "skills/bee-hive/references/scout-and-ticks.md",
+          "docs/history/codex-harness-hardening/release-manifest.json",
           "docs/knowledge/work/*",
           "docs/history/knowledge-work/*",
+          "docs/knowledge/areas/*",
+          "docs/knowledge/patterns/*",
           "docs/knowledge/index.md",
           "docs/knowledge/areas/index.md",
           "docs/knowledge/patterns/index.md"
@@ -242,23 +265,32 @@
           "docs/history/knowledge-freshness-mechanic/plan.md",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
           "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs"
         ],
-        "affects_skills": [],
+        "affects_skills": [
+          "skills/bee-hive/references/scout-and-ticks.md"
+        ],
         "affects_specs": [],
-        "action": "Stop generating delivery records and take the delivery-log tree out of the bundle (D4 e7e80d78, D5 28fb074d). promote.rs: remove section (a), the delivery draft (anchor: `format!(\"{work_dir}/delivery.md\")`), from both the text proposal and the --json output; the proposal keeps (b) area update bullets and (c) pattern candidates and says in its header that it proposes those two only; update the promote tests in knowledge/tests.rs that assert `delivery` (rg anchors: `assert_eq!(p[\"delivery\"][\"path\"], \"work/delivery.md\");` and `assert_eq!(p[\"delivery\"][\"path\"], \"work/hist-1/delivery.md\");`). walk.rs `list_bundle_markdown` (anchor: `pub(crate) fn list_bundle_markdown(dir: &Path) -> Option<Vec<String>> {`) skips a top-level `work/` directory, so check, index, context, list, search and the preamble never see it; add a test that a bundle with work/ lists nothing under it. Move the tree with `git mv docs/knowledge/work docs/history/knowledge-work` (453 files; one commit with the code), then run `bee knowledge index` so the root and section indexes no longer list a work section, and confirm `bee knowledge check` reports 0 OKF errors and `bee knowledge index --check` 0 stale. Confirm `bee knowledge context --work <a closed feature, e.g. windows-ci-1107> --budget 4000` still answers from the docs/history anchor (anchor.rs: `// whose bee.id matches `work` always wins; otherwise docs/history/<work>/`). Do not touch areas/ or patterns/ content.",
-        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge && .bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check",
+        "action": "Stop generating delivery records and take the delivery-log tree out of the bundle (D4 e7e80d78, D5 28fb074d). promote.rs: remove section (a), the delivery draft (anchor: `format!(\"{work_dir}/delivery.md\")`), from the text proposal and the --json output; the proposal keeps (b) area update bullets and (c) pattern candidates and says in its header that it proposes those two only; update the promote tests in knowledge/tests.rs that assert `delivery` (rg anchors: `assert_eq!(p[\"delivery\"][\"path\"], \"work/delivery.md\");` and `assert_eq!(p[\"delivery\"][\"path\"], \"work/hist-1/delivery.md\");`). Both bundle walks skip a top-level `work/` directory: verbs walk.rs `list_bundle_markdown` (anchor: `pub(crate) fn list_bundle_markdown(dir: &Path) -> Option<Vec<String>> {`) and the preamble's own session_preamble/knowledge.rs `list_bundle_markdown` (anchor: `pub(crate) fn list_bundle_markdown(dir: &Path) -> Vec<String> {`); add a test for each that a bundle with work/ lists nothing under it. render.rs `work_item_candidate` (anchor: `let rel = format!(\"work/{feature}/work-item.md\");`) is removed with its call so the preamble never announces a work-item anchor; resolve_anchor then takes its docs/history arm (anchor.rs: `// whose bee.id matches `work` always wins; otherwise docs/history/<work>/`); update the preamble and brief tests that build work/ fixtures (session_preamble/tests.rs and drivers/tests.rs — rg `docs/knowledge/work` in both) to the history anchor. In skills/bee-hive/references/scout-and-ticks.md, the line that offers to author a work item under docs/knowledge/ (rg `work item` near line 251) now points at docs/history/<feature>/ instead; skills/ is hashed, so run `bee dev regen` and include the manifest. Move the tree with `git mv docs/knowledge/work docs/history/knowledge-work` (one commit with the code), then repoint every literal `docs/knowledge/work/` string inside docs/knowledge/areas/ and docs/knowledge/patterns/ — frontmatter sources and body alike, path strings only, no sentence rewrites — to `docs/history/knowledge-work/` (rg anchor: `sources: [\"docs/knowledge/work/usage-in-bee-store/delivery.md\"` in workflow-state/close-usage-record.md), run `bee knowledge index`, and confirm `bee knowledge check --json` reports 0 OKF errors and ZERO dangling_source rows, `bee knowledge index --check` 0 stale, and `bee knowledge context --work windows-ci-1107 --budget 4000` still returns a manifest from the docs/history anchor. Do not change any other concept content.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble drivers::tests::prepare && .bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
         "must_haves": {
           "truths": [
             "bee knowledge promote emits no delivery section in text or JSON",
             "docs/knowledge/work/ no longer exists and docs/history/knowledge-work/ holds the moved files",
-            "bee knowledge check, index --check and list ignore a top-level work/ directory",
+            "both bundle walks ignore a top-level work/ directory and the preamble announces no work-item anchor",
+            "bee knowledge check --json reports zero dangling_source rows after the move",
             "bee knowledge context --work on a closed feature still returns a manifest from the docs/history anchor"
           ],
           "artifacts": [
             {
               "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
-              "substantive": "top-level work/ skipped in the bundle walk"
+              "substantive": "top-level work/ skipped in the verbs' bundle walk"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+              "substantive": "top-level work/ skipped in the preamble's bundle walk"
             },
             {
               "path": "docs/knowledge/index.md",
@@ -266,10 +298,11 @@
             }
           ],
           "key_links": [
-            "every bundle reader goes through list_bundle_markdown and therefore skips work/"
+            "every bundle reader, verbs and preamble, skips work/",
+            "no sources entry in docs/knowledge names docs/knowledge/work/"
           ],
           "prohibitions": [
-            "Do not edit any concept under areas/ or patterns/",
+            "Do not rewrite any sentence in areas/ or patterns/; repoint path strings only",
             "Do not delete the moved files; they move to docs/history/knowledge-work/",
             "No code comments"
           ],
@@ -283,7 +316,9 @@
         "title": "Count knowledge pulls per feature",
         "lane": "standard",
         "role": "code",
-        "deps": [],
+        "deps": [
+          "kfm-4"
+        ],
         "decisions": [
           "e7e133dc-dd86-42c5-8089-712ab6555f4b"
         ],
@@ -301,12 +336,12 @@
         ],
         "affects_skills": [],
         "affects_specs": [],
-        "action": "Measure pull rate (D6 e7e133dc). verbs/mod.rs `record_timing` (anchor: `pub(crate) fn record_timing(root: &Path, cmd: &str, t0: Instant, ok: bool) {`) adds a `feature` field to every timings row: the calling session's bound lane feature from state_group/store.rs `session_binding(None, root)` (anchor: `pub(crate) fn session_binding(flag: Option<&str>, root: &Path) -> R2<(Option<String>, Option<String>)> {`), or null when the session is unbound or the read fails — fail-open, never a refusal, and the existing `{ts, cmd, ms, ok}` keys and the stderr line are unchanged. report.rs `build_report` (anchor: `pub(crate) fn build_report(root: &Path, concepts: &[Concept]) -> (Vec<Value>, Vec<Value>, Value, Vec<String>) {`) adds a `pull_rate` section read from .bee/logs/timings.jsonl: per feature (null grouped as `(unbound)`), counts of `knowledge search`, `knowledge context` and their sum, plus a total row; text output prints it as a small table under a `Pull rate` heading; malformed rows are skipped and counted in `malformed_count` like timings report does; a missing log prints an empty table. Tests red-first: a timings row written by a session bound to a lane carries that feature; an unbound session writes null; the report groups a fixture log by feature and skips a malformed line.",
+        "action": "Measure pull rate (D6 e7e133dc). verbs/mod.rs `record_timing` (anchor: `pub(crate) fn record_timing(root: &Path, cmd: &str, t0: Instant, ok: bool) {`) adds a `feature` field to every timings row: when the environment carries a session id (store.rs anchor: `if let Some(v) = env_nonempty(\"BEE_SESSION_ID\") {`) read that session's bound lane feature through state_group/store.rs `session_binding(Some(id), root)`; with no env id, or any read failure, write null — never the session-listing fallback, never a refusal, never a slowdown; the existing `{ts, cmd, ms, ok}` keys and the stderr line are unchanged. report.rs `build_report` (anchor: `pub(crate) fn build_report(root: &Path, concepts: &[Concept]) -> (Vec<Value>, Vec<Value>, Value, Vec<String>) {`) adds a `pull_rate` section read from .bee/logs/timings.jsonl: per feature (null grouped as `(unbound)`) the counts of `knowledge search`, `knowledge context`, `knowledge show`, their sum `pulls`, the count of all rows `calls`, and `rate` = pulls / calls rounded to three decimals, plus a total row; text output prints a small table under a `Pull rate` heading; malformed rows are skipped and counted in `malformed_count`; a missing log prints an empty table. Tests red-first: a row written with BEE_SESSION_ID bound to a lane carries that feature; without the env id the row carries null; the report groups a fixture log by feature, computes rate, and skips a malformed line.",
         "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge timings",
         "must_haves": {
           "truths": [
-            "every new timings row carries feature (string or null) beside the unchanged ts, cmd, ms, ok keys",
-            "bee knowledge report prints a pull-rate table per feature with search, context and total counts"
+            "every new timings row carries feature (string or null) beside the unchanged ts, cmd, ms, ok keys, read from the env session id only",
+            "bee knowledge report prints a pull-rate table per feature with search, context, show, pulls, calls and rate"
           ],
           "artifacts": [
             {
@@ -315,10 +350,10 @@
             }
           ],
           "key_links": [
-            "record_timing reads the bound lane through session_binding"
+            "record_timing reads the bound lane through session_binding with the env session id"
           ],
           "prohibitions": [
-            "Do not make record_timing refuse or slow the command on any failure",
+            "Do not make record_timing list session records, refuse, or slow the command on any failure",
             "Do not change existing report sections",
             "No code comments"
           ],
@@ -334,7 +369,10 @@
         "role": "docs",
         "deps": [
           "kfm-1",
-          "kfm-4"
+          "kfm-2",
+          "kfm-3",
+          "kfm-4",
+          "kfm-5"
         ],
         "decisions": [
           "93e1001d-bdf6-42fb-9297-9f4d8589a5ef",
@@ -345,9 +383,10 @@
           "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
           "docs/knowledge/areas/okf-profile/index.md",
           "docs/knowledge/areas/okf-profile/overview.md",
+          "docs/knowledge/areas/okf-profile/context-and-promote.md",
+          "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
           "skills/bee-capturing/SKILL.md",
           "docs/knowledge/areas/*",
-          "docs/knowledge/patterns/*",
           "docs/knowledge/index.md",
           "docs/history/codex-harness-hardening/release-manifest.json"
         ],
@@ -362,14 +401,15 @@
           "skills/bee-capturing/SKILL.md"
         ],
         "affects_specs": [],
-        "action": "Document the mechanic and apply it to bee's bundle (D2 93e1001d, D7 6a502ad0, D8 4148025d). Write one new concept docs/knowledge/areas/okf-profile/freshness-and-document-homes.md through `bee knowledge new --type <the area concept type used by the sibling files> --area okf-profile` and then edit its body: (1) the document homes rule — the four kinds that live in docs/knowledge (vision, glossary, area map with boundaries and invariants, decisions, patterns) and the three that live in code (verify features and tests, generated contracts, runnable runbooks), with the sentence that every area entry anchors to at least one code file or verify feature; (2) the three fields `bee.anchors`, `bee.verified_at`, `bee.verified_commit` and the grade rule, cited from plan.md Approach by pointer, not copied; (3) the cap re-confirm step and the `--sync-ack` escape; (4) the pull-rate measure and what a flat rate means (the lean layer is deleted next); (5) a Pointers section naming freshness.rs, sync_door.rs, report.rs and this feature's CONTEXT.md; and set its own `bee.anchors` to those three Rust files. Link it from okf-profile/overview.md (one bullet) and regenerate indexes with `bee knowledge index`. In skills/bee-capturing/SKILL.md add, in the capture discipline, one short paragraph: when a captured behaviour change touches a file an area concept anchors, re-confirm or edit that concept (`bee knowledge confirm --id`), and new area entries carry `bee.anchors` — cite the new concept by path, no second copy of the rule; because skills/ is hashed, run `bee dev regen` and include the regenerated manifest. Then run `bee knowledge anchors seed` once over areas/ and patterns/ (kfm-1's verb; kfm-4 has already moved work/ out) and commit the seeded frontmatter; record in the cap report how many concepts received anchors and how many got none. Finish with `bee knowledge check` (0 OKF errors, 0 profile errors; the stale_anchor warnings it now prints are expected and are the next feature's input — quote the freshness count line in the cap) and `bee dev release-manifest --check`.",
+        "action": "Document the mechanic and apply it to bee's bundle (D2 93e1001d, D7 6a502ad0, D8 4148025d). First make the installed binary carry kfm-1..kfm-5: run `cargo build --release --manifest-path packages/bee-rs/Cargo.toml` then `bee dev regen` (its onboard --apply step copies the built binary into .bee/bin) and confirm `.bee/bin/bee --help --names` lists `knowledge seed-anchors` before going on. Write one new concept docs/knowledge/areas/okf-profile/freshness-and-document-homes.md through `bee knowledge new --type <the concept type the sibling okf-profile files use> --area okf-profile` and then edit its body: (1) the document homes rule — the four kinds that live in docs/knowledge (vision, glossary, area map with boundaries and invariants, decisions, patterns) and the three that live in code (verify features and tests, generated contracts, runnable runbooks), with the sentence that every area entry anchors to at least one code file or verify feature; (2) the three fields `bee.anchors`, `bee.verified_at`, `bee.verified_commit` and the grade rule, cited from plan.md Approach by pointer, not copied, plus the one-line fact that patterns carry a date and no grade; (3) the cap re-confirm step, that unverified passes, and the `--sync-ack` escape; (4) the host steps: the binary and skills arrive through onboarding, then the owner runs `bee knowledge seed-anchors` once, and `knowledge check` prints the NOTE until that happens; (5) the pull-rate measure and what a flat rate means (the lean layer is deleted next); (6) a Pointers section naming freshness.rs, sync_door.rs, report.rs and this feature's CONTEXT.md, and its own `bee.anchors` set to those three Rust files. Link it from okf-profile/overview.md (one bullet). In okf-profile/context-and-promote.md and concept-model-and-authoring.md, change only the sentences that still describe the delivery draft and the docs/knowledge/work/ work-item location (rg `delivery` and `work/` in both) to say promote proposes area bullets and pattern candidates only and that work-item records live under docs/history/. In skills/bee-capturing/SKILL.md add, in the capture discipline, one short paragraph: when a captured behaviour change touches a file an area concept anchors, re-confirm or edit that concept (`bee knowledge confirm --id`), new area entries carry `bee.anchors`, and a bundle with no anchors is seeded once with `bee knowledge seed-anchors` — cite the new concept by path, no second copy of the rule; skills/ is hashed, so run `bee dev regen` again and include the manifest. Then run `bee knowledge seed-anchors` once over areas/ and commit the seeded frontmatter; record in the cap report how many concepts received anchors and how many got none. Three seeded concepts are rule homes with `bee.applied_at` (workflow-state/capture-queue-and-the-blocker-threshold.md, doctrine-layer/delegation-threshold.md, hook-runtime/governed-paths-and-the-intake-gate.md); their frontmatter change trips sync check (b) at cap, so cap with `--sync-ack \"seed wrote bee.anchors frontmatter only; applied_at files unchanged\"` — this ack is predicted here, not a deviation. Finish with `bee knowledge check` (0 OKF errors, 0 profile errors; the stale_anchor warnings it now prints are expected and are the next feature's input — quote the freshness count line in the cap), `bee knowledge index` then `index --check`, and `bee dev release-manifest --check`.",
         "verify": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
         "must_haves": {
           "truths": [
-            "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md states the homes rule, the three fields, the grade rule by pointer, the cap step and the pull-rate measure, and is linked from the area overview",
-            "skills/bee-capturing/SKILL.md names the re-confirm step and bee.anchors on new entries, citing the concept",
-            "every area and pattern concept with at least one resolving backticked repo path carries bee.anchors",
-            "bee knowledge check reports 0 OKF errors and 0 profile errors after seeding"
+            "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md states the homes rule, the three fields, the grade rule by pointer, the cap step, the host seed step and the pull-rate measure, and is linked from the area overview",
+            "skills/bee-capturing/SKILL.md names re-confirm, bee.anchors on new entries and the one-time seed, citing the concept",
+            "every area concept with at least one resolving backticked repo path carries bee.anchors and a baseline verified_commit",
+            "bee knowledge check reports 0 OKF errors and 0 profile errors after seeding, with the freshness count line quoted in the cap",
+            "the installed .bee/bin/bee used for the seed carries the seed-anchors verb"
           ],
           "artifacts": [
             {
@@ -378,7 +418,7 @@
             },
             {
               "path": "skills/bee-capturing/SKILL.md",
-              "substantive": "re-confirm paragraph in the capture discipline"
+              "substantive": "re-confirm and seed paragraph in the capture discipline"
             }
           ],
           "key_links": [
@@ -386,9 +426,10 @@
             "the release manifest hash for skills/bee-capturing/SKILL.md matches the edited file"
           ],
           "prohibitions": [
-            "Do not rewrite or cut any existing area narrative; that is the next feature",
+            "Do not rewrite or cut any existing area narrative beyond the named delivery and work-item sentences; the content cut is the next feature",
             "Do not write a glossary or an event catalogue",
             "Do not hand-edit frontmatter the seed verb writes",
+            "Do not seed patterns/",
             "No code comments"
           ],
           "open_choices": []
@@ -430,19 +471,565 @@
           "stage": "hat-facts-gaps",
           "classification": "required",
           "role": "hat-facts-gaps",
-          "reason": "Standard lane with more than five product files: the plan-step hat wave runs."
+          "reason": "Standard lane with more than five product files: the plan-step hat wave ran."
         },
         {
           "stage": "hat-alternatives",
           "classification": "required",
           "role": "hat-alternatives",
-          "reason": "Default hat seat."
+          "reason": "Default hat seat; ran."
         },
         {
           "stage": "hat-user-impact",
           "classification": "required",
           "role": "hat-user-impact",
-          "reason": "Default hat seat."
+          "reason": "Default hat seat; ran."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Five seats only on high-risk."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader writes this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release rides this feature."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow extraction needed."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One clear design."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-11-07T14:34:17.725Z",
+    "feature": "knowledge-freshness-mechanic",
+    "newest_decision_id": "0022baa3-5c17-4db4-8c83-517ec28f571d",
+    "plan_sha256": "a8588ed92d7d2da27f9b91f0a2b51bfc716b82c1ac41db26d824caf8df30d3a2",
+    "advisor": "hat-wave:opus(hat-facts-gaps,hat-alternatives,hat-user-impact)",
+    "digest_head": "# Plan check — knowledge-freshness-mechanic (hat wave synthesis)\n\nSeats: hat-facts-gaps (job-1794061310005-3863788-1 / mailbox report), hat-alternatives (job-1794061307781-3863277-1), hat-user-impact. Synthesized by the leader on 2026-11-07; plan.md rewritten once with every accepted finding.\n\nPLAN CHECK\nWork: current slice, kfm-1..kfm-6\n\nSTRUCTURE\nBLOCKERS (all resolved in the rewritten plan):\n- key links: cap door graded against main root while commits sit in the worktree / handlers_close.rs:7"
+  },
+  "approved_cell_packet": {
+    "feature": "knowledge-freshness-mechanic",
+    "plan_sha256": "a8588ed92d7d2da27f9b91f0a2b51bfc716b82c1ac41db26d824caf8df30d3a2",
+    "previewed_at": "2026-11-07T14:34:17.520Z",
+    "cells": [
+      {
+        "id": "kfm-1",
+        "feature": "knowledge-freshness-mechanic",
+        "title": "Grade concept freshness from anchors and git, with seed and confirm verbs",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "27ad96a5-ac3a-46bf-b80a-cb18978ccb5d",
+          "4148025d-e997-4642-bab4-da00104c5795"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+          "docs/history/knowledge-freshness-mechanic/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/frontmatter.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+          "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add the freshness grade to the knowledge bundle (D3 27ad96a5, D8 4148025d) exactly by the Grade rule and the Seeding paragraph in plan.md Approach. New module verbs/knowledge/freshness.rs exports: (1) `bundle_root(root, feature: Option<&str>) -> PathBuf` — the docs/knowledge directory of the checkout the command runs in, built the way drivers/close.rs `docs_root_for_feature` picks a granted worktree's tree (anchor: `pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {`); every knowledge verb that reads or writes concepts (check, list, search, show, context, new, seed-anchors, confirm) resolves its bundle through it, so a command run inside a granted worktree reads and writes that worktree's docs tree; (2) `grade_bundle(checkout_root, concepts) -> BTreeMap<rel_path, Grade>` and `grade_concept(checkout_root, rel_path, bee: &Map<String, Value>) -> Grade` where `Grade { grade: confirmed|suspect|orphan|unverified, verified_at: Option<String>, verified_commit: Option<String>, anchors: Vec<String>, changed: Vec<String>, reason: Option<String> }` — the signature takes the bundle-relative path and the parsed `bee` map, not walk::Concept, so the session preamble's own Concept type can call it; implement the one-pass rule from plan.md: one `git log --format=%H --name-only --first-parent -m <oldest verified_commit>..HEAD` through verbs/worktree/git.rs `run_git` (anchor: `pub(crate) fn run_git(cwd: &Path, args: &[&str]) -> GitOut {`) plus one `git merge-base --is-ancestor <vc> HEAD` per distinct verified_commit, never a git call per anchor; a concept's repo path for the same-commit exemption is `docs/knowledge/<rel>`. Three frontmatter fields under `bee`: `anchors` (flat list), `verified_at` (ISO date), `verified_commit` (full sha); every write goes through the canonical emitter (frontmatter.rs `emit_scalar` / `is_plain_safe`) and a written file must report zero not_canonical. In check.rs, after the profile pass, grade every concept under areas/ only (never patterns/, never work/, never index.md) and emit: text summary line `freshness: <n> confirmed, <n> suspect, <n> orphan, <n> unverified`; `--json` object `freshness: {confirmed, suspect, orphan, unverified, rows: [{path, grade, verified_at, verified_commit, changed, reason}]}`; one profile WARNING per suspect concept (code `stale_anchor`, message naming the changed anchors and the remedy `bee knowledge confirm --id <bee.id>`) and per orphan concept (code `orphan_anchor`, naming the missing path and the remedy: fix bee.anchors); unverified is counted, never warned; when areas/ has concepts and none carries bee.anchors, print one NOTE `no concept carries bee.anchors — run bee knowledge seed-anchors once`. Two new single-token verbs routed in routing.rs (anchor: `\"check\" => run_check(flags, json, pre_json, t0),`) and declared in generated/registry_payload.json as `{name, invoke, description}` rows beside `knowledge.check` (round-trip the JSON keeping its byte format): `bee knowledge seed-anchors [--dry-run]` walks areas/ only and, for every concept with NO `bee.anchors` key, collects the backticked repo-relative paths in its body that exist under the checkout (same backtick-path shape `dangling_source_candidate` accepts), skipping any path under `.bee/`, `docs/`, or containing a `/generated/` segment; writes them as `bee.anchors`; sets `bee.verified_commit` to `git log -1 --format=%H -- docs/knowledge/<rel>` and `bee.verified_at` to that commit's ISO date (a concept with no commit gets anchors only); prints per-file counts and how many concepts got zero anchors. `bee knowledge confirm (--id <bee.id>)+ | --path <repo path>` stamps `verified_at` (today, UTC) and `verified_commit` (current HEAD of the checkout) on each named concept, or on every areas/ concept whose anchors contain --path; refusals, each naming its remedy: unknown id → `no concept with bee.id <id> — bee knowledge list`; concept with no anchors → `<path> has no bee.anchors — run bee knowledge seed-anchors or add anchors`; --path matching no concept → `no concept anchors <path>`; confirm never clears orphan and says so when the grade stays orphan. Extend tests/registry_dispatch.rs `every_namespace_the_dispatcher_serves_is_declared_in_the_registry` (anchor: `for verb in match_arm_verbs(&crate_src(\"devtools/mod.rs\"), \"pub fn try_native\", 5) {`) to also scan verbs/knowledge/routing.rs's match arms as `bee knowledge <verb>`, so an undeclared knowledge verb fails the test. Tests red-first in knowledge/tests.rs on a fixture repo with real git commits: each of the four grades; anchor changed in a commit that also touched the concept → confirmed; a present sha that is not an ancestor of HEAD → unverified with a reason; a merge commit touching an anchor is seen; seed writes anchors and the baseline commit only where anchors are absent and the file stays canonical; confirm stamps both fields, handles --path, and each refusal names its remedy; a confirm run from a granted worktree writes the worktree's concept and leaves main untouched; check's --json carries the freshness object, the stale_anchor / orphan_anchor rows and the seed NOTE.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge registry",
+        "must_haves": {
+          "truths": [
+            "grade_concept returns confirmed, suspect, orphan or unverified by the rule in plan.md Approach, with unverified for a present-but-non-ancestor sha and for an unavailable git",
+            "an anchor changed in a commit that also touched the concept file does not make the concept suspect",
+            "grading the whole bundle makes at most one git log call plus one merge-base call per distinct verified_commit",
+            "every knowledge verb run inside a granted worktree reads and writes that worktree's docs/knowledge",
+            "bee knowledge check prints the freshness count line, carries the freshness object in --json, emits stale_anchor and orphan_anchor warnings and the seed NOTE, and never grades patterns/",
+            "bee knowledge seed-anchors writes bee.anchors plus a baseline verified_commit and verified_at only to areas/ concepts without anchors, skips .bee/, docs/ and generated paths, and keeps every written file canonical",
+            "bee knowledge confirm --id and --path stamp verified_at and verified_commit and every refusal names its remedy",
+            "the registry served-vs-declared test scans knowledge verbs"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+              "substantive": "bundle_root, grade_bundle, grade_concept, seed-anchors and confirm"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "knowledge.seed-anchors and knowledge.confirm declared"
+            }
+          ],
+          "key_links": [
+            "check.rs calls grade_bundle for every areas/ concept",
+            "routing.rs serves seed-anchors and confirm",
+            "tests/registry_dispatch.rs scans verbs/knowledge/routing.rs"
+          ],
+          "prohibitions": [
+            "Do not grade or seed anything under docs/knowledge/patterns/ or docs/knowledge/work/",
+            "Do not change any existing finding code or its wording",
+            "Do not run one git invocation per anchor",
+            "No code comments"
+          ],
+          "open_choices": [
+            "Keep the seed and confirm verbs in freshness.rs instead of author.rs"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "kfm-2",
+        "feature": "knowledge-freshness-mechanic",
+        "title": "Print the grade wherever a concept is read",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "kfm-1"
+        ],
+        "decisions": [
+          "2b11f025-942e-4a18-86b1-fdb28a89f254",
+          "27ad96a5-ac3a-46bf-b80a-cb18978ccb5d"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+          "docs/history/knowledge-freshness-mechanic/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Make the freshness grade visible at every pull point (D1 2b11f025, D3 27ad96a5), using only freshness::grade_bundle / grade_concept from kfm-1 — never a second grading rule. search.rs: `SearchHit` (anchor: `pub(crate) struct SearchHit {`) gains grade, verified_at and verified_commit; the text line becomes `<path> — <title> — [<grade> @ <verified_at or never>] — <why>` and the JSON row (anchor: `row.insert(\"why\".into(), Value::String(hit.why.clone()));`) gains `grade`, `verified_at`, `verified_commit`; a patterns/ hit prints `[pattern]` in place of a grade. author.rs `run_show` prints a `freshness:` line after the metadata and adds the same three keys to its JSON. context.rs: every manifest entry carries `grade` and `verified_at`; a suspect or orphan entry's inclusion reason ends with ` (grade: <grade> — <first changed or missing anchor>)`; ranking is unchanged. session_preamble: in render.rs `project_map_lines` (anchor: `pub(crate) fn project_map_lines(root: &Path, bundle: bool) -> Vec<String> {`), NOT in the per-feature knowledge_context_lines, add ONE line `- knowledge: <n> confirmed, <m> suspect, <k> orphan, <u> unverified — suspect first: bee knowledge check` computed over areas/ with grade_bundle; omit the line when the bundle is absent or areas/ holds zero concepts; wrap the computation in a 500 ms budget and past it print `- knowledge: freshness skipped (slow) — bee knowledge check` instead; bridge the preamble's own Concept (path + parsed data) to grade_concept's (rel_path, bee map) signature. The preamble byte budget tests stay green. Tests red-first: a search row and a show output carry the grade of a fixture concept in two grades; a patterns hit prints [pattern]; a context manifest entry carries grade and the suspect suffix; the preamble line counts a fixture bundle, is absent without a bundle and with zero area concepts, and the skipped form renders when the budget is exceeded (inject the budget).",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble",
+        "must_haves": {
+          "truths": [
+            "knowledge search text and JSON rows carry grade, verified_at and verified_commit",
+            "knowledge show prints the grade and carries it in JSON",
+            "knowledge context entries carry grade and a suspect or orphan entry names its first changed or missing anchor in the reason",
+            "the session preamble's project map prints one freshness count line, omitted for no bundle or zero area concepts, and a skipped note past 500 ms"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+              "substantive": "SearchHit carries the grade fields and both outputs print them"
+            }
+          ],
+          "key_links": [
+            "search.rs, author.rs, context.rs and render.rs all call freshness::grade_bundle or grade_concept"
+          ],
+          "prohibitions": [
+            "Do not change search ranking or context ranking",
+            "Do not add a second grading rule anywhere",
+            "Do not put the count line in knowledge_context_lines",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "kfm-3",
+        "feature": "knowledge-freshness-mechanic",
+        "title": "Refuse a cap that leaves a suspect or orphan concept unconfirmed",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "kfm-1"
+        ],
+        "decisions": [
+          "e7e80d78-f172-410d-b142-7b2bd464105e"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "skills/bee-swarming/SKILL.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+          "docs/history/knowledge-freshness-mechanic/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+        ],
+        "affects_skills": [
+          "skills/bee-swarming/SKILL.md"
+        ],
+        "affects_specs": [],
+        "action": "Add check (d) to the cap-time sync door (D4 e7e80d78) by the Cap door paragraph in plan.md Approach. sync_door.rs `sync_refusal` (anchor: `pub(crate) fn sync_refusal(root: &Path, cell: &Map<String, Value>, touched: &[String]) -> Option<String> {`) gains a `history_root: &Path` parameter (the checkout whose HEAD the cell committed into), and handlers_close.rs passes the `history_root` it already builds touched_set from (anchor: `if let Some(refusal) = sync_refusal(root, &cell_map, &touched_set) {`). Check (d), after (c): grade the areas/ concepts of `history_root`'s docs/knowledge with freshness::grade_bundle; for every concept whose `bee.anchors` (normalized with normalize_cell_path) intersects `touched`, the cap passes when the concept's own repo path is in `touched`, or its grade is confirmed or unverified; it refuses on suspect or orphan with `capCell: SYNC_DOOR — cell \"<id>\" touches <paths> anchored by knowledge concept(s): <concept path> (<grade>)…. FIX: for suspect, bee knowledge confirm --id <bee.id> (or --path <file>), then add the concept file to the cell's files and reservation and commit it with the cell; for orphan, fix the concept's bee.anchors; or pass --sync-ack \"<reason>\" to cap anyway (the reason is recorded on trace.sync_ack and trace.deviations).` A missing docs/knowledge/ or an empty areas/ makes (d) a no-op. The existing --sync-ack escape covers (d) with no new flag. In skills/bee-swarming/SKILL.md, under the worker contract (\"Execute\"), add one step before the commit: run `bee knowledge check --json`; for every suspect concept anchored by a file you changed, fix the concept or run `bee knowledge confirm --id <id>`, reserve and commit the concept file with the cell — cite this feature's CONTEXT.md D4 by path, no second copy of the grade rule. Because skills/ is hashed by the release manifest, run `cargo build --release --manifest-path packages/bee-rs/Cargo.toml` then `bee dev regen` and include the regenerated manifest. Tests red-first in cells/tests.rs, every test name starting with `sync_door_`, on a fixture repo with a bundle and real commits: a cap touching an anchored file with the concept suspect refuses and names the concept, the grade and the confirm remedy; the same for orphan with the anchors remedy; an unverified concept passes; passes when the concept file is in the touched set; passes after `knowledge confirm` with the concept committed; passes with --sync-ack and records the reason; a touched file anchored by no concept passes; a repo without a bundle caps as before; a cell committed in a granted worktree is graded against the worktree's bundle, not main's.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells::tests::sync_door && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "a cap whose touched files anchor a suspect or orphan concept refuses, naming the concept, its grade and the remedy for that grade",
+            "a cap passes when the concept is unverified, in the touched set, confirmed at that commit, or escaped with --sync-ack",
+            "the door grades the worktree's bundle when the cell committed in a granted worktree",
+            "a repo without a bundle caps exactly as before",
+            "the bee-swarming worker contract names the re-confirm step and the reservation"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+              "substantive": "check (d) over bee.anchors using freshness::grade_bundle against history_root"
+            },
+            {
+              "path": "skills/bee-swarming/SKILL.md",
+              "substantive": "one re-confirm step in the worker contract"
+            }
+          ],
+          "key_links": [
+            "handlers_close.rs passes history_root into sync_refusal",
+            "sync_door.rs calls knowledge::freshness::grade_bundle",
+            "the release manifest hash for skills/bee-swarming/SKILL.md matches the edited file"
+          ],
+          "prohibitions": [
+            "Do not change checks (a), (b) or (c) or their wording",
+            "Do not add a new cap flag",
+            "Do not refuse on unverified",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "kfm-4",
+        "feature": "knowledge-freshness-mechanic",
+        "title": "Retire delivery records and move work/ out of the bundle",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "kfm-1"
+        ],
+        "decisions": [
+          "e7e80d78-f172-410d-b142-7b2bd464105e",
+          "28fb074d-82c5-4962-85ba-a430b13b9292"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "skills/bee-hive/references/scout-and-ticks.md",
+          "docs/history/codex-harness-hardening/release-manifest.json",
+          "docs/knowledge/work/*",
+          "docs/history/knowledge-work/*",
+          "docs/knowledge/areas/*",
+          "docs/knowledge/patterns/*",
+          "docs/knowledge/index.md",
+          "docs/knowledge/areas/index.md",
+          "docs/knowledge/patterns/index.md"
+        ],
+        "read_first": [
+          "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+          "docs/history/knowledge-freshness-mechanic/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/references/scout-and-ticks.md"
+        ],
+        "affects_specs": [],
+        "action": "Stop generating delivery records and take the delivery-log tree out of the bundle (D4 e7e80d78, D5 28fb074d). promote.rs: remove section (a), the delivery draft (anchor: `format!(\"{work_dir}/delivery.md\")`), from the text proposal and the --json output; the proposal keeps (b) area update bullets and (c) pattern candidates and says in its header that it proposes those two only; update the promote tests in knowledge/tests.rs that assert `delivery` (rg anchors: `assert_eq!(p[\"delivery\"][\"path\"], \"work/delivery.md\");` and `assert_eq!(p[\"delivery\"][\"path\"], \"work/hist-1/delivery.md\");`). Both bundle walks skip a top-level `work/` directory: verbs walk.rs `list_bundle_markdown` (anchor: `pub(crate) fn list_bundle_markdown(dir: &Path) -> Option<Vec<String>> {`) and the preamble's own session_preamble/knowledge.rs `list_bundle_markdown` (anchor: `pub(crate) fn list_bundle_markdown(dir: &Path) -> Vec<String> {`); add a test for each that a bundle with work/ lists nothing under it. render.rs `work_item_candidate` (anchor: `let rel = format!(\"work/{feature}/work-item.md\");`) is removed with its call so the preamble never announces a work-item anchor; resolve_anchor then takes its docs/history arm (anchor.rs: `// whose bee.id matches `work` always wins; otherwise docs/history/<work>/`); update the preamble and brief tests that build work/ fixtures (session_preamble/tests.rs and drivers/tests.rs — rg `docs/knowledge/work` in both) to the history anchor. In skills/bee-hive/references/scout-and-ticks.md, the line that offers to author a work item under docs/knowledge/ (rg `work item` near line 251) now points at docs/history/<feature>/ instead; skills/ is hashed, so run `bee dev regen` and include the manifest. Move the tree with `git mv docs/knowledge/work docs/history/knowledge-work` (one commit with the code), then repoint every literal `docs/knowledge/work/` string inside docs/knowledge/areas/ and docs/knowledge/patterns/ — frontmatter sources and body alike, path strings only, no sentence rewrites — to `docs/history/knowledge-work/` (rg anchor: `sources: [\"docs/knowledge/work/usage-in-bee-store/delivery.md\"` in workflow-state/close-usage-record.md), run `bee knowledge index`, and confirm `bee knowledge check --json` reports 0 OKF errors and ZERO dangling_source rows, `bee knowledge index --check` 0 stale, and `bee knowledge context --work windows-ci-1107 --budget 4000` still returns a manifest from the docs/history anchor. Do not change any other concept content.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble drivers::tests::prepare && .bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "bee knowledge promote emits no delivery section in text or JSON",
+            "docs/knowledge/work/ no longer exists and docs/history/knowledge-work/ holds the moved files",
+            "both bundle walks ignore a top-level work/ directory and the preamble announces no work-item anchor",
+            "bee knowledge check --json reports zero dangling_source rows after the move",
+            "bee knowledge context --work on a closed feature still returns a manifest from the docs/history anchor"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+              "substantive": "top-level work/ skipped in the verbs' bundle walk"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+              "substantive": "top-level work/ skipped in the preamble's bundle walk"
+            },
+            {
+              "path": "docs/knowledge/index.md",
+              "substantive": "regenerated without a work section"
+            }
+          ],
+          "key_links": [
+            "every bundle reader, verbs and preamble, skips work/",
+            "no sources entry in docs/knowledge names docs/knowledge/work/"
+          ],
+          "prohibitions": [
+            "Do not rewrite any sentence in areas/ or patterns/; repoint path strings only",
+            "Do not delete the moved files; they move to docs/history/knowledge-work/",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "kfm-5",
+        "feature": "knowledge-freshness-mechanic",
+        "title": "Count knowledge pulls per feature",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "kfm-4"
+        ],
+        "decisions": [
+          "e7e133dc-dd86-42c5-8089-712ab6555f4b"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+          "docs/history/knowledge-freshness-mechanic/plan.md",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Measure pull rate (D6 e7e133dc). verbs/mod.rs `record_timing` (anchor: `pub(crate) fn record_timing(root: &Path, cmd: &str, t0: Instant, ok: bool) {`) adds a `feature` field to every timings row: when the environment carries a session id (store.rs anchor: `if let Some(v) = env_nonempty(\"BEE_SESSION_ID\") {`) read that session's bound lane feature through state_group/store.rs `session_binding(Some(id), root)`; with no env id, or any read failure, write null — never the session-listing fallback, never a refusal, never a slowdown; the existing `{ts, cmd, ms, ok}` keys and the stderr line are unchanged. report.rs `build_report` (anchor: `pub(crate) fn build_report(root: &Path, concepts: &[Concept]) -> (Vec<Value>, Vec<Value>, Value, Vec<String>) {`) adds a `pull_rate` section read from .bee/logs/timings.jsonl: per feature (null grouped as `(unbound)`) the counts of `knowledge search`, `knowledge context`, `knowledge show`, their sum `pulls`, the count of all rows `calls`, and `rate` = pulls / calls rounded to three decimals, plus a total row; text output prints a small table under a `Pull rate` heading; malformed rows are skipped and counted in `malformed_count`; a missing log prints an empty table. Tests red-first: a row written with BEE_SESSION_ID bound to a lane carries that feature; without the env id the row carries null; the report groups a fixture log by feature, computes rate, and skips a malformed line.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge timings",
+        "must_haves": {
+          "truths": [
+            "every new timings row carries feature (string or null) beside the unchanged ts, cmd, ms, ok keys, read from the env session id only",
+            "bee knowledge report prints a pull-rate table per feature with search, context, show, pulls, calls and rate"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+              "substantive": "pull_rate section built from timings.jsonl"
+            }
+          ],
+          "key_links": [
+            "record_timing reads the bound lane through session_binding with the env session id"
+          ],
+          "prohibitions": [
+            "Do not make record_timing list session records, refuse, or slow the command on any failure",
+            "Do not change existing report sections",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "kfm-6",
+        "feature": "knowledge-freshness-mechanic",
+        "title": "Write the homes rule and re-confirm step, and seed bee's own anchors",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "kfm-1",
+          "kfm-2",
+          "kfm-3",
+          "kfm-4",
+          "kfm-5"
+        ],
+        "decisions": [
+          "93e1001d-bdf6-42fb-9297-9f4d8589a5ef",
+          "6a502ad0-7273-4c91-9266-065e56eec25c",
+          "4148025d-e997-4642-bab4-da00104c5795"
+        ],
+        "files": [
+          "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+          "docs/knowledge/areas/okf-profile/index.md",
+          "docs/knowledge/areas/okf-profile/overview.md",
+          "docs/knowledge/areas/okf-profile/context-and-promote.md",
+          "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+          "skills/bee-capturing/SKILL.md",
+          "docs/knowledge/areas/*",
+          "docs/knowledge/index.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+          "docs/history/knowledge-freshness-mechanic/plan.md",
+          "docs/knowledge/areas/okf-profile/overview.md",
+          "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+          "skills/bee-capturing/SKILL.md"
+        ],
+        "affects_skills": [
+          "skills/bee-capturing/SKILL.md"
+        ],
+        "affects_specs": [],
+        "action": "Document the mechanic and apply it to bee's bundle (D2 93e1001d, D7 6a502ad0, D8 4148025d). First make the installed binary carry kfm-1..kfm-5: run `cargo build --release --manifest-path packages/bee-rs/Cargo.toml` then `bee dev regen` (its onboard --apply step copies the built binary into .bee/bin) and confirm `.bee/bin/bee --help --names` lists `knowledge seed-anchors` before going on. Write one new concept docs/knowledge/areas/okf-profile/freshness-and-document-homes.md through `bee knowledge new --type <the concept type the sibling okf-profile files use> --area okf-profile` and then edit its body: (1) the document homes rule — the four kinds that live in docs/knowledge (vision, glossary, area map with boundaries and invariants, decisions, patterns) and the three that live in code (verify features and tests, generated contracts, runnable runbooks), with the sentence that every area entry anchors to at least one code file or verify feature; (2) the three fields `bee.anchors`, `bee.verified_at`, `bee.verified_commit` and the grade rule, cited from plan.md Approach by pointer, not copied, plus the one-line fact that patterns carry a date and no grade; (3) the cap re-confirm step, that unverified passes, and the `--sync-ack` escape; (4) the host steps: the binary and skills arrive through onboarding, then the owner runs `bee knowledge seed-anchors` once, and `knowledge check` prints the NOTE until that happens; (5) the pull-rate measure and what a flat rate means (the lean layer is deleted next); (6) a Pointers section naming freshness.rs, sync_door.rs, report.rs and this feature's CONTEXT.md, and its own `bee.anchors` set to those three Rust files. Link it from okf-profile/overview.md (one bullet). In okf-profile/context-and-promote.md and concept-model-and-authoring.md, change only the sentences that still describe the delivery draft and the docs/knowledge/work/ work-item location (rg `delivery` and `work/` in both) to say promote proposes area bullets and pattern candidates only and that work-item records live under docs/history/. In skills/bee-capturing/SKILL.md add, in the capture discipline, one short paragraph: when a captured behaviour change touches a file an area concept anchors, re-confirm or edit that concept (`bee knowledge confirm --id`), new area entries carry `bee.anchors`, and a bundle with no anchors is seeded once with `bee knowledge seed-anchors` — cite the new concept by path, no second copy of the rule; skills/ is hashed, so run `bee dev regen` again and include the manifest. Then run `bee knowledge seed-anchors` once over areas/ and commit the seeded frontmatter; record in the cap report how many concepts received anchors and how many got none. Three seeded concepts are rule homes with `bee.applied_at` (workflow-state/capture-queue-and-the-blocker-threshold.md, doctrine-layer/delegation-threshold.md, hook-runtime/governed-paths-and-the-intake-gate.md); their frontmatter change trips sync check (b) at cap, so cap with `--sync-ack \"seed wrote bee.anchors frontmatter only; applied_at files unchanged\"` — this ack is predicted here, not a deviation. Finish with `bee knowledge check` (0 OKF errors, 0 profile errors; the stale_anchor warnings it now prints are expected and are the next feature's input — quote the freshness count line in the cap), `bee knowledge index` then `index --check`, and `bee dev release-manifest --check`.",
+        "verify": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md states the homes rule, the three fields, the grade rule by pointer, the cap step, the host seed step and the pull-rate measure, and is linked from the area overview",
+            "skills/bee-capturing/SKILL.md names re-confirm, bee.anchors on new entries and the one-time seed, citing the concept",
+            "every area concept with at least one resolving backticked repo path carries bee.anchors and a baseline verified_commit",
+            "bee knowledge check reports 0 OKF errors and 0 profile errors after seeding, with the freshness count line quoted in the cap",
+            "the installed .bee/bin/bee used for the seed carries the seed-anchors verb"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+              "substantive": "the homes rule and the freshness mechanic, with Pointers and its own anchors"
+            },
+            {
+              "path": "skills/bee-capturing/SKILL.md",
+              "substantive": "re-confirm and seed paragraph in the capture discipline"
+            }
+          ],
+          "key_links": [
+            "okf-profile/overview.md links the new concept",
+            "the release manifest hash for skills/bee-capturing/SKILL.md matches the edited file"
+          ],
+          "prohibitions": [
+            "Do not rewrite or cut any existing area narrative beyond the named delivery and work-item sentences; the content cut is the next feature",
+            "Do not write a glossary or an event catalogue",
+            "Do not hand-edit frontmatter the seed verb writes",
+            "Do not seed patterns/",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust cells kfm-1..kfm-5 write code and tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "conditional",
+          "role": "test",
+          "condition": "a cell's worker reports a red it cannot clear in two attempts",
+          "reason": "Tests ride each cell; the test role repairs a stuck red."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "kfm-6 writes the OKF profile concept and the bee-capturing step and runs the seed verb."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "required",
+          "role": "read",
+          "reason": "Leader gathers at scribe time run on --kind gather."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard lane with more than five product files: the plan-step hat wave ran."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default hat seat; ran."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default hat seat; ran."
         },
         {
           "stage": "hat-risks",
