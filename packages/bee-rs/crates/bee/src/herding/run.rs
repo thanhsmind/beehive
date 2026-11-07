@@ -2920,7 +2920,7 @@ pub(crate) fn resolve_paseo_workspace(
     })
 }
 
-const THIN_PEER_CLAUDE_ENV: [(&str, &str); 4] = [
+pub(crate) const THIN_PEER_CLAUDE_ENV: [(&str, &str); 4] = [
     ("CLAUDE_CODE_DISABLE_CLAUDE_MDS", "1"),
     ("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1"),
     ("ENABLE_CLAUDEAI_MCP_SERVERS", "false"),
@@ -13365,6 +13365,7 @@ mod tests {
     ];
 
     fn paseo_run_argv_with_config(provider: &str, switch: Option<bool>, agent_env: Value) -> Vec<String> {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         let mut opts = test_options(tmp.path(), false);
         opts.agent = Some("w".to_string());
@@ -13462,6 +13463,7 @@ mod tests {
 
     #[test]
     fn claude_session_switch_on_sets_the_four_env_vars_for_the_session() {
+        let _env = crate::hooks::UnherdedEnv::new();
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
         std::fs::write(tmp.path().join(".bee").join("config.json"), r#"{"dispatch":{"thin_peer_boot":true}}"#).unwrap();
@@ -13480,6 +13482,7 @@ mod tests {
 
     #[test]
     fn thin_peer_claude_session_env_follows_the_default_and_an_explicit_false() {
+        let _env = crate::hooks::UnherdedEnv::new();
         for (config, thin) in [(None, true), (Some(r#"{"dispatch":{"thin_peer_boot":false}}"#), false)] {
             let tmp = tempfile::tempdir().unwrap();
             std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();

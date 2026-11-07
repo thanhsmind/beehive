@@ -93,7 +93,7 @@ pub(crate) mod status_digest;
 // spawn one bee-ignorant external agent into a pane, wait on the mailbox
 // above with native health-check liveness, return one structured result.
 // See run.rs.
-mod run;
+pub(crate) mod run;
 
 // The tmux implementation of run.rs's `PaneTransport` seam
 // (tmux-herding-transport D2/D3/D4/D5): the same 13 operations, reached

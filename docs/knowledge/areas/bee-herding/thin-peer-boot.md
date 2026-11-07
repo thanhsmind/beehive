@@ -54,6 +54,12 @@ full boot.
 non-boolean value means on; only an explicit `false` means off. With `false`, the env layer adds
 nothing and the hook boots the worker in full, exactly as before the thin boot existed.
 
+Both layers read one config view: the main checkout's tracked `.bee/config.json` merged with its
+`.bee/config.local.json`. `bee herding run` reads it from the main root; the hook resolves the same
+root from a linked worktree, whose gitignored `config.local.json` is absent. An explicit `false`
+anywhere in that view therefore turns the env layer and the hook off together, and a worker never
+boots half thin.
+
 The thin boot shipped behind this switch, off, until a measured saving earned the default
 (thin-worker-boot D6). A one-task pilot measured about 25% less boot context and about 22% fewer
 fresh tokens, and on 2026-11-07 the owner chose to make it the default.
@@ -67,7 +73,7 @@ boot again.
 
 ## Pointers
 
-- `packages/bee-rs/crates/bee/src/hooks/mod.rs` — `thin_peer_switch_on`, the one function that holds the rule, and `thin_peer_boot`, which adds the marker requirement.
+- `packages/bee-rs/crates/bee/src/hooks/mod.rs` — `thin_peer_switch_on`, the one function that holds the rule, and `thin_peer_boot`, which adds the marker requirement and reads the switch from the control root's merged config.
 - `packages/bee-rs/crates/bee/src/herding/run.rs` — `thin_peer_env`, which calls the rule and adds the Claude-only requirement.
-- `packages/bee-rs/crates/bee/src/hooks/session_init.rs` — prints the preamble when `thin_peer_boot` is true.
+- `packages/bee-rs/crates/bee/src/hooks/session_init.rs` — prints the preamble when `thin_peer_boot` is true, before any session is registered.
 - `packages/bee/prompts/peer-boot.md` — the preamble text.
