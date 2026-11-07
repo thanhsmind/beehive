@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"paseo-visible-sessions\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 5e32ec7; capture what settled, then bee close --feature paseo-visible-sessions.",
   "created_at": "2026-11-07T02:43:00.054Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-11-07T02:42:56.855Z",
     "feature": "paseo-visible-sessions"
-  },
-  "merge_ready": {
-    "since": "2026-11-07T03:02:55.386Z",
-    "branch": "wt/paseo-visible-sessions",
-    "worktree_id": "beehive--wt--paseo-visible-sessions",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
