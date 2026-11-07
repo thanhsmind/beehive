@@ -1,0 +1,153 @@
+{
+  "id": "pi-1",
+  "feature": "protocol-init-from-project",
+  "title": "Render the workspace protocol from the project at init",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7",
+    "c5e4d24a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "read_first": [
+    "docs/history/protocol-init-from-project/CONTEXT.md",
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+    "WORKSPACE_PROTOCOL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+  ],
+  "action": "In verbs/protocol.rs replace the fixed TEMPLATE render with a render from the control root per CONTEXT D1-D6 (keep a pure fn `render_protocol(facts) -> String` and a fn that gathers the facts from the root, so tests feed fake facts and temp git repos). Read git through the crate's existing git helpers where one exists (no new dependency); strip `user[:pass]@` from the origin URL. Read `uat_stop` through the existing config reader. The rendered file must check `valid` with protocol_state, hold no placeholder and no FULL_TEST or other test command. Output: text mode prints `wrote <path>`, then one next line naming the review files and the judgment work (D6); `--json` carries `ok, path, facts:[{key,value,source}], review:[paths]`. D7: add `--print` (text: the rendered file on stdout; json: `rendered` plus facts and review); it writes nothing and works when a file exists; without it an existing file still returns the protocol_exists refusal unchanged. Declare `--print` and the new output in registry_payload.json under protocol.init. If the flag name `print` is new to the catalog, raise PINNED_FLAG_COUNT in catalog.rs by exactly the new names, citing c5e4d24a. Tests: a temp git repo with origin `https://u:p@example.com/o/r.git` and origin/HEAD renders REPOSITORY_REMOTE without `u:p@` and DEFAULT_BRANCH from origin/HEAD; no origin leaves both keys out (branch falls back to the current branch); uat_stop merge vs absent gives the two MERGE_OWNER texts; scripts/release.sh present gives the DEPLOY_OWNER line naming it, a `.github/workflows/release.yml` alone names that, none gives `human`; a present `.claude/skills` dir adds its PROTECTED_AREAS item, an absent one does not; the render checks valid and has a Sources line per derived key; `review` lists only existing files; --print on an existing file returns the render and leaves the file bytes unchanged; init on an existing file still refuses. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "init writes git facts, MERGE_OWNER from uat_stop and DEPLOY_OWNER from the first release entry",
+      "the origin URL never carries credentials",
+      "the rendered file checks valid and holds no test command",
+      "a Sources list and the json facts name where each derived key came from",
+      "init names the review files that exist",
+      "--print writes nothing and works on an existing file; plain init still refuses an existing file"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+        "substantive": "project render, --print, tests"
+      }
+    ],
+    "key_links": [
+      "registry_payload.json declares --print"
+    ],
+    "prohibitions": [
+      "No overwrite path for an existing file",
+      "No new dependency",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pi-1",
+    "outcome": "protocol init renders from git, uat_stop and the release entry with a Sources list, facts and review output, plus --print; commit 6b9d4ecaca2cd217e2f9c2a304c5fe9ae5952c88",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs"
+    ],
+    "deviations": [
+      "sync-ack: the skill side of this change is pi-2's bee-hive onboarding reference; no workflow-state owned skill describes protocol init"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T09:22:14.316Z",
+    "behavior_change": false,
+    "verification_evidence": "protocol 33 passed, catalog and registry_contracts green, full suite 5375 passed; flags.rs gained print in FLAG_ALONE_BOOLEANS so a bare --print parses (D7 needs it)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-11-07T09:14:32.597Z",
+    "sync_ack": "the skill side of this change is pi-2's bee-hive onboarding reference; no workflow-state owned skill describes protocol init",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "protocol init renders from git, uat_stop and the release entry with a Sources list, facts and review output, plus --print; commit 6b9d4ecaca2cd217e2f9c2a304c5fe9ae5952c88",
+      "commit": "6b9d4ecaca2cd217e2f9c2a304c5fe9ae5952c88",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — protocol 33 passed, catalog and registry_contracts green, full suite 5375 passed; flags.rs gained print in FLAG_ALONE_BOOLEANS so a bare --print parses (D7 needs it)",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 541 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "init writes git facts, MERGE_OWNER from uat_stop and DEPLOY_OWNER from the first release entry",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "the origin URL never carries credentials",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "the rendered file checks valid and holds no test command",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "a Sources list and the json facts name where each derived key came from",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "init names the review files that exist",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "--print writes nothing and works on an existing file; plain init still refuses an existing file",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "registry_payload.json declares --print",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-11-07T09:22:22.487Z",
+        "recorded_by": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 123099,
+    "cached": 1591022,
+    "total": 1714121,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 123099,
+        "cached": 1591022,
+        "total": 1714121
+      }
+    },
+    "jobs": [
+      "job-1794042877609-2812590-1"
+    ]
+  }
+}
