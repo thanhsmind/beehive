@@ -235,15 +235,15 @@ use std::time::Instant;
     fn context_manifest_orders_and_cuts() {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("docs").join("knowledge");
-        std::fs::create_dir_all(dir.join("work/w1")).unwrap();
+        std::fs::create_dir_all(dir.join("tasks/w1")).unwrap();
         std::fs::write(
-            dir.join("work/w1/item.md"),
+            dir.join("tasks/w1/item.md"),
             // required_context targets resolve against the BUNDLE root (D19).
             "---\ntype: bee.work-item\ntitle: Widget work\ndescription: widgets and gears\nbee:\n  id: w1\n  lifecycle: active\n  areas: [billing]\n  decisions: [\"0001\"]\n  required_context: [ctx.md]\n---\nwidgets gears assembly\n",
         )
         .unwrap();
         std::fs::write(
-            dir.join("work/w1/plan.md"),
+            dir.join("tasks/w1/plan.md"),
             "---\ntype: bee.plan\ntitle: Plan\nbee:\n  id: w1-plan\n  lifecycle: active\n---\nplan body\n",
         )
         .unwrap();
@@ -276,8 +276,8 @@ use std::time::Instant;
         assert_eq!(
             entries,
             vec![
-                "docs/knowledge/work/w1/item.md",
-                "docs/knowledge/work/w1/plan.md",
+                "docs/knowledge/tasks/w1/item.md",
+                "docs/knowledge/tasks/w1/plan.md",
                 "docs/knowledge/ctx.md",
                 "docs/knowledge/crit.md",
                 "docs/knowledge/dec.md",
@@ -293,8 +293,8 @@ use std::time::Instant;
             .map(|e| e["reason"].as_str().unwrap())
             .collect();
         assert_eq!(reasons[0], "work item");
-        assert_eq!(reasons[1], "plan sibling in work/w1/");
-        assert_eq!(reasons[2], "required_context depth 1 via work/w1/item.md");
+        assert_eq!(reasons[1], "plan sibling in tasks/w1/");
+        assert_eq!(reasons[2], "required_context depth 1 via tasks/w1/item.md");
         assert!(reasons[3].starts_with("critical pattern (relevance "));
         assert!(reasons[3].ends_with(", rank 1 of 1, floor)"));
         assert_eq!(reasons[4], "decision for area billing");
@@ -399,14 +399,31 @@ use std::time::Instant;
     }
 
     #[test]
+    fn the_bundle_walk_lists_nothing_under_a_top_level_work_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let put = |rel: &str| {
+            let file = tmp.path().join(rel);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, "---\ntype: bee.area\n---\nx\n").unwrap();
+        };
+        put("areas/a.md");
+        put("work/f1/delivery.md");
+        put("areas/work/kept.md");
+        assert_eq!(
+            list_bundle_markdown(tmp.path()).unwrap(),
+            vec!["areas/a.md".to_string(), "areas/work/kept.md".to_string()]
+        );
+    }
+
+    #[test]
     fn promotion_mines_capped_traces_and_proposes_without_writing() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let kn = root.join("docs").join("knowledge");
-        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::create_dir_all(kn.join("items")).unwrap();
         std::fs::create_dir_all(kn.join("areas")).unwrap();
         std::fs::write(
-            kn.join("work").join("w1.md"),
+            kn.join("items").join("w1.md"),
             "---\ntype: bee.work-item\ntitle: Widget work\ndescription: does widgets\ntags: [alpha]\nbee:\n  id: w1\n  lifecycle: active\n  areas: [cli]\n  lane: small\n---\n\n# Widget work\n",
         )
         .unwrap();
@@ -445,24 +462,19 @@ use std::time::Instant;
         let ids: Vec<&str> = p["cells"].as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap()).collect();
         assert_eq!(ids, vec!["w1-9", "w1-10"]);
         assert_eq!(p["writes"], json!([]));
-        assert_eq!(p["work_item"], "work/w1.md");
-        assert_eq!(p["delivery"]["path"], "work/delivery.md");
-        assert_eq!(p["delivery"]["repo_path"], "docs/knowledge/work/delivery.md");
+        assert_eq!(p["work_item"], "items/w1.md");
+        assert!(p.get("delivery").is_none());
         // trace.outcome wins over the title; the fallback is the title.
         assert_eq!(p["cells"][1]["outcome"], "did   the  thing");
         assert_eq!(p["cells"][0]["outcome"], "ninth");
         assert_eq!(p["cells"][1]["verify_summary"], "green");
         // behavior_change: trace.true, and the cell-level fallback.
         assert_eq!(p["cells"][0]["behavior_change"], true);
-        // Timestamp = the LATEST capped date.
-        let content = p["delivery"]["content"].as_str().unwrap();
-        assert!(content.contains("timestamp: 2024-06-02"));
-        assert!(content.starts_with("---\ntype: bee.delivery\n"));
-        assert!(content.contains("bee:\n  id: w1-delivery\n  lifecycle: active\n  areas: [cli]\n"));
-        assert!(content.contains("lane: small"));
-        assert!(content.contains("- **w1-10** — did the thing (2 file(s) changed)"));
-        assert!(content.contains("- **w1-10** — `cargo test` — green"));
-        assert!(content.contains("- **w1-10** — scope: dev two"));
+        let text = promote_text(&p);
+        assert!(!text.contains("DELIVERY"));
+        assert!(!text.contains("delivery draft"));
+        assert!(text.contains("(b) AREA UPDATES"));
+        assert!(text.contains("(c) PATTERN CANDIDATES"));
 
         // Area bullets: only the behavior_change cell whose files touch the
         // area subjects (src/cli via the area concept's sources).
@@ -471,7 +483,7 @@ use std::time::Instant;
         assert_eq!(areas[0]["area"], "cli");
         assert_eq!(
             areas[0]["subjects"],
-            json!(["docs/knowledge/areas/cli.md", "docs/knowledge/work/w1.md", "src/cli"])
+            json!(["docs/knowledge/areas/cli.md", "docs/knowledge/items/w1.md", "src/cli"])
         );
         assert_eq!(areas[0]["bullets"].as_array().unwrap().len(), 1);
         assert_eq!(areas[0]["bullets"][0]["files"], json!(["src/cli/main.rs"]));
@@ -495,7 +507,7 @@ use std::time::Instant;
         assert!(cands[0]["content"].as_str().unwrap().contains("polarity: pitfall"));
 
         // Nothing was written anywhere under docs/knowledge/.
-        assert!(!kn.join("work").join("delivery.md").exists());
+        assert!(!kn.join("work").exists());
         assert!(!kn.join("patterns").exists());
 
         // Typed refusals.
@@ -556,8 +568,7 @@ use std::time::Instant;
         assert_eq!(p["work_item"], "docs/history/hist-1/CONTEXT.md");
         // The canonical proposed save path — a PROPOSAL only; D5 holds, nothing
         // under docs/knowledge/ is ever created, moved, or deleted here.
-        assert_eq!(p["delivery"]["path"], "work/hist-1/delivery.md");
-        assert_eq!(p["delivery"]["repo_path"], "docs/knowledge/work/hist-1/delivery.md");
+        assert!(p.get("delivery").is_none());
         let ids: Vec<&str> =
             p["cells"].as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap()).collect();
         assert_eq!(ids, vec!["hist-1-1"]);
@@ -617,8 +628,7 @@ use std::time::Instant;
             json!([".bee/logs/scribing-runs.jsonl", ".bee/lanes/led-1.json"])
         );
         assert_eq!(p["work_item"], ".bee/logs/scribing-runs.jsonl + .bee/lanes/led-1.json");
-        assert_eq!(p["delivery"]["path"], "work/led-1/delivery.md");
-        assert_eq!(p["delivery"]["repo_path"], "docs/knowledge/work/led-1/delivery.md");
+        assert!(p.get("delivery").is_none());
         assert!(!kn.join("work").exists());
 
         // Same reach-two fallback the history arm already exercises: the
@@ -782,9 +792,9 @@ use std::time::Instant;
         assert_eq!(p["anchor"]["kind"], "history");
 
         // A work item, once present, wins over both fallbacks.
-        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::create_dir_all(kn.join("tasks")).unwrap();
         std::fs::write(
-            kn.join("work").join("prec-1.md"),
+            kn.join("tasks").join("prec-1.md"),
             "---\ntype: bee.work-item\ntitle: Precedence work\ndescription: wins over both fallbacks\ntags: []\nbee:\n  id: prec-1\n  lifecycle: active\n---\n\n# Precedence work\n",
         )
         .unwrap();
@@ -803,9 +813,9 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let kn = root.join("docs").join("knowledge");
-        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::create_dir_all(kn.join("tasks")).unwrap();
         std::fs::write(
-            kn.join("work").join("w2.md"),
+            kn.join("tasks").join("w2.md"),
             "---\ntype: bee.work-item\ntitle: Archived work\ndescription: a retired feature\ntags: []\nbee:\n  id: w2\n  lifecycle: active\n---\n\n# Archived work\n",
         )
         .unwrap();
@@ -859,9 +869,9 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let kn = root.join("docs").join("knowledge");
-        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::create_dir_all(kn.join("tasks")).unwrap();
         std::fs::write(
-            kn.join("work").join("frd-mine.md"),
+            kn.join("tasks").join("frd-mine.md"),
             "---\ntype: bee.work-item\ntitle: frd-1 mining\ndescription: proves --deviation reaches promote\ntags: []\nbee:\n  id: frd-mine\n  lifecycle: active\n---\n\n# frd-1 mining\n",
         )
         .unwrap();
@@ -970,7 +980,6 @@ use std::time::Instant;
         assert_eq!(areas.len(), 1);
         assert_eq!(areas[0]["area"], "widgets");
         assert_eq!(areas[0]["bullets"].as_array().unwrap().len(), 1);
-        assert_eq!(p["delivery"]["content"].as_str().unwrap().contains("areas: [widgets]"), true);
 
         // The text render names the source and the timestamp.
         let text = promote_text(&p);
@@ -2305,7 +2314,7 @@ use std::time::Instant;
         let (_tmp, dir) = bundle();
         put(
             &dir,
-            "work/billing/work-item.md",
+            "tasks/billing/work-item.md",
             Cx::new("billing-migration")
                 .ty("bee.work-item")
                 .title("Migrate the billing ledger onto the invoice schema")
@@ -2358,7 +2367,7 @@ use std::time::Instant;
         let (_tmp, dir) = bundle();
         put(
             &dir,
-            "work/billing/work-item.md",
+            "tasks/billing/work-item.md",
             Cx::new("billing-migration")
                 .ty("bee.work-item")
                 .title("Migrate the billing ledger onto the invoice schema")
@@ -2406,7 +2415,7 @@ use std::time::Instant;
         }
 
         let full = built(&dir, "billing-migration", 100_000.0);
-        let work_path = "docs/knowledge/work/billing/work-item.md";
+        let work_path = "docs/knowledge/tasks/billing/work-item.md";
         assert_eq!(full["entries"][0]["path"], work_path, "rank 1 is the work item");
         let floor = str_list(&full["floor"]);
         assert_eq!(floor.len(), FLOOR, "the floor is the pinned FLOOR: {floor:?}");
@@ -2488,7 +2497,7 @@ use std::time::Instant;
         ];
 
         let (_tmp, dir) = bundle();
-        put(&dir, "work/lonely/work-item.md", work());
+        put(&dir, "tasks/lonely/work-item.md", work());
         for (i, topic) in topics.iter().enumerate() {
             put(&dir, &format!("patterns/void-{i:02}.md"), void(topic, i));
         }
@@ -2506,7 +2515,7 @@ use std::time::Instant;
         // ZERO_SIGNAL_MIN_POPULATION the guard is inert, and the count is
         // still reported.
         let (_tmp2, small) = bundle();
-        put(&small, "work/lonely/work-item.md", work());
+        put(&small, "tasks/lonely/work-item.md", work());
         put(&small, "patterns/void-00.md", void(topics[0], 0));
         let manifest = built(&small, "signalless", 100_000.0);
         assert_eq!(manifest["zero_signal_count"], json!(1), "the count is still REPORTED below the floor");
@@ -2520,7 +2529,7 @@ use std::time::Instant;
         let (_tmp, dir) = bundle();
         put(
             &dir,
-            "work/twins/work-item.md",
+            "tasks/twins/work-item.md",
             Cx::new("twins")
                 .ty("bee.work-item")
                 .title("Twin ranking")
@@ -2640,15 +2649,15 @@ use std::time::Instant;
         let root = tmp.path();
         put(
             &dir,
-            "work/w1/item.md",
+            "tasks/w1/item.md",
             Cx::new("w1").ty("bee.work-item").title("Widget work").description("widgets and gears"),
         );
         write_history(root, "w1", "CONTEXT.md", "# Should Not Win\n\nThis must never be the anchor.\n");
 
         let m = built(&dir, "w1", 20_000.0);
         assert_eq!(m["anchor"]["kind"], json!("work-item"));
-        assert_eq!(m["anchor"]["paths"], json!(["docs/knowledge/work/w1/item.md"]));
-        assert_eq!(m["entries"][0]["path"], "docs/knowledge/work/w1/item.md");
+        assert_eq!(m["anchor"]["paths"], json!(["docs/knowledge/tasks/w1/item.md"]));
+        assert_eq!(m["entries"][0]["path"], "docs/knowledge/tasks/w1/item.md");
         assert_eq!(m["entries"][0]["reason"], "work item");
     }
 

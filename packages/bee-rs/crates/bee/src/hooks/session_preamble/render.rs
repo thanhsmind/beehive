@@ -216,21 +216,6 @@ pub fn handoff_block_lines(handoff: &Value, outcome: Option<&HandoffOutcome>) ->
     lines
 }
 
-/// A work item's one canonical location — the same path the retired advice
-/// line below named — read as ONE candidate file, never a bundle walk: the
-/// cheaper reading `rank_critical_rows` (budget.rs) already takes for the
-/// same reason (kl-4 deliberately avoided the 1.24 MB collect_concepts cost
-/// just to answer a yes/no). A missing or unparsed candidate reads as an
-/// empty-data row — resolve_anchor's WorkItem arm simply will not match it,
-/// the same "unreadable file, keep the row" direction collect_concepts
-/// itself takes.
-fn work_item_candidate(root: &Path, feature: &str) -> Vec<Concept> {
-    let rel = format!("work/{feature}/work-item.md");
-    let path = join_rel(&bundle_dir(root), &rel);
-    let data = read_file_lossy(&path).and_then(|text| parse_frontmatter(&text)).unwrap_or_default();
-    vec![Concept { path: rel, data }]
-}
-
 impl crate::verbs::knowledge::ConceptLike for Concept {
     fn concept_path(&self) -> &str {
         &self.path
@@ -257,7 +242,7 @@ pub(crate) fn knowledge_context_lines(root: &Path, record: &JMap) -> Vec<String>
     if feature.is_empty() || is_no_work_phase(record) {
         return Vec::new();
     }
-    let candidates = work_item_candidate(root, &feature);
+    let candidates: Vec<Concept> = Vec::new();
     let Some(anchor) = crate::verbs::knowledge::resolve_anchor(&candidates, root, &feature) else {
         return Vec::new();
     };

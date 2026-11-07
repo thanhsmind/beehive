@@ -248,7 +248,7 @@ Re-run the read-only scout (`.bee/bin/bee status --json`) when you are about to 
 
 ### Knowledge context
 
-When the active feature has a `bee.work-item` concept in `docs/knowledge/`, the session preamble says so and names the command — run `bee knowledge context --work <feature> --budget 20000` and read the manifest's files before planning or execution; that manifest is the feature's curated context and it replaces scanning `docs/history/`. When the feature is active but has no work item, offer to author one (`docs/knowledge/areas/okf-profile/concept-model-and-authoring.md`, Templates section) — one line, user chooses, never silent and never auto-written.
+When the active feature has an anchor in `docs/history/<feature>/`, the session preamble says so and names the command — run `bee knowledge context --work <feature> --budget 20000` and read the manifest's files before planning or execution; that manifest is the feature's curated context and it replaces scanning `docs/history/`. When the feature is active but has no anchor yet, offer to author `docs/history/<feature>/CONTEXT.md` — one line, user chooses, never silent and never auto-written.
 
 ### Capture queue offer
 

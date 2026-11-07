@@ -477,8 +477,6 @@ pub(crate) fn build_promotion_split(
         .into_iter()
         .filter(|a| !a.is_empty())
         .collect();
-    let work_decisions = str_array(&work_bee, "decisions");
-    let work_tags = work_concept.map(|c| str_array(&c.data, "tags")).unwrap_or_default();
     let cells = read_capped_cell_traces(store_root, work_id)?;
 
     let (area_list, areas_source): (Vec<String>, AreasSource) = if !work_areas.is_empty() {
@@ -489,162 +487,6 @@ pub(crate) fn build_promotion_split(
             None => (Vec::new(), AreasSource::None),
         }
     };
-
-    // ── (a) delivery draft ────────────────────────────────────────────────
-    // A history anchor is not a bundle concept and has no directory of its
-    // own to save beside — the proposed save path is the canonical
-    // docs/knowledge/work/<slug>/delivery.md (a PROPOSAL; nothing is
-    // written, so D5 holds).
-    let work_dir = match work_concept {
-        Some(wc) => dir_of(&wc.path).to_string(),
-        None => format!("work/{work_id}"),
-    };
-    let delivery_path = if work_dir.is_empty() {
-        "delivery.md".to_string()
-    } else {
-        format!("{work_dir}/delivery.md")
-    };
-    let mut capped_dates: Vec<String> = cells
-        .iter()
-        .filter_map(|c| iso_date(c.capped_at.as_ref().map(|s| Value::String(s.clone())).as_ref()))
-        .collect();
-    js_default_sort(&mut capped_dates);
-    let timestamp = match capped_dates.last() {
-        Some(d) => Some(d.clone()),
-        None => work_concept.and_then(|wc| iso_date(wc.data.get("timestamp"))),
-    };
-    let deviation_count: usize = cells.iter().map(|c| c.deviations.len()).sum();
-    let work_title = match work_concept.and_then(|wc| wc.data.get("title")) {
-        Some(Value::String(s)) if !s.is_empty() => s.clone(),
-        _ => work_id.to_string(),
-    };
-
-    let mut delivery_data = Map::new();
-    delivery_data.insert("type".into(), Value::String("bee.delivery".into()));
-    delivery_data.insert("title".into(), Value::String(format!("{work_title} — delivery")));
-    delivery_data.insert(
-        "description".into(),
-        Value::String(format!(
-            "Delivery record proposed by bee knowledge promote for work item {work_id}: {} capped cell(s), {deviation_count} recorded deviation(s).",
-            cells.len()
-        )),
-    );
-    if !work_tags.is_empty() {
-        delivery_data.insert(
-            "tags".into(),
-            Value::Array(work_tags.iter().cloned().map(Value::String).collect()),
-        );
-    }
-    if let Some(ts) = &timestamp {
-        delivery_data.insert("timestamp".into(), Value::String(ts.clone()));
-    }
-    let mut delivery_bee = Map::new();
-    delivery_bee.insert("id".into(), Value::String(format!("{work_id}-delivery")));
-    delivery_bee.insert("lifecycle".into(), Value::String("active".into()));
-    if !area_list.is_empty() {
-        delivery_bee.insert(
-            "areas".into(),
-            Value::Array(area_list.iter().cloned().map(Value::String).collect()),
-        );
-    }
-    delivery_bee.insert(
-        "required_context".into(),
-        Value::Array(match work_concept {
-            Some(wc) => vec![Value::String(wc.path.clone())],
-            None => anchor.paths().into_iter().map(Value::String).collect(),
-        }),
-    );
-    if !work_decisions.is_empty() {
-        delivery_bee.insert(
-            "decisions".into(),
-            Value::Array(work_decisions.iter().cloned().map(Value::String).collect()),
-        );
-    }
-    let mut sources: Vec<Value> = match work_concept {
-        Some(wc) => vec![Value::String(format!("docs/knowledge/{}", wc.path))],
-        None => anchor.paths().into_iter().map(Value::String).collect(),
-    };
-    sources.extend(cells.iter().map(|c| Value::String(c.trace_path.clone())));
-    delivery_bee.insert("sources".into(), Value::Array(sources));
-    if let Some(lane) = work_bee.get("lane").and_then(Value::as_str).filter(|s| !s.is_empty()) {
-        delivery_bee.insert("lane".into(), Value::String(lane.to_string()));
-    }
-    delivery_data.insert("bee".into(), Value::Object(delivery_bee));
-
-    let shipped: Vec<String> = if !cells.is_empty() {
-        cells
-            .iter()
-            .map(|c| {
-                format!(
-                    "- **{}** — {} ({} file(s) changed)",
-                    c.id,
-                    one_line(&c.outcome, 0),
-                    c.files_changed.len()
-                )
-            })
-            .collect()
-    } else {
-        vec![format!(
-            "No capped cell trace for work item {work_id} exists in .bee/cells/ at proposal time."
-        )]
-    };
-    let verified: Vec<String> = if !cells.is_empty() {
-        cells
-            .iter()
-            .map(|c| {
-                let suffix = if c.verify_summary.is_empty() {
-                    String::new()
-                } else {
-                    format!(" — {}", c.verify_summary)
-                };
-                format!("- **{}** — `{}`{suffix}", c.id, c.verify)
-            })
-            .collect()
-    } else {
-        vec!["Nothing to verify: no capped cell trace was found.".to_string()]
-    };
-    let mut deviation_lines: Vec<String> = Vec::new();
-    for c in &cells {
-        for d in &c.deviations {
-            deviation_lines.push(format!("- **{}** — {}", c.id, one_line(d, 0)));
-        }
-    }
-    if deviation_lines.is_empty() {
-        deviation_lines.push("None recorded in the capped cell traces.".to_string());
-    }
-
-    let mut body: Vec<String> = vec![
-        format!("# {work_title} — Delivery"),
-        String::new(),
-        "## What shipped".into(),
-        String::new(),
-    ];
-    body.extend(shipped);
-    body.extend([String::new(), "## Verify".into(), String::new(),
-        "Each cell below was capped only against a recorded passing verify result — bee refuses a cap without one.".into(),
-        String::new()]);
-    body.extend(verified);
-    body.extend([String::new(), "## Deviations".into(), String::new()]);
-    body.extend(deviation_lines);
-    body.extend([String::new(), "## Provenance".into(), String::new()]);
-    let provenance_subject = match work_concept {
-        Some(wc) => format!("the work item `docs/knowledge/{}`", wc.path),
-        None => format!("the anchor `{}`", anchor.paths().join("`, `")),
-    };
-    body.push(format!(
-        "Proposed by `bee knowledge promote --work {work_id}` from {} capped cell trace(s) in `.bee/cells/` and {provenance_subject}. Every line above is copied from a trace or from the work item; nothing here is curated truth until a human or agent accepts it.",
-        cells.len()
-    ));
-    body.push(String::new());
-    let delivery_content = format!("{}\n{}", emit_frontmatter(&delivery_data).ok()?, body.join("\n"));
-
-    let mut delivery = Map::new();
-    delivery.insert("path".into(), Value::String(delivery_path.clone()));
-    delivery.insert(
-        "repo_path".into(),
-        Value::String(format!("docs/knowledge/{delivery_path}")),
-    );
-    delivery.insert("content".into(), Value::String(delivery_content));
 
     // ── (b) area updates ──────────────────────────────────────────────────
     //
@@ -832,7 +674,6 @@ pub(crate) fn build_promotion_split(
         "cells".into(),
         Value::Array(cells.iter().map(cell_value).collect()),
     );
-    out.insert("delivery".into(), Value::Object(delivery));
     out.insert("area_updates".into(), Value::Array(area_updates));
     // Names where area_list came from — reach two's own requirement — read
     // by promote_text below to render the same fact for a human.
@@ -876,9 +717,7 @@ pub(crate) fn promote_text(p: &Value) -> String {
         ),
         "PROPOSAL ONLY — nothing was written. Applying any section below is a human or agent decision.".to_string(),
         String::new(),
-        format!("(a) DELIVERY DRAFT — save as {}", p["delivery"]["repo_path"].as_str().unwrap_or("")),
-        String::new(),
-        strip_one_trailing_newline(p["delivery"]["content"].as_str().unwrap_or("")),
+        "This proposal covers (b) area updates and (c) pattern candidates only; it proposes no delivery record.".to_string(),
         String::new(),
         "(b) AREA UPDATES — candidate spec-sync bullets, each citing its cell".to_string(),
         String::new(),
@@ -967,7 +806,7 @@ pub(crate) fn promote_text(p: &Value) -> String {
         .map(|u| u["bullets"].as_array().map(Vec::len).unwrap_or(0))
         .sum();
     lines.push(format!(
-        "knowledge promote: {} capped cell(s) mined, 1 delivery draft, {bullet_total} area bullet(s), {} pattern candidate(s), 0 file(s) written.",
+        "knowledge promote: {} capped cell(s) mined, {bullet_total} area bullet(s), {} pattern candidate(s), 0 file(s) written.",
         cells.len(),
         candidates.len()
     ));

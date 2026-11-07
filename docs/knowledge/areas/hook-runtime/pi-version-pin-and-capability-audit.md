@@ -210,7 +210,7 @@ Nothing in the range earns `delete`.
   Pi docs or binary were read unchanged"): they are true statements about what
   was read. The range is a decision, tagged `contract:pi-version-range`.
 - **A delivery record claims a label change that did not reach every copy.**
-  `docs/knowledge/work/pi-stage-dispatch/delivery.md:43` cites "the absence of
+  `docs/history/knowledge-work/pi-stage-dispatch/delivery.md:43` cites "the absence of
   the old Pi 0.84.x label". The label remains in `.pi/extensions/bee-guard/`
   (`index.ts` and `tool-map.ts`),
   `docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md:336`,

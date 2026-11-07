@@ -6625,7 +6625,7 @@ mod tests {
                 crate::verbs::knowledge::Promo::Ok(proposal) => {
                     assert_eq!(proposal["cells"].as_array().unwrap().len(), 1);
                     assert_eq!(proposal["cells"][0]["id"], "c1");
-                    assert!(proposal["delivery"]["content"].as_str().unwrap().contains("docs/history/demo/CONTEXT.md"));
+                    assert!(proposal["anchor"]["paths"].as_array().unwrap().iter().any(|p| p == "docs/history/demo/CONTEXT.md"));
                 }
                 _ => panic!("expected promo ok"),
             }

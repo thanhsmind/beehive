@@ -102,8 +102,8 @@ use crate::version::BEE_VERSION;
         );
         write(
             root,
-            "docs/knowledge/work/f1/work-item.md",
-            "---\ntype: bee.work-item\nbee:\n  id: f1\n---\nbody\n",
+            "docs/history/f1/CONTEXT.md",
+            "# f1\nsome context\n",
         );
         write(
             root,
@@ -115,7 +115,7 @@ use crate::version::BEE_VERSION;
         let text = render(root);
         assert!(!text.contains(".mjs"), "an .mjs spelling survived:\n{text}");
         assert!(
-            text.contains("- `.bee/bin/bee knowledge context --work f1 --budget 20000` (anchor: work-item)"),
+            text.contains("- `.bee/bin/bee knowledge context --work f1 --budget 20000` (anchor: history)"),
             "knowledge-context command missing or misspelled:\n{text}"
         );
     }
@@ -418,17 +418,25 @@ use crate::version::BEE_VERSION;
             "{text}"
         );
 
-        // With a work item it keeps the invitation, named "work-item", budget by mode.
-        write(
-            tmp.path(),
-            "docs/knowledge/work/f9/work-item.md",
-            "---\ntype: bee.work-item\nbee:\n  id: f9\n---\nx\n",
-        );
+        // A history anchor outranks the ledger stamp; the budget follows the mode.
+        write(tmp.path(), "docs/history/f9/CONTEXT.md", "# f9\nsome context\n");
         write(tmp.path(), ".bee/state.json", r#"{"phase":"swarming","feature":"f9","mode":"tiny"}"#);
         let text = render(tmp.path());
         assert!(
-            text.contains("- `.bee/bin/bee knowledge context --work f9 --budget 8000` (anchor: work-item)"),
+            text.contains("- `.bee/bin/bee knowledge context --work f9 --budget 8000` (anchor: history)"),
             "{text}"
+        );
+    }
+
+    #[test]
+    fn the_bundle_walk_lists_nothing_under_a_top_level_work_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(tmp.path(), "areas/a.md", "---\ntype: bee.area\n---\nx\n");
+        write(tmp.path(), "work/f1/work-item.md", "---\ntype: bee.work-item\n---\nx\n");
+        write(tmp.path(), "areas/work/kept.md", "---\ntype: bee.area\n---\nx\n");
+        assert_eq!(
+            super::knowledge::list_bundle_markdown(tmp.path()),
+            vec!["areas/a.md".to_string(), "areas/work/kept.md".to_string()]
         );
     }
 

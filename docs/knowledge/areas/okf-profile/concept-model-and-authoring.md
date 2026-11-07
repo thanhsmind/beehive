@@ -328,7 +328,7 @@ actions, jobs and messages are named in business vocabulary. Format-green is not
 `knowledge list --area` and by the index generator. `bee.authoritative_for` (singular) is subject
 OWNERSHIP. A concept normally carries both.
 
-### `bee.work-item` — `docs/knowledge/work/okf-foundation/work-item.md` (live)
+### `bee.work-item` — `docs/history/knowledge-work/okf-foundation/work-item.md` (live)
 
 ```yaml
 ---
@@ -382,7 +382,7 @@ comma, or other reserved character; both forms round-trip.
 - Coverage for the gate, its three refusals and the repo-divorce topology:
   packages/bee/tests/test_bundle_mode.mjs (retired with the Node runtime, 2026-08-02).
 
-### `bee.plan` — `docs/knowledge/work/okf-foundation/plan.md` (live)
+### `bee.plan` — `docs/history/knowledge-work/okf-foundation/plan.md` (live)
 
 ```yaml
 ---

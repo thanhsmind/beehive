@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
   decisions: ["close-usage-summary D1 (2d3abd12)", "close-usage-record D1 (e97cc9d4)", "usage-in-bee-store D1 (62331863)", "report-usage-verb (af457159)"]
-  sources: ["docs/knowledge/work/usage-in-bee-store/delivery.md", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs", "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs", "docs/history/herding-job-feature/plan.md", "packages/bee-rs/crates/bee/src/herding/run.rs", "packages/bee-rs/crates/bee/src/hooks/activity.rs", "packages/bee-rs/crates/bee/src/verbs/mailbox.rs", "packages/bee-rs/crates/bee/src/verbs/report.rs"]
+  sources: ["docs/history/knowledge-work/usage-in-bee-store/delivery.md", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs", "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs", "docs/history/herding-job-feature/plan.md", "packages/bee-rs/crates/bee/src/herding/run.rs", "packages/bee-rs/crates/bee/src/hooks/activity.rs", "packages/bee-rs/crates/bee/src/verbs/mailbox.rs", "packages/bee-rs/crates/bee/src/verbs/report.rs"]
   authoritative_for: "workflow-state: the close usage record — accounting, home, and persistence"
 ---
 
@@ -111,4 +111,4 @@ tool can read it back.
   `stamp_feature`), `verbs/drivers/prepare.rs` (`--feature` on the herding
   command), `packages/bee-rs/crates/bee/src/hooks/activity.rs` (`resolve_herded_feature`),
   `verbs/drivers/close.rs` (`herding_jobs`).
-- Delivery trace: `docs/knowledge/work/usage-in-bee-store/delivery.md`.
+- Delivery trace: `docs/history/knowledge-work/usage-in-bee-store/delivery.md`.
