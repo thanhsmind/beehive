@@ -3232,6 +3232,34 @@ mod freshness_tests {
     }
 
     #[test]
+    fn a_merge_commit_that_edits_an_anchor_in_its_own_tree_makes_the_concept_suspect() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        put(&root, "src/a.rs", "a1\n");
+        put(&root, "src/b.rs", "b1\n");
+        let base = commit(&root, "base");
+        git(&root, &["checkout", "-q", "-b", "side"]);
+        put(&root, "src/side.rs", "s\n");
+        commit(&root, "side adds a file");
+        git(&root, &["checkout", "-q", "main"]);
+        put(&root, "notes.txt", "n\n");
+        commit(&root, "main moves on");
+        git(&root, &["merge", "-q", "--no-ff", "--no-commit", "side"]);
+        put(&root, "src/a.rs", "a-evil\n");
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-q", "-m", "merge side with an edit"]);
+        put(&root, &area_path("evil"), &concept("evil", Some(&["src/a.rs"]), Some(&base), "Body.\n"));
+        put(&root, &area_path("calm"), &concept("calm", Some(&["src/b.rs"]), Some(&base), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        assert_eq!(graded["areas/demo/evil.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/evil.md"].changed, vec!["src/a.rs".to_string()]);
+        assert_eq!(graded["areas/demo/calm.md"].grade, CONFIRMED);
+    }
+
+    #[test]
     fn verified_commits_from_unrelated_histories_joined_into_head_stay_graded() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().join("repo");

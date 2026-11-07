@@ -234,7 +234,7 @@ pub(crate) fn grade_bundle_with(
     let mut commits: Vec<LoggedCommit> = Vec::new();
     if let (Some(base), false) = (base, live.is_empty()) {
         let exclude = format!("{base}^@");
-        let mut args = vec!["-c", "core.quotepath=false", "log", "--format=%x01%H %P", "--name-only", "HEAD"];
+        let mut args = vec!["-c", "core.quotepath=false", "log", "--format=%x01%H %P", "--name-only", "-c", "HEAD"];
         if !unbounded {
             args.extend(["--not", exclude.as_str()]);
         }
