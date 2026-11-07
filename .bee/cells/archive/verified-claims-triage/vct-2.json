@@ -1,0 +1,147 @@
+{
+  "id": "vct-2",
+  "feature": "verified-claims-triage",
+  "lane": "small",
+  "role": "code",
+  "title": "Warn at turn end when a reply agrees without a verified label",
+  "action": "Work in the worktree /mnt/data/Projects/goglbe/beehive--wt--verified-claims-triage (branch wt/verified-claims-triage). Add a Stop-hook check that enforces rule agents-verify-before-agreeing (packages/bee/LEADER.md). Contract: (1) New module packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs, registered in session_close/mod.rs, exposing pub(crate) fn unverified_agreement_warning(events: &[serde_json::Value]) -> Option<String>. Input: the transcript events the Stop hook already reads (perf_events in run_inner; reuse them, never a second transcript read). It collects the TEXT of every assistant message of the LAST turn (same turn boundary rules as final_assistant_text_line in session_close/mod.rs, Claude and Codex shapes; reuse or generalise that walker rather than copy it). It returns Some(warning) only when ALL hold: (a) that text, lowercased, contains an agreement phrase from a fixed list — English: \"you're right\", \"you are right\", \"good idea\", \"great idea\", \"sounds good\", \"sounds right\", \"makes sense\", \"i agree\", \"agreed\"; Vietnamese: \"đúng rồi\", \"bạn đúng\", \"anh đúng\", \"chị đúng\", \"hợp lý\", \"đồng ý\", \"ý hay\", \"chuẩn rồi\"; (b) it contains no \"[verified\" label; (c) it contains no conditional marker: \"checking\", \"check first\", \"kiểm tra trước\", \"để em kiểm tra\", \"để tôi kiểm tra\". Otherwise None. The warning text is one line, plain English, naming the rule: \"bee: this reply agrees with a proposal but carries no [verified] label — rule agents-verify-before-agreeing: check the key assumption first, then agree with what the check showed.\" (2) In session_close/mod.rs run_inner, on event \"Stop\" only, when the advisory outcome is Done or Crash (never on Block or Disabled), push that warning into parts before emit_hook_output so it reaches the session as the existing advisory output; the turn is never blocked, the exit code never changes, and the turn-end mark still receives the events (clone or borrow as needed). (3) Tests (TDD, red first): unit tests for unverified_agreement_warning covering: agreement without label -> Some; agreement with [verified] -> None; conditional 'sounds right; checking X first' -> None; Vietnamese 'hợp lý' without label -> Some; no agreement phrase -> None; agreement only in an EARLIER turn -> None; Codex-shaped events -> Some. Plus one test through the Stop hook entry (follow the existing pattern in session_close/tests.rs) proving the warning appears in the hook output for a Claude transcript. (4) No code comments at all (no //, ///, //!). (5) Add one sentence to packages/bee/LEADER.md inside the agents-verify-before-agreeing block: the Stop hook warns when a reply agrees without a [verified] label. Add a short concept paragraph to docs/knowledge/areas/hook-runtime/overview.md naming the check and its pointer file session_close/claims.rs. Do NOT run bee dev regen; the leader runs it.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "packages/bee/LEADER.md",
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/adapter.rs",
+    "packages/bee/LEADER.md"
+  ],
+  "must_haves": [
+    "unverified_agreement_warning returns Some only for agreement without [verified] and without a conditional marker, in the last turn only",
+    "Stop hook output carries the warning; turn never blocked; exit code unchanged",
+    "unit tests and one hook-entry test, seen red before green",
+    "no code comments in new or changed lines",
+    "LEADER.md and hook-runtime overview mention the check"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "decisions": [
+    "2eddf0e2-e7bf-4f95-99b5-83b8af3d8da5",
+    "94dad855-125d-4ee6-a104-f3538d3f6218",
+    "9b910b64-57fa-472c-9f63-77da7fb44f73"
+  ],
+  "judge_obligation_ack": "advisory-only Stop-hook warning: never blocks a turn or changes an exit code, so a wrong verdict costs one ignorable line; the leader reads the diff against the contract at cap",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "vct-worker-2",
+    "outcome": "Stop hook now warns when the last turn agrees without a [verified] label (advisory only); claims.rs, mod.rs wiring, tests, LEADER.md and hook-runtime overview done, commit 16356d679",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+      "packages/bee/LEADER.md",
+      "docs/knowledge/areas/hook-runtime/overview.md"
+    ],
+    "deviations": [
+      "sync-ack: added one sentence inside the new agents-verify-before-agreeing block; other rules in LEADER.md unchanged"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T06:45:43.733Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite exit 0; session_close 79 passed, rule_index_parity 10 passed, pointer_integrity 5 passed; tests seen red (5 failed) against a stub before green",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "4aefc375-5dab-40f3-916c-7de9cdb55e63",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity",
+    "claimed_at": "2026-11-07T06:38:26.911Z",
+    "sync_ack": "added one sentence inside the new agents-verify-before-agreeing block; other rules in LEADER.md unchanged",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Stop hook now warns when the last turn agrees without a [verified] label (advisory only); claims.rs, mod.rs wiring, tests, LEADER.md and hook-runtime overview done, commit 16356d679",
+      "commit": "16356d6791d261b8fab5ec770ca3b502440ad220",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "packages/bee/LEADER.md",
+        "docs/knowledge/areas/hook-runtime/overview.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite exit 0; session_close 79 passed, rule_index_parity 10 passed, pointer_integrity 5 passed; tests seen red (5 failed) against a stub before green",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "unverified_agreement_warning returns Some only for agreement without [verified] and without a conditional marker, in the last turn only",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "Stop hook output carries the warning; turn never blocked; exit code unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+          },
+          {
+            "requirement": "unit tests and one hook-entry test, seen red before green",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "no code comments in new or changed lines",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "LEADER.md and hook-runtime overview mention the check",
+            "artifact": "docs/knowledge/areas/hook-runtime/overview.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+          },
+          {
+            "requirement": "packages/bee/LEADER.md",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/overview.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/overview.md"
+          }
+        ],
+        "recorded_at": "2026-11-07T07:45:06.940Z",
+        "recorded_by": "4aefc375-5dab-40f3-916c-7de9cdb55e63",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 85407,
+    "cached": 1150108,
+    "total": 1235515,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 85407,
+        "cached": 1150108,
+        "total": 1235515
+      }
+    },
+    "jobs": [
+      "job-1794033514880-2121394-1"
+    ]
+  }
+}

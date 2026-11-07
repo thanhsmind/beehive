@@ -1,0 +1,148 @@
+{
+  "id": "vct-1",
+  "feature": "verified-claims-triage",
+  "lane": "small",
+  "role": "docs",
+  "title": "Add the triage line, claim labels and evidence-first pushback to bee doctrine",
+  "action": "Work in the worktree /mnt/data/Projects/goglbe/beehive--wt--verified-claims-triage. Turn the owner's v2 agent-work protocol into bee doctrine, using bee lane names (tiny, small, docs = fast lane; standard, high-risk = deep lane) and the existing route flags, never a PATH A/B or Tier vocabulary (decision 2eddf0e2). Contract: (1) packages/bee/LEADER.md gets ONE new rule block with marker pair <!-- rule: agents-verify-before-agreeing --> ... <!-- /rule --> placed in section 'Prove, then say so'. Bare rule, at most ~1100 bytes: (a) a task opens with one line 'Triage: <lane> — <reason in 10 words or fewer>' before its first tool call; a route flag never takes a fast lane; the user may override; a plain question needs no triage line (decision 3d666b0d). (b) each technical claim about code or behavior in a reply carries [verified] (read or ran in this session) or [unverified] (general knowledge or inference); never present [unverified] as fact. (c) never agree with a proposal until its key assumption is [verified]; the first reaction to an unchecked idea is conditional ('sounds right; checking X first'). (d) when the user's direction conflicts with the code, never say 'you are wrong': state the goal, what the code does and why with file:line, then the options. It points to the full forms by heading: routing-and-contracts.md ('Claim labels and pushback') and scout-and-ticks.md ('Fast-lane read budget'). (2) skills/bee-hive/references/routing-and-contracts.md, inside '## Communication contract', gets a subsection '### Claim labels and pushback' with the full form: label rules with one short example each; the conditional first reaction; the pushback shape as four parts Current state (file:line) / Gap / Options and trade-offs / Recommendation, with the plain-language opener 'I understand the goal is X. Current code does Y because Z (file:line). To keep X, the options are...'; and the Triage line form with one example per lane family. (3) skills/bee-hive/references/scout-and-ticks.md gets a subsection '### Fast-lane read budget' (under the Scout Contract): tiny/small read only the named file or line range plus AT MOST ONE exact-symbol search for the changed symbol's callers; broad or fuzzy searches and file-tree scans are out; a caller in another module or any route flag found means stop before patching, emit the line 'Escalating: <what was found>', and re-route upward with bee route --set (promotion is always available). Add the read order cheap to expensive: outline, symbol list, signatures first; then a line range; a whole file only before rewriting it. (4) docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, section '## AGENTS.md rule homes', gets a row for agents-verify-before-agreeing in the same grammar as its siblings (home 'packages/bee/LEADER.md § Prove, then say so', an indented spoken: line ending in its reason after an em dash, and an applied_at list naming the two reference files). Write no code comments. Do not touch AGENTS.md, packages/bee/AGENTS.block.md or .bee/**. Do NOT run bee dev regen and do not touch docs/history/codex-harness-hardening/release-manifest.json; the leader runs the regen at merge.",
+  "files": [
+    "packages/bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "read_first": [
+    "packages/bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs"
+  ],
+  "must_haves": [
+    "LEADER.md carries the agents-verify-before-agreeing marker pair in § Prove, then say so, covering triage line, [verified]/[unverified] labels, no agreement before the key assumption is verified, and evidence-first pushback",
+    "routing-and-contracts.md has '### Claim labels and pushback' with the four-part pushback shape",
+    "scout-and-ticks.md has '### Fast-lane read budget' with the one-symbol search limit, the Escalating line and the cheap-to-expensive read order",
+    "rule index row exists with an indented spoken: line",
+    "rule_index_parity and pointer_integrity tests pass"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity",
+  "affects_skills": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/scout-and-ticks.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "decisions": [
+    "2eddf0e2-e7bf-4f95-99b5-83b8af3d8da5",
+    "3d666b0d-0893-4b71-acd4-3bedf0d8cce1"
+  ],
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "vct-worker-1",
+    "outcome": "Added agents-verify-before-agreeing to LEADER.md, the two reference subsections and the rule index row; commit f2d73eaa1c452fff57cd345ebc7181cbaea2d664",
+    "files_changed": [
+      "packages/bee/LEADER.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "deviations": [
+      "sync-ack: added a new rule block in LEADER.md; agents-capture-line-at-close text unchanged, its applied_at files need no update"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T06:34:27.941Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity — green:static — docs-only change; the parity and pointer tests are the cell's verify command",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "4aefc375-5dab-40f3-916c-7de9cdb55e63",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity",
+    "claimed_at": "2026-11-07T06:32:18.277Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "sync_ack": "added a new rule block in LEADER.md; agents-capture-line-at-close text unchanged, its applied_at files need no update",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added agents-verify-before-agreeing to LEADER.md, the two reference subsections and the rule index row; commit f2d73eaa1c452fff57cd345ebc7181cbaea2d664",
+      "commit": "f2d73eaa1c452fff57cd345ebc7181cbaea2d664",
+      "files": [
+        "packages/bee/LEADER.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-hive/references/scout-and-ticks.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity — green:static — docs-only change; the parity and pointer tests are the cell's verify command",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "LEADER.md carries the agents-verify-before-agreeing marker pair in § Prove, then say so, covering triage line, [verified]/[unverified] labels, no agreement before the key assumption is verified, and evidence-first pushback",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "routing-and-contracts.md has '### Claim labels and pushback' with the four-part pushback shape",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "scout-and-ticks.md has '### Fast-lane read budget' with the one-symbol search limit, the Escalating line and the cheap-to-expensive read order",
+            "artifact": "skills/bee-hive/references/scout-and-ticks.md"
+          },
+          {
+            "requirement": "rule index row exists with an indented spoken: line",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "rule_index_parity and pointer_integrity tests pass",
+            "artifact": "skills/bee-hive/references/scout-and-ticks.md"
+          },
+          {
+            "requirement": "packages/bee/LEADER.md",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/scout-and-ticks.md",
+            "artifact": "skills/bee-hive/references/scout-and-ticks.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          }
+        ],
+        "recorded_at": "2026-11-07T07:45:06.929Z",
+        "recorded_by": "4aefc375-5dab-40f3-916c-7de9cdb55e63",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "usage": {
+    "new": 52987,
+    "cached": 489303,
+    "total": 542290,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 52987,
+        "cached": 489303,
+        "total": 542290
+      }
+    },
+    "jobs": [
+      "job-1794033143704-2105809-1"
+    ]
+  }
+}
