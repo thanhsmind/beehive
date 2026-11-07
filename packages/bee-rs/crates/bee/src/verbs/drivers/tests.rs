@@ -5333,7 +5333,7 @@ exit 0
         assert!(doors[0].blocking);
         assert_eq!(
             doors[0].detail,
-            "pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it"
+            "pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or run bee audit log --kind capture-deferral --feature demo --note \"<why>\" to defer it"
         );
         assert_eq!(doors[0].command, Some("bee-capturing"));
         assert!(!doors[1].blocking);
@@ -5344,7 +5344,7 @@ exit 0
         assert_eq!(
             render_close_door_lines(&doors),
             vec![
-                "door scribing-debt: BLOCKING — pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it | settle: bee-capturing",
+                "door scribing-debt: BLOCKING — pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or run bee audit log --kind capture-deferral --feature demo --note \"<why>\" to defer it | settle: bee-capturing",
                 "door capture-queue: open — pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing",
                 // reflection-becomes-lesson: the mistakes door joined the
                 // builder too; these cells carry no report at all, so they
@@ -5371,7 +5371,7 @@ exit 0
         assert_eq!(deferred_doors[0].command, None);
         assert_eq!(
             deferred_doors[0].detail,
-            "deferred — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); a logged capture-deferral decision names \"demo\""
+            "deferred — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); a logged capture-deferral record names \"demo\""
         );
         // A capture-deferral decision naming a DIFFERENT feature never lifts
         // THIS feature's block.
@@ -5523,7 +5523,7 @@ exit 0
         assert!(scribing.blocking, "an archived-only debt cell must still block close");
         assert_eq!(
             scribing.detail,
-            "pending — 1 behavior_change cell(s) uncaptured (demo-1); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it"
+            "pending — 1 behavior_change cell(s) uncaptured (demo-1); run bee-capturing to record the capture, or run bee audit log --kind capture-deferral --feature demo --note \"<why>\" to defer it"
         );
     }
 
