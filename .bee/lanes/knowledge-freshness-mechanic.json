@@ -4,7 +4,7 @@
   "mode": null,
   "phase": "exploring",
   "approved_gates": {
-    "context": false,
+    "context": true,
     "shape": false,
     "execution": false,
     "review": false,
