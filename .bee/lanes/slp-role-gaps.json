@@ -17,8 +17,8 @@
   "waiting_on": {
     "kind": "question",
     "subject": "Remove merged worktrees by hand while prune is blocked by issue 106?",
-    "asked_at": "2026-10-15T13:32:26.548Z",
-    "session": "7842a05d-f159-4653-a18d-48ea6abf8cf1"
+    "asked_at": "2026-11-07T05:37:16.465Z",
+    "session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c"
   },
   "route": {
     "class": "feature",

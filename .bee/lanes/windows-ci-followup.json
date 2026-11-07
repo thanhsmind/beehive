@@ -13,7 +13,7 @@
   "summary": "Feature \"windows-ci-followup\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at b5e111e; capture what settled, then bee close --feature windows-ci-followup.",
   "created_at": "2026-10-23T08:01:26.085Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",

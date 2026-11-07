@@ -17,8 +17,8 @@
   "waiting_on": {
     "kind": "gate",
     "subject": "uat door: onboard-allow-worktree-tools merged into main at 7b949cc — user tests, then bee close",
-    "asked_at": "2026-10-17T04:13:08.812Z",
-    "session": "f70eff40-b292-4cc9-910d-1cb2a4c39157"
+    "asked_at": "2026-11-07T05:36:59.161Z",
+    "session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c"
   },
   "route": {
     "class": "bugfix",

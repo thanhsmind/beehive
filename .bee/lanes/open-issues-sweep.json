@@ -13,13 +13,8 @@
   "summary": "Feature \"open-issues-sweep\" started at phase \"planning\" (lane).",
   "next_action": "bee close finished \"open-issues-sweep\" — feature is closed.",
   "created_at": "2026-10-18T00:48:11.595Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-10-18T03:38:28.602Z",
-    "session": "33b80c7b-a699-4752-bb0a-0a47312d5c44"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",

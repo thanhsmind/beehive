@@ -17,8 +17,8 @@
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: design-packs-install-prompt",
-    "asked_at": "2026-10-24T13:08:53.692Z",
-    "session": "bee-worktree-merge-sessionless"
+    "asked_at": "2026-11-07T05:36:58.677Z",
+    "session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c"
   },
   "route": {
     "class": "feature",

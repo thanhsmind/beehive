@@ -17,8 +17,8 @@
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: issue-sweep-1024",
-    "asked_at": "2026-10-24T17:14:26.186Z",
-    "session": "bee-worktree-merge-sessionless"
+    "asked_at": "2026-11-07T05:36:58.951Z",
+    "session": "ad3d2e88-a97d-4006-ae69-adad70c84e1c"
   },
   "route": {
     "class": "bugfix",
