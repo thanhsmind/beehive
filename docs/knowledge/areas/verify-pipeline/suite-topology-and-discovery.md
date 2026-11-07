@@ -7,7 +7,7 @@ bee:
   id: verify-pipeline-suite-topology-and-discovery
   lifecycle: archived
   areas: [verify-pipeline]
-  decisions: [contention-split D1-D6 (decision 1ce777d9), verify-scoping D1/D2 (decisions e39d3f89, 20534ea9), impacted-level1 D1 (decision 4f8295fb), i54-closeout D2, "test-economy D6 (impacted cap over the transitive tail — level-1 direct/self-selected always run, exit reflects only the part actually run, best-effort CI delegation)", derived-check-hardening E3/E4 (index-derived scan sets are existence-filtered and unioned with the porcelain status; the hand-grep that found it becomes a standing check), derived-check-hardening E2/E9 (the scheduled full run moves its daily slot and stays once-a-day; the 24-hour blind window ships open and named)]
+  decisions: [full-suite-once D1/D3 (decisions dc19f610, feddf5c3 — doors read proof, the full suite runs once per feature, CI runs on every push), contention-split D1-D6 (decision 1ce777d9), verify-scoping D1/D2 (decisions e39d3f89, 20534ea9), impacted-level1 D1 (decision 4f8295fb), i54-closeout D2, "test-economy D6 (impacted cap over the transitive tail — level-1 direct/self-selected always run, exit reflects only the part actually run, best-effort CI delegation)", derived-check-hardening E3/E4 (index-derived scan sets are existence-filtered and unioned with the porcelain status; the hand-grep that found it becomes a standing check), derived-check-hardening E2/E9 (the scheduled full run moves its daily slot and stays once-a-day; the 24-hour blind window ships open and named)]
   sources: ["contention-split cells cs-1/cs-2a/cs-2b/cs-3/cs-4 (fixture extraction, monolith split 430-check conservation, monolith deletion, convention-based suite discovery; traces in .bee/cells/, 2026-07-20)", "hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — Windows CI runs the real split suites through the runner's own discovery rather than a hand-maintained list; write-guard-hook-fix wgf-1, 2026-07-21 — the fixture that vendors a module tree copies the tree, never a hand-maintained file list)", "verify-scoping cells vs-1/vs-2 (scoped --only include filter + two-tier verify doctrine; traces in .bee/cells/, 2026-07-23)", "impacted-level1 cells l1-1/l1-2 (registry per-edge depth split + run_verify --level 1 direct-only selection; traces in .bee/cells/, 2026-07-23)", "test-economy cell te-3 (impacted cap — transitive tail delegated to CI; docs/history/test-economy/CONTEXT.md, trace in .bee/cells/, 2026-07-25)", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", "docs/specs/verify-pipeline.md#R3", "docs/specs/verify-pipeline.md#E1", "docs/specs/verify-pipeline.md#P1", "docs/specs/verify-pipeline.md#P2", "docs/specs/verify-pipeline.md#P3", "docs/specs/verify-pipeline.md#P4", "i54-closeout cell i54-closeout-2 (run_verify per-suite wall-clock timeout + heartbeat; trace in .bee/cells/, 2026-07-24)", "derived-check-hardening cells dch-3/dch-4/dch-5 (CI schedule slot, portable-paths scan-set reconciliation, scan-set hygiene suite; traces .bee/cells/dch-{3,4,5}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)"]
   authoritative_for: "verify-pipeline: suite topology and discovery"
 ---
@@ -17,9 +17,11 @@ bee:
 > **Archived (2026-08-10).** Everything below describes the retired Node
 > runner (`scripts/run_verify.mjs`) — deleted with the Rust port. The LIVE
 > verify chain is one declared command: `commands.test` in
-> `.bee/config.json` runs `cargo test --release` over the crate's 14 suites,
-> executed fresh at `cells finish`, `close`, `worktree merge`, and CI —
-> there is no suite discovery, no impact registry, no impacted mode, and no
+> `.bee/config.json` runs `cargo test --release` over the crate's 14 suites.
+> No door runs it (test-doctrine D7): a cell proves itself with its related
+> tests, the full suite runs once per feature as `bee test` before
+> `bee worktree merge`, which reads that record, and CI runs it on every push
+> (full-suite-once D1/D3, dc19f610, feddf5c3). There is no suite discovery, no impact registry, no impacted mode, and no
 > per-suite selection in the shipped runtime. Kept as the historical record
 > of the Node-era topology (backlog P1 row 649: this file was being read as
 > ground truth by planning sessions).
@@ -143,16 +145,12 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   never scanned and the gate passes green having looked at less than it claimed
   (derived-check-hardening E3/E4).
 
-- **This repository's own full run is scheduled once a day, and otherwise only
-  on an explicit manual request.** Nothing automatic triggers it — not a push,
-  not opening a change proposal — and when it goes red it files an issue rather
-  than blocking anything. Moving the
-  daily slot changes *when* a failure is noticed, never *whether* — the base
-  branch can carry a red for up to a full day before anything reports it, and
-  work started in that window is built on an unproven base. This is the local
-  shape of R4's CI-owned full tier, stated here because the cadence is what
-  bounds how stale the base branch's proof may be
-  (derived-check-hardening E2/E9).
+- **This repository's own full run happens in CI on every push and pull
+  request, with a daily scheduled run and a manual trigger kept beside them**
+  (`.github/workflows/ci.yml`). The base branch's proof is therefore at most
+  one push old, not a day old. This is the local shape of R4's CI-owned full
+  tier (derived-check-hardening E2/E9, whose once-a-day cadence the push
+  trigger superseded).
 
 - **A hung suite is killed and named, never left to hang the whole run.** Every
   suite the runner launches carries a per-suite wall-clock timeout (default
@@ -186,7 +184,8 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   `bee cells finish` runs the declared `commands.test` at every cap and
   `bee close` re-runs it for the feature; `bee worktree merge` re-runs
   `commands.test` against the staged merge; the estate beyond that stays
-  CI-owned. The pre-amendment rule is kept below as the historical
+  CI-owned. Superseded by test-doctrine D7 and full-suite-once D1/D3: no door
+  runs the suite. The pre-amendment rule is kept below as the historical
   record.)* Verify is two-tier, but the full tier moved off the machine
   (verify-scoping D2, superseded by ci-owned-verify D1/D5/D6): a cell's
   `verify` command is the narrowest honest scoped check covering its change
@@ -197,8 +196,8 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   CI-owned: it runs on the project's own CI cadence (push, nightly, or
   scheduled — the host workflow decides), never locally, and auto-files a
   deduped `verify-red` issue when red — no session baseline, feature close, or
-  worktree-merge moment runs it locally by default; worktree merge gates on
-  `commands.test` instead. Cap evidence is the cell's scoped verify; the full
+  worktree-merge moment runs it locally by default; worktree merge reads a
+  fresh green `bee test` record instead (full-suite-once D3). Cap evidence is the cell's scoped verify; the full
   run belongs to CI. Mid-iteration, the level-1 impacted run (direct edges
   only) is the fast local check; the transitive impacted run (`commands.test`)
   remains what gates wave-close and merge (impacted-level1 D1). A repo that
@@ -240,14 +239,10 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 - The CLI dispatcher (4.4k lines, all handlers inline) remains the last
   structural hotspot; handler extraction is deferred to its own feature
   (contention-split D5).
-- **The base branch can carry a failure for up to a day.** The full run's
-  once-a-day cadence is unchanged, and no push-triggered or
-  proposal-triggered run was added: moving the daily slot moved the moment of
-  detection, not the blind window. The run still only files an issue when it
-  goes red — nothing is blocked by it — so work can be built on a red base for
-  as long as a day before anyone is told. Both halves, the missing trigger and
-  the non-blocking outcome, ship deliberately open and named rather than
-  recorded as closed (derived-check-hardening E2/E9).
+- **Closed: the base branch used to carry a failure for up to a day.** CI now
+  runs on every push and pull request, so the blind window of the daily-only
+  schedule is gone (derived-check-hardening E2/E9 named it open; the push
+  trigger closed it). The run is still not a merge blocker on its own.
 
 ## Resolved Gaps
 
@@ -286,4 +281,4 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   `statusPorcelainFiles()` in `scripts/run_verify.mjs` are the union source.
 - **P7** — `.github/workflows/ci.yml` — the `on:` block: `schedule` with
   `cron: '0 23 * * *'` (23:00 UTC = 06:00 Asia/Ho_Chi_Minh) plus
-  `workflow_dispatch`; no `push` or `pull_request` trigger.
+  `workflow_dispatch`, and `push` and `pull_request` triggers.

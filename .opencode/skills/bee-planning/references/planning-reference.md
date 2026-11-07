@@ -434,8 +434,13 @@ break, never a copy of the whole declared suite. Pasting the declared
 command into every cell buys nothing the push already buys and makes each
 worker pay a full build of everything; keep the release profile (or any
 other slow flag the suite declares) only where the cell's proof actually
-needs it. A cell whose change is docs or prose carries a parity/pointer
-check as its `verify`, not a test run at all.
+needs it. `bee cells add` and `bee cells update` refuse a verify that is
+the bare declared suite (or a bare `bee test`) and print a scoped form to
+use; the full suite runs once per feature, as `bee test` before the merge
+(rule: agents-proof-at-cap). A cross-cutting change whose proof really is
+the whole suite sets a non-empty `full_suite_reason` on the cell, which
+allows it and stays on the cell. A cell whose change is docs or prose
+carries a parity/pointer check as its `verify`, not a test run at all.
 
 ## Greenfield init lane
 
@@ -445,7 +450,8 @@ succeeds from scratch, one passing test exists, standard commands recorded
 in `.bee/config.json`, clean first commit — before any feature cell. Its
 proof is the recorded test command (`commands.test`) running green,
 recorded on the cap and checked at the boundary (`bee close`/`bee
-worktree merge`).
+worktree merge`); the suite is one test then, so the cell carries a
+`full_suite_reason`.
 
 ## Tiny/small merged gate
 

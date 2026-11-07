@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [verify-pipeline]
   required_context: []
-  decisions: ["contention-split D1-D6 (decision 1ce777d9)", "verify-scoping D1/D2 (decisions e39d3f89, 20534ea9)", "412e9b3a (commands.test is the one declared test path)"]
-  sources: ["docs/history/test-economy/CONTEXT.md", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2"]
+  decisions: ["contention-split D1-D6 (decision 1ce777d9)", "verify-scoping D1/D2 (decisions e39d3f89, 20534ea9)", "412e9b3a (commands.test is the one declared test path)", "full-suite-once D1/D2 (decisions dc19f610, 82a5bff7)"]
+  sources: ["docs/history/test-economy/CONTEXT.md", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", "docs/history/full-suite-once/plan.md"]
   authoritative_for: "verify-pipeline: purpose, test execution, and proof discipline"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/test_runner.rs]
   owns.skills: []
@@ -33,8 +33,9 @@ lifecycle.
 
 ## Entry Points & Triggers
 
-- **Cell verify** — executed during `bee cells finish` and cell completion checks.
-- **Merge verification** — runs declared test suites during `bee worktree merge`.
+- **Cell verify** — the cell's scoped proof, run by its worker; `bee cells finish` records the proof line and runs nothing.
+- **Cell plan check** — `bee cells add` and `bee cells update` refuse a verify that is the bare declared suite (or a bare `bee test`) with a `FIX:` line naming a scoped form; a non-empty `full_suite_reason` on the cell allows it and stays on the cell (full-suite-once D2).
+- **Feature-end suite** — the full declared suite runs once per feature, as `bee test` in the worktree; `bee worktree merge` reads that record and runs nothing (see `../worktree-parallelism/returning-and-the-merge-gate.md`). The rule's text lives in `packages/bee/LEADER.md`, rule `agents-proof-at-cap`.
 - **Knowledge verification** — runs `bee knowledge check` and `bee knowledge index --check`.
 
 ## Data Dictionary
@@ -53,11 +54,13 @@ lifecycle.
 ## Business Rules
 
 - A red verification result refuses cell completion and merge unconditionally.
+- A cell proves itself with its related tests; the full suite runs once per feature, never per cell, and a leader never re-runs a worker's recorded proof.
 - Proof lines must name fresh command output and valid scope justifications.
 
 ## Pointers (implementation)
 
 - Test runner invocation: `packages/bee-rs/crates/bee/src/verbs/test_runner.rs`.
+- Cell plan check: `full_suite_verify_problem` in `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs`; tests in `packages/bee-rs/crates/bee/tests/full_suite_verify.rs`.
 - Proof gate tests: `packages/bee-rs/crates/bee/tests/proof_gate.rs`.
 - Concurrency tests: `packages/bee-rs/crates/bee/tests/concurrency.rs`.
 

@@ -125,6 +125,12 @@ A plain question needs neither.
   `bee close` and `bee worktree merge` check that recorded proof; they
   run nothing themselves — CI runs the full declared command on every
   push, the one deterministic net.
+  A cell proves itself with its related tests only. The full declared
+  suite (`commands.test`) runs once per feature, at its end: `bee test`
+  in the worktree, then `bee worktree merge`, which refuses a
+  code-touching feature without a fresh green record. Never run the
+  full suite per cell, and never re-run a worker's recorded proof;
+  `scripts/release.sh` and CI keep their own full runs.
 <!-- /rule -->
 <!-- rule: agents-never-build-on-red -->
 - A red proof refuses the cap — never build on a red base, in every
@@ -320,9 +326,9 @@ one type per file, linked where types meet.
   refuses a feature whose capped cells never answered: silence and a
   clean run must not read alike.
 - Before ending substantial work: cap or release every claimed cell,
-  release reservations, leave `.bee/state.json` honest, run
-  `commands.test` over what changed when one is recorded, and name the
-  blockers and next action in the final message. Then run
+  release reservations, leave `.bee/state.json` honest, and name the
+  blockers and next action in the final message; the proof to run is
+  the one in `agents-proof-at-cap`. Then run
   `bee state session release` — sibling sessions stop counting this
   one as a live worker, and the next user message re-engages it.
 

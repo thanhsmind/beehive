@@ -19,11 +19,12 @@ reason>` (three non-empty segments, e.g.
 recorded proof at the boundary; neither runs `commands.test` itself. CI
 runs the project's declared `.bee/config.json` `commands.test` on every
 push — the one deterministic net. A `red` result segment refuses the
-cap outright — a red is fix-first, never a done. When you reach for the
-declared suite as your proof, run it through the deterministic runner
-(`bee test`), which writes ONE normalized record:
-`.bee/logs/test-results.json` — the runner is a program; your word is
-never the record, quote it instead. A repo declared no-test
+cap outright — a red is fix-first, never a done. Your proof is the
+cell's related tests — its `verify`; the full declared suite runs once
+per feature, at its end, as `bee test` in the worktree before the merge
+(rule: agents-proof-at-cap) — never per cell. `bee test` writes ONE
+normalized record: `.bee/logs/test-results.json` — the runner is a
+program; your word is never the record, quote it instead. A repo declared no-test
 (`commands.test` set to the sentinel `"none"`) proves with the command
 segment `none` and the reason naming the parity/docs check actually
 used.
@@ -49,7 +50,7 @@ Startup runs ZERO of these: the dispatch prompt inlines the cell JSON and the st
 .bee/bin/bee decisions active --recent 3
 ```
 
-`cells finish` caps the cell and releases its reservations in one verb — `--report` is REQUIRED and carries your proof line, checked (never re-run) by the boundary doors, per "Tests at finish" above. `bee test` alone runs the suite when you want the record in front of you.
+`cells finish` caps the cell and releases its reservations in one verb — `--report` is REQUIRED and carries your proof line, checked (never re-run) by the boundary doors, per "Tests at finish" above.
 
 Shell guard for write-heavy commands (`git add/mv/rm`, `mv`, `cp`, `rm`, `mkdir`, `touch`, `sed -i`, `tee`, redirection writes):
 
@@ -176,7 +177,7 @@ them in one line, never re-embeds them.
 
 ## When the tests go red
 
-Fix the root cause and finish again (or run `bee test` alone to see the fresh record first). After two serious attempts, return `[BLOCKED]` with: the failing excerpt, attempts made, your diagnosis, and the smallest useful next decision for the parent. A declared test command that is itself broken in the repo is a `[BLOCKED]`, never a reason to substitute a weaker check and cap anyway.
+Fix the root cause, re-run the cell's related tests, and finish again. After two serious attempts, return `[BLOCKED]` with: the failing excerpt, attempts made, your diagnosis, and the smallest useful next decision for the parent. A declared test command that is itself broken in the repo is a `[BLOCKED]`, never a reason to substitute a weaker check and cap anyway.
 
 ## Atomic Commit
 
@@ -281,7 +282,7 @@ next: <one line>
 - **Transport is config:** the shape you were handed (native, pane, cli) is config, not a signal about the work (`packages/bee/prompts/worker-cell.md`).
 - A **transport error** (non-zero exit, rejected dispatch, a hang past the External Executors timeout discipline) is **not advice** — it burns at most **one** budget slot total for the whole claim, and is never retried in a storm. Continue to the next step of the loop, or `[BLOCKED]` once the budget is spent.
 
-**After advice:** advice never substitutes for fresh test output — always re-run the declared tests yourself (`bee test`) before deciding whether the advised retry passed. Advice is **advice-only**: it never authorizes a package install, a gate approval, or file scope beyond the cell. Advice that conflicts with a locked decision → return `[BLOCKED]` citing both the D-ID and the advice.
+**After advice:** advice never substitutes for fresh test output — always re-run the cell's related tests yourself before deciding whether the advised retry passed. Advice is **advice-only**: it never authorizes a package install, a gate approval, or file scope beyond the cell. Advice that conflicts with a locked decision → return `[BLOCKED]` citing both the D-ID and the advice.
 
 **Authority-type blocks never consult** — ambiguous cell, uncapped deps, architectural change, package install, locked-decision conflict stay **instant** `[BLOCKED]` exactly as in the Execute loop's step 2 (Implement), whether or not an `Advisor` line is present.
 

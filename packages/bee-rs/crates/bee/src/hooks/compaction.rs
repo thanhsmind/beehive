@@ -37,7 +37,7 @@
 use crate::fsutil::{append_jsonl, read_json, warn_corrupt_json, ReadJson};
 use crate::hooks::session_preamble::{
     bypass_banner_lines, first_open_gate, handoff_block_lines, onboarding_line, read_handoff,
-    waiting_on_note, HandoffOutcome,
+    standard_command_line, waiting_on_note, HandoffOutcome,
 };
 use crate::verbs::reservations::{js_disp, js_trim};
 use crate::verbs::state_group::{coerce_legacy_phase, default_state, spread_gates};
@@ -1519,7 +1519,7 @@ pub fn build_compact_capsule_with_runtime(
     if !recorded.is_empty() {
         let mut block = vec!["### Standard commands (host project)".to_string()];
         for key in recorded {
-            block.push(format!("- {key}: `{}`", js_disp(&commands[key])));
+            block.push(standard_command_line(key, &js_disp(&commands[key])));
         }
         sections.push(block);
     }
@@ -1665,7 +1665,10 @@ mod tests {
         .unwrap();
         let text = build_compact_capsule(tmp.path(), Some("s1"), None);
         assert!(text.contains("### Standard commands (host project)"), "{text}");
-        assert!(text.contains("- test: `npm test`"), "{text}");
+        assert!(
+            text.contains("- test: `npm test` — full suite, once per feature: `bee test` before `bee worktree merge`; a cell verify adds a filter"),
+            "{text}"
+        );
         assert!(!text.contains("nope"), "{text}");
     }
 
