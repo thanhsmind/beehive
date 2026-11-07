@@ -174,6 +174,9 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     let mut stdout = String::new();
     let mut stderr = String::new();
     let mut parts: Vec<String> = Vec::new();
+    let claims_warning = (ctx.event == "Stop")
+        .then(|| perf_events.as_deref().and_then(unverified_agreement_warning))
+        .flatten();
 
     // The .mjs's advisory try/catch: a Crash logs and falls through to the
     // emit of whatever parts were already collected.
@@ -193,6 +196,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
             // block — i.e. control genuinely returns to the human this turn,
             // never a forced continuation. `Disabled` and `Block` both
             // `return` their own branch above and never reach here.
+            parts.extend(claims_warning);
             if ctx.event == "Stop" {
                 set_turn_end_mark_best_effort(&root, &ctx, session_id.as_deref(), perf_events);
             }
@@ -200,6 +204,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
         Err(Flow::Delegate) => return Err(()),
         Err(Flow::Crash(msg)) => {
             log_crash(Some(&root), HOOK_NAME, &msg, ctx.source);
+            parts.extend(claims_warning);
             // Best-effort, same principle as `prompt_context.rs`'s clear
             // path: the Stop event genuinely fired regardless of an
             // unrelated pipeline crash (e.g. a corrupt lane record) inside
@@ -443,6 +448,23 @@ fn is_tool_result_record(event: &Value) -> bool {
     false
 }
 
+pub(crate) fn is_turn_boundary(event: &Value) -> bool {
+    let ev_type = event.get("type").and_then(Value::as_str).unwrap_or("");
+    if ev_type == "turn_context" {
+        return true;
+    }
+    if ev_type == "event_msg"
+        && event.get("payload").and_then(|p| p.get("type")).and_then(Value::as_str) == Some("task_started")
+    {
+        return true;
+    }
+    if is_tool_result_record(event) {
+        return false;
+    }
+    ev_type == "user"
+        || event.get("payload").and_then(|p| p.get("role")).and_then(Value::as_str) == Some("user")
+}
+
 pub(crate) fn final_assistant_text_line(events: &[Value]) -> Option<String> {
     let mut codex_final_answer: Option<String> = None;
     let mut codex_commentary: Option<String> = None;
@@ -451,25 +473,8 @@ pub(crate) fn final_assistant_text_line(events: &[Value]) -> Option<String> {
     for event in events.iter().rev() {
         let ev_type = event.get("type").and_then(Value::as_str).unwrap_or("");
 
-        // Turn boundaries in Codex and Claude:
-        if ev_type == "turn_context" {
+        if is_turn_boundary(event) {
             break;
-        }
-        if ev_type == "event_msg" {
-            let p_type = event.get("payload").and_then(|p| p.get("type")).and_then(Value::as_str);
-            if p_type == Some("task_started") {
-                break;
-            }
-        }
-        if !is_tool_result_record(event) {
-            if ev_type == "user" {
-                break;
-            }
-            if let Some(payload) = event.get("payload") {
-                if payload.get("role").and_then(Value::as_str) == Some("user") {
-                    break;
-                }
-            }
         }
 
         // Claude assistant message:
@@ -681,6 +686,8 @@ mod store;
 mod perf;
 mod html;
 mod obligations;
+mod claims;
+pub(crate) use self::claims::*;
 pub(crate) use self::reads::*;
 pub(crate) use self::nudges::*;
 pub(crate) use self::store::*;

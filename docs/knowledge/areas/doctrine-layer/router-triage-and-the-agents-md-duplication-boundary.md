@@ -208,6 +208,11 @@ Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages
     - `skills/bee-hive/references/gates-and-delegation.md`
     - `skills/bee-swarming/SKILL.md`
     - `skills/bee-swarming/references/swarming-reference.md`
+- `agents-verify-before-agreeing` (packages/bee/LEADER.md § Prove, then say so):
+  spoken: open with a triage line, label every code claim verified or unverified, and agree only once the key assumption is verified — a pushback states the goal, the code with file:line, then options, because an unchecked agreement ships a wrong premise
+  - applied_at:
+    - `skills/bee-hive/references/routing-and-contracts.md`
+    - `skills/bee-hive/references/scout-and-ticks.md`
 - `agents-never-zero-execution-workers` (packages/bee/LEADER.md § Work in parallel, coordinate through the store):
   spoken: from a small lane up, hand every cell to a dispatched worker — only a tiny cell may run inline
   - applied_at:
