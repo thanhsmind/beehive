@@ -1,0 +1,161 @@
+{
+  "id": "kom-1",
+  "feature": "knowledge-outcome-measure",
+  "lane": "standard",
+  "role": "code",
+  "title": "Hold out a fixed tenth of cells from the learned-context block",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-outcome-measure/plan.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "action": "Follow the Contract for kom-1 in docs/history/knowledge-outcome-measure/plan.md. Kind cell dispatches get a deterministic arm: holdout when the first 8 hex digits of sha256_hex(cell id) as u32 mod 100 is below .bee/config.json knowledge_holdout_percent (absent or invalid = 10, integer 0..=100 honored, 0 = off). Holdout renders no Learned context block; knowledge arm prompt stays byte-identical. The kind cell prepare record gains knowledge_arm and learned_context (array of listed repo-relative paths, [] when none). Other kinds' records stay byte-identical. Write the tests first and watch them fail.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "A holdout cell brief carries no Learned context block",
+      "A knowledge-arm cell brief is byte-identical to before",
+      "The same cell id always lands in the same arm",
+      "knowledge_holdout_percent 0 holds out no cell; absent or invalid uses 10",
+      "The kind cell dispatch record carries knowledge_arm and learned_context; other kinds carry neither"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "decisions": [
+    "dafd05a1",
+    "8303f1d6"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-kom-1",
+    "outcome": "Cell dispatches get a deterministic holdout arm that drops the Learned context block; the cell prepare record carries knowledge_arm and learned_context. Commit 79560ca607deb2ceaad7f5aac41ed832e9e72798",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T05:53:02.616Z",
+    "behavior_change": true,
+    "verification_evidence": "whole workspace: 5320 passed, 0 failed; drivers subset 502 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "330fe462-687b-4326-b5dd-428e88f0a404",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers",
+    "claimed_at": "2026-11-07T05:44:07.165Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Cell dispatches get a deterministic holdout arm that drops the Learned context block; the cell prepare record carries knowledge_arm and learned_context. Commit 79560ca607deb2ceaad7f5aac41ed832e9e72798",
+      "commit": "79560ca607deb2ceaad7f5aac41ed832e9e72798",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers — green:unit — whole workspace: 5320 passed, 0 failed; drivers subset 502 passed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A holdout cell brief carries no Learned context block",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "A knowledge-arm cell brief is byte-identical to before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "The same cell id always lands in the same arm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "knowledge_holdout_percent 0 holds out no cell; absent or invalid uses 10",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "The kind cell dispatch record carries knowledge_arm and learned_context; other kinds carry neither",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "file packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "file packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T05:53:54.257Z",
+        "recorded_by": "330fe462-687b-4326-b5dd-428e88f0a404",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "prepare.rs:1124-1131 cell_learned_context returns Vec::new() when arm==holdout; prepare.rs:1320 prompt_body_for joins that into learned_context, which worker-cell.md renders only when non-empty. Test drivers/tests.rs:12652 asserts no 'Learned context (machine-assembled' and no 'docs/knowledge/' in the c-1 (holdout) prompt; passed."
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "Knowledge arm calls the unchanged learned_context_lines(bundle_root, cell) (prepare.rs:1130) with the same bundle_root as before (prepare.rs:1319). Test drivers/tests.rs:12662 rebuilds the exact block text and asserts the c-2 prompt contains it right after the plan.md line; passed. Pre-existing tests at tests.rs:3129-3180 were moved from c-1 to c-2 only because c-1 now hashes to holdout."
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "prepare.rs:1118-1122 knowledge_arm is a pure function of sha256_hex(cell_id)[..8] as u32 % 100 and the config percent; there is no time or random input. Test drivers/tests.rs:12681 dispatches c-1 and c-2 twice each and gets the same arms; passed."
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "prepare.rs:1109-1116: a Number with as_u64 <=100 is honored; anything else (string, negative, >100, float, null, bool, absent) falls back to 10. Tests: tests.rs:12689 (0 -> c-1 and c-5 both knowledge), 12698 (absent -> c-1 and c-5 holdout, c-2 knowledge), 12707 (\"50\", -1, 101, 5.5, null, true, \"abc\" all behave like 10), 12718 (50 and 100 honored); all passed."
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "prepare.rs:3269-3284 inserts knowledge_arm and learned_context only when kind==\"cell\" and a cell is present; the paths come from the same lines with '- ' and ' — title' removed. Test tests.rs:12725: the c-2 record has 5 repo-relative paths and the c-1 holdout record has []. Test tests.rs:12744: gather and reviewer records have neither key. All passed. Advisor has no test, but the kind==\"cell\" check excludes it."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-07T05:59:40.584Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 88167,
+    "cached": 1150232,
+    "total": 1238399,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 88167,
+        "cached": 1150232,
+        "total": 1238399
+      }
+    },
+    "jobs": [
+      "job-1794030248652-1698486-1"
+    ]
+  }
+}
