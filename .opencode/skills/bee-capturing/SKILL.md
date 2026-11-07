@@ -97,6 +97,12 @@ never pick paths or type frontmatter blocks by eye. The full loop —
 search, decide, write, relate, validate — is
 `references/concept-authoring.md`.
 
+When a captured behavior change touches a file an area concept anchors,
+re-confirm or edit that concept — `bee knowledge confirm --id <id>` —
+and a new area entry carries `bee.anchors`. A bundle with no anchors is
+seeded once with `bee knowledge seed-anchors`. The rule and its fields:
+`docs/knowledge/areas/okf-profile/freshness-and-document-homes.md`.
+
 ## Compound — close with what you learned
 
 Deferred by design, like review: a green `bee close` records capture as

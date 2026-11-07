@@ -12,6 +12,9 @@ bee:
   decisions: []
   sources: ["windows-path-identity (cells wpi-1, wpi-2, wpi-3)", docs/history/windows-path-identity/plan.md, docs/history/windows-path-identity/reports/wpi-1.md]
   authoritative_for: "worktree-parallelism: deciding whether two path strings name the same location"
+  anchors: [packages/bee-rs/crates/bee/src/path_identity.rs, packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 ## Purpose

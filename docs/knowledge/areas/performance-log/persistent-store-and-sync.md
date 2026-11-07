@@ -11,6 +11,9 @@ bee:
   decisions: [D1 0a459671, D 62a7c7fd]
   sources: [docs/history/perf-log/CONTEXT.md, docs/history/perf-log/plan.md, "cells perf-log-1, perf-log-2, perf-log-3 (capped, verified)", "docs/specs/performance-log.md#R6", "docs/specs/performance-log.md#R7", "docs/specs/performance-log.md#R9", "docs/specs/performance-log.md#R10", "docs/specs/performance-log.md#E4", "docs/specs/performance-log.md#P1", "docs/specs/performance-log.md#P3", "docs/specs/performance-log.md#P5"]
   authoritative_for: "performance-log: persistent store and automatic sync"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs, packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Performance Log — Persistent Store and Automatic Sync

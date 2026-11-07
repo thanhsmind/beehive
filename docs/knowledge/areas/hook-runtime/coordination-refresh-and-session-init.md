@@ -11,6 +11,9 @@ bee:
   decisions: ["multi-session-hardening D2/D5 with Δ3-amendment (docs/history/multi-session-hardening/CONTEXT.md; audit 12f54e88, locked 17a624dc)", "codex-loop-p0 clp-1 (session-routed prompt reminder — a lane-bound session sees its own phase; repair recorded by scribing-integrity D5, 2026-07-24)"]
   sources: ["multi-session-hardening cell msh-5 (throttled heartbeat-and-lease renewal wired into the per-prompt and post-task-update checkpoints, try-once/skip-on-busy against the coordination lock; trace in .bee/cells/, report docs/history/multi-session-hardening/reports/msh-5.md, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — session-init persists the runtime-provided transcript path into the session record so crash recovery prefers it over layout math), "docs/specs/hook-runtime.md#B20", "docs/specs/hook-runtime.md#B21", "docs/specs/hook-runtime.md#R19", "docs/specs/hook-runtime.md#R21", "docs/specs/hook-runtime.md#E8", "docs/specs/hook-runtime.md#P17"]
   authoritative_for: "hook-runtime: opportunistic coordination refresh and session-init state persistence"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/cells/claims.rs, packages/bee-rs/crates/bee/src/verbs/reservations/mod.rs, packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/src/hooks/state_sync.rs, packages/bee-rs/crates/bee/src/lock.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Hook Runtime — durable state a checkpoint maintains as a side job

@@ -1,6 +1,6 @@
 ---
 type: bee.area
-title: "Workflow State — the prompt work record and its acceptance"
+title: Workflow State — the prompt work record and its acceptance
 description: "The session record's work object: the user's verbatim prompt captured as the unit of asked-for work, how follow-ups extend it while it stays open, which scanners may read it, the four-status vocabulary, and why an acceptance is the promotion to a card rather than a separate verb."
 timestamp: 2026-08-26
 bee:
@@ -9,8 +9,11 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/hook-runtime/agent-activity-record.md]
   decisions: [bd78f64a, 856789db, 5944ebbb, 34944b7a, f9bf6456]
-  sources: ["prompt-work-record capture stubs 754cfe7e and 36f69784 (flushed 2026-08-26)", "packages/bee-rs/crates/bee/src/hooks/activity.rs", "packages/bee-rs/crates/bee/src/verbs/work.rs"]
+  sources: [prompt-work-record capture stubs 754cfe7e and 36f69784 (flushed 2026-08-26), packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/bee/src/verbs/work.rs]
   authoritative_for: "workflow-state: the prompt work record, its statuses, and its acceptance"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/bee/src/verbs/work.rs]
+  verified_at: 2026-08-26
+  verified_commit: ec9d3604d04eaa87beb3c6890909ffa457e027e9
 ---
 
 # Workflow State — the prompt work record and its acceptance

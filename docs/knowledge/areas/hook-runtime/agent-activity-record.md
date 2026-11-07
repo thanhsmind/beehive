@@ -11,6 +11,9 @@ bee:
   decisions: [b17bfa89, 2f782f51, 40c707ba, 2d4e3900, b4f21f29]
   sources: [docs/history/agent-activity-hook/CONTEXT.md, docs/history/agent-activity-hook/plan.md, docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md]
   authoritative_for: "hook-runtime: the agent activity record, its states, and the read-time signal"
+  anchors: [.codex/hooks.json, .pi/extensions/bee-guard/]
+  verified_at: 2026-10-03
+  verified_commit: a424a53fd96daaa2df5709c3006f9b5865accd9e
 ---
 
 # Hook Runtime — the agent activity record and its read-time signal

@@ -12,6 +12,9 @@ bee:
   decisions: ["cli-output-spill D1 (allowlist of read verbs, text stdout only, never --json, never a terminal)", "cli-output-spill D2 (opt-in key output_spill_bytes, BEE_OUTPUT_FULL override, head two thirds, marker, tail one quarter)", "cli-output-spill D3 (Unix file-descriptor redirect, Windows pass-through)"]
   sources: [docs/history/cli-output-spill/CONTEXT.md, packages/bee-rs/crates/bee/src/output_spill.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/output_spill.rs]
   authoritative_for: "rust-runtime: when a bee command's stdout is spilled to a file and what the caller sees instead"
+  anchors: [packages/bee-rs/crates/bee/src/output_spill.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/output_spill.rs]
+  verified_at: 2026-11-03
+  verified_commit: f3cdc2977941300c3869477f38c8243ab42d97b3
 ---
 
 # Compiled runtime — output spill

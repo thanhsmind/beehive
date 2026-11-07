@@ -8,12 +8,15 @@ bee:
   lifecycle: active
   areas: [verify-pipeline]
   required_context: []
-  decisions: ["contention-split D1-D6 (decision 1ce777d9)", "verify-scoping D1/D2 (decisions e39d3f89, 20534ea9)", "412e9b3a (commands.test is the one declared test path)", "full-suite-once D1/D2 (decisions dc19f610, 82a5bff7)"]
-  sources: ["docs/history/test-economy/CONTEXT.md", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", "docs/history/full-suite-once/plan.md"]
+  decisions: [contention-split D1-D6 (decision 1ce777d9), "verify-scoping D1/D2 (decisions e39d3f89, 20534ea9)", 412e9b3a (commands.test is the one declared test path), "full-suite-once D1/D2 (decisions dc19f610, 82a5bff7)"]
+  sources: [docs/history/test-economy/CONTEXT.md, "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", docs/history/full-suite-once/plan.md]
   authoritative_for: "verify-pipeline: purpose, test execution, and proof discipline"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/test_runner.rs]
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
+  anchors: [packages/bee/LEADER.md, packages/bee-rs/crates/bee/src/verbs/test_runner.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/tests/full_suite_verify.rs, packages/bee-rs/crates/bee/tests/proof_gate.rs, packages/bee-rs/crates/bee/tests/concurrency.rs]
+  verified_at: 2026-11-07
+  verified_commit: 1f3dccd95e6ae4a66ff339a5fe63d93e5825799d
 ---
 
 # Verify Pipeline — Purpose, Test Execution, and Proof Discipline

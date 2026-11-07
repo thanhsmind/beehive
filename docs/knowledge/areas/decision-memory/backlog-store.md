@@ -11,6 +11,9 @@ bee:
   decisions: ["backlog-unification D1-D6 v2 (c023ee98, supersedes v1 d2b8b94f)", "D8 (scribing, decision 0007 pattern)", D9, D11a, D11b, D13, "pic-1 9fd3e59c (issue #55 — addPbi generate-check-regenerate under the backlog-pbi store lock closes the concurrent-collision window the fold backstop alone could not)"]
   sources: [docs/history/backlog-unification/CONTEXT.md, packages/bee-rs/crates/bee/src/verbs/backlog.rs (rust-port equivalent of the retired .bee/bin/lib/backlog.mjs), "cells bu-1, bu-2, bu-3, bu-4 (backlog-unification, capped, verified; traces in `.bee/cells/`)", "pbi-id-collision cell pic-1 (trace .bee/cells/pic-1.json, capped 2026-07-26, issue #55)"]
   authoritative_for: "decision-memory: the unified backlog store (event-sourced PBI records)"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/backlog.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs, skills/bee-capturing/SKILL.md, skills/bee-capturing/references/citations.md]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Decision Memory — The Unified Backlog Store (Event-Sourced PBI Records)

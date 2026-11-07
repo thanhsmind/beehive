@@ -11,6 +11,9 @@ bee:
   decisions: ["worktree-feature-parallelism (three lifecycle tiers realized by git config, no directory move)", cross-worktree-holds D1-D6 (the shared ledger module and its three seam taps)]
   sources: [docs/history/worktree-feature-parallelism/, "docs/specs/worktree-parallelism.md#S-the-three-tiers-what-merges-what-does-not", "docs/specs/worktree-parallelism.md#S-where-it-lives-reading-map"]
   authoritative_for: "worktree-parallelism: store lifecycle tiers, merge safety, and the implementation map"
+  anchors: [packages/bee-rs/crates/bee/tests/concurrency.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Worktree Parallelism — Store Tiers and Where It Lives

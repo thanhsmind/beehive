@@ -10,9 +10,12 @@ bee:
   decisions: [D2, D10, D13, D15, D20, D21, D23, D24, D27, D29, D30, D34, D37, D38]
   sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", "okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "okf-switchover-f3 cell f3-5 (G6 — this spec migrated into the bundle it describes; trace in `.bee/cells/`, 2026-07-22)", "docs/specs/okf-profile.md#P4", "docs/specs/okf-profile.md#P6", "docs/specs/okf-profile.md#P7", "knowledge-show-new cell ksn-1 (`bee knowledge show` and `bee knowledge new` verbs; trace .bee/cells/archive/knowledge-show-new/ksn-1.json, capped 2026-09-06)"]
   authoritative_for: "okf-profile: purpose, entry points, and actors"
-  owns.code: ["packages/bee-rs/crates/bee/src/verbs/knowledge/*"]
+  owns.code: [packages/bee-rs/crates/bee/src/verbs/knowledge/*]
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
+  anchors: [scripts/]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Bee OKF Profile (purpose, entry points, and actors)
@@ -47,7 +50,10 @@ under:
   load-bearing rather than optional: `context-and-promote.md`;
 - how a legacy source is **migrated** into the bundle and what grades that migration — the coverage
   gate, the content-addressed pin, the unparsed report, the fidelity floor and the drift telemetry:
-  `migration-and-coverage-gates.md`.
+  `migration-and-coverage-gates.md`;
+- which kinds of truth live in the bundle and which live in code, how an area concept is anchored to
+  files and graded against git, the cap re-confirm step, the host seed and the pull-rate measure:
+  [freshness-and-document-homes.md](freshness-and-document-homes.md).
 
 ## Entry Points & Triggers
 

@@ -11,6 +11,9 @@ bee:
   decisions: [D2 8cd4c84e, D2b 8cd4c84e, b8fe5c81, "ask-guard-autofix D3 (dead-source skip silent inside hook runs, 2026-07-23)"]
   sources: ["docs/history/evolving-loop/ (cells evolving-1 … evolving-11, capped)", docs/history/evolving-loop/reports/review-slice-a.md, docs/history/evolving-loop/reports/review-slice-b.md, "docs/history/cli-mutations/ (cell cli-mutations-2, capped; walkthrough.md)", ask-guard-autofix cell ag-2 (2026-07-23), "docs/specs/feedback-digest.md#R3", "docs/specs/feedback-digest.md#R4", "docs/specs/feedback-digest.md#R5", "docs/specs/feedback-digest.md#R6", "docs/specs/feedback-digest.md#E5", "docs/specs/feedback-digest.md#P1", "docs/specs/feedback-digest.md#P4", "docs/specs/feedback-digest.md#P5"]
   authoritative_for: "feedback-digest: cross-repository collection and trust boundary"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/state.rs, packages/bee-rs/crates/bee/src/verbs/decisions/mod.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Feedback Digest — Cross-Repository Collection and the Trust Boundary

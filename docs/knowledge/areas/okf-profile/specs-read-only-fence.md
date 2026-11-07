@@ -11,6 +11,9 @@ bee:
   decisions: [G1, G2, G3, G4, G6, G13, D20, D37]
   sources: ["okf-switchover-f3 cell f3-4 (the fence, red-first: every selftest assertion written and run against a classifier that classified nothing; trace in `.bee/cells/`, 2026-07-22)", "okf-switchover-f3 cell f3-5 (G6 — the profile migrated, and its named exception removed rather than relabelled; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-switchover-f3/CONTEXT.md`]
   authoritative_for: "okf-profile: the docs/specs read-only fence"
+  anchors: [packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs, packages/bee-rs/crates/bee/src/state.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Bee OKF Profile — The Read-Only Fence Over the Compatibility Surface

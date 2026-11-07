@@ -12,6 +12,9 @@ bee:
   decisions: [router-cost D1, router-cost D2, router-cost D3, router-cost D4, router-cost D10]
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cell rc-1, capped)"]
   authoritative_for: "hook-runtime: the read-size guard on inbound file reads"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 ## Purpose

@@ -11,8 +11,11 @@ bee:
   sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "fanout-doctrine (cell fanout-doctrine-1, 2026-07-13, flushed capture stub 2f796f40)", "terminal-phase-gate (cell tpg-2, 2026-07-13)", "tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "codex-agent-wait-loop (cells codex-agent-wait-loop-2/codex-agent-wait-loop-3, 2026-07-15/2026-07-19 — native wait rule plus independently reviewed D6/D7 repair)", "compounding-fanout-hardening (cell cfh-1, 2026-07-17, flushed capture stub d3417cb2)", "advisor-and-orchestration Slice 2A-ii (cells ao-2aii-1/ao-2aii-2, 2026-07-17)", "advisor-and-orchestration Slice 2A-iii (cells ao-2aiii-1/ao-2aiii-2 — dispatch-boundary enforcement + gather-purpose routing prose, 2026-07-17)", "advisor-and-orchestration Slice 5 (cell ao-5-1 — execution-worker class, tiny/small single-worker execution, AO14, 2026-07-17)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)"]
   authoritative_for: "doctrine-layer: purpose, vocabulary, and actors"
   owns.code: [packages/bee-rs/crates/bee/src/devtools/prompts.rs, packages/bee-rs/crates/bee/src/devtools/skill_trees.rs, packages/bee-rs/crates/bee/src/hooks/prompt_context.rs]
-  owns.skills: ["skills/bee-hive/*", "skills/bee-writing-skills/*", "skills/bee-researching/*"]
+  owns.skills: [skills/bee-hive/*, skills/bee-writing-skills/*, skills/bee-researching/*]
   owns.tests: [packages/bee-rs/crates/bee/tests/instruction_laws.rs]
+  anchors: [skills/bee-hive/SKILL.md]
+  verified_at: 2026-09-06
+  verified_commit: ef6f288062d9e6cbbbc01f1875f7173909d7431b
 ---
 
 # Doctrine Layer (the standing instructions an assistant always carries)

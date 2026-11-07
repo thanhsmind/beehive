@@ -11,6 +11,9 @@ bee:
   decisions: [4cc1c355 (Codex plugin-first distribution), cf511ff3 (plugin/package and repo-copy sources are mutually exclusive; cleanup is integrity- and ownership-proof-gated in both directions), codex-hook-state-parity D9-D14, "3318374a (installer hardening: per-project skills default, global opt-in)", "codex-plugin-first-hybrid D1-D6 (GH #22 P0-1)"]
   sources: ["codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "installer-version-parity-1-3-1 D7 managed-set cleanup fencing (cell installer-version-parity-1-3-1-2, 2026-07-16)", "codex-runtime-parity D1 (distribution contract, 2026-07-11)", "docs/specs/onboarding.md#R5", "docs/specs/onboarding.md#R12", "docs/specs/onboarding.md#R18", "docs/specs/onboarding.md#R19", "docs/specs/onboarding.md#R20", "docs/specs/onboarding.md#R24", "docs/specs/onboarding.md#R25", "docs/specs/onboarding.md#E1", "docs/specs/onboarding.md#P3", "docs/specs/onboarding.md#P6"]
   authoritative_for: "onboarding: distribution sources and their exclusive transition"
+  anchors: [packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Onboarding — Distribution Sources and Their Exclusive Transition

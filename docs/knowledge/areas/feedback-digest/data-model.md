@@ -11,6 +11,9 @@ bee:
   decisions: ["D2 8cd4c84e, 9880542e, c45d0fb3", D 9157d074, D1 backlog-auto-commit, D2 backlog-auto-commit]
   sources: ["docs/history/evolving-loop/ (cells evolving-1 … evolving-11, capped)", docs/history/evolving-loop/reports/review-slice-a.md, docs/history/evolving-loop/reports/review-slice-b.md, "docs/history/cli-mutations/ (cell cli-mutations-2, capped; walkthrough.md)", "docs/specs/feedback-digest.md#R2", "docs/specs/feedback-digest.md#R7", "docs/specs/feedback-digest.md#R8", "docs/specs/feedback-digest.md#R9", "docs/specs/feedback-digest.md#E4", "docs/specs/feedback-digest.md#P8", "docs/history/backlog-auto-commit/ (cell backlog-auto-commit-1, capped)", "docs/history/backlog-auto-commit/ (cell backlog-auto-commit-2, capped)"]
   authoritative_for: "feedback-digest: data model"
+  anchors: [packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Feedback Digest — Data Model

@@ -12,8 +12,11 @@ bee:
   sources: ["docs/history/backlog-submit-command/ (cell backlog-submit-command-1, capped)", "docs/history/backlog-auto-commit/ (prior-art scoped CLI addition, unrelated store)", ".bee/backlog.jsonl friction 2026-07-23T10:20:34.557Z (known counting defect)"]
   authoritative_for: "product-backlog: mechanical passes and CLI verbs (counts/rank/badges/add/propose)"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/backlog.rs]
-  owns.skills: ["skills/bee-shaping/*", "skills/bee-grooming/*"]
+  owns.skills: [skills/bee-shaping/*, skills/bee-grooming/*]
   owns.tests: []
+  anchors: [packages/bee-rs/crates/bee/src/verbs/backlog.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Product Backlog — Mechanical Passes and Submission

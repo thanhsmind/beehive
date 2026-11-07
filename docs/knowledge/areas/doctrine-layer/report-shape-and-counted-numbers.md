@@ -9,9 +9,12 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md, areas/doctrine-layer/the-communication-contract.md]
-  decisions: ["213799df (a report-shaped skill ends with ONE required last line carrying the counts, and the empty case is written out verbatim in the skill body)", "1bcb1cec (countable findings are reported as ONE line over a closed tag vocabulary, and every tag names its replacement or action)", "44175a6f (a skill that prints numbers names the number it may never invent, and says why it cannot be known)", "3a9a303e (a Boundaries block names the out-of-scope concern AND where it routes instead)"]
-  sources: ["docs/history/skill-report-stamps/ (small lane, cells srs-1/srs-2/srs-3, 2026-08-25)", "skills/bee-reviewing/SKILL.md (the count line and the Boundaries block this concept describes)", "skills/bee-grooming/SKILL.md (the stamp, the closed tag list, the count line and the honesty boundary)", "skills/bee-capturing/SKILL.md (the close line and its verbatim empty case)", "the ponytail skill collection by DietrichGebert, read out-of-tree — six skills whose endings and honesty boundary the craft was distilled from"]
+  decisions: ["213799df (a report-shaped skill ends with ONE required last line carrying the counts, and the empty case is written out verbatim in the skill body)", "1bcb1cec (countable findings are reported as ONE line over a closed tag vocabulary, and every tag names its replacement or action)", "44175a6f (a skill that prints numbers names the number it may never invent, and says why it cannot be known)", 3a9a303e (a Boundaries block names the out-of-scope concern AND where it routes instead)]
+  sources: ["docs/history/skill-report-stamps/ (small lane, cells srs-1/srs-2/srs-3, 2026-08-25)", skills/bee-reviewing/SKILL.md (the count line and the Boundaries block this concept describes), "skills/bee-grooming/SKILL.md (the stamp, the closed tag list, the count line and the honesty boundary)", skills/bee-capturing/SKILL.md (the close line and its verbatim empty case), "the ponytail skill collection by DietrichGebert, read out-of-tree — six skills whose endings and honesty boundary the craft was distilled from"]
   authoritative_for: "doctrine-layer: the shape of a skill's report output and the honesty of its numbers"
+  anchors: [skills/bee-reviewing/SKILL.md, skills/bee-grooming/SKILL.md, skills/bee-capturing/SKILL.md]
+  verified_at: 2026-09-08
+  verified_commit: fcc91f2f25e63b07d716b778eb6a7c8ec1144451
 ---
 
 # Doctrine Layer — report shape and counted numbers

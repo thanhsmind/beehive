@@ -12,6 +12,9 @@ bee:
   sources: ["fanout-doctrine (cell fanout-doctrine-1, 2026-07-13, flushed capture stub 2f796f40)", "advisor-and-orchestration Slice 2A-iii (cells ao-2aiii-1/ao-2aiii-2 — dispatch-boundary enforcement + gather-purpose routing prose, 2026-07-17)", "docs/specs/doctrine-layer.md#B3", "docs/specs/doctrine-layer.md#R3", "docs/specs/doctrine-layer.md#R4", "docs/specs/doctrine-layer.md#R5", "docs/specs/doctrine-layer.md#E2", "docs/specs/doctrine-layer.md#P3", "docs/specs/doctrine-layer.md#P5"]
   authoritative_for: "doctrine-layer: the delegation threshold"
   applied_at: [skills/bee-hive/references/gates-and-delegation.md]
+  anchors: [skills/bee-hive/references/routing-and-contracts.md, packages/bee-rs/crates/bee/src/hooks/model_guard.rs]
+  verified_at: 2026-09-08
+  verified_commit: 99c2f5a2965cc7629f17071d6144fd9ab9604671
 ---
 
 # Doctrine Layer — The Delegation Threshold

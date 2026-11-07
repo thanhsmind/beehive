@@ -7,12 +7,15 @@ bee:
   id: discovery-wayfinding-overview
   lifecycle: active
   areas: [discovery-wayfinding]
-  decisions: ["wayfinding-flow D1 (separate bee-wayfinding skill)", "wayfinding-flow D2 (map as markdown under docs/discovery/<effort>/)", "wayfinding-flow D3 (name bee-wayfinding)", "wayfinding-flow D4 (status + preamble show open maps from v1)", "wayfinding-flow D5 (orient recommends bee-wayfinding deterministically when idle with frontier)", "wayfinding-flow D6 (four activation mechanisms; park-for-vagueness creates a stub; shaping entry check stays semi-hard)", "wayfinding-flow D7 (four ticket types, destination-first, one HITL ticket per session, convention-only claim/block lines)", "wayfinding-flow D8 (resolved tickets log decisions; map gists; exit feeds bee-shaping Lock)"]
+  decisions: [wayfinding-flow D1 (separate bee-wayfinding skill), wayfinding-flow D2 (map as markdown under docs/discovery/<effort>/), wayfinding-flow D3 (name bee-wayfinding), wayfinding-flow D4 (status + preamble show open maps from v1), wayfinding-flow D5 (orient recommends bee-wayfinding deterministically when idle with frontier), wayfinding-flow D6 (four activation mechanisms; park-for-vagueness creates a stub; shaping entry check stays semi-hard), "wayfinding-flow D7 (four ticket types, destination-first, one HITL ticket per session, convention-only claim/block lines)", wayfinding-flow D8 (resolved tickets log decisions; map gists; exit feeds bee-shaping Lock)]
   sources: ["cells wayf-1..wayf-6 (capped, .bee/cells/, 2026-08-17)", docs/history/wayfinding-flow/CONTEXT.md, docs/history/wayfinding-flow/plan.md, "judge verdicts 6/6 PASS (trace.semantic_judge, model independence confirmed)", "wayfinding-craft cell wayfc-1 (interview craft, fact-lookup dispatch, spike rules; trace .bee/cells/archive/wayfinding-craft/wayfc-1.json, 2026-08-17)"]
   authoritative_for: "discovery-wayfinding: pre-shaping discovery maps, their tickets, and their activation surfaces"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/discovery.rs]
-  owns.skills: ["skills/bee-wayfinding/*"]
+  owns.skills: [skills/bee-wayfinding/*]
   owns.tests: [packages/bee-rs/crates/bee/tests/discovery_verbs.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/discovery.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, skills/bee-wayfinding/SKILL.md, skills/bee-wayfinding/references/wayfinding-reference.md, skills/bee-shaping/references/gray-area-probes.md, skills/bee-wayfinding/, skills/bee-shaping/SKILL.md]
+  verified_at: 2026-09-06
+  verified_commit: ab2fce1afc72aade536e8910d1034a96315697b9
 ---
 
 # Discovery Wayfinding (charting fog-state ideas before shaping)

@@ -11,6 +11,9 @@ bee:
   decisions: ["codex-runtime-parity D1, D2", "codex-hook-state-parity D1-D3, D8-D13"]
   sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "codex-hook-state-parity cells 2, 3, 5 (paired Codex subagent audit, package authority, exclusive hook-source arbitration, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-command-windows cells 1/2 (shell-agnostic Windows command on every codex source-repository fallback entry + both transport forms unified on the committed onboarded handler path; traces in .bee/cells/, 2026-07-20; flushed capture stub a681f64a)", "hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — the Windows hook command becomes a shell-agnostic node -e bootstrap that resolves the git root first, exits 0 silently outside a git repo, forwards stdin, and propagates the real handler's exit status, proven by a contract test run from a nested cwd)", "docs/specs/hook-runtime.md#B7", "docs/specs/hook-runtime.md#B8", "docs/specs/hook-runtime.md#B9", "docs/specs/hook-runtime.md#R7", "docs/specs/hook-runtime.md#R8", "docs/specs/hook-runtime.md#R8a", "docs/specs/hook-runtime.md#R8b", "docs/specs/hook-runtime.md#R9", "docs/specs/hook-runtime.md#R20", "docs/specs/hook-runtime.md#E6", "docs/specs/hook-runtime.md#P10", "docs/specs/hook-runtime.md#P13"]
   authoritative_for: "hook-runtime: rendering targets and the fallback checkpoint command's launch contract"
+  anchors: [packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs, .codex/hooks.json]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Hook Runtime — the two delivery targets and what a fallback checkpoint command must do

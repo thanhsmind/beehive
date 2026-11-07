@@ -1,6 +1,6 @@
 ---
 type: bee.area
-title: "Worktree Parallelism — the staging mixing ground the user tests at"
+title: Worktree Parallelism — the staging mixing ground the user tests at
 description: "The invariant 'staging = main + Σ features awaiting UAT', the three triggers that keep it true, why staging is disposable and its history is garbage, and the teeth that keep it a mixing ground instead of a back door into main."
 timestamp: 2026-08-17
 bee:
@@ -9,8 +9,11 @@ bee:
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/returning-and-the-merge-gate.md]
   decisions: ["staging-lane D0 (the main/staging/worktree topology becomes first-class bee mechanics, not convention, 2026-08-17)", "staging-lane D0a (lifecycle detail on D0: the invariant, the three update triggers, disposability, 2026-08-17)", "uat-gate-before-merge D1 (the uat gate is the 'awaiting UAT' signal staging reads, 2026-08-17)", "staging-optional D1 (staging_before_merge is the repo-wide staging opt-out; absent means ON, false refuses STAGING_DISABLED, the uat gate is untouched, 2026-08-18)"]
-  sources: ["docs/history/staging-lane/plan.md", ".bee/decisions.jsonl (0f87be54 D0, d20ef88e D0a, 16c7ba64 uat-gate-before-merge D1)", "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs", "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs (WORKTREE_MERGE_STAGING_FORBIDDEN, staging_rebuild_suggested)", "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs (staging_worktree_commit_denial)"]
+  sources: [docs/history/staging-lane/plan.md, ".bee/decisions.jsonl (0f87be54 D0, d20ef88e D0a, 16c7ba64 uat-gate-before-merge D1)", packages/bee-rs/crates/bee/src/verbs/staging/mod.rs, "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs (WORKTREE_MERGE_STAGING_FORBIDDEN, staging_rebuild_suggested)", packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs (staging_worktree_commit_denial)]
   authoritative_for: "worktree-parallelism: bee staging add/rebuild/status, the staging.json record, and the disposable staging mixing ground"
+  anchors: [skills/bee-swarming/SKILL.md, packages/bee-rs/crates/bee/src/verbs/staging/mod.rs, packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs]
+  verified_at: 2026-08-20
+  verified_commit: 293b0612534f26c63a472c4fb7b12970301e5ace
 ---
 
 # Worktree Parallelism — The Staging Mixing Ground

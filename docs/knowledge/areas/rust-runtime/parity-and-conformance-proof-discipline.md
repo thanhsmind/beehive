@@ -12,6 +12,9 @@ bee:
   decisions: []
   sources: [docs/history/rust-port/reports/rust-port-15.md, docs/history/rust-port/reports/rust-port-17.md, docs/history/rust-port/reports/rust-port-20.md, docs/history/rust-port/reports/rust-port-21.md]
   authoritative_for: "rust-runtime: how a port is proven faithful against a frozen reference"
+  anchors: [.claude-plugin/skills/, .codex-plugin/skills/]
+  verified_at: 2026-09-08
+  verified_commit: 99c2f5a2965cc7629f17071d6144fd9ab9604671
 ---
 
 ## Purpose

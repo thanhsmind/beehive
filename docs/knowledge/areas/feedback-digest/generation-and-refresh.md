@@ -11,6 +11,9 @@ bee:
   decisions: [D1 8cd4c84e, D2 8cd4c84e]
   sources: ["docs/history/evolving-loop/ (cells evolving-1 … evolving-11, capped)", docs/history/evolving-loop/reports/review-slice-a.md, docs/history/evolving-loop/reports/review-slice-b.md, "docs/history/cli-mutations/ (cell cli-mutations-2, capped; walkthrough.md)", "docs/specs/feedback-digest.md#R1", "docs/specs/feedback-digest.md#R10", "docs/specs/feedback-digest.md#R11", "docs/specs/feedback-digest.md#E1", "docs/specs/feedback-digest.md#E2", "docs/specs/feedback-digest.md#E3", "docs/specs/feedback-digest.md#E6", "docs/specs/feedback-digest.md#P2", "docs/specs/feedback-digest.md#P6", "docs/specs/feedback-digest.md#P7"]
   authoritative_for: "feedback-digest: generation and refresh"
+  anchors: [skills/bee-capturing/SKILL.md]
+  verified_at: 2026-08-02
+  verified_commit: 9b75d96735ef94136920010f52d9a85df8df380d
 ---
 
 # Feedback Digest — Generating and Refreshing a Repository's Own Digest

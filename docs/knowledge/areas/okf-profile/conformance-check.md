@@ -11,6 +11,9 @@ bee:
   decisions: [D2, D4, D10, D12, D13, D18, D19, D23, D31, G14 (okf-switchover-f3 — the profile-error severity that fails a non-strict chain run)]
   sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B1", "docs/specs/okf-profile.md#B2", "docs/specs/okf-profile.md#B3", "docs/specs/okf-profile.md#B4", "docs/specs/okf-profile.md#E2", "docs/specs/okf-profile.md#P1", "knowledge-orphan-check cell koc-1 (orphan_concept NOTE tier + profile.orphans JSON list; trace .bee/cells/archive/knowledge-orphan-check/koc-1.json, capped 2026-09-06)"]
   authoritative_for: "okf-profile: the two-level conformance check and its finding codes"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Bee OKF Profile — The Two-Level Conformance Check and Its Finding Codes
