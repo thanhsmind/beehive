@@ -749,7 +749,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                     }
                 }
             }
-            if let Some(refusal) = sync_refusal(root, &cell_map, &touched_set) {
+            if let Some(refusal) = sync_refusal(root, &history_root, &cell_map, &touched_set) {
                 return Err(Fail::Thrown(refusal));
             }
             // D3/D4: legacy cell predates affects_skills — check (c) is

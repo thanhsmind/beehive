@@ -6,18 +6,26 @@
 #![allow(unused_imports)]
 
 use super::*;
-use crate::verbs::knowledge::{load_ownership, matches_owned, AreaOwnership, RuleHome};
+use crate::verbs::knowledge::{
+    bee_of, grade_bundle, load_areas, load_ownership, matches_owned, str_field, AreaOwnership, RuleHome, ORPHAN, SUSPECT,
+};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-/// sync_refusal — runs the three cap-time sync checks:
+/// sync_refusal — runs the four cap-time sync checks:
 /// (a) ownership: touched code in an area with non-empty owns.skills must touch at least one owned skill
 /// (b) applied_at: touched rule home must touch every applied_at file
 /// (c) prediction: affects_skills prediction must equal touched skills/** paths (skipped on legacy cells)
+/// (d) freshness: a touched path anchored by a suspect or orphan concept of history_root's bundle refuses unless the concept is touched too
 ///
 /// Returns None when clean, Some(refusal_message) on failure.
-pub(crate) fn sync_refusal(root: &Path, cell: &Map<String, Value>, touched: &[String]) -> Option<String> {
+pub(crate) fn sync_refusal(
+    root: &Path,
+    history_root: &Path,
+    cell: &Map<String, Value>,
+    touched: &[String],
+) -> Option<String> {
     let ownership = load_ownership(root);
     let id = cell.get("id").and_then(Value::as_str).unwrap_or("(unknown id)");
 
@@ -117,5 +125,70 @@ pub(crate) fn sync_refusal(root: &Path, cell: &Map<String, Value>, touched: &[St
         }
     }
 
-    None
+    freshness_refusal(history_root, id, touched)
+}
+
+fn freshness_refusal(history_root: &Path, id: &str, touched: &[String]) -> Option<String> {
+    let concepts = load_areas(&history_root.join("docs").join("knowledge"))?;
+    let touched_norm: BTreeSet<String> = touched.iter().map(|t| normalize_cell_path(t)).collect();
+    let bees: Vec<(String, Map<String, Value>)> =
+        concepts.iter().map(|c| (c.rel.clone(), bee_of(&c.data))).collect();
+    let refs: Vec<(&str, &Map<String, Value>)> = bees.iter().map(|(rel, bee)| (rel.as_str(), bee)).collect();
+    let graded = grade_bundle(history_root, &refs);
+
+    let mut paths: BTreeSet<String> = BTreeSet::new();
+    let mut named: Vec<String> = Vec::new();
+    let mut remedies: Vec<String> = Vec::new();
+    let mut suspect_remedy = false;
+    let mut orphan_remedy = false;
+    for (rel, bee) in &bees {
+        let concept_path = format!("docs/knowledge/{rel}");
+        let Some(grade) = graded.get(rel) else { continue };
+        if grade.grade != SUSPECT && grade.grade != ORPHAN {
+            continue;
+        }
+        if touched_norm.contains(&concept_path) {
+            continue;
+        }
+        let hit: Vec<String> = grade
+            .anchors
+            .iter()
+            .map(|a| normalize_cell_path(a))
+            .filter(|a| touched_norm.contains(a))
+            .collect();
+        if hit.is_empty() {
+            continue;
+        }
+        paths.extend(hit);
+        named.push(format!("{concept_path} ({})", grade.grade));
+        if grade.grade == SUSPECT {
+            suspect_remedy = true;
+            let confirm = match str_field(bee, "id") {
+                Some(bee_id) => format!("--id {bee_id}"),
+                None => format!("--path {concept_path}"),
+            };
+            remedies.push(format!("{concept_path}: bee knowledge confirm {confirm}"));
+        } else {
+            orphan_remedy = true;
+        }
+    }
+    if named.is_empty() {
+        return None;
+    }
+    let mut fixes: Vec<String> = Vec::new();
+    if suspect_remedy {
+        fixes.push(format!(
+            "for suspect, run {}, then add the concept file to the cell's files and reservation and commit it with the cell",
+            remedies.join("; ")
+        ));
+    }
+    if orphan_remedy {
+        fixes.push("for orphan, fix the concept's bee.anchors".to_string());
+    }
+    Some(format!(
+        "capCell: SYNC_DOOR — cell \"{id}\" touches {} anchored by knowledge concept(s): {}. FIX: {}; or pass --sync-ack \"<reason>\" to cap anyway (the reason is recorded on trace.sync_ack and trace.deviations).",
+        paths.into_iter().collect::<Vec<_>>().join(", "),
+        named.join(", "),
+        fixes.join("; ")
+    ))
 }
