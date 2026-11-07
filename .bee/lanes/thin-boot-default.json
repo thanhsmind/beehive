@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "thin-boot-default",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"thin-boot-default\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"thin-boot-default\" (lane).",
+  "created_at": "2026-11-07T01:31:48.978Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 5,
+    "rationale": "touches hooks guard source, so an independent judge read is owed",
+    "updated_at": "2026-11-07T01:32:12.309Z",
+    "feature": "thin-boot-default"
+  },
+  "merge_ready": {
+    "since": "2026-11-07T01:39:34.066Z",
+    "branch": "wt/thin-boot-default",
+    "worktree_id": "beehive--wt--thin-boot-default",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

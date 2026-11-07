@@ -808,6 +808,7 @@
     "contract:usage-herding-block",
     "contract:doctrine-split",
     "report-usage",
-    "token-accounting"
+    "token-accounting",
+    "thin-worker-boot"
   ]
 }
