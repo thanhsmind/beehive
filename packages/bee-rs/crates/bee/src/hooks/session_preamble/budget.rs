@@ -171,6 +171,16 @@ pub(crate) fn command_surface_section() -> Vec<String> {
     lines
 }
 
+const TEST_COMMAND_NOTE: &str = "full suite, once per feature: `bee test` before `bee worktree merge`; a cell verify adds a filter";
+
+pub(crate) fn standard_command_line(key: &str, command: &str) -> String {
+    if key == "test" && command != NO_TEST_SENTINEL {
+        format!("- {key}: `{command}` — {TEST_COMMAND_NOTE}")
+    } else {
+        format!("- {key}: `{command}`")
+    }
+}
+
 /// Truncate on a CHARACTER boundary (never mid-UTF-8) and say so, so a reader
 /// never mistakes a cut for the end of the text.
 pub(crate) fn clamp_chars(s: &str, max: usize) -> String {
@@ -715,7 +725,7 @@ pub fn build_session_preamble_within(
         lines.push(String::new());
         lines.push("### Standard commands (host project)".to_string());
         for key in &recorded_keys {
-            lines.push(format!("- {key}: `{}`", tpl(commands.get(*key))));
+            lines.push(standard_command_line(key, &tpl(commands.get(*key))));
         }
         if str_eq(commands.get("test"), NO_TEST_SENTINEL) {
             // no-test-repos D1 (decision 55b951e1): the sentinel REPLACES the

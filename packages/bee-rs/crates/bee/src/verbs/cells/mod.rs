@@ -360,7 +360,7 @@ fn handle_show(root: &Path, id: &str) -> Result<Handled, Delegate> {
 }
 
 /// bee.mjs VERIFY_OWNER_ANNOTATION (vo-1, R82 main-verifies).
-const VERIFY_OWNER_ANNOTATION: &str = "main (feature close) — the worker never runs this";
+const VERIFY_OWNER_ANNOTATION: &str = "the cell's scoped proof — its worker runs it; the full suite runs once per feature, before merge";
 
 /// bee.mjs withVerifyOwner: re-build the object inserting `verify_owner`
 /// immediately after the `verify` key; append at the end when the cell has

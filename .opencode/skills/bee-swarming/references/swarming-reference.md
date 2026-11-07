@@ -224,14 +224,15 @@ steps for its single worker — never wave analysis or multi-cell assignment.
      schema, no mandatory full-suite rerun — the single home of this rule is
      `bee-hive/references/routing-and-contracts.md` ("Leader completeness
      check").
-   - **Read the recorded proof; re-run tests only on smell.** The worker's
+   - **Read the recorded proof; never re-run it.** The worker's
      cap carries the proof line it chose and ran (`<command> — <result> —
-     <scope reason>`); reading it satisfies the fresh-output rule. Re-run
-     `bee test` yourself on a smell — a missing/garbled report, a
+     <scope reason>`); reading it satisfies the fresh-output rule, and the
+     leader never re-runs it or runs the full suite per cell (rule:
+     agents-proof-at-cap). A smell — a missing/garbled report, a
      `[DONE]` with no diff, a `high-risk`/hard-gate cell, or a proof scope
-     that looks too narrow for the diff. The re-run is orchestrator
-     judgment; the completeness check above is not. Failure on a
-     spot-check → the cell is NOT done:
+     that looks too narrow for the diff — earns the full diff read and
+     wiring trace of the completeness check above. A gap found there →
+     the cell is NOT done:
      re-dispatch on the same role with the failing excerpt (a task miss is
      a rerun, never a silent escalation onto the session model — provider
      errors, not task errors, are what the rescue ladder's escalation rung
@@ -315,13 +316,19 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
 > The agent owns test scope: pick proof, record on cap, doors check and run nothing (rule: agents-proof-at-cap).
 
 - **Declaration:** `.bee/config.json` `commands.test` names the
-  project's one declared suite — what CI runs on every push, and the
-  default a code-change proof reaches for. No boundary door runs it.
+  project's one declared suite — what CI runs on every push and what runs
+  once per feature before merge. No boundary door runs it.
 - **Runner:** `bee test` runs the declared commands in order and writes
   ONE normalized record, `.bee/logs/test-results.json` — `{ran_at, green,
-  commands: [{command, exit, duration_ms, failure_excerpt, failure_log}]}`.
-  The runner is a program; an agent's word is never the record, but the
-  agent chooses when to reach for it.
+  head, commands: [{command, exit, duration_ms, failure_excerpt,
+  failure_log}]}`. The runner is a program; an agent's word is never the
+  record.
+- **Once per feature:** a cell proves itself with its related tests; the
+  full suite runs at the feature's end, as `bee test` in the worktree. A
+  code-touching feature merges only on a fresh green record at the current
+  head — `bee worktree merge` reads it and spawns nothing; a refusal ends
+  with a `FIX:` line, and `--full-suite-waiver "<reason>"` is the audited
+  escape.
 - **The proof line:** required on every `cells finish --report`,
   `<command> — <result> — <scope reason>` — three non-empty segments
   (split on the first two ` — ` separators, so the reason may itself

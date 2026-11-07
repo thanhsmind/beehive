@@ -140,6 +140,69 @@ pub(crate) fn assert_verify_sentinel_allowed(root: &Path, verb: &str, verify: &V
     )))
 }
 
+fn strip_env_assignments(segment: &str) -> String {
+    let mut rest = segment.trim_start();
+    loop {
+        let name_len = rest
+            .char_indices()
+            .take_while(|(i, c)| c.is_ascii_alphabetic() || *c == '_' || (*i > 0 && c.is_ascii_digit()))
+            .count();
+        if name_len == 0 || !rest[name_len..].starts_with('=') {
+            break;
+        }
+        let mut quote: Option<char> = None;
+        let mut end = rest.len();
+        for (i, c) in rest.char_indices().skip(name_len + 1) {
+            match quote {
+                Some(q) if c == q => quote = None,
+                Some(_) => {}
+                None if c == '"' || c == '\'' => quote = Some(c),
+                None if c.is_whitespace() => {
+                    end = i;
+                    break;
+                }
+                None => {}
+            }
+        }
+        rest = rest[end..].trim_start();
+    }
+    rest.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn verify_segments(verify: &str) -> Vec<String> {
+    verify
+        .replace("&&", "\n")
+        .replace("||", "\n")
+        .replace(';', "\n")
+        .lines()
+        .map(strip_env_assignments)
+        .filter(|segment| !segment.is_empty())
+        .collect()
+}
+
+pub(crate) fn full_suite_verify_problem(root: &Path, verb: &str, cell: &Map<String, Value>) -> MR<Option<String>> {
+    let Some(Value::String(verify)) = cell.get("verify") else { return Ok(None) };
+    if nonblank_string(cell.get("full_suite_reason")) {
+        return Ok(None);
+    }
+    let commands = read_commands_slice(root)?;
+    let Some(declared) = commands.test.as_ref().filter(|_| !is_no_test_repo(&commands)) else {
+        return Ok(None);
+    };
+    let declared: Vec<String> = declared.iter().map(|c| strip_env_assignments(c)).collect();
+    let bare = verify_segments(verify).into_iter().any(|segment| {
+        declared.contains(&segment) || segment == "bee test" || segment == ".bee/bin/bee test"
+    });
+    if !bare {
+        return Ok(None);
+    }
+    let suite = &declared[0];
+    let id = js_string_or_undefined(cell.get("id"));
+    Ok(Some(format!(
+        "{verb}: verify runs the full suite — cell \"{id}\" proves itself with its related tests; the full suite runs once per feature, at its end, as `bee test` before the merge. FIX: scope the verify, e.g. `{suite} --test <name>` or `{suite} <filter>`; for a cross-cutting change that truly needs the whole suite, set \"full_suite_reason\" on the cell to say why."
+    )))
+}
+
 pub(crate) fn nonblank_string(v: Option<&Value>) -> bool {
     matches!(v, Some(Value::String(s)) if !js_trim(s).is_empty())
 }
@@ -262,6 +325,9 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             Err(Fail::Thrown(message)) => problems.push(message),
             Err(Fail::Delegate) => return Err(Fail::Delegate),
         }
+    }
+    if nonblank_string(map.get("verify")) {
+        problems.extend(full_suite_verify_problem(root, "addCell", map)?);
     }
     let id = if nonblank_string(map.get("id")) {
         match map.get("id") {

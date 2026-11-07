@@ -115,7 +115,7 @@ Phase headers only if plan.md is phase-shaped — never invent phases.>
 <Describe what WILL be checked. Link evidence from the test-result record
 (`.bee/logs/test-results.json`) once it exists. NEVER state a result that has not run.>
 
-**Automated** — `<the proof the change type needs — code: declared test command (commands.test); docs: parity/pointer check; behavior: judge verdict>` → expected: <target outcome>
+**Automated** — `<the proof the change type needs — code: the related tests (a scoped form of commands.test; the full suite runs once at feature end before merge); docs: parity/pointer check; behavior: judge verdict>` → expected: <target outcome>
 **Manual** — [ ] <check for SEE/CALL/RUN decisions>
 **Evidence** — <link to docs/history/<feature>/reports/… once the declared tests run; "pending" before>
 

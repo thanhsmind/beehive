@@ -396,7 +396,7 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
 
 // ── cells update ───────────────────────────────────────────────────────────
 
-pub(crate) const UPDATE_FIELDS: [&str; 15] = [
+pub(crate) const UPDATE_FIELDS: [&str; 16] = [
     "title",
     "action",
     "verify",
@@ -412,11 +412,19 @@ pub(crate) const UPDATE_FIELDS: [&str; 15] = [
     REGEN_ACK_FIELD,
     "affects_skills",
     "affects_specs",
+    "full_suite_reason",
 ];
 
 pub(crate) fn update_field_problem(key: &str, value: &Value) -> Option<String> {
     let bad = |msg: &str| Some(msg.to_string());
     match key {
+        "full_suite_reason" => {
+            if matches!(value, Value::Null) || nonblank_string(Some(value)) {
+                None
+            } else {
+                bad("must be null or a non-empty string (why this cell needs the whole suite)")
+            }
+        }
         "title" | "action" | "verify" => {
             if nonblank_string(Some(value)) {
                 None
@@ -651,6 +659,11 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
             let merged_value = Value::Object(merged.clone());
             if patch_map.contains_key("deps") {
                 assert_no_cycle(&root, "updateCell", std::slice::from_ref(&merged_value))?;
+            }
+            if patch_map.contains_key("verify") || patch_map.contains_key("full_suite_reason") {
+                if let Some(message) = full_suite_verify_problem(&root, "updateCell", &merged)? {
+                    return Err(Fail::Thrown(format!("{message} The cell is untouched.")));
+                }
             }
             assert_regen_obligation(&merged, "updateCell")?;
             if let Some(refusal) = rigor_floor_refusal(&root, &merged, "updateCell") {

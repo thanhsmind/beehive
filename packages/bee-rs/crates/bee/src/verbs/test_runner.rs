@@ -21,7 +21,7 @@
 //     failure_excerpt is the last ≤500 UTF-16 units of the JS-trimmed output
 //     (null on pass), or "(no output; exit <exit>)" when empty; a signal
 //     death records exit null.
-//   - Record: {ran_at, green, commands:[{command, exit, duration_ms,
+//   - Record: {ran_at, green, head, commands:[{command, exit, duration_ms,
 //     failure_excerpt}]} written via writeJsonAtomic (pretty + "\n").
 //   - Green: text = ✓ lines + "next: green (record: ...)" line, exit 0.
 //     Red: ✗ lines carry ", exit N" (or "spawn-failed"), "next: <first
@@ -184,7 +184,7 @@ fn emit_error(message: &str, use_json: bool) -> ExitCode {
 /// Ordered declared commands, or None when the repo declares no test path
 /// (absent commands.test, empty after normalization, or only the "none"
 /// sentinel).
-fn declared_test_commands(root: &Path) -> Option<Vec<String>> {
+pub(crate) fn declared_test_commands(root: &Path) -> Option<Vec<String>> {
     let config = read_config_raw(root);
     // normalizeCommands: non-object (or array) commands -> {}.
     let raw_test = config
@@ -310,6 +310,7 @@ fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun 
         "commands".into(),
         Value::Array(results.iter().map(command_result_value).collect()),
     );
+    record.insert("head".into(), checkout_head(root).map_or(Value::Null, Value::from));
     let write_error = write_json_atomic(
         &root.join(".bee").join("logs").join("test-results.json"),
         &Value::Object(record),
@@ -322,6 +323,15 @@ fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun 
         commands: results,
         write_error,
     }
+}
+
+fn checkout_head(root: &Path) -> Option<String> {
+    let out = crate::verbs::worktree::run_git(root, &["rev-parse", "HEAD"]);
+    if out.status != Some(0) {
+        return None;
+    }
+    let head = js_trim(&out.stdout.unwrap_or_default());
+    if head.is_empty() { None } else { Some(head) }
 }
 
 /// {command, exit, duration_ms, failure_excerpt, failure_log} — frozen key
@@ -456,6 +466,29 @@ mod tests {
     }
 
     #[test]
+    fn the_record_carries_the_checkout_head() {
+        let Some(shell) = posix_shell() else {
+            return;
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        let git = |args: &[&str]| {
+            let out = std::process::Command::new("git").args(args).current_dir(root).output().unwrap();
+            assert!(out.status.success());
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&["init", "-q"]);
+        git(&["-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "c"]);
+        let run = run_declared_tests(root, &["true".to_string()], shell);
+        assert!(run.write_error.is_none());
+        let raw =
+            std::fs::read_to_string(root.join(".bee").join("logs").join("test-results.json")).unwrap();
+        let record: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(record["head"], json!(git(&["rev-parse", "HEAD"])));
+    }
+
+    #[test]
     fn green_run_writes_record_and_renders_check_lines() {
         let Some(shell) = posix_shell() else {
             return; // no POSIX sh on this host — the verb delegates anyway
@@ -481,8 +514,9 @@ mod tests {
         let obj = record.as_object().unwrap();
         assert_eq!(
             obj.keys().collect::<Vec<_>>(),
-            vec!["ran_at", "green", "commands"]
+            vec!["ran_at", "green", "commands", "head"]
         );
+        assert_eq!(obj.get("head"), Some(&Value::Null));
         assert_eq!(obj.get("green"), Some(&json!(true)));
         let cmd = &obj.get("commands").unwrap().as_array().unwrap()[0];
         assert_eq!(

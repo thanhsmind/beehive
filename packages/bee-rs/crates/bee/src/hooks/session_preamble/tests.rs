@@ -210,7 +210,10 @@ use crate::version::BEE_VERSION;
         write(tmp.path(), ".bee/config.json", r#"{"commands":{"test":"npm test"}}"#);
         let text = render(tmp.path());
         assert!(text.contains("### Standard commands (host project)"), "{text}");
-        assert!(text.contains("- test: `npm test`"), "{text}");
+        assert!(
+            text.contains("- test: `npm test` — full suite, once per feature: `bee test` before `bee worktree merge`; a cell verify adds a filter"),
+            "{text}"
+        );
         assert!(
             text.contains(
                 "- Proof-per-change-type: pick the proof your change needs — related tests for code, parity/pointer checks for docs — and record it in the cap proof line. CI runs the same command on every push and PR."
@@ -1023,8 +1026,8 @@ use crate::version::BEE_VERSION;
         let root = tmp.path();
         pathological_store(root);
 
-        let text = build_session_preamble_within(root, None, None, "claude", 8700);
-        assert!(text.len() <= 8700, "{} bytes", text.len());
+        let text = build_session_preamble_within(root, None, None, "claude", 8800);
+        assert!(text.len() <= 8800, "{} bytes", text.len());
         assert!(!text.contains("### Recent decisions"), "{text}");
         assert!(!text.contains("### Critical patterns (digest)"), "{text}");
         assert!(text.contains("### Command surface"), "{text}");
