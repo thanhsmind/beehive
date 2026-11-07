@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-first-lean-decisions",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"knowledge-first-lean-decisions\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"knowledge-first-lean-decisions\" (lane).",
+  "created_at": "2026-11-07T02:59:04.847Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}
