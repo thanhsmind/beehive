@@ -86,15 +86,15 @@ Risk map:
 
 | Component | Risk | Lands in | Proof needed |
 |---|---|---|---|
-| Parser misreads paseo files | MEDIUM | wp-1 | fixtures from paseo-pi-team and paseo-room formats |
-| Prepare output changes break callers | MEDIUM | wp-2 | existing prepare tests stay green; new keys only add |
-| Purpose lint refuses a needed consult | LOW | wp-2 | test: a leaning purpose still builds the payload |
-| Prompt byte tests | LOW | wp-3 | prompt-render tests green |
+| Parser misreads paseo files | MEDIUM | wsp-1 | fixtures from paseo-pi-team and paseo-room formats |
+| Prepare output changes break callers | MEDIUM | wsp-2 | existing prepare tests stay green; new keys only add |
+| Purpose lint refuses a needed consult | LOW | wsp-2 | test: a leaning purpose still builds the payload |
+| Prompt byte tests | LOW | wsp-3 | prompt-render tests green |
 
-Waves: wp-1 and wp-3 run in parallel (no file overlap; the registry payload
-is hand-edited, so only wp-3 runs `bee dev regen`, for its prompt and
-doctrine copies). wp-2 follows wp-1: it calls wp-1's digest helper and
-edits the same router and registry payload. wp-4 documents last.
+Waves: wsp-1 and wsp-3 run in parallel (no file overlap; the registry payload
+is hand-edited, so only wsp-3 runs `bee dev regen`, for its prompt and
+doctrine copies). wsp-2 follows wsp-1: it calls wsp-1's digest helper and
+edits the same router and registry payload. wsp-4 documents last.
 
 ## Role assignments
 
@@ -104,9 +104,9 @@ edits the same router and registry payload. wp-4 documents last.
   "runtime": "claude",
   "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"wp-1 and wp-2 add Rust verbs and prepare keys."},
+    {"stage":"implementation","classification":"required","role":"code","reason":"wsp-1 and wsp-2 add Rust verbs and prepare keys."},
     {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Tests ride each code cell; the live proof is the leader's."},
-    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"wp-3 changes prompts and doctrine; wp-4 writes the concept."},
+    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"wsp-3 changes prompts and doctrine; wsp-4 writes the concept."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
     {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"A release is a separate user ask."},
     {"stage":"read-only-gather","classification":"conditional","role":"read","condition":"a worker report needs a multi-file check","reason":"Discovery is done; gathers only on demand."},
@@ -135,10 +135,10 @@ a brief did not change, and briefs carry no menus and no leaning.
 
 | Epic | Capability/Risk Area | Why It Exists | Slices | Proof Needed |
 |---|---|---|---|---|
-| Protocol | parse, check, init, doctor row | boundaries live in prose today | wp-1 | unit tests on fixtures |
-| Receipts | prepare digests, dispatch verify, purpose lint | no proof a brief stayed the same | wp-2 | prepare tests + live verify |
-| Discipline | prompts, doctrine | menus and leaning in briefs | wp-3 | prompt tests, pointer check |
-| Record | knowledge concept | the concept must match | wp-4 | pointer check |
+| Protocol | parse, check, init, doctor row | boundaries live in prose today | wsp-1 | unit tests on fixtures |
+| Receipts | prepare digests, dispatch verify, purpose lint | no proof a brief stayed the same | wsp-2 | prepare tests + live verify |
+| Discipline | prompts, doctrine | menus and leaning in briefs | wsp-3 | prompt tests, pointer check |
+| Record | knowledge concept | the concept must match | wsp-4 | pointer check |
 
 One slice; every cell is current.
 
@@ -146,17 +146,17 @@ One slice; every cell is current.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| wp-1 | Add the workspace protocol check, init and doctor row | verbs/protocol.rs (new), verbs/mod.rs, verbs/drivers/close.rs, doctor.rs, generated/registry_payload.json, tests/registry_contracts.rs | — | `bee protocol check` prints the state; `bee protocol init` writes a valid file; doctor shows the row | cargo test protocol; doctor; registry |
-| wp-3 | Forbid option menus in worker briefs and leaning in advisor briefs | packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee/LEADER.md, skills/bee-hive/references/gates-and-delegation.md | — | the worker prompt and the leader doctrine carry the new rules | cargo test prompt |
-| wp-2 | Record prompt and protocol digests at dispatch and add dispatch verify | verbs/drivers/prepare.rs, verbs/drivers/close.rs, verbs/drivers/brief_lint.rs, verbs/drivers/tests.rs, generated/registry_payload.json, tests/registry_contracts.rs | wp-1 | prepare output has `prompt_sha256` and `protocol_sha256`; `bee dispatch verify` reports same/changed | cargo test prepare; dispatch; registry |
-| wp-4 | Document the workspace protocol and dispatch receipts | docs/knowledge/areas/workflow-state/workspace-protocol.md (new), docs/knowledge/index.md | wp-1, wp-2, wp-3 | one concept names the file, the verbs and the receipt | pointer check |
+| wsp-1 | Add the workspace protocol check, init and doctor row | verbs/protocol.rs (new), verbs/mod.rs, verbs/drivers/close.rs, doctor.rs, generated/registry_payload.json, tests/registry_contracts.rs | — | `bee protocol check` prints the state; `bee protocol init` writes a valid file; doctor shows the row | cargo test protocol; doctor; registry |
+| wsp-3 | Forbid option menus in worker briefs and leaning in advisor briefs | packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee/LEADER.md, skills/bee-hive/references/gates-and-delegation.md | — | the worker prompt and the leader doctrine carry the new rules | cargo test prompt |
+| wsp-2 | Record prompt and protocol digests at dispatch and add dispatch verify | verbs/drivers/prepare.rs, verbs/drivers/close.rs, verbs/drivers/brief_lint.rs, verbs/drivers/tests.rs, generated/registry_payload.json, tests/registry_contracts.rs | wsp-1 | prepare output has `prompt_sha256` and `protocol_sha256`; `bee dispatch verify` reports same/changed | cargo test prepare; dispatch; registry |
+| wsp-4 | Document the workspace protocol and dispatch receipts | docs/knowledge/areas/workflow-state/workspace-protocol.md (new), docs/knowledge/index.md | wsp-1, wsp-2, wsp-3 | one concept names the file, the verbs and the receipt | pointer check |
 
 Paths under `verbs/`, `doctor.rs` and `generated/` are in `packages/bee-rs/crates/bee/src/`; `tests/` is `packages/bee-rs/crates/bee/tests/`. The cell packet:
 
 ```json
 [
   {
-    "id": "wp-1",
+    "id": "wsp-1",
     "feature": "workspace-protocol",
     "title": "Add the workspace protocol check, init and doctor row",
     "lane": "standard",
@@ -182,7 +182,7 @@ Paths under `verbs/`, `doctor.rs` and `generated/` are in `packages/bee-rs/crate
     ],
     "affects_skills": [],
     "affects_specs": ["docs/knowledge/areas/workflow-state/dispatch.md"],
-    "action": "New module verbs/protocol.rs, the ONE home that reads WORKSPACE_PROTOCOL.md. Contract: pub(crate) `PROTOCOL_FILE = \"WORKSPACE_PROTOCOL.md\"`; `parse(text) -> BTreeMap<String, ProtocolValue>` per D1 (scalar or list); `protocol_state(root) -> ProtocolReport { state: missing|unreadable|invalid|valid, issues: Vec<String>, keys, sha256: Option<String> }` per D2 and D3 (FULL_TEST compared against .bee/config.json commands.test read through the existing config reader; string or array joined with \" && \"); `protocol_sha256(control_root) -> Option<String>` using crate::verbs::reservations::sha256_hex over the file bytes (None when missing or unreadable) — wp-2 calls this; `TEMPLATE` per D4. Verbs: `bee protocol check [--json]` prints state, issues, keys, sha256; exit 0 for every state. `bee protocol init [--json]` writes TEMPLATE to <root>/WORKSPACE_PROTOCOL.md only when absent; an existing file returns a typed refusal {ok:false, type:\"refused\", reason:\"protocol_exists\", path, fix} and leaves the bytes untouched. Wire the verb group through the same router style as `dispatch` in close.rs and declare both verbs and their flags in generated/registry_payload.json (hand-edited, no generator — gates.md:866); if the top-level verb router lives outside close.rs, wire `protocol` there too and name the extra file as a deviation (the registry contract test must stay green; update its pins if it counts verbs). doctor.rs: one row `workspace-protocol` per D5 — missing/valid status `ok`, invalid/unreadable status `advisory` (assert that exact string) with issues and fix `bee protocol check`; never blocking. Tests: parse a paseo-pi-team style fenced file (lists, trailing # comment kept, unknown keys kept); parse a `- key: value` paseo-doctrine style file reads no keys and gives invalid with three issues; missing file is missing; non-UTF-8 bytes is unreadable; init then check is valid; init twice refuses and keeps the first bytes; init prints the review-and-edit next-step line; FULL_TEST equal is fine, different is one issue naming commands.test; a duplicate key gives a `duplicate key` issue and the last value; a scalar HUMAN_DECISION_BOUNDARIES gives an issue naming the `- item` list form; a `<...>` or ` | ` placeholder value gives a placeholder issue (so a copied unfilled paseo template is invalid); a list ends at a blank line; the doctor row always prints, ok with the init hint when missing, advisory and never blocking when invalid. Root: the control root (main checkout holding the bee store), the same root prepare uses. No code comments.",
+    "action": "New module verbs/protocol.rs, the ONE home that reads WORKSPACE_PROTOCOL.md. Contract: pub(crate) `PROTOCOL_FILE = \"WORKSPACE_PROTOCOL.md\"`; `parse(text) -> BTreeMap<String, ProtocolValue>` per D1 (scalar or list); `protocol_state(root) -> ProtocolReport { state: missing|unreadable|invalid|valid, issues: Vec<String>, keys, sha256: Option<String> }` per D2 and D3 (FULL_TEST compared against .bee/config.json commands.test read through the existing config reader; string or array joined with \" && \"); `protocol_sha256(control_root) -> Option<String>` using crate::verbs::reservations::sha256_hex over the file bytes (None when missing or unreadable) — wsp-2 calls this; `TEMPLATE` per D4. Verbs: `bee protocol check [--json]` prints state, issues, keys, sha256; exit 0 for every state. `bee protocol init [--json]` writes TEMPLATE to <root>/WORKSPACE_PROTOCOL.md only when absent; an existing file returns a typed refusal {ok:false, type:\"refused\", reason:\"protocol_exists\", path, fix} and leaves the bytes untouched. Wire the verb group through the same router style as `dispatch` in close.rs and declare both verbs and their flags in generated/registry_payload.json (hand-edited, no generator — gates.md:866); if the top-level verb router lives outside close.rs, wire `protocol` there too and name the extra file as a deviation (the registry contract test must stay green; update its pins if it counts verbs). doctor.rs: one row `workspace-protocol` per D5 — missing/valid status `ok`, invalid/unreadable status `advisory` (assert that exact string) with issues and fix `bee protocol check`; never blocking. Tests: parse a paseo-pi-team style fenced file (lists, trailing # comment kept, unknown keys kept); parse a `- key: value` paseo-doctrine style file reads no keys and gives invalid with three issues; missing file is missing; non-UTF-8 bytes is unreadable; init then check is valid; init twice refuses and keeps the first bytes; init prints the review-and-edit next-step line; FULL_TEST equal is fine, different is one issue naming commands.test; a duplicate key gives a `duplicate key` issue and the last value; a scalar HUMAN_DECISION_BOUNDARIES gives an issue naming the `- item` list form; a `<...>` or ` | ` placeholder value gives a placeholder issue (so a copied unfilled paseo template is invalid); a list ends at a blank line; the doctor row always prints, ok with the init hint when missing, advisory and never blocking when invalid. Root: the control root (main checkout holding the bee store), the same root prepare uses. No code comments.",
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
     "must_haves": {
       "truths": [
@@ -201,7 +201,7 @@ Paths under `verbs/`, `doctor.rs` and `generated/` are in `packages/bee-rs/crate
     }
   },
   {
-    "id": "wp-3",
+    "id": "wsp-3",
     "feature": "workspace-protocol",
     "title": "Forbid option menus in worker briefs and leaning in advisor briefs",
     "lane": "standard",
@@ -212,7 +212,8 @@ Paths under `verbs/`, `doctor.rs` and `generated/` are in `packages/bee-rs/crate
       "packages/bee/prompts/worker-cell.md",
       "packages/bee/prompts/advisor.md",
       "packages/bee/LEADER.md",
-      "skills/bee-hive/references/gates-and-delegation.md"
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/workspace-protocol/CONTEXT.md",
@@ -224,8 +225,8 @@ Paths under `verbs/`, `doctor.rs` and `generated/` are in `packages/bee-rs/crate
     ],
     "affects_skills": ["skills/bee-hive/references/gates-and-delegation.md"],
     "affects_specs": [],
-    "action": "worker-cell.md: add one Contract bullet per D9 (never stop to offer the leader a menu of implementation options; choose inside the cell's scope and record it as a departure; a decision outside the scope is one short yes/no question through [PARKED] or [BLOCKED]). Put it where it renders for every shape, not inside a native_bookkeeping block. advisor.md: add, right after the first line, the reviewer.md line 4 sentence per D10. packages/bee/LEADER.md: in the section on starting a session or on dispatch, add the D6 rule in two or three ASD-STE100 sentences: when WORKSPACE_PROTOCOL.md exists at the repo root, read it in full before routing work; copy the boundaries a cell touches into that cell's brief; name each listed boundary the plan touches in the Gate 2 message (under bypass, in the auto-approval reason and the closing report); a boundary adds no new stop — the gate_bypass level decides as for every gate; workers never read the file; `bee protocol check` reports its state. gates-and-delegation.md Delegation contract: one short paragraph — a reviewer or advisor brief carries the artifact, the constraints and the open question, never the leader's preferred answer (prepare warns with purpose_leaning); a worker brief never asks for a menu. Then run `bee dev regen` once from the worktree so the vendored copies match, and commit the regenerated files with this cell. Run the prompt render tests and fix any byte pin that asserts the exact old prompt text by updating the expected text, never by weakening the assertion. No code comments.",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prompt",
+    "action": "worker-cell.md: add one Contract bullet per D9 (never stop to offer the leader a menu of implementation options; choose inside the cell's scope and record it as a departure; a decision outside the scope is one short yes/no question through [PARKED] or [BLOCKED]). Put it where it renders for every shape, not inside a native_bookkeeping block. advisor.md: add, right after the first line, the reviewer.md line 4 sentence per D10. packages/bee/LEADER.md: in the section on starting a session or on dispatch, add the D6 rule in two or three ASD-STE100 sentences: when WORKSPACE_PROTOCOL.md exists at the repo root, read it in full before routing work; copy the boundaries a cell touches into that cell's brief; name each listed boundary the plan touches in the Gate 2 message (under bypass, in the auto-approval reason and the closing report); a boundary adds no new stop — the gate_bypass level decides as for every gate; workers never read the file; `bee protocol check` reports its state. gates-and-delegation.md Delegation contract: one short paragraph — a reviewer or advisor brief carries the artifact, the constraints and the open question, never the leader's preferred answer (prepare warns with purpose_leaning); a worker brief never asks for a menu. Then run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) once from the worktree so the vendored copies match, and commit the regenerated files with this cell. Run the prompt render tests and fix any byte pin that asserts the exact old prompt text by updating the expected text, never by weakening the assertion. No code comments.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prompt && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "the rendered worker-cell prompt forbids an option menu in every shape",
@@ -240,12 +241,12 @@ Paths under `verbs/`, `doctor.rs` and `generated/` are in `packages/bee-rs/crate
     }
   },
   {
-    "id": "wp-2",
+    "id": "wsp-2",
     "feature": "workspace-protocol",
     "title": "Record prompt and protocol digests at dispatch and add dispatch verify",
     "lane": "standard",
     "role": "code",
-    "deps": ["wp-1"],
+    "deps": ["wsp-1"],
     "decisions": ["D7", "D8", "D11"],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
@@ -280,12 +281,12 @@ Paths under `verbs/`, `doctor.rs` and `generated/` are in `packages/bee-rs/crate
     }
   },
   {
-    "id": "wp-4",
+    "id": "wsp-4",
     "feature": "workspace-protocol",
     "title": "Document the workspace protocol and dispatch receipts",
     "lane": "standard",
     "role": "docs",
-    "deps": ["wp-1", "wp-2", "wp-3"],
+    "deps": ["wsp-1", "wsp-2", "wsp-3"],
     "decisions": ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12"],
     "files": [
       "docs/knowledge/areas/workflow-state/workspace-protocol.md",
@@ -314,15 +315,15 @@ Paths under `verbs/`, `doctor.rs` and `generated/` are in `packages/bee-rs/crate
 
 | Dimension | Probe | Cell | Pass when |
 |---|---|---|---|
-| Empty/absent | no protocol file | wp-1, wp-2 | state missing; protocol_sha256 null; verify absent |
-| Malformed input | non-UTF-8 file; paseo-doctrine `- key:` prose | wp-1 | unreadable; invalid with three issues |
-| Foreign format | paseo-pi-team fenced template | wp-1 | keys and lists parse |
-| Overwrite | init on an existing file | wp-1 | refused, bytes kept |
-| Drift | FULL_TEST differs from commands.test | wp-1 | one issue |
-| Unfilled template | paseo `human \| named-integration-owner` values | wp-1 | placeholder issue, invalid |
-| Round trip | saved payload field through verify --prompt-file | wp-2 | match |
-| Change after dispatch | protocol edited or deleted | wp-2 | changed / removed |
-| False fire | leaning purpose on an advisor consult | wp-2 | payload built, purpose_leaning set |
+| Empty/absent | no protocol file | wsp-1, wsp-2 | state missing; protocol_sha256 null; verify absent |
+| Malformed input | non-UTF-8 file; paseo-doctrine `- key:` prose | wsp-1 | unreadable; invalid with three issues |
+| Foreign format | paseo-pi-team fenced template | wsp-1 | keys and lists parse |
+| Overwrite | init on an existing file | wsp-1 | refused, bytes kept |
+| Drift | FULL_TEST differs from commands.test | wsp-1 | one issue |
+| Unfilled template | paseo `human \| named-integration-owner` values | wsp-1 | placeholder issue, invalid |
+| Round trip | saved payload field through verify --prompt-file | wsp-2 | match |
+| Change after dispatch | protocol edited or deleted | wsp-2 | changed / removed |
+| False fire | leaning purpose on an advisor consult | wsp-2 | payload built, purpose_leaning set |
 | Regression | existing prepare, doctor, registry, prompt tests | each code cell | the cell's verify commands green |
 
 ## Open Questions
