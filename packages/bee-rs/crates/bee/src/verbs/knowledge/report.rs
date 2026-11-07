@@ -308,6 +308,123 @@ pub(crate) fn build_report(root: &Path, concepts: &[Concept]) -> (Vec<Value>, Ve
     (measured, unmeasured, evidence_ladder, lines)
 }
 
+const ARMS: [&str; 2] = ["knowledge", "holdout"];
+const MIN_PER_ARM: usize = 30;
+const SIGNALS: [&str; 4] = ["blocked", "reopened", "red_rounds", "with_mistakes"];
+
+fn closed_cells(root: &Path) -> Vec<Value> {
+    let cells_dir = root.join(".bee").join("cells");
+    let mut dirs = vec![cells_dir.clone()];
+    if let Ok(rd) = std::fs::read_dir(cells_dir.join("archive")) {
+        dirs.extend(rd.flatten().filter(|e| e.path().is_dir()).map(|e| e.path()));
+    }
+    let mut cells = Vec::new();
+    for dir in dirs {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for entry in rd.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") || !path.is_file() {
+                continue;
+            }
+            let Some(cell) = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else {
+                continue;
+            };
+            if matches!(cell.get("status").and_then(Value::as_str), Some("capped" | "dropped")) {
+                cells.push(cell);
+            }
+        }
+    }
+    cells
+}
+
+fn recorded_arms(root: &Path) -> std::collections::HashMap<String, String> {
+    let mut arms = std::collections::HashMap::new();
+    for row in read_jsonl(&root.join(".bee").join("logs").join("dispatch.jsonl")).rows {
+        if row.get("source").and_then(Value::as_str) != Some("prepare") || row.get("kind").and_then(Value::as_str) != Some("cell") {
+            continue;
+        }
+        let Some(cell) = row.get("cell").and_then(Value::as_str) else { continue };
+        let arm = row.get("knowledge_arm").and_then(Value::as_str).unwrap_or_default();
+        arms.entry(cell.to_string()).or_insert_with(|| arm.to_string());
+    }
+    arms
+}
+
+fn cell_signals(trace: &Value) -> [bool; 4] {
+    let present = |key: &str| !matches!(trace.get(key), None | Some(Value::Null));
+    let non_empty = |key: &str| match trace.get(key) {
+        Some(Value::Array(a)) => !a.is_empty(),
+        _ => false,
+    };
+    [
+        matches!(trace.get("blocked_reason"), Some(Value::String(s)) if !s.is_empty()),
+        present("reopened_for_rework") || present("reopened_at"),
+        non_empty("attempts"),
+        non_empty("mistakes"),
+    ]
+}
+
+fn rate(count: usize, cells: usize) -> Value {
+    if cells == 0 {
+        return json!(0.0);
+    }
+    json!((count as f64 / cells as f64 * 1000.0).round() / 1000.0)
+}
+
+pub(crate) fn build_outcomes(root: &Path) -> (Value, Vec<String>) {
+    let recorded = recorded_arms(root);
+    let mut cells = [0usize; 2];
+    let mut counts = [[0usize; 4]; 2];
+    let mut unrecorded = 0usize;
+    for cell in closed_cells(root) {
+        let id = cell.get("id").and_then(Value::as_str).unwrap_or_default();
+        let Some(arm) = ARMS.iter().position(|a| recorded.get(id).map(String::as_str) == Some(*a)) else {
+            unrecorded += 1;
+            continue;
+        };
+        cells[arm] += 1;
+        let signals = cell_signals(cell.get("trace").unwrap_or(&Value::Null));
+        for (slot, hit) in signals.iter().enumerate() {
+            counts[arm][slot] += usize::from(*hit);
+        }
+    }
+
+    let mut arms = Map::new();
+    let mut lines = Vec::new();
+    for (arm, name) in ARMS.iter().enumerate() {
+        let mut row = Map::new();
+        let mut rates = Map::new();
+        row.insert("cells".into(), Value::from(cells[arm]));
+        for (slot, signal) in SIGNALS.iter().enumerate() {
+            row.insert((*signal).into(), Value::from(counts[arm][slot]));
+            rates.insert((*signal).into(), rate(counts[arm][slot], cells[arm]));
+        }
+        row.insert("rates".into(), Value::Object(rates));
+        arms.insert((*name).into(), Value::Object(row));
+        lines.push(format!(
+            "outcomes {name}: {} cell(s), {} blocked, {} reopened, {} red round(s), {} with mistakes",
+            cells[arm], counts[arm][0], counts[arm][1], counts[arm][2], counts[arm][3]
+        ));
+    }
+    lines.push(format!("outcomes unrecorded: {unrecorded} closed cell(s) with no recorded arm"));
+
+    let comparable = cells.iter().all(|c| *c >= MIN_PER_ARM);
+    if !comparable {
+        lines.push(format!(
+            "outcomes not comparable: each arm needs {MIN_PER_ARM} cells — {} more knowledge, {} more holdout",
+            MIN_PER_ARM.saturating_sub(cells[0]),
+            MIN_PER_ARM.saturating_sub(cells[1])
+        ));
+    }
+
+    let mut outcomes = Map::new();
+    outcomes.insert("arms".into(), Value::Object(arms));
+    outcomes.insert("unrecorded".into(), Value::from(unrecorded));
+    outcomes.insert("min_per_arm".into(), Value::from(MIN_PER_ARM));
+    outcomes.insert("comparable".into(), Value::Bool(comparable));
+    (Value::Object(outcomes), lines)
+}
+
 // ─── routing ────────────────────────────────────────────────────────────
 
 pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -321,7 +438,9 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     let dir = bundle_dir(&ctx.root)?;
     let concepts = collect_concepts(&dir)?;
 
-    let (measured, unmeasured, evidence_ladder, lines) = build_report(&ctx.root, &concepts);
+    let (measured, unmeasured, evidence_ladder, mut lines) = build_report(&ctx.root, &concepts);
+    let (outcomes, outcome_lines) = build_outcomes(&ctx.root);
+    lines.extend(outcome_lines);
 
     let mut result = Map::new();
     let measured_count = measured.len();
@@ -331,6 +450,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     result.insert("measured_count".into(), Value::from(measured_count));
     result.insert("unmeasured_count".into(), Value::from(unmeasured_count));
     result.insert("evidence_ladder".into(), evidence_ladder);
+    result.insert("outcomes".into(), outcomes);
     Some(ctx.emit(&Value::Object(result), &lines.join("\n"), 0))
 }
 
