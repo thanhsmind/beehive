@@ -2003,5 +2003,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-11-07T06:07:47.770Z"
+  },
+  "release-2-84-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-07T06:22:05.488Z"
   }
 }
