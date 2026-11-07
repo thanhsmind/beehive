@@ -104,6 +104,13 @@ verb: when you are routing, starting, or resuming work — and only then —
 run `bee orient`; it names the phase, the blockers, and the next skill.
 A plain question needs neither.
 
+When `WORKSPACE_PROTOCOL.md` exists at the repo root, read it in full before
+you route work. Copy the boundaries a cell touches into that cell's brief,
+and name each listed boundary the plan touches in the Gate 2 message (under
+bypass, in the auto-approval reason and the closing report). A boundary adds
+no new stop: the `gate_bypass` level decides, as for every gate. Workers
+never read the file, and `bee protocol check` reports its state.
+
 <!-- rule: agents-knowledge-before-code -->
 - Search the knowledge store before you read code. Once per turn, before
   your first read of source under `packages/` or `src/` (or any source
