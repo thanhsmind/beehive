@@ -29,6 +29,7 @@ The machinery it starts is documented beside it:
 | [Waves and occupancy](waves-and-occupancy.md) | Fan-out over running workers, the ledger, and slot counting |
 | [The supervisor observer and its interventions](the-supervisor-observer-and-its-interventions.md) | The cold observer role, its one-record tick, and how an open question reaches a session |
 | [Presence, wake reports, and earned autonomy](presence-wake-reports-and-earned-autonomy.md) | The away/back mark, the single bounded report, health counters, and silence-is-consent |
+| [Thin peer boot](thin-peer-boot.md) | What a herded Claude worker loads at start, the env layer, the peer preamble, and the `dispatch.thin_peer_boot` switch that is on by default |
 
 ## Entry Points & Triggers
 

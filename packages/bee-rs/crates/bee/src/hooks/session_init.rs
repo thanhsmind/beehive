@@ -713,6 +713,26 @@ mod tests {
     }
 
     #[test]
+    fn thin_peer_boot_is_on_by_default_and_off_for_an_explicit_false() {
+        let _guard = crate::hooks::herding_env_lock();
+        for (switch, registers) in [(None, false), (Some(false), true)] {
+            let _env = crate::hooks::tests::MarkerEnv::set(Some("1"));
+            let tmp = tempfile::tempdir().unwrap();
+            vendored_repo(tmp.path());
+            if let Some(on) = switch {
+                std::fs::write(
+                    tmp.path().join(".bee").join("config.json"),
+                    json!({"dispatch": {"thin_peer_boot": on}}).to_string(),
+                )
+                .unwrap();
+            }
+            let outcome = run(&[], &payload_for(tmp.path()));
+            assert!(matches!(outcome, Outcome::Done(_)));
+            assert_eq!(tmp.path().join(".bee").join("sessions").exists(), registers, "{switch:?}");
+        }
+    }
+
+    #[test]
     fn missing_vendored_lib_exits_zero_natively() {
         // Root resolves (a .git dir) but the vendored state.mjs is absent —
         // the presence-gate arm.

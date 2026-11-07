@@ -102,14 +102,12 @@ pub(crate) fn herding_worker_marker_set() -> bool {
 /// not answer.
 pub(crate) const PEER_BOOT: &str = include_str!("../../../../../bee/prompts/peer-boot.md");
 
+pub(crate) fn thin_peer_switch_on(cfg: &serde_json::Value) -> bool {
+    cfg.pointer("/dispatch/thin_peer_boot").and_then(serde_json::Value::as_bool) != Some(false)
+}
+
 pub(crate) fn thin_peer_boot(root: &std::path::Path) -> bool {
-    herding_worker_marker_set()
-        && matches!(
-            crate::state::read_config_raw(root)
-                .get("dispatch")
-                .and_then(|d| d.get("thin_peer_boot")),
-            Some(serde_json::Value::Bool(true))
-        )
+    herding_worker_marker_set() && thin_peer_switch_on(&serde_json::Value::Object(crate::state::read_config_raw(root)))
 }
 
 fn thin_peer_hook_open(name: &str) -> bool {
@@ -316,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn thin_peer_boot_needs_both_the_switch_and_the_marker() {
+    fn thin_peer_boot_needs_the_marker_and_is_on_unless_the_switch_is_false() {
         let _guard = herding_worker_env_lock();
         let on = tempfile::tempdir().unwrap();
         thin_repo(on.path(), Some(true));
@@ -328,10 +326,21 @@ mod tests {
             let _env = MarkerEnv::set(Some("1"));
             assert!(thin_peer_boot(on.path()));
             assert!(!thin_peer_boot(off.path()));
-            assert!(!thin_peer_boot(absent.path()));
+            assert!(thin_peer_boot(absent.path()), "an absent switch is on");
         }
         let _env = MarkerEnv::set(None);
         assert!(!thin_peer_boot(on.path()), "no marker, no thin boot");
+        assert!(!thin_peer_boot(absent.path()), "no marker, no thin boot");
+    }
+
+    #[test]
+    fn thin_peer_switch_is_off_only_for_an_explicit_false() {
+        assert!(thin_peer_switch_on(&serde_json::json!({})));
+        assert!(thin_peer_switch_on(&serde_json::json!({"dispatch": {}})));
+        assert!(thin_peer_switch_on(&serde_json::json!({"dispatch": {"thin_peer_boot": true}})));
+        assert!(thin_peer_switch_on(&serde_json::json!({"dispatch": {"thin_peer_boot": "no"}})));
+        assert!(thin_peer_switch_on(&serde_json::json!({"dispatch": {"thin_peer_boot": null}})));
+        assert!(!thin_peer_switch_on(&serde_json::json!({"dispatch": {"thin_peer_boot": false}})));
     }
 
     #[test]
