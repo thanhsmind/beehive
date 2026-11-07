@@ -811,6 +811,8 @@
     "token-accounting",
     "thin-worker-boot",
     "contract:knowledge-first-nudge",
-    "contract:audit-log"
+    "contract:audit-log",
+    "test-scope",
+    "owner-rule"
   ]
 }
