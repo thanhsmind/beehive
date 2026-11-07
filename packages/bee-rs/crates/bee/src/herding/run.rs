@@ -13685,7 +13685,8 @@ mod tests {
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
         );
-        let claude_fake = FakeClaudeCli::new(Ok(listing.replace("CWD", &opts.cwd.display().to_string())));
+        let cwd_json = serde_json::to_string(&opts.cwd.display().to_string()).unwrap();
+        let claude_fake = FakeClaudeCli::new(Ok(listing.replace("CWD", &cwd_json[1..cwd_json.len() - 1])));
         let _ = execute_paseo_steered(&opts, &spec, &paseo_fake, Some(&claude_fake));
         read_job(&mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id))
     }
