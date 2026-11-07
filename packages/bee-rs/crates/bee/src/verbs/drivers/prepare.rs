@@ -1104,6 +1104,33 @@ pub(crate) fn learned_context_lines(root: &Path, cell: &Value) -> D<Vec<String>>
     Ok(lines)
 }
 
+const KNOWLEDGE_HOLDOUT_DEFAULT_PERCENT: u64 = 10;
+
+pub(crate) fn knowledge_holdout_percent(root: &Path) -> u64 {
+    match read_config_raw(root).get("knowledge_holdout_percent") {
+        Some(Value::Number(n)) => {
+            n.as_u64().filter(|p| *p <= 100).unwrap_or(KNOWLEDGE_HOLDOUT_DEFAULT_PERCENT)
+        }
+        _ => KNOWLEDGE_HOLDOUT_DEFAULT_PERCENT,
+    }
+}
+
+pub(crate) fn knowledge_arm(root: &Path, cell_id: &str) -> &'static str {
+    let digest = crate::verbs::reservations::sha256_hex(cell_id);
+    let bucket = u32::from_str_radix(&digest[..8], 16).unwrap_or(0) % 100;
+    if u64::from(bucket) < knowledge_holdout_percent(root) { "holdout" } else { "knowledge" }
+}
+
+pub(crate) fn cell_learned_context(
+    root: &Path,
+    bundle_root: &Path,
+    cell: &Value,
+) -> D<(&'static str, Vec<String>)> {
+    let arm = knowledge_arm(root, &tpl(vget(cell, "id")));
+    let lines = if arm == "holdout" { Vec::new() } else { learned_context_lines(bundle_root, cell)? };
+    Ok((arm, lines))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExpertiseEntry {
     pub path: String,
@@ -1290,7 +1317,7 @@ pub(crate) fn prompt_body_for(
     // from inside it (roots.rs's WIDE door) — never the control root's own
     // (possibly bundle-less, possibly stale) checkout.
     let bundle_root: &Path = if worktree_root.is_empty() { root } else { Path::new(worktree_root) };
-    let learned = learned_context_lines(bundle_root, cell)?.join("\n");
+    let learned = cell_learned_context(root, bundle_root, cell)?.1.join("\n");
     let answered = crate::verbs::cells::park_answers(cell)
         .into_iter()
         .map(|(question, answer)| {
@@ -3238,6 +3265,22 @@ pub(crate) fn prepare_dispatch_wire(
     }
     for (k, v) in &economics {
         record.insert(k.clone(), v.clone());
+    }
+    if let (true, Some(c)) = (kind == "cell", &cell) {
+        let bundle_root: &Path = match &worktree_location {
+            Some((w, _)) if !w.is_empty() => Path::new(w),
+            _ => root,
+        };
+        let (arm, lines) = cell_learned_context(root, bundle_root, c)?;
+        record.insert("knowledge_arm".into(), Value::String(arm.to_string()));
+        let paths = lines
+            .iter()
+            .map(|l| {
+                let body = l.strip_prefix("- ").unwrap_or(l);
+                Value::String(body.split_once(" — ").map_or(body, |(path, _)| path).to_string())
+            })
+            .collect();
+        record.insert("learned_context".into(), Value::Array(paths));
     }
     // `record_it` is false on the PROBE pass: run() builds the whole envelope
     // once to discover delegate-shaped inputs before a byte is produced, then

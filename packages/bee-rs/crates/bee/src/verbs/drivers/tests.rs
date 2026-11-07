@@ -3129,12 +3129,12 @@ use std::time::Instant;
         bundle_fixture(&granted);
         w(
             &main,
-            ".bee/cells/c-1.json",
-            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+            prepare_dispatch(&main, "claude", "cell", Some("c-2"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -3164,19 +3164,19 @@ use std::time::Instant;
         bundle_fixture(&root);
         w(
             &root,
-            ".bee/cells/c-1.json",
-            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+            prepare_dispatch(&root, "claude", "cell", Some("c-2"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
         };
         let prompt = v.get("payload").unwrap().get("prompt").unwrap().as_str().unwrap();
         assert_eq!(
-            learned_context_lines(&root, &json!({"id": "c-1", "feature": "demo", "lane": "small"})).unwrap(),
+            learned_context_lines(&root, &json!({"id": "c-2", "feature": "demo", "lane": "small"})).unwrap(),
             vec![
                 "- docs/knowledge/work/demo/work-item.md — Demo work item",
                 "- docs/knowledge/work/demo/plan.md — Demo plan",
@@ -12610,4 +12610,151 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
         let elder_body = embedded_agent_body("bee-elder").expect("bee-elder body");
         assert!(stdin.starts_with(elder_body));
+    }
+
+    // ── kom-1: the knowledge holdout arm ───────────────────────────────────
+
+    fn holdout_config(percent: Option<&str>) -> String {
+        match percent {
+            None => r#"{"models":{"claude":{"generation":"sonnet"}}}"#.to_string(),
+            Some(p) => format!(
+                r#"{{"models":{{"claude":{{"generation":"sonnet"}}}},"knowledge_holdout_percent":{p}}}"#
+            ),
+        }
+    }
+
+    fn dispatch_cell_recorded(percent: Option<&str>, cell_id: &str) -> (String, Value) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &holdout_config(percent));
+        bundle_fixture(&root);
+        w(
+            &root,
+            &format!(".bee/cells/{cell_id}.json"),
+            &format!(
+                r#"{{"id":"{cell_id}","feature":"demo","status":"claimed","trace":{{"worker":"w"}},"lane":"small"}}"#
+            ),
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some(cell_id), Some("w"), false, None, None, true, None)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let prompt = v["payload"]["prompt"].as_str().unwrap().to_string();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        (prompt, record)
+    }
+
+    const LEARNED_HEADER: &str = "Learned context (machine-assembled";
+
+    #[test]
+    fn a_holdout_cell_brief_carries_no_learned_context_block() {
+        let (prompt, record) = dispatch_cell_recorded(None, "c-1");
+        assert_eq!(record["knowledge_arm"], json!("holdout"));
+        assert!(!prompt.contains(LEARNED_HEADER), "{prompt}");
+        assert!(!prompt.contains("docs/knowledge/"), "{prompt}");
+        assert!(prompt.contains("- docs/history/demo/plan.md (when present)"), "{prompt}");
+        assert!(!prompt.contains("{{"), "{prompt}");
+    }
+
+    #[test]
+    fn a_knowledge_arm_cell_brief_keeps_the_learned_context_block_byte_for_byte() {
+        let (prompt, record) = dispatch_cell_recorded(None, "c-2");
+        assert_eq!(record["knowledge_arm"], json!("knowledge"));
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        bundle_fixture(&root);
+        let lines = learned_context_lines(&root, &json!({"id": "c-2", "feature": "demo", "lane": "small"}))
+            .unwrap()
+            .join("\n");
+        let block = format!(
+            "\n\n{LEARNED_HEADER} — read before implementing; prefer it over re-deriving):\n{lines}\n"
+        );
+        assert!(prompt.contains(&block), "{prompt}");
+        assert!(prompt.contains(
+            "- docs/history/demo/plan.md (when present)\n\nLearned context (machine-assembled"
+        ));
+    }
+
+    #[test]
+    fn the_same_cell_id_lands_in_the_same_arm_every_time() {
+        for _ in 0..2 {
+            assert_eq!(dispatch_cell_recorded(None, "c-1").1["knowledge_arm"], json!("holdout"));
+            assert_eq!(dispatch_cell_recorded(None, "c-2").1["knowledge_arm"], json!("knowledge"));
+        }
+    }
+
+    #[test]
+    fn a_holdout_percent_of_zero_holds_out_no_cell() {
+        for id in ["c-1", "c-5"] {
+            let (prompt, record) = dispatch_cell_recorded(Some("0"), id);
+            assert_eq!(record["knowledge_arm"], json!("knowledge"), "{id}");
+            assert!(prompt.contains(LEARNED_HEADER), "{id}");
+        }
+    }
+
+    #[test]
+    fn an_absent_holdout_percent_uses_ten() {
+        let arms: Vec<Value> = ["c-1", "c-5", "c-2"]
+            .iter()
+            .map(|id| dispatch_cell_recorded(None, id).1["knowledge_arm"].clone())
+            .collect();
+        assert_eq!(arms, vec![json!("holdout"), json!("holdout"), json!("knowledge")]);
+    }
+
+    #[test]
+    fn an_invalid_holdout_percent_uses_ten() {
+        for bad in ["\"50\"", "-1", "101", "5.5", "null", "true", "\"abc\""] {
+            let arms: Vec<Value> = ["c-1", "c-2"]
+                .iter()
+                .map(|id| dispatch_cell_recorded(Some(bad), id).1["knowledge_arm"].clone())
+                .collect();
+            assert_eq!(arms, vec![json!("holdout"), json!("knowledge")], "percent {bad}");
+        }
+    }
+
+    #[test]
+    fn a_valid_integer_holdout_percent_is_honoured() {
+        assert_eq!(dispatch_cell_recorded(Some("50"), "c-2").1["knowledge_arm"], json!("holdout"));
+        assert_eq!(dispatch_cell_recorded(Some("50"), "c-6").1["knowledge_arm"], json!("knowledge"));
+        assert_eq!(dispatch_cell_recorded(Some("100"), "c-8").1["knowledge_arm"], json!("holdout"));
+    }
+
+    #[test]
+    fn the_cell_record_carries_the_arm_and_the_listed_paths() {
+        let (_, record) = dispatch_cell_recorded(None, "c-2");
+        assert_eq!(record["knowledge_arm"], json!("knowledge"));
+        assert_eq!(
+            record["learned_context"],
+            json!([
+                "docs/knowledge/work/demo/work-item.md",
+                "docs/knowledge/work/demo/plan.md",
+                "docs/knowledge/patterns/dispatch-prompt.md",
+                "docs/knowledge/patterns/unrelated.md",
+                "docs/knowledge/areas/dispatch.md",
+            ])
+        );
+        let (_, held) = dispatch_cell_recorded(None, "c-1");
+        assert_eq!(held["knowledge_arm"], json!("holdout"));
+        assert_eq!(held["learned_context"], json!([]));
+    }
+
+    #[test]
+    fn non_cell_records_carry_neither_arm_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","review":"opus","advisor":"opus"}}}"#,
+        );
+        for kind in ["gather", "reviewer"] {
+            prepare_dispatch(&root, "claude", kind, None, None, false, None, None, true, None).unwrap();
+        }
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        assert_eq!(log.lines().count(), 2);
+        for line in log.lines() {
+            let record: Value = serde_json::from_str(line).unwrap();
+            assert_eq!(record.get("knowledge_arm"), None, "{line}");
+            assert_eq!(record.get("learned_context"), None, "{line}");
+        }
     }
