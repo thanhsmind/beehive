@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "herding-job-feature",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"herding-job-feature\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at fb3f4d0; reload the product and test \"herding-job-feature\", then either approve uat (\"bee gate --name uat --approved true --lane herding-job-feature\") or fix it in the worktree and merge again.",
+  "next_action": "bee close --feature herding-job-feature",
   "created_at": "2026-11-07T02:08:27.451Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: herding-job-feature",
-    "asked_at": "2026-11-07T02:22:32.911Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat: owner accepts herding-job-feature (job.json feature stamp) before close",
+    "asked_at": "2026-11-07T02:22:37.913Z",
+    "session": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce"
   },
   "route": {
     "class": "feature",
@@ -112,5 +112,15 @@
         "deps": []
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "herding-job-feature",
+    "date": "2026-11-07",
+    "at": "2026-11-07T02:26:36.015Z",
+    "areas_synced": [
+      "workflow-state",
+      "bee-herding"
+    ],
+    "next_action": "bee close --feature herding-job-feature"
   }
 }
