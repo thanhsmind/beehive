@@ -1,7 +1,6 @@
 ---
 type: research
 status: open
-claimed-by: none
 blocked-by: none
 ---
 

@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed-by: none
+status: closed
+claimed-by: leader-session (closed)
 blocked-by: none
 ---
 
@@ -19,4 +19,7 @@ Pointers paths that resolve on disk; Pointers stays prose for the reader,
 anchors is the machine contract.
 
 ## Answer
-
+A new explicit `bee.anchors` frontmatter list of repo-relative paths (code,
+test, verify feature files), seeded once from the Pointers paths that resolve on
+disk; Pointers stays prose, anchors is the machine contract. Named agent guess,
+owner may override before the content cut. Logged as D8 (4148025d).

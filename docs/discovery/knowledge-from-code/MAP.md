@@ -45,10 +45,12 @@ in the binary and skills, and bee's own bundle has been cut to it.
 - D6 (e7e133dc): pull rate is the measure, reported per feature.
 - D7 (6a502ad0): the mechanic is portable through onboarding; bee's
   content cut is a separate bee-only slice.
+- D8 (4148025d): an anchor is an entry in an explicit bee.anchors path
+  list, seeded from resolving Pointers — agent's named guess, owner may
+  override — tickets/001-anchor-definition.md
 
 ## Not yet specified
 
-- What an anchor is, exactly — tickets/001-anchor-definition.md
 - How the area cut preserves the reasons buried in narrative —
   tickets/002-area-cut-without-losing-reasons.md
 - Whether an event catalogue can be generated from code —
