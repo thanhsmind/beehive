@@ -621,6 +621,32 @@ pub(crate) fn owner_briefs_advisory(root: &Path) -> Option<(Value, String)> {
     Some((json!({"row": "owner_briefs", "status": "note", "detail": detail.clone()}), detail))
 }
 
+fn workspace_protocol_row(root: &Path) -> (Value, String) {
+    use crate::verbs::protocol::{protocol_state, ProtocolState, PROTOCOL_FILE};
+    let report = protocol_state(&crate::hooks::session_init::control_root_for(root));
+    let (status, detail) = match report.state {
+        ProtocolState::Missing => (
+            "ok",
+            format!("no {PROTOCOL_FILE} — optional; `bee protocol init` writes one"),
+        ),
+        ProtocolState::Valid => ("ok", format!("{PROTOCOL_FILE} is valid")),
+        state => (
+            "advisory",
+            format!(
+                "{PROTOCOL_FILE} is {} — {} — fix: bee protocol check. Advisory only: it does not change the verdict.",
+                state.as_str(),
+                report.issues.join("; ")
+            ),
+        ),
+    };
+    let mut row = json!({"row": "workspace-protocol", "status": status, "detail": detail.clone()});
+    if status == "advisory" {
+        row["issues"] = json!(report.issues);
+        row["fix"] = json!("bee protocol check");
+    }
+    (row, detail)
+}
+
 /// Source that ships without reinstalling the binary the hooks call is
 /// inert — a pattern this repo has paid for more than once (four features
 /// shipped to main in one session with `.bee/bin/bee` never rebuilt). This
@@ -1521,6 +1547,8 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
     if let Some((row, _)) = &briefs_advisory {
         all.push(row.clone());
     }
+    let (protocol_row, protocol_detail) = workspace_protocol_row(root);
+    all.push(protocol_row.clone());
     let runtime_checks = runtime_checks_with_env(root, env);
     all.extend(runtime_checks.iter().map(RuntimeCheck::value));
 
@@ -1564,6 +1592,8 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
     if let Some((_, detail)) = &briefs_advisory {
         lines.push(format!("  note {:<22} {}", "owner_briefs", detail));
     }
+    let protocol_mark = if protocol_row["status"] == "ok" { "ok  " } else { "note" };
+    lines.push(format!("  {protocol_mark} {:<22} {protocol_detail}", "workspace-protocol"));
     for check in &runtime_checks {
         lines.extend(check.lines());
     }
@@ -1687,7 +1717,7 @@ mod design_skill_tests {
 
     const ROLE_CONFIG: &str = r#"{"team":{"claude":{"design":{"model":"sonnet"}}}}"#;
 
-    fn repo(tmp: &Path, config: &str, design_agent: bool) -> PathBuf {
+    pub(super) fn repo(tmp: &Path, config: &str, design_agent: bool) -> PathBuf {
         let root = tmp.join("repo");
         std::fs::create_dir_all(root.join(".bee").join("bin")).unwrap();
         std::fs::write(root.join(".bee/bin/bee"), b"#!/bin/sh\n").unwrap();
@@ -1776,5 +1806,68 @@ mod design_skill_tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(tmp.path(), "{}", false);
         assert!(design_row(&root).is_none(), "nothing configures design work, so nothing is named");
+    }
+}
+
+#[cfg(test)]
+mod protocol_row_tests {
+    use super::design_skill_tests::repo;
+    use super::*;
+
+    fn row(payload: &Value) -> &Value {
+        payload["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["row"] == "workspace-protocol")
+            .expect("the workspace-protocol row always prints")
+    }
+
+    #[test]
+    fn a_missing_protocol_is_ok_and_hints_at_init() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        let (payload, lines) = doctor_report(&root, Runtime::Claude, &|_| None);
+        assert_eq!(row(&payload)["status"], "ok");
+        assert!(row(&payload)["detail"].as_str().unwrap().contains("bee protocol init"));
+        assert!(lines.iter().any(|l| l.contains("workspace-protocol") && l.contains("optional")), "{lines:?}");
+        assert_eq!(payload["overall_status"], "ready", "{payload}");
+    }
+
+    #[test]
+    fn a_valid_protocol_is_ok() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        crate::verbs::protocol::init_protocol(&root).unwrap();
+        let (payload, _) = doctor_report(&root, Runtime::Claude, &|_| None);
+        assert_eq!(row(&payload)["status"], "ok");
+        assert_eq!(payload["overall_status"], "ready", "{payload}");
+    }
+
+    #[test]
+    fn an_invalid_protocol_is_advisory_and_never_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        let (clean, _) = doctor_report(&root, Runtime::Claude, &|_| None);
+        std::fs::write(root.join("WORKSPACE_PROTOCOL.md"), "MERGE_OWNER: human\n").unwrap();
+        let (payload, lines) = doctor_report(&root, Runtime::Claude, &|_| None);
+        let r = row(&payload);
+        assert_eq!(r["status"], "advisory");
+        assert_eq!(r["fix"], "bee protocol check");
+        assert_eq!(r["issues"].as_array().unwrap().len(), 2);
+        assert!(r["detail"].as_str().unwrap().contains("DEPLOY_OWNER"));
+        assert_eq!(payload["overall_status"], clean["overall_status"]);
+        assert_ne!(payload["overall_status"], "blocked", "{payload}");
+        assert!(lines.iter().any(|l| l.contains("workspace-protocol") && l.contains("bee protocol check")), "{lines:?}");
+    }
+
+    #[test]
+    fn an_unreadable_protocol_is_advisory_and_never_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        std::fs::write(root.join("WORKSPACE_PROTOCOL.md"), [0xff, 0xfe, 0x00]).unwrap();
+        let (payload, _) = doctor_report(&root, Runtime::Claude, &|_| None);
+        assert_eq!(row(&payload)["status"], "advisory");
+        assert_ne!(payload["overall_status"], "blocked", "{payload}");
     }
 }

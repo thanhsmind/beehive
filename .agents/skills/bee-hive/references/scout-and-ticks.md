@@ -27,6 +27,14 @@ the touched area.
 
 **Orphaned scribing debt:** when `bee status --json` reports a non-zero `scribing_debt.orphaned` count (the preamble already prints one loud line for it), surface it and offer it as fix-first knowledge work with the same one-line offer discipline as the capture-queue flush — e.g. "N cell(s) across M feature(s) never got their scribing sync — close the gap now, or after the current task?" One line, user chooses; orphaned scribing debt is never silently ignored. The repair verb is `bee state scribing-run --feature <feature> --areas "<a,b>" --next-action "<n>"`, which can stamp a non-active feature directly — no need to reactivate it first.
 
+### Fast-lane read budget
+
+Under `tiny` and `small` the reading is the named file or line range, plus AT MOST ONE exact-symbol search for the changed symbol's callers. Broad or fuzzy searches and file-tree scans are out of the budget.
+
+Stop before patching when the one search finds a caller in another module, or when any route flag turns up. Emit the line `Escalating: <what was found>`, then re-route upward with `bee route --set` — promotion is always available, never a favor to ask for.
+
+Read cheap to expensive: outline, symbol list and signatures first; then a line range; a whole file only before rewriting it.
+
 ### Route record
 
 `bee route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused:

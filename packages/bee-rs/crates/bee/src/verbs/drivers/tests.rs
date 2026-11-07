@@ -2961,6 +2961,29 @@ use std::time::Instant;
     }
 
     #[test]
+    fn dispatch_verify_from_a_granted_worktree_reads_the_control_roots_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        let root = psd1_store_root(&granted);
+        std::fs::write(main.join("WORKSPACE_PROTOCOL.md"), "# Workspace protocol\n").unwrap();
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, true, None, None, None, None, None, None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let id = v["dispatch_id"].as_str().unwrap();
+        assert!(!granted.join(".bee").join("logs").join("dispatch.jsonl").exists());
+        let (report, code) = verify_dispatch(&root, id, None);
+        assert_eq!(code, 0, "{report}");
+        assert_eq!(report["protocol"], json!("same"));
+        let (missing, code) = verify_dispatch(&root, "no-such-id", None);
+        assert_eq!(code, 1);
+        assert!(missing["fix"].as_str().unwrap().contains(&root.display().to_string()), "{missing}");
+    }
+
+    #[test]
     fn non_cell_dispatch_from_a_granted_worktree_runs_in_that_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, granted) = dp1_worktree_fixture(tmp.path());
@@ -3129,12 +3152,12 @@ use std::time::Instant;
         bundle_fixture(&granted);
         w(
             &main,
-            ".bee/cells/c-1.json",
-            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+            prepare_dispatch(&main, "claude", "cell", Some("c-2"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -3164,19 +3187,19 @@ use std::time::Instant;
         bundle_fixture(&root);
         w(
             &root,
-            ".bee/cells/c-1.json",
-            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+            prepare_dispatch(&root, "claude", "cell", Some("c-2"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
         };
         let prompt = v.get("payload").unwrap().get("prompt").unwrap().as_str().unwrap();
         assert_eq!(
-            learned_context_lines(&root, &json!({"id": "c-1", "feature": "demo", "lane": "small"})).unwrap(),
+            learned_context_lines(&root, &json!({"id": "c-2", "feature": "demo", "lane": "small"})).unwrap(),
             vec![
                 "- docs/knowledge/work/demo/work-item.md — Demo work item",
                 "- docs/knowledge/work/demo/plan.md — Demo plan",
@@ -7930,7 +7953,7 @@ exit 0
         const GATHER: &str = r#"{"subagent_type":"bee-forager","prompt":"[bee-tier: read] [bee-kind: gather]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
         // pi-run-friction-fixes prf-6 re-cut the REVIEWER golden ONCE, on purpose: reviewer.md gained the lens line.
         const REVIEWER: &str = r#"{"subagent_type":"bee-guard","prompt":"[bee-tier: review] [bee-kind: reviewer]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\nThe dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity.\nBefore you review, check that HEAD equals the frozen review head and that the in-scope paths are clean. On a mismatch, stop and report `REVIEW_HEAD_MISMATCH` with the fix line `re-freeze the review head, or commit or drop the stray paths`.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
-        const ADVISOR: &str = r#"{"subagent_type":"bee-elder","prompt":"[bee-tier: advisor] [bee-kind: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\nEnd the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.","description":"advisor (fable)","model":"fable"}"#;
+        const ADVISOR: &str = r#"{"subagent_type":"bee-elder","prompt":"[bee-tier: advisor] [bee-kind: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\nEnd the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.","description":"advisor (fable)","model":"fable"}"#;
 
         let t0 = tempfile::tempdir().unwrap();
         let none = chain_repo(&t0, "");
@@ -8306,7 +8329,7 @@ advance_on — falling to another model there hides the defect (D11)"
     /// leaves one byte of residue behind — the newline around `{{/if}}` being
     /// the byte that is easiest to get wrong.
     const ADVISOR_BODY_WITHOUT_A_BRIEF: &str = concat!(
-        "Advisor consult: produce an independent digest/opinion on the given question. Read-only.\n",
+        "Advisor consult: produce an independent digest/opinion on the given question. Read-only.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n",
         "\n",
         "Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\n",
         "End the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run."
@@ -10596,6 +10619,7 @@ Contract:
 - Load the bee-swarming skill (Execute section) for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
 - At each meaningful step (read done, red test seen, green, committed) record one progress note with `.bee/bin/bee herding notify --kind progress --job c-golden --step <word> --text "<note, at most 120 characters>"`; a note never ends the turn.
 - Execute only the assigned cell. Do not select or accept other work.
+- Never stop to offer the leader a menu of implementation options: choose inside the cell's scope and record the choice as a departure. A decision outside the scope is one short yes/no question, returned through `[PARKED]` or `[BLOCKED]`.
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
 - Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
 - Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: c-golden` (the words "cell:" then the id — a bare id alone fails the cap).
@@ -12610,4 +12634,151 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
         let elder_body = embedded_agent_body("bee-elder").expect("bee-elder body");
         assert!(stdin.starts_with(elder_body));
+    }
+
+    // ── kom-1: the knowledge holdout arm ───────────────────────────────────
+
+    fn holdout_config(percent: Option<&str>) -> String {
+        match percent {
+            None => r#"{"models":{"claude":{"generation":"sonnet"}}}"#.to_string(),
+            Some(p) => format!(
+                r#"{{"models":{{"claude":{{"generation":"sonnet"}}}},"knowledge_holdout_percent":{p}}}"#
+            ),
+        }
+    }
+
+    fn dispatch_cell_recorded(percent: Option<&str>, cell_id: &str) -> (String, Value) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &holdout_config(percent));
+        bundle_fixture(&root);
+        w(
+            &root,
+            &format!(".bee/cells/{cell_id}.json"),
+            &format!(
+                r#"{{"id":"{cell_id}","feature":"demo","status":"claimed","trace":{{"worker":"w"}},"lane":"small"}}"#
+            ),
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some(cell_id), Some("w"), false, None, None, true, None)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let prompt = v["payload"]["prompt"].as_str().unwrap().to_string();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        (prompt, record)
+    }
+
+    const LEARNED_HEADER: &str = "Learned context (machine-assembled";
+
+    #[test]
+    fn a_holdout_cell_brief_carries_no_learned_context_block() {
+        let (prompt, record) = dispatch_cell_recorded(None, "c-1");
+        assert_eq!(record["knowledge_arm"], json!("holdout"));
+        assert!(!prompt.contains(LEARNED_HEADER), "{prompt}");
+        assert!(!prompt.contains("docs/knowledge/"), "{prompt}");
+        assert!(prompt.contains("- docs/history/demo/plan.md (when present)"), "{prompt}");
+        assert!(!prompt.contains("{{"), "{prompt}");
+    }
+
+    #[test]
+    fn a_knowledge_arm_cell_brief_keeps_the_learned_context_block_byte_for_byte() {
+        let (prompt, record) = dispatch_cell_recorded(None, "c-2");
+        assert_eq!(record["knowledge_arm"], json!("knowledge"));
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        bundle_fixture(&root);
+        let lines = learned_context_lines(&root, &json!({"id": "c-2", "feature": "demo", "lane": "small"}))
+            .unwrap()
+            .join("\n");
+        let block = format!(
+            "\n\n{LEARNED_HEADER} — read before implementing; prefer it over re-deriving):\n{lines}\n"
+        );
+        assert!(prompt.contains(&block), "{prompt}");
+        assert!(prompt.contains(
+            "- docs/history/demo/plan.md (when present)\n\nLearned context (machine-assembled"
+        ));
+    }
+
+    #[test]
+    fn the_same_cell_id_lands_in_the_same_arm_every_time() {
+        for _ in 0..2 {
+            assert_eq!(dispatch_cell_recorded(None, "c-1").1["knowledge_arm"], json!("holdout"));
+            assert_eq!(dispatch_cell_recorded(None, "c-2").1["knowledge_arm"], json!("knowledge"));
+        }
+    }
+
+    #[test]
+    fn a_holdout_percent_of_zero_holds_out_no_cell() {
+        for id in ["c-1", "c-5"] {
+            let (prompt, record) = dispatch_cell_recorded(Some("0"), id);
+            assert_eq!(record["knowledge_arm"], json!("knowledge"), "{id}");
+            assert!(prompt.contains(LEARNED_HEADER), "{id}");
+        }
+    }
+
+    #[test]
+    fn an_absent_holdout_percent_uses_ten() {
+        let arms: Vec<Value> = ["c-1", "c-5", "c-2"]
+            .iter()
+            .map(|id| dispatch_cell_recorded(None, id).1["knowledge_arm"].clone())
+            .collect();
+        assert_eq!(arms, vec![json!("holdout"), json!("holdout"), json!("knowledge")]);
+    }
+
+    #[test]
+    fn an_invalid_holdout_percent_uses_ten() {
+        for bad in ["\"50\"", "-1", "101", "5.5", "null", "true", "\"abc\""] {
+            let arms: Vec<Value> = ["c-1", "c-2"]
+                .iter()
+                .map(|id| dispatch_cell_recorded(Some(bad), id).1["knowledge_arm"].clone())
+                .collect();
+            assert_eq!(arms, vec![json!("holdout"), json!("knowledge")], "percent {bad}");
+        }
+    }
+
+    #[test]
+    fn a_valid_integer_holdout_percent_is_honoured() {
+        assert_eq!(dispatch_cell_recorded(Some("50"), "c-2").1["knowledge_arm"], json!("holdout"));
+        assert_eq!(dispatch_cell_recorded(Some("50"), "c-6").1["knowledge_arm"], json!("knowledge"));
+        assert_eq!(dispatch_cell_recorded(Some("100"), "c-8").1["knowledge_arm"], json!("holdout"));
+    }
+
+    #[test]
+    fn the_cell_record_carries_the_arm_and_the_listed_paths() {
+        let (_, record) = dispatch_cell_recorded(None, "c-2");
+        assert_eq!(record["knowledge_arm"], json!("knowledge"));
+        assert_eq!(
+            record["learned_context"],
+            json!([
+                "docs/knowledge/work/demo/work-item.md",
+                "docs/knowledge/work/demo/plan.md",
+                "docs/knowledge/patterns/dispatch-prompt.md",
+                "docs/knowledge/patterns/unrelated.md",
+                "docs/knowledge/areas/dispatch.md",
+            ])
+        );
+        let (_, held) = dispatch_cell_recorded(None, "c-1");
+        assert_eq!(held["knowledge_arm"], json!("holdout"));
+        assert_eq!(held["learned_context"], json!([]));
+    }
+
+    #[test]
+    fn non_cell_records_carry_neither_arm_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","review":"opus","advisor":"opus"}}}"#,
+        );
+        for kind in ["gather", "reviewer"] {
+            prepare_dispatch(&root, "claude", kind, None, None, false, None, None, true, None).unwrap();
+        }
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        assert_eq!(log.lines().count(), 2);
+        for line in log.lines() {
+            let record: Value = serde_json::from_str(line).unwrap();
+            assert_eq!(record.get("knowledge_arm"), None, "{line}");
+            assert_eq!(record.get("learned_context"), None, "{line}");
+        }
     }

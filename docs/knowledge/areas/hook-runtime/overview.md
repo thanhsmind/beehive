@@ -80,6 +80,16 @@ with a visible log entry, not in a new allow or a new deny. Every actor
 observes either the normal outcome or a logged fail-open — never a stack trace
 ending the turn.
 
+**B2 — Unverified-agreement warning (Stop).** When a session stops, the close
+checkpoint reads the assistant text of the last turn from the transcript events
+it already loaded. If that text agrees with a proposal ("you're right", "makes
+sense", "hợp lý" and similar fixed phrases) yet carries no `[verified]` label
+and no conditional marker ("checking", "kiểm tra trước"), it adds one advisory
+line naming the rule `agents-verify-before-agreeing`. The line is advisory
+only: the turn is never blocked and the exit code never changes, and a Stop
+that blocks or whose hook is disabled adds nothing. Pointer:
+`packages/bee-rs/crates/bee/src/hooks/session_close/claims.rs`.
+
 ## Business Rules
 
 - R2 — A checkpoint failure never flips an allow/deny decision; fail-open is

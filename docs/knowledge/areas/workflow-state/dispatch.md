@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
   decisions: [30606de4-5fae-4c9d-9e3f-8f47a494f8a3 (one unified command entry point publishing a machine-readable catalog), bbc6bcea (shim-retire D1 — the legacy per-group forwarders are deleted; bee is the sole shipped CLI), 8ef2bae6 (cli-ergonomics D1 — exhaustive refusal, every problem + a runnable example in one message), "80b64c20 (packages-engine-move D1-D5: onboarding/distribution engine relocated to packages/bee/scripts, strict-flag validation universal, migration-tooling pattern)", "b0ef4f66 (packages-engine-move-3: capture add --text friction record corrected — never a silent no-op, message now names the actual unknown flag via a universal dispatcher-level check)"]
-  sources: ["harness-integration-adopt cells hia-1 and hia-2 (traces and reports, 2026-07-12)", "dispatcher-unify cells du-1..du-6 (traces and reports, 2026-07-12, flushed capture stubs b6a2233c/9e68432b)", "docs/specs/workflow-state.md#B8", "docs/specs/workflow-state.md#R12", "docs/specs/workflow-state.md#R13", "docs/specs/workflow-state.md#E10", "docs/specs/workflow-state.md#E11", "docs/specs/workflow-state.md#P6", "docs/specs/workflow-state.md#P10", docs/history/packages-engine-move/]
+  sources: ["docs/history/knowledge-outcome-measure/plan.md (D2-D5: the holdout arm)", "harness-integration-adopt cells hia-1 and hia-2 (traces and reports, 2026-07-12)", "dispatcher-unify cells du-1..du-6 (traces and reports, 2026-07-12, flushed capture stubs b6a2233c/9e68432b)", "docs/specs/workflow-state.md#B8", "docs/specs/workflow-state.md#R12", "docs/specs/workflow-state.md#R13", "docs/specs/workflow-state.md#E10", "docs/specs/workflow-state.md#E11", "docs/specs/workflow-state.md#P6", "docs/specs/workflow-state.md#P10", docs/history/packages-engine-move/]
   authoritative_for: "workflow-state: unified command discovery, validation, and dispatch"
 ---
 
@@ -347,6 +347,24 @@ decision 80b64c20).
   unconditionally, and because receipts were never retired, every cell ever
   dispatched stayed protected forever and the cleanup could never run
   (decisions 602e80ae, 6d752b0e; cell wlf-1).
+- R21 — A fixed tenth of cell dispatches is held out of the Learned context
+  block, so the knowledge bundle has a comparison group (knowledge-outcome-measure
+  plan D2). The arm is a pure function of the cell id (plan D3): the first 8 hex
+  digits of the sha256 of the id, read as a u32 and taken modulo 100, fall below
+  `knowledge_holdout_percent` in `.bee/config.json` for `holdout`, else
+  `knowledge`. A re-dispatch of the same cell therefore stays in its arm. The
+  key defaults to 10 when absent or when its value is not an integer from 0 to
+  100; 0 holds out no cell. A `holdout` cell renders no Learned context block;
+  a `knowledge` cell renders byte-identically to before. The holdout removes
+  only that block: the static read list and the dispatcher-picked Expertise
+  block stay in both arms, and a worker may still search knowledge on its own,
+  so the comparison is by assigned arm (plan D4). The kind `cell` prepare-time
+  dispatch record carries `knowledge_arm` and `learned_context` (the
+  repo-relative paths the block lists, `[]` for a holdout); the gather,
+  reviewer and advisor records carry neither. A cell dispatched before the
+  record carried an arm has none and is never given one after the fact
+  (plan D5). `bee knowledge report` reads these records
+  (`areas/okf-profile/critical-bar.md`, B6).
 
 
 ## Edge Cases Settled
@@ -407,6 +425,11 @@ pretending to be behaviour.
   2-line forwarder with byte-identical output, then shim-retire (D1, decision
   bbc6bcea; `.bee/cells/shim-retire-{1..6}.json`) deleted those forwarders
   outright — `bee` is now the sole shipped CLI, no forwarders remain.
+- Holdout arm (R21): `knowledge_arm`, `knowledge_holdout_percent` and
+  `cell_learned_context` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`; the record keys
+  are appended in `prepare_dispatch_wire`. Plan:
+  `docs/history/knowledge-outcome-measure/plan.md` (D2-D5).
 - Contract-citation tripwire (R16, R17): one shared check,
   `contract_citation_refusal` in
   `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs`, called from

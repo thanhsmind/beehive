@@ -1,0 +1,162 @@
+{
+  "id": "kom-2",
+  "feature": "knowledge-outcome-measure",
+  "lane": "standard",
+  "role": "code",
+  "title": "Compare holdout and knowledge cells in the knowledge report",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-outcome-measure/plan.md",
+    "docs/knowledge/areas/okf-profile/critical-bar.md"
+  ],
+  "action": "Follow the Contract for kom-2 in docs/history/knowledge-outcome-measure/plan.md. bee knowledge report keeps measured, unmeasured and the evidence ladder and gains outcomes: per arm (knowledge, holdout) the counts cells, blocked, reopened, red_rounds, with_mistakes plus rates (3 decimals), unrecorded, min_per_arm 30 and comparable. Population: capped or dropped cells under .bee/cells (archive included). Arm: knowledge_arm on the earliest dispatch.jsonl row with source prepare, kind cell and that cell id; none means unrecorded. Signals from trace: blocked_reason non-empty string, reopened_for_rework or reopened_at non-null, attempts non-empty, mistakes non-empty. Missing files or bad rows are skipped. Text output adds one line per arm and a too-few line when not comparable. Write the tests first and watch them fail.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test knowledge_outcomes",
+  "must_haves": {
+    "truths": [
+      "bee knowledge report JSON carries outcomes with per-arm counts and rates",
+      "A cell with no recorded arm counts as unrecorded and in neither arm",
+      "Open cells are excluded from the population",
+      "comparable is false until both arms reach 30 cells",
+      "measured, unmeasured and the evidence ladder are unchanged"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/okf-profile/critical-bar.md"
+  ],
+  "decisions": [
+    "eeb666c4",
+    "dafd05a1",
+    "5b12cf38"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-kom-2",
+    "outcome": "bee knowledge report gains an outcomes section (per-arm counts, rates, unrecorded, comparable at 30/arm) with 8 new tests; commit 8729d72340d52927b46b4b1f3df48144f19a60b0",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T05:52:50.135Z",
+    "behavior_change": true,
+    "verification_evidence": "full suite exit 0, includes knowledge_outcomes 8 passed (7 seen red first)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "330fe462-687b-4326-b5dd-428e88f0a404",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test knowledge_outcomes",
+    "claimed_at": "2026-11-07T05:44:07.960Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee knowledge report gains an outcomes section (per-arm counts, rates, unrecorded, comparable at 30/arm) with 8 new tests; commit 8729d72340d52927b46b4b1f3df48144f19a60b0",
+      "commit": "79560ca607deb2ceaad7f5aac41ed832e9e72798",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test knowledge_outcomes — green:unit — full suite exit 0, includes knowledge_outcomes 8 passed (7 seen red first)",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge report JSON carries outcomes with per-arm counts and rates",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "A cell with no recorded arm counts as unrecorded and in neither arm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "Open cells are excluded from the population",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "comparable is false until both arms reach 30 cells",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "measured, unmeasured and the evidence ladder are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+          },
+          {
+            "requirement": "file packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "file packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T05:53:54.270Z",
+        "recorded_by": "330fe462-687b-4326-b5dd-428e88f0a404",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "report.rs:376-427 build_outcomes builds arms.{knowledge,holdout}.{cells,blocked,reopened,red_rounds,with_mistakes,rates{...}}, unrecorded, min_per_arm 30 and comparable. report.rs:367-372 computes each rate rounded to 3 decimals, or 0 when cells is 0. report.rs:442,453 put it into the JSON result. Tests knowledge_outcomes.rs:102 (exact counts and rates: 0.25 and 0.5), 132 (0.333), 147 (an empty arm gives 0.0); passed."
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "report.rs:340-350 takes the first source=prepare, kind=cell row per cell id. A missing key gives \"\", which matches no arm, so report.rs:380-383 adds 1 to unrecorded and continues. Test knowledge_outcomes.rs:102 has u1: its prepare row has no key, while a herding-run row and a gather row do; the test asserts unrecorded==1, k=4, h=2. Test :157 (no dispatch log) gives unrecorded 2 with 0 cells in both arms. Both passed."
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "report.rs:315-337 closed_cells reads .bee/cells/*.json and .bee/cells/archive/<dir>/*.json, which matches the real layout, and keeps only status capped or dropped (report.rs:332). In the tests, o1 (claimed, with a knowledge prepare row and blocked_reason) and o2 (open) are not counted (knowledge_outcomes.rs:79-80,107), and c3 (open) is excluded at :157. Passed."
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "report.rs:411 sets comparable = every arm has >= MIN_PER_ARM (30), and report.rs:412-418 adds the 'not comparable ... N more knowledge, M more holdout' line. Test knowledge_outcomes.rs:169: 30 knowledge and 29 holdout give false, and 30/30 gives true. Tests :197 and :210 cover the text lines. All passed."
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "In `git diff 8729d7234~1 8729d7234 -- report.rs` the only removed line is the build_report destructure, which changed to bind `mut lines`. build_report (report.rs:253-309) is untouched, and outcome lines are added after its lines (report.rs:441-443). Test knowledge_outcomes.rs:227 checks that measured, unmeasured, measured_count, unmeasured_count and evidence_ladder are present; passed. Older report.rs unit tests (e.g. :679) still pass."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-07T05:59:40.585Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 97740,
+    "cached": 1218708,
+    "total": 1316448,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 97740,
+        "cached": 1218708,
+        "total": 1316448
+      }
+    },
+    "jobs": [
+      "job-1794030248652-1698487-1"
+    ]
+  }
+}

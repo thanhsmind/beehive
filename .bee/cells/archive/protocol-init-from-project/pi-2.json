@@ -1,0 +1,144 @@
+{
+  "id": "pi-2",
+  "feature": "protocol-init-from-project",
+  "title": "Document the agent step that finishes a project's protocol",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "D6",
+    "D8"
+  ],
+  "files": [
+    "skills/bee-hive/references/onboarding.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/protocol-init-from-project/CONTEXT.md",
+    "skills/bee-hive/references/onboarding.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "WORKSPACE_PROTOCOL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/onboarding.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+  ],
+  "action": "Per D8, add section \"Workspace protocol\" to skills/bee-hive/references/onboarding.md in its existing style (ASD-STE100, short sentences): when (the owner asks, or bee protocol check is not valid); steps: run `bee protocol init --json` (or `--print` when a file exists); read every `review` path; add the project's own boundaries, protected areas and anti-patterns and set PROJECT_CRITICALITY, each added line cited in `## Sources`; no placeholder, no test command; run `bee protocol check` until valid; commit; show the owner a table of key, value and source. Point at the repo-root WORKSPACE_PROTOCOL.md of the bee repo as the reference result. In skills/bee-hive/SKILL.md Onboarding add exactly one pointer line to that section. In the workspace-protocol concept, record that init renders from the project (D1-D7), cite decision c5e4d24a, and note it narrows the fixed template of workspace-protocol D4. Then run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) once from the worktree and commit the regenerated files with this cell. No code comments.",
+  "verify": ".bee/bin/bee dev release-manifest --check && rg -n 'Workspace protocol' skills/bee-hive/references/onboarding.md && rg -n 'c5e4d24a' docs/knowledge/areas/workflow-state/workspace-protocol.md",
+  "must_haves": {
+    "truths": [
+      "the onboarding reference holds the agent procedure with the review-files step",
+      "bee-hive SKILL.md points at it in one line",
+      "the concept records the project render and cites c5e4d24a"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/onboarding.md",
+        "substantive": "Workspace protocol section"
+      }
+    ],
+    "key_links": [
+      "SKILL.md Onboarding points at the section"
+    ],
+    "prohibitions": [
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pi-2",
+    "outcome": "Added Workspace protocol section, SKILL.md pointer, concept update citing c5e4d24a, ran bee dev regen; commit 0662e4412",
+    "files_changed": [
+      "skills/bee-hive/references/onboarding.md",
+      "skills/bee-hive/SKILL.md",
+      "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".agents/skills",
+      ".claude/skills",
+      ".claude-plugin/skills",
+      ".codex-plugin/skills",
+      ".opencode/skills",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T09:15:32.797Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change; manifest check and both content greps matched",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && rg -n 'Workspace protocol' skills/bee-hive/references/onboarding.md && rg -n 'c5e4d24a' docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "claimed_at": "2026-11-07T09:14:34.102Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added Workspace protocol section, SKILL.md pointer, concept update citing c5e4d24a, ran bee dev regen; commit 0662e4412",
+      "commit": "0662e4412c97d5d931601fb520df33cc72e94c09",
+      "files": [
+        "skills/bee-hive/references/onboarding.md",
+        "skills/bee-hive/SKILL.md",
+        "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".agents/skills",
+        ".claude/skills",
+        ".claude-plugin/skills",
+        ".codex-plugin/skills",
+        ".opencode/skills",
+        ".bee/onboarding.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && rg -n 'Workspace protocol' skills/bee-hive/references/onboarding.md && rg -n 'c5e4d24a' docs/knowledge/areas/workflow-state/workspace-protocol.md — green:static — docs-only change; manifest check and both content greps matched",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 238 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the onboarding reference holds the agent procedure with the review-files step",
+            "artifact": "skills/bee-hive/references/onboarding.md"
+          },
+          {
+            "requirement": "bee-hive SKILL.md points at it in one line",
+            "artifact": "skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": "the concept records the project render and cites c5e4d24a",
+            "artifact": "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+          },
+          {
+            "requirement": "SKILL.md Onboarding points at the section",
+            "artifact": "skills/bee-hive/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-07T09:15:42.797Z",
+        "recorded_by": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 48531,
+    "cached": 591798,
+    "total": 640329,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 48531,
+        "cached": 591798,
+        "total": 640329
+      }
+    },
+    "jobs": [
+      "job-1794042879108-2812959-1"
+    ]
+  }
+}

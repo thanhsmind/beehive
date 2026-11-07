@@ -104,6 +104,13 @@ verb: when you are routing, starting, or resuming work — and only then —
 run `bee orient`; it names the phase, the blockers, and the next skill.
 A plain question needs neither.
 
+When `WORKSPACE_PROTOCOL.md` exists at the repo root, read it in full before
+you route work. Copy the boundaries a cell touches into that cell's brief,
+and name each listed boundary the plan touches in the Gate 2 message (under
+bypass, in the auto-approval reason and the closing report). A boundary adds
+no new stop: the `gate_bypass` level decides, as for every gate. Workers
+never read the file, and `bee protocol check` reports its state.
+
 <!-- rule: agents-knowledge-before-code -->
 - Search the knowledge store before you read code. Once per turn, before
   your first read of source under `packages/` or `src/` (or any source
@@ -139,6 +146,23 @@ A plain question needs neither.
   holds as a principle, never as a pre-claim full-suite order. A
   scoped-green cap whose CI later goes red is a fix-first cell plus a
   captured learning on why the scope missed.
+<!-- /rule -->
+<!-- rule: agents-verify-before-agreeing -->
+- A task opens with one line before its first tool call: `Triage:
+  <lane> — <reason in 10 words or fewer>`. A route flag never takes a
+  fast lane; the user may override; a plain question needs none.
+- Tag each technical claim about code or behavior `[verified]` (read or
+  ran this session) or `[unverified]` (general knowledge or inference);
+  never present `[unverified]` as fact.
+- Never agree with a proposal until its key assumption is `[verified]`;
+  the first reaction to an unchecked idea is conditional ("sounds
+  right; checking X first").
+  The Stop hook warns when a reply agrees without a `[verified]` label.
+- When the user's direction conflicts with the code, never say "you are
+  wrong": state the goal, what the code does and why with file:line,
+  then the options.
+  Full forms: `routing-and-contracts.md` ("Claim labels and pushback"),
+  `scout-and-ticks.md` ("Fast-lane read budget").
 <!-- /rule -->
 - Write "done", "green", or "fixed" only beside fresh command output
   in the same message, naming the command or path first.

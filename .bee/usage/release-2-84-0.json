@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-84-0",
+  "closed_at": "2026-11-07T06:22:07.988Z",
+  "sessions": [
+    {
+      "session_id": "330fe462-687b-4326-b5dd-428e88f0a404",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 374,
+          "output": 73509,
+          "cache_write": 241339,
+          "cache_read": 29270314,
+          "new": 315222,
+          "cached": 29270314,
+          "total": 29585536
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794029288439,
+      "ended_ms": 1794032523666,
+      "totals": {
+        "new": 315222,
+        "cached": 29270314,
+        "total": 29585536
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 315222,
+      "cached": 29270314,
+      "total": 29585536
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 339682,
+      "cached": 29380486,
+      "total": 29720168
+    },
+    "herding": {
+      "new": 24460,
+      "cached": 110172,
+      "total": 134632,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 8,
+          "output": 1524,
+          "cache_write": 22928,
+          "cache_read": 110172,
+          "new": 24460,
+          "cached": 110172,
+          "total": 134632
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "1edb0ee9-1b75-40ad-a033-fb817bf55cb5",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 8,
+          "output": 1524,
+          "cache_write": 22928,
+          "cache_read": 110172,
+          "new": 24460,
+          "cached": 110172,
+          "total": 134632
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794031934526,
+      "ended_ms": 1794031953057,
+      "totals": {
+        "new": 24460,
+        "cached": 110172,
+        "total": 134632
+      },
+      "job_id": "job-1794031932747-2015806-1"
+    }
+  ]
+}

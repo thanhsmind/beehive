@@ -1,0 +1,531 @@
+{
+  "schema_version": "1.0",
+  "feature": "protocol-init-from-project",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"protocol-init-from-project\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"protocol-init-from-project\" — feature is closed.",
+  "created_at": "2026-11-07T09:12:27.146Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-11-07T09:12:24.026Z",
+    "feature": "protocol-init-from-project"
+  },
+  "gate_preview": {
+    "feature": "protocol-init-from-project",
+    "plan_sha256": "1de64878ec83c02a4d5ba1ba57f194ebe749257ee93b2fc72113454e84728a26",
+    "previewed_at": "2026-11-07T09:14:15.012Z",
+    "cells": [
+      {
+        "id": "pi-1",
+        "feature": "protocol-init-from-project",
+        "title": "Render the workspace protocol from the project at init",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "c5e4d24a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "read_first": [
+          "docs/history/protocol-init-from-project/CONTEXT.md",
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+          "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+          "WORKSPACE_PROTOCOL.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+        ],
+        "action": "In verbs/protocol.rs replace the fixed TEMPLATE render with a render from the control root per CONTEXT D1-D6 (keep a pure fn `render_protocol(facts) -> String` and a fn that gathers the facts from the root, so tests feed fake facts and temp git repos). Read git through the crate's existing git helpers where one exists (no new dependency); strip `user[:pass]@` from the origin URL. Read `uat_stop` through the existing config reader. The rendered file must check `valid` with protocol_state, hold no placeholder and no FULL_TEST or other test command. Output: text mode prints `wrote <path>`, then one next line naming the review files and the judgment work (D6); `--json` carries `ok, path, facts:[{key,value,source}], review:[paths]`. D7: add `--print` (text: the rendered file on stdout; json: `rendered` plus facts and review); it writes nothing and works when a file exists; without it an existing file still returns the protocol_exists refusal unchanged. Declare `--print` and the new output in registry_payload.json under protocol.init. If the flag name `print` is new to the catalog, raise PINNED_FLAG_COUNT in catalog.rs by exactly the new names, citing c5e4d24a. Tests: a temp git repo with origin `https://u:p@example.com/o/r.git` and origin/HEAD renders REPOSITORY_REMOTE without `u:p@` and DEFAULT_BRANCH from origin/HEAD; no origin leaves both keys out (branch falls back to the current branch); uat_stop merge vs absent gives the two MERGE_OWNER texts; scripts/release.sh present gives the DEPLOY_OWNER line naming it, a `.github/workflows/release.yml` alone names that, none gives `human`; a present `.claude/skills` dir adds its PROTECTED_AREAS item, an absent one does not; the render checks valid and has a Sources line per derived key; `review` lists only existing files; --print on an existing file returns the render and leaves the file bytes unchanged; init on an existing file still refuses. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+        "must_haves": {
+          "truths": [
+            "init writes git facts, MERGE_OWNER from uat_stop and DEPLOY_OWNER from the first release entry",
+            "the origin URL never carries credentials",
+            "the rendered file checks valid and holds no test command",
+            "a Sources list and the json facts name where each derived key came from",
+            "init names the review files that exist",
+            "--print writes nothing and works on an existing file; plain init still refuses an existing file"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+              "substantive": "project render, --print, tests"
+            }
+          ],
+          "key_links": [
+            "registry_payload.json declares --print"
+          ],
+          "prohibitions": [
+            "No overwrite path for an existing file",
+            "No new dependency",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "pi-2",
+        "feature": "protocol-init-from-project",
+        "title": "Document the agent step that finishes a project's protocol",
+        "lane": "small",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "D6",
+          "D8"
+        ],
+        "files": [
+          "skills/bee-hive/references/onboarding.md",
+          "skills/bee-hive/SKILL.md",
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/protocol-init-from-project/CONTEXT.md",
+          "skills/bee-hive/references/onboarding.md",
+          "skills/bee-hive/SKILL.md",
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+          "WORKSPACE_PROTOCOL.md"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/references/onboarding.md",
+          "skills/bee-hive/SKILL.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+        ],
+        "action": "Per D8, add section \"Workspace protocol\" to skills/bee-hive/references/onboarding.md in its existing style (ASD-STE100, short sentences): when (the owner asks, or bee protocol check is not valid); steps: run `bee protocol init --json` (or `--print` when a file exists); read every `review` path; add the project's own boundaries, protected areas and anti-patterns and set PROJECT_CRITICALITY, each added line cited in `## Sources`; no placeholder, no test command; run `bee protocol check` until valid; commit; show the owner a table of key, value and source. Point at the repo-root WORKSPACE_PROTOCOL.md of the bee repo as the reference result. In skills/bee-hive/SKILL.md Onboarding add exactly one pointer line to that section. In the workspace-protocol concept, record that init renders from the project (D1-D7), cite decision c5e4d24a, and note it narrows the fixed template of workspace-protocol D4. Then run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) once from the worktree and commit the regenerated files with this cell. No code comments.",
+        "verify": ".bee/bin/bee dev release-manifest --check && rg -n 'Workspace protocol' skills/bee-hive/references/onboarding.md && rg -n 'c5e4d24a' docs/knowledge/areas/workflow-state/workspace-protocol.md",
+        "must_haves": {
+          "truths": [
+            "the onboarding reference holds the agent procedure with the review-files step",
+            "bee-hive SKILL.md points at it in one line",
+            "the concept records the project render and cites c5e4d24a"
+          ],
+          "artifacts": [
+            {
+              "path": "skills/bee-hive/references/onboarding.md",
+              "substantive": "Workspace protocol section"
+            }
+          ],
+          "key_links": [
+            "SKILL.md Onboarding points at the section"
+          ],
+          "prohibitions": [
+            "No code comments"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "pi-1 changes the init verb."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride the code cell; the live proof is the leader's."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "pi-2 writes the agent procedure and the concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Small lane: no consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "protocol-init-from-project",
+    "plan_sha256": "1de64878ec83c02a4d5ba1ba57f194ebe749257ee93b2fc72113454e84728a26",
+    "previewed_at": "2026-11-07T09:14:15.012Z",
+    "cells": [
+      {
+        "id": "pi-1",
+        "feature": "protocol-init-from-project",
+        "title": "Render the workspace protocol from the project at init",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "c5e4d24a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "read_first": [
+          "docs/history/protocol-init-from-project/CONTEXT.md",
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+          "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+          "WORKSPACE_PROTOCOL.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+        ],
+        "action": "In verbs/protocol.rs replace the fixed TEMPLATE render with a render from the control root per CONTEXT D1-D6 (keep a pure fn `render_protocol(facts) -> String` and a fn that gathers the facts from the root, so tests feed fake facts and temp git repos). Read git through the crate's existing git helpers where one exists (no new dependency); strip `user[:pass]@` from the origin URL. Read `uat_stop` through the existing config reader. The rendered file must check `valid` with protocol_state, hold no placeholder and no FULL_TEST or other test command. Output: text mode prints `wrote <path>`, then one next line naming the review files and the judgment work (D6); `--json` carries `ok, path, facts:[{key,value,source}], review:[paths]`. D7: add `--print` (text: the rendered file on stdout; json: `rendered` plus facts and review); it writes nothing and works when a file exists; without it an existing file still returns the protocol_exists refusal unchanged. Declare `--print` and the new output in registry_payload.json under protocol.init. If the flag name `print` is new to the catalog, raise PINNED_FLAG_COUNT in catalog.rs by exactly the new names, citing c5e4d24a. Tests: a temp git repo with origin `https://u:p@example.com/o/r.git` and origin/HEAD renders REPOSITORY_REMOTE without `u:p@` and DEFAULT_BRANCH from origin/HEAD; no origin leaves both keys out (branch falls back to the current branch); uat_stop merge vs absent gives the two MERGE_OWNER texts; scripts/release.sh present gives the DEPLOY_OWNER line naming it, a `.github/workflows/release.yml` alone names that, none gives `human`; a present `.claude/skills` dir adds its PROTECTED_AREAS item, an absent one does not; the render checks valid and has a Sources line per derived key; `review` lists only existing files; --print on an existing file returns the render and leaves the file bytes unchanged; init on an existing file still refuses. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+        "must_haves": {
+          "truths": [
+            "init writes git facts, MERGE_OWNER from uat_stop and DEPLOY_OWNER from the first release entry",
+            "the origin URL never carries credentials",
+            "the rendered file checks valid and holds no test command",
+            "a Sources list and the json facts name where each derived key came from",
+            "init names the review files that exist",
+            "--print writes nothing and works on an existing file; plain init still refuses an existing file"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+              "substantive": "project render, --print, tests"
+            }
+          ],
+          "key_links": [
+            "registry_payload.json declares --print"
+          ],
+          "prohibitions": [
+            "No overwrite path for an existing file",
+            "No new dependency",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "pi-2",
+        "feature": "protocol-init-from-project",
+        "title": "Document the agent step that finishes a project's protocol",
+        "lane": "small",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "D6",
+          "D8"
+        ],
+        "files": [
+          "skills/bee-hive/references/onboarding.md",
+          "skills/bee-hive/SKILL.md",
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/protocol-init-from-project/CONTEXT.md",
+          "skills/bee-hive/references/onboarding.md",
+          "skills/bee-hive/SKILL.md",
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+          "WORKSPACE_PROTOCOL.md"
+        ],
+        "affects_skills": [
+          "skills/bee-hive/references/onboarding.md",
+          "skills/bee-hive/SKILL.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+        ],
+        "action": "Per D8, add section \"Workspace protocol\" to skills/bee-hive/references/onboarding.md in its existing style (ASD-STE100, short sentences): when (the owner asks, or bee protocol check is not valid); steps: run `bee protocol init --json` (or `--print` when a file exists); read every `review` path; add the project's own boundaries, protected areas and anti-patterns and set PROJECT_CRITICALITY, each added line cited in `## Sources`; no placeholder, no test command; run `bee protocol check` until valid; commit; show the owner a table of key, value and source. Point at the repo-root WORKSPACE_PROTOCOL.md of the bee repo as the reference result. In skills/bee-hive/SKILL.md Onboarding add exactly one pointer line to that section. In the workspace-protocol concept, record that init renders from the project (D1-D7), cite decision c5e4d24a, and note it narrows the fixed template of workspace-protocol D4. Then run the full regen chain `bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) once from the worktree and commit the regenerated files with this cell. No code comments.",
+        "verify": ".bee/bin/bee dev release-manifest --check && rg -n 'Workspace protocol' skills/bee-hive/references/onboarding.md && rg -n 'c5e4d24a' docs/knowledge/areas/workflow-state/workspace-protocol.md",
+        "must_haves": {
+          "truths": [
+            "the onboarding reference holds the agent procedure with the review-files step",
+            "bee-hive SKILL.md points at it in one line",
+            "the concept records the project render and cites c5e4d24a"
+          ],
+          "artifacts": [
+            {
+              "path": "skills/bee-hive/references/onboarding.md",
+              "substantive": "Workspace protocol section"
+            }
+          ],
+          "key_links": [
+            "SKILL.md Onboarding points at the section"
+          ],
+          "prohibitions": [
+            "No code comments"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "pi-1 changes the init verb."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride the code cell; the live proof is the leader's."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "pi-2 writes the agent procedure and the concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Small lane: no consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI changes."
+        }
+      ]
+    }
+  },
+  "last_scribing_run": {
+    "feature": "protocol-init-from-project",
+    "date": "2026-11-07",
+    "at": "2026-11-07T09:23:41.550Z",
+    "areas_synced": [
+      "workflow-state",
+      "onboarding"
+    ],
+    "next_action": "close"
+  }
+}

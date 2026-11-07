@@ -35,3 +35,34 @@ If onboarding is not complete, do not continue into the rest of the bee workflow
 ### Greenfield init lane
 
 When the onboarding result carries the init-lane notice (first onboard, no detectable build), offer it before any feature work: the first planning slice is **one init cell** whose `must_haves` are exactly the initialization checklist — setup succeeds from scratch, one passing test exists, standard commands recorded in `.bee/config.json`, clean first commit. The user may decline; a declined offer is recorded as a deferred idea, never silently dropped.
+
+## Workspace protocol
+
+A host project may keep one root file, `WORKSPACE_PROTOCOL.md`. It names the
+human decision boundaries, the merge owner and the deploy owner. The binary
+writes the facts it can read. The agent adds what only reading can find. Read
+the tree. Do not ask the owner to describe the project.
+
+**When.** Run this procedure when the owner asks for it. Run it also when
+`bee protocol check` is not `valid`.
+
+**Steps.**
+
+1. Run `.bee/bin/bee protocol init --json`. When a file exists, run
+   `.bee/bin/bee protocol init --print` instead. It writes nothing. Compare the
+   render with the file.
+2. Read every path in `review`. Those are the project's own rule files:
+   `LEADER.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `docs/DEPLOY.md`
+   and the `.github/workflows/*` files that exist.
+3. Edit `WORKSPACE_PROTOCOL.md`. Add the project's own human decision
+   boundaries, protected areas and anti-patterns. Set `PROJECT_CRITICALITY` to
+   `low`, `medium` or `high`.
+4. Cite every line you add in `## Sources`. Name the file it came from.
+5. Leave no placeholder. Add no test command. Test commands live in
+   `.bee/config.json` `commands.test`.
+6. Run `.bee/bin/bee protocol check` until the state is `valid`.
+7. Commit the file.
+8. Show the owner a table of key, value and source. Take each row from the
+   `facts` list and from your own `## Sources` lines.
+
+The repo-root `WORKSPACE_PROTOCOL.md` of the bee repo is the reference result.

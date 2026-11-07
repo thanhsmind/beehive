@@ -1,0 +1,121 @@
+{
+  "id": "kom-3",
+  "feature": "knowledge-outcome-measure",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Document the holdout and the outcomes measure",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/okf-profile/critical-bar.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-outcome-measure/plan.md"
+  ],
+  "action": "Follow the Contract for kom-3 in docs/history/knowledge-outcome-measure/plan.md. Update the help text for bee dispatch prepare (holdout arm, knowledge_holdout_percent, the knowledge_arm and learned_context record keys) and bee knowledge report (the outcomes section) in packages/bee-rs/crates/bee/src/generated/registry_payload.json, the help text's one home, keeping it valid JSON. Add the holdout behavior to docs/knowledge/areas/workflow-state/dispatch.md and the outcomes measure to docs/knowledge/areas/okf-profile/critical-bar.md, stating the signature count is not the usefulness measure. Cite plan D1-D5, never raw decision ids.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "bee dispatch prepare --help names the holdout and knowledge_holdout_percent",
+      "bee knowledge report --help names the outcomes section",
+      "The knowledge docs describe the holdout and the outcomes measure citing plan D-numbers"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/okf-profile/critical-bar.md"
+  ],
+  "decisions": [
+    "eeb666c4",
+    "dafd05a1"
+  ],
+  "deps": [
+    "kom-1",
+    "kom-2"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-kom-3",
+    "outcome": "Help text for dispatch prepare and knowledge report plus R21 in dispatch.md and B6 in critical-bar.md; commit c07748e62",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/workflow-state/dispatch.md",
+      "docs/knowledge/areas/okf-profile/critical-bar.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T05:55:56.624Z",
+    "behavior_change": false,
+    "verification_evidence": "docs and help-text JSON only, registry contract tests passed (12) and knowledge check reported 0 errors",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "330fe462-687b-4326-b5dd-428e88f0a404",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-07T05:54:01.012Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Help text for dispatch prepare and knowledge report plus R21 in dispatch.md and B6 in critical-bar.md; commit c07748e62",
+      "commit": "c07748e621628e068578ca39c28b3f0d98c670ee",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/workflow-state/dispatch.md",
+        "docs/knowledge/areas/okf-profile/critical-bar.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee knowledge check — green:static — docs and help-text JSON only, registry contract tests passed (12) and knowledge check reported 0 errors",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee dispatch prepare --help names the holdout and knowledge_holdout_percent",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "bee knowledge report --help names the outcomes section",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "The knowledge docs describe the holdout and the outcomes measure citing plan D-numbers",
+            "artifact": "docs/knowledge/areas/workflow-state/dispatch.md"
+          },
+          {
+            "requirement": "file docs/knowledge/areas/workflow-state/dispatch.md",
+            "artifact": "docs/knowledge/areas/workflow-state/dispatch.md"
+          },
+          {
+            "requirement": "file docs/knowledge/areas/okf-profile/critical-bar.md",
+            "artifact": "docs/knowledge/areas/okf-profile/critical-bar.md"
+          },
+          {
+            "requirement": "file packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-11-07T05:56:09.356Z",
+        "recorded_by": "330fe462-687b-4326-b5dd-428e88f0a404",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 66528,
+    "cached": 688371,
+    "total": 754899,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 66528,
+        "cached": 688371,
+        "total": 754899
+      }
+    },
+    "jobs": [
+      "job-1794030841750-1870679-1"
+    ]
+  }
+}

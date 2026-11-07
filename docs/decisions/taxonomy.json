@@ -815,6 +815,16 @@
     "test-scope",
     "owner-rule",
     "contract:full-suite-verify-refusal",
-    "contract:feature-full-suite-proof"
+    "contract:feature-full-suite-proof",
+    "contract:windows-ci-green",
+    "contract:knowledge-holdout-arm",
+    "contract:knowledge-outcomes-report",
+    "contract:windows-ci-1107",
+    "contract:unverified-agreement-warning",
+    "workspace-protocol",
+    "contract:workspace-protocol",
+    "contract:dispatch-receipt",
+    "catalog",
+    "contract:protocol-init"
   ]
 }

@@ -1,0 +1,161 @@
+{
+  "id": "wsp-1",
+  "feature": "workspace-protocol",
+  "title": "Add the workspace protocol check, init and doctor row",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "571f8857"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/workspace-protocol/CONTEXT.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "packages/bee-rs/crates/bee/src/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "/mnt/data/Projects/refs/slp/paseo-pi-team/templates/WORKSPACE_PROTOCOL.example.md",
+    "/mnt/data/Projects/refs/slp/paseo-pi-team/cli/lib/workspace-protocol.mjs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "action": "New module verbs/protocol.rs, the ONE home that reads WORKSPACE_PROTOCOL.md. Contract: pub(crate) `PROTOCOL_FILE = \"WORKSPACE_PROTOCOL.md\"`; `parse(text) -> BTreeMap<String, ProtocolValue>` per D1 (scalar or list); `protocol_state(root) -> ProtocolReport { state: missing|unreadable|invalid|valid, issues: Vec<String>, keys, sha256: Option<String> }` per D2 and D3 (FULL_TEST compared against .bee/config.json commands.test read through the existing config reader; string or array joined with \" && \"); `protocol_sha256(control_root) -> Option<String>` using crate::verbs::reservations::sha256_hex over the file bytes (None when missing or unreadable) — wsp-2 calls this; `TEMPLATE` per D4. Verbs: `bee protocol check [--json]` prints state, issues, keys, sha256; exit 0 for every state. `bee protocol init [--json]` writes TEMPLATE to <root>/WORKSPACE_PROTOCOL.md only when absent; an existing file returns a typed refusal {ok:false, type:\"refused\", reason:\"protocol_exists\", path, fix} and leaves the bytes untouched. Wire the verb group through the same router style as `dispatch` in close.rs and declare both verbs and their flags in generated/registry_payload.json (hand-edited, no generator — gates.md:866); if the top-level verb router lives outside close.rs, wire `protocol` there too and name the extra file as a deviation (the registry contract test must stay green; update its pins if it counts verbs). doctor.rs: one row `workspace-protocol` per D5 — missing/valid status `ok`, invalid/unreadable status `advisory` (assert that exact string) with issues and fix `bee protocol check`; never blocking. Tests: parse a paseo-pi-team style fenced file (lists, trailing # comment kept, unknown keys kept); parse a `- key: value` paseo-doctrine style file reads no keys and gives invalid with three issues; missing file is missing; non-UTF-8 bytes is unreadable; init then check is valid; init twice refuses and keeps the first bytes; init prints the review-and-edit next-step line; FULL_TEST equal is fine, different is one issue naming commands.test; a duplicate key gives a `duplicate key` issue and the last value; a scalar HUMAN_DECISION_BOUNDARIES gives an issue naming the `- item` list form; a `<...>` or ` | ` placeholder value gives a placeholder issue (so a copied unfilled paseo template is invalid); a list ends at a blank line; the doctor row always prints, ok with the init hint when missing, advisory and never blocking when invalid. Root: the control root (main checkout holding the bee store), the same root prepare uses. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "bee protocol check reports missing, unreadable, invalid or valid and exits 0 for each",
+      "a valid protocol needs MERGE_OWNER, DEPLOY_OWNER and at least one HUMAN_DECISION_BOUNDARIES item",
+      "a FULL_TEST that differs from commands.test is an issue",
+      "bee protocol init writes a file that checks valid and never overwrites an existing file",
+      "the doctor row never blocks overall_status",
+      "protocol_sha256(root) is the one digest helper"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+        "substantive": "parser, state, digest, template, verbs and tests"
+      }
+    ],
+    "key_links": [
+      "doctor.rs calls protocol_state",
+      "registry_payload.json declares protocol check and protocol init"
+    ],
+    "prohibitions": [
+      "No gate or refusal of any other verb on protocol state",
+      "No second parser of the file",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-wsp-1",
+    "outcome": "Added verbs/protocol.rs (parse, state, sha256, template, check and init verbs), the protocol router arm, registry entries and the advisory doctor row; commit 29bf129473fb4a7409ab2651761b09cd4e4d9d47",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T07:14:46.440Z",
+    "behavior_change": false,
+    "verification_evidence": "full workspace run after the change; protocol 22, doctor 72, registry_contracts 12 passed, zero failed result lines",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-11-07T07:07:26.421Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added verbs/protocol.rs (parse, state, sha256, template, check and init verbs), the protocol router arm, registry entries and the advisory doctor row; commit 29bf129473fb4a7409ab2651761b09cd4e4d9d47",
+      "commit": "29bf129473fb4a7409ab2651761b09cd4e4d9d47",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee protocol && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — full workspace run after the change; protocol 22, doctor 72, registry_contracts 12 passed, zero failed result lines",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 726 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee protocol check reports missing, unreadable, invalid or valid and exits 0 for each",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "a valid protocol needs MERGE_OWNER, DEPLOY_OWNER and at least one HUMAN_DECISION_BOUNDARIES item",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "a FULL_TEST that differs from commands.test is an issue",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "bee protocol init writes a file that checks valid and never overwrites an existing file",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "the doctor row never blocks overall_status",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "protocol_sha256(root) is the one digest helper",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+          },
+          {
+            "requirement": "doctor.rs calls protocol_state",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "registry_payload.json declares protocol check and protocol init",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-11-07T07:15:11.255Z",
+        "recorded_by": "23d97bd6-0b5e-4474-8f73-2101e642cbf0",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 163578,
+    "cached": 2177563,
+    "total": 2341141,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 163578,
+        "cached": 2177563,
+        "total": 2341141
+      }
+    },
+    "jobs": [
+      "job-1794035255738-2214915-1"
+    ]
+  }
+}
