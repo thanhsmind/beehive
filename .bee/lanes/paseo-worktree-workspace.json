@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Hôm qua 7 cell chưa được đánh giá độc lập. Tôi gửi một reviewer đọc lại cả 7 cell.",
-    "asked_at": "2026-11-07T01:57:18.242Z",
+    "subject": "Reviewer vẫn đang chạy (bản cũ không từ chối cờ này). Trong lúc chờ, tôi đóng cell.",
+    "asked_at": "2026-11-07T02:20:15.995Z",
     "session": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce"
   }
 }

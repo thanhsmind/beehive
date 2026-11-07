@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-job-feature",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-job-feature\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"herding-job-feature\" (lane).",
+  "created_at": "2026-11-07T02:08:27.451Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 6,
+    "rationale": "stamp the dispatching feature into job.json; touches hooks/activity.rs, a judge root",
+    "updated_at": "2026-11-07T02:08:27.513Z",
+    "feature": "herding-job-feature"
+  },
+  "gate_preview": {
+    "feature": "herding-job-feature",
+    "plan_sha256": "a4a4a5e1dccd42d8968ce3423904c246932246c00a9e8de8a30286c7731b0db9",
+    "previewed_at": "2026-11-07T02:09:00.607Z",
+    "cells": [
+      {
+        "id": "hjf-1",
+        "feature": "herding-job-feature",
+        "lane": "standard",
+        "role": "code",
+        "title": "Stamp the dispatching feature into job.json and read it first in the activity hook and bee close",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/knowledge/areas/workflow-state/close-usage-record.md"
+        ],
+        "read_first": [
+          "docs/history/herding-job-feature/plan.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1794016637145-62259-1/report-1.md"
+        ],
+        "action": "Follow the Contract in docs/history/herding-job-feature/plan.md. The job feature has one home, job.json feature. bee herding run takes --feature and stamps feature into every job.json it writes (resolution: --feature, then the --cell-id cell feature, then the calling session bound lane, else no key). bee dispatch prepare adds --feature \"<slug>\" to every herding run command it returns when it resolved a feature. hooks/activity.rs resolve_herded_feature reads job.json feature first. verbs/drivers/close.rs herding_jobs takes the feature from job.json first, then activity.json. Old jobs without the key keep the old behavior. Update help text in generated/registry_payload.json and the close-usage-record concept (cite docs/history/herding-job-feature/plan.md, no raw decision ids). Write tests first and watch them fail.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "A main-cwd job stamped with feature X while state.json says Y is labelled X and counted by bee close X, not Y",
+            "Every herding run command bee dispatch prepare returns carries --feature when a feature resolved",
+            "herding run stamps job.json feature from --feature and from the cell",
+            "A job.json without feature keeps the old fallback"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/close-usage-record.md"
+        ],
+        "deps": []
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "herding-job-feature",
+    "plan_sha256": "a4a4a5e1dccd42d8968ce3423904c246932246c00a9e8de8a30286c7731b0db9",
+    "previewed_at": "2026-11-07T02:09:00.607Z",
+    "cells": [
+      {
+        "id": "hjf-1",
+        "feature": "herding-job-feature",
+        "lane": "standard",
+        "role": "code",
+        "title": "Stamp the dispatching feature into job.json and read it first in the activity hook and bee close",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/knowledge/areas/workflow-state/close-usage-record.md"
+        ],
+        "read_first": [
+          "docs/history/herding-job-feature/plan.md",
+          "/mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1794016637145-62259-1/report-1.md"
+        ],
+        "action": "Follow the Contract in docs/history/herding-job-feature/plan.md. The job feature has one home, job.json feature. bee herding run takes --feature and stamps feature into every job.json it writes (resolution: --feature, then the --cell-id cell feature, then the calling session bound lane, else no key). bee dispatch prepare adds --feature \"<slug>\" to every herding run command it returns when it resolved a feature. hooks/activity.rs resolve_herded_feature reads job.json feature first. verbs/drivers/close.rs herding_jobs takes the feature from job.json first, then activity.json. Old jobs without the key keep the old behavior. Update help text in generated/registry_payload.json and the close-usage-record concept (cite docs/history/herding-job-feature/plan.md, no raw decision ids). Write tests first and watch them fail.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "A main-cwd job stamped with feature X while state.json says Y is labelled X and counted by bee close X, not Y",
+            "Every herding run command bee dispatch prepare returns carries --feature when a feature resolved",
+            "herding run stamps job.json feature from --feature and from the cell",
+            "A job.json without feature keeps the old fallback"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/close-usage-record.md"
+        ],
+        "deps": []
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-11-07T02:20:14.576Z",
+    "branch": "wt/herding-job-feature",
+    "worktree_id": "beehive--wt--herding-job-feature",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
