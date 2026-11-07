@@ -9,7 +9,7 @@ bee:
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
   decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)"]
-  sources: ["docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)"]
+  sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)"]
   authoritative_for: "okf-profile: the bee.critical bar and what earns a pattern that label"
 ---
 
@@ -59,10 +59,27 @@ proven to recur elsewhere), which other feature/surface the failure mode reaches
 cost was. A pattern that cannot state that in one sentence per leg has not cleared the bar yet, whatever
 its narrative interest.
 
+**B6 — Knowledge usefulness is measured by cell outcomes, not signature counts (knowledge-outcome-measure
+plan D1).** The `bee.signature` recurrence count is not the usefulness measure: no signature string is
+ever written into `.bee/decisions.jsonl` or `.bee/capture-queue.jsonl`, so that count reads 0 for every
+pattern whatever the bundle does. `bee knowledge report` therefore also prints an `outcomes` section
+that compares closed cells by the arm their brief was dispatched in (`knowledge`, or `holdout` with no
+Learned context block; `areas/workflow-state/dispatch.md`, R21, plan D2-D4). The population is every
+`capped` or `dropped` cell under `.bee/cells/` (archive included). A cell's arm is `knowledge_arm` on the
+earliest `.bee/logs/dispatch.jsonl` row with `source: "prepare"`, `kind: "cell"` and that cell id; a cell
+with no such row is `unrecorded` and is never assigned an arm after the fact (plan D5). Per arm the
+section counts `cells` and four trace signals — `blocked` (`blocked_reason` a non-empty string),
+`reopened` (`reopened_for_rework` or `reopened_at` present), `red_rounds` (`attempts` non-empty),
+`with_mistakes` (`mistakes` non-empty) — with each as a 3-decimal rate of the arm's cells. `comparable`
+is true only when both arms hold at least `min_per_arm` (30) cells; until then the text output names how
+many more cells each arm needs, and the rates are not a finding.
+
 ## Business Rules
 
 - The bar applies only to `bee.pattern` concepts; no other concept type carries `bee.critical`.
 - Failing one leg is sufficient to disqualify — the three legs are conjunctive (AND), never averaged.
+- The outcomes section measures the bundle as a whole by arm; it grades no single pattern, and a
+  low signature count (or a zero) says nothing about whether the bundle helps (plan D1).
 - Re-grading is a frontmatter-only operation: `lifecycle`, body content, and `bee.id` never change as
   a side effect of a `critical` re-grade.
 
@@ -83,4 +100,8 @@ its narrative interest.
 - Where the pool is consumed: `docs/knowledge/areas/okf-profile/context-and-promote.md` (the
   relevance ranking that "cuts critical patterns without losing one" under budget), and
   `docs/knowledge/index.md`'s generated "Critical patterns" section (`bee knowledge index`).
+- The outcomes measure (B6): `build_outcomes` in
+  `packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs`, tested in
+  `packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs`; plan
+  `docs/history/knowledge-outcome-measure/plan.md` (D1-D5).
 - The re-grade this concept documents: `docs/history/knowledge-usable/CONTEXT.md` (U6), cell `ku-6`.
