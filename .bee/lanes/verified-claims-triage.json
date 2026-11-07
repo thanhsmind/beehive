@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "verified-claims-triage",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"verified-claims-triage\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at a9d2d9d; capture what settled, then bee close --feature verified-claims-triage.",
+  "next_action": "bee close finished \"verified-claims-triage\" — feature is closed.",
   "created_at": "2026-11-07T06:30:39.300Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
