@@ -484,7 +484,8 @@ pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JM
             .exists()),
     );
     {
-        let recent = active_decisions(ctx, Some(3));
+        let recent: Vec<Value> =
+            crate::audit::hide_audit_tagged(active_decisions(ctx, None), None).into_iter().take(3).collect();
         let rows: Vec<Value> = recent
             .iter()
             .map(|event| {

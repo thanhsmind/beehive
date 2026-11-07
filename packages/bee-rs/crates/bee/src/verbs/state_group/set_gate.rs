@@ -1068,6 +1068,27 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     } else if target.lane().is_some() {
         durable_stamp_unreachable = true;
     }
+    if actor == "auto" {
+        let gate_names = if merge { "shape, execution".to_string() } else { name.clone() };
+        let note = format!(
+            "gate {gate_names} set to {approved} by auto: {}",
+            reason.as_deref().unwrap_or_default()
+        );
+        crate::audit::append(
+            root,
+            "gate-bypass",
+            routed_feature.as_deref().unwrap_or_default(),
+            None,
+            &note,
+            "bee gate",
+            bypass_level.as_deref(),
+        )
+        .map_err(|e| {
+            Err2::Msg(format!(
+                "gate: the gate was set but its audit row could not be written ({e}). FIX: run `bee audit log --kind gate-bypass --feature <f> --note \"{note}\"`."
+            ))
+        })?;
+    }
     drop(locks);
     // merge-ready-fact D2: `bee gate --name uat` is the one verb that flips
     // the stored `merge_ready.uat` between "pending" and "approved". It
