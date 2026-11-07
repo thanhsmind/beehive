@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"thin-boot-default\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"thin-boot-default\" (lane).",
+  "next_action": "Merged into main at 3b9d2e2; reload the product and test \"thin-boot-default\", then either approve uat (\"bee gate --name uat --approved true --lane thin-boot-default\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-07T01:31:48.978Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: thin-boot-default",
+    "asked_at": "2026-11-07T01:52:35.156Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -23,12 +28,5 @@
     "rationale": "touches hooks guard source, so an independent judge read is owed",
     "updated_at": "2026-11-07T01:32:12.309Z",
     "feature": "thin-boot-default"
-  },
-  "merge_ready": {
-    "since": "2026-11-07T01:39:34.066Z",
-    "branch": "wt/thin-boot-default",
-    "worktree_id": "beehive--wt--thin-boot-default",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
