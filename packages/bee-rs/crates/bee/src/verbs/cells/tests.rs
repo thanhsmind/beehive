@@ -5598,6 +5598,41 @@ use std::time::Instant;
     }
 
     #[test]
+    fn a_verify_segment_equal_to_the_declared_suite_is_the_bare_full_suite() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "FOO=1 cargo test --release"}}));
+        let refused = |verify: &str| -> bool {
+            let mut cell = addable("f-1");
+            cell["verify"] = json!(verify);
+            full_suite_verify_problem(root, "addCell", cell.as_object().unwrap()).unwrap().is_some()
+        };
+        assert!(refused("cargo test --release"));
+        assert!(refused("BAR=\"a b\" cargo   test --release"));
+        assert!(refused("cargo fmt --check && cargo test --release"));
+        assert!(refused("cargo fmt\ncargo test --release; true"));
+        assert!(refused("bee test"));
+        assert!(refused("X=1 .bee/bin/bee test"));
+        assert!(!refused("cargo test --release --lib one"));
+        assert!(!refused("cargo test --release -- --exact one"));
+        assert!(!refused("cargo test"));
+        assert!(!refused("bee test --help"));
+
+        let mut reasoned = addable("f-1");
+        reasoned["verify"] = json!("cargo test --release");
+        reasoned["full_suite_reason"] = json!("cross-cutting");
+        assert!(full_suite_verify_problem(root, "addCell", reasoned.as_object().unwrap()).unwrap().is_none());
+
+        write_bee_config(root, &json!({"commands": {"test": ["cargo fmt --check", "cargo test --release"]}}));
+        assert!(refused("cargo fmt --check"));
+
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        assert!(!refused("bee test"));
+        write_bee_config(root, &json!({}));
+        assert!(!refused("cargo test --release"));
+    }
+
+    #[test]
     fn verify_none_is_accepted_only_in_a_declared_no_test_repo() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
