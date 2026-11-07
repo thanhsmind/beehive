@@ -1,0 +1,279 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-outcome-measure",
+  "mode": null,
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"knowledge-outcome-measure\" started at phase \"exploring\" (lane).",
+  "next_action": "close",
+  "created_at": "2026-11-07T05:40:13.881Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-11-07T05:40:10.496Z",
+    "feature": "knowledge-outcome-measure"
+  },
+  "gate_preview": {
+    "feature": "knowledge-outcome-measure",
+    "plan_sha256": "59d17801c207e2d302f490d522de0745641ebace7918365f1e65600b0705c254",
+    "previewed_at": "2026-11-07T05:43:14.917Z",
+    "cells": [
+      {
+        "id": "kom-1",
+        "feature": "knowledge-outcome-measure",
+        "lane": "standard",
+        "role": "code",
+        "title": "Hold out a fixed tenth of cells from the learned-context block",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-outcome-measure/plan.md",
+          "docs/knowledge/areas/workflow-state/dispatch.md"
+        ],
+        "action": "Follow the Contract for kom-1 in docs/history/knowledge-outcome-measure/plan.md. Kind cell dispatches get a deterministic arm: holdout when the first 8 hex digits of sha256_hex(cell id) as u32 mod 100 is below .bee/config.json knowledge_holdout_percent (absent or invalid = 10, integer 0..=100 honored, 0 = off). Holdout renders no Learned context block; knowledge arm prompt stays byte-identical. The kind cell prepare record gains knowledge_arm and learned_context (array of listed repo-relative paths, [] when none). Other kinds' records stay byte-identical. Write the tests first and watch them fail.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers",
+        "must_haves": {
+          "truths": [
+            "A holdout cell brief carries no Learned context block",
+            "A knowledge-arm cell brief is byte-identical to before",
+            "The same cell id always lands in the same arm",
+            "knowledge_holdout_percent 0 holds out no cell; absent or invalid uses 10",
+            "The kind cell dispatch record carries knowledge_arm and learned_context; other kinds carry neither"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/dispatch.md"
+        ],
+        "decisions": [
+          "dafd05a1"
+        ],
+        "deps": []
+      },
+      {
+        "id": "kom-2",
+        "feature": "knowledge-outcome-measure",
+        "lane": "standard",
+        "role": "code",
+        "title": "Compare holdout and knowledge cells in the knowledge report",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-outcome-measure/plan.md",
+          "docs/knowledge/areas/okf-profile/critical-bar.md"
+        ],
+        "action": "Follow the Contract for kom-2 in docs/history/knowledge-outcome-measure/plan.md. bee knowledge report keeps measured, unmeasured and the evidence ladder and gains outcomes: per arm (knowledge, holdout) the counts cells, blocked, reopened, red_rounds, with_mistakes plus rates (3 decimals), unrecorded, min_per_arm 30 and comparable. Population: capped or dropped cells under .bee/cells (archive included). Arm: knowledge_arm on the earliest dispatch.jsonl row with source prepare, kind cell and that cell id; none means unrecorded. Signals from trace: blocked_reason non-empty string, reopened_for_rework or reopened_at non-null, attempts non-empty, mistakes non-empty. Missing files or bad rows are skipped. Text output adds one line per arm and a too-few line when not comparable. Write the tests first and watch them fail.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test knowledge_outcomes",
+        "must_haves": {
+          "truths": [
+            "bee knowledge report JSON carries outcomes with per-arm counts and rates",
+            "A cell with no recorded arm counts as unrecorded and in neither arm",
+            "Open cells are excluded from the population",
+            "comparable is false until both arms reach 30 cells",
+            "measured, unmeasured and the evidence ladder are unchanged"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/okf-profile/critical-bar.md"
+        ],
+        "decisions": [
+          "eeb666c4",
+          "dafd05a1"
+        ],
+        "deps": []
+      },
+      {
+        "id": "kom-3",
+        "feature": "knowledge-outcome-measure",
+        "lane": "standard",
+        "role": "docs",
+        "title": "Document the holdout and the outcomes measure",
+        "behavior_change": false,
+        "files": [
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/knowledge/areas/workflow-state/dispatch.md",
+          "docs/knowledge/areas/okf-profile/critical-bar.md"
+        ],
+        "read_first": [
+          "docs/history/knowledge-outcome-measure/plan.md"
+        ],
+        "action": "Follow the Contract for kom-3 in docs/history/knowledge-outcome-measure/plan.md. Update the help text for bee dispatch prepare (holdout arm, knowledge_holdout_percent, the knowledge_arm and learned_context record keys) and bee knowledge report (the outcomes section) in packages/bee-rs/crates/bee/src/generated/registry_payload.json, the help text's one home, keeping it valid JSON. Add the holdout behavior to docs/knowledge/areas/workflow-state/dispatch.md and the outcomes measure to docs/knowledge/areas/okf-profile/critical-bar.md, stating the signature count is not the usefulness measure. Cite plan D1-D5, never raw decision ids.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "bee dispatch prepare --help names the holdout and knowledge_holdout_percent",
+            "bee knowledge report --help names the outcomes section",
+            "The knowledge docs describe the holdout and the outcomes measure citing plan D-numbers"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/dispatch.md",
+          "docs/knowledge/areas/okf-profile/critical-bar.md"
+        ],
+        "decisions": [
+          "eeb666c4",
+          "dafd05a1"
+        ],
+        "deps": [
+          "kom-1",
+          "kom-2"
+        ]
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "knowledge-outcome-measure",
+    "plan_sha256": "59d17801c207e2d302f490d522de0745641ebace7918365f1e65600b0705c254",
+    "previewed_at": "2026-11-07T05:43:14.917Z",
+    "cells": [
+      {
+        "id": "kom-1",
+        "feature": "knowledge-outcome-measure",
+        "lane": "standard",
+        "role": "code",
+        "title": "Hold out a fixed tenth of cells from the learned-context block",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-outcome-measure/plan.md",
+          "docs/knowledge/areas/workflow-state/dispatch.md"
+        ],
+        "action": "Follow the Contract for kom-1 in docs/history/knowledge-outcome-measure/plan.md. Kind cell dispatches get a deterministic arm: holdout when the first 8 hex digits of sha256_hex(cell id) as u32 mod 100 is below .bee/config.json knowledge_holdout_percent (absent or invalid = 10, integer 0..=100 honored, 0 = off). Holdout renders no Learned context block; knowledge arm prompt stays byte-identical. The kind cell prepare record gains knowledge_arm and learned_context (array of listed repo-relative paths, [] when none). Other kinds' records stay byte-identical. Write the tests first and watch them fail.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers",
+        "must_haves": {
+          "truths": [
+            "A holdout cell brief carries no Learned context block",
+            "A knowledge-arm cell brief is byte-identical to before",
+            "The same cell id always lands in the same arm",
+            "knowledge_holdout_percent 0 holds out no cell; absent or invalid uses 10",
+            "The kind cell dispatch record carries knowledge_arm and learned_context; other kinds carry neither"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/dispatch.md"
+        ],
+        "decisions": [
+          "dafd05a1"
+        ],
+        "deps": []
+      },
+      {
+        "id": "kom-2",
+        "feature": "knowledge-outcome-measure",
+        "lane": "standard",
+        "role": "code",
+        "title": "Compare holdout and knowledge cells in the knowledge report",
+        "behavior_change": true,
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+        ],
+        "read_first": [
+          "docs/history/knowledge-outcome-measure/plan.md",
+          "docs/knowledge/areas/okf-profile/critical-bar.md"
+        ],
+        "action": "Follow the Contract for kom-2 in docs/history/knowledge-outcome-measure/plan.md. bee knowledge report keeps measured, unmeasured and the evidence ladder and gains outcomes: per arm (knowledge, holdout) the counts cells, blocked, reopened, red_rounds, with_mistakes plus rates (3 decimals), unrecorded, min_per_arm 30 and comparable. Population: capped or dropped cells under .bee/cells (archive included). Arm: knowledge_arm on the earliest dispatch.jsonl row with source prepare, kind cell and that cell id; none means unrecorded. Signals from trace: blocked_reason non-empty string, reopened_for_rework or reopened_at non-null, attempts non-empty, mistakes non-empty. Missing files or bad rows are skipped. Text output adds one line per arm and a too-few line when not comparable. Write the tests first and watch them fail.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test knowledge_outcomes",
+        "must_haves": {
+          "truths": [
+            "bee knowledge report JSON carries outcomes with per-arm counts and rates",
+            "A cell with no recorded arm counts as unrecorded and in neither arm",
+            "Open cells are excluded from the population",
+            "comparable is false until both arms reach 30 cells",
+            "measured, unmeasured and the evidence ladder are unchanged"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/okf-profile/critical-bar.md"
+        ],
+        "decisions": [
+          "eeb666c4",
+          "dafd05a1"
+        ],
+        "deps": []
+      },
+      {
+        "id": "kom-3",
+        "feature": "knowledge-outcome-measure",
+        "lane": "standard",
+        "role": "docs",
+        "title": "Document the holdout and the outcomes measure",
+        "behavior_change": false,
+        "files": [
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/knowledge/areas/workflow-state/dispatch.md",
+          "docs/knowledge/areas/okf-profile/critical-bar.md"
+        ],
+        "read_first": [
+          "docs/history/knowledge-outcome-measure/plan.md"
+        ],
+        "action": "Follow the Contract for kom-3 in docs/history/knowledge-outcome-measure/plan.md. Update the help text for bee dispatch prepare (holdout arm, knowledge_holdout_percent, the knowledge_arm and learned_context record keys) and bee knowledge report (the outcomes section) in packages/bee-rs/crates/bee/src/generated/registry_payload.json, the help text's one home, keeping it valid JSON. Add the holdout behavior to docs/knowledge/areas/workflow-state/dispatch.md and the outcomes measure to docs/knowledge/areas/okf-profile/critical-bar.md, stating the signature count is not the usefulness measure. Cite plan D1-D5, never raw decision ids.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "bee dispatch prepare --help names the holdout and knowledge_holdout_percent",
+            "bee knowledge report --help names the outcomes section",
+            "The knowledge docs describe the holdout and the outcomes measure citing plan D-numbers"
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/dispatch.md",
+          "docs/knowledge/areas/okf-profile/critical-bar.md"
+        ],
+        "decisions": [
+          "eeb666c4",
+          "dafd05a1"
+        ],
+        "deps": [
+          "kom-1",
+          "kom-2"
+        ]
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-11-07T05:55:56.690Z",
+    "branch": "wt/knowledge-outcome-measure",
+    "worktree_id": "beehive--wt--knowledge-outcome-measure",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "last_scribing_run": {
+    "feature": "knowledge-outcome-measure",
+    "date": "2026-11-07",
+    "at": "2026-11-07T05:59:47.133Z",
+    "areas_synced": [
+      "workflow-state",
+      "okf-profile"
+    ],
+    "next_action": "close"
+  }
+}
