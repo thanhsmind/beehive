@@ -1598,7 +1598,8 @@ fn hook_wiring_does_not_depend_on_a_vendored_binary_and_never_stacks() {
     // at HOOK time, so its presence at ONBOARD time changes nothing — and it
     // must not, or the same settings file would be wrong when read from a
     // linked worktree that has no binary of its own.
-    write(&fx.repo.join(".bee").join("bin").join("bee.exe"), "MZ");
+    let other_name = if std::env::consts::EXE_SUFFIX.is_empty() { "bee.exe" } else { "bee" };
+    write(&fx.repo.join(".bee").join("bin").join(other_name), "MZ");
     let p = plan(&fx, &["--repo-hooks"]);
     assert_eq!(p["plan"].as_array().unwrap().len(), 0, "vendoring must not re-wire");
     assert_eq!(read_command(&fx), before);
@@ -3019,7 +3020,10 @@ fn vendored_binary_planned_when_missing_and_hooks_expect_it() {
     let computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
     let binary_item = computed.plan.iter().find(|i| i["action"] == "copy_binary");
     assert!(binary_item.is_some());
-    assert_eq!(binary_item.unwrap()["path"], ".bee/bin/bee");
+    assert_eq!(
+        binary_item.unwrap()["path"],
+        format!(".bee/bin/bee{}", std::env::consts::EXE_SUFFIX)
+    );
 }
 
 #[test]
