@@ -1279,3 +1279,4 @@
 {"ts":"2026-11-07T10:31:24.654Z","event":"complete","id":"59bf4709-c2c7-4413-92db-3b04629adc28"}
 {"ts":"2026-11-07T10:39:38.575Z","event":"add","id":"0a5ee4ff-011e-4b14-90fb-83a135ed43ff","kind":"worktree-cleanup","feature":"windows-ci-1107","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--windows-ci-1107"],"reason":"Worktree beehive--wt--windows-ci-1107 (branch wt/windows-ci-1107) merged into main at 5cdec75046e57031f752b04372725319e000223d and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-11-07T10:40:35.005Z","event":"add","id":"39cd7f35-3653-4433-8d83-e62acf0f1c30","kind":"promote","feature":"windows-ci-1107","cells":[],"areas":[],"files":["docs/history/windows-ci-1107/promote-proposals.md"],"reason":"Promote proposal for \"windows-ci-1107\" awaiting apply — docs/history/windows-ci-1107/promote-proposals.md."}
+{"ts":"2026-11-07T10:40:40.885Z","event":"complete","id":"0a5ee4ff-011e-4b14-90fb-83a135ed43ff"}

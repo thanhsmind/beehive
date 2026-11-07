@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "windows-ci-1107",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"windows-ci-1107\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 5cdec75; capture what settled, then bee close --feature windows-ci-1107.",
+  "next_action": "bee close finished \"windows-ci-1107\" — feature is closed.",
   "created_at": "2026-11-07T05:44:40.995Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
