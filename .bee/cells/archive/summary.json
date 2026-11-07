@@ -1978,5 +1978,10 @@
     "capped": 1,
     "dropped": 1,
     "archived_at": "2026-11-07T01:24:06.413Z"
+  },
+  "thin-boot-default": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-07T01:56:51.424Z"
   }
 }

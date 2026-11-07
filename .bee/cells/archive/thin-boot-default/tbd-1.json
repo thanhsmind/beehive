@@ -1,0 +1,157 @@
+{
+  "id": "tbd-1",
+  "feature": "thin-boot-default",
+  "lane": "standard",
+  "role": "code",
+  "title": "Turn thin peer boot on by default",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+    "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "read_first": [
+    "docs/history/thin-boot-default/plan.md",
+    "docs/history/thin-worker-boot/CONTEXT.md"
+  ],
+  "action": "Follow the Contract in docs/history/thin-boot-default/plan.md: one function owns the dispatch.thin_peer_boot rule (absent or anything but explicit false = on); hooks/mod.rs thin_peer_boot and herding/run.rs thin_peer_env both call it; marker and Claude-only requirements stay. Update tests that assumed absent = off to the new rule; add tests for absent=on and explicit false=off in both paths. Write the concept docs/knowledge/areas/bee-herding/thin-peer-boot.md and link it from the area overview, citing thin-worker-boot CONTEXT D-numbers only (no raw decision ids). Write tests first and watch them fail.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml thin_peer",
+  "must_haves": {
+    "truths": [
+      "With no dispatch.thin_peer_boot key a herded Claude worker gets the thin env and the peer preamble",
+      "dispatch.thin_peer_boot false keeps the full boot in both paths",
+      "A non-herded session never gets the thin hook boot",
+      "One function holds the switch rule"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/thin-peer-boot.md"
+  ],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "tbd-worker",
+    "outcome": "dispatch.thin_peer_boot is now on unless explicitly false, via one function used by both the hook and herding env paths; tests and thin-peer-boot concept added; commit 24facfc0d",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+      "docs/knowledge/areas/bee-herding/overview.md"
+    ],
+    "deviations": [
+      "sync-ack: skills/bee-herding covers cockpit roles only and never described the thin boot switch; the switch lives in the thin-peer-boot concept and config-reference"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T01:39:34.036Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml (with the thin and BEE_HERDING env vars unset) — green:unit — covers the switch rule, hook and env paths, and the full crate suite (4710 passed, 0 failed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml thin_peer",
+    "claimed_at": "2026-11-07T01:32:12.558Z",
+    "sync_ack": "skills/bee-herding covers cockpit roles only and never described the thin boot switch; the switch lives in the thin-peer-boot concept and config-reference",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "dispatch.thin_peer_boot is now on unless explicitly false, via one function used by both the hook and herding env paths; tests and thin-peer-boot concept added; commit 24facfc0d",
+      "commit": "af51e20b755eff9c07898ebdbe43040b7259d85b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "docs/knowledge/areas/bee-herding/thin-peer-boot.md",
+        "docs/knowledge/areas/bee-herding/overview.md"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml thin_peer — green:unit — PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml (with the thin and BEE_HERDING env vars unset) — green:unit — covers the switch rule, hook and env paths, and the full crate suite (4710 passed, 0 failed)",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "With no dispatch.thin_peer_boot key a herded Claude worker gets the thin env and the peer preamble",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/mod.rs thin_peer_switch_on returns true unless the value is exactly false; packages/bee-rs/crates/bee/src/herding/run.rs thin_peer_env calls it; independent review job-1794015590170-4062712-1 check 1 holds"
+          },
+          {
+            "requirement": "dispatch.thin_peer_boot false keeps the full boot in both paths",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs thin_peer_switch_false_leaves_a_claude_agent_unchanged and thin_peer_claude_session_env_follows_the_default_and_an_explicit_false"
+          },
+          {
+            "requirement": "A non-herded session never gets the thin hook boot",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/mod.rs thin_peer_boot_needs_the_marker_and_is_on_unless_the_switch_is_false"
+          },
+          {
+            "requirement": "One function holds the switch rule",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/mod.rs thin_peer_switch_on is the only reader; review check 2 holds"
+          }
+        ],
+        "recorded_at": "2026-11-07T01:52:29.088Z",
+        "recorded_by": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "default-on",
+            "status": "PASS",
+            "evidence": "independent opus review job-1794015590170-4062712-1: check 1 holds in hooks/mod.rs and herding/run.rs for pane, paseo and claude-session paths"
+          },
+          {
+            "id": "one-owner",
+            "status": "PASS",
+            "evidence": "review check 2: thin_peer_switch_on is the only reader"
+          },
+          {
+            "id": "marker",
+            "status": "PASS",
+            "evidence": "review check 3: no marker, no thin hook boot"
+          },
+          {
+            "id": "tests",
+            "status": "PASS",
+            "evidence": "review check 4: absent, true, false covered; full suite 5237 passed 0 failed in a clean env"
+          },
+          {
+            "id": "docs",
+            "status": "PASS",
+            "evidence": "review P2 doc mismatch and P3 findings were fixed in tbd-2 and re-reviewed in job-1794016372844-19296-1"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5-5",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-07T01:56:50.598Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 96571,
+    "cached": 1624660,
+    "total": 1721231,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 96571,
+        "cached": 1624660,
+        "total": 1721231
+      }
+    },
+    "jobs": [
+      "job-1794015138396-3955116-1"
+    ]
+  }
+}

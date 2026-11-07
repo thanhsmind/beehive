@@ -1,0 +1,146 @@
+{
+  "id": "tbd-2",
+  "feature": "thin-boot-default",
+  "lane": "standard",
+  "role": "code",
+  "title": "Make the thin boot switch read one config view and keep its tests hermetic",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+    "docs/config-reference.md",
+    "docs/knowledge/areas/bee-herding/thin-peer-boot.md"
+  ],
+  "read_first": [
+    "docs/history/thin-boot-default/plan.md",
+    ".bee/mailbox/job-1794015590170-4062712-1/report-1.md"
+  ],
+  "action": "Fix the three findings in the review report .bee/mailbox/job-1794015590170-4062712-1/report-1.md. P3-b: the session-init hook must read dispatch.thin_peer_boot from the same merged main-checkout config (tracked config.json plus config.local.json) that herding/run.rs read_main_config reads, so an explicit false anywhere in that view turns BOTH the env layer and the hook off; add a test where false lives only in the main config.local.json and the hook runs from a linked worktree root. P3-a: the thin_peer tests in herding/run.rs and the session_init tests named in the report must not depend on the ambient process env (BEE_HERDING_WORKER, BEE_HERDING_JOB_ID, the four thin vars): build or filter the env explicitly. Prove it by running the full suite inside this herded worker WITHOUT unsetting any vars, and it must be green. P2: docs/config-reference.md row dispatch.thin_peer_boot must name only session-init, say no session is registered and prompt-context stays silent, matching the code and thin-peer-boot.md; update the concept with the one-config-view rule. Write tests first and watch them fail.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "An explicit false in the main config.local.json turns off both the env layer and the hook for a worker in a linked worktree",
+      "The full suite is green when run inside a default herded Claude worker with no vars unset",
+      "config-reference and the concept describe the same hook behavior as the code"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/thin-peer-boot.md"
+  ],
+  "deps": [
+    "tbd-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "tbd-worker2",
+    "outcome": "Hook now reads the thin switch from the control root's merged config, thin tests are hermetic, docs match the code; commit d5525f0f4f84f075c63e2be5bea553056d6b93f1",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "docs/config-reference.md",
+      "docs/knowledge/areas/bee-herding/thin-peer-boot.md"
+    ],
+    "deviations": [
+      "sync-ack: skills/bee-herding covers cockpit roles only and never described the thin boot switch; the switch lives in the thin-peer-boot concept and config-reference"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T01:52:17.587Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the full suite run inside this herded worker with no vars unset, exit 0, 5239 passed, 0 failed; the two new linked-worktree tests failed before the fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-11-07T01:45:04.361Z",
+    "sync_ack": "skills/bee-herding covers cockpit roles only and never described the thin boot switch; the switch lives in the thin-peer-boot concept and config-reference",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Hook now reads the thin switch from the control root's merged config, thin tests are hermetic, docs match the code; commit d5525f0f4f84f075c63e2be5bea553056d6b93f1",
+      "commit": "d5525f0f4f84f075c63e2be5bea553056d6b93f1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "docs/config-reference.md",
+        "docs/knowledge/areas/bee-herding/thin-peer-boot.md"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the full suite run inside this herded worker with no vars unset, exit 0, 5239 passed, 0 failed; the two new linked-worktree tests failed before the fix",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An explicit false in the main config.local.json turns off both the env layer and the hook for a worker in a linked worktree",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/mod.rs reads the control root merged config; two new linked-worktree tests failed before the fix and pass after"
+          },
+          {
+            "requirement": "The full suite is green when run inside a default herded Claude worker with no vars unset",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs and packages/bee-rs/crates/bee/src/hooks/session_init.rs tests build their env explicitly; worker full suite inside a herded pane 5239 passed 0 failed; leader rerun 5239 passed 0 failed"
+          },
+          {
+            "requirement": "config-reference and the concept describe the same hook behavior as the code",
+            "artifact": "docs/config-reference.md dispatch.thin_peer_boot row and docs/knowledge/areas/bee-herding/thin-peer-boot.md name only session-init and no session registration"
+          }
+        ],
+        "recorded_at": "2026-11-07T01:52:29.099Z",
+        "recorded_by": "51a0937f-e0af-4a92-9ada-379bd7fdf8ce",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "one-view",
+            "status": "PASS",
+            "evidence": "independent opus review job-1794016372844-19296-1: P3-b fixed, hook reads the merged main config, linked-worktree tests prove it"
+          },
+          {
+            "id": "hermetic",
+            "status": "PASS",
+            "evidence": "same review: full suite run inside a herded worker with vars set, exit 0, 5239 passed 0 failed"
+          },
+          {
+            "id": "docs",
+            "status": "PASS",
+            "evidence": "two remaining P3 wording issues in docs/config-reference.md fixed by the leader in bffbe7030"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5-5",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-07T01:56:50.599Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 87114,
+    "cached": 1047430,
+    "total": 1134544,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 87114,
+        "cached": 1047430,
+        "total": 1134544
+      }
+    },
+    "jobs": [
+      "job-1794015909638-4136290-1"
+    ]
+  }
+}
