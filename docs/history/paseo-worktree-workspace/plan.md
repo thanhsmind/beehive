@@ -103,7 +103,7 @@ throwaway worktree and read `paseo inspect` (workspace = the worktree's,
 {
   "schema_version": "1.0",
   "runtime": "claude",
-  "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+  "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
   "stages": [
     {"stage":"implementation","classification":"required","role":"code","reason":"pw-1 to pw-3 change Rust verbs and the herding transport."},
     {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Tests ride each code cell; the live proof is the leader's."},
@@ -123,7 +123,8 @@ throwaway worktree and read `paseo inspect` (workspace = the worktree's,
     {"stage":"hat-risks","classification":"not-applicable","role":"hat-risks","reason":"Three seats on standard work."},
     {"stage":"hat-value","classification":"not-applicable","role":"hat-value","reason":"Three seats on standard work."},
     {"stage":"hat-alternatives","classification":"required","role":"hat-alternatives","reason":"Standard plan check."},
-    {"stage":"hat-user-impact","classification":"required","role":"hat-user-impact","reason":"Standard plan check."}
+    {"stage":"hat-user-impact","classification":"required","role":"hat-user-impact","reason":"Standard plan check."},
+    {"stage":"design","classification":"not-applicable","role":"design","reason":"No rendered UI changes; the work is Rust verbs and herding transport."}
   ]
 }
 ```
