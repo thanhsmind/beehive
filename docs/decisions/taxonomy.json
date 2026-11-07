@@ -806,6 +806,8 @@
     "plan-check",
     "telemetry",
     "contract:usage-herding-block",
-    "contract:doctrine-split"
+    "contract:doctrine-split",
+    "report-usage",
+    "token-accounting"
   ]
 }

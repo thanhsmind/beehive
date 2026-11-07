@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "report-usage-herding",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"report-usage-herding\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"report-usage-herding\" (lane).",
+  "created_at": "2026-11-07T00:49:18.316Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 4,
+    "rationale": "one verb gains a source; tests in the same file; two doc lines",
+    "updated_at": "2026-11-07T00:49:22.626Z",
+    "feature": "report-usage-herding"
+  },
+  "merge_ready": {
+    "since": "2026-11-07T01:00:53.681Z",
+    "branch": "wt/report-usage-herding",
+    "worktree_id": "beehive--wt--report-usage-herding",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
