@@ -402,7 +402,7 @@ pub(crate) fn run_show(flags: Flags, json: bool, pre_json: bool, t0: Instant) ->
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
-    let dir = bundle_dir(&ctx.root)?;
+    let dir = command_bundle(&ctx.root)?;
 
     match show_concept(&dir, &id) {
         Ok(res) => {
@@ -466,7 +466,7 @@ pub(crate) fn run_new(flags: Flags, json: bool, pre_json: bool, t0: Instant) -> 
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
-    let dir = bundle_dir(&ctx.root)?;
+    let dir = command_bundle(&ctx.root)?;
 
     let body = match flags.get("file") {
         Some(FlagV::S(file_path)) => {

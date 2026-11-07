@@ -1074,6 +1074,28 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         ));
     }
 
+    let mut freshness: Vec<(String, Grade)> = Vec::new();
+    if let Some(checkout) = repo_root {
+        let area_bees: Vec<(&str, Map<String, Value>)> = parsed_concepts
+            .iter()
+            .filter(|c| c.path.starts_with("areas/"))
+            .map(|c| (c.path.as_str(), bee_of(&c.data)))
+            .collect();
+        freshness = grade_areas(checkout, &area_bees);
+        for (path, grade) in &freshness {
+            let bee = area_bees.iter().find(|(p, _)| p == path).map(|(_, b)| b);
+            let id = bee.and_then(|b| str_field(b, "id")).unwrap_or("<bee.id>");
+            if grade.grade == SUSPECT {
+                warnings.push(finding(path, "stale_anchor", stale_anchor_message(grade, id)));
+            } else if grade.grade == ORPHAN {
+                warnings.push(finding(path, "orphan_anchor", orphan_anchor_message(grade)));
+            }
+        }
+        if !freshness.is_empty() && freshness.iter().all(|(_, g)| g.anchors.is_empty()) {
+            notes.push("no concept carries bee.anchors — run bee knowledge seed-anchors once".to_string());
+        }
+    }
+
     let ok = errors.is_empty() && profile_errors.is_empty() && (!strict || warnings.is_empty());
     Some(CheckReport {
         okf_errors: errors,
@@ -1084,5 +1106,6 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         ok,
         notes,
         orphans,
+        freshness,
     })
 }

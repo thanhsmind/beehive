@@ -234,7 +234,7 @@ pub(crate) fn run_search(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
-    let dir = bundle_dir(&ctx.root)?;
+    let dir = command_bundle(&ctx.root)?;
     let hits = search_bundle(&dir, &text, limit)?;
 
     let mut lines: Vec<String> = Vec::new();

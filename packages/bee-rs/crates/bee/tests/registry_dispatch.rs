@@ -435,6 +435,9 @@ fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
     for verb in match_arm_verbs(&crate_src("herding.rs"), "pub fn try_native", 5) {
         served.push(format!("bee herding {verb}"));
     }
+    for verb in match_arm_verbs(&crate_src("verbs/knowledge/routing.rs"), "pub fn try_native", 10) {
+        served.push(format!("bee knowledge {verb}"));
+    }
     // `bee blind …` — a whole TOP-LEVEL namespace, which is invisible to more
     // of this file's checks than a new sub-verb is: without an arm here the
     // scan would not look at `verbs/blind/mod.rs` at all, and a served,
