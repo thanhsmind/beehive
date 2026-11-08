@@ -3481,6 +3481,54 @@ use std::time::Instant;
     }
 
     #[test]
+    fn read_set_merge_approval_refuses_a_path_outside_docs_knowledge_even_when_on_disk() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        read_set_fixture(root, "demo", Some(&read_set_context(&["docs/specs/x.md"])));
+        std::fs::create_dir_all(root.join("docs/specs")).unwrap();
+        std::fs::write(root.join("docs/specs/x.md"), "spec\n").unwrap();
+        let Out::Thrown(msg) = read_set_merge(root, "demo") else {
+            panic!("expected a refusal")
+        };
+        assert!(msg.contains("docs/specs/x.md"), "{msg}");
+        assert!(msg.contains("fix the path or remove the row"), "{msg}");
+        read_set_lane_untouched(root, "demo");
+    }
+
+    #[test]
+    fn read_set_merge_approval_from_main_finds_a_concept_that_exists_only_in_the_feature_worktree() {
+        let tmp = tmp_root();
+        let main = route_worktree_fixture(tmp.path());
+        let worktree = tmp.path().join("wt-target");
+        let plan = "# Plan\n\n## Approach\n\nprose\n\n## Load-bearing claims\n\n| # | Claim | Label | Anchor | Verbatim evidence |\n|---|---|---|---|---|\n| 1 | valid | ran | cargo test | test output |\n\n## Shape\n\none cell\n";
+        let history = worktree.join("docs").join("history").join("target-feat");
+        std::fs::create_dir_all(&history).unwrap();
+        std::fs::write(history.join("plan.md"), plan).unwrap();
+        std::fs::write(
+            history.join("CONTEXT.md"),
+            read_set_context(&["docs/knowledge/areas/a/only-here.md"]),
+        )
+        .unwrap();
+        std::fs::create_dir_all(worktree.join("docs/knowledge/areas/a")).unwrap();
+        std::fs::write(worktree.join("docs/knowledge/areas/a/only-here.md"), "one\n").unwrap();
+        assert!(!main.join("docs/knowledge/areas/a/only-here.md").exists());
+        let sha = compute_plan_sha256(plan.as_bytes());
+        let lanes = main.join(".bee").join("lanes");
+        std::fs::create_dir_all(&lanes).unwrap();
+        std::fs::write(
+            lanes.join("target-feat.json"),
+            format!(
+                r#"{{"feature":"target-feat","phase":"planning","mode":"standard","gate_preview":{{"feature":"target-feat","plan_sha256":"{sha}"}}}}"#
+            ),
+        )
+        .unwrap();
+        let Out::Emit(..) = read_set_merge(&main, "target-feat") else {
+            panic!("expected the worktree-only concept to pass")
+        };
+        assert_eq!(lane_on_disk(&main, "target-feat")["approved_gates"]["shape"], json!(true));
+    }
+
+    #[test]
     fn read_set_empty_knowledge_table_passes() {
         let tmp = tmp_root();
         let root = tmp.path();

@@ -654,7 +654,10 @@ pub(crate) fn read_set_refusal(
     if is_exempt {
         return None;
     }
-    let context_path = advisor_plan_path(root, feature).with_file_name("CONTEXT.md");
+    let base = crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
+        .map(|(_, worktree_root)| PathBuf::from(worktree_root))
+        .unwrap_or_else(|| root.to_path_buf());
+    let context_path = base.join("docs").join("history").join(feature).join("CONTEXT.md");
     let shown = format!("docs/history/{feature}/CONTEXT.md");
     let remedy = format!(
         "FIX: run `bee knowledge context --work {feature}` and `bee knowledge search --text \"<topic>\"`, write the section (skills/bee-shaping/references/context-template.md), or add `<!-- bee:no-read-set: <reason> -->` for a CONTEXT.md written before the read set existed."
@@ -678,7 +681,7 @@ pub(crate) fn read_set_refusal(
         ));
     };
     for path in paths {
-        let on_disk = path.starts_with("docs/knowledge/") && root.join(&path).exists();
+        let on_disk = path.starts_with("docs/knowledge/") && base.join(&path).exists();
         if !on_disk {
             return Some(format!(
                 "gate: approval refused \u{2014} {shown} read set names `{path}`, which is not a docs/knowledge/ path on disk. FIX: fix the path or remove the row."
