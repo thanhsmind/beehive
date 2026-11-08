@@ -829,6 +829,8 @@
     "contract:knowledge-freshness",
     "contract:cap-sync-door-freshness",
     "contract:knowledge-bundle-walk",
-    "contract:knowledge-pull-rate"
+    "contract:knowledge-pull-rate",
+    "contract:read-set-gate",
+    "contract:missing-decision-link"
   ]
 }
