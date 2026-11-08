@@ -628,6 +628,66 @@ pub(crate) fn gate_preview_refusal(
     None
 }
 
+pub(crate) fn read_set_refusal(
+    root: &Path,
+    record: &Map<String, Value>,
+    lane: Option<&str>,
+) -> Option<String> {
+    let feature = match lane {
+        Some(l) => l.to_string(),
+        None => record.get("feature").filter(|v| truthy(v)).map(js_disp)?,
+    };
+    let feature = feature.as_str();
+    let mode = record
+        .get("mode")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| {
+            record
+                .get("route")
+                .and_then(|r| r.get("lane"))
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .or_else(|| crate::verbs::drivers::feature_route(root, feature).ok().flatten());
+    let is_exempt = matches!(mode.as_deref(), Some("tiny") | Some("small") | Some("docs"));
+    if is_exempt {
+        return None;
+    }
+    let context_path = advisor_plan_path(root, feature).with_file_name("CONTEXT.md");
+    let shown = format!("docs/history/{feature}/CONTEXT.md");
+    let remedy = format!(
+        "FIX: run `bee knowledge context --work {feature}` and `bee knowledge search --text \"<topic>\"`, write the section (skills/bee-shaping/references/context-template.md), or add `<!-- bee:no-read-set: <reason> -->` for a CONTEXT.md written before the read set existed."
+    );
+    let text = match std::fs::read_to_string(&context_path) {
+        Ok(t) => t,
+        Err(e) => {
+            return Some(format!(
+                "gate: approval refused \u{2014} {shown} could not be read at {} ({}). {remedy}",
+                context_path.display(),
+                io_read_reason(&context_path, &e)
+            ));
+        }
+    };
+    if text.contains("<!-- bee:no-read-set:") {
+        return None;
+    }
+    let Some(paths) = crate::verbs::drivers::parse_read_set(&text) else {
+        return Some(format!(
+            "gate: approval refused \u{2014} {shown} has no \"## Read set\" section. {remedy}"
+        ));
+    };
+    for path in paths {
+        let on_disk = path.starts_with("docs/knowledge/") && root.join(&path).exists();
+        if !on_disk {
+            return Some(format!(
+                "gate: approval refused \u{2014} {shown} read set names `{path}`, which is not a docs/knowledge/ path on disk. FIX: fix the path or remove the row."
+            ));
+        }
+    }
+    None
+}
+
 /// Helper to get the approved cell packet for a feature from its lane or state record.
 pub(crate) fn get_approved_preview_packet(root: &Path, feature: &str) -> Option<Map<String, Value>> {
     let lane_file = root.join(".bee").join("lanes").join(format!("{feature}.json"));
@@ -827,6 +887,12 @@ mod tests {
     fn write_state_file(root: &Path, content: &str) {
         std::fs::create_dir_all(root.join(".bee")).unwrap();
         std::fs::write(root.join(".bee").join("state.json"), content).unwrap();
+    }
+
+    fn waive_read_set(root: &Path, feature: &str) {
+        let dir = root.join("docs").join("history").join(feature);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("CONTEXT.md"), "<!-- bee:no-read-set: fixture -->\n").unwrap();
     }
 
     fn write_plan(root: &Path, feature: &str, content: &str) -> PathBuf {
@@ -1086,6 +1152,7 @@ mod tests {
             "action": "a", "files": ["src/lib.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo test -p bee"
         }]);
         write_plan(root, "demo-feat", &sample_plan_with_cells("demo-feat", &serde_json::to_string(&cell_pkt).unwrap()));
+        waive_read_set(root, "demo-feat");
 
         // 1. Approval without preview -> refuses missing preview
         let gate_flags = parse_flags(&["--no-lane", "--name", "shape", "--approved", "true"]).unwrap().0;
@@ -1228,6 +1295,7 @@ mod tests {
             r#"{"schema_version":"1.0","phase":"planning","feature":"feat-high","mode":"high-risk","approved_gates":{"shape":false,"execution":false}}"#,
         );
         // NO plan.md is created
+        waive_read_set(root, "feat-high");
         let gate_flags = parse_flags(&["--no-lane", "--name", "shape", "--approved", "true"]).unwrap().0;
         let out = run_gate_body(root, &gate_flags).unwrap();
         let Out::Thrown(err) = out else { panic!("missing plan.md in high-risk lane must refuse shape approval") };

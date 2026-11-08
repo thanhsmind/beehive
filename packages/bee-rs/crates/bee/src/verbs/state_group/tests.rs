@@ -3344,6 +3344,152 @@ use std::time::Instant;
         assert!(lane.get("merge_ready").is_none(), "no fact was invented: {lane}");
     }
 
+    fn read_set_fixture(root: &Path, feature: &str, context: Option<&str>) {
+        let plan = "# Plan\n\n## Approach\n\nprose\n\n## Load-bearing claims\n\n| # | Claim | Label | Anchor | Verbatim evidence |\n|---|---|---|---|---|\n| 1 | valid | ran | cargo test | test output |\n\n## Shape\n\none cell\n";
+        let history = root.join("docs").join("history").join(feature);
+        std::fs::create_dir_all(&history).unwrap();
+        std::fs::write(history.join("plan.md"), plan).unwrap();
+        if let Some(body) = context {
+            std::fs::write(history.join("CONTEXT.md"), body).unwrap();
+        }
+        let sha = compute_plan_sha256(plan.as_bytes());
+        let lanes = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&lanes).unwrap();
+        std::fs::write(
+            lanes.join(format!("{feature}.json")),
+            format!(
+                r#"{{"feature":"{feature}","phase":"planning","mode":"standard","gate_preview":{{"feature":"{feature}","plan_sha256":"{sha}"}}}}"#
+            ),
+        )
+        .unwrap();
+    }
+
+    fn read_set_context(paths: &[&str]) -> String {
+        let mut body = "# Demo \u{2014} Context\n\n## Read set\n\n### Knowledge\n\n| Concept | Grade at read | Why it matters |\n|---|---|---|\n".to_string();
+        for p in paths {
+            body.push_str(&format!("| `{p}` | fresh | why |\n"));
+        }
+        body.push_str("\n### Code\n\n| Path | What it decides |\n|---|---|\n| src/x.rs | things |\n");
+        body
+    }
+
+    fn read_set_merge(root: &Path, feature: &str) -> Out {
+        ok(run_gate_body(
+            root,
+            &gate_flags(&["--lane", feature, "--merge", "--approved", "true"]),
+        ))
+    }
+
+    fn read_set_lane_untouched(root: &Path, feature: &str) {
+        let lane = lane_on_disk(root, feature);
+        assert!(lane.get("approved_gates").is_none(), "a refusal must write no state: {lane}");
+    }
+
+    #[test]
+    fn read_set_merge_approval_lands_when_every_knowledge_path_is_on_disk() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        read_set_fixture(root, "demo", Some(&read_set_context(&["docs/knowledge/areas/a/one.md"])));
+        std::fs::create_dir_all(root.join("docs/knowledge/areas/a")).unwrap();
+        std::fs::write(root.join("docs/knowledge/areas/a/one.md"), "one\n").unwrap();
+        let Out::Emit(..) = read_set_merge(root, "demo") else {
+            panic!("expected the approval to land")
+        };
+        assert_eq!(lane_on_disk(root, "demo")["approved_gates"]["shape"], json!(true));
+    }
+
+    #[test]
+    fn read_set_merge_approval_refuses_a_knowledge_path_missing_on_disk() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        read_set_fixture(root, "demo", Some(&read_set_context(&["docs/knowledge/areas/a/gone.md"])));
+        let Out::Thrown(msg) = read_set_merge(root, "demo") else {
+            panic!("expected a refusal")
+        };
+        assert!(msg.contains("docs/knowledge/areas/a/gone.md"), "{msg}");
+        assert!(msg.contains("fix the path or remove the row"), "{msg}");
+        read_set_lane_untouched(root, "demo");
+    }
+
+    #[test]
+    fn read_set_marker_waives_the_check() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        read_set_fixture(root, "demo", Some("# Demo\n\n<!-- bee:no-read-set: legacy -->\n\n## Locked Decisions\n"));
+        let Out::Emit(..) = read_set_merge(root, "demo") else {
+            panic!("expected the marker to waive the check")
+        };
+    }
+
+    #[test]
+    fn read_set_merge_approval_refuses_a_context_with_no_section_and_names_the_marker() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        read_set_fixture(root, "demo", Some("# Demo\n\n## Locked Decisions\n\n| ID | Decision |\n|---|---|\n"));
+        let Out::Thrown(msg) = read_set_merge(root, "demo") else {
+            panic!("expected a refusal")
+        };
+        assert!(msg.contains("has no \"## Read set\" section"), "{msg}");
+        assert!(msg.contains("<!-- bee:no-read-set: <reason> -->"), "{msg}");
+        assert!(msg.contains("bee knowledge context --work demo"), "{msg}");
+        read_set_lane_untouched(root, "demo");
+    }
+
+    #[test]
+    fn read_set_merge_approval_refuses_an_absent_context_and_names_the_path() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        read_set_fixture(root, "demo", None);
+        let Out::Thrown(msg) = read_set_merge(root, "demo") else {
+            panic!("expected a refusal")
+        };
+        assert!(msg.contains("docs/history/demo/CONTEXT.md"), "{msg}");
+        assert!(msg.contains("bee:no-read-set"), "{msg}");
+        read_set_lane_untouched(root, "demo");
+    }
+
+    #[test]
+    fn read_set_tiny_lane_is_exempt() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("docs/history/demo")).unwrap();
+        std::fs::write(root.join("docs/history/demo/CONTEXT.md"), "# Demo\n\nshort\n").unwrap();
+        std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee/lanes/demo.json"),
+            r#"{"feature":"demo","phase":"planning","mode":"tiny"}"#,
+        )
+        .unwrap();
+        let Out::Emit(..) = read_set_merge(root, "demo") else {
+            panic!("expected the tiny lane to approve")
+        };
+    }
+
+    #[test]
+    fn read_set_check_never_runs_on_a_plain_execution_approval() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        read_set_fixture(root, "demo", Some("# Demo\n\n## Locked Decisions\n"));
+        let out = ok(run_gate_body(
+            root,
+            &gate_flags(&["--lane", "demo", "--name", "execution", "--approved", "true"]),
+        ));
+        let Out::Emit(..) = out else {
+            panic!("expected the execution approval to land unchanged")
+        };
+        assert_eq!(lane_on_disk(root, "demo")["approved_gates"]["execution"], json!(true));
+    }
+
+    #[test]
+    fn read_set_empty_knowledge_table_passes() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        read_set_fixture(root, "demo", Some(&read_set_context(&[])));
+        let Out::Emit(..) = read_set_merge(root, "demo") else {
+            panic!("expected the empty table to pass")
+        };
+    }
+
     #[test]
     fn plan_packets_lane_packet_with_foreign_feature_is_not_returned() {
         let tmp = tmp_root();

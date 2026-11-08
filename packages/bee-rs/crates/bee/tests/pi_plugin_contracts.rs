@@ -8138,6 +8138,7 @@ Parity test plan.
 ```
 "#;
     std::fs::write(plan_dir.join("plan.md"), plan_content).expect("write plan.md");
+    std::fs::write(plan_dir.join("CONTEXT.md"), "<!-- bee:no-read-set: fixture -->\n").expect("write CONTEXT.md");
 
     // Shape/merged approval without preview is REFUSED
     let unpreviewed_gate = real_bee(&bee_target)

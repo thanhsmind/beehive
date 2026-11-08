@@ -6338,6 +6338,33 @@ exit 0
     }
 
     #[test]
+    fn parse_read_set_returns_the_knowledge_table_paths_trimmed_of_backticks() {
+        let text = "# Demo\n\n## Read set\n\n### Knowledge\n\n| Concept | Grade at read | Why it matters |\n|---|---|---|\n| `docs/knowledge/areas/a/one.md` | fresh | why |\n| docs/knowledge/patterns/two.md | stale | why |\n\n### Code\n\n| Path | What it decides |\n|---|---|\n| src/x.rs | things |\n\n## Next\n";
+        assert_eq!(
+            parse_read_set(text),
+            Some(vec![
+                "docs/knowledge/areas/a/one.md".to_string(),
+                "docs/knowledge/patterns/two.md".to_string()
+            ])
+        );
+    }
+
+    #[test]
+    fn parse_read_set_is_none_without_the_heading_or_the_concept_table() {
+        assert_eq!(parse_read_set("# Demo\n\n## Locked Decisions\n\n| ID | Decision |\n|---|---|\n"), None);
+        let other_table_only = "## Read set\n\n| Path | What it decides |\n|---|---|\n| src/x.rs | things |\n\n## Next\n\n| Concept | Grade | Why |\n|---|---|---|\n| docs/knowledge/a.md | x | y |\n";
+        assert_eq!(parse_read_set(other_table_only), None);
+    }
+
+    #[test]
+    fn parse_read_set_skips_a_parenthesised_note_row_and_accepts_an_empty_table() {
+        let note_row = "## Read set\n\n| Concept | Grade at read | Why it matters |\n|---|---|---|\n| (no bundle) | \u{2014} | this host has no docs/knowledge/ |\n";
+        assert_eq!(parse_read_set(note_row), Some(vec![]));
+        let empty = "## Read set\n\n| Concept | Grade at read | Why it matters |\n|---|---|---|\n\n## Next\n";
+        assert_eq!(parse_read_set(empty), Some(vec![]));
+    }
+
+    #[test]
     fn routing_door_routes_the_plain_range_and_slash_citation_forms() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
