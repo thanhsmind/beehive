@@ -1,0 +1,258 @@
+{
+  "id": "kfm-4",
+  "feature": "knowledge-freshness-mechanic",
+  "title": "Retire delivery records and move work/ out of the bundle",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "kfm-1"
+  ],
+  "decisions": [
+    "e7e80d78-f172-410d-b142-7b2bd464105e",
+    "28fb074d-82c5-4962-85ba-a430b13b9292",
+    "d4bcbdbd-78bd-42df-b1dd-a439e9825f8a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "docs/knowledge/work/*",
+    "docs/history/knowledge-work/*",
+    "docs/knowledge/areas/*",
+    "docs/knowledge/patterns/*",
+    "docs/knowledge/index.md",
+    "docs/knowledge/areas/index.md",
+    "docs/knowledge/patterns/index.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+    "docs/history/knowledge-freshness-mechanic/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/scout-and-ticks.md"
+  ],
+  "affects_specs": [],
+  "action": "Stop generating delivery records and take the delivery-log tree out of the bundle (D4 e7e80d78, D5 28fb074d). promote.rs: remove section (a), the delivery draft (anchor: `format!(\"{work_dir}/delivery.md\")`), from the text proposal and the --json output; the proposal keeps (b) area update bullets and (c) pattern candidates and says in its header that it proposes those two only; update the promote tests in knowledge/tests.rs that assert `delivery` (rg anchors: `assert_eq!(p[\"delivery\"][\"path\"], \"work/delivery.md\");` and `assert_eq!(p[\"delivery\"][\"path\"], \"work/hist-1/delivery.md\");`). Both bundle walks skip a top-level `work/` directory: verbs walk.rs `list_bundle_markdown` (anchor: `pub(crate) fn list_bundle_markdown(dir: &Path) -> Option<Vec<String>> {`) and the preamble's own session_preamble/knowledge.rs `list_bundle_markdown` (anchor: `pub(crate) fn list_bundle_markdown(dir: &Path) -> Vec<String> {`); add a test for each that a bundle with work/ lists nothing under it. render.rs `work_item_candidate` (anchor: `let rel = format!(\"work/{feature}/work-item.md\");`) is removed with its call so the preamble never announces a work-item anchor; resolve_anchor then takes its docs/history arm (anchor.rs: `// whose bee.id matches `work` always wins; otherwise docs/history/<work>/`); update the preamble and brief tests that build work/ fixtures (session_preamble/tests.rs and drivers/tests.rs — rg `docs/knowledge/work` in both) to the history anchor. In skills/bee-hive/references/scout-and-ticks.md, the line that offers to author a work item under docs/knowledge/ (rg `work item` near line 251) now points at docs/history/<feature>/ instead; skills/ is hashed, so run `bee dev regen` and include the manifest. Move the tree with `git mv docs/knowledge/work docs/history/knowledge-work` (one commit with the code), then repoint every literal `docs/knowledge/work/` string inside docs/knowledge/areas/ and docs/knowledge/patterns/ — frontmatter sources and body alike, path strings only, no sentence rewrites — to `docs/history/knowledge-work/` (rg anchor: `sources: [\"docs/knowledge/work/usage-in-bee-store/delivery.md\"` in workflow-state/close-usage-record.md), run `bee knowledge index`, and confirm `bee knowledge check --json` reports 0 OKF errors and ZERO dangling_source rows, `bee knowledge index --check` 0 stale, and `bee knowledge context --work windows-ci-1107 --budget 4000` still returns a manifest from the docs/history anchor. Do not change any other concept content.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble drivers::tests::prepare && .bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "bee knowledge promote emits no delivery section in text or JSON",
+      "docs/knowledge/work/ no longer exists and docs/history/knowledge-work/ holds the moved files",
+      "both bundle walks ignore a top-level work/ directory and the preamble announces no work-item anchor",
+      "bee knowledge check --json reports zero dangling_source rows after the move",
+      "bee knowledge context --work on a closed feature still returns a manifest from the docs/history anchor"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+        "substantive": "top-level work/ skipped in the verbs' bundle walk"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+        "substantive": "top-level work/ skipped in the preamble's bundle walk"
+      },
+      {
+        "path": "docs/knowledge/index.md",
+        "substantive": "regenerated without a work section"
+      }
+    ],
+    "key_links": [
+      "every bundle reader, verbs and preamble, skips work/",
+      "no sources entry in docs/knowledge names docs/knowledge/work/"
+    ],
+    "prohibitions": [
+      "Do not rewrite any sentence in areas/ or patterns/; repoint path strings only",
+      "Do not delete the moved files; they move to docs/history/knowledge-work/",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-kfm-4",
+    "outcome": "Delivery draft retired from promote, both bundle walks skip work/, preamble announces no work-item anchor, work/ tree moved to docs/history/knowledge-work and paths repointed; commit 5e715b425",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/index.md",
+      "docs/knowledge/areas/",
+      "docs/knowledge/patterns/",
+      "docs/history/knowledge-work/"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T16:08:46.267Z",
+    "behavior_change": true,
+    "verification_evidence": "4827 passed 0 failed; knowledge check --json 0 dangling_source, index --check 0 stale, release-manifest --check match",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble drivers::tests::prepare && .bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-07T15:58:40.561Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Delivery draft retired from promote, both bundle walks skip work/, preamble announces no work-item anchor, work/ tree moved to docs/history/knowledge-work and paths repointed; commit 5e715b425",
+      "commit": "5e715b42536c2fb2acd1d3b1e08d77452a9ee402",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "skills/bee-hive/references/scout-and-ticks.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/index.md",
+        "docs/knowledge/areas/",
+        "docs/knowledge/patterns/",
+        "docs/history/knowledge-work/"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble drivers::tests::prepare && .bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check — green:unit — 4827 passed 0 failed; knowledge check --json 0 dangling_source, index --check 0 stale, release-manifest --check match",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge promote emits no delivery section in text or JSON",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs"
+          },
+          {
+            "requirement": "docs/knowledge/work/ no longer exists and docs/history/knowledge-work/ holds the moved files",
+            "artifact": "docs/history/knowledge-work"
+          },
+          {
+            "requirement": "both bundle walks ignore a top-level work/ directory and the preamble announces no work-item anchor",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs"
+          },
+          {
+            "requirement": "bee knowledge check --json reports zero dangling_source rows after the move",
+            "artifact": "docs/knowledge/areas/workflow-state/close-usage-record.md"
+          },
+          {
+            "requirement": "bee knowledge context --work on a closed feature still returns a manifest from the docs/history anchor",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "top-level work/ skipped in the verbs' bundle walk",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs"
+          },
+          {
+            "requirement": "top-level work/ skipped in the preamble's bundle walk",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs"
+          },
+          {
+            "requirement": "regenerated without a work section",
+            "artifact": "docs/knowledge/index.md"
+          },
+          {
+            "requirement": "every bundle reader, verbs and preamble, skips work/",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs"
+          },
+          {
+            "requirement": "no sources entry in docs/knowledge names docs/knowledge/work/",
+            "artifact": "docs/knowledge/areas/workflow-state/close-usage-record.md"
+          }
+        ],
+        "recorded_at": "2026-11-07T16:09:17.302Z",
+        "recorded_by": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "promote emits no delivery section in text or JSON",
+            "status": "PASS",
+            "evidence": "promote.rs:720; knowledge/tests.rs asserts p.get(\"delivery\").is_none() and no DELIVERY text"
+          },
+          {
+            "id": "work/ gone, docs/history/knowledge-work holds moved files",
+            "status": "PASS",
+            "evidence": "docs/knowledge/work absent; git ls-files docs/history/knowledge-work = 453; commit 453 R, 0 D"
+          },
+          {
+            "id": "both walks skip top-level work/, preamble announces no work-item anchor",
+            "status": "PASS",
+            "evidence": "walk.rs:54, session_preamble/knowledge.rs:231; tests the_bundle_walk_lists_nothing_under_a_top_level_work_directory (both); session_preamble/tests.rs:396"
+          },
+          {
+            "id": "zero dangling_source after the move",
+            "status": "PASS",
+            "evidence": "grep docs/knowledge/work in docs/knowledge: none; all 8 repointed docs/history/knowledge-work paths exist (bee check itself not run: brief forbids bee commands)"
+          },
+          {
+            "id": "context for a closed feature answers from docs/history",
+            "status": "PASS",
+            "evidence": "test history_anchor_resolves_from_whichever_of_context_and_plan_exist; docs/history/windows-ci-1107/plan.md exists"
+          },
+          {
+            "id": "prohibition: path strings only in areas/ patterns/",
+            "status": "PASS",
+            "evidence": "git show 5e715b425 -- docs/knowledge/areas docs/knowledge/patterns: 20 lines, each a docs/knowledge/work -> docs/history/knowledge-work swap"
+          },
+          {
+            "id": "prohibition: moved files not deleted",
+            "status": "PASS",
+            "evidence": "name-status: 0 D"
+          },
+          {
+            "id": "prohibition: no code comments",
+            "status": "PASS",
+            "evidence": "one obsolete test comment rewritten in place in session_preamble/tests.rs; no net comment added"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-07T16:21:44.137Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 103771,
+    "cached": 2649392,
+    "total": 2753163,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 103771,
+        "cached": 2649392,
+        "total": 2753163
+      }
+    },
+    "jobs": [
+      "job-1794067129317-20313-1"
+    ]
+  }
+}

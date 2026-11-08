@@ -1,0 +1,142 @@
+{
+  "id": "kfm-6",
+  "feature": "knowledge-freshness-mechanic",
+  "title": "Write the homes rule and re-confirm step, and seed bee's own anchors",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "kfm-1",
+    "kfm-2",
+    "kfm-3",
+    "kfm-4",
+    "kfm-5"
+  ],
+  "decisions": [
+    "93e1001d-bdf6-42fb-9297-9f4d8589a5ef",
+    "6a502ad0-7273-4c91-9266-065e56eec25c",
+    "4148025d-e997-4642-bab4-da00104c5795"
+  ],
+  "files": [
+    "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+    "docs/knowledge/areas/okf-profile/index.md",
+    "docs/knowledge/areas/okf-profile/overview.md",
+    "docs/knowledge/areas/okf-profile/context-and-promote.md",
+    "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+    "skills/bee-capturing/SKILL.md",
+    "docs/knowledge/areas/*",
+    "docs/knowledge/index.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+    "docs/history/knowledge-freshness-mechanic/plan.md",
+    "docs/knowledge/areas/okf-profile/overview.md",
+    "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Document the mechanic and apply it to bee's bundle (D2 93e1001d, D7 6a502ad0, D8 4148025d). First make the installed binary carry kfm-1..kfm-5: run `cargo build --release --manifest-path packages/bee-rs/Cargo.toml` then `bee dev regen` (its onboard --apply step copies the built binary into .bee/bin) and confirm `.bee/bin/bee --help --names` lists `knowledge seed-anchors` before going on. Write one new concept docs/knowledge/areas/okf-profile/freshness-and-document-homes.md through `bee knowledge new --type <the concept type the sibling okf-profile files use> --area okf-profile` and then edit its body: (1) the document homes rule — the four kinds that live in docs/knowledge (vision, glossary, area map with boundaries and invariants, decisions, patterns) and the three that live in code (verify features and tests, generated contracts, runnable runbooks), with the sentence that every area entry anchors to at least one code file or verify feature; (2) the three fields `bee.anchors`, `bee.verified_at`, `bee.verified_commit` and the grade rule, cited from plan.md Approach by pointer, not copied, plus the one-line fact that patterns carry a date and no grade; (3) the cap re-confirm step, that unverified passes, and the `--sync-ack` escape; (4) the host steps: the binary and skills arrive through onboarding, then the owner runs `bee knowledge seed-anchors` once, and `knowledge check` prints the NOTE until that happens; (5) the pull-rate measure and what a flat rate means (the lean layer is deleted next); (6) a Pointers section naming freshness.rs, sync_door.rs, report.rs and this feature's CONTEXT.md, and its own `bee.anchors` set to those three Rust files. Link it from okf-profile/overview.md (one bullet). In okf-profile/context-and-promote.md and concept-model-and-authoring.md, change only the sentences that still describe the delivery draft and the docs/knowledge/work/ work-item location (rg `delivery` and `work/` in both) to say promote proposes area bullets and pattern candidates only and that work-item records live under docs/history/. In skills/bee-capturing/SKILL.md add, in the capture discipline, one short paragraph: when a captured behaviour change touches a file an area concept anchors, re-confirm or edit that concept (`bee knowledge confirm --id`), new area entries carry `bee.anchors`, and a bundle with no anchors is seeded once with `bee knowledge seed-anchors` — cite the new concept by path, no second copy of the rule; skills/ is hashed, so run `bee dev regen` again and include the manifest. Then run `bee knowledge seed-anchors` once over areas/ and commit the seeded frontmatter; record in the cap report how many concepts received anchors and how many got none. Three seeded concepts are rule homes with `bee.applied_at` (workflow-state/capture-queue-and-the-blocker-threshold.md, doctrine-layer/delegation-threshold.md, hook-runtime/governed-paths-and-the-intake-gate.md); their frontmatter change trips sync check (b) at cap, so cap with `--sync-ack \"seed wrote bee.anchors frontmatter only; applied_at files unchanged\"` — this ack is predicted here, not a deviation. Finish with `bee knowledge check` (0 OKF errors, 0 profile errors; the stale_anchor warnings it now prints are expected and are the next feature's input — quote the freshness count line in the cap), `bee knowledge index` then `index --check`, and `bee dev release-manifest --check`.",
+  "verify": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md states the homes rule, the three fields, the grade rule by pointer, the cap step, the host seed step and the pull-rate measure, and is linked from the area overview",
+      "skills/bee-capturing/SKILL.md names re-confirm, bee.anchors on new entries and the one-time seed, citing the concept",
+      "every area concept with at least one resolving backticked repo path carries bee.anchors and a baseline verified_commit",
+      "bee knowledge check reports 0 OKF errors and 0 profile errors after seeding, with the freshness count line quoted in the cap",
+      "the installed .bee/bin/bee used for the seed carries the seed-anchors verb"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+        "substantive": "the homes rule and the freshness mechanic, with Pointers and its own anchors"
+      },
+      {
+        "path": "skills/bee-capturing/SKILL.md",
+        "substantive": "re-confirm and seed paragraph in the capture discipline"
+      }
+    ],
+    "key_links": [
+      "okf-profile/overview.md links the new concept",
+      "the release manifest hash for skills/bee-capturing/SKILL.md matches the edited file"
+    ],
+    "prohibitions": [
+      "Do not rewrite or cut any existing area narrative beyond the named delivery and work-item sentences; the content cut is the next feature",
+      "Do not write a glossary or an event catalogue",
+      "Do not hand-edit frontmatter the seed verb writes",
+      "Do not seed patterns/",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "w-kfm-6",
+    "outcome": "Wrote the freshness-and-document-homes concept, bee-capturing paragraph and doc fixes, seeded anchors (122 concepts anchored, 17 none); knowledge check 0 errors, freshness: 47 confirmed, 76 suspect, 0 orphan, 17 unverified; commit c5855442590cdd61cd67c72e7723f7b8fab0aae8",
+    "files_changed": [
+      "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+      "docs/knowledge/areas/okf-profile/overview.md",
+      "docs/knowledge/areas/okf-profile/context-and-promote.md",
+      "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+      "docs/knowledge/areas/okf-profile/index.md",
+      "docs/knowledge/areas/*",
+      "docs/knowledge/index.md",
+      "skills/bee-capturing/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the installed binary could not be refreshed from the worktree (.bee/bin/bee is a symlink into main); the seed and checks ran with the freshly built target binary, and main's binary must be rebuilt after merge",
+      "sync-ack: seed wrote bee.anchors frontmatter only on three rule-home concepts; applied_at files unchanged (predicted in the plan)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T16:20:26.996Z",
+    "behavior_change": false,
+    "verification_evidence": "docs cell: bee knowledge check 0 OKF and 0 profile errors, index --check 0 stale, release-manifest --check match, run with the worktree-built binary because .bee/bin/bee in the worktree is a symlink to main's older binary; the worker's full suite also ran green (5413 passed)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+    "verify_command": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-07T16:14:40.628Z",
+    "sync_ack": "seed wrote bee.anchors frontmatter only on three rule-home concepts; applied_at files unchanged (predicted in the plan)",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Wrote the freshness-and-document-homes concept, bee-capturing paragraph and doc fixes, seeded anchors (122 concepts anchored, 17 none); knowledge check 0 errors, freshness: 47 confirmed, 76 suspect, 0 orphan, 17 unverified; commit c5855442590cdd61cd67c72e7723f7b8fab0aae8",
+      "commit": "c5855442590cdd61cd67c72e7723f7b8fab0aae8",
+      "files": [
+        "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+        "docs/knowledge/areas/okf-profile/overview.md",
+        "docs/knowledge/areas/okf-profile/context-and-promote.md",
+        "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+        "docs/knowledge/areas/okf-profile/index.md",
+        "docs/knowledge/areas/*",
+        "docs/knowledge/index.md",
+        "skills/bee-capturing/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check — green:static — docs cell: bee knowledge check 0 OKF and 0 profile errors, index --check 0 stale, release-manifest --check match, run with the worktree-built binary because .bee/bin/bee in the worktree is a symlink to main's older binary; the worker's full suite also ran green (5413 passed)",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 687 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 142198,
+    "cached": 4126527,
+    "total": 4268725,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 142198,
+        "cached": 4126527,
+        "total": 4268725
+      }
+    },
+    "jobs": [
+      "job-1794068081655-148211-1"
+    ]
+  }
+}

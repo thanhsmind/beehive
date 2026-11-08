@@ -1,0 +1,214 @@
+{
+  "id": "kfm-2",
+  "feature": "knowledge-freshness-mechanic",
+  "title": "Print the grade wherever a concept is read",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "kfm-1"
+  ],
+  "decisions": [
+    "2b11f025-942e-4a18-86b1-fdb28a89f254",
+    "27ad96a5-ac3a-46bf-b80a-cb18978ccb5d",
+    "d050fc2c-61bb-43b6-ac4a-408f396e99bd"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/knowledge.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+    "docs/history/knowledge-freshness-mechanic/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Make the freshness grade visible at every pull point (D1 2b11f025, D3 27ad96a5), using only freshness::grade_bundle / grade_concept from kfm-1 — never a second grading rule. search.rs: `SearchHit` (anchor: `pub(crate) struct SearchHit {`) gains grade, verified_at and verified_commit; the text line becomes `<path> — <title> — [<grade> @ <verified_at or never>] — <why>` and the JSON row (anchor: `row.insert(\"why\".into(), Value::String(hit.why.clone()));`) gains `grade`, `verified_at`, `verified_commit`; a patterns/ hit prints `[pattern]` in place of a grade. author.rs `run_show` prints a `freshness:` line after the metadata and adds the same three keys to its JSON. context.rs: every manifest entry carries `grade` and `verified_at`; a suspect or orphan entry's inclusion reason ends with ` (grade: <grade> — <first changed or missing anchor>)`; ranking is unchanged. session_preamble: in render.rs `project_map_lines` (anchor: `pub(crate) fn project_map_lines(root: &Path, bundle: bool) -> Vec<String> {`), NOT in the per-feature knowledge_context_lines, add ONE line `- knowledge: <n> confirmed, <m> suspect, <k> orphan, <u> unverified — suspect first: bee knowledge check` computed over areas/ with grade_bundle; omit the line when the bundle is absent or areas/ holds zero concepts; wrap the computation in a 500 ms budget and past it print `- knowledge: freshness skipped (slow) — bee knowledge check` instead; bridge the preamble's own Concept (path + parsed data) to grade_concept's (rel_path, bee map) signature. The preamble byte budget tests stay green. Tests red-first: a search row and a show output carry the grade of a fixture concept in two grades; a patterns hit prints [pattern]; a context manifest entry carries grade and the suspect suffix; the preamble line counts a fixture bundle, is absent without a bundle and with zero area concepts, and the skipped form renders when the budget is exceeded (inject the budget).",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble",
+  "must_haves": {
+    "truths": [
+      "knowledge search text and JSON rows carry grade, verified_at and verified_commit",
+      "knowledge show prints the grade and carries it in JSON",
+      "knowledge context entries carry grade and a suspect or orphan entry names its first changed or missing anchor in the reason",
+      "the session preamble's project map prints one freshness count line, omitted for no bundle or zero area concepts, and a skipped note past 500 ms"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+        "substantive": "SearchHit carries the grade fields and both outputs print them"
+      }
+    ],
+    "key_links": [
+      "search.rs, author.rs, context.rs and render.rs all call freshness::grade_bundle or grade_concept"
+    ],
+    "prohibitions": [
+      "Do not change search ranking or context ranking",
+      "Do not add a second grading rule anywhere",
+      "Do not put the count line in knowledge_context_lines",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-kfm-2",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [
+      "sync_door.rs edited for one doc-comment deletion under decision 9c7553ba (comment_baseline repair), outside the plan's file list for this cell",
+      "sync-ack: sync_door.rs touched only to delete one doc-comment line (comment_baseline repair, decision 9c7553ba); no behaviour or skill text changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T15:58:01.906Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell's related tests: 210 passed 0 failed; the worker's full run was 4824 passed 1 failed, the one red being the shipped-command-spelling scan over docs/history/knowledge-freshness-mechanic/plan.md (a docs file outside this cell; the leader repairs the spelling in plan rev 2)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble",
+    "claimed_at": "2026-11-07T15:46:10.105Z",
+    "sync_ack": "sync_door.rs touched only to delete one doc-comment line (comment_baseline repair, decision 9c7553ba); no behaviour or skill text changes",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Grade prints in knowledge search, show and context (text and JSON) and the preamble project map carries one freshness count line under a 500 ms budget; the stray sync_door doc-comment line is removed; commit aff29c0d0",
+      "commit": "aff29c0d0c6f93753bee45ea3194d319e84a82f1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge session_preamble — green:unit — the cell's related tests: 210 passed 0 failed; the worker's full run was 4824 passed 1 failed, the one red being the shipped-command-spelling scan over docs/history/knowledge-freshness-mechanic/plan.md (a docs file outside this cell; the leader repairs the spelling in plan rev 2)",
+      "deviations": [
+        "sync_door.rs edited for one doc-comment deletion under decision 9c7553ba (comment_baseline repair), outside the plan's file list for this cell"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "knowledge search text and JSON rows carry grade, verified_at and verified_commit",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs"
+          },
+          {
+            "requirement": "knowledge show prints the grade and carries it in JSON",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs"
+          },
+          {
+            "requirement": "knowledge context entries carry grade and a suspect or orphan entry names its first changed or missing anchor in the reason",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs"
+          },
+          {
+            "requirement": "the session preamble's project map prints one freshness count line, omitted for no bundle or zero area concepts, and a skipped note past 500 ms",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+          },
+          {
+            "requirement": "SearchHit carries the grade fields and both outputs print them",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs"
+          },
+          {
+            "requirement": "search.rs, author.rs, context.rs and render.rs all call freshness::grade_bundle or grade_concept",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T15:58:34.273Z",
+        "recorded_by": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "search text and JSON carry grade, verified_at, verified_commit",
+            "status": "PASS",
+            "evidence": "search.rs:172-190; test search_rows_carry_the_grade_of_an_area_concept_and_patterns_print_pattern"
+          },
+          {
+            "id": "show prints grade and carries it in JSON",
+            "status": "PASS",
+            "evidence": "author.rs show_concept freshness line + show_value; test show_prints_the_freshness_line_and_carries_it_in_json"
+          },
+          {
+            "id": "context entries carry grade; suspect/orphan reason names first anchor",
+            "status": "PASS",
+            "evidence": "context.rs first_stale_anchor + manifest keys; test context_entries_carry_the_grade_and_a_stale_entry_names_its_anchor"
+          },
+          {
+            "id": "preamble project map count line, omitted without bundle/areas, skipped past 500 ms",
+            "status": "PASS",
+            "evidence": "render.rs freshness_map_line in project_map_lines_within; tests the_project_map_counts_the_area_grades_in_one_line, the_freshness_line_is_absent_without_a_bundle_and_with_zero_area_concepts, a_budget_past_its_limit_prints_the_skipped_form"
+          },
+          {
+            "id": "prohibition: search/context ranking unchanged",
+            "status": "PASS",
+            "evidence": "git show aff29c0d0: no sort/score/rank lines changed"
+          },
+          {
+            "id": "prohibition: no second grading rule",
+            "status": "PASS",
+            "evidence": "all callers use grade_bundle/grade_concept (search.rs:157, author.rs:241, context.rs:429, render.rs:284)"
+          },
+          {
+            "id": "prohibition: count line not in knowledge_context_lines",
+            "status": "PASS",
+            "evidence": "render.rs project_map_lines_within"
+          },
+          {
+            "id": "prohibition: no code comments",
+            "status": "PASS",
+            "evidence": "no added // lines; removes kfm-3's sync_door.rs (d) doc line"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-07T16:21:44.115Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 152761,
+    "cached": 2714780,
+    "total": 2867541,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 152761,
+        "cached": 2714780,
+        "total": 2867541
+      }
+    },
+    "jobs": [
+      "job-1794066387343-4126983-1"
+    ]
+  }
+}

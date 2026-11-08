@@ -1,0 +1,167 @@
+{
+  "id": "kfm-5",
+  "feature": "knowledge-freshness-mechanic",
+  "title": "Count knowledge pulls per feature",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "kfm-4"
+  ],
+  "decisions": [
+    "e7e133dc-dd86-42c5-8089-712ab6555f4b",
+    "1910c257-7ce9-48f5-b491-c553880e7491"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+    "docs/history/knowledge-freshness-mechanic/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Measure pull rate (D6 e7e133dc). verbs/mod.rs `record_timing` (anchor: `pub(crate) fn record_timing(root: &Path, cmd: &str, t0: Instant, ok: bool) {`) adds a `feature` field to every timings row: when the environment carries a session id (store.rs anchor: `if let Some(v) = env_nonempty(\"BEE_SESSION_ID\") {`) read that session's bound lane feature through state_group/store.rs `session_binding(Some(id), root)`; with no env id, or any read failure, write null — never the session-listing fallback, never a refusal, never a slowdown; the existing `{ts, cmd, ms, ok}` keys and the stderr line are unchanged. report.rs `build_report` (anchor: `pub(crate) fn build_report(root: &Path, concepts: &[Concept]) -> (Vec<Value>, Vec<Value>, Value, Vec<String>) {`) adds a `pull_rate` section read from .bee/logs/timings.jsonl: per feature (null grouped as `(unbound)`) the counts of `knowledge search`, `knowledge context`, `knowledge show`, their sum `pulls`, the count of all rows `calls`, and `rate` = pulls / calls rounded to three decimals, plus a total row; text output prints a small table under a `Pull rate` heading; malformed rows are skipped and counted in `malformed_count`; a missing log prints an empty table. Tests red-first: a row written with BEE_SESSION_ID bound to a lane carries that feature; without the env id the row carries null; the report groups a fixture log by feature, computes rate, and skips a malformed line.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge timings",
+  "must_haves": {
+    "truths": [
+      "every new timings row carries feature (string or null) beside the unchanged ts, cmd, ms, ok keys, read from the env session id only",
+      "bee knowledge report prints a pull-rate table per feature with search, context, show, pulls, calls and rate"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "substantive": "pull_rate section built from timings.jsonl"
+      }
+    ],
+    "key_links": [
+      "record_timing reads the bound lane through session_binding with the env session id"
+    ],
+    "prohibitions": [
+      "Do not make record_timing list session records, refuse, or slow the command on any failure",
+      "Do not change existing report sections",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-kfm-5",
+    "outcome": "record_timing now writes the env-bound feature (or null) on every row, and bee knowledge report prints a per-feature pull-rate table; commit edc0f9e6d",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T16:14:21.354Z",
+    "behavior_change": true,
+    "verification_evidence": "full crate suite, all result lines ok with 0 failed; the 6 new knowledge/timings tests ran and passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge timings",
+    "claimed_at": "2026-11-07T16:09:10.909Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "record_timing now writes the env-bound feature (or null) on every row, and bee knowledge report prints a per-feature pull-rate table; commit edc0f9e6d",
+      "commit": "edc0f9e6da7592e6b025189f86624c6b6cc88e3d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge timings — green:unit — full crate suite, all result lines ok with 0 failed; the 6 new knowledge/timings tests ran and passed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every new timings row carries feature (string or null) beside the unchanged ts, cmd, ms, ok keys, read from the env session id only",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          },
+          {
+            "requirement": "bee knowledge report prints a pull-rate table per feature with search, context, show, pulls, calls and rate",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "pull_rate section built from timings.jsonl",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "record_timing reads the bound lane through session_binding with the env session id",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T16:14:45.514Z",
+        "recorded_by": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "timings row carries feature beside unchanged ts/cmd/ms/ok, env session id only",
+            "status": "PASS",
+            "evidence": "verbs/mod.rs timing_row/timing_feature; store.rs:420-425 flag path never lists sessions; tests timings_row_keeps_the_four_keys_and_adds_feature, timings_feature_reads_the_bound_lane_of_the_env_session, timings_feature_is_null_without_an_env_session_even_with_one_live_session"
+          },
+          {
+            "id": "report prints pull-rate table per feature with search/context/show/pulls/calls/rate",
+            "status": "PASS",
+            "evidence": "report.rs build_pull_rate; tests timings_pull_rate_groups_by_feature_and_skips_malformed_rows, timings_pull_rate_rounds_to_three_decimals, timings_pull_rate_over_a_missing_log_is_an_empty_table"
+          },
+          {
+            "id": "prohibition: record_timing never lists sessions, refuses or slows",
+            "status": "PASS",
+            "evidence": "timing_feature uses session_binding(Some(id)).ok()? -> null on failure"
+          },
+          {
+            "id": "prohibition: existing report sections unchanged",
+            "status": "PASS",
+            "evidence": "git show edc0f9e6d report.rs: additions only"
+          },
+          {
+            "id": "prohibition: no code comments",
+            "status": "PASS",
+            "evidence": "no added // lines"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-07T16:21:44.138Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 83891,
+    "cached": 907490,
+    "total": 991381,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 83891,
+        "cached": 907490,
+        "total": 991381
+      }
+    },
+    "jobs": [
+      "job-1794067751677-104880-1"
+    ]
+  }
+}

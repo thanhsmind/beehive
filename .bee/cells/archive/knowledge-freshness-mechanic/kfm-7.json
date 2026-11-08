@@ -1,0 +1,119 @@
+{
+  "id": "kfm-7",
+  "feature": "knowledge-freshness-mechanic",
+  "title": "Derive the preamble pathological-budget fixture bound from the render",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "kfm-1"
+  ],
+  "decisions": [
+    "da4ccfeb-495d-471d-af2f-80f8cec4d3c0"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-freshness-mechanic/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Fix-first cell (never build on red). kfm-1 added two verb names to the command surface and the test `a_tighter_budget_drops_the_digest_next_and_keeps_the_command_surface` in hooks/session_preamble/tests.rs went red: its hard-coded budget 8800 sat 12 bytes above the pathological fixture's floor, and the new names push the kept-surface render to 8813 bytes. The contract (decision da4ccfeb, contract:session-preamble-budget) is the DROP ORDER — recent decisions, then the critical-patterns digest, then command surface, then project map — not the number 8800. Rewrite that test (and its sibling `an_over_budget_render_drops_recent_decisions_first_and_names_where_to_fetch_it` only if it shares the brittle constant) so the budget is derived from the render: render once at PREAMBLE_BUDGET_BYTES, measure the byte length of the `### Critical patterns (digest)` section, and set the tighter budget to (that render's length − digest length + a small slack such as 8) so that the digest no longer fits but the command surface still does; keep every existing assertion about which sections remain and the Omitted line. Red-first: confirm the test is red at HEAD before the change and green after; the sibling budget tests and `the_preamble_budget_sits_below_the_host_inline_limit` stay untouched and green. Never widen a literal budget by hand.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- session_preamble",
+  "must_haves": {
+    "truths": [
+      "a_tighter_budget_drops_the_digest_next_and_keeps_the_command_surface is green at HEAD and its budget is computed from the render, not a literal",
+      "every other session_preamble test is unchanged and green",
+      "PREAMBLE_BUDGET_BYTES and the drop order are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "substantive": "the tighter-budget test derives its bound from the digest section length"
+      }
+    ],
+    "key_links": [
+      "the derived budget sits strictly between the kept-surface render size and the digest-included render size"
+    ],
+    "prohibitions": [
+      "Do not change budget.rs or any renderer code",
+      "Do not widen a literal budget constant",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": false,
+  "trace": {
+    "worker": "w-kfm-7",
+    "outcome": "Tighter-budget test now derives its bound from the digest section length; 70 session_preamble tests green; commit 24299c5ea",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-07T15:44:59.395Z",
+    "behavior_change": false,
+    "verification_evidence": "the test and its sibling budget tests live in the session_preamble module",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- session_preamble",
+    "claimed_at": "2026-11-07T15:38:47.609Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Tighter-budget test now derives its bound from the digest section length; 70 session_preamble tests green; commit 24299c5ea",
+      "commit": "24299c5ea9dea2383f37a280070e841d049817ad",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- session_preamble — green:unit — the test and its sibling budget tests live in the session_preamble module",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a_tighter_budget_drops_the_digest_next_and_keeps_the_command_surface is green at HEAD and its budget is computed from the render, not a literal",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          },
+          {
+            "requirement": "every other session_preamble test is unchanged and green",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          },
+          {
+            "requirement": "PREAMBLE_BUDGET_BYTES and the drop order are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          },
+          {
+            "requirement": "the tighter-budget test derives its bound from the digest section length",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T15:45:54.002Z",
+        "recorded_by": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 43464,
+    "cached": 389704,
+    "total": 433168,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 43464,
+        "cached": 389704,
+        "total": 433168
+      }
+    },
+    "jobs": [
+      "job-1794065935727-4075185-1"
+    ]
+  }
+}

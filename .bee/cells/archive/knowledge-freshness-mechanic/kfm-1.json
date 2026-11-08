@@ -1,0 +1,666 @@
+{
+  "id": "kfm-1",
+  "feature": "knowledge-freshness-mechanic",
+  "title": "Grade concept freshness from anchors and git, with seed and confirm verbs",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "27ad96a5-ac3a-46bf-b80a-cb18978ccb5d",
+    "4148025d-e997-4642-bab4-da00104c5795",
+    "d050fc2c-61bb-43b6-ac4a-408f396e99bd",
+    "00ad3248-53d6-489a-bae1-d53cf11b7b84"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+    "docs/history/knowledge-freshness-mechanic/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frontmatter.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add the freshness grade to the knowledge bundle (D3 27ad96a5, D8 4148025d) exactly by the Grade rule and the Seeding paragraph in plan.md Approach. New module verbs/knowledge/freshness.rs exports: (1) `bundle_root(root, feature: Option<&str>) -> PathBuf` — the docs/knowledge directory of the checkout the command runs in, built the way drivers/close.rs `docs_root_for_feature` picks a granted worktree's tree (anchor: `pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {`); every knowledge verb that reads or writes concepts (check, list, search, show, context, new, seed-anchors, confirm) resolves its bundle through it, so a command run inside a granted worktree reads and writes that worktree's docs tree; (2) `grade_bundle(checkout_root, concepts) -> BTreeMap<rel_path, Grade>` and `grade_concept(checkout_root, rel_path, bee: &Map<String, Value>) -> Grade` where `Grade { grade: confirmed|suspect|orphan|unverified, verified_at: Option<String>, verified_commit: Option<String>, anchors: Vec<String>, changed: Vec<String>, reason: Option<String> }` — the signature takes the bundle-relative path and the parsed `bee` map, not walk::Concept, so the session preamble's own Concept type can call it; implement the one-pass rule from plan.md: one `git log --format=%H --name-only --first-parent -m <oldest verified_commit>..HEAD` through verbs/worktree/git.rs `run_git` (anchor: `pub(crate) fn run_git(cwd: &Path, args: &[&str]) -> GitOut {`) plus one `git merge-base --is-ancestor <vc> HEAD` per distinct verified_commit, never a git call per anchor; a concept's repo path for the same-commit exemption is `docs/knowledge/<rel>`. Three frontmatter fields under `bee`: `anchors` (flat list), `verified_at` (ISO date), `verified_commit` (full sha); every write goes through the canonical emitter (frontmatter.rs `emit_scalar` / `is_plain_safe`) and a written file must report zero not_canonical. In check.rs, after the profile pass, grade every concept under areas/ only (never patterns/, never work/, never index.md) and emit: text summary line `freshness: <n> confirmed, <n> suspect, <n> orphan, <n> unverified`; `--json` object `freshness: {confirmed, suspect, orphan, unverified, rows: [{path, grade, verified_at, verified_commit, changed, reason}]}`; one profile WARNING per suspect concept (code `stale_anchor`, message naming the changed anchors and the remedy `bee knowledge confirm --id <bee.id>`) and per orphan concept (code `orphan_anchor`, naming the missing path and the remedy: fix bee.anchors); unverified is counted, never warned; when areas/ has concepts and none carries bee.anchors, print one NOTE `no concept carries bee.anchors — run bee knowledge seed-anchors once`. Two new single-token verbs routed in routing.rs (anchor: `\"check\" => run_check(flags, json, pre_json, t0),`) and declared in generated/registry_payload.json as `{name, invoke, description}` rows beside `knowledge.check` (round-trip the JSON keeping its byte format): `bee knowledge seed-anchors [--dry-run]` walks areas/ only and, for every concept with NO `bee.anchors` key, collects the backticked repo-relative paths in its body that exist under the checkout (same backtick-path shape `dangling_source_candidate` accepts), skipping any path under `.bee/`, `docs/`, or containing a `/generated/` segment; writes them as `bee.anchors`; sets `bee.verified_commit` to `git log -1 --format=%H -- docs/knowledge/<rel>` and `bee.verified_at` to that commit's ISO date (a concept with no commit gets anchors only); prints per-file counts and how many concepts got zero anchors. `bee knowledge confirm (--id <bee.id>)+ | --path <repo path>` stamps `verified_at` (today, UTC) and `verified_commit` (current HEAD of the checkout) on each named concept, or on every areas/ concept whose anchors contain --path; refusals, each naming its remedy: unknown id → `no concept with bee.id <id> — bee knowledge list`; concept with no anchors → `<path> has no bee.anchors — run bee knowledge seed-anchors or add anchors`; --path matching no concept → `no concept anchors <path>`; confirm never clears orphan and says so when the grade stays orphan. Extend tests/registry_dispatch.rs `every_namespace_the_dispatcher_serves_is_declared_in_the_registry` (anchor: `for verb in match_arm_verbs(&crate_src(\"devtools/mod.rs\"), \"pub fn try_native\", 5) {`) to also scan verbs/knowledge/routing.rs's match arms as `bee knowledge <verb>`, so an undeclared knowledge verb fails the test. Tests red-first in knowledge/tests.rs on a fixture repo with real git commits: each of the four grades; anchor changed in a commit that also touched the concept → confirmed; a present sha that is not an ancestor of HEAD → unverified with a reason; a merge commit touching an anchor is seen; seed writes anchors and the baseline commit only where anchors are absent and the file stays canonical; confirm stamps both fields, handles --path, and each refusal names its remedy; a confirm run from a granted worktree writes the worktree's concept and leaves main untouched; check's --json carries the freshness object, the stale_anchor / orphan_anchor rows and the seed NOTE.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge registry",
+  "must_haves": {
+    "truths": [
+      "grade_concept returns confirmed, suspect, orphan or unverified by the rule in plan.md Approach, with unverified for a present-but-non-ancestor sha and for an unavailable git",
+      "an anchor changed in a commit that also touched the concept file does not make the concept suspect",
+      "grading the whole bundle makes at most one git log call plus one merge-base call per distinct verified_commit",
+      "every knowledge verb run inside a granted worktree reads and writes that worktree's docs/knowledge",
+      "bee knowledge check prints the freshness count line, carries the freshness object in --json, emits stale_anchor and orphan_anchor warnings and the seed NOTE, and never grades patterns/",
+      "bee knowledge seed-anchors writes bee.anchors plus a baseline verified_commit and verified_at only to areas/ concepts without anchors, skips .bee/, docs/ and generated paths, and keeps every written file canonical",
+      "bee knowledge confirm --id and --path stamp verified_at and verified_commit and every refusal names its remedy",
+      "the registry served-vs-declared test scans knowledge verbs"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+        "substantive": "bundle_root, grade_bundle, grade_concept, seed-anchors and confirm"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "knowledge.seed-anchors and knowledge.confirm declared"
+      }
+    ],
+    "key_links": [
+      "check.rs calls grade_bundle for every areas/ concept",
+      "routing.rs serves seed-anchors and confirm",
+      "tests/registry_dispatch.rs scans verbs/knowledge/routing.rs"
+    ],
+    "prohibitions": [
+      "Do not grade or seed anything under docs/knowledge/patterns/ or docs/knowledge/work/",
+      "Do not change any existing finding code or its wording",
+      "Do not run one git invocation per anchor",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Keep the seed and confirm verbs in freshness.rs instead of author.rs"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-kfm-1",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [
+      "window rule changed from the plan.md first-parent wording to the vc..HEAD graph by owner direction t-ae0fad (cells answer on kfm-1)",
+      "run ceiling raised from 1800 s to 3600 s again for a release build",
+      "the earlier worker job-1794068531857-202731-1 stalled idle for about 3 h and was cancelled before this re-dispatch",
+      "four worker rounds: semantic judge rounds 2 and 3 found the unrelated-history and merge-commit gaps after the first rework"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T19:57:41.351Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell related tests: 183 passed 0 failed in the bee bin at cbec8071e (leader run) and 184 passed 0 failed at 61053f789 (worker and judge runs), covering the merged-branch window, side-branch suspect, unrelated histories, the merge-commit anchor edit and the injected-runner call count; the worker full workspace suite ran green at 61053f789 (bin 4839 passed); red-before-green shown for the round-3 and round-4 tests, not for round 2 (the old file had no injectable runner); semantic judge round 4 PASS high",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0d4f9005-56fd-4946-829b-aaaa0b61560d",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge registry",
+    "claimed_at": "2026-11-07T19:10:14.760Z",
+    "mistakes": [
+      {
+        "wrong": "the leader sent round 3 with only the round-2 failure_signature and dropped the judge minor note on merge commits",
+        "better": "carry every judge note on the cell contract into the next round",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Grade window rebuilt over the full vc..HEAD graph: one git log -c over HEAD --not <base>^@ with parents (all of HEAD when the verified commits share no base), n-1 pairwise merge-base calls, ancestry and per-concept window from that one graph, merge commits that edit an anchor in their own tree count; no --first-parent and no octopus; anchor_covers exposed for the cap door; commits fd4f650c3, cbec8071e, 61053f789",
+      "commit": "61053f7896ddc1583224d2c19cadf229a8d5afd7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge registry — green:unit — the cell related tests: 183 passed 0 failed in the bee bin at cbec8071e (leader run) and 184 passed 0 failed at 61053f789 (worker and judge runs), covering the merged-branch window, side-branch suspect, unrelated histories, the merge-commit anchor edit and the injected-runner call count; the worker full workspace suite ran green at 61053f789 (bin 4839 passed); red-before-green shown for the round-3 and round-4 tests, not for round 2 (the old file had no injectable runner); semantic judge round 4 PASS high",
+      "deviations": [
+        "window rule changed from the plan.md first-parent wording to the vc..HEAD graph by owner direction t-ae0fad (cells answer on kfm-1)",
+        "run ceiling raised from 1800 s to 3600 s again for a release build",
+        "the earlier worker job-1794068531857-202731-1 stalled idle for about 3 h and was cancelled before this re-dispatch",
+        "four worker rounds: semantic judge rounds 2 and 3 found the unrelated-history and merge-commit gaps after the first rework"
+      ],
+      "mistakes": [
+        "the leader sent round 3 with only the round-2 failure_signature and dropped the judge minor note on merge commits — carry every judge note on the cell contract into the next round — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "grade_concept returns confirmed, suspect, orphan or unverified by the rule in plan.md Approach, with unverified for a present-but-non-ancestor sha and for an unavailable git",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "an anchor changed in a commit that also touched the concept file does not make the concept suspect",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "grading the whole bundle makes at most one git log call plus one merge-base call per distinct verified_commit",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "every knowledge verb run inside a granted worktree reads and writes that worktree's docs/knowledge",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "bee knowledge check prints the freshness count line, carries the freshness object in --json, emits stale_anchor and orphan_anchor warnings and the seed NOTE, and never grades patterns/",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "bee knowledge seed-anchors writes bee.anchors plus a baseline verified_commit and verified_at only to areas/ concepts without anchors, skips .bee/, docs/ and generated paths, and keeps every written file canonical",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "bee knowledge confirm --id and --path stamp verified_at and verified_commit and every refusal names its remedy",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "the registry served-vs-declared test scans knowledge verbs",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+          },
+          {
+            "requirement": "knowledge.seed-anchors and knowledge.confirm declared",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "check.rs calls grade_bundle for every areas/ concept",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "routing.rs serves seed-anchors and confirm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T15:38:14.040Z",
+        "recorded_by": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "grade_concept returns confirmed, suspect, orphan or unverified by the rule in plan.md Approach, with unverified for a present-but-non-ancestor sha and for an unavailable git",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "an anchor changed in a commit that also touched the concept file does not make the concept suspect",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "grading the whole bundle makes at most one git log call plus one merge-base call per distinct verified_commit",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "every knowledge verb run inside a granted worktree reads and writes that worktree's docs/knowledge",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "bee knowledge check prints the freshness count line, carries the freshness object in --json, emits stale_anchor and orphan_anchor warnings and the seed NOTE, and never grades patterns/",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "bee knowledge seed-anchors writes bee.anchors plus a baseline verified_commit and verified_at only to areas/ concepts without anchors, skips .bee/, docs/ and generated paths, and keeps every written file canonical",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "bee knowledge confirm --id and --path stamp verified_at and verified_commit and every refusal names its remedy",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "the registry served-vs-declared test scans knowledge verbs",
+            "artifact": "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+          },
+          {
+            "requirement": "knowledge.seed-anchors and knowledge.confirm declared",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "check.rs calls grade_bundle for every areas/ concept",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "routing.rs serves seed-anchors and confirm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T19:57:52.698Z",
+        "recorded_by": "0d4f9005-56fd-4946-829b-aaaa0b61560d",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "grade rule: orphan > unverified > suspect > confirmed",
+            "status": "FAIL",
+            "evidence": "freshness.rs:206-209 window_end falls back to the whole octopus-base range when vc is not first-parent; /tmp git repro: W1..HEAD -- src/a.rs empty, yet 'change a' (ancestor of W1) is in the window"
+          },
+          {
+            "id": "unverified for non-ancestor sha and no git",
+            "status": "PASS",
+            "evidence": "freshness.rs:83-94; tests a_sha_that_is_not_an_ancestor_of_head_is_unverified_with_a_reason, a_checkout_without_git_grades_unverified_with_a_reason"
+          },
+          {
+            "id": "same-commit anchor+concept edit is not suspect",
+            "status": "PASS",
+            "evidence": "freshness.rs:210,220; test an_anchor_changed_in_a_commit_that_also_touched_the_concept_is_confirmed"
+          },
+          {
+            "id": "at most one git log + one merge-base per distinct vc",
+            "status": "FAIL",
+            "evidence": "freshness.rs:172 adds merge-base --octopus: n+2 calls; no test counts calls"
+          },
+          {
+            "id": "verbs read/write the worktree's docs/knowledge",
+            "status": "PASS",
+            "evidence": "freshness.rs:26-35 via close.rs:835-841; test a_confirm_from_a_granted_worktree_writes_the_worktrees_concept_and_leaves_main_alone"
+          },
+          {
+            "id": "check: count line, freshness json, stale_anchor/orphan_anchor, seed NOTE, never patterns/",
+            "status": "PASS",
+            "evidence": "check.rs:1077-1097; tests check_reports_freshness_counts_rows_warnings_and_never_grades_patterns, check_prints_the_seed_note_when_no_area_concept_carries_anchors"
+          },
+          {
+            "id": "seed-anchors: only unanchored areas/, skips .bee/ docs/ generated, canonical",
+            "status": "PASS",
+            "evidence": "freshness.rs:354-449; test seed_anchors_writes_anchors_and_a_baseline_only_where_anchors_are_absent"
+          },
+          {
+            "id": "confirm by id/path stamps both fields, refusals name remedy",
+            "status": "PASS",
+            "evidence": "freshness.rs:470-570; tests confirm_stamps_both_fields_by_id_and_by_path, every_confirm_refusal_names_its_remedy, confirm_never_clears_an_orphan"
+          },
+          {
+            "id": "registry test scans knowledge verbs",
+            "status": "PASS",
+            "evidence": "tests/registry_dispatch.rs:438-440; registry_payload.json knowledge.seed-anchors, knowledge.confirm"
+          },
+          {
+            "id": "prohibition: no patterns/ or work/ grading or seeding",
+            "status": "PASS",
+            "evidence": "freshness.rs:271,302 areas/ filter"
+          },
+          {
+            "id": "prohibition: existing finding codes unchanged",
+            "status": "PASS",
+            "evidence": "git show d1e4c972e check.rs: additions only"
+          },
+          {
+            "id": "prohibition: no per-anchor git call",
+            "status": "PASS",
+            "evidence": "freshness.rs:159-192 calls are per distinct vc and one log"
+          },
+          {
+            "id": "prohibition: no code comments",
+            "status": "PASS",
+            "evidence": "no added // lines in git show d1e4c972e -- '*.rs'"
+          }
+        ],
+        "failure_signature": "grade window: a verified_commit off HEAD's first-parent chain (worktree confirm landed by --no-ff merge) with 2+ distinct vcs grades suspect on commits that are ancestors of vc (freshness.rs:169-177,206-209)",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-07T16:21:44.040Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "prior: merged-branch vc with 2+ vcs not graded suspect on its own ancestors",
+            "status": "PASS",
+            "evidence": "freshness.rs:228-274; test a_verified_commit_on_a_merged_branch_is_not_suspect_for_changes_that_precede_it"
+          },
+          {
+            "id": "prior: call budget <=1 log + <=1 merge-base per distinct vc on every path (no octopus)",
+            "status": "PASS",
+            "evidence": "freshness.rs:133-169,227-248; test grading_a_bundle_costs_one_log_and_at_most_one_merge_base_per_distinct_verified_commit; code walk of no-git/not-repo/unknown/root-base paths"
+          },
+          {
+            "id": "owner: window exactly vc..HEAD over all parents for every ancestor vc",
+            "status": "FAIL",
+            "evidence": "freshness.rs:147-166 else-branch at :165 kills an ancestor vc from an unrelated history; scratch repo: merge-base exit=1, empty stderr, both roots pass --is-ancestor HEAD"
+          },
+          {
+            "id": "owner: non-ancestor vc stays unverified with existing reason text",
+            "status": "PASS",
+            "evidence": "freshness.rs:256-258; test a_sha_that_is_not_an_ancestor_of_head_is_unverified_with_a_reason"
+          },
+          {
+            "id": "owner: anchor_covers pub(crate), dir anchor covers files under it",
+            "status": "PASS",
+            "evidence": "freshness.rs:126-129; test a_directory_anchor_covers_every_file_under_it_and_nothing_beside_it"
+          },
+          {
+            "id": "truth: four grades, unverified for non-ancestor and no git",
+            "status": "PASS",
+            "evidence": "tests each_of_the_four_grades_is_derived_from_anchors_and_git, a_checkout_without_git_grades_unverified_with_a_reason"
+          },
+          {
+            "id": "truth: same-commit exemption",
+            "status": "PASS",
+            "evidence": "freshness.rs:292; test an_anchor_changed_in_a_commit_that_also_touched_the_concept_is_confirmed"
+          },
+          {
+            "id": "truth: verbs in a granted worktree use its docs/knowledge",
+            "status": "PASS",
+            "evidence": "command_bundle freshness.rs:32 in routing.rs:59/200/345, search.rs:301, author.rs:447/500, freshness.rs:458/587; test a_confirm_from_a_granted_worktree_writes_the_worktrees_concept_and_leaves_main_alone"
+          },
+          {
+            "id": "truth: check count line, --json freshness, stale/orphan warnings, seed NOTE, no patterns/",
+            "status": "PASS",
+            "evidence": "check.rs:1077-1097; tests check_reports_freshness_counts_rows_warnings_and_never_grades_patterns, check_prints_the_seed_note_when_no_area_concept_carries_anchors"
+          },
+          {
+            "id": "truth: seed-anchors scope, skips, baseline, canonical",
+            "status": "PASS",
+            "evidence": "freshness.rs:427-434,486-491; test seed_anchors_writes_anchors_and_a_baseline_only_where_anchors_are_absent"
+          },
+          {
+            "id": "truth: confirm stamps and refusals name remedies",
+            "status": "PASS",
+            "evidence": "freshness.rs:543-572; tests every_confirm_refusal_names_its_remedy, confirm_never_clears_an_orphan"
+          },
+          {
+            "id": "truth: registry test scans knowledge verbs",
+            "status": "PASS",
+            "evidence": "tests/registry_dispatch.rs:438; every_namespace_the_dispatcher_serves_is_declared_in_the_registry ok"
+          },
+          {
+            "id": "prohibition: no patterns/ or work/ grading or seeding",
+            "status": "PASS",
+            "evidence": "freshness.rs:344,375"
+          },
+          {
+            "id": "prohibition: no existing finding code or wording changed",
+            "status": "PASS",
+            "evidence": "git show d1e4c972e -- check.rs: additions only"
+          },
+          {
+            "id": "prohibition: no git call per anchor",
+            "status": "PASS",
+            "evidence": "freshness.rs:286-296 has no git call"
+          },
+          {
+            "id": "prohibition: no code comments",
+            "status": "PASS",
+            "evidence": "no // or /* lines added in d1e4c972e or fd4f650c3"
+          },
+          {
+            "id": "cell verify",
+            "status": "PASS",
+            "evidence": "cargo test ... -p bee -- knowledge registry exit 0; 182 passed, 0 failed"
+          }
+        ],
+        "failure_signature": "grade window: verified_commits from two unrelated histories joined into HEAD (merge --allow-unrelated-histories) make merge-base exit 1 with empty stderr, and freshness.rs:165 marks the second-sorted vc dead as 'shares no history' so an ancestor-of-HEAD concept grades unverified, breaking 'window is exactly vc..HEAD; only non-ancestors stay unverified with the existing reason texts'",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-07T19:22:23.272Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "round-2 fix: unrelated-history vcs stay graded, budget 1 log + 1 merge-base",
+            "status": "PASS",
+            "evidence": "freshness.rs:170-173, 237-240; verified_commits_from_unrelated_histories_joined_into_head_stay_graded"
+          },
+          {
+            "id": "round-1 fix: window is exactly vc..HEAD over all parents, no first-parent",
+            "status": "PASS",
+            "evidence": "freshness.rs:237, 259-284; a_verified_commit_on_a_merged_branch_is_not_suspect_for_changes_that_precede_it"
+          },
+          {
+            "id": "truth: grade rule, four grades, non-ancestor and no-git unverified",
+            "status": "FAIL",
+            "evidence": "freshness.rs:237 logs without -m/--cc, so merge commits carry no files; scratch repo: evil merge 2fb1e1d edits anchor a, the log lists no files for it, concept (anchors [a], vc root) grades confirmed where plan.md:132 requires suspect; regression from d1e4c972e which used -m"
+          },
+          {
+            "id": "truth: same-commit exemption",
+            "status": "PASS",
+            "evidence": "freshness.rs:301; an_anchor_changed_in_a_commit_that_also_touched_the_concept_is_confirmed"
+          },
+          {
+            "id": "truth: at most 1 log + 1 merge-base per distinct vc on every path",
+            "status": "PASS",
+            "evidence": "freshness.rs:147-176, 235-257; grading_a_bundle_costs_one_log_and_at_most_one_merge_base_per_distinct_verified_commit"
+          },
+          {
+            "id": "truth: verbs use the worktree bundle",
+            "status": "PASS",
+            "evidence": "freshness.rs:26-35; a_confirm_from_a_granted_worktree_writes_the_worktrees_concept_and_leaves_main_alone"
+          },
+          {
+            "id": "truth: check count line, json, stale/orphan warnings, seed NOTE, no patterns",
+            "status": "PASS",
+            "evidence": "check.rs +1077-1097; check_reports_freshness_counts_rows_warnings_and_never_grades_patterns"
+          },
+          {
+            "id": "truth: seed-anchors scope, skips, canonical",
+            "status": "PASS",
+            "evidence": "freshness.rs:436-531; seed_anchors_writes_anchors_and_a_baseline_only_where_anchors_are_absent"
+          },
+          {
+            "id": "truth: confirm stamps and refusals name remedies",
+            "status": "PASS",
+            "evidence": "freshness.rs:552-652; confirm_stamps_both_fields_by_id_and_by_path, every_confirm_refusal_names_its_remedy"
+          },
+          {
+            "id": "truth: registry test scans knowledge verbs",
+            "status": "PASS",
+            "evidence": "tests/registry_dispatch.rs:438-440; every_namespace_the_dispatcher_serves_is_declared_in_the_registry ok"
+          },
+          {
+            "id": "anchor_covers pub(crate), directory covers files under it",
+            "status": "PASS",
+            "evidence": "freshness.rs:126; a_directory_anchor_covers_every_file_under_it_and_nothing_beside_it"
+          },
+          {
+            "id": "prohibition: no patterns/ or work/ grading or seeding",
+            "status": "PASS",
+            "evidence": "freshness.rs:353, 384; walk.rs work skip"
+          },
+          {
+            "id": "prohibition: no finding code changed",
+            "status": "PASS",
+            "evidence": "check.rs diff adds lines only"
+          },
+          {
+            "id": "prohibition: no per-anchor git call",
+            "status": "PASS",
+            "evidence": "freshness.rs:241 single log"
+          },
+          {
+            "id": "prohibition: no code comments",
+            "status": "PASS",
+            "evidence": "grep of added .rs lines in d1e4c972e, fd4f650c3, cbec8071e: none"
+          },
+          {
+            "id": "cell verify",
+            "status": "PASS",
+            "evidence": "cargo test -p bee -- knowledge registry: 183 passed + registry_dispatch 3 passed, exit 0"
+          }
+        ],
+        "failure_signature": "grade window: a merge commit whose own tree change edits an anchor (evil merge or conflict-only resolution) lists no files because the single git log has no -m/--cc, so the concept grades confirmed instead of suspect",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-07T19:40:22.534Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "window is vc..HEAD over all parents, no --first-parent",
+            "status": "PASS",
+            "evidence": "freshness.rs:237-241,270-283; test a_verified_commit_on_a_merged_branch_is_not_suspect_for_changes_that_precede_it"
+          },
+          {
+            "id": "round-1: off-first-parent vc with 2+ vcs not suspect on its ancestors",
+            "status": "PASS",
+            "evidence": "tests.rs:3204 and tests.rs:3218 pass"
+          },
+          {
+            "id": "round-2: unrelated-history vcs stay graded",
+            "status": "PASS",
+            "evidence": "freshness.rs:170-173; tests.rs:3263 passes with (1 log, 1 merge-base)"
+          },
+          {
+            "id": "round-3: evil merge edit is listed, ordinary merge is not",
+            "status": "PASS",
+            "evidence": "freshness.rs:237 -c; tests.rs:3235 and 3133 pass; scratch: mixed merge lists src/a.rs, clean and theirs merges list none"
+          },
+          {
+            "id": "non-ancestor vc unverified with existing reason text",
+            "status": "PASS",
+            "evidence": "freshness.rs:93-98,266-268; a_sha_that_is_not_an_ancestor_of_head_is_unverified_with_a_reason"
+          },
+          {
+            "id": "same-commit exemption",
+            "status": "PASS",
+            "evidence": "freshness.rs:293,301; an_anchor_changed_in_a_commit_that_also_touched_the_concept_is_confirmed"
+          },
+          {
+            "id": "budget: <=1 log + <=1 merge-base per distinct vc on every path",
+            "status": "PASS",
+            "evidence": "freshness.rs:147-176,235-257; tests.rs:3341-3376; scratch root-commit ^@ exit 0, unknown sha exit 128 names sha, not-a-repo stderr"
+          },
+          {
+            "id": "anchor_covers pub(crate), directory covers files under it",
+            "status": "PASS",
+            "evidence": "freshness.rs:126-129; tests.rs:3303"
+          },
+          {
+            "id": "four grades incl. unverified for unavailable git",
+            "status": "PASS",
+            "evidence": "freshness.rs:83-91,190-216; each_of_the_four_grades_is_derived_from_anchors_and_git; a_checkout_without_git_grades_unverified_with_a_reason"
+          },
+          {
+            "id": "every listed verb reads the worktree bundle",
+            "status": "PASS",
+            "evidence": "command_bundle at routing.rs:59,200,345 author.rs:447,500 search.rs:301 freshness.rs:467,596; a_confirm_from_a_granted_worktree_writes_the_worktrees_concept_and_leaves_main_alone"
+          },
+          {
+            "id": "check line, JSON, stale/orphan warnings, seed NOTE, areas only",
+            "status": "PASS",
+            "evidence": "check.rs d1e4c972e diff; freshness.rs:376-383; check_reports_freshness_counts_rows_warnings_and_never_grades_patterns; check_prints_the_seed_note_when_no_area_concept_carries_anchors"
+          },
+          {
+            "id": "seed-anchors contract",
+            "status": "PASS",
+            "evidence": "seed_anchors_writes_anchors_and_a_baseline_only_where_anchors_are_absent"
+          },
+          {
+            "id": "confirm stamps, refusals name remedies",
+            "status": "PASS",
+            "evidence": "confirm_stamps_both_fields_by_id_and_by_path; every_confirm_refusal_names_its_remedy; confirm_never_clears_an_orphan"
+          },
+          {
+            "id": "registry declares and test scans knowledge verbs",
+            "status": "PASS",
+            "evidence": "registry_payload.json knowledge.seed-anchors/confirm; registry_dispatch.rs every_namespace_the_dispatcher_serves_is_declared_in_the_registry ok"
+          },
+          {
+            "id": "prohibition: no patterns/ or work/ grading or seeding",
+            "status": "PASS",
+            "evidence": "freshness.rs:379,400 areas/ filter"
+          },
+          {
+            "id": "prohibition: existing finding codes unchanged",
+            "status": "PASS",
+            "evidence": "git show d1e4c972e check.rs: additions only"
+          },
+          {
+            "id": "prohibition: no git call per anchor",
+            "status": "PASS",
+            "evidence": "freshness.rs:295-305 in-memory match"
+          },
+          {
+            "id": "prohibition: no code comments",
+            "status": "PASS",
+            "evidence": "grep of added lines in d1e4c972e fd4f650c3 cbec8071e 61053f789: none"
+          },
+          {
+            "id": "cell verify green",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee -- knowledge registry: EXIT=0, 184 passed 0 failed + registry_dispatch ok"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-07T19:57:38.777Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-07T16:21:44.040Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "ownership_overrides": [
+      {
+        "verb": "parkCell",
+        "forced_by": "0d4f9005-56fd-4946-829b-aaaa0b61560d",
+        "owner_bypassed": null,
+        "at": "2026-11-07T19:09:53.182Z"
+      }
+    ],
+    "park": [
+      {
+        "question": "The semantic judge found the grade window wrong on merged branches (first-parent walk plus an octopus base that falls back to the whole range) and over the call budget. Which window rule should the rework implement?",
+        "parked_at": "2026-11-07T19:09:53.182Z",
+        "answer": "Owner direction, waggledance task t-ae0fad: the grade window must not depend on --first-parent and must never fall back to the whole common-base range when a verified_commit sits on a merged branch. This replaces the --first-parent -m wording in the cell action and in plan.md Approach. Contract: a concept's window is exactly the commits reachable from HEAD and not reachable from its own verified_commit (git's vc..HEAD set over all parents); a vc that is not an ancestor of HEAD stays unverified with the existing reason texts; the same-commit exemption stays. Call budget per bundle, in every path including error paths: at most one git log plus at most one merge-base call per distinct verified_commit; per-sha ancestry calls plus an extra octopus call breaks it. One shape that fits: build a common base B of the distinct vcs with n-1 pairwise git merge-base calls (stderr names a bad sha), run one git log with hash and parents plus --name-only over HEAD --not B^@ (no --first-parent, no -m), and derive both ancestry (vc is in the logged set) and each concept's window (logged set minus the vc's ancestors walked through the logged parents) from that one graph. Expose one pub(crate) function in freshness.rs that says whether an anchor covers a repo path (a directory anchor covers every file under it, the current anchor_touched rule) so the cap door in kfm-3 reuses it. Tests red-first in knowledge/tests.rs: a fixture with a --no-ff merge where the vc sits on the merged branch and a second distinct vc exists, and changes that are ancestors of the vc do not make it suspect; an anchor change on the side branch after the vc, merged, makes it suspect; a test that counts git calls through an injectable runner for 1, 2 and 3 distinct vcs, one of them an unknown sha.",
+        "answer_decision": "00ad3248-53d6-489a-bae1-d53cf11b7b84",
+        "answered_at": "2026-11-07T19:10:00.011Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 682369,
+    "cached": 13986856,
+    "total": 14669225,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 682369,
+        "cached": 13986856,
+        "total": 14669225
+      }
+    },
+    "jobs": [
+      "job-1794062152939-3889198-1",
+      "job-1794065229325-4021193-1",
+      "job-1794068531857-202731-1",
+      "job-1794078622464-471146-1",
+      "job-1794079358499-561395-1",
+      "job-1794080426701-627527-1"
+    ]
+  }
+}

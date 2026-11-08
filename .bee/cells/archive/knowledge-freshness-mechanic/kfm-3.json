@@ -1,0 +1,400 @@
+{
+  "id": "kfm-3",
+  "feature": "knowledge-freshness-mechanic",
+  "title": "Refuse a cap that leaves a suspect or orphan concept unconfirmed",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "kfm-1"
+  ],
+  "decisions": [
+    "e7e80d78-f172-410d-b142-7b2bd464105e",
+    "9d469211-acaf-4889-820b-fd72799a3f62"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "skills/bee-swarming/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-freshness-mechanic/CONTEXT.md",
+    "docs/history/knowledge-freshness-mechanic/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Add check (d) to the cap-time sync door (D4 e7e80d78) by the Cap door paragraph in plan.md Approach. sync_door.rs `sync_refusal` (anchor: `pub(crate) fn sync_refusal(root: &Path, cell: &Map<String, Value>, touched: &[String]) -> Option<String> {`) gains a `history_root: &Path` parameter (the checkout whose HEAD the cell committed into), and handlers_close.rs passes the `history_root` it already builds touched_set from (anchor: `if let Some(refusal) = sync_refusal(root, &cell_map, &touched_set) {`). Check (d), after (c): grade the areas/ concepts of `history_root`'s docs/knowledge with freshness::grade_bundle; for every concept whose `bee.anchors` (normalized with normalize_cell_path) intersects `touched`, the cap passes when the concept's own repo path is in `touched`, or its grade is confirmed or unverified; it refuses on suspect or orphan with `capCell: SYNC_DOOR — cell \"<id>\" touches <paths> anchored by knowledge concept(s): <concept path> (<grade>)…. FIX: for suspect, bee knowledge confirm --id <bee.id> (or --path <file>), then add the concept file to the cell's files and reservation and commit it with the cell; for orphan, fix the concept's bee.anchors; or pass --sync-ack \"<reason>\" to cap anyway (the reason is recorded on trace.sync_ack and trace.deviations).` A missing docs/knowledge/ or an empty areas/ makes (d) a no-op. The existing --sync-ack escape covers (d) with no new flag. In skills/bee-swarming/SKILL.md, under the worker contract (\"Execute\"), add one step before the commit: run `bee knowledge check --json`; for every suspect concept anchored by a file you changed, fix the concept or run `bee knowledge confirm --id <id>`, reserve and commit the concept file with the cell — cite this feature's CONTEXT.md D4 by path, no second copy of the grade rule. Because skills/ is hashed by the release manifest, run `cargo build --release --manifest-path packages/bee-rs/Cargo.toml` then `bee dev regen` and include the regenerated manifest. Tests red-first in cells/tests.rs, every test name starting with `sync_door_`, on a fixture repo with a bundle and real commits: a cap touching an anchored file with the concept suspect refuses and names the concept, the grade and the confirm remedy; the same for orphan with the anchors remedy; an unverified concept passes; passes when the concept file is in the touched set; passes after `knowledge confirm` with the concept committed; passes with --sync-ack and records the reason; a touched file anchored by no concept passes; a repo without a bundle caps as before; a cell committed in a granted worktree is graded against the worktree's bundle, not main's. REWORK after the semantic judge NEEDS_REVISION (owner task t-ae0fad): check (d) must match a touched file against each anchor with the same cover rule the grade uses — a directory anchor covers every file under it (freshness.rs anchor_touched; kfm-1 rework exposes it as one pub(crate) function in freshness.rs, call that, no second copy of the rule). Add red-first tests sync_door_refuses_a_file_under_a_suspect_directory_anchor and sync_door_passes_a_sibling_path_that_only_shares_the_directory_prefix_text (src/ab.rs is not under anchor src/a). Remove the /// doc block above sync_refusal that this cell edited, since code comments are refused.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells::tests::sync_door && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "a cap whose touched files anchor a suspect or orphan concept refuses, naming the concept, its grade and the remedy for that grade",
+      "a cap passes when the concept is unverified, in the touched set, confirmed at that commit, or escaped with --sync-ack",
+      "the door grades the worktree's bundle when the cell committed in a granted worktree",
+      "a repo without a bundle caps exactly as before",
+      "the bee-swarming worker contract names the re-confirm step and the reservation"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+        "substantive": "check (d) over bee.anchors using freshness::grade_bundle against history_root"
+      },
+      {
+        "path": "skills/bee-swarming/SKILL.md",
+        "substantive": "one re-confirm step in the worker contract"
+      }
+    ],
+    "key_links": [
+      "handlers_close.rs passes history_root into sync_refusal",
+      "sync_door.rs calls knowledge::freshness::grade_bundle",
+      "the release manifest hash for skills/bee-swarming/SKILL.md matches the edited file"
+    ],
+    "prohibitions": [
+      "Do not change checks (a), (b) or (c) or their wording",
+      "Do not add a new cap flag",
+      "Do not refuse on unverified",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-kfm-3",
+    "outcome": "Added check (d) to the cap sync door (suspect/orphan anchored concept refuses, unverified passes), the worker-contract re-confirm step and regenerated manifest; commit ae328f47a697ab020af766dfee2fee7b951b68ba",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "run ceiling raised from 1800 s to 3600 s for a release build",
+      "the first rework judge went idle twice with no result and was cancelled and re-run",
+      "sync-ack: the bee-swarming re-confirm step landed in this cell's first round (ae328f47a); the rework only changes how check (d) matches anchors, which the skill step does not describe"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-07T20:11:29.574Z",
+    "behavior_change": true,
+    "verification_evidence": "leader run: 11 sync_door tests passed 0 failed, release-manifest 605 files match; the judge showed the new directory-anchor test red at 21fd8ad64^ and green at HEAD; worker full workspace suite green (5421 passed); semantic judge PASS high",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0d4f9005-56fd-4946-829b-aaaa0b61560d",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells::tests::sync_door && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-07T19:57:45.664Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Cap door check (d) now matches touched files with the grade cover rule freshness::anchor_covers, so a file under an anchored directory refuses while a sibling that only shares prefix text passes; edited doc block above sync_refusal removed; commit 21fd8ad64",
+      "commit": "21fd8ad647f46a06b1918ca528ebfba689c38648",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- cells::tests::sync_door && .bee/bin/bee dev release-manifest --check — green:unit — leader run: 11 sync_door tests passed 0 failed, release-manifest 605 files match; the judge showed the new directory-anchor test red at 21fd8ad64^ and green at HEAD; worker full workspace suite green (5421 passed); semantic judge PASS high",
+      "deviations": [
+        "run ceiling raised from 1800 s to 3600 s for a release build",
+        "the first rework judge went idle twice with no result and was cancelled and re-run"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a cap whose touched files anchor a suspect or orphan concept refuses, naming the concept, its grade and the remedy for that grade",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs"
+          },
+          {
+            "requirement": "a cap passes when the concept is unverified, in the touched set, confirmed at that commit, or escaped with --sync-ack",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "the door grades the worktree's bundle when the cell committed in a granted worktree",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "a repo without a bundle caps exactly as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "the bee-swarming worker contract names the re-confirm step and the reservation",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "check (d) over bee.anchors using freshness::grade_bundle against history_root",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs"
+          },
+          {
+            "requirement": "one re-confirm step in the worker contract",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "handlers_close.rs passes history_root into sync_refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "the release manifest hash for skills/bee-swarming/SKILL.md matches the edited file",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-07T15:45:53.991Z",
+        "recorded_by": "69e83eaf-a3df-4fa6-b4a2-34c7d9fc8336",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a cap whose touched files anchor a suspect or orphan concept refuses, naming the concept, its grade and the remedy for that grade",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs"
+          },
+          {
+            "requirement": "a cap passes when the concept is unverified, in the touched set, confirmed at that commit, or escaped with --sync-ack",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "the door grades the worktree's bundle when the cell committed in a granted worktree",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "a repo without a bundle caps exactly as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "the bee-swarming worker contract names the re-confirm step and the reservation",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "check (d) over bee.anchors using freshness::grade_bundle against history_root",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs"
+          },
+          {
+            "requirement": "one re-confirm step in the worker contract",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "handlers_close.rs passes history_root into sync_refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "the release manifest hash for skills/bee-swarming/SKILL.md matches the edited file",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-07T20:11:33.833Z",
+        "recorded_by": "0d4f9005-56fd-4946-829b-aaaa0b61560d",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "refuses when touched files anchor a suspect/orphan concept, names concept, grade, remedy",
+            "status": "FAIL",
+            "evidence": "exact-path case PASS (tests sync_door_refuses_a_suspect_concept_and_names_the_grade_and_the_confirm_remedy, sync_door_refuses_an_orphan_concept_with_the_anchors_remedy); directory-anchor case missed: sync_door.rs:151-156 vs freshness.rs:113-115, seedable freshness.rs:354-361 accepts dirs"
+          },
+          {
+            "id": "passes on unverified, touched concept, confirmed, --sync-ack",
+            "status": "PASS",
+            "evidence": "tests sync_door_passes_an_unverified_concept, sync_door_passes_when_the_concept_file_is_in_the_touched_set, sync_door_passes_after_confirm_with_the_concept_committed, sync_door_passes_with_sync_ack_and_records_the_reason"
+          },
+          {
+            "id": "grades the worktree bundle",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:752 passes history_root; test sync_door_grades_the_worktree_bundle_not_mains"
+          },
+          {
+            "id": "repo without bundle caps as before",
+            "status": "PASS",
+            "evidence": "sync_door.rs:130 load_areas(...)?; test sync_door_caps_as_before_in_a_repo_without_a_bundle"
+          },
+          {
+            "id": "bee-swarming names re-confirm step and reservation",
+            "status": "PASS",
+            "evidence": "skills/bee-swarming/SKILL.md worker step 4 (git show ae328f47a)"
+          },
+          {
+            "id": "prohibition: checks (a)(b)(c) and wording unchanged",
+            "status": "PASS",
+            "evidence": "removed lines in sync_door.rs limited to import, doc word, signature, trailing None"
+          },
+          {
+            "id": "prohibition: no new cap flag",
+            "status": "PASS",
+            "evidence": "handlers_close.rs diff is the one call-site line"
+          },
+          {
+            "id": "prohibition: unverified not refused",
+            "status": "PASS",
+            "evidence": "sync_door.rs:145-147"
+          },
+          {
+            "id": "prohibition: no code comments",
+            "status": "PASS",
+            "evidence": "added (d) doc line removed by aff29c0d0; residual: existing comment edited three->four at sync_door.rs:16 (low)"
+          }
+        ],
+        "failure_signature": "cap door matches anchors by exact path only (sync_door.rs:151-156) while the grade treats directory anchors as covering files under them (freshness.rs:113-115); seed writes directory anchors, so a cell editing a file under an anchored directory caps unrefused",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-07T16:21:44.117Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "rework: directory anchor covers files under it via the one anchor_covers rule",
+            "status": "PASS",
+            "evidence": "sync_door.rs:146-150 calls freshness.rs:126 anchor_covers (also used by the grade at freshness.rs:301); red on 21fd8ad64^: sync_door_refuses_a_file_under_a_suspect_directory_anchor FAILED, green at HEAD ok"
+          },
+          {
+            "id": "rework: sibling path sharing prefix text passes",
+            "status": "PASS",
+            "evidence": "sync_door_passes_a_sibling_path_that_only_shares_the_directory_prefix_text ok"
+          },
+          {
+            "id": "rework: /// doc block above sync_refusal removed",
+            "status": "PASS",
+            "evidence": "git show 21fd8ad64; sync_door.rs:16"
+          },
+          {
+            "id": "T1 suspect/orphan refuse naming concept, grade, remedy",
+            "status": "PASS",
+            "evidence": "sync_door.rs:154-185; sync_door_refuses_a_suspect_concept_and_names_the_grade_and_the_confirm_remedy, sync_door_refuses_an_orphan_concept_with_the_anchors_remedy"
+          },
+          {
+            "id": "T2 pass on unverified, in-touched, confirmed, --sync-ack",
+            "status": "PASS",
+            "evidence": "sync_door.rs:140-145; sync_door_passes_an_unverified_concept, _when_the_concept_file_is_in_the_touched_set, _after_confirm_with_the_concept_committed, _with_sync_ack_and_records_the_reason"
+          },
+          {
+            "id": "T3 grades the worktree bundle",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:734,752; sync_door.rs:125; sync_door_grades_the_worktree_bundle_not_mains"
+          },
+          {
+            "id": "T4 no bundle caps as before",
+            "status": "PASS",
+            "evidence": "sync_door.rs:125,167; sync_door_caps_as_before_in_a_repo_without_a_bundle"
+          },
+          {
+            "id": "T5 skill names re-confirm step and reservation",
+            "status": "PASS",
+            "evidence": "skills/bee-swarming/SKILL.md:220-224"
+          },
+          {
+            "id": "K1 handlers_close passes history_root",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:752"
+          },
+          {
+            "id": "K2 sync_door calls grade_bundle",
+            "status": "PASS",
+            "evidence": "sync_door.rs:130"
+          },
+          {
+            "id": "K3 manifest hash matches skill",
+            "status": "PASS",
+            "evidence": "bee dev release-manifest --check: 605 file(s) match; sha256 of skills/bee-swarming/SKILL.md matches"
+          },
+          {
+            "id": "P1 checks a/b/c and wording unchanged",
+            "status": "PASS",
+            "evidence": "sync_refusal body diff vs ae328f47a^: signature + tail call only"
+          },
+          {
+            "id": "P2 no new cap flag",
+            "status": "PASS",
+            "evidence": "handlers_close.rs diff is one line"
+          },
+          {
+            "id": "P3 no refuse on unverified",
+            "status": "PASS",
+            "evidence": "sync_door.rs:140"
+          },
+          {
+            "id": "P4 no code comments",
+            "status": "PASS",
+            "evidence": "git show ae328f47a 21fd8ad64 add no comments"
+          },
+          {
+            "id": "verify command green",
+            "status": "PASS",
+            "evidence": "with a clean CARGO_TARGET_DIR: 11 passed; 0 failed. The shared target dir fails E0080 from a stale empty pi_guard_files.rs (environment, not kfm-3)"
+          },
+          {
+            "id": "minor m1: skill check runs before commit, so it cannot see suspect concepts caused by uncommitted edits",
+            "status": "PASS",
+            "evidence": "plan-level gap; SKILL.md:220 vs grade over committed history; not on the cell contract"
+          },
+          {
+            "id": "minor m2: confirmed-grade pass branch not exercised alone; confirm test hand-stamps",
+            "status": "PASS",
+            "evidence": "tests.rs sync_door_passes_after_confirm_with_the_concept_committed passes via sync_door.rs:143"
+          },
+          {
+            "id": "minor m3: stale header comment names only checks a-c",
+            "status": "PASS",
+            "evidence": "sync_door.rs:1-4, pre-existing; no-comments rule"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-07T20:11:24.508Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-07T16:21:44.117Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "sync_ack": "the bee-swarming re-confirm step landed in this cell's first round (ae328f47a); the rework only changes how check (d) matches anchors, which the skill step does not describe"
+  },
+  "usage": {
+    "new": 174297,
+    "cached": 2513112,
+    "total": 2687409,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 174297,
+        "cached": 2513112,
+        "total": 2687409
+      }
+    },
+    "jobs": [
+      "job-1794065938755-4075800-1",
+      "job-1794081469837-692292-1"
+    ]
+  }
+}
