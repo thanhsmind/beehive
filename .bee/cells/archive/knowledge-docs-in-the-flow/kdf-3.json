@@ -1,0 +1,180 @@
+{
+  "id": "kdf-3",
+  "feature": "knowledge-docs-in-the-flow",
+  "title": "Give every document template its section questions, deletion lines, the read set and the rule bullet fields",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "skills/bee-shaping/references/context-template.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-capturing/references/area-spec.md",
+    "skills/bee-capturing/references/concept-authoring.md",
+    ".agents/skills/*",
+    ".claude/skills/*",
+    ".codex/skills/*",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-docs-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-docs-in-the-flow/plan.md",
+    "skills/bee-shaping/references/context-template.md",
+    "skills/bee-capturing/references/area-spec.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-shaping/references/context-template.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-capturing/references/area-spec.md",
+    "skills/bee-capturing/references/concept-authoring.md"
+  ],
+  "affects_specs": [],
+  "action": "Templates ask for information, not shape (per D3), and the read set lives in CONTEXT.md (per D2). (1) context-template.md: add a `## Read set` section after `## Terms` with the grammar fixed in plan.md Approach — `### Knowledge` table `| Concept | Grade at read | Why it matters |` and `### Code` table `| Path | What it decides |` — each table preceded by one line saying the question it answers and the source that feeds it (`bee knowledge context --work <feature>`, `bee knowledge search --text`, the scout), one deletion line (drop a row the plan never cites), and the one-row form a host with no docs/knowledge/ writes in the knowledge table (`| (no bundle) | — | this host has no docs/knowledge/ |`). (2) bee-shaping SKILL.md: in Explore, the scout that already starts at the area index runs `bee knowledge context` and `bee knowledge search --text` and keeps the hits with their printed grade — the read set is recorded from that scout, never a second read pass; in Lock, the `## Read set` section renders those hits and the scout's code paths, and the section is named as what the shape gate checks, with the `<!-- bee:no-read-set: <reason> -->` marker as the recorded escape for a context written before the section existed. (3) bee-planning SKILL.md Research and planning-reference.md: a cell's `read_first` cites paths from the read set first (planning-reference.md:282-283 `read_first` what it must read.`), and the plan's `## Discovery` extends the read set with what planning read. (4) area-spec.md: every template section (Entry Points & Triggers through Pointers) opens with one line naming the question the section answers for a rebuilder and pointing at its row of the Gather Sources table (never repeating the row), plus a deletion line specific to that section (Behaviors: a behavior a test already states; Business Rules: a bullet a test already states; Data Dictionary: an element the code names and nothing explains — one sentence each, no generic line repeated); the Business Rules section gains the optional rule-bullet tail `— status: active|temporary|retired; proves: <test or verify feature path>` used only where the rule differs from its concept, and this tail replaces the ad-hoc parenthetical status form the template shows today (`R2 (not yet implemented — backlog b-12)`); add a `## Cut area template` section holding exactly map, boundaries, invariants, entry points, pointers, each with its question line, opened by one line saying the content cut (PBI p-3a756890) uses it and hosts keep the nine-section template until told otherwise. (5) concept-authoring.md, step \"Write through the CLI\": one paragraph saying every concept type's body follows the section questions, the deletion line and the rule-bullet tail of area-spec.md, with a link to that section. Keep every addition to one question line plus sources per section; no sub-bullets. Then run `.bee/bin/bee dev regen` so .agents/skills, .claude/skills, .codex/skills, .bee/onboarding.json and the release manifest record follow, and commit them with the cell. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "context-template.md renders a ## Read set section with the Knowledge and Code tables and their question lines",
+      "bee-shaping SKILL.md tells the agent to run bee knowledge context and bee knowledge search before Lock and names the bee:no-read-set marker",
+      "area-spec.md sections each open with one question line and sources, Business Rules carries the deletion line and the optional status/proves tail, and a Cut area template section exists",
+      "the rendered skill trees match skills/ after bee dev regen"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-shaping/references/context-template.md",
+        "substantive": "## Read set with both tables and question lines"
+      },
+      {
+        "path": "skills/bee-capturing/references/area-spec.md",
+        "substantive": "question lines per section, deletion line, rule bullet tail, Cut area template"
+      },
+      {
+        "path": "skills/bee-planning/references/planning-reference.md",
+        "substantive": "read_first cites the read set"
+      }
+    ],
+    "key_links": [
+      "bee-shaping SKILL.md Lock names the ## Read set section the shape gate checks",
+      "bee dev regen was run and the rendered trees are committed with the cell"
+    ],
+    "prohibitions": [
+      "No new template file; existing references are extended",
+      "No rule marker (<!-- rule: -->) added or moved",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Whether the rule-bullet tail uses an inline em-dash form or a sub-bullet"
+    ]
+  },
+  "trace": {
+    "worker": "w-kdf-3",
+    "outcome": "Added Read set, section questions, deletion lines, rule-bullet tail and Cut area template to the templates, ran bee dev regen, committed 2425b28e7",
+    "files_changed": [
+      "skills/bee-shaping/references/context-template.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-capturing/references/area-spec.md",
+      "skills/bee-capturing/references/concept-authoring.md",
+      ".agents/skills/*",
+      ".claude/skills/*",
+      ".codex/skills/*",
+      ".claude-plugin/skills/*",
+      ".codex-plugin/skills/*",
+      ".opencode/skills/*",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: kdf-3 added template sections to six skill references and their rendered trees; the anchored concepts describe behaviors these edits do not change, and every one of them was already suspect from earlier commits — re-confirming them here would assert a review this cell did not do. Their re-confirmation belongs to the content cut (PBI p-3a756890)."
+    ],
+    "friction": "every skill reference edit trips the anchored-knowledge check because seed-anchors anchored dozens of concepts to skills/* and the rendered trees; the door needs a narrower anchor set or a docs-lane rule",
+    "capped_at": "2026-11-08T05:12:53.016Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity && .bee/bin/bee dev release-manifest --check — green:static — skill reference edits are docs pinned by parity tests and the release manifest; 10+5 tests passed, manifest 605 files match. Commit 2425b28e7",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "02c0ba14-95d9-48ed-aba2-edecde0ebc63",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-08T05:09:34.025Z",
+    "sync_ack": "kdf-3 added template sections to six skill references and their rendered trees; the anchored concepts describe behaviors these edits do not change, and every one of them was already suspect from earlier commits — re-confirming them here would assert a review this cell did not do. Their re-confirmation belongs to the content cut (PBI p-3a756890).",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added Read set, section questions, deletion lines, rule-bullet tail and Cut area template to the templates, ran bee dev regen, committed 2425b28e7",
+      "commit": "2425b28e76f67285a86ae8a7232e181fe3c206f1",
+      "files": [
+        "skills/bee-shaping/references/context-template.md",
+        "skills/bee-shaping/SKILL.md",
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-planning/references/planning-reference.md",
+        "skills/bee-capturing/references/area-spec.md",
+        "skills/bee-capturing/references/concept-authoring.md",
+        ".agents/skills/*",
+        ".claude/skills/*",
+        ".codex/skills/*",
+        ".claude-plugin/skills/*",
+        ".codex-plugin/skills/*",
+        ".opencode/skills/*",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity && .bee/bin/bee dev release-manifest --check — green:static — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity && .bee/bin/bee dev release-manifest --check — green:static — skill reference edits are docs pinned by parity tests and the release manifest; 10+5 tests passed, manifest 605 files match. Commit 2425b28e7",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 850 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "must-haves",
+            "status": "PASS",
+            "evidence": "all four truths, the three artifacts, both key links and the prohibitions hold in commit 2425b28e7; the five rendered trees are byte-identical to skills/ for the touched skills; the open choice was resolved as the inline em-dash tail"
+          },
+          {
+            "id": "regen-side-effects",
+            "status": "PASS",
+            "evidence": "P3 notes: .bee/onboarding.json rendered_from.design and rendered_from.review flip from opus to fable through regen (a config change, not this cell's), and regen writes .claude-plugin/skills, .codex-plugin/skills and .opencode/skills outside the declared .codex/skills/* glob — recorded by the worker as a departure"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-sonnet-5-5",
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-08T05:47:19.603Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 86915,
+    "cached": 777836,
+    "total": 864751,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 86915,
+        "cached": 777836,
+        "total": 864751
+      }
+    },
+    "jobs": [
+      "job-1794114575151-1955676-1"
+    ]
+  }
+}

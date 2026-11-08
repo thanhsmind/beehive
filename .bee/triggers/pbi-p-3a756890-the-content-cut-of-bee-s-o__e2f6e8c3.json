@@ -1,0 +1,11 @@
+{
+  "id": "pbi-p-3a756890-the-content-cut-of-bee-s-o__e2f6e8c3",
+  "decision": "e2f6e8c3",
+  "condition": "PBI p-3a756890 (the content cut of bee's own areas) is picked up: the cut half of map D10 lands there",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-11-08T09:49:34.286Z",
+  "updated_at": "2026-11-08T09:49:34.286Z",
+  "outcome": null
+}

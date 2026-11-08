@@ -1,0 +1,537 @@
+{
+  "id": "kdf-4",
+  "feature": "knowledge-docs-in-the-flow",
+  "title": "Record the read set, the templates rule and the decision-link error in the OKF profile",
+  "lane": "standard",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "kdf-1",
+    "kdf-2",
+    "kdf-3"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+    "docs/knowledge/areas/okf-profile/overview.md",
+    "docs/knowledge/areas/okf-profile/index.md",
+    "docs/knowledge/index.md",
+    "skills/bee-capturing/SKILL.md",
+    ".agents/skills/*",
+    ".claude/skills/*",
+    ".codex/skills/*",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-docs-in-the-flow/CONTEXT.md",
+    "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+    "docs/knowledge/areas/okf-profile/overview.md",
+    "skills/bee-capturing/references/concept-authoring.md",
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Extend the okf-profile concept freshness-and-document-homes.md (never a new concept) with three sections written through bee-technical-writing: the read set (what CONTEXT.md records, the grammar, the shape-gate refusal and its marker escape, per D2), the templates rule (sections ask one question and name their sources, the deletion line, the rule-bullet status and proves tail, the cut area template, per D3), and the decision-link error (`missing_decision_link`, its remedy, per D4), each citing knowledge-docs-in-the-flow D1-D4 in `bee.decisions` and adding the new code paths from kdf-1 and kdf-2 to `bee.anchors`; update `verified_at` and `verified_commit` with `bee knowledge confirm --id okf-profile-freshness-and-document-homes` after the edit. Update overview.md's split paragraph and index.md so the concept's description names the read set and the templates rule, and regenerate docs/knowledge/index.md with `bee knowledge index`. Add one paragraph to skills/bee-capturing/SKILL.md (Scribe section) saying the area template's sections open with their question and sources and a rule bullet may carry status and proves, citing the concept; then run `.bee/bin/bee dev regen` and commit the rendered trees with the cell. Rebuild test: a stranger could rebuild the read-set refusal and the check error from the concept alone.",
+  "verify": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "bee knowledge search --text \"read set\" returns okf-profile/freshness-and-document-homes.md",
+      "the concept's bee.decisions cites knowledge-docs-in-the-flow D1, D2, D3 and D4 and its bee.anchors names context_table.rs, plan_packets.rs and check.rs",
+      "bee knowledge check and bee knowledge index --check report 0 errors and 0 stale"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+        "substantive": "three new sections: the read set, the templates rule, the decision-link error"
+      },
+      {
+        "path": "skills/bee-capturing/SKILL.md",
+        "substantive": "one paragraph citing the templates rule and the concept"
+      }
+    ],
+    "key_links": [
+      "overview.md and index.md describe the extended concept",
+      "bee dev regen was run and the rendered trees are committed with the cell"
+    ],
+    "prohibitions": [
+      "No new concept file",
+      "No restating of the grade rule or the homes rule already in the concept",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "leader-kdf",
+    "outcome": null,
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-capturing/SKILL.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-capturing/SKILL.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-capturing/SKILL.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-capturing/SKILL.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-capturing/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+      "docs/knowledge/areas/okf-profile/index.md",
+      "docs/knowledge/areas/okf-profile/overview.md",
+      "skills/bee-capturing/SKILL.md"
+    ],
+    "deviations": [
+      "the worker committed 54805b017 and stopped before cap; the leader ran the verify and capped",
+      "rendered skill copies under .claude-plugin, .codex-plugin and .opencode are outside the declared globs; bee dev regen writes them with the others",
+      "the one-line judge fix ran inline in the leader, not through a worker: a single doc sentence",
+      "sync-ack: the only skill change is one templates-rule paragraph in bee-capturing plus its regenerated copies; the anchoring concepts cover the skill trees as a whole and none states the bee-capturing templates rule, which okf-profile/freshness-and-document-homes.md (in this cell) now owns"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-08T09:47:10.908Z",
+    "behavior_change": false,
+    "verification_evidence": "docs cell; rerun after the fix: 0 OKF errors, 0 profile errors, 19 index files 0 stale, 605 manifest files match; installed main binary predates kdf-2 missing_decision_link, which the feature bee test covers",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "8fa72145-dfb5-454b-a569-c1ee4fc604ce",
+    "verify_command": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-08T09:44:27.604Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "8fa72145-dfb5-454b-a569-c1ee4fc604ce",
+        "owner_bypassed": null,
+        "at": "2026-11-08T09:33:51.008Z"
+      },
+      {
+        "verb": "capCell",
+        "forced_by": "8fa72145-dfb5-454b-a569-c1ee4fc604ce",
+        "owner_bypassed": null,
+        "at": "2026-11-08T09:47:10.907Z"
+      }
+    ],
+    "sync_ack": "the only skill change is one templates-rule paragraph in bee-capturing plus its regenerated copies; the anchoring concepts cover the skill trees as a whole and none states the bee-capturing templates rule, which okf-profile/freshness-and-document-homes.md (in this cell) now owns",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "freshness-and-document-homes.md gains the read set, templates rule and decision-link error sections citing D1-D4 and anchoring context_table.rs, plan_packets.rs, check.rs; bee-capturing cites the templates rule; skill trees regenerated; commits 54805b017 and 74dcda7c2 (exit-mode sentence fixed after judge round 1)",
+      "commit": "74dcda7c2",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-capturing/SKILL.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-capturing/SKILL.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-capturing/SKILL.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-capturing/SKILL.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-capturing/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+        "docs/knowledge/areas/okf-profile/index.md",
+        "docs/knowledge/areas/okf-profile/overview.md",
+        "skills/bee-capturing/SKILL.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check — green:static — docs cell; rerun after the fix: 0 OKF errors, 0 profile errors, 19 index files 0 stale, 605 manifest files match; installed main binary predates kdf-2 missing_decision_link, which the feature bee test covers",
+      "deviations": [
+        "the worker committed 54805b017 and stopped before cap; the leader ran the verify and capped",
+        "rendered skill copies under .claude-plugin, .codex-plugin and .opencode are outside the declared globs; bee dev regen writes them with the others",
+        "the one-line judge fix ran inline in the leader, not through a worker: a single doc sentence"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge search --text \"read set\" returns okf-profile/freshness-and-document-homes.md",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "the concept's bee.decisions cites knowledge-docs-in-the-flow D1, D2, D3 and D4 and its bee.anchors names context_table.rs, plan_packets.rs and check.rs",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "bee knowledge check and bee knowledge index --check report 0 errors and 0 stale",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "overview.md and index.md describe the extended concept",
+            "artifact": "docs/knowledge/areas/okf-profile/overview.md"
+          },
+          {
+            "requirement": "bee dev regen was run and the rendered trees are committed with the cell",
+            "artifact": ".claude/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "No new concept file",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "No restating of the grade rule or the homes rule already in the concept",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": ".agents/skills/.bee-render.json",
+            "artifact": ".agents/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".agents/skills/bee-capturing/SKILL.md",
+            "artifact": ".agents/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/.bee-render.json",
+            "artifact": ".claude-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-capturing/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/.bee-render.json",
+            "artifact": ".claude/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude/skills/bee-capturing/SKILL.md",
+            "artifact": ".claude/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/.bee-render.json",
+            "artifact": ".codex-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-capturing/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/.bee-render.json",
+            "artifact": ".opencode/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".opencode/skills/bee-capturing/SKILL.md",
+            "artifact": ".opencode/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/index.md",
+            "artifact": "docs/knowledge/areas/okf-profile/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/overview.md",
+            "artifact": "docs/knowledge/areas/okf-profile/overview.md"
+          },
+          {
+            "requirement": "skills/bee-capturing/SKILL.md",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-08T09:34:00.287Z",
+        "recorded_by": "8fa72145-dfb5-454b-a569-c1ee4fc604ce",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge search --text \"read set\" returns okf-profile/freshness-and-document-homes.md",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "the concept's bee.decisions cites knowledge-docs-in-the-flow D1, D2, D3 and D4 and its bee.anchors names context_table.rs, plan_packets.rs and check.rs",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "bee knowledge check and bee knowledge index --check report 0 errors and 0 stale",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "overview.md and index.md describe the extended concept",
+            "artifact": "docs/knowledge/areas/okf-profile/overview.md"
+          },
+          {
+            "requirement": "bee dev regen was run and the rendered trees are committed with the cell",
+            "artifact": ".claude/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "No new concept file",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "No restating of the grade rule or the homes rule already in the concept",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": ".agents/skills/.bee-render.json",
+            "artifact": ".agents/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".agents/skills/bee-capturing/SKILL.md",
+            "artifact": ".agents/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/.bee-render.json",
+            "artifact": ".claude-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-capturing/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/.bee-render.json",
+            "artifact": ".claude/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude/skills/bee-capturing/SKILL.md",
+            "artifact": ".claude/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/.bee-render.json",
+            "artifact": ".codex-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-capturing/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/.bee-render.json",
+            "artifact": ".opencode/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".opencode/skills/bee-capturing/SKILL.md",
+            "artifact": ".opencode/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+            "artifact": "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/index.md",
+            "artifact": "docs/knowledge/areas/okf-profile/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/overview.md",
+            "artifact": "docs/knowledge/areas/okf-profile/overview.md"
+          },
+          {
+            "requirement": "skills/bee-capturing/SKILL.md",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-08T09:47:15.430Z",
+        "recorded_by": "8fa72145-dfb5-454b-a569-c1ee4fc604ce",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "truth-search-read-set",
+            "status": "PASS",
+            "evidence": "bee knowledge search --text \"read set\" lists docs/knowledge/areas/okf-profile/freshness-and-document-homes.md [confirmed @ 2026-11-08]"
+          },
+          {
+            "id": "truth-decisions-and-anchors",
+            "status": "PASS",
+            "evidence": "freshness-and-document-homes.md:11 cites knowledge-docs-in-the-flow D1 5c5ae146, D2 f3c5ad0f, D3 2bc56fb6, D4 e2f6e8c3 (ids match bee decisions search); :14 anchors include drivers/context_table.rs, state_group/plan_packets.rs, knowledge/check.rs, all present at HEAD"
+          },
+          {
+            "id": "truth-check-and-index-clean",
+            "status": "PASS",
+            "evidence": "bee knowledge check: 0 OKF error(s), 0 profile error(s) — OK; bee knowledge index --check: 19 expected, 0 stale — OK"
+          },
+          {
+            "id": "artifact-three-sections",
+            "status": "PASS",
+            "evidence": "freshness-and-document-homes.md:86 ## The read set, :110 ## The templates rule, :132 ## The decision-link error"
+          },
+          {
+            "id": "artifact-skill-paragraph",
+            "status": "PASS",
+            "evidence": "skills/bee-capturing/SKILL.md:106-113 one paragraph on question+sources, deletion line, status/proves tail, citing the concept path"
+          },
+          {
+            "id": "keylink-overview-index",
+            "status": "PASS",
+            "evidence": "overview.md:54-57 and okf-profile/index.md:17 name the read set, the templates rule and the decision-link error"
+          },
+          {
+            "id": "keylink-regen-committed",
+            "status": "PASS",
+            "evidence": "commit carries .agents/.claude/.claude-plugin/.codex-plugin/.opencode skills/bee-capturing/SKILL.md and .bee-render.json; diff -q against skills/bee-capturing/SKILL.md is clean for all five"
+          },
+          {
+            "id": "prohibition-no-new-concept",
+            "status": "PASS",
+            "evidence": "git show --diff-filter=A 54805b017 lists no added file"
+          },
+          {
+            "id": "prohibition-no-restating",
+            "status": "PASS",
+            "evidence": "new sections :86-142 cite the grade rule and homes rule by reference only; :29-57 unchanged"
+          },
+          {
+            "id": "prohibition-no-code-comments",
+            "status": "PASS",
+            "evidence": "grep of added lines for //, /*, <!-- finds only the documented bee:no-read-set marker inside refusal text"
+          },
+          {
+            "id": "action-read-set-fidelity",
+            "status": "PASS",
+            "evidence": ":88-108 match context_table.rs:48-82 (heading scope, | Concept | header, ( rows skipped) and plan_packets.rs:631-688 (three refusal strings, marker escape, tiny/small/docs exempt); set_gate.rs:928-942 guard approved && (merge || name == \"shape\") after plan_claims_refusal"
+          },
+          {
+            "id": "action-templates-rule-fidelity",
+            "status": "PASS",
+            "evidence": ":112-130 match area-spec.md:86-201 deletion lines, :160-163 status/proves tail, :246-269 five-section cut template"
+          },
+          {
+            "id": "action-decision-link-fidelity",
+            "status": "FAIL",
+            "evidence": ":139-140 error code and remedy match check.rs:895-902 verbatim and :137 matches check.rs:1118; but :142 says profile errors fail the command only in --strict mode, while check.rs:1123 and routing.rs:61,118 fail it in both modes (decision 9ad06476 agrees)",
+            "failure_signature": "freshness-and-document-homes.md:142 misstates missing_decision_link exit behaviour as strict-only; code fails in both modes"
+          }
+        ],
+        "failure_signature": "freshness-and-document-homes.md:142 misstates missing_decision_link exit behaviour as strict-only; code fails in both modes",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-08T09:41:22.991Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-search-read-set",
+            "status": "PASS",
+            "evidence": "bee knowledge search --text \"read set\" lists docs/knowledge/areas/okf-profile/freshness-and-document-homes.md"
+          },
+          {
+            "id": "truth-decisions-and-anchors",
+            "status": "PASS",
+            "evidence": "freshness-and-document-homes.md:11 cites knowledge-docs-in-the-flow D1 5c5ae146, D2 f3c5ad0f, D3 2bc56fb6, D4 e2f6e8c3; :14 anchors drivers/context_table.rs, state_group/plan_packets.rs, knowledge/check.rs, all present at HEAD"
+          },
+          {
+            "id": "truth-check-and-index-clean",
+            "status": "PASS",
+            "evidence": "bee knowledge check: 0 OKF error(s), 0 profile error(s) — OK; bee knowledge index --check: 19 expected, 0 stale — OK"
+          },
+          {
+            "id": "artifact-three-sections",
+            "status": "PASS",
+            "evidence": "freshness-and-document-homes.md:86 ## The read set, :110 ## The templates rule, :132 ## The decision-link error"
+          },
+          {
+            "id": "artifact-skill-paragraph",
+            "status": "PASS",
+            "evidence": "skills/bee-capturing/SKILL.md:106-113 one paragraph on question+sources, deletion line, status/proves tail, citing the concept path"
+          },
+          {
+            "id": "keylink-overview-index",
+            "status": "PASS",
+            "evidence": "overview.md:54-57 and okf-profile/index.md:17 name the read set, the templates rule and the decision-link error"
+          },
+          {
+            "id": "keylink-regen-committed",
+            "status": "PASS",
+            "evidence": "54805b017 carries the five rendered skills/bee-capturing/SKILL.md copies and .bee-render.json; diff -q against skills/bee-capturing/SKILL.md clean for .agents/.claude/.claude-plugin/.codex-plugin/.opencode"
+          },
+          {
+            "id": "prohibition-no-new-concept",
+            "status": "PASS",
+            "evidence": "git show --diff-filter=A --name-only 54805b017 lists no added file"
+          },
+          {
+            "id": "prohibition-no-restating",
+            "status": "PASS",
+            "evidence": "new sections :86-142 cite the grade rule and homes rule by reference only; :29-57 unchanged in both commits"
+          },
+          {
+            "id": "prohibition-no-code-comments",
+            "status": "PASS",
+            "evidence": "grep of added lines for //, /*, <!-- finds only the documented bee:no-read-set marker inside quoted refusal text"
+          },
+          {
+            "id": "action-read-set-fidelity",
+            "status": "PASS",
+            "evidence": ":88-108 match context_table.rs:48-82 and plan_packets.rs:631-688 (tiny/small/docs exempt, three refusal strings, marker escape, docs/knowledge/ prefix + exists); set_gate.rs:928-942 guard approved && (merge || name == \"shape\") after plan_claims_refusal"
+          },
+          {
+            "id": "action-templates-rule-fidelity",
+            "status": "PASS",
+            "evidence": ":112-130 match area-spec.md:86-201 deletion lines, :160-163 status/proves tail, :246-269 five-section cut template"
+          },
+          {
+            "id": "action-decision-link-fidelity",
+            "status": "PASS",
+            "evidence": ":134-140 match check.rs:890-902 and :1118; :142 now states non-zero exit in every mode with --strict adding warnings — matches check.rs:1123 ok = errors.is_empty() && profile_errors.is_empty() && (!strict || warnings.is_empty()), routing.rs:61,118 exit u8::from(!ok); decision 9ad06476 agrees"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-08T09:47:00.178Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-08T09:41:22.991Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "inline_reason": "judge round-1 fix was one doc sentence (exit-mode wording); the cell's main work 54805b017 came from dispatched worker w-kdf-4"
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

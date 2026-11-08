@@ -1,0 +1,361 @@
+{
+  "id": "kdf-1",
+  "feature": "knowledge-docs-in-the-flow",
+  "title": "Refuse a shape or merged approval whose CONTEXT.md has no read set",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D5",
+    "e716c2f8-d0c6-4f47-a01f-34c2aa51946d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-docs-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-docs-in-the-flow/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add `parse_read_set(text: &str) -> Option<Vec<String>>` to context_table.rs beside `parse_locked_decision_ids` (context_table.rs:23 `pub(crate) fn parse_locked_decision_ids(text: &str) -> Option<Vec<String>> {`), the same prefix-tolerant shape (reuse its loop, `is_separator_row` and `skip_table`): find the `## Read set` heading, then before the next `## ` heading the first pipe table whose header row starts with `| Concept |`, and return its first-column cells trimmed of backticks; `None` when the heading or the table is absent (per D2; grammar fixed in plan.md Approach). Add `read_set_refusal(root: &Path, feature: &str) -> Option<String>` in plan_packets.rs beside `claims_refusal`, copying its skeleton: exempt `tiny|small|docs` lanes exactly as plan_packets.rs:584 does (`let is_exempt = matches!(mode.as_deref(), Some(\"tiny\") | Some(\"small\") | Some(\"docs\"));`), resolve `docs/history/<feature>/CONTEXT.md` the worktree-aware way `advisor_plan_path` resolves plan.md; a CONTEXT.md that cannot be read refuses, naming the path it looked for; when the file carries a `<!-- bee:no-read-set: <reason> -->` marker anywhere return None (the marker in the file is the record; add no gate output field); when `parse_read_set` is None refuse with this message shape: `gate: approval refused — docs/history/<feature>/CONTEXT.md has no \"## Read set\" section. FIX: run \\`bee knowledge context --work <feature>\\` and \\`bee knowledge search --text \"<topic>\"\\`, write the section (skills/bee-shaping/references/context-template.md), or add \\`<!-- bee:no-read-set: <reason> -->\\` for a CONTEXT.md written before the read set existed.`; an empty knowledge table (section present, zero rows) passes; when any returned path does not start with `docs/knowledge/` or does not exist under the repo root, refuse naming that path and the remedy (fix the path or remove the row). Call `read_set_refusal` at exactly ONE site: the pre-lock peek where `plan_claims_refusal` already runs for `shape` and `--merge` approvals (set_gate.rs:934 `if let Some(msg) = plan_claims_refusal(root, &peek, lane) {`), right after it, never on a plain `--name execution` (per D2). Write the seven test-matrix rows for kdf-1 as tests whose fn names contain `read_set`: the parser cases in drivers/tests.rs beside the existing CONTEXT.md fixture helper (drivers/tests.rs:6332 `fn write_locked_decisions_table(root: &Path, feature: &str, ids: &[&str]) {`), the gate approval cases in state_group/tests.rs beside the existing gate approval tests. No code comments. Do not touch brief.rs or the prompt renderer (per D5). A knowledge-table row whose first cell is wrapped in parentheses (the template's no-bundle form `| (no bundle) | — | this host has no docs/knowledge/ |`) is a note row: parse_read_set skips it and it never refuses.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- read_set",
+  "must_haves": {
+    "truths": [
+      "bee gate --merge --approved true on a standard feature whose CONTEXT.md lacks ## Read set refuses, names the section and the bee:no-read-set marker, and writes no state",
+      "the same approval with the section and every knowledge path on disk approves",
+      "a CONTEXT.md carrying <!-- bee:no-read-set: legacy --> approves",
+      "a tiny lane with no section approves; a plain --name execution approval never runs the check"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+        "substantive": "parse_read_set with the heading-scoped, header-prefix table grammar"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "substantive": "read_set_refusal with the lane exemption, the marker escape and the path check"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "gate approval tests whose names contain read_set: happy, missing path, marker, missing section, absent file, tiny exempt, execution-only"
+      }
+    ],
+    "key_links": [
+      "set_gate.rs calls read_set_refusal once, at the pre-lock peek right after plan_claims_refusal"
+    ],
+    "prohibitions": [
+      "No change to brief.rs or the dispatch prompt renderer",
+      "No change to gate_preview_refusal's or claims_refusal's behavior",
+      "No new field in the gate's --json output",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "kdf-1-rework",
+    "outcome": "parse_read_set + read_set_refusal wired once at the pre-lock peek after plan_claims_refusal; 11 read_set tests green; 12 existing approval fixtures and one e2e test carry the bee:no-read-set marker; commit 239680ffb",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "undeclared-file pi_plugin_contracts.rs — e2e shape approval fixture needed the bee:no-read-set marker (one line from round 239680ffb, kept)",
+      "advisor consult not run: the three judge fixes were fully specified",
+      "sync-ack: the skill side of this door landed in kdf-3 (commit 2425b28e7); kdf-1 adds only the refusal and its tests"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-08T09:44:21.480Z",
+    "behavior_change": true,
+    "verification_evidence": "14 passed 0 failed 4868 filtered out, the cell verify covering the parser, gate approval, worktree-root and outside-docs-knowledge rows; the worktree-root test was seen red with the old root.join check",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "8fa72145-dfb5-454b-a569-c1ee4fc604ce",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- read_set",
+    "claimed_at": "2026-11-08T09:33:05.359Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "sync_ack": "the skill side of this door landed in kdf-3 (commit 2425b28e7); kdf-1 adds only the refusal and its tests",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "read_set_refusal now derives one base root from the granted feature worktree for both the CONTEXT.md read and the knowledge path check; two new gate tests cover a worktree-only concept approved from main and an on-disk path outside docs/knowledge/; commit 05c4339c8",
+      "commit": "05c4339c89593f6e82905e16401709f6694cafaa",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- read_set — green:unit — 14 passed 0 failed 4868 filtered out, the cell verify covering the parser, gate approval, worktree-root and outside-docs-knowledge rows; the worktree-root test was seen red with the old root.join check",
+      "deviations": [
+        "undeclared-file pi_plugin_contracts.rs — e2e shape approval fixture needed the bee:no-read-set marker (one line from round 239680ffb, kept)",
+        "advisor consult not run: the three judge fixes were fully specified"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee gate --merge --approved true on a standard feature whose CONTEXT.md lacks ## Read set refuses, names the section and the bee:no-read-set marker, and writes no state",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "the same approval with the section and every knowledge path on disk approves",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "a CONTEXT.md carrying <!-- bee:no-read-set: legacy --> approves",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "a tiny lane with no section approves; a plain --name execution approval never runs the check",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "set_gate.rs calls read_set_refusal once, at the pre-lock peek right after plan_claims_refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "No change to brief.rs or the dispatch prompt renderer",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "No change to gate_preview_refusal's or claims_refusal's behavior",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "No new field in the gate's --json output",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-08T05:41:52.517Z",
+        "recorded_by": "02c0ba14-95d9-48ed-aba2-edecde0ebc63",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee gate --merge --approved true on a standard feature whose CONTEXT.md lacks ## Read set refuses, names the section and the bee:no-read-set marker, and writes no state",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "the same approval with the section and every knowledge path on disk approves",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "a CONTEXT.md carrying <!-- bee:no-read-set: legacy --> approves",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "a tiny lane with no section approves; a plain --name execution approval never runs the check",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "set_gate.rs calls read_set_refusal once, at the pre-lock peek right after plan_claims_refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "No change to brief.rs or the dispatch prompt renderer",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "No change to gate_preview_refusal's or claims_refusal's behavior",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "No new field in the gate's --json output",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-11-08T09:44:27.489Z",
+        "recorded_by": "8fa72145-dfb5-454b-a569-c1ee4fc604ce",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "must-haves",
+            "status": "PASS",
+            "evidence": "every must_have truth, artifact, key_link and prohibition is met and all eight kdf-1 test-matrix rows have a named test in commit 239680ffb"
+          },
+          {
+            "id": "root-consistency",
+            "status": "FAIL",
+            "evidence": "plan_packets.rs:657 resolves CONTEXT.md through advisor_plan_path (worktree-aware) while plan_packets.rs:681 checks each knowledge path with root.join(path).exists() against the caller's root, so a merged approval run from the main checkout refuses a concept that exists only in the feature worktree",
+            "failure_signature": "read_set_refusal path check uses caller root, CONTEXT.md uses worktree root"
+          },
+          {
+            "id": "undeclared-file",
+            "status": "FAIL",
+            "evidence": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs is edited by the commit but is not in the cell's files list and no deviation is recorded",
+            "failure_signature": "pi_plugin_contracts.rs edited outside the declared files with no recorded deviation"
+          },
+          {
+            "id": "outside-docs-knowledge-test",
+            "status": "FAIL",
+            "evidence": "no test covers a read-set row whose path exists on disk but sits outside docs/knowledge/ (the starts_with half of the guard at plan_packets.rs:681)",
+            "failure_signature": "starts_with half of the path guard has no test"
+          }
+        ],
+        "failure_signature": "read_set_refusal checks knowledge paths against the caller root while CONTEXT.md resolves to the worktree root",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-fable-5-1",
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-08T05:47:19.571Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "must-haves",
+            "status": "PASS",
+            "evidence": "all four truths, three artifacts, the single call-site key link (set_gate.rs:940 after plan_claims_refusal :937) and four prohibitions hold in commits 239680ffb + 05c4339c8; every kdf-1 matrix row has a named read_set test"
+          },
+          {
+            "id": "root-consistency",
+            "status": "PASS",
+            "evidence": "plan_packets.rs:657-660 derives one base via find_granted_worktree_for_feature (same as advisor_plan_path, advisor_ref.rs:80-90); CONTEXT.md (:660) and every path check (:684) use base; tests.rs:3499 proves a worktree-only concept approves from main"
+          },
+          {
+            "id": "undeclared-file",
+            "status": "PASS",
+            "evidence": "pi_plugin_contracts.rs:8141 one-line fixture marker is still outside the declared files but the worker report records it as a named deviation for the cap --files; the cap must carry it"
+          },
+          {
+            "id": "outside-docs-knowledge-test",
+            "status": "PASS",
+            "evidence": "tests.rs:3484 names docs/specs/x.md on disk in the read set and asserts the refusal with the path, the remedy and no state write, covering the starts_with half of plan_packets.rs:684"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-08T09:44:21.428Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-08T05:47:19.571Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "8fa72145-dfb5-454b-a569-c1ee4fc604ce",
+        "owner_bypassed": null,
+        "at": "2026-11-08T09:44:21.479Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 324427,
+    "cached": 4696545,
+    "total": 5020972,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 115164,
+        "cached": 2004984,
+        "total": 2120148
+      },
+      "claude-fable-5-1": {
+        "new": 209263,
+        "cached": 2691561,
+        "total": 2900824
+      }
+    },
+    "jobs": [
+      "job-1794114776612-1963510-1",
+      "job-1794115535834-2084803-1",
+      "job-1794130391130-2712829-1"
+    ]
+  }
+}

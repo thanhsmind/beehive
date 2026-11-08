@@ -1,0 +1,220 @@
+{
+  "id": "kdf-2",
+  "feature": "knowledge-docs-in-the-flow",
+  "title": "Refuse an area concept with no decision link in knowledge check",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "D6",
+    "9ad06476-016d-4c3c-99d8-195f7eacf3f4",
+    "823f45f3-ba85-4eca-bf32-bbfebc6bc93c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+    "docs/knowledge/areas/rust-runtime/parity-and-conformance-proof-discipline.md",
+    "docs/knowledge/areas/verify-pipeline/verify-pipeline-skill-trigger-cases.md",
+    "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-docs-in-the-flow/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frontmatter.rs",
+    "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In `check_bundle` (check.rs:557 `pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {`) add the profile error `missing_decision_link` for every concept of type bee.area — an area's overview.md included, only the generated index.md (which has no frontmatter) excluded — whose `bee.decisions` is absent or an empty list, as a branch of the existing bee.area loop in check_bundle rather than a new per-concept loop. The error fires only when at least one area concept in the bundle carries a non-empty `bee.decisions`; when none does, emit one NOTE (the shape of the no-anchors NOTE) saying no area concept links a decision and that the rule arms on the first link, and no error rows (per D6; a bootstrapped host must not red). The row uses the same `finding(path, code, message)` shape as `owns_missing` (check.rs:896 `\"owns_missing\",`) and its message names the concept path, the remedy `bee decisions search --text \"<topic>\"` then `bee decisions log`, and the `decisions` list the id goes into (per D4). Patterns, work items and decision concepts are never checked. Add tests in knowledge/tests.rs with fn names containing `missing_decision_link`, modelled on tests.rs:2045 `fn owns_missing_errors_when_area_overview_carries_no_owns_keys() {`: an area concept with one decision gives no row; an area concept with `decisions: []` gives exactly one profile error row with that code; a pattern concept with no decisions gives no row. Then link the five area concepts named in files: for each, find the decision that settled it with `bee decisions search --text` (or the feature's docs/history CONTEXT.md D-number) and add it to `bee.decisions` in the canonical form the rest of the bundle uses (`<feature> D<n> (<short8>): <gist>` when a history feature exists, else the short8 id and a gist), keeping the frontmatter canonical (frontmatter.rs:90 `pub(crate) fn emit_frontmatter(data: &Map<String, Value>) -> Result<String, ()> {`). Portable per D6: no bee-repo path in the check. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- missing_decision_link && cargo run --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge check",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check on a bundle holding an area concept with decisions: [] prints one profile error row missing_decision_link whose message names bee decisions log and the concept path",
+      "a pattern concept with no decisions produces no row",
+      "a bundle in which no area concept carries a decision gets one NOTE and no missing_decision_link row",
+      "bee knowledge check on this branch's bundle reports 0 OKF errors and 0 profile errors"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "substantive": "missing_decision_link profile error with its remedy message"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "substantive": "three tests whose names contain missing_decision_link"
+      },
+      {
+        "path": "docs/knowledge/areas/worktree-parallelism/path-identity.md",
+        "substantive": "bee.decisions carries the settling decision, frontmatter canonical"
+      }
+    ],
+    "key_links": [
+      "the new row is produced inside check_bundle and counted as a profile error, so strict mode exits non-zero on it"
+    ],
+    "prohibitions": [
+      "No new frontmatter field",
+      "No bee-repo-only path in the check",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-kdf-2",
+    "outcome": "knowledge check now errors with missing_decision_link on an unlinked area concept once the rule is armed (one NOTE otherwise); three tests added; the five area concepts linked, 0 profile errors; commit 9fcd11c1a",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+      "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+      "docs/knowledge/areas/rust-runtime/parity-and-conformance-proof-discipline.md",
+      "docs/knowledge/areas/verify-pipeline/verify-pipeline-skill-trigger-cases.md",
+      "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+    ],
+    "deviations": [
+      "sync-ack: kdf-2 added one profile error branch to check.rs and three tests; the concepts anchored to check.rs and knowledge/tests.rs were already suspect from earlier commits and describe checks this cell did not change; kdf-4 (writer) extends and re-confirms the okf-profile concept that documents this error, and the content cut (PBI p-3a756890) owns the rest."
+    ],
+    "friction": null,
+    "capped_at": "2026-11-08T05:25:20.386Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- missing_decision_link && cargo run --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge check — green:unit — 3 new tests pass, knowledge module 142 pass, check reports 0 OKF and 0 profile errors; the full suite was not re-run after the notes-order fix, and its other failures belong to the uncommitted read-set work in this worktree (see report)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "02c0ba14-95d9-48ed-aba2-edecde0ebc63",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- missing_decision_link && cargo run --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge check",
+    "claimed_at": "2026-11-08T05:12:55.652Z",
+    "sync_ack": "kdf-2 added one profile error branch to check.rs and three tests; the concepts anchored to check.rs and knowledge/tests.rs were already suspect from earlier commits and describe checks this cell did not change; kdf-4 (writer) extends and re-confirms the okf-profile concept that documents this error, and the content cut (PBI p-3a756890) owns the rest.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "knowledge check now errors with missing_decision_link on an unlinked area concept once the rule is armed (one NOTE otherwise); three tests added; the five area concepts linked, 0 profile errors; commit 9fcd11c1a",
+      "commit": "9fcd11c1a2988f41bb1050e54a05f2cb31e64dd1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+        "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+        "docs/knowledge/areas/rust-runtime/parity-and-conformance-proof-discipline.md",
+        "docs/knowledge/areas/verify-pipeline/verify-pipeline-skill-trigger-cases.md",
+        "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- missing_decision_link && cargo run --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge check — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- missing_decision_link && cargo run --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge check — green:unit — 3 new tests pass, knowledge module 142 pass, check reports 0 OKF and 0 profile errors; the full suite was not re-run after the notes-order fix, and its other failures belong to the uncommitted read-set work in this worktree (see report)",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge check on a bundle holding an area concept with decisions: [] prints one profile error row missing_decision_link whose message names bee decisions log and the concept path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "a pattern concept with no decisions produces no row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "a bundle in which no area concept carries a decision gets one NOTE and no missing_decision_link row",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "bee knowledge check on this branch's bundle reports 0 OKF errors and 0 profile errors",
+            "artifact": "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+          },
+          {
+            "requirement": "the new row is produced inside check_bundle and counted as a profile error, so strict mode exits non-zero on it",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "No new frontmatter field",
+            "artifact": "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+          },
+          {
+            "requirement": "No bee-repo-only path in the check",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/rust-runtime/parity-and-conformance-proof-discipline.md",
+            "artifact": "docs/knowledge/areas/rust-runtime/parity-and-conformance-proof-discipline.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/verify-pipeline/verify-pipeline-skill-trigger-cases.md",
+            "artifact": "docs/knowledge/areas/verify-pipeline/verify-pipeline-skill-trigger-cases.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/worktree-parallelism/path-identity.md",
+            "artifact": "docs/knowledge/areas/worktree-parallelism/path-identity.md"
+          }
+        ],
+        "recorded_at": "2026-11-08T05:41:53.758Z",
+        "recorded_by": "02c0ba14-95d9-48ed-aba2-edecde0ebc63",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "must-haves",
+            "status": "PASS",
+            "evidence": "all four truths, three artifacts, the key link and the prohibitions are satisfied by commit 9fcd11c1a; the four kdf-2 matrix rows have named tests missing_decision_link_*"
+          },
+          {
+            "id": "bundle-check",
+            "status": "PASS",
+            "evidence": "truth 4 (bee knowledge check on the branch bundle reports 0 OKF and 0 profile errors) verified only by the worker's proof line; the judge could not run the check under the worker guard"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "claude-sonnet-5-5",
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-08T05:47:19.598Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 118236,
+    "cached": 2339331,
+    "total": 2457567,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 118236,
+        "cached": 2339331,
+        "total": 2457567
+      }
+    },
+    "jobs": [
+      "job-1794114776612-1963511-1"
+    ]
+  }
+}

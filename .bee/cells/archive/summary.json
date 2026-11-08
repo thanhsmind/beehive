@@ -2043,5 +2043,10 @@
     "capped": 7,
     "dropped": 0,
     "archived_at": "2026-11-08T04:43:12.715Z"
+  },
+  "knowledge-docs-in-the-flow": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-11-08T09:50:21.760Z"
   }
 }
