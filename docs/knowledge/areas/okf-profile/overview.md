@@ -52,7 +52,8 @@ under:
   gate, the content-addressed pin, the unparsed report, the fidelity floor and the drift telemetry:
   `migration-and-coverage-gates.md`;
 - which kinds of truth live in the bundle and which live in code, how an area concept is anchored to
-  files and graded against git, the cap re-confirm step, the host seed and the pull-rate measure:
+  files and graded against git, the cap re-confirm step, the host seed, the pull-rate measure, the
+  read set, the templates rule, and the decision-link error:
   [freshness-and-document-homes.md](freshness-and-document-homes.md).
 
 ## Entry Points & Triggers

@@ -1,19 +1,19 @@
 ---
 type: bee.area
 title: "Bee OKF Profile — freshness, anchors and the document homes"
-description: "Which kinds of truth live in docs/knowledge and which live in code, how an area concept names the files it depends on and is graded against git, the cap re-confirm step, the one-time host seed, and the pull-rate measure that tells whether any of it is read."
+description: "Which kinds of truth live in docs/knowledge and which live in code, how an area concept names the files it depends on and is graded against git, the cap re-confirm step, the one-time host seed, the pull-rate measure that tells whether any of it is read, the read set, the templates rule, and the decision-link error."
 timestamp: 2026-11-07
 bee:
   id: okf-profile-freshness-and-document-homes
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: ["knowledge-freshness-mechanic D1 (2b11f025): knowledge is pulled on demand, never pushed into briefs", "knowledge-freshness-mechanic D2 (93e1001d): the document homes rule", "knowledge-freshness-mechanic D3 (27ad96a5): freshness is derived from git through verified_at and verified_commit", "knowledge-freshness-mechanic D4 (e7e80d78): updates ride the cap sync door and promote", "knowledge-freshness-mechanic D5 (28fb074d): delete before write, work/ leaves the bundle", "knowledge-freshness-mechanic D6 (e7e133dc): pull rate is the measure", "knowledge-freshness-mechanic D7 (6a502ad0): the mechanic is portable and reaches hosts through onboarding", "knowledge-freshness-mechanic D8 (4148025d): bee.anchors is an explicit, seeded path list"]
-  sources: [docs/history/knowledge-freshness-mechanic/CONTEXT.md, docs/history/knowledge-freshness-mechanic/plan.md]
-  authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step and the pull-rate measure"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs]
-  verified_at: 2026-11-07
-  verified_commit: edc0f9e6da7592e6b025189f86624c6b6cc88e3d
+  decisions: ["knowledge-freshness-mechanic D1 (2b11f025): knowledge is pulled on demand, never pushed into briefs", "knowledge-freshness-mechanic D2 (93e1001d): the document homes rule", "knowledge-freshness-mechanic D3 (27ad96a5): freshness is derived from git through verified_at and verified_commit", "knowledge-freshness-mechanic D4 (e7e80d78): updates ride the cap sync door and promote", "knowledge-freshness-mechanic D5 (28fb074d): delete before write, work/ leaves the bundle", "knowledge-freshness-mechanic D6 (e7e133dc): pull rate is the measure", "knowledge-freshness-mechanic D7 (6a502ad0): the mechanic is portable and reaches hosts through onboarding", "knowledge-freshness-mechanic D8 (4148025d): bee.anchors is an explicit, seeded path list", "knowledge-docs-in-the-flow D1 (5c5ae146): documentation is a working part of the flow", "knowledge-docs-in-the-flow D2 (f3c5ad0f): the read set lives in CONTEXT.md and shape approval checks it", "knowledge-docs-in-the-flow D3 (2bc56fb6): every template's sections open with their question and sources, plus a deletion line", "knowledge-docs-in-the-flow D4 (e2f6e8c3): bee knowledge check refuses an unlinked area concept as missing_decision_link"]
+  sources: [docs/history/knowledge-freshness-mechanic/CONTEXT.md, docs/history/knowledge-freshness-mechanic/plan.md, docs/history/knowledge-docs-in-the-flow/CONTEXT.md, docs/history/knowledge-docs-in-the-flow/plan.md]
+  authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step, the pull-rate measure, the read set, the templates rule, and the decision-link error"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs]
+  verified_at: 2026-11-08
+  verified_commit: c64ed1b9413e010c2daee47ed79fca879c02af8e
 ---
 
 # Bee OKF Profile (freshness, anchors and the document homes)
@@ -83,11 +83,76 @@ per feature, how many `knowledge search`, `knowledge context` and `knowledge sho
 and the ratio. That ratio is the measure of whether the bundle is read. A flat rate means the lean layer
 carries no weight with the agents it was written for, and the lean layer is deleted next, not extended.
 
+## The read set
+
+Documentation is a working part of the flow rather than an afterthought. During shaping and planning, agents record what knowledge concepts and code entry points they read before making decisions. This record lives in `docs/history/<feature>/CONTEXT.md` under the heading `## Read set`.
+
+The section holds two markdown tables:
+
+- `### Knowledge` — lists each concept read, its freshness grade at read time, and one line on why it matters. The header row must start with `| Concept |` (`| Concept | Grade at read | Why it matters |`). First-column cells contain repo-relative paths beginning with `docs/knowledge/` (backtick-trimmed). A host with no knowledge bundle writes `| (no bundle) | — | this host has no docs/knowledge/ |`. The parser skips rows whose cell begins with an open parenthesis `(`.
+- `### Code` — lists each code entry point and what it decides (`| Path | What it decides |`). The header row must start with `| Path |`. This table informs readers and planning; gate verification checks only the knowledge table.
+
+The parser (`parse_read_set` in `packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs`) is heading-scoped and prefix-tolerant. It locates `## Read set`, scans lines until the next `## ` heading, finds the first pipe table whose header starts with `| Concept |`, and collects its first-column paths.
+
+Gate approval for `shape` or `--merge` gates validates the read set through `read_set_refusal` (`packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs`) at the pre-lock peek, immediately after the plan claims check. Plain `--name execution` approvals never run the check. Features running on `tiny`, `small`, or `docs` lanes are exempt.
+
+The check enforces three conditions:
+1. **Readable context file:** `docs/history/<feature>/CONTEXT.md` must exist and be readable. If the file cannot be read, approval is refused with:
+   `gate: approval refused — docs/history/<feature>/CONTEXT.md could not be read at <path> (<reason>). FIX: run \`bee knowledge context --work <feature>\` and \`bee knowledge search --text "<topic>"\`, write the section (skills/bee-shaping/references/context-template.md), or add \`<!-- bee:no-read-set: <reason> -->\` for a CONTEXT.md written before the read set existed.`
+2. **Recorded escape marker:** If the file contains `<!-- bee:no-read-set:` anywhere, the check passes immediately. The marker records the rationale for legacy context files created before the read set existed.
+3. **Section presence and resolving paths:** When no escape marker is present, `parse_read_set` must return a list of paths. If the `## Read set` section or the knowledge table is missing, approval is refused with:
+   `gate: approval refused — docs/history/<feature>/CONTEXT.md has no "## Read set" section. FIX: run \`bee knowledge context --work <feature>\` and \`bee knowledge search --text "<topic>"\`, write the section (skills/bee-shaping/references/context-template.md), or add \`<!-- bee:no-read-set: <reason> -->\` for a CONTEXT.md written before the read set existed.`
+   An empty knowledge table (zero rows) passes. When rows are present, every path must start with `docs/knowledge/` and resolve to an existing file on disk under the repo root. If any path fails this check, approval is refused with:
+   `gate: approval refused — docs/history/<feature>/CONTEXT.md read set names \`<path>\`, which is not a docs/knowledge/ path on disk. FIX: fix the path or remove the row.`
+
+Refusals mutate no state. Knowledge is pulled on demand; briefs do not push the read set.
+
+## The templates rule
+
+Document templates ask for information, not structure. Every template section opens with one sentence that states the single question the section answers for a rebuilder, followed by the sources that feed it from the Gather Sources table.
+
+Each section includes a deletion line that tells the writer when to remove a line instead of keeping unneeded prose:
+- In entry points: delete a line whose trigger the Behaviors section already names.
+- In data dictionaries: delete an element that code names and nothing explains.
+- In behaviors: delete a behavior that a test already states.
+- In actor matrices: delete a row whose capabilities match the row above it.
+- In business rules: delete a bullet that a test already states.
+- In edge cases: delete a case that the Behaviors section already answers.
+- In open gaps: delete a gap an answer has closed.
+- In diagrams: delete a diagram that repeats a list.
+- In visuals: delete a line whose screen no longer exists.
+- In pointers: delete a pointer nobody would search for.
+
+A business rule bullet may carry an optional status and verification tail:
+`— status: <active|temporary|retired>; proves: <test or verify feature path>`
+Use this tail only where a rule's status or verification differs from its concept. The decision link stays on the concept.
+
+The cut area template provides a lean five-section structure for area concepts during content trimming: `## Map`, `## Boundaries`, `## Invariants`, `## Entry Points`, and `## Pointers`. Each section carries its question line, sources, and deletion line. Host repositories use the standard nine-section area template until instructed otherwise.
+
+## The decision-link error
+
+`bee knowledge check` requires every area concept (`type: bee.area`) to link at least one decision through a non-empty `bee.decisions` list in its frontmatter. This rule applies to area concepts and area `overview.md` files. Generated `index.md` files carry no frontmatter and are excluded. Patterns, work items, and decision concepts are never checked.
+
+The check arms conditionally. It verifies area concepts only when the bundle contains at least one area concept with a non-empty `bee.decisions` list. When no area concept in the bundle carries a decision link (such as in a newly bootstrapped repository), `bee knowledge check` outputs a single note and zero errors:
+`no area concept links a decision (bee.decisions) — the missing_decision_link rule arms on the first link`
+
+Once armed, any area concept whose `bee.decisions` field is absent or empty produces a profile error finding with code `missing_decision_link`:
+`area concept "<path>" carries no decision link — run bee decisions search --text "<topic>", then bee decisions log, and put the decision id in this concept's bee.decisions list`
+
+In strict mode (`--strict`), profile errors cause `bee knowledge check` to fail with a non-zero exit code.
+
 ## Pointers (implementation)
 
 - Grade, bundle root, `seed-anchors` and `confirm`: `packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs`.
 - The cap door's anchored-concept check: `packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs`.
+- Read set table parser: `packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs`.
+- Read set gate refusal: `packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs`.
+- Decision-link check error: `packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs`.
 - The pull-rate section of the report: `packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs`.
 - The locked decisions and the grade rule: `docs/history/knowledge-freshness-mechanic/CONTEXT.md` and
   `docs/history/knowledge-freshness-mechanic/plan.md`.
+- Read set, template, and decision check decisions: `docs/history/knowledge-docs-in-the-flow/CONTEXT.md` and
+  `docs/history/knowledge-docs-in-the-flow/plan.md`.
+- Context template with read set: `skills/bee-shaping/references/context-template.md`.
+- Area spec and cut area templates: `skills/bee-capturing/references/area-spec.md`.
 - The capture-side step that cites this concept: `skills/bee-capturing/SKILL.md`.
