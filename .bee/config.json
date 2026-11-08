@@ -137,9 +137,9 @@
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
-        "model": "opus",
+        "model": "fable",
         "description": "author or repair tests, red-first",
-        "effort": "high"
+        "effort": "low"
       },
       "docs": {
         "kind": "herding",
@@ -153,9 +153,9 @@
         "agent": "paseo-pi-agy-flash"
       },
       "plan": {
-        "model": "opus",
+        "model": "fable",
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan",
-        "effort": "high"
+        "effort": "low"
       },
       "extraction": {
         "kind": "herding",
@@ -168,9 +168,9 @@
         "description": "fall-through tail: default writer role"
       },
       "review": {
-        "model": "opus",
+        "model": "fable",
         "description": "independent read-only check of a claim or diff",
-        "effort": "high"
+        "effort": "low"
       },
       "advisor": {
         "model": "fable",
@@ -188,19 +188,19 @@
         "effort": "high"
       },
       "lane-2": {
-        "model": "opus",
+        "model": "fable",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief",
-        "effort": "high"
+        "effort": "low"
       },
       "lane-3": {
-        "model": "opus",
+        "model": "fable",
         "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief",
-        "effort": "high"
+        "effort": "low"
       },
       "hat-facts-gaps": {
-        "model": "opus",
+        "model": "fable",
         "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test",
-        "effort": "high"
+        "effort": "low"
       },
       "hat-risks": {
         "model": "fable",
@@ -208,23 +208,29 @@
         "effort": "high"
       },
       "hat-value": {
-        "model": "opus",
+        "model": "fable",
         "description": "hat: is this worth its cost — materiality test",
-        "effort": "high"
+        "effort": "low"
       },
       "hat-alternatives": {
-        "model": "opus",
+        "model": "fable",
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude",
-        "effort": "high"
+        "effort": "low"
       },
       "hat-user-impact": {
-        "model": "opus",
+        "model": "fable",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock",
-        "effort": "high"
+        "effort": "low"
       },
       "design": {
-        "model": "opus",
-        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
+        "model": "fable",
+        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate",
+        "effort": "low"
+      },
+      "writer": {
+        "kind": "herding",
+        "agent": "paseo-pi-agy-flash",
+        "description": "dedicated technical writer — any role (plan, code, review, design) hands finished work here to write its docs, specs, plans, READMEs and reports; writes through bee-technical-writing; asked for with --role writer"
       }
     },
     "codex": {
@@ -317,6 +323,11 @@
         "kind": "herding",
         "agent": "paseo-pi-agy-flash",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
+      },
+      "writer": {
+        "kind": "herding",
+        "agent": "paseo-pi-agy-flash",
+        "description": "dedicated technical writer — any role (plan, code, review, design) hands finished work here to write its docs, specs, plans, READMEs and reports; writes through bee-technical-writing; asked for with --role writer"
       }
     }
   },
