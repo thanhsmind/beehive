@@ -108,9 +108,9 @@ feature) and before glossary or event catalogue.
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: the heading is the CONTEXT template's section name, and all three questions under it were answered by planning — plan.md Discovery and Approach (rev 2): the timings row carries the env-bound feature; work/ moves by git mv and both walks skip it; seed coverage is reported in kfm-6's cap -->
 ### Deferred To Planning
 
-<!-- bee:not-a-deferral: all three were answered by planning — plan.md Discovery and Approach (rev 2): the timings row carries the env-bound feature; work/ moves by git mv and both walks skip it; seed coverage is reported in kfm-6's cap -->
 - [ ] How timings rows learn their feature — a new field written by the
   dispatcher from the bound lane, or a join on lane start/close windows.
 - [ ] Whether `work/` moves by `git mv` in this feature or is left in place
@@ -120,6 +120,7 @@ feature) and before glossary or event catalogue.
   paths after seeding (they grade `unverified` with no anchors).
 <!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: these ideas are not promises this feature makes later — each is owned by the knowledge-from-code discovery map (tickets 002, 003, 004) or by the registered trigger bee-knowledge-report-shows-a-pull-rate-r__28fb074d, cited inline -->
 ## Deferred Ideas
 
 - Cut bee's own areas to map + invariants (map ticket 002) — the next
@@ -127,9 +128,12 @@ feature) and before glossary or event catalogue.
 - Glossary (ticket 004) and event catalogue (ticket 003) — wait on pull
   rate (D5); trigger `bee-knowledge-report-shows-a-pull-rate-r__28fb074d`.
 - Pattern freshness — patterns keep a date only (agent-suspected, on the map).
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
+<!-- bee:not-a-deferral: template prose describing what planning reads, not a promise to act later -->
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->

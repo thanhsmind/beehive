@@ -112,7 +112,7 @@ under:
   draft, the area bullets and the pitfall candidates a finished work item earned; writes nothing.
   The **human or agent who accepts a proposal** is the actor that turns it into a concept — the
   profile deliberately keeps that step outside the tool (D38).
-- **`.bee/bin/bee test`** (the declared `commands.test`) — the CI-equivalent chain `check` (and later `index --check`)
+- **`.bee/bin/bee test`** (the declared `commands.test`) — the CI-equivalent chain `check` and `index --check`
   joins; a profile violation fails the same way any other suite failure does.
 - **The human owner** — configures nothing here; the profile has no runtime knobs. Owner-level
   input landed once, at exploring, as the locked decisions this document cites.

@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: ["knowledge-freshness-mechanic D2 (93e1001d): the document homes rule", "knowledge-freshness-mechanic D7 (6a502ad0): the mechanic is portable and reaches hosts through onboarding", "knowledge-freshness-mechanic D8 (4148025d): bee.anchors is an explicit, seeded path list"]
+  decisions: ["knowledge-freshness-mechanic D1 (2b11f025): knowledge is pulled on demand, never pushed into briefs", "knowledge-freshness-mechanic D2 (93e1001d): the document homes rule", "knowledge-freshness-mechanic D3 (27ad96a5): freshness is derived from git through verified_at and verified_commit", "knowledge-freshness-mechanic D4 (e7e80d78): updates ride the cap sync door and promote", "knowledge-freshness-mechanic D5 (28fb074d): delete before write, work/ leaves the bundle", "knowledge-freshness-mechanic D6 (e7e133dc): pull rate is the measure", "knowledge-freshness-mechanic D7 (6a502ad0): the mechanic is portable and reaches hosts through onboarding", "knowledge-freshness-mechanic D8 (4148025d): bee.anchors is an explicit, seeded path list"]
   sources: [docs/history/knowledge-freshness-mechanic/CONTEXT.md, docs/history/knowledge-freshness-mechanic/plan.md]
   authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step and the pull-rate measure"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs]

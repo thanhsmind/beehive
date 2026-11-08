@@ -444,7 +444,13 @@ home file is touched, every one of its `applied_at` files must be
 touched too, else the cap is refused naming the rule and the untouched
 files; (c) *prediction* — the cell's own `affects_skills` must equal, as
 a set, the touched `skills/**` paths, else the cap is refused naming the
-difference. `--sync-ack "<reason>"` is the one escape, on `cells cap`
+difference; (d) *anchored knowledge* — for every area concept whose
+`bee.anchors` intersects the touched set and that grades `suspect` or
+`orphan`, the cap is refused until the concept is edited in the same
+cell or re-confirmed with `bee knowledge confirm`; `unverified` passes.
+The grade rule and the confirm step are the OKF profile's
+(`areas/okf-profile/freshness-and-document-homes.md`, knowledge-freshness-mechanic D4).
+`--sync-ack "<reason>"` is the one escape, on `cells cap`
 and `cells finish` alike: blank is refused the same way `--deviation`
 is, and a non-blank reason is recorded to `trace.sync_ack` AND appended
 to `trace.deviations` as `sync-ack: <reason>` so `bee knowledge promote`
