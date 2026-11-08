@@ -934,6 +934,9 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
             if let Some(msg) = plan_claims_refusal(root, &peek, lane) {
                 return Ok(Out::Thrown(msg));
             }
+            if let Some(msg) = read_set_refusal(root, &peek, lane) {
+                return Ok(Out::Thrown(msg));
+            }
             if let Some(msg) = gate_preview_refusal(root, &peek, lane) {
                 return Ok(Out::Thrown(msg));
             }
@@ -1279,6 +1282,10 @@ mod tests {
         std::fs::write(&file, body).unwrap();
     }
 
+    fn waive_read_set(root: &Path, feature: &str) {
+        w(root, &format!("docs/history/{feature}/CONTEXT.md"), "<!-- bee:no-read-set: fixture -->\n");
+    }
+
     fn read_json_file(root: &Path, rel: &str) -> Value {
         let text = std::fs::read_to_string(root.join(rel)).unwrap();
         serde_json::from_str(&text).unwrap()
@@ -1597,6 +1604,7 @@ mod tests {
         let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
         w(root, "docs/history/gate-door-open/plan.md", &plan);
         let sha = compute_plan_sha256(plan.as_bytes());
+        waive_read_set(root, "gate-door-open");
         let advisor_ref = fresh_advisor_ref(root, "gate-door-open");
         w(
             root,
@@ -1629,6 +1637,7 @@ mod tests {
         let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
         w(root, "docs/history/demo/plan.md", &plan);
         let sha = compute_plan_sha256(plan.as_bytes());
+        waive_read_set(root, "demo");
         let advisor_ref = fresh_advisor_ref(root, "demo");
         w(
             root,
@@ -1847,6 +1856,7 @@ mod tests {
     }
 
     fn merged_approval(root: &Path, feature: &str) -> Out {
+        waive_read_set(root, feature);
         run_gate_body(root, &flags(&["--lane", feature, "--merge", "--approved", "true"])).unwrap()
     }
 
@@ -2062,6 +2072,7 @@ mod tests {
         let tmp = tmp_root();
         let root = tmp.path();
         write_conflict_fixture(root, "koh9-named", 1, None);
+        waive_read_set(root, "koh9-named");
         let Out::Thrown(msg) = run_gate_body(
             root,
             &flags(&["--lane", "koh9-named", "--name", "execution", "--approved", "true"]),
@@ -2097,6 +2108,7 @@ mod tests {
     /// conflict precondition applies, so the claims door is the only one that
     /// can speak.
     fn seed_claims_lane(root: &Path, feature: &str, plan_body: Option<&str>) {
+        waive_read_set(root, feature);
         let preview_field = if let Some(body) = plan_body {
             w(root, &format!("docs/history/{feature}/plan.md"), body);
             let sha = compute_plan_sha256(body.as_bytes());

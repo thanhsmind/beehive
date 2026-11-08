@@ -82,7 +82,9 @@ coverage: full | partial
 
 ## Entry Points & Triggers
 
-<One line per way this area is invoked: route/URL, menu path, link source,
+<How does anyone or anything start this area? Sources: Gather Sources, capped
+cells row. Delete a line whose trigger the Behaviors section already names.
+One line per way it is invoked: route/URL, menu path, link source,
 schedule, event, incoming call → what appears or what runs. Business names,
 not component or class names.>
 
@@ -92,7 +94,10 @@ not component or class names.>
 
 ## Data Dictionary
 
-<Every element a user sees, the area stores, or a consumer receives — form
+<What does each element mean, and what values may it hold? Sources: Gather
+Sources, capped cells row; meanings from decisions and Terms, never from code.
+Delete an element the code names and nothing explains.
+Every element a user sees, the area stores, or a consumer receives — form
 fields in DISPLAY ORDER; inputs/outputs/config for backend areas.>
 
 | # | Element | Meaning | Values | Required | Default |
@@ -109,7 +114,10 @@ from shaping's pinned terms.
 
 ## Behaviors & Operations
 
-<One block per user action OR system operation. Given/when/then prose, no code.>
+<What happens when an actor acts or a system operation runs? Sources: Gather
+Sources, capped cells and worker reports rows. Delete a behavior a test
+already states.
+One block per user action OR system operation. Given/when/then prose, no code.>
 
 ### Save (create)
 
@@ -131,7 +139,9 @@ from shaping's pinned terms.
 
 ## Actors & Access
 
-<Matrix: every actor — human roles AND consuming/producing systems — × what
+<Who may see, do, call or receive what? Sources: Gather Sources, capped cells
+row. Delete a row whose cells match the row above it.
+Matrix: every actor — human roles AND consuming/producing systems — × what
 they can see, do, call, or receive. Include anonymous visitors when relevant.>
 
 | Capability | Owner | Company admin | Applicant | Visitor | Job-board partner (system) |
@@ -142,40 +152,54 @@ they can see, do, call, or receive. Include anonymous visitors when relevant.>
 
 ## Business Rules
 
-<Numbered, one sentence each, citing the deciding decision by short8 id
+<Which policies must any rebuild keep, and why? Sources: Gather Sources,
+CONTEXT.md and decisions row. Delete a bullet a test already states.
+Numbered, one sentence each, citing the deciding decision by short8 id
 (see references/citations.md). Rules live here even when the code enforces
-them only implicitly.>
+them only implicitly. A rule that differs from its concept may end with the
+tail `— status: active|temporary|retired; proves: <test or verify feature path>`.>
 
 - **R1.** A posting can never return from `closed` to any other status (per `b9b9fee3`).
-- **R2 (not yet implemented — backlog b-12).** …
+- **R2.** Postings expire after the expiry window (per `b9b9fee3`) — status: temporary; proves: verify feature `postings/expiry`
 
 ## Edge Cases Settled
 
-<Edge cases with a decided answer. An open question does not belong here — it
-belongs in Open Gaps (harvest) or in exploring (new work).>
+<Which edge cases already have a decided answer? Sources: Gather Sources,
+CONTEXT.md and decisions row. Delete a case the Behaviors section already
+answers.
+An open question does not belong here — it belongs in Open Gaps (harvest) or
+in exploring (new work).>
 
 ## Open Gaps
 
-<Only in `coverage: partial` specs. One line per unknown: what is unknown, and
+<What does this spec not yet know? Sources: Gather Sources, user answers row.
+Delete a gap an answer has since closed.
+Only in `coverage: partial` specs. One line per unknown: what is unknown, and
 who/what could answer it. Empty section + `coverage: full` = the rebuild bar is met.>
 
 ## Diagrams
 
-<Whenever a documented behavior is flow-shaped — states, sequences,
+<Which behavior is easier to see than to read? Sources: Gather Sources,
+Behaviors and Business Rules above. Delete a diagram that repeats a list.
+Whenever a documented behavior is flow-shaped — states, sequences,
 containment, routing — it is drawn here in Mermaid, always. One diagram per
 question, business vocabulary only. A behavior with no drawable shape: omit,
 never force a list into a picture.>
 
 ## Visuals
 
-<UI areas only. One line per settled screen:
+<What does each settled screen look like? Sources: Gather Sources, capped
+cells row, with a snapshot. Delete a line whose screen no longer exists.
+UI areas only. One line per settled screen:
 `visuals/<area>/<screen>.png` — what it shows. Refreshed at sync when the screen
 visibly changed. No snapshot available → say so here or in Open Gaps, never silently.
 Backend areas: "Not applicable — no screen.">
 
 ## Pointers (implementation)
 
-<THE ONLY technology-bound section. Key files/routes/tables: `path` — role.
+<Where does the code behind this area live? Sources: Gather Sources, code
+reading row. Delete a pointer nobody would search for.
+THE ONLY technology-bound section. Key files/routes/tables: `path` — role.
 Deleting this section must not remove any business meaning.>
 ```
 
@@ -201,8 +225,8 @@ Deleting this section must not remove any business meaning.>
   posting, not any owner").
 - **Business Rules vs Behaviors:** a Behavior is what the system
   observably does; a Rule is the policy behind it. A rule approved but
-  not yet shipped is marked "not yet implemented" with a backlog id —
-  never written as a Behavior.
+  not yet shipped carries `status: temporary` and its backlog id in the
+  sentence — never written as a Behavior.
 - **Diagrams:** drawable means drawn — when a behavior is flow-shaped
   (a lifecycle of states, a sequence of actors, a containment of
   parts, a routing of cases), a Mermaid diagram section is mandatory,
@@ -218,6 +242,32 @@ Deleting this section must not remove any business meaning.>
   capture one; an absent snapshot is an Open Gap with a stated reason.
 - **Pointers:** load-bearing few, not a file listing. This section is
   allowed to rot slightly; everything above it is not.
+
+## Cut area template
+
+The content cut (PBI p-3a756890) uses this template; hosts keep the nine-section template until told otherwise.
+
+```markdown
+## Map
+
+<What are the parts of this area and how do they connect? Sources: Gather Sources, code reading row. Delete a part the invariants never touch.>
+
+## Boundaries
+
+<Where does this area end, and what does it hand to its neighbors? Sources: Gather Sources, CONTEXT.md and decisions row. Delete a boundary no other area crosses.>
+
+## Invariants
+
+<Which rules must hold whatever the code does? Sources: Gather Sources, CONTEXT.md and decisions row. Delete an invariant a test already states.>
+
+## Entry Points
+
+<How does anyone or anything start this area? Sources: Gather Sources, capped cells row. Delete an entry point another section already names.>
+
+## Pointers
+
+<Where does the code behind this area live? Sources: Gather Sources, code reading row. Delete a pointer nobody would search for.>
+```
 
 ## Merge Rules
 

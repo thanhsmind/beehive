@@ -883,7 +883,24 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
     }
 
     // ── D4: owns_missing (area overview carrying none of the owns.* keys) ──
+    let has_decision_link = |data: &Map<String, Value>| {
+        matches!(bee_of(data).get("decisions"), Some(Value::Array(ids)) if !ids.is_empty())
+    };
+    let is_area = |data: &Map<String, Value>| str_field(data, "type") == Some("bee.area");
+    let decision_link_armed = parsed_concepts
+        .iter()
+        .any(|c| is_area(&c.data) && has_decision_link(&c.data));
     for concept in &parsed_concepts {
+        if decision_link_armed && is_area(&concept.data) && !has_decision_link(&concept.data) {
+            profile_errors.push(finding(
+                &concept.path,
+                "missing_decision_link",
+                format!(
+                    "area concept \"{}\" carries no decision link — run bee decisions search --text \"<topic>\", then bee decisions log, and put the decision id in this concept's bee.decisions list",
+                    concept.path
+                ),
+            ));
+        }
         let is_area_overview = concept.path.starts_with("areas/")
             && concept.path.ends_with("/overview.md")
             && concept.path.matches('/').count() == 2;
@@ -1094,6 +1111,13 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         if !freshness.is_empty() && freshness.iter().all(|(_, g)| g.anchors.is_empty()) {
             notes.push("no concept carries bee.anchors — run bee knowledge seed-anchors once".to_string());
         }
+    }
+
+    if !decision_link_armed && parsed_concepts.iter().any(|c| is_area(&c.data)) {
+        notes.push(
+            "no area concept links a decision (bee.decisions) — the missing_decision_link rule arms on the first link"
+                .to_string(),
+        );
     }
 
     let ok = errors.is_empty() && profile_errors.is_empty() && (!strict || warnings.is_empty());

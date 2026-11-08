@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: []
-  decisions: []
+  decisions: ["rust-port (f7ef3224): the parity differ's whole-path exclusion set is fixed and a volatility allowlist is the only escape", "rust-port (51d7b174): cross-runtime proof compares parsed values as well as bytes and tests every authoritative branch"]
   sources: [docs/history/rust-port/reports/rust-port-15.md, docs/history/rust-port/reports/rust-port-17.md, docs/history/rust-port/reports/rust-port-20.md, docs/history/rust-port/reports/rust-port-21.md]
   authoritative_for: "rust-runtime: how a port is proven faithful against a frozen reference"
   anchors: [.claude-plugin/skills/, .codex-plugin/skills/]

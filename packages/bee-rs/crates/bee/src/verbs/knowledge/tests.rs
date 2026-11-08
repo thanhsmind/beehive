@@ -2063,6 +2063,85 @@ use std::time::Instant;
     }
 
     #[test]
+    fn missing_decision_link_passes_an_area_concept_with_one_decision() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "areas/demo/linked.md",
+            Cx::new("demo-linked")
+                .ty("bee.area")
+                .bee("decisions", json!(["demo D1 (aaaaaaaa): the settling decision"])),
+        );
+
+        let report = check_bundle(&dir, false).unwrap();
+        let rows = of_code(&report.profile_errors, "missing_decision_link");
+        assert!(rows.is_empty(), "a linked area concept must not error: {:?}", report.profile_errors);
+        assert!(
+            !report.notes.iter().any(|n| n.contains("missing_decision_link")),
+            "an armed bundle emits no arming note: {:?}",
+            report.notes
+        );
+    }
+
+    #[test]
+    fn missing_decision_link_errors_on_an_area_concept_with_an_empty_list() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "areas/demo/linked.md",
+            Cx::new("demo-linked")
+                .ty("bee.area")
+                .bee("decisions", json!(["demo D1 (aaaaaaaa): the settling decision"])),
+        );
+        put(
+            &dir,
+            "areas/demo/bare.md",
+            Cx::new("demo-bare").ty("bee.area").bee("decisions", json!([])),
+        );
+
+        let report = check_bundle(&dir, true).unwrap();
+        let rows = of_code(&report.profile_errors, "missing_decision_link");
+        assert_eq!(rows.len(), 1, "exactly one area concept lacks a link: {:?}", report.profile_errors);
+        assert_eq!(rows[0]["file"], "areas/demo/bare.md");
+        assert!(msg(rows[0]).contains("areas/demo/bare.md"), "{}", msg(rows[0]));
+        assert!(msg(rows[0]).contains("bee decisions log"), "{}", msg(rows[0]));
+        assert!(msg(rows[0]).contains("decisions"), "{}", msg(rows[0]));
+        assert!(!report.ok);
+    }
+
+    #[test]
+    fn missing_decision_link_ignores_a_pattern_concept_and_arms_on_the_first_link() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "areas/demo/bare.md",
+            Cx::new("demo-bare").ty("bee.area").bee("decisions", json!([])),
+        );
+        put(&dir, "patterns/plain.md", Cx::new("plain-one").title("Plain pattern"));
+
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(
+            of_code(&report.profile_errors, "missing_decision_link").is_empty(),
+            "no area links a decision, so the rule is unarmed: {:?}",
+            report.profile_errors
+        );
+        let notes: Vec<&String> = report.notes.iter().filter(|n| n.contains("missing_decision_link")).collect();
+        assert_eq!(notes.len(), 1, "one arming note: {:?}", report.notes);
+
+        put(
+            &dir,
+            "areas/demo/linked.md",
+            Cx::new("demo-linked")
+                .ty("bee.area")
+                .bee("decisions", json!(["demo D1 (aaaaaaaa): the settling decision"])),
+        );
+        let armed = check_bundle(&dir, false).unwrap();
+        let rows = of_code(&armed.profile_errors, "missing_decision_link");
+        assert_eq!(rows.len(), 1, "{:?}", armed.profile_errors);
+        assert_eq!(rows[0]["file"], "areas/demo/bare.md");
+    }
+
+    #[test]
     fn exempt_tree_produces_no_rule_findings() {
         let (tmp, dir) = bundle();
         let root = tmp.path();

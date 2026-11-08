@@ -118,9 +118,9 @@
       ".claude/agents/bee-guard.md"
     ],
     "rendered_from": {
-      "design": "opus",
+      "design": "fable",
       "advisor": "fable",
-      "review": "opus"
+      "review": "fable"
     },
     "codex": {
       "agents": [],
@@ -145,5 +145,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-07T16:16:58.422Z"
+  "updated_at": "2026-11-08T05:44:16.582Z"
 }

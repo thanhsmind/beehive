@@ -103,6 +103,14 @@ and a new area entry carries `bee.anchors`. A bundle with no anchors is
 seeded once with `bee knowledge seed-anchors`. The rule and its fields:
 `docs/knowledge/areas/okf-profile/freshness-and-document-homes.md`.
 
+Every area template section opens with the one question it answers for
+a rebuilder and names the sources that feed it, followed by a deletion
+line that tells the writer when to remove a line a test already states.
+A business rule bullet may carry an optional `— status: <active|temporary|retired>; proves: <path>`
+tail when its status or verification differs from its concept; the
+decision link stays on the concept. The templates rule and the cut area
+template: `docs/knowledge/areas/okf-profile/freshness-and-document-homes.md`.
+
 ## Compound — close with what you learned
 
 Deferred by design, like review: a green `bee close` records capture as

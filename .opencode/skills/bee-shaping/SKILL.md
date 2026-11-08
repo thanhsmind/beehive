@@ -31,7 +31,11 @@ The craft is interviewing, not writing. Scout lightly, then triage the
 request. With a bundle, the scout starts at the touched area's
 `docs/knowledge/areas/<area>/index.md` and its Open Gaps (no bundle:
 `docs/specs/<area>.md` when present): settled rules get cited, never
-re-asked, and Open Gaps are ready-made interview questions. Read
+re-asked, and Open Gaps are ready-made interview questions. That same scout
+runs `bee knowledge context --work <feature>` and `bee knowledge search
+--text "<topic>"` and keeps each hit with the grade the command printed,
+plus the code paths it opened: Lock records the read set from that scout,
+never from a second read pass. Read
 `.bee/verify/verify-app/features/README.md` when that index exists, for one
 question: is this ask a new feature, or a change to one already mapped? A
 mapped feature is a change — never a second door to the same room. Default:
@@ -137,6 +141,11 @@ cites D-IDs, never reinterprets them (AGENTS.md). When a
 map's Decisions so far — the settled answers and their D-IDs — straight
 into CONTEXT.md, citing them; it never re-asks a question the map
 already resolved (D8).
+
+Lock renders the scout's knowledge hits and code paths into the
+`## Read set` section of CONTEXT.md, the section the shape gate checks.
+A CONTEXT.md written before the section existed passes with the recorded
+escape `<!-- bee:no-read-set: <reason> -->`.
 
 Lock also writes `docs/briefs/<feature>.md`, the owner brief, drawn from
 the Feature Boundary and the Locked Decisions in the owner language, and

@@ -41,6 +41,28 @@ scribing seeds the spec's Data Dictionary from this table. Remove if none came u
 |------|-------------------------|
 | <term> | <settled meaning, one line> |
 
+## Read set
+
+The shape gate checks this section. Fill it from the shaping scout, never a
+second read pass; a CONTEXT.md written before the section existed carries
+`<!-- bee:no-read-set: <reason> -->` instead.
+
+### Knowledge
+
+Which concepts did this feature read, and how fresh was each? Fed by `bee knowledge context --work <feature>` and `bee knowledge search --text "<topic>"`, the grade copied as printed. Drop a row the plan never cites. A host with no `docs/knowledge/` writes the one row `| (no bundle) | — | this host has no docs/knowledge/ |`.
+
+| Concept | Grade at read | Why it matters |
+|---------|---------------|----------------|
+| docs/knowledge/areas/<area>/<concept>.md | confirmed | <one line, what it settles for this feature> |
+
+### Code
+
+Which code paths decide this feature's behavior? Fed by the shaping scout. Drop a row the plan never cites.
+
+| Path | What it decides |
+|------|-----------------|
+| `<path>` | <one line> |
+
 ## Specific Ideas And References
 
 - <Mockup/example/reference the user mentioned, and what it means for the work.>
@@ -84,6 +106,6 @@ Out-of-scope ideas captured during shaping. Not lost, not planned.
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
-decisions, code context, canonical references, and deferred-to-planning questions.
+decisions, the read set, code context, canonical references, and deferred-to-planning questions.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
 ```

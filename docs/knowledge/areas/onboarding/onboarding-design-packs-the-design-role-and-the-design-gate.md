@@ -8,6 +8,7 @@ bee:
   id: onboarding-onboarding-design-packs-the-design-role-and-the-design-gate
   lifecycle: active
   areas: [onboarding]
+  decisions: ["design-os-in-bee D3 (961426b5): bee's team gains a dedicated UI design role", "design-os-in-bee D4 (572bc11e): design packs install by project type and a pack not picked is never written into the host", "design-os-in-bee D6 (587bcc85): a UI cell carries ui gate proof under a baseline ratchet"]
   anchors: [packages/bee/design/, scripts/sync-design-os.sh, scripts/design-os-contract.mjs, packages/bee-rs/crates/bee/src/onboard/, scripts/install.sh, packages/bee/agents/bee-comb.md.tmpl, packages/bee/design/bee-design/additions/wcag-2-2.md, packages/bee/design/bee-design-motion/additions/frame-rehearsal.md, packages/bee/design/bee-design/SKILL.md]
   verified_at: 2026-11-05
   verified_commit: f54e93f70f3ee737557ce583cd5701a043ba5d76

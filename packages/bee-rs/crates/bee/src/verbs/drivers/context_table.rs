@@ -45,6 +45,49 @@ pub(crate) fn parse_locked_decision_ids(text: &str) -> Option<Vec<String>> {
     None
 }
 
+pub(crate) fn parse_read_set(text: &str) -> Option<Vec<String>> {
+    let lines: Vec<&str> = text.lines().collect();
+    let heading_idx = lines.iter().position(|l| l.trim() == "## Read set")?;
+    let mut i = heading_idx + 1;
+    while i < lines.len() {
+        let trimmed = lines[i].trim();
+        if trimmed.starts_with("## ") {
+            break;
+        }
+        if trimmed.starts_with('|') && !is_separator_row(trimmed) {
+            if trimmed.starts_with("| Concept |") {
+                return Some(read_set_rows(&lines, i));
+            }
+            i = skip_table(&lines, i);
+            continue;
+        }
+        i += 1;
+    }
+    None
+}
+
+fn read_set_rows(lines: &[&str], header_idx: usize) -> Vec<String> {
+    let mut paths = Vec::new();
+    let mut j = header_idx + 1;
+    if j < lines.len() && is_separator_row(lines[j]) {
+        j += 1;
+    }
+    while j < lines.len() {
+        let row = lines[j].trim();
+        if !row.starts_with('|') {
+            break;
+        }
+        if let Some(cell) = row.strip_prefix('|').and_then(|r| r.split('|').next()) {
+            let cell = cell.trim().trim_matches('`').trim();
+            if !cell.is_empty() && !cell.starts_with('(') {
+                paths.push(cell.to_string());
+            }
+        }
+        j += 1;
+    }
+    paths
+}
+
 fn table_header_matches(line: &str) -> bool {
     line.trim_start().starts_with("| ID | Decision")
 }

@@ -54,7 +54,8 @@ below. Every row is load-bearing; no `guessed` row survives the gate.>
 
 ## Discovery
 <2–4 lines: what was inspected, the finding, the evidence command — or a
-one-line pointer to discovery.md when one exists.>
+one-line pointer to discovery.md when one exists. Extends CONTEXT.md's
+`## Read set` with the concepts and paths planning read.>
 
 ## Approach
 <Recommended path (cites decision ids) · rejected alternatives (one line
@@ -279,7 +280,8 @@ history.
    the plan never proved turns into a constraint the moment the action
    prescribes it (agent-anti-patterns D1).
 2. **Bounded files.** `files` lists everything the worker may write;
-   `read_first` what it must read. Cross-cell file overlap is legal, not a
+   `read_first` what it must read, citing paths from CONTEXT.md's
+   `## Read set` first. Cross-cell file overlap is legal, not a
    scoping error — it only costs a wave (auto-serialized); prefer explicit
    paths or trailing-`*` patterns, since overlap detection treats mid-path
    globs as literals.
