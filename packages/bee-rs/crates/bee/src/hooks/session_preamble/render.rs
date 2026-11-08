@@ -216,21 +216,6 @@ pub fn handoff_block_lines(handoff: &Value, outcome: Option<&HandoffOutcome>) ->
     lines
 }
 
-/// A work item's one canonical location — the same path the retired advice
-/// line below named — read as ONE candidate file, never a bundle walk: the
-/// cheaper reading `rank_critical_rows` (budget.rs) already takes for the
-/// same reason (kl-4 deliberately avoided the 1.24 MB collect_concepts cost
-/// just to answer a yes/no). A missing or unparsed candidate reads as an
-/// empty-data row — resolve_anchor's WorkItem arm simply will not match it,
-/// the same "unreadable file, keep the row" direction collect_concepts
-/// itself takes.
-fn work_item_candidate(root: &Path, feature: &str) -> Vec<Concept> {
-    let rel = format!("work/{feature}/work-item.md");
-    let path = join_rel(&bundle_dir(root), &rel);
-    let data = read_file_lossy(&path).and_then(|text| parse_frontmatter(&text)).unwrap_or_default();
-    vec![Concept { path: rel, data }]
-}
-
 impl crate::verbs::knowledge::ConceptLike for Concept {
     fn concept_path(&self) -> &str {
         &self.path
@@ -257,7 +242,7 @@ pub(crate) fn knowledge_context_lines(root: &Path, record: &JMap) -> Vec<String>
     if feature.is_empty() || is_no_work_phase(record) {
         return Vec::new();
     }
-    let candidates = work_item_candidate(root, &feature);
+    let candidates: Vec<Concept> = Vec::new();
     let Some(anchor) = crate::verbs::knowledge::resolve_anchor(&candidates, root, &feature) else {
         return Vec::new();
     };
@@ -277,9 +262,46 @@ pub(crate) fn knowledge_context_lines(root: &Path, record: &JMap) -> Vec<String>
 
 /// inject.mjs projectMapLines (D5/D10 + okf-integration-close-f4 D2).
 pub(crate) fn project_map_lines(root: &Path, bundle: bool) -> Vec<String> {
+    project_map_lines_within(root, bundle, FRESHNESS_BUDGET)
+}
+
+const FRESHNESS_BUDGET: std::time::Duration = std::time::Duration::from_millis(500);
+
+const FRESHNESS_PULL: &str = "bee knowledge check";
+
+fn freshness_map_line(root: &Path, budget: std::time::Duration) -> Option<String> {
+    let root = root.to_path_buf();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let areas: Vec<(String, JMap)> = collect_concepts(&root)
+            .into_iter()
+            .filter(|c| c.path.starts_with("areas/") && !c.data.is_empty())
+            .map(|c| (c.path, c.data.get("bee").and_then(Value::as_object).cloned().unwrap_or_default()))
+            .collect();
+        let counts = (!areas.is_empty()).then(|| {
+            let refs: Vec<(&str, &JMap)> = areas.iter().map(|(rel, bee)| (rel.as_str(), bee)).collect();
+            let graded: Vec<(String, crate::verbs::knowledge::Grade)> =
+                crate::verbs::knowledge::grade_bundle(&resolve_product_root(&root), &refs).into_iter().collect();
+            crate::verbs::knowledge::freshness_counts(&graded)
+        });
+        let _ = tx.send(counts);
+    });
+    match rx.recv_timeout(budget) {
+        Ok(None) => None,
+        Ok(Some([confirmed, suspect, orphan, unverified])) => Some(format!(
+            "- knowledge: {confirmed} confirmed, {suspect} suspect, {orphan} orphan, {unverified} unverified — suspect first: {FRESHNESS_PULL}"
+        )),
+        Err(_) => Some(format!("- knowledge: freshness skipped (slow) — {FRESHNESS_PULL}")),
+    }
+}
+
+pub(crate) fn project_map_lines_within(root: &Path, bundle: bool, budget: std::time::Duration) -> Vec<String> {
     let mut lines = vec!["### Project map".to_string()];
     let body = if bundle { bundle_project_map_lines(root) } else { spec_project_map_lines(root) };
     lines.extend(body);
+    if bundle {
+        lines.extend(freshness_map_line(root, budget));
+    }
     if let Some(backlog) = read_backlog_counts(root) {
         lines.push(format!(
             "- PBI: {} done / {} in-flight / {} proposed",

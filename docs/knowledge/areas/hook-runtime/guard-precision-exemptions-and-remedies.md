@@ -11,6 +11,9 @@ bee:
   decisions: ["write-guard-precision D1 (guard precision over blanket strictness, 2026-08-11)", "herding-executor D8 (the worker mailbox is exempt from the scratch-shape deny, 2026-08-19)"]
   sources: ["write-guard-precision cell wgp-1 (trace .bee/cells/archive/write-guard-precision/wgp-1.json, commit 23ad32e, worker suite 1529 passed / 7 ignored, 2026-08-11)", "write-guard-precision cell wgp-2 (trace .bee/cells/archive/write-guard-precision/wgp-2.json, commit fbcc40d7, worker suite 1422 passed, 2026-08-11)", docs/history/write-guard-precision/plan.md]
   authoritative_for: "hook-runtime: write-guard code-extension exemptions, the idle-gate git safe-form table, and the worker-count-unresolved remedy"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs]
+  verified_at: 2026-08-20
+  verified_commit: 5913779423c790578a647a5eb329967606f250df
 ---
 
 # Hook Runtime — guard precision: code exemptions, the idle-gate git safe-form table, and a named worker-count remedy

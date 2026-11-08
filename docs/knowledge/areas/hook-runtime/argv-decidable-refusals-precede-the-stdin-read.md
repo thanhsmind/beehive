@@ -1,6 +1,6 @@
 ---
 type: bee.area
-title: "Hook Runtime — argv-decidable refusals run before the blocking stdin read"
+title: Hook Runtime — argv-decidable refusals run before the blocking stdin read
 description: "Why a hook's dispatch order refuses what argv alone can decide before it ever reads stdin: read_stdin_once has no timeout by design, so nothing argv-decidable may sit behind it."
 timestamp: 2026-08-30
 bee:
@@ -9,8 +9,11 @@ bee:
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
   decisions: []
-  sources: ["packages/bee-rs/crates/bee/src/hooks/mod.rs — try_native dispatch order"]
+  sources: [packages/bee-rs/crates/bee/src/hooks/mod.rs — try_native dispatch order]
   authoritative_for: "hook-runtime: the fixed order between argv-decidable refusals and the stdin read"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/mod.rs]
+  verified_at: 2026-08-31
+  verified_commit: 9ac7eead709bd5b918cdb7ef3db662e7f0f1fca3
 ---
 
 # Hook Runtime — argv-decidable refusals run before the blocking stdin read

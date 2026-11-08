@@ -9,9 +9,12 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [areas/rust-runtime/overview.md]
-  decisions: ["pi-slp-next-ops D1-D4 (orient reads the session record; one runnable next operation; the per-turn run line; no open-your-session text)", harness-refocus-P2, 412e9b3a, harness-refocus-P4]
+  decisions: [pi-slp-next-ops D1-D4 (orient reads the session record; one runnable next operation; the per-turn run line; no open-your-session text), harness-refocus-P2, 412e9b3a, harness-refocus-P4]
   sources: [docs/specs/porcelain.md, docs/handbook/register.md, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
   authoritative_for: "rust-runtime: the porcelain/plumbing command surface and the teach-at-point-of-contact contract"
+  anchors: [packages/bee-rs/crates/bee/src/router.rs]
+  verified_at: 2026-11-06
+  verified_commit: b30737f041dfd4377537b84003d1977c8d1be0fd
 ---
 
 # Compiled runtime — the command surface

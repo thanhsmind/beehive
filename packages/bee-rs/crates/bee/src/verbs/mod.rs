@@ -182,11 +182,18 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 pub(crate) fn record_timing(root: &Path, cmd: &str, t0: Instant, ok: bool) {
     let ms = t0.elapsed().as_millis() as u64;
     let ts = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-    let _ = append_jsonl(
-        &root.join(".bee").join("logs").join("timings.jsonl"),
-        &json!({"ts": ts, "cmd": cmd, "ms": ms, "ok": ok}),
-    );
+    let session = state_group::store::env_nonempty("BEE_SESSION_ID");
+    let row = timing_row(root, cmd, ms, ok, &ts, session.as_deref());
+    let _ = append_jsonl(&root.join(".bee").join("logs").join("timings.jsonl"), &row);
     eprintln!("[bee] {cmd} {ms}ms");
+}
+
+pub(crate) fn timing_feature(root: &Path, session_id: Option<&str>) -> Option<String> {
+    state_group::store::session_binding(Some(session_id?), root).ok()?.1
+}
+
+pub(crate) fn timing_row(root: &Path, cmd: &str, ms: u64, ok: bool, ts: &str, session_id: Option<&str>) -> serde_json::Value {
+    json!({"ts": ts, "cmd": cmd, "ms": ms, "ok": ok, "feature": timing_feature(root, session_id)})
 }
 
 /// CUTOVER: the shared emission for every `Roots::Unsupported` arm. There is

@@ -11,6 +11,9 @@ bee:
   decisions: [D 62a7c7fd]
   sources: [docs/history/perf-log/CONTEXT.md, docs/history/perf-log/plan.md, "cells perf-log-1, perf-log-2, perf-log-3 (capped, verified)", "docs/specs/performance-log.md#R11", "docs/specs/performance-log.md#P7"]
   authoritative_for: "performance-log: cross-project matrix"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Performance Log — Cross-Project Matrix

@@ -11,6 +11,9 @@ bee:
   decisions: [3fbe2f79 state-query-surface A -- internals-reach guard blocks inline-eval only never file-based node <path>.mjs runs]
   sources: [state-query-surface feature close 2026-07-24, packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs has_node_inline_eval internals-reach guard branch (rust-port equivalent of the retired .bee/bin/hooks/bee-write-guard.mjs)]
   authoritative_for: "hook-runtime: internals-reach bash guard"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Hook Runtime — The Internals-Reach Bash Guard

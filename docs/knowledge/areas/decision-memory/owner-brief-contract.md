@@ -11,6 +11,9 @@ bee:
   decisions: [owner-brief D1 35853825 (contract), "owner-brief D2-D14 of docs/history/owner-brief/CONTEXT.md (forbidden content, language, the add door, live and active, folding, the check, the doctor note, the ledger, Lock and deferral, examples, the out-of-scope digest, where brief files live)"]
   sources: [docs/history/owner-brief/CONTEXT.md, docs/history/owner-brief/spec.md, docs/briefs/owner-brief.md]
   authoritative_for: "decision-memory: the owner brief contract"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/brief.rs, packages/bee-rs/crates/bee/src/verbs/backlog.rs, packages/bee-rs/crates/bee/src/doctor.rs, skills/bee-shaping/SKILL.md, skills/bee-planning/SKILL.md, skills/bee-capturing/SKILL.md]
+  verified_at: 2026-10-28
+  verified_commit: 8a2420dd6c96e53ae68f3cf57ceea28508305c64
 ---
 
 # Decision Memory — The Owner Brief Contract

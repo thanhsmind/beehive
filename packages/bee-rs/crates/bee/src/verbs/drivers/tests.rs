@@ -3168,7 +3168,7 @@ use std::time::Instant;
             "the worktree's own bundle must produce a real learned-context block: {prompt}"
         );
         assert!(
-            prompt.contains("- docs/knowledge/work/demo/work-item.md — Demo work item"),
+            prompt.contains("- docs/knowledge/tasks/demo/work-item.md — Demo work item"),
             "{prompt}"
         );
         assert!(
@@ -3201,15 +3201,15 @@ use std::time::Instant;
         assert_eq!(
             learned_context_lines(&root, &json!({"id": "c-2", "feature": "demo", "lane": "small"})).unwrap(),
             vec![
-                "- docs/knowledge/work/demo/work-item.md — Demo work item",
-                "- docs/knowledge/work/demo/plan.md — Demo plan",
+                "- docs/knowledge/tasks/demo/work-item.md — Demo work item",
+                "- docs/knowledge/tasks/demo/plan.md — Demo plan",
                 "- docs/knowledge/patterns/dispatch-prompt.md — Dispatch prompt assembly",
                 "- docs/knowledge/patterns/unrelated.md — Unrelated pattern",
                 "- docs/knowledge/areas/dispatch.md — Dispatch decision",
             ]
         );
         assert!(
-            prompt.contains("- docs/knowledge/work/demo/work-item.md — Demo work item"),
+            prompt.contains("- docs/knowledge/tasks/demo/work-item.md — Demo work item"),
             "{prompt}"
         );
     }
@@ -4707,9 +4707,9 @@ exit 0
     /// below quotes its exact byte sizes.
     fn bundle_fixture(root: &Path) {
         w(root, "docs/knowledge/index.md", "# Knowledge\n\n## Critical patterns\n\n- none yet\n");
-        w(root, "docs/knowledge/work/demo/work-item.md",
+        w(root, "docs/knowledge/tasks/demo/work-item.md",
           "---\ntype: bee.work-item\ntitle: Demo work item\ndescription: port the dispatch driver to rust\nbee:\n  id: demo\n  lifecycle: active\n  areas: [dispatch]\n  decisions: [d-1]\n---\n\nThe demo work item body mentions dispatch prompts and rust.\n");
-        w(root, "docs/knowledge/work/demo/plan.md",
+        w(root, "docs/knowledge/tasks/demo/plan.md",
           "---\ntype: bee.plan\ntitle: Demo plan\ndescription: the plan for demo\nbee:\n  id: demo-plan\n  lifecycle: active\n---\n\nPlan body.\n");
         w(root, "docs/knowledge/patterns/dispatch-prompt.md",
           "---\ntype: bee.pattern\ntitle: Dispatch prompt assembly\ndescription: how dispatch prompts are assembled\nbee:\n  id: p-dispatch\n  lifecycle: active\n  critical: true\n  areas: [dispatch]\n---\n\nDispatch prompts are assembled from templates and machine blocks.\n");
@@ -4745,8 +4745,8 @@ exit 0
         assert_eq!(
             learned_context_lines(&root, &cell).unwrap(),
             vec![
-                "- docs/knowledge/work/demo/work-item.md — Demo work item",
-                "- docs/knowledge/work/demo/plan.md — Demo plan",
+                "- docs/knowledge/tasks/demo/work-item.md — Demo work item",
+                "- docs/knowledge/tasks/demo/plan.md — Demo plan",
                 "- docs/knowledge/patterns/dispatch-prompt.md — Dispatch prompt assembly",
                 "- docs/knowledge/patterns/unrelated.md — Unrelated pattern",
                 "- docs/knowledge/areas/dispatch.md — Dispatch decision",
@@ -4756,7 +4756,7 @@ exit 0
         // and backslashes / "./" prefixes normalize first.
         let cell = json!({
             "id": "c-1", "feature": "demo",
-            "read_first": ["docs\\knowledge\\work\\demo\\work-item.md", "./docs/knowledge/areas/dispatch.md"]
+            "read_first": ["docs\\knowledge\\tasks\\demo\\work-item.md", "./docs/knowledge/areas/dispatch.md"]
         });
         let lines = learned_context_lines(&root, &cell).unwrap();
         assert!(!lines.iter().any(|l| l.contains("work-item.md")));
@@ -4798,7 +4798,7 @@ exit 0
         );
         // A normal path is byte-identical to before the fix — one_line is a
         // no-op on text with no whitespace to collapse.
-        assert!(lines.contains(&"- docs/knowledge/work/demo/work-item.md — Demo work item".to_string()));
+        assert!(lines.contains(&"- docs/knowledge/tasks/demo/work-item.md — Demo work item".to_string()));
     }
 
     #[test]
@@ -5132,7 +5132,7 @@ exit 0
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
         let proposals = std::fs::read_to_string(root.join("docs/history/demo/promote-proposals.md")).unwrap();
-        assert!(proposals.contains("(a) DELIVERY DRAFT"));
+        assert!(!proposals.contains("DELIVERY"));
         assert!(proposals.contains("(b) AREA UPDATES"));
         assert!(proposals.contains("(c) PATTERN CANDIDATES"));
         // D38/D5 still hold: promote proposes, close never writes under
@@ -5956,7 +5956,7 @@ exit 0
         w(root, "docs/history/demo/plan.md", "# Demo plan\n");
         w(
             root,
-            "docs/knowledge/work/demo/delivery.md",
+            "docs/knowledge/tasks/demo/delivery.md",
             "---\ntype: bee.delivery\ntitle: Demo delivery\ndescription: d\nbee:\n  id: demo-delivery\n  lifecycle: active\n  required_context: [docs/history/demo/CONTEXT.md, docs/history/demo/plan.md]\n---\nbody\n",
         );
         let dir = crate::verbs::knowledge::bundle_dir(root).unwrap();
@@ -12752,8 +12752,8 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert_eq!(
             record["learned_context"],
             json!([
-                "docs/knowledge/work/demo/work-item.md",
-                "docs/knowledge/work/demo/plan.md",
+                "docs/knowledge/tasks/demo/work-item.md",
+                "docs/knowledge/tasks/demo/plan.md",
                 "docs/knowledge/patterns/dispatch-prompt.md",
                 "docs/knowledge/patterns/unrelated.md",
                 "docs/knowledge/areas/dispatch.md",

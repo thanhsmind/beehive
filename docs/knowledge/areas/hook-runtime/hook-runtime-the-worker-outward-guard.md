@@ -8,8 +8,11 @@ bee:
   id: hook-runtime-hook-runtime-the-worker-outward-guard
   lifecycle: active
   areas: [hook-runtime]
-  decisions: ["worker-outward-guard D1-D11", "paseo-pi-hardening D5 be1699f8", "paseo-pi-hardening D9 e2af1dab", "contract:worker-guard 9659395e"]
+  decisions: [worker-outward-guard D1-D11, paseo-pi-hardening D5 be1699f8, paseo-pi-hardening D9 e2af1dab, "contract:worker-guard 9659395e"]
   sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md]
+  anchors: [.pi/extensions/bee-guard/events.ts, .pi/extensions/bee-guard/index.ts, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, packages/bee-rs/crates/bee/src/hooks/worker_guard.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs]
+  verified_at: 2026-10-06
+  verified_commit: 72ddcb2e9aba91116cd6fa59f03645d05b773b78
 ---
 
 ## Purpose

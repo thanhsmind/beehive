@@ -11,6 +11,9 @@ bee:
   decisions: [089905ba (compaction-hardening D19 — the hook keeps owning the anchor; the capsule is the preamble replacement only), "compaction-hardening D6 (the capsule's fixed twelve-item order)", compaction-hardening D8 (every other start keeps the full startup preamble byte-identical), compaction-hardening D9 (the compaction-survival advisory), "compaction-hardening D12, D13 (the integrity sweep reports and never mutates)", 2056a7ca (compaction-hardening D27 — the adoption-refused explanation is a call-site contract)]
   sources: ["compaction-hardening cells cz-3, cz-4, cz-5, cz-6 (the compaction module, its verbs, the capsule builder and its golden, the SessionStart wiring; traces in `.bee/cells/`, 2026-07-23)", "docs/history/compaction-hardening/CONTEXT.md D6, D8, D9, D12, D13, D19, D26, D27"]
   authoritative_for: "hook-runtime: post-compaction orientation and the compact capsule"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/compaction.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs, packages/bee-rs/crates/bee/tests/hook_contracts.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Hook Runtime — Post-Compaction Orientation and the Compact Capsule

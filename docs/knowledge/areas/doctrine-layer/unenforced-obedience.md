@@ -11,6 +11,9 @@ bee:
   decisions: [c2c46488 (an unblocked write is not an approved write), 1689af1b (silent bookkeeping), 4439bd7e (purpose-first narration + intent-carrying dispatch descriptions), tick-contract-inline T6 (a green reachability check is not evidence of obedience; nothing observes agent chat output), "guard-hardening E5 + E1/E2/E3 (docs/history/guard-hardening/CONTEXT.md, 2026-08-04 — the markdown-only set is recorded by necessity; three formerly prose-only rules moved to enforcement)"]
   sources: ["terminal-phase-gate (cell tpg-2, 2026-07-13)", "docs/specs/doctrine-layer.md#B5", "docs/specs/doctrine-layer.md#R6", "docs/specs/doctrine-layer.md#R7", "docs/specs/doctrine-layer.md#R8", "docs/specs/doctrine-layer.md#E3", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)", "guard-hardening (cell gh-3, docs/history/guard-hardening/CONTEXT.md, 2026-08-04)"]
   authoritative_for: "doctrine-layer: unenforced obedience and the human boundary"
+  anchors: [.claude/settings.json]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Doctrine Layer — Unenforced Obedience and the Human Boundary

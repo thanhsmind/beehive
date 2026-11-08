@@ -1,6 +1,6 @@
 ---
 type: bee.area
-title: Hook Runtime — the Pi version the belt runs on, and the 0.84.3 to 1.4.0 capability audits
+title: "Hook Runtime — the Pi version the belt runs on, and the 0.84.3 to 1.4.0 capability audits"
 description: "Which Pi version bee's extension belt was enumerated against, why the belt's true floor is 0.84.4 rather than the 0.84.3 it claims, which Pi surfaces an upgrade can break, and the keep/adapt/delete disposition for every extension-API change between 0.84.3 and 1.4.0."
 timestamp: 2026-10-27
 bee:
@@ -11,6 +11,9 @@ bee:
   decisions: [pi-stage-dispatch D9 (version labels read 0.84-0.85), pi-beehive D5 / store 5d87f14e (pi means the pi binary only), pi-1-0-upgrade D1 (ceiling moves on live evidence), D2 (codemode and tool_search pass by name), D3 (systemPrompt carrier kept), D4 and D10 (backlog rows), pi-1-4-capability-audit D1 (custom runs inject nothing), D2 (ceiling moves to 1.4.0 on live evidence), D3 (the 1.0.0 to 1.4.0 delta)]
   sources: [.pi/extensions/bee-guard/ (entry index.ts), packages/bee-rs/crates/bee/src/doctor.rs, .bee/verify/verify-app/features/pi-hat-wave.md, pi 0.84.3, 0.85.1, 1.0.0 and 1.4.0 shipped docs and the 1.4.0 CHANGELOG under the mise install root]
   authoritative_for: "hook-runtime: the Pi version floor, the Pi upgrade re-probe list, and the per-version Pi capability audit"
+  anchors: [.pi/extensions/bee-guard/, packages/bee-rs/crates/bee/src/doctor.rs, .agents/skills/, scripts/codex-parity-canary.sh]
+  verified_at: 2026-11-07
+  verified_commit: 5e715b42536c2fb2acd1d3b1e08d77452a9ee402
 ---
 
 # Hook Runtime — The Pi Version the Belt Runs On, and the 0.84.3 to 1.4.0 Capability Audits
@@ -210,7 +213,7 @@ Nothing in the range earns `delete`.
   Pi docs or binary were read unchanged"): they are true statements about what
   was read. The range is a decision, tagged `contract:pi-version-range`.
 - **A delivery record claims a label change that did not reach every copy.**
-  `docs/knowledge/work/pi-stage-dispatch/delivery.md:43` cites "the absence of
+  `docs/history/knowledge-work/pi-stage-dispatch/delivery.md:43` cites "the absence of
   the old Pi 0.84.x label". The label remains in `.pi/extensions/bee-guard/`
   (`index.ts` and `tool-map.ts`),
   `docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md:336`,

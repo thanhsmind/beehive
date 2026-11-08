@@ -215,11 +215,16 @@ included: add guidance beside those words, never over them.
    product question only the human can answer parks your cell, never the
    lane: `bee cells park --id <cell> --question "<question>"`, then return
    `[PARKED]`.
-4. Before the commit, revert any edit the proof did not need. Commit
+4. Before the commit, run `bee knowledge check --json`. For every
+   suspect concept anchored by a file you changed, fix the concept or run
+   `bee knowledge confirm --id <id>`, then reserve the concept file and
+   commit it with the cell — the cap door refuses otherwise (grade rule:
+   `docs/history/knowledge-freshness-mechanic/CONTEXT.md` D4).
+5. Revert any edit the proof did not need. Commit
    once: subject describes the change in imperative mood; the last line of
    the body is the literal trailer `cell: <id>` — a bare id alone fails
    the cap.
-5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>
+6. `bee finish --id <cell> --outcome "<one line>" --files <a,b>
    --report '<json>'` — cap and release in one verb, `--report` REQUIRED
    and carrying the Result form you return
    (`references/swarming-reference.md`, "Result Formats"). Its `tests`
@@ -233,7 +238,7 @@ included: add guidance beside those words, never over them.
    check that recorded proof at the boundary; they run nothing
    themselves. CI runs the full declared command on every push — the
    one deterministic net.
-6. Return exactly one token, first thing in your final message, and the
+7. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
    diagnosis) · `[HANDOFF]` (the 150k-token or 65% handoff — handoff file

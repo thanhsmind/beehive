@@ -11,6 +11,9 @@ bee:
   decisions: ["codex-native-transport D3-D5 (3ceba8f5, D3a c0cba64e, Δ2-amended 760e9b05)", "350f1e82 (codex-native-transport cnt-4 rescope — override-field route-check deferred to a documented pass-through-open gap, pending observed evidence)"]
   sources: ["codex-native-transport cells cnt-2/cnt-3 (capability classification + probe record + doctor unlock naming; dispatch-guard marker extension; traces in .bee/cells/, reports docs/history/codex-native-transport/reports/, 2026-07-19)", "codex-native-transport cells cnt-4/cnt-5 (override-field route-check rescoped to a documented pass-through-open gap pending observed evidence; capability probe's live leg with isolation independently verified and a cross-build regression observed; traces in .bee/cells/, reports docs/history/codex-native-transport/reports/cnt-4.md and reports/probe-evidence.md, 2026-07-19)", "docs/specs/hook-runtime.md#B19", "docs/specs/hook-runtime.md#R18", "docs/specs/hook-runtime.md#E15", "docs/specs/hook-runtime.md#E16", "docs/specs/hook-runtime.md#P14", "docs/specs/hook-runtime.md#P15", "docs/specs/hook-runtime.md#P16"]
   authoritative_for: "hook-runtime: native spawn override pass-through and native-transport classification"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/doctor.rs, scripts/codex-parity-canary.sh]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Hook Runtime — the native spawn checkpoint and transport classification

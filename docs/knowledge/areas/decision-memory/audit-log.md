@@ -9,8 +9,11 @@ bee:
   areas: [decision-memory]
   required_context: [areas/decision-memory/overview.md]
   decisions: ["knowledge-first-lean-decisions D3, D4, D5, D6 (docs/history/knowledge-first-lean-decisions/plan.md, 2026-11-07)"]
-  sources: ["knowledge-first-lean-decisions cells kbc-2, kbc-3, kbc-4 (traces in .bee/cells/, 2026-11-07)", "packages/bee-rs/crates/bee/src/audit.rs", "packages/bee-rs/crates/bee/src/verbs/audit.rs", "packages/bee/LEADER.md (§ Capture what settles)"]
+  sources: ["knowledge-first-lean-decisions cells kbc-2, kbc-3, kbc-4 (traces in .bee/cells/, 2026-11-07)", packages/bee-rs/crates/bee/src/audit.rs, packages/bee-rs/crates/bee/src/verbs/audit.rs, packages/bee/LEADER.md (§ Capture what settles)]
   authoritative_for: "decision-memory: what belongs in the audit log and what stays a decision"
+  anchors: [packages/bee/LEADER.md]
+  verified_at: 2026-11-07
+  verified_commit: f8b881980b5525db18d7810bcd7dea239ede692f
 ---
 
 # Decision Memory — the audit log for bookkeeping

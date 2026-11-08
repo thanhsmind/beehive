@@ -11,6 +11,9 @@ bee:
   decisions: ["pi-slp-operations D3 (amended aa4db1c5: a containment deny names a writable path, never an act an agent cannot do)", "worktree-first (docs/specs/worktree-first.md, 2026-07-31, owner-approved)", "worktree-session-routing D9 (the routing rule is prose, not a hook)", D9a (a live cross-session heartbeat plus a non-idle phase in the shared store), "cross-worktree-holds D7 (lane-first: the grant is taken at Gate 2's execution component — the old standalone execution gate, folded in by validation-diet D2 — and only on genuine file overlap; superseded by worktree-first)", "worktree-ux (2026-07-21, GH #30/#31 — the ungranted-worktree notice and the containment-deny message)"]
   sources: [docs/specs/worktree-first.md, docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-routing-rule-d9-prose-not-a-hook"]
   authoritative_for: "worktree-parallelism: the worktree-first routing rule, its exemptions, and worktree visibility notices"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Worktree Parallelism — Routing and Visibility

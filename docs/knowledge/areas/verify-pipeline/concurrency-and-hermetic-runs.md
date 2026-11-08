@@ -11,6 +11,9 @@ bee:
   decisions: [verify-parallel-runner, F4-D9]
   sources: ["contention-split cells cs-1/cs-2a/cs-2b/cs-3/cs-4 (locked tmp-swap render; traces in .bee/cells/, 2026-07-20)", "verify-parallel-runner (parallel pool, 2026-07-20, commit 6caceb4)", "hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — session-id env scrubbing at both runner and bootstrap for hermetic local/CI parity; deterministic fs-barrier claim-race negative control, 10/10 both env modes; chmod-based write-failure simulations skip loudly under root; nested-clone isolation regression pins root resolution off the parent repo's git config)", "docs/specs/verify-pipeline.md#R4", "docs/specs/verify-pipeline.md#R5", "docs/specs/verify-pipeline.md#E2", "docs/specs/verify-pipeline.md#E3", "docs/specs/verify-pipeline.md#E4", "docs/specs/verify-pipeline.md#P5", "okf-integration-close-f4 cell f4-4 (the third identity variable — the agent-name prefix bee's own swarm rule mandates was manufacturing a false red in the coordination guards; trace in `.bee/cells/`, 2026-07-22)"]
   authoritative_for: "verify-pipeline: concurrency safety and hermetic runs"
+  anchors: [packages/bee-rs/crates/bee/tests/concurrency.rs, scripts/tests/, packages/bee-rs/crates/bee/src/devtools/skill_trees.rs]
+  verified_at: 2026-08-16
+  verified_commit: f87664cb054c489b8d5ad30139649540374a1fbc
 ---
 
 # Verify Pipeline — Concurrency Safety and Hermetic Runs

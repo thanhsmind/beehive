@@ -11,6 +11,9 @@ bee:
   decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3, "knowledge-loop D1/D5/D6/D7/D8 (one shared anchor resolver; a history CONTEXT.md/plan.md fallback when no work-item concept matches; zero_signal reported not thrown under it; the fallback reaches context, promote, kctx and dispatch prepare)", "07dce495 (capture-reads-proposals: review-then-merge a promote proposal, never apply it as written; the area tag and the code it describes are both verified first, and the scribing stamp is owed even when nothing is kept)", "knowledge-search D1-D7 (symptom pull verb `bee knowledge search`: decisions-search grammar, patterns+areas corpus only, read-only at any phase from any checkout, skill wiring at the two debug moments — docs/history/knowledge-search/CONTEXT.md)", "backlog-anchor D1 a98e27c2 (fourth, last anchor arm: a folded .bee/backlog.jsonl PBI row whose id or feature whole-matches the work — the exploring-time anchor, before CONTEXT.md exists)"]
   sources: ["knowledge-search cells ks-1 (`bee knowledge search` verb; commit 448287b7, 2026-08-10) and ks-2 (skill wiring; commit f693f20f, 2026-08-10)", CONTEXT.md `docs/history/knowledge-search/CONTEXT.md`, "okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)", "knowledge-loop cell kl-1 (anchor.rs + context.rs/kctx.rs fallback, D5/D6/D7/D8; commit 1b2a8253, 2026-08-05)", "knowledge-loop cell kl-2 (promote.rs consumes the resolver; dispatch-prepare manifest proof; commit e6f99a7a, 2026-08-05)", CONTEXT.md `docs/history/knowledge-loop/CONTEXT.md`, "capture-reads-proposals cell crp-1 (the capture doctrine names the proposal as the first input of a compounding run and the scribing stamp as its receipt; skills/bee-capturing/SKILL.md, 2026-08-06)", "backlog-anchor cell ba-1 (Anchor::Backlog fourth arm + kctx.rs parity; commit 6dda58db, 2026-08-11)", CONTEXT.md `docs/history/backlog-anchor/CONTEXT.md`]
   authoritative_for: "okf-profile: the context consumer, the promote proposer, and the session preamble"
+  anchors: [packages/bee-rs/crates/bee/tests/registry_contracts.rs, packages/, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs]
+  verified_at: 2026-11-07
+  verified_commit: 5e715b42536c2fb2acd1d3b1e08d77452a9ee402
 ---
 
 # Bee OKF Profile — The Context Consumer, the Promote Proposer, and the Session Preamble
@@ -25,7 +28,7 @@ rather than optional.
 **B9 — `context` and `promote` resolve their anchor through one shared resolver, and a work-item concept always wins (D1, D5, D6, D8).** Both verbs used to duplicate their own `--work` resolution — separately tagged `D27` in `context` and `D38` in `promote`, already drifted from each other — plus a third verbatim port copy in `drivers/kctx.rs`. All three now call one function, `resolve_anchor` in `verbs/knowledge/anchor.rs`:
 
 - A `bee.work-item` concept whose `bee.id` matches the given work argument ALWAYS wins (D5). An existing work item is never displaced by the fallback below, and the two work items that already resolve this way today keep resolving exactly as they did before this feature.
-- When no work-item concept matches, the anchor is the feature's own history directory: `docs/history/<id>/CONTEXT.md` and `docs/history/<id>/plan.md`, whichever of the two exist on disk — both together when both do (D1, D6). The resolver only reads; no work-item file is ever auto-created, and nothing under `docs/knowledge/work/` is created, moved, or deleted by either verb (D5).
+- When no work-item concept matches, the anchor is the feature's own history directory: `docs/history/<id>/CONTEXT.md` and `docs/history/<id>/plan.md`, whichever of the two exist on disk — both together when both do (D1, D6). The resolver only reads; no work-item file is ever auto-created, and nothing under `docs/history/knowledge-work/` is created, moved, or deleted by either verb (D5).
 - When no work-item concept matches and the feature has no history directory either, the anchor is the feature's most recent entry in the append-only ledger `.bee/logs/scribing-runs.jsonl`, with its meta and body built from the slug, the stamped area names, and the recorded `next_action` — all read from disk (decision 34ccf18d). This arm exists because lanes `small` and `tiny` deliberately produce no `docs/history/<slug>/` artifacts: a small-lane feature logs its scoping synthesis as a decision instead. Without it every small and tiny feature stays permanently unreachable. Everywhere past resolution the ledger arm behaves exactly like the history arm — `zero_signal` is reported rather than thrown, the anchor is the rank-1 manifest entry, and `areas_source` names the same stamp.
 - When no work-item, history, or ledger signal exists, the last arm is the feature's row in the product backlog `.bee/backlog.jsonl`: the folded PBI whose `id` or `feature` field whole-matches the given work, with meta from the row's title and body from its detail text (backlog-anchor D1 a98e27c2, cell ba-1, 2026-08-11). This arm exists because during exploring none of the other three artifacts exist yet — CONTEXT.md is what exploring produces — so the curated manifest could never fire at the moment initial context is most needed; the backlog row is the earliest artifact that names the work. It ranks last because it is the thinnest text, and past resolution it degrades exactly like the history and ledger arms: no tags, no areas, no decision overlap, `zero_signal` reported rather than thrown.
 - When none of the four exists, both verbs keep the refusal they always had: a typed `unknown_work` error, byte for byte, still carrying its historical `(D27)` tag in `context` and `(D38)` tag in `promote` — the resolver changed how the anchor is found, never the shape of "found nothing."
@@ -58,15 +61,14 @@ drift net.
 **B5 — `promote` proposes; it never writes (D38).** `bee knowledge promote --work <id>` resolves
 the work item by `bee.id` (the same resolution `context` performs — an unresolvable id exits 1 with
 a typed `unknown_work` error), then mines the **capped** cells of that feature from `.bee/cells/`
-and returns exactly three sections:
+and returns exactly two sections, labelled (b) and (c) — the delivery draft that was once section (a) is retired, and work-item records live under `docs/history/`:
 
 | Section | What it proposes | Where every line comes from |
 |---|---|---|
-| **(a) Delivery draft** | A complete `bee.delivery` concept **in canonical emitter form**, ready to be saved as the work item's `delivery.md` sibling: what shipped, how it was verified, every recorded deviation. Because it is emitted through `emitFrontmatter`, saving it produces zero `not_canonical` findings. | Each cell's `trace.outcome`, `verify` command and `trace.verification_evidence`; the work item's own title, tags, `bee.decisions`, `bee.areas`, `bee.lane`. |
 | **(b) Area updates** | For each area named in the work item's `bee.areas`, the capped **`behavior_change`** cells whose `files_changed` touch that area's subject — its concepts' own paths and their `bee.sources` — as candidate spec-sync bullets, each citing its cell id. | `trace.files_changed` matched against bundle concept paths and `bee.sources`. |
 | **(c) Pattern candidates** | Every capped cell whose trace carries a **deviation** or a **failure signature**, shaped as a candidate `bee.pattern` concept with `bee.polarity: pitfall` and `bee.lifecycle: draft`, quoting the trace verbatim. A clean cell yields nothing. | `trace.deviations`, `trace.attempts[].failure_signature`, `trace.semantic_judge[].failure_signature`. |
 
-The `--json` payload is `{work, work_item, cells, delivery, area_updates, pattern_candidates,
+The `--json` payload is `{work, work_item, cells, area_updates, pattern_candidates,
 writes}`, and **`writes` is always `[]`** — the machine-readable form of the contract.
 A proposal review is finished only when `bee state scribing-run --feature <f>`
 stamps the feature: the unapplied-proposal counter reads that stamp, never a
@@ -78,9 +80,8 @@ from phase idle for the feature the default record does track (0e35c469). There 
 touches `.bee/*.json(l)`, and never touches anything else. Deciding to save a proposal — and
 editing it into curated prose first — is a human or agent decision.
 
-Under a history anchor (B9), the proposed delivery save path in section (a) is still the canonical
-`docs/knowledge/work/<id>/delivery.md` — the draft names where a human or agent would save it, never
-where `promote` itself writes. `writes` stays `[]` on every anchor kind, always: D38 is unchanged by
+Under a history anchor (B9), `promote` still proposes only area bullets and pattern candidates and names no
+delivery record to save. `writes` stays `[]` on every anchor kind, always: D38 is unchanged by
 the fallback. An empty `bee.areas` list (no work-item concept means none to read) keeps the existing
 "None: the work item declares no bee.areas…" render for section (b).
 
@@ -205,7 +206,7 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
 ## Business Rules
 
 - **`promote` proposes; it never writes (D38).** Finished work is allowed to *suggest* knowledge —
-  a delivery draft, area bullets, pitfall candidates — and is never allowed to *commit* it. No
+  area bullets and pattern candidates — and is never allowed to *commit* it. No
   section `promote` emits is written to disk by `promote`; accepting one is a human or agent
   decision, and `writes: []` in the payload states that in machine-readable form. The reason is the
   same one behind D10's never-invent rule: a proposal that writes itself into the bundle arrives
@@ -216,7 +217,7 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
 - **A work-item concept always outranks the history fallback, and the fallback never authors a
   file (D1, D5, D6).** `resolve_anchor` (B9) picks a matching `bee.work-item` concept first, every
   time; only its absence opens the `docs/history/<id>/CONTEXT.md` / `plan.md` fallback, and reading
-  those files never creates, moves, or deletes anything under `docs/knowledge/work/`. `unknown_work`
+  those files never creates, moves, or deletes anything under `docs/history/knowledge-work/`. `unknown_work`
   survives, byte for byte, when neither anchor exists.
 
 - **`promote` reaches retired cells, and takes its areas from the scribing ledger when the work

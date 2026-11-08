@@ -9675,6 +9675,250 @@ use std::time::Instant;
         );
     }
 
+    const SDD_CONCEPT: &str = "docs/knowledge/areas/demo/concept.md";
+
+    fn sdd_head(cwd: &Path) -> String {
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(cwd)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn sdd_commit(cwd: &Path, paths: &[&str], subject: &str, trailer: &str) {
+        let mut add = vec!["add", "--"];
+        add.extend_from_slice(paths);
+        git_ok(cwd, &add);
+        git_ok(cwd, &["commit", "-q", "-m", &format!("{subject}\n\ncell: {trailer}")]);
+    }
+
+    fn sdd_write_concept(cwd: &Path, anchors: &str, verified: Option<&str>) {
+        let path = cwd.join(SDD_CONCEPT);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let stamp = verified
+            .map(|sha| format!("  verified_commit: {sha}\n  verified_at: 2026-11-01\n"))
+            .unwrap_or_default();
+        std::fs::write(
+            path,
+            format!(
+                "---\ntype: bee.area\ntitle: demo concept\ntags: []\nbee:\n  id: demo-concept\n  areas: [demo]\n  anchors: [{anchors}]\n{stamp}---\nDemo concept.\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    fn sdd_git_init(cwd: &Path) {
+        std::fs::create_dir_all(cwd.join("src")).unwrap();
+        std::fs::write(cwd.join("src/a.rs"), "a0\n").unwrap();
+        std::fs::write(cwd.join("src/b.rs"), "b0\n").unwrap();
+        git_ok(cwd, &["init", "-q", "-b", "main", "."]);
+        git_ok(cwd, &["config", "user.email", "a@b.c"]);
+        git_ok(cwd, &["config", "user.name", "t"]);
+        sdd_commit(cwd, &["src/a.rs", "src/b.rs"], "base", "base");
+    }
+
+    fn sdd_bundle_repo(cwd: &Path, anchors: &str, stamped: bool) {
+        sdd_git_init(cwd);
+        let base = sdd_head(cwd);
+        sdd_write_concept(cwd, anchors, stamped.then_some(base.as_str()));
+        sdd_commit(cwd, &[SDD_CONCEPT], "concept", "concept");
+    }
+
+    fn sdd_touch(cwd: &Path, file: &str, extra: &[&str], id: &str) {
+        std::fs::write(cwd.join(file), "changed\n").unwrap();
+        let mut paths = vec![file];
+        paths.extend_from_slice(extra);
+        sdd_commit(cwd, &paths, "work", id);
+    }
+
+    fn sdd_cell(root: &Path, id: &str) {
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, id, &cell(id, "claimed", "f", json!([])));
+    }
+
+    #[test]
+    fn sync_door_refuses_a_suspect_concept_and_names_the_grade_and_the_confirm_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src/a.rs", true);
+        sdd_touch(root, "src/a.rs", &[], "sdd-1");
+        sdd_cell(root, "sdd-1");
+
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_sync("sdd-1", vec![], None), false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert!(refusal.contains("src/a.rs"), "must name the touched path: {refusal}");
+        assert!(refusal.contains("areas/demo/concept.md"), "must name the concept: {refusal}");
+        assert!(refusal.contains("(suspect)"), "must name the grade: {refusal}");
+        assert!(refusal.contains("bee knowledge confirm --id demo-concept"), "{refusal}");
+        assert!(refusal.contains("--sync-ack"), "{refusal}");
+        assert_eq!(
+            read_cell_norm(root, "sdd-1").unwrap().unwrap()["status"],
+            json!("claimed"),
+            "a refused cap writes nothing"
+        );
+    }
+
+    #[test]
+    fn sync_door_refuses_an_orphan_concept_with_the_anchors_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src/a.rs, src/gone.rs", true);
+        sdd_touch(root, "src/a.rs", &[], "sdd-2");
+        sdd_cell(root, "sdd-2");
+
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_sync("sdd-2", vec![], None), false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert!(refusal.contains("areas/demo/concept.md (orphan)"), "{refusal}");
+        assert!(refusal.contains("bee.anchors"), "must name the anchors remedy: {refusal}");
+        assert!(
+            !refusal.contains("knowledge confirm"),
+            "a confirm does not clear an orphan: {refusal}"
+        );
+    }
+
+    #[test]
+    fn sync_door_refuses_a_file_under_a_suspect_directory_anchor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src", true);
+        sdd_touch(root, "src/a.rs", &[], "sdd-10");
+        sdd_cell(root, "sdd-10");
+
+        let refusal = thrown(cap_cell_from_flags(root, &cap_flags_sync("sdd-10", vec![], None), false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert!(refusal.contains("src/a.rs"), "must name the touched path: {refusal}");
+        assert!(refusal.contains("areas/demo/concept.md (suspect)"), "{refusal}");
+        assert!(refusal.contains("bee knowledge confirm --id demo-concept"), "{refusal}");
+    }
+
+    #[test]
+    fn sync_door_passes_a_sibling_path_that_only_shares_the_directory_prefix_text() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src/a")).unwrap();
+        std::fs::write(root.join("src/a/x.rs"), "x0\n").unwrap();
+        std::fs::write(root.join("src/ab.rs"), "ab0\n").unwrap();
+        sdd_git_init(root);
+        sdd_commit(root, &["src/a/x.rs", "src/ab.rs"], "dirs", "dirs");
+        let base = sdd_head(root);
+        sdd_write_concept(root, "src/a, src/b.rs", Some(base.as_str()));
+        sdd_commit(root, &[SDD_CONCEPT], "concept", "concept");
+        sdd_touch(root, "src/b.rs", &[], "other");
+        sdd_touch(root, "src/ab.rs", &[], "sdd-11");
+        sdd_cell(root, "sdd-11");
+
+        let capped = cap_cell_from_flags(root, &cap_flags_sync("sdd-11", vec![], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn sync_door_passes_an_unverified_concept() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src/a.rs", false);
+        sdd_touch(root, "src/a.rs", &[], "sdd-3");
+        sdd_cell(root, "sdd-3");
+
+        let capped = cap_cell_from_flags(root, &cap_flags_sync("sdd-3", vec![], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn sync_door_passes_when_the_concept_file_is_in_the_touched_set() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src/a.rs", true);
+        sdd_touch(root, "src/a.rs", &[], "sdd-4");
+        sdd_cell(root, "sdd-4");
+
+        let flags = cap_flags_sync("sdd-4", vec![SDD_CONCEPT], None);
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn sync_door_passes_after_confirm_with_the_concept_committed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src/a.rs", true);
+        let head = sdd_head(root);
+        sdd_write_concept(root, "src/a.rs", Some(head.as_str()));
+        sdd_touch(root, "src/a.rs", &[SDD_CONCEPT], "sdd-5");
+        sdd_cell(root, "sdd-5");
+
+        let capped = cap_cell_from_flags(root, &cap_flags_sync("sdd-5", vec![], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn sync_door_passes_with_sync_ack_and_records_the_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src/a.rs", true);
+        sdd_touch(root, "src/a.rs", &[], "sdd-6");
+        sdd_cell(root, "sdd-6");
+
+        let flags = cap_flags_sync("sdd-6", vec![], Some("concept re-confirm deferred"));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["sync_ack"], json!("concept re-confirm deferred"));
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!(["sync-ack: concept re-confirm deferred"])
+        );
+    }
+
+    #[test]
+    fn sync_door_passes_a_touched_file_no_concept_anchors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_bundle_repo(root, "src/a.rs", true);
+        sdd_touch(root, "src/b.rs", &[], "sdd-7");
+        sdd_cell(root, "sdd-7");
+
+        let capped = cap_cell_from_flags(root, &cap_flags_sync("sdd-7", vec![], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn sync_door_caps_as_before_in_a_repo_without_a_bundle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        sdd_git_init(root);
+        sdd_touch(root, "src/a.rs", &[], "sdd-8");
+        sdd_cell(root, "sdd-8");
+
+        let capped = cap_cell_from_flags(root, &cap_flags_sync("sdd-8", vec![], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn sync_door_grades_the_worktree_bundle_not_mains() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            format!("{}\n", json!({ "feature": "f" })),
+        )
+        .unwrap();
+        git_ok(&granted, &["config", "user.email", "a@b.c"]);
+        git_ok(&granted, &["config", "user.name", "t"]);
+        std::fs::create_dir_all(granted.join("src")).unwrap();
+        std::fs::write(granted.join("src/a.rs"), "a0\n").unwrap();
+        sdd_commit(&granted, &["src/a.rs"], "base", "base");
+        let base = sdd_head(&granted);
+        sdd_write_concept(&granted, "src/a.rs", Some(base.as_str()));
+        sdd_commit(&granted, &[SDD_CONCEPT], "concept", "concept");
+        sdd_touch(&granted, "src/a.rs", &[], "sdd-9");
+        sdd_cell(&main, "sdd-9");
+        assert!(!main.join(SDD_CONCEPT).exists(), "main must hold no bundle");
+
+        let refusal = thrown(cap_cell_from_flags(&main, &cap_flags_sync("sdd-9", vec![], None), false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert!(refusal.contains("areas/demo/concept.md (suspect)"), "{refusal}");
+    }
+
     #[test]
     fn update_can_backfill_affects_skills_on_an_old_cell() {
         let tmp = tempfile::tempdir().unwrap();

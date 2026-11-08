@@ -11,6 +11,9 @@ bee:
   decisions: [de967733-00c8-48b3-b154-68397faf7b5f (cost pattern; advisor config tolerance; refines decision 0015; amended by advisor D1 — worker-level on-failure consult), "72f3d6dd (AO5 config is the authority — the adviser strength ladder was removed, cells ao-2b-1/ao-2b-2 2026-07-17)", advisor D1-D3 (docs/history/advisor/CONTEXT.md; logged 3a794918/6841bfcb/34514a8b)]
   sources: ["advisor cells adv-1..adv-3 (traces in .bee/cells/, reports docs/history/advisor/reports/, 2026-07-13)", "advisor-and-orchestration Slice 2B cells ao-2b-1/ao-2b-2 (AO5 adviser form — ladder and ceiling-skip removed, same-model no-op only, 2026-07-17)", "fanout-delegation D1 (cells fanout-1/fanout-4, 2026-07-12 — advisor config tolerance)", "docs/specs/workflow-state.md#B9", "docs/specs/workflow-state.md#R7", "docs/specs/workflow-state.md#R8", "docs/specs/workflow-state.md#R14", "docs/specs/workflow-state.md#R15", "docs/specs/workflow-state.md#R16", "docs/specs/workflow-state.md#R24", "docs/specs/workflow-state.md#E3", "docs/specs/workflow-state.md#E12", "docs/specs/workflow-state.md#E13", "docs/specs/workflow-state.md#P7", "docs/specs/workflow-state.md#P8", "docs/specs/workflow-state.md#P11"]
   authoritative_for: "workflow-state: the worker adviser consult loop, its budget, and adviser configuration tolerance"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, packages/bee-rs/crates/bee/src/state.rs, skills/bee-swarming/references/worker-details.md, skills/bee-swarming/SKILL.md, packages/bee-rs/crates/bee/src/main.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Workflow State — the worker's adviser consult, its budget, and the cost pattern behind it

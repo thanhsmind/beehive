@@ -1,6 +1,6 @@
 ---
 type: bee.area
-title: Doctrine Layer — model roles, fall-through, and escalation
+title: "Doctrine Layer — model roles, fall-through, and escalation"
 description: "How work says which model should run it: an open set of job-named roles resolved through one parser, an ordered fall-through that warns instead of failing, cost held apart as an explicit escalation flag, and an explicit-only retry chain that never fires on a semantic failure."
 timestamp: 2026-08-26
 bee:
@@ -9,8 +9,11 @@ bee:
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
   decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9, deploy-stage-execution D1, effort-at-the-door D2/D4/D4a/D5/D7/D10]
-  sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md", "role-slot-description cell rsd-1 (capture stub c1952702, flushed 2026-08-26)", "models-show-verb cells ms-1..ms-3 (capture stub feeed5df, flushed 2026-08-26)", "agent-model-unpin cells amu-1/amu-2 (capture stub 003a23fc, flushed 2026-08-26)"]
+  sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", docs/discovery/model-role-split/MAP.md, docs/history/research/oh-my-pi-model-roles-distill.md, docs/history/model-role-split/reports/review-r2.md, "role-slot-description cell rsd-1 (capture stub c1952702, flushed 2026-08-26)", "models-show-verb cells ms-1..ms-3 (capture stub feeed5df, flushed 2026-08-26)", "agent-model-unpin cells amu-1/amu-2 (capture stub 003a23fc, flushed 2026-08-26)"]
   authoritative_for: "doctrine-layer: how a unit of work selects the model that runs it"
+  anchors: [scripts/release.sh, packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/models_group.rs]
+  verified_at: 2026-11-05
+  verified_commit: faade44c5fc6bec9792b793a187351d097343935
 ---
 
 # Doctrine Layer — Model Roles, Fall-through, and Escalation

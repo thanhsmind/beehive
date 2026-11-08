@@ -11,6 +11,9 @@ bee:
   decisions: [G1, G2, G12, G13, F4-D4]
   sources: ["okf-integration-close-f4 cells f4-1..f4-6 (three hand audits found 7, then 2, then 6 instruction gaps with the chain green throughout; the gate ends the sequence; traces in `.bee/cells/`, 2026-07-22/23)", red evidence `docs/history/okf-integration-close-f4/reports/red-instructions-fence.md`, CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`]
   authoritative_for: "okf-profile: the instruction-layer fence"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs, packages/bee-rs/crates/bee/tests/hook_contracts.rs, packages/bee-rs/crates/bee/tests/specs_fence.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Bee OKF Profile — The Instruction-Layer Fence

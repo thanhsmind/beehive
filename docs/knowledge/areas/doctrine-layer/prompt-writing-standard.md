@@ -12,6 +12,9 @@ bee:
   decisions: ["prompt-diet D1-D7 (docs/history/prompt-diet/CONTEXT.md, 2026-08-03)", 8f63adb4 + budget-fence-removal D1/D6 (a size ceiling on instruction text is never a standing rule)]
   sources: [docs/history/prompt-diet/CONTEXT.md, "Lulla et al., arXiv 2601.20404", "Gloaguen et al. (ETH SRI), arXiv 2602.11988", "Khatri, arXiv 2607.27250", "Chatlatanagulchai et al. (NAIST), arXiv 2511.12884"]
   authoritative_for: "doctrine-layer: the prompt-writing standard"
+  anchors: [.claude/settings.json, packages/bee/AGENTS.block.md, packages/bee-rs/crates/bee/tests/instruction_laws.rs, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
+  verified_at: 2026-08-06
+  verified_commit: 11aa13e005710ac50c0e497acf31f9cff9cebc96
 ---
 
 ## Purpose

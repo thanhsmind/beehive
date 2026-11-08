@@ -11,6 +11,9 @@ bee:
   decisions: ["self-correcting-loop D2 with Validating amendments Δ1-Δ3 (append-only attempt ledger, claim-door lifetime budgets, picker skip)", gh-issue-fixes-172 D-GHF-B (heartbeat-invariant acquisition identity in the attempt ledger and claim counting)]
   sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", "gh-issue-fixes-172 cells ghf-1/ghf-3..ghf-6 (traces in .bee/cells/, GH #23/#27, 2026-07-20)", "docs/specs/workflow-state.md#B26", "docs/specs/workflow-state.md#B27", "docs/specs/workflow-state.md#B28", "docs/specs/workflow-state.md#R41", "docs/specs/workflow-state.md#R42", "docs/specs/workflow-state.md#R43", "docs/specs/workflow-state.md#R44", "docs/specs/workflow-state.md#R45", "docs/specs/workflow-state.md#E23", "docs/specs/workflow-state.md#E24", "docs/specs/workflow-state.md#P20"]
   authoritative_for: "workflow-state: unit attempt history, lifetime budgets, and budget reset"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/cells/mod.rs, packages/bee-rs/crates/bee/src/verbs/cells/judge.rs, skills/bee-hive/references/routing-and-contracts.md]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Workflow State — the attempt history, lifetime budgets, and the audited reset door

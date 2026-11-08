@@ -228,6 +228,9 @@ pub(crate) fn list_bundle_markdown(dir: &Path) -> Vec<String> {
             let Ok(ft) = entry.file_type() else { continue };
             let child_rel = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
             if ft.is_dir() {
+                if rel.is_empty() && name == "work" {
+                    continue;
+                }
                 walk(&child_abs, &child_rel, out);
             } else if ft.is_file() && name.ends_with(".md") {
                 out.push(child_rel);

@@ -8,12 +8,15 @@ bee:
   lifecycle: active
   areas: [performance-log]
   required_context: []
-  decisions: ["D1 0a459671", "D 62a7c7fd"]
+  decisions: [D1 0a459671, D 62a7c7fd]
   sources: [docs/history/perf-log/CONTEXT.md, docs/history/perf-log/plan.md, "docs/specs/performance-log.md#R1", "docs/specs/performance-log.md#R6"]
   authoritative_for: "performance-log: purpose, persistent store, and measurement"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/timings.rs, packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs]
   owns.skills: []
   owns.tests: []
+  anchors: [packages/bee-rs/crates/bee/src/verbs/timings.rs, packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs]
+  verified_at: 2026-09-06
+  verified_commit: ef6f288062d9e6cbbbc01f1875f7173909d7431b
 ---
 
 # Performance Log — Purpose, Persistent Store, and Measurement

@@ -11,6 +11,9 @@ bee:
   decisions: ["4205835b (doc-viewer links: an opt-in viewer prefix carried into the startup briefing and the post-compaction capsule, joined never encoded, half-set warns — cells dvl-1/dvl-2, 2026-08-05)"]
   sources: ["doc-viewer-links cell dvl-1 (one shared reader + both briefing injectors; trace .bee/cells/archive/doc-viewer-links/dvl-1.json, capped 2026-08-05)", "doc-viewer-links cell dvl-2 (the contract rule and the configuration reference; trace .bee/cells/archive/doc-viewer-links/dvl-2.json, capped 2026-08-05)", docs/config-reference.md (the doc_viewer key and its half-set warning)]
   authoritative_for: "hook-runtime: the doc-viewer link prefix carried into agent-facing briefings"
+  anchors: [packages/bee-rs/crates/bee/src/state.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/compaction.rs, packages/bee/AGENTS.block.md, skills/bee-hive/references/routing-and-contracts.md]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Hook Runtime — the opt-in doc-viewer prefix in agent-facing briefings

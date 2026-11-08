@@ -11,6 +11,9 @@ bee:
   decisions: [b58c1cef, c3be1e3f, d45b1e6b]
   sources: ["docs/history/bee-report-issues/ (cells bri-1, bri-2, bri-3)", docs/history/bee-report-issues/CONTEXT.md, docs/history/bee-report-issues/reports/plan-check.md]
   authoritative_for: "feedback-digest: bee defect reports filed upstream and ingested as issues"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/report.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee/AGENTS.block.md, skills/bee-evolving/SKILL.md]
+  verified_at: 2026-10-06
+  verified_commit: efa1b99944314ad22ee49d2a5dc05d8a04700d55
 ---
 
 # Feedback Digest — Bee Defects Filed Upstream as Issues

@@ -11,6 +11,9 @@ bee:
   decisions: [advisor D1-D3, f1ca79b9 (AO15 — attribution fields)]
   sources: ["advisor cells adv-1..adv-3 (worker consult loop, 2026-07-13)", "advisor-and-orchestration Slices 2A-i..2A-iv, 2B, 3A, 3B, 4, 5 (cells ao-2ai-1..ao-5-1, traces in .bee/cells/, reports docs/history/advisor-and-orchestration/reports/, 2026-07-17)", "docs/specs/advisor-protocol.md#B2", "docs/specs/advisor-protocol.md#B4", "docs/specs/advisor-protocol.md#R7", "docs/specs/advisor-protocol.md#P1"]
   authoritative_for: "advisor-protocol: worker consult loop"
+  anchors: [skills/bee-swarming/references/worker-details.md, skills/bee-swarming/SKILL.md]
+  verified_at: 2026-07-31
+  verified_commit: 295b8c6fd7671ff5137b5b21769e16434282dbb1
 ---
 
 # Advisor Protocol — Worker Consult Loop

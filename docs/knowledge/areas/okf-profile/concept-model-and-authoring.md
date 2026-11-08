@@ -11,6 +11,9 @@ bee:
   decisions: [D4, D10, D11, D12, D17, D18, D19, D23, D31, D32, D33, D36, G12, G13, G14]
   sources: ["okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#E1", "okf-switchover-f3 cells f3-2, f3-3 (bundle-first scribing target, the three-layer anti-fork gate, and both doc trees resolved off the product root; capped with verify evidence, trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-switchover-f3/CONTEXT.md`, "knowledge-show-new cell ksn-1 (`bee knowledge show` and `bee knowledge new`; trace .bee/cells/archive/knowledge-show-new/ksn-1.json, capped 2026-09-06)"]
   authoritative_for: "okf-profile: the concept model, its frontmatter, and concept authoring"
+  anchors: [packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs, packages/bee-rs/crates/bee/src/state.rs, skills/bee-capturing/SKILL.md]
+  verified_at: 2026-11-07
+  verified_commit: 5e715b42536c2fb2acd1d3b1e08d77452a9ee402
 ---
 
 # Bee OKF Profile — The Concept Model, Its Frontmatter, and How a Concept Is Authored
@@ -29,9 +32,9 @@ grades meaning where the checker can only grade form.
 |---|---|
 | `bee.area` | Current truth about a subsystem. Several may share one `areas/<slug>/` directory — authority is per-subject, not per-directory (D31). |
 | `bee.feature` | A feature's current-truth summary. |
-| `bee.work-item` | One unit of work, at `work/<id>/`. |
+| `bee.work-item` | One unit of work; its record lives under `docs/history/`, outside the bundle's walk. |
 | `bee.plan` | A work item's plan (absorbs `implement-plan.md`'s review-state role — D36). |
-| `bee.delivery` | A work item's delivery record. |
+| `bee.delivery` | A work item's delivery record. `bee knowledge promote` no longer proposes one; records that exist live under `docs/history/`. |
 | `bee.decision` | A locked decision, migrated form. |
 | `bee.pattern` | A durable pattern **or pitfall** — `bee.polarity: practice \| pitfall` distinguishes them; there is no separate tenth "pitfall" type, because pattern and pitfall carry identical metadata and identical consumption (D18). |
 | `bee.runbook` | An operational procedure. |
@@ -63,8 +66,8 @@ grades meaning where the checker can only grade form.
   carrying them still round-trips byte-identically; none of them is profile-required, so a concept
   that owns nothing simply omits them. `bee knowledge check` grades them (`conformance-check.md`).
 - **Id/path direction (D32 — corrects D19's original wording, which had it backwards):** an id is
-  **never** computed from a file's path. Instead the path segments `areas/<slug>/` and `work/<id>/`
-  are **derived from the id**. `bee.id` is identity; the file **path is the link target** an OKF
+  **never** computed from a file's path. Instead the path segment `areas/<slug>/`
+  is **derived from the id**. `bee.id` is identity; the file **path is the link target** an OKF
   consumer follows (§5) — both exist because links are paths but ids must survive the splits and
   moves migration performs.
 - Field supply at migration time: `timestamp` is set from the source file's last git commit;
@@ -328,7 +331,7 @@ actions, jobs and messages are named in business vocabulary. Format-green is not
 `knowledge list --area` and by the index generator. `bee.authoritative_for` (singular) is subject
 OWNERSHIP. A concept normally carries both.
 
-### `bee.work-item` — `docs/knowledge/work/okf-foundation/work-item.md` (live)
+### `bee.work-item` — `docs/history/knowledge-work/okf-foundation/work-item.md` (live)
 
 ```yaml
 ---
@@ -382,7 +385,7 @@ comma, or other reserved character; both forms round-trip.
 - Coverage for the gate, its three refusals and the repo-divorce topology:
   packages/bee/tests/test_bundle_mode.mjs (retired with the Node runtime, 2026-08-02).
 
-### `bee.plan` — `docs/knowledge/work/okf-foundation/plan.md` (live)
+### `bee.plan` — `docs/history/knowledge-work/okf-foundation/plan.md` (live)
 
 ```yaml
 ---

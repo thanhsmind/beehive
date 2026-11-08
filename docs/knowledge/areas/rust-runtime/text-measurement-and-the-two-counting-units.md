@@ -11,6 +11,9 @@ bee:
   decisions: [js-parity-cleanup D3 (helpers consolidate to one module and truncation goes character-based; the code-unit comparator survives as a named exception with its real reproduction rationale), "bc2e2d44 (judge pass over the consolidation: the question-heading guard had been converted with everything else and had to go back, and the surviving exception's stated rationale was inverted)"]
   sources: ["js-parity-cleanup cell jp-5 (seven duplicated helpers plus three inline copies folded into one module; trace .bee/cells/archive/js-parity-cleanup/jp-5.json, 2026-08-04 — 1004 passed, 0 failed)", "js-parity-cleanup cell jp-9 (heading guard restored to code units, exception rationale corrected; trace .bee/cells/archive/js-parity-cleanup/jp-9.json, 2026-08-04 — 1006 passed, 0 failed)", docs/history/js-parity-cleanup/CONTEXT.md, "packages/bee-rs/crates/bee/src/textutil.rs (the one module: char_len, truncate_chars_head, truncate_chars_tail, utf16_len, code_unit_cmp, js_default_sort)"]
   authoritative_for: "rust-runtime: how string length is counted, where each counting unit applies, and the pinned exceptions"
+  anchors: [packages/bee-rs/crates/bee/src/textutil.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Rust Runtime — measuring text: characters for what people read, code units for what a foreign contract counts

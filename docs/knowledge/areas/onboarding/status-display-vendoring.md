@@ -8,9 +8,12 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["4cac0774 (default statusline install; supersedes 102efe08)", 102efe08 (superseded: opt-in statusline vendor shape), "c6ee6b6e (Gate 4 onboard-statusline: anchored detection, sweep opt-in)", b7af1bf9 (full compatible Codex lifecycle-hook parity)]
+  decisions: [4cac0774 (default statusline install; supersedes 102efe08), "102efe08 (superseded: opt-in statusline vendor shape)", "c6ee6b6e (Gate 4 onboard-statusline: anchored detection, sweep opt-in)", b7af1bf9 (full compatible Codex lifecycle-hook parity)]
   sources: ["cell onboard-statusline-1 (verification_evidence, 2026-07-11)", docs/history/onboard-statusline/reports/review-correctness.md, "codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "docs/specs/onboarding.md#R1", "docs/specs/onboarding.md#R2", "docs/specs/onboarding.md#R3", "docs/specs/onboarding.md#R4", "docs/specs/onboarding.md#E2", "docs/specs/onboarding.md#E3", "docs/specs/onboarding.md#E4", "docs/specs/onboarding.md#E5", "docs/specs/onboarding.md#E7", "docs/specs/onboarding.md#P7", "docs/specs/onboarding.md#P8", "docs/specs/onboarding.md#P9", "docs/specs/onboarding.md#P10", "docs/specs/onboarding.md#P11", "docs/specs/onboarding.md#P12"]
   authoritative_for: "onboarding: the default status display"
+  anchors: [packages/bee-rs/crates/bee/tests/statusline_contract.rs, .claude/statusline-command.sh, packages/bee/statusline/statusline-command.sh, .claude/, packages/bee-rs/crates/bee/, packages/bee-rs/crates/bee/src/onboard/source.rs, packages/bee-rs/crates/bee/src/devtools/statusline.rs, packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs, packages/bee-rs/crates/bee/src/onboard/tests.rs, .claude/settings.json, packages/bee-rs/crates/bee/src/onboard/templates.rs, .pi/extensions/bee-guard/, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Onboarding — The Default Status Display

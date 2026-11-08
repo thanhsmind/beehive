@@ -11,6 +11,9 @@ bee:
   decisions: ["cli-surface-in-context Gate 2: the name-and-type index is carried every session and the description-per-flag variant is priced and declined (2026-08-06)", "8ef2bae6 (cli-ergonomics D1): exhaustive refusal — every problem named in one message"]
   sources: ["cells csc-1 through csc-4: docs/history/cli-surface-in-context/plan.md, 2026-08-06 — full suite 1341 passed, 3 ignored", "measured 2026-08-06: five invented flag names across two agents in one working session, every one a wrong name and none a misunderstood meaning", "measured 2026-08-06: 142 commands, 143 distinct flag names, rendered section 7,950 characters", "preamble-surface-slim cell pss-1 (grouped-name renderer in budget.rs, 7.9KB to 1.7KB, supersede decision logged; capture stub 6e9734f6, 2026-08-07)"]
   authoritative_for: "hook-runtime: the command surface carried in the session briefing"
+  anchors: [packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Hook Runtime — the command surface a session starts with

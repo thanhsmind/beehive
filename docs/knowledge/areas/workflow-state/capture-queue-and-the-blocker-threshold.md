@@ -12,6 +12,9 @@ bee:
   sources: ["counter-teeth cell ct-3 (trace .bee/cells/archive/counter-teeth/ct-3.json, 2026-08-04 — escalation reuses the existing pending membership; status_full 49 passed, 0 failed)", docs/history/counter-teeth/CONTEXT.md, "packages/bee-rs/crates/bee/src/state.rs (DEFAULT_CAPTURE_QUEUE_THRESHOLD + capture_queue_threshold — the two constants, moved here from the retired status_full/orient.rs:134-181 during the rust-port split)", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs (capture_queue_door_detail — the escalation predicate; capture_queue_pending — pending membership, stub rows minus flush rows; moved here from the retired status_full/records.rs:215)"]
   authoritative_for: "workflow-state: the capture queue's pending membership and its escalation from offer to blocker"
   applied_at: [skills/bee-capturing/SKILL.md, packages/bee-rs/crates/bee/src/verbs/capture.rs]
+  anchors: [packages/bee-rs/crates/bee/src/catalog.rs, packages/bee-rs/crates/bee/src/verbs/capture.rs]
+  verified_at: 2026-09-08
+  verified_commit: fcc91f2f25e63b07d716b778eb6a7c8ec1144451
 ---
 
 # Workflow State — the capture queue, its pending membership, and the threshold that turns an offer into a blocker

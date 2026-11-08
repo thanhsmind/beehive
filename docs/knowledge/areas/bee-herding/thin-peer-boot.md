@@ -8,10 +8,13 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["thin-worker-boot D1 (a dispatched peer knows no bee flow: peer role text plus brief)", "thin-worker-boot D2 (one thin shared instruction file holds the hard boundaries; flow doctrine stays with the leader)", "thin-worker-boot D3 (the peer ends with the one finish command its brief names)", "thin-worker-boot D4 (pane peers launch trimmed; project-level guard hooks stay on)", "thin-worker-boot D6 (the thin boot ships behind a config switch and becomes default only on a measured saving)", "thin-worker-boot D8 (two launch layers: an env layer always on with the switch, and an optional flag layer)", "thin-worker-boot D10 (the four env variables plus the role-aware preamble; partial by design)"]
+  decisions: ["thin-worker-boot D1 (a dispatched peer knows no bee flow: peer role text plus brief)", thin-worker-boot D2 (one thin shared instruction file holds the hard boundaries; flow doctrine stays with the leader), thin-worker-boot D3 (the peer ends with the one finish command its brief names), thin-worker-boot D4 (pane peers launch trimmed; project-level guard hooks stay on), thin-worker-boot D6 (the thin boot ships behind a config switch and becomes default only on a measured saving), "thin-worker-boot D8 (two launch layers: an env layer always on with the switch, and an optional flag layer)", thin-worker-boot D10 (the four env variables plus the role-aware preamble; partial by design)]
   sources: [docs/history/thin-worker-boot/CONTEXT.md, docs/history/thin-worker-boot/plan.md, docs/history/thin-boot-default/plan.md]
   authoritative_for: "bee-herding: the thin peer boot — the env layer, the peer preamble hook, the dispatch.thin_peer_boot switch and its default"
   owns.code: [packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs, packages/bee/prompts/peer-boot.md]
+  anchors: [packages/bee/prompts/peer-boot.md, packages/bee-rs/crates/bee/src/hooks/mod.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/hooks/session_init.rs]
+  verified_at: 2026-11-07
+  verified_commit: 3b9d2e2a363470dd1365e42b07f88d186942ed64
 ---
 
 # Bee Herding — thin peer boot, what a herded Claude worker loads, and the switch that is on by default

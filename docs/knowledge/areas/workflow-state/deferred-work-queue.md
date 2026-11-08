@@ -11,6 +11,9 @@ bee:
   decisions: ["traceable-runs D5 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — deferred capture, scribing, review, and promote-proposal work all become records in ONE claimable queue, each carrying feature, cells, areas, files, and a reason, plus a claim/lease, so a parallel agent absent when the item was queued can still execute it)"]
   sources: ["traceable-runs cell trun-8 (trace .bee/cells/archive/traceable-runs/trun-8.json, capped 2026-08-14 — new deferred_queue.rs verb module: add/list/claim/release/complete, claim exclusivity proven by a real multi-process race in tests/concurrency.rs plus a negative control)", "traceable-runs cell trun-9 (trace .bee/cells/archive/traceable-runs/trun-9.json, capped 2026-08-14 after two rounds of judge rework — scribe/promote materialization from the two derived scans, reconciled across all six scribing-debt scan copies through state_group::ledger::deferred_debt_cleared and the shared fold scribe_queue_cells)", "docs/history/traceable-runs/plan.md (S4, the reusable primitives: lock::acquire_store_lock, resolve_session_id, backlog.rs's append-then-fold shape, cells/claims.rs's O_EXCL claim protocol and dual-condition stale sweep)"]
   authoritative_for: "workflow-state: the deferred-work queue (.bee/deferred-queue.jsonl), its claim protocol, and the scribe/promote scan-to-record materialization"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs, packages/bee-rs/crates/bee/tests/concurrency.rs, packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs, packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Workflow State — the deferred-work queue, its claim exclusivity, and the scribe/promote materialization

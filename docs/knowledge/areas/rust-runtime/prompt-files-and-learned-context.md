@@ -12,6 +12,9 @@ bee:
   decisions: [prompt-files]
   sources: [docs/specs/prompt-files.md, packages/bee/prompts, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
   authoritative_for: "rust-runtime: prompt file rendering and the worker learned-context block"
+  anchors: [packages/bee/prompts/, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
+  verified_at: 2026-11-04
+  verified_commit: 8c0366c75f0a498a4f38f6fd454e8849a2485cd4
 ---
 
 # Compiled runtime — prompt files and learned context

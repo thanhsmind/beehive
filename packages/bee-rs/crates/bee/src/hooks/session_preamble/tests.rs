@@ -102,8 +102,8 @@ use crate::version::BEE_VERSION;
         );
         write(
             root,
-            "docs/knowledge/work/f1/work-item.md",
-            "---\ntype: bee.work-item\nbee:\n  id: f1\n---\nbody\n",
+            "docs/history/f1/CONTEXT.md",
+            "# f1\nsome context\n",
         );
         write(
             root,
@@ -115,7 +115,7 @@ use crate::version::BEE_VERSION;
         let text = render(root);
         assert!(!text.contains(".mjs"), "an .mjs spelling survived:\n{text}");
         assert!(
-            text.contains("- `.bee/bin/bee knowledge context --work f1 --budget 20000` (anchor: work-item)"),
+            text.contains("- `.bee/bin/bee knowledge context --work f1 --budget 20000` (anchor: history)"),
             "knowledge-context command missing or misspelled:\n{text}"
         );
     }
@@ -418,17 +418,25 @@ use crate::version::BEE_VERSION;
             "{text}"
         );
 
-        // With a work item it keeps the invitation, named "work-item", budget by mode.
-        write(
-            tmp.path(),
-            "docs/knowledge/work/f9/work-item.md",
-            "---\ntype: bee.work-item\nbee:\n  id: f9\n---\nx\n",
-        );
+        // A history anchor outranks the ledger stamp; the budget follows the mode.
+        write(tmp.path(), "docs/history/f9/CONTEXT.md", "# f9\nsome context\n");
         write(tmp.path(), ".bee/state.json", r#"{"phase":"swarming","feature":"f9","mode":"tiny"}"#);
         let text = render(tmp.path());
         assert!(
-            text.contains("- `.bee/bin/bee knowledge context --work f9 --budget 8000` (anchor: work-item)"),
+            text.contains("- `.bee/bin/bee knowledge context --work f9 --budget 8000` (anchor: history)"),
             "{text}"
+        );
+    }
+
+    #[test]
+    fn the_bundle_walk_lists_nothing_under_a_top_level_work_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(tmp.path(), "areas/a.md", "---\ntype: bee.area\n---\nx\n");
+        write(tmp.path(), "work/f1/work-item.md", "---\ntype: bee.work-item\n---\nx\n");
+        write(tmp.path(), "areas/work/kept.md", "---\ntype: bee.area\n---\nx\n");
+        assert_eq!(
+            super::knowledge::list_bundle_markdown(tmp.path()),
+            vec!["areas/a.md".to_string(), "areas/work/kept.md".to_string()]
         );
     }
 
@@ -1026,8 +1034,20 @@ use crate::version::BEE_VERSION;
         let root = tmp.path();
         pathological_store(root);
 
-        let text = build_session_preamble_within(root, None, None, "claude", 8800);
-        assert!(text.len() <= 8800, "{} bytes", text.len());
+        let full = build_session_preamble_within(root, None, None, "claude", PREAMBLE_BUDGET_BYTES);
+        let digest_start = full.find("### Critical patterns (digest)").expect("digest rides the full render");
+        let digest_end = digest_start
+            + full[digest_start..]
+                .find("\n### ")
+                .map(|offset| offset + 1)
+                .expect("a section follows the digest");
+        let digest_len = digest_end - digest_start;
+        let named_in_omitted_line = "; Critical patterns (digest) → docs/knowledge/index.md".len();
+        let budget = full.len() - digest_len + named_in_omitted_line + 8;
+        assert!(budget < full.len(), "the derived budget {budget} must sit below the digest-included render {}", full.len());
+
+        let text = build_session_preamble_within(root, None, None, "claude", budget);
+        assert!(text.len() <= budget, "{} bytes over the derived {budget}", text.len());
         assert!(!text.contains("### Recent decisions"), "{text}");
         assert!(!text.contains("### Critical patterns (digest)"), "{text}");
         assert!(text.contains("### Command surface"), "{text}");
@@ -1218,6 +1238,100 @@ use crate::version::BEE_VERSION;
         );
         // Exactly one occurrence — never a second line or flag-by-flag doc.
         assert_eq!(bundled.matches("bee knowledge search --text").count(), 1, "{bundled}");
+    }
+
+    fn git_in(root: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git").args(args).current_dir(root).output().unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn commit_all(root: &Path, message: &str) -> String {
+        git_in(root, &["add", "-A"]);
+        git_in(root, &["commit", "-q", "-m", message]);
+        git_in(root, &["rev-parse", "HEAD"])
+    }
+
+    fn area_concept(id: &str, anchor: &str, verified: Option<&str>) -> String {
+        let mut text = format!(
+            "---\ntype: bee.area\ntitle: {id}\ndescription: {id}\nbee:\n  id: {id}\n  lifecycle: active\n  anchors: [{anchor}]\n"
+        );
+        if let Some(vc) = verified {
+            text.push_str(&format!("  verified_at: 2026-01-01\n  verified_commit: {vc}\n"));
+        }
+        text.push_str("---\nBody.\n");
+        text
+    }
+
+    fn four_grade_bundle(root: &Path) {
+        git_in(root, &["init", "-q"]);
+        git_in(root, &["config", "user.email", "fresh@example.com"]);
+        git_in(root, &["config", "user.name", "preamble tests"]);
+        git_in(root, &["config", "commit.gpgsign", "false"]);
+        write(root, "src/a.rs", "a1\n");
+        write(root, "src/b.rs", "b1\n");
+        let first = commit_all(root, "code");
+        write(root, "docs/knowledge/areas/demo/conf.md", &area_concept("conf", "src/a.rs", Some(&first)));
+        write(root, "docs/knowledge/areas/demo/susp.md", &area_concept("susp", "src/b.rs", Some(&first)));
+        write(root, "docs/knowledge/areas/demo/orph.md", &area_concept("orph", "src/gone.rs", Some(&first)));
+        write(root, "docs/knowledge/areas/demo/unv.md", &area_concept("unv", "src/a.rs", None));
+        write(root, "docs/knowledge/patterns/p.md", "---\ntype: bee.pattern\ntitle: P\n---\nx\n");
+        commit_all(root, "concepts");
+        write(root, "src/b.rs", "b2\n");
+        commit_all(root, "change b");
+    }
+
+    const FRESHNESS_PREFIX: &str = "- knowledge: ";
+
+    fn freshness_line_of(lines: &[String]) -> Option<&String> {
+        lines.iter().find(|l| l.starts_with(FRESHNESS_PREFIX))
+    }
+
+    #[test]
+    fn the_project_map_counts_the_area_grades_in_one_line() {
+        let tmp = minimal_repo();
+        four_grade_bundle(tmp.path());
+
+        let lines = project_map_lines(tmp.path(), true);
+        assert_eq!(
+            freshness_line_of(&lines).map(String::as_str),
+            Some("- knowledge: 1 confirmed, 1 suspect, 1 orphan, 1 unverified — suspect first: bee knowledge check"),
+            "{lines:?}"
+        );
+        assert_eq!(lines.iter().filter(|l| l.starts_with(FRESHNESS_PREFIX)).count(), 1);
+
+        let text = render(tmp.path());
+        assert!(
+            text.contains("- knowledge: 1 confirmed, 1 suspect, 1 orphan, 1 unverified — suspect first: bee knowledge check"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn the_freshness_line_is_absent_without_a_bundle_and_with_zero_area_concepts() {
+        let tmp = minimal_repo();
+        assert!(freshness_line_of(&project_map_lines(tmp.path(), false)).is_none());
+
+        write(tmp.path(), "docs/knowledge/patterns/only.md", "---\ntype: bee.pattern\ntitle: P\n---\nx\n");
+        let lines = project_map_lines(tmp.path(), true);
+        assert!(freshness_line_of(&lines).is_none(), "{lines:?}");
+        assert!(!render(tmp.path()).contains(FRESHNESS_PREFIX));
+    }
+
+    #[test]
+    fn a_budget_past_its_limit_prints_the_skipped_form() {
+        let tmp = minimal_repo();
+        four_grade_bundle(tmp.path());
+
+        let lines = project_map_lines_within(tmp.path(), true, std::time::Duration::ZERO);
+        assert_eq!(
+            freshness_line_of(&lines).map(String::as_str),
+            Some("- knowledge: freshness skipped (slow) — bee knowledge check"),
+            "{lines:?}"
+        );
+
+        let roomy = project_map_lines_within(tmp.path(), true, std::time::Duration::from_secs(30));
+        assert!(freshness_line_of(&roomy).unwrap().contains("1 confirmed, 1 suspect"), "{roomy:?}");
     }
 
     #[test]

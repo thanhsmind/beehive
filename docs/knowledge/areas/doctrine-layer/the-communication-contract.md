@@ -12,6 +12,9 @@ bee:
   decisions: [ec9a60ae (comms-contract D1 — a single-home communication contract shaped as reader facts -> turn shape -> seven rules -> break conditions -> pre-send litmus), f6ff3bf5-df05-4af9-9d03-65fd9d0b4735 (auto-approved landing of the contract into routing-and-contracts.md), "tick-contract-inline T1 (the operative per-step line contract moves into the always-loaded sheet: one line per perceivable step, on by default, fixed shape, four glyphs, two bounded silence switches, no bypass level silences it)", "tick-contract-inline T2 (the worked-example catalogue stays on demand -- examples, not the contract)", tick-contract-inline T6 (emission is not enforced; nothing observes agent chat output)]
   sources: ["docs/history/comms-contract/ (tiny lane, decisions ec9a60ae + f6ff3bf5-df05-4af9-9d03-65fd9d0b4735, 2026-07-26)", "skills/bee-hive/references/routing-and-contracts.md '## Communication contract' (the governing text this concept describes)", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)", packages/bee/AGENTS.block.md critical rule 17 (the governing per-step text)]
   authoritative_for: "doctrine-layer: the communication contract"
+  anchors: [skills/bee-shaping/references/shaping-reference.md, skills/bee-hive/references/routing-and-contracts.md, packages/bee/AGENTS.block.md, packages/bee-rs/crates/bee/tests/instruction_laws.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Doctrine Layer — the communication contract

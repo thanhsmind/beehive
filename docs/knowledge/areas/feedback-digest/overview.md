@@ -8,12 +8,15 @@ bee:
   lifecycle: active
   areas: [feedback-digest]
   required_context: []
-  decisions: ["D2 8cd4c84e", 9880542e, c45d0fb3, "D 9157d074", D1 backlog-auto-commit, D2 backlog-auto-commit]
+  decisions: [D2 8cd4c84e, 9880542e, c45d0fb3, D 9157d074, D1 backlog-auto-commit, D2 backlog-auto-commit]
   sources: ["docs/history/evolving-loop/ (cells evolving-1 … evolving-11, capped)", "docs/specs/feedback-digest.md#R1", "docs/specs/feedback-digest.md#R2"]
   authoritative_for: "feedback-digest: purpose, overview, and governance"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/feedback.rs]
-  owns.skills: ["skills/bee-evolving/*"]
+  owns.skills: [skills/bee-evolving/*]
   owns.tests: []
+  anchors: [packages/bee-rs/crates/bee/src/verbs/feedback.rs, skills/bee-evolving/SKILL.md]
+  verified_at: 2026-10-06
+  verified_commit: 1f29a4d3e491f8fddf2b32eca12878508f8db022
 ---
 
 # Feedback Digest — Purpose, Data Model, Ranking, and Self-Improvement

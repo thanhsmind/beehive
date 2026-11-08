@@ -1,6 +1,6 @@
 ---
 type: bee.area
-title: Workflow State — the workspace protocol file, dispatch receipts, and brief discipline
+title: "Workflow State — the workspace protocol file, dispatch receipts, and brief discipline"
 description: "One optional root file names the human decision boundaries, the merge owner and the deploy owner; bee validates it and reports its state but never gates on it. Every dispatch prepare record carries a digest of the prompt and of that file, dispatch verify compares them after the dispatch, and two prompt lines plus a warn-only purpose lint keep menus and leaning out of briefs."
 timestamp: 2026-11-07
 bee:
@@ -8,9 +8,12 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["workspace-protocol D1-D12 (`bee decisions search --text WORKSPACE_PROTOCOL`)", "protocol-init-from-project D1-D8 (init renders from the project; narrows D4)"]
-  sources: ["docs/history/workspace-protocol/CONTEXT.md (D1-D12)", "docs/history/workspace-protocol/plan.md", "workspace-protocol cells wsp-1..wsp-4", "docs/history/protocol-init-from-project/CONTEXT.md (D1-D8)"]
+  decisions: [workspace-protocol D1-D12 (`bee decisions search --text WORKSPACE_PROTOCOL`), protocol-init-from-project D1-D8 (init renders from the project; narrows D4)]
+  sources: [docs/history/workspace-protocol/CONTEXT.md (D1-D12), docs/history/workspace-protocol/plan.md, workspace-protocol cells wsp-1..wsp-4, docs/history/protocol-init-from-project/CONTEXT.md (D1-D8)]
   authoritative_for: "workflow-state: WORKSPACE_PROTOCOL.md, bee protocol, the prepare digests, bee dispatch verify, the purpose leaning lint"
+  anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs]
+  verified_at: 2026-11-07
+  verified_commit: 0def8142ff60817457851f228b3c974515adad83
 ---
 
 # Workflow State — the workspace protocol file, dispatch receipts, and brief discipline

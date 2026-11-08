@@ -11,6 +11,9 @@ bee:
   decisions: [i54-closeout D8 (capability pin bumps only on observed evidence), 103a5608 (i54-closeout scope lock)]
   sources: [packages/bee-rs/crates/bee/src/doctor.rs, "docs/history/i54-closeout/reports/validation-canary.md section 4 (post-fix full canary rerun, all probes green)", docs/history/i54-closeout/CONTEXT.md D8]
   authoritative_for: "hook-runtime: codex capability probe version pin and re-probe evidence"
+  anchors: [packages/bee-rs/crates/bee/src/doctor.rs]
+  verified_at: 2026-09-18
+  verified_commit: 082f8c53af00db79ac5fbc8a4188697736cfebd5
 ---
 
 # Hook Runtime — The Codex Capability Probe Version Pin and Re-Probe Evidence

@@ -41,6 +41,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "report" => run_report(flags, json, pre_json, t0),
         "show" => run_show(flags, json, pre_json, t0),
         "new" => run_new(flags, json, pre_json, t0),
+        "seed-anchors" => run_seed_anchors(flags, json, pre_json, t0),
+        "confirm" => run_confirm(flags, json, pre_json, t0, &toks),
         _ => None, // unknown verbs (group-usage fallback) → Node
     }
 }
@@ -54,7 +56,7 @@ pub(crate) fn run_check(flags: Flags, json: bool, pre_json: bool, t0: Instant) -
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
-    let dir = bundle_dir(&ctx.root)?;
+    let dir = command_bundle(&ctx.root)?;
     let report = check_bundle(&dir, strict)?;
     let failing = !report.ok;
 
@@ -79,6 +81,7 @@ pub(crate) fn run_check(flags: Flags, json: bool, pre_json: bool, t0: Instant) -
     for n in &report.notes {
         lines.push(format!("NOTE: {n}"));
     }
+    lines.push(freshness_line(&report.freshness));
     lines.push(format!(
         "knowledge check: {} concept(s) in {} file(s), {} OKF error(s), {} profile error(s), {} profile warning(s){} — {}",
         report.concepts,
@@ -107,6 +110,7 @@ pub(crate) fn run_check(flags: Flags, json: bool, pre_json: bool, t0: Instant) -
     result.insert("okf".into(), Value::Object(okf));
     result.insert("profile".into(), Value::Object(profile));
     result.insert("counts".into(), Value::Object(counts));
+    result.insert("freshness".into(), freshness_json(&report.freshness));
     if !report.notes.is_empty() {
         result.insert("notes".into(), Value::Array(report.notes.iter().map(|s| Value::String(s.clone())).collect()));
     }
@@ -193,7 +197,7 @@ pub(crate) fn run_list(flags: Flags, json: bool, pre_json: bool, t0: Instant) ->
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
-    let dir = bundle_dir(&ctx.root)?;
+    let dir = command_bundle(&ctx.root)?;
     let concepts = collect_concepts(&dir)?;
 
     let mut rows: Vec<Value> = Vec::new();
@@ -338,7 +342,7 @@ pub(crate) fn run_context(flags: Flags, json: bool, pre_json: bool, t0: Instant)
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
-    let dir = bundle_dir(&ctx.root)?;
+    let dir = command_bundle(&ctx.root)?;
     let manifest = match build_context_manifest(&dir, &work, budget, &budget_raw) {
         ManifestOut::Built(m) => m,
         ManifestOut::Thrown(msg) => return Some(ctx.fail(&msg)),

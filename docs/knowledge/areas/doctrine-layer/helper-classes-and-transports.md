@@ -11,6 +11,9 @@ bee:
   decisions: ["040f8ef0 (read-only analyst spawn + partial-return fan-out, B7/R11)", D1/D2/D3 delegation contract, "f6606f4d (the execution tier renders a second, write-capable identity alongside its I/O-offload one, 2026-08-04)"]
   sources: ["compounding-fanout-hardening (cell cfh-1, 2026-07-17, flushed capture stub d3417cb2)", "advisor-and-orchestration Slice 2A-ii (cells ao-2aii-1/ao-2aii-2, 2026-07-17)", "advisor-and-orchestration Slice 2A-iii (cells ao-2aiii-1/ao-2aiii-2 — dispatch-boundary enforcement + gather-purpose routing prose, 2026-07-17)", "advisor-and-orchestration Slice 5 (cell ao-5-1 — execution-worker class, tiny/small single-worker execution, AO14, 2026-07-17)", "docs/specs/doctrine-layer.md#B7", "docs/specs/doctrine-layer.md#B7a", "docs/specs/doctrine-layer.md#B8", "docs/specs/doctrine-layer.md#R11", "docs/specs/doctrine-layer.md#R12", "docs/specs/doctrine-layer.md#P6", "docs/specs/doctrine-layer.md#P7"]
   authoritative_for: "doctrine-layer: helper classes and transports"
+  anchors: [skills/bee-capturing/SKILL.md, packages/bee-rs/crates/bee/src/state.rs, skills/bee-hive/references/routing-and-contracts.md]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Doctrine Layer — Helper Classes and Transports

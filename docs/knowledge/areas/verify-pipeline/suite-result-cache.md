@@ -11,6 +11,9 @@ bee:
   required_context: [areas/verify-pipeline/suite-topology-and-discovery.md]
   decisions: [test-batching-finish merged-gate audit, "spec #80 P7", review-p1-fixes p1-1/p2-2 (the cache was reworked twice — a leaking fixture and an opt-in declaration table — before the runtime it lived in was retired; 2026-08-04), "962a6490 (the retired runtime's performance work is recorded, never merged into the specs as current behavior)"]
   sources: ["verified 2026-08-06: no suite-result cache exists in the shipped runtime; the test verb reads commands.test from .bee/config.json and runs every declared command sequentially, writing .bee/logs/test-results.json on each call", review-p1-fixes cells p1-1/p2-2 (docs/history/review-p1-fixes/promote-proposals.md — the last two reworks of the retired cache)]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/test_runner.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 > **Retired (2026-08-06).** Everything below describes a subsystem of the

@@ -235,15 +235,15 @@ use std::time::Instant;
     fn context_manifest_orders_and_cuts() {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("docs").join("knowledge");
-        std::fs::create_dir_all(dir.join("work/w1")).unwrap();
+        std::fs::create_dir_all(dir.join("tasks/w1")).unwrap();
         std::fs::write(
-            dir.join("work/w1/item.md"),
+            dir.join("tasks/w1/item.md"),
             // required_context targets resolve against the BUNDLE root (D19).
             "---\ntype: bee.work-item\ntitle: Widget work\ndescription: widgets and gears\nbee:\n  id: w1\n  lifecycle: active\n  areas: [billing]\n  decisions: [\"0001\"]\n  required_context: [ctx.md]\n---\nwidgets gears assembly\n",
         )
         .unwrap();
         std::fs::write(
-            dir.join("work/w1/plan.md"),
+            dir.join("tasks/w1/plan.md"),
             "---\ntype: bee.plan\ntitle: Plan\nbee:\n  id: w1-plan\n  lifecycle: active\n---\nplan body\n",
         )
         .unwrap();
@@ -276,8 +276,8 @@ use std::time::Instant;
         assert_eq!(
             entries,
             vec![
-                "docs/knowledge/work/w1/item.md",
-                "docs/knowledge/work/w1/plan.md",
+                "docs/knowledge/tasks/w1/item.md",
+                "docs/knowledge/tasks/w1/plan.md",
                 "docs/knowledge/ctx.md",
                 "docs/knowledge/crit.md",
                 "docs/knowledge/dec.md",
@@ -293,8 +293,8 @@ use std::time::Instant;
             .map(|e| e["reason"].as_str().unwrap())
             .collect();
         assert_eq!(reasons[0], "work item");
-        assert_eq!(reasons[1], "plan sibling in work/w1/");
-        assert_eq!(reasons[2], "required_context depth 1 via work/w1/item.md");
+        assert_eq!(reasons[1], "plan sibling in tasks/w1/");
+        assert_eq!(reasons[2], "required_context depth 1 via tasks/w1/item.md");
         assert!(reasons[3].starts_with("critical pattern (relevance "));
         assert!(reasons[3].ends_with(", rank 1 of 1, floor)"));
         assert_eq!(reasons[4], "decision for area billing");
@@ -399,14 +399,31 @@ use std::time::Instant;
     }
 
     #[test]
+    fn the_bundle_walk_lists_nothing_under_a_top_level_work_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let put = |rel: &str| {
+            let file = tmp.path().join(rel);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, "---\ntype: bee.area\n---\nx\n").unwrap();
+        };
+        put("areas/a.md");
+        put("work/f1/delivery.md");
+        put("areas/work/kept.md");
+        assert_eq!(
+            list_bundle_markdown(tmp.path()).unwrap(),
+            vec!["areas/a.md".to_string(), "areas/work/kept.md".to_string()]
+        );
+    }
+
+    #[test]
     fn promotion_mines_capped_traces_and_proposes_without_writing() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let kn = root.join("docs").join("knowledge");
-        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::create_dir_all(kn.join("items")).unwrap();
         std::fs::create_dir_all(kn.join("areas")).unwrap();
         std::fs::write(
-            kn.join("work").join("w1.md"),
+            kn.join("items").join("w1.md"),
             "---\ntype: bee.work-item\ntitle: Widget work\ndescription: does widgets\ntags: [alpha]\nbee:\n  id: w1\n  lifecycle: active\n  areas: [cli]\n  lane: small\n---\n\n# Widget work\n",
         )
         .unwrap();
@@ -445,24 +462,19 @@ use std::time::Instant;
         let ids: Vec<&str> = p["cells"].as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap()).collect();
         assert_eq!(ids, vec!["w1-9", "w1-10"]);
         assert_eq!(p["writes"], json!([]));
-        assert_eq!(p["work_item"], "work/w1.md");
-        assert_eq!(p["delivery"]["path"], "work/delivery.md");
-        assert_eq!(p["delivery"]["repo_path"], "docs/knowledge/work/delivery.md");
+        assert_eq!(p["work_item"], "items/w1.md");
+        assert!(p.get("delivery").is_none());
         // trace.outcome wins over the title; the fallback is the title.
         assert_eq!(p["cells"][1]["outcome"], "did   the  thing");
         assert_eq!(p["cells"][0]["outcome"], "ninth");
         assert_eq!(p["cells"][1]["verify_summary"], "green");
         // behavior_change: trace.true, and the cell-level fallback.
         assert_eq!(p["cells"][0]["behavior_change"], true);
-        // Timestamp = the LATEST capped date.
-        let content = p["delivery"]["content"].as_str().unwrap();
-        assert!(content.contains("timestamp: 2024-06-02"));
-        assert!(content.starts_with("---\ntype: bee.delivery\n"));
-        assert!(content.contains("bee:\n  id: w1-delivery\n  lifecycle: active\n  areas: [cli]\n"));
-        assert!(content.contains("lane: small"));
-        assert!(content.contains("- **w1-10** — did the thing (2 file(s) changed)"));
-        assert!(content.contains("- **w1-10** — `cargo test` — green"));
-        assert!(content.contains("- **w1-10** — scope: dev two"));
+        let text = promote_text(&p);
+        assert!(!text.contains("DELIVERY"));
+        assert!(!text.contains("delivery draft"));
+        assert!(text.contains("(b) AREA UPDATES"));
+        assert!(text.contains("(c) PATTERN CANDIDATES"));
 
         // Area bullets: only the behavior_change cell whose files touch the
         // area subjects (src/cli via the area concept's sources).
@@ -471,7 +483,7 @@ use std::time::Instant;
         assert_eq!(areas[0]["area"], "cli");
         assert_eq!(
             areas[0]["subjects"],
-            json!(["docs/knowledge/areas/cli.md", "docs/knowledge/work/w1.md", "src/cli"])
+            json!(["docs/knowledge/areas/cli.md", "docs/knowledge/items/w1.md", "src/cli"])
         );
         assert_eq!(areas[0]["bullets"].as_array().unwrap().len(), 1);
         assert_eq!(areas[0]["bullets"][0]["files"], json!(["src/cli/main.rs"]));
@@ -495,7 +507,7 @@ use std::time::Instant;
         assert!(cands[0]["content"].as_str().unwrap().contains("polarity: pitfall"));
 
         // Nothing was written anywhere under docs/knowledge/.
-        assert!(!kn.join("work").join("delivery.md").exists());
+        assert!(!kn.join("work").exists());
         assert!(!kn.join("patterns").exists());
 
         // Typed refusals.
@@ -556,8 +568,7 @@ use std::time::Instant;
         assert_eq!(p["work_item"], "docs/history/hist-1/CONTEXT.md");
         // The canonical proposed save path — a PROPOSAL only; D5 holds, nothing
         // under docs/knowledge/ is ever created, moved, or deleted here.
-        assert_eq!(p["delivery"]["path"], "work/hist-1/delivery.md");
-        assert_eq!(p["delivery"]["repo_path"], "docs/knowledge/work/hist-1/delivery.md");
+        assert!(p.get("delivery").is_none());
         let ids: Vec<&str> =
             p["cells"].as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap()).collect();
         assert_eq!(ids, vec!["hist-1-1"]);
@@ -617,8 +628,7 @@ use std::time::Instant;
             json!([".bee/logs/scribing-runs.jsonl", ".bee/lanes/led-1.json"])
         );
         assert_eq!(p["work_item"], ".bee/logs/scribing-runs.jsonl + .bee/lanes/led-1.json");
-        assert_eq!(p["delivery"]["path"], "work/led-1/delivery.md");
-        assert_eq!(p["delivery"]["repo_path"], "docs/knowledge/work/led-1/delivery.md");
+        assert!(p.get("delivery").is_none());
         assert!(!kn.join("work").exists());
 
         // Same reach-two fallback the history arm already exercises: the
@@ -782,9 +792,9 @@ use std::time::Instant;
         assert_eq!(p["anchor"]["kind"], "history");
 
         // A work item, once present, wins over both fallbacks.
-        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::create_dir_all(kn.join("tasks")).unwrap();
         std::fs::write(
-            kn.join("work").join("prec-1.md"),
+            kn.join("tasks").join("prec-1.md"),
             "---\ntype: bee.work-item\ntitle: Precedence work\ndescription: wins over both fallbacks\ntags: []\nbee:\n  id: prec-1\n  lifecycle: active\n---\n\n# Precedence work\n",
         )
         .unwrap();
@@ -803,9 +813,9 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let kn = root.join("docs").join("knowledge");
-        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::create_dir_all(kn.join("tasks")).unwrap();
         std::fs::write(
-            kn.join("work").join("w2.md"),
+            kn.join("tasks").join("w2.md"),
             "---\ntype: bee.work-item\ntitle: Archived work\ndescription: a retired feature\ntags: []\nbee:\n  id: w2\n  lifecycle: active\n---\n\n# Archived work\n",
         )
         .unwrap();
@@ -859,9 +869,9 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let kn = root.join("docs").join("knowledge");
-        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::create_dir_all(kn.join("tasks")).unwrap();
         std::fs::write(
-            kn.join("work").join("frd-mine.md"),
+            kn.join("tasks").join("frd-mine.md"),
             "---\ntype: bee.work-item\ntitle: frd-1 mining\ndescription: proves --deviation reaches promote\ntags: []\nbee:\n  id: frd-mine\n  lifecycle: active\n---\n\n# frd-1 mining\n",
         )
         .unwrap();
@@ -970,7 +980,6 @@ use std::time::Instant;
         assert_eq!(areas.len(), 1);
         assert_eq!(areas[0]["area"], "widgets");
         assert_eq!(areas[0]["bullets"].as_array().unwrap().len(), 1);
-        assert_eq!(p["delivery"]["content"].as_str().unwrap().contains("areas: [widgets]"), true);
 
         // The text render names the source and the timestamp.
         let text = promote_text(&p);
@@ -2305,7 +2314,7 @@ use std::time::Instant;
         let (_tmp, dir) = bundle();
         put(
             &dir,
-            "work/billing/work-item.md",
+            "tasks/billing/work-item.md",
             Cx::new("billing-migration")
                 .ty("bee.work-item")
                 .title("Migrate the billing ledger onto the invoice schema")
@@ -2358,7 +2367,7 @@ use std::time::Instant;
         let (_tmp, dir) = bundle();
         put(
             &dir,
-            "work/billing/work-item.md",
+            "tasks/billing/work-item.md",
             Cx::new("billing-migration")
                 .ty("bee.work-item")
                 .title("Migrate the billing ledger onto the invoice schema")
@@ -2406,7 +2415,7 @@ use std::time::Instant;
         }
 
         let full = built(&dir, "billing-migration", 100_000.0);
-        let work_path = "docs/knowledge/work/billing/work-item.md";
+        let work_path = "docs/knowledge/tasks/billing/work-item.md";
         assert_eq!(full["entries"][0]["path"], work_path, "rank 1 is the work item");
         let floor = str_list(&full["floor"]);
         assert_eq!(floor.len(), FLOOR, "the floor is the pinned FLOOR: {floor:?}");
@@ -2488,7 +2497,7 @@ use std::time::Instant;
         ];
 
         let (_tmp, dir) = bundle();
-        put(&dir, "work/lonely/work-item.md", work());
+        put(&dir, "tasks/lonely/work-item.md", work());
         for (i, topic) in topics.iter().enumerate() {
             put(&dir, &format!("patterns/void-{i:02}.md"), void(topic, i));
         }
@@ -2506,7 +2515,7 @@ use std::time::Instant;
         // ZERO_SIGNAL_MIN_POPULATION the guard is inert, and the count is
         // still reported.
         let (_tmp2, small) = bundle();
-        put(&small, "work/lonely/work-item.md", work());
+        put(&small, "tasks/lonely/work-item.md", work());
         put(&small, "patterns/void-00.md", void(topics[0], 0));
         let manifest = built(&small, "signalless", 100_000.0);
         assert_eq!(manifest["zero_signal_count"], json!(1), "the count is still REPORTED below the floor");
@@ -2520,7 +2529,7 @@ use std::time::Instant;
         let (_tmp, dir) = bundle();
         put(
             &dir,
-            "work/twins/work-item.md",
+            "tasks/twins/work-item.md",
             Cx::new("twins")
                 .ty("bee.work-item")
                 .title("Twin ranking")
@@ -2640,15 +2649,15 @@ use std::time::Instant;
         let root = tmp.path();
         put(
             &dir,
-            "work/w1/item.md",
+            "tasks/w1/item.md",
             Cx::new("w1").ty("bee.work-item").title("Widget work").description("widgets and gears"),
         );
         write_history(root, "w1", "CONTEXT.md", "# Should Not Win\n\nThis must never be the anchor.\n");
 
         let m = built(&dir, "w1", 20_000.0);
         assert_eq!(m["anchor"]["kind"], json!("work-item"));
-        assert_eq!(m["anchor"]["paths"], json!(["docs/knowledge/work/w1/item.md"]));
-        assert_eq!(m["entries"][0]["path"], "docs/knowledge/work/w1/item.md");
+        assert_eq!(m["anchor"]["paths"], json!(["docs/knowledge/tasks/w1/item.md"]));
+        assert_eq!(m["entries"][0]["path"], "docs/knowledge/tasks/w1/item.md");
         assert_eq!(m["entries"][0]["reason"], "work item");
     }
 
@@ -2902,3 +2911,971 @@ use std::time::Instant;
         ));
         assert!(!matches_owned(&code_patterns, "docs/knowledge/overview.md"));
     }
+
+mod freshness_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = Command::new("git").args(args).current_dir(dir).output().unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn put(root: &Path, rel: &str, body: &str) {
+        let file = join_rel(root, rel);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, body).unwrap();
+    }
+
+    fn read(root: &Path, rel: &str) -> String {
+        std::fs::read_to_string(join_rel(root, rel)).unwrap()
+    }
+
+    fn commit(root: &Path, message: &str) -> String {
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-q", "-m", message]);
+        git(root, &["rev-parse", "HEAD"])
+    }
+
+    fn init_repo(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        git(root, &["init", "-q"]);
+        git(root, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+        git(root, &["config", "user.email", "fresh@example.com"]);
+        git(root, &["config", "user.name", "freshness tests"]);
+        git(root, &["config", "commit.gpgsign", "false"]);
+        put(root, ".bee/onboarding.json", "{}\n");
+        put(root, ".bee/config.json", "{}\n");
+    }
+
+    fn concept(id: &str, anchors: Option<&[&str]>, verified: Option<&str>, body: &str) -> String {
+        let mut text = format!(
+            "---\ntype: bee.area\ntitle: {id}\ndescription: {id} area\nbee:\n  id: {id}\n  lifecycle: active\n"
+        );
+        if let Some(list) = anchors {
+            text.push_str(&format!("  anchors: [{}]\n", list.join(", ")));
+        }
+        if let Some(vc) = verified {
+            text.push_str(&format!("  verified_at: 2026-01-01\n  verified_commit: {vc}\n"));
+        }
+        text.push_str("---\n");
+        text.push_str(body);
+        text
+    }
+
+    fn bees_of(checkout: &Path) -> Vec<(String, Map<String, Value>)> {
+        let dir = checkout.join("docs").join("knowledge");
+        collect_concepts(&dir)
+            .unwrap()
+            .into_iter()
+            .map(|c| (c.path.clone(), bee_of(&c.data)))
+            .collect()
+    }
+
+    fn grade_all(checkout: &Path) -> BTreeMap<String, Grade> {
+        let bees = bees_of(checkout);
+        let refs: Vec<(&str, &Map<String, Value>)> = bees.iter().map(|(p, b)| (p.as_str(), b)).collect();
+        grade_bundle(checkout, &refs)
+    }
+
+    fn area_path(name: &str) -> String {
+        format!("docs/knowledge/areas/demo/{name}.md")
+    }
+
+    struct Cwd {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl Cwd {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for Cwd {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn run_verb(args: &[&str]) -> Option<ExitCode> {
+        let mut argv: Vec<OsString> = vec![OsString::from("knowledge")];
+        argv.extend(args.iter().map(OsString::from));
+        try_native(&argv, Instant::now())
+    }
+
+    fn four_grade_repo(root: &Path) -> String {
+        init_repo(root);
+        put(root, "src/a.rs", "a1\n");
+        put(root, "src/b.rs", "b1\n");
+        let first = commit(root, "code");
+        put(root, &area_path("conf"), &concept("conf", Some(&["src/a.rs"]), Some(&first), "Body.\n"));
+        put(root, &area_path("susp"), &concept("susp", Some(&["src/b.rs"]), Some(&first), "Body.\n"));
+        put(root, &area_path("orph"), &concept("orph", Some(&["src/gone.rs"]), Some(&first), "Body.\n"));
+        put(root, &area_path("unv"), &concept("unv", Some(&["src/a.rs"]), None, "Body.\n"));
+        put(root, &area_path("anchorless"), &concept("anchorless", None, None, "Body.\n"));
+        commit(root, "concepts");
+        put(root, "src/b.rs", "b2\n");
+        commit(root, "change b");
+        first
+    }
+
+    #[test]
+    fn each_of_the_four_grades_is_derived_from_anchors_and_git() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let first = four_grade_repo(&root);
+        let graded = grade_all(&root);
+
+        let conf = &graded["areas/demo/conf.md"];
+        assert_eq!(conf.grade, CONFIRMED);
+        assert_eq!(conf.verified_commit.as_deref(), Some(first.as_str()));
+        assert_eq!(conf.verified_at.as_deref(), Some("2026-01-01"));
+        assert!(conf.changed.is_empty());
+
+        let susp = &graded["areas/demo/susp.md"];
+        assert_eq!(susp.grade, SUSPECT);
+        assert_eq!(susp.changed, vec!["src/b.rs".to_string()]);
+
+        let orph = &graded["areas/demo/orph.md"];
+        assert_eq!(orph.grade, ORPHAN);
+        assert!(orph.reason.as_deref().unwrap().contains("src/gone.rs"));
+
+        let unv = &graded["areas/demo/unv.md"];
+        assert_eq!(unv.grade, UNVERIFIED);
+        assert!(unv.reason.as_deref().unwrap().contains("verified_commit"));
+
+        let anchorless = &graded["areas/demo/anchorless.md"];
+        assert_eq!(anchorless.grade, UNVERIFIED);
+        assert!(anchorless.reason.as_deref().unwrap().contains("bee.anchors"));
+    }
+
+    #[test]
+    fn grade_concept_matches_the_bundle_pass() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        four_grade_repo(&root);
+        let bees = bees_of(&root);
+        let (rel, bee) = bees.iter().find(|(p, _)| p.ends_with("susp.md")).unwrap();
+        let grade = grade_concept(&root, rel, bee);
+        assert_eq!(grade.grade, SUSPECT);
+        assert_eq!(grade.changed, vec!["src/b.rs".to_string()]);
+    }
+
+    #[test]
+    fn an_anchor_changed_in_a_commit_that_also_touched_the_concept_is_confirmed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        put(&root, "src/a.rs", "a1\n");
+        let first = commit(&root, "code");
+        put(&root, &area_path("x"), &concept("x", Some(&["src/a.rs"]), Some(&first), "Body.\n"));
+        commit(&root, "concept");
+        put(&root, "src/a.rs", "a2\n");
+        put(&root, &area_path("x"), &concept("x", Some(&["src/a.rs"]), Some(&first), "Body, edited.\n"));
+        commit(&root, "code and concept together");
+        assert_eq!(grade_all(&root)["areas/demo/x.md"].grade, CONFIRMED);
+
+        put(&root, "src/a.rs", "a3\n");
+        commit(&root, "code alone");
+        let after = grade_all(&root);
+        assert_eq!(after["areas/demo/x.md"].grade, SUSPECT);
+        assert_eq!(after["areas/demo/x.md"].changed, vec!["src/a.rs".to_string()]);
+    }
+
+    #[test]
+    fn a_sha_that_is_not_an_ancestor_of_head_is_unverified_with_a_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        put(&root, "src/a.rs", "a1\n");
+        commit(&root, "code");
+        git(&root, &["checkout", "-q", "-b", "side"]);
+        put(&root, "src/side.rs", "s\n");
+        let side = commit(&root, "side only");
+        git(&root, &["checkout", "-q", "main"]);
+        let unknown = "0123456789abcdef0123456789abcdef01234567";
+        put(&root, &area_path("off"), &concept("off", Some(&["src/a.rs"]), Some(&side), "Body.\n"));
+        put(&root, &area_path("ghost"), &concept("ghost", Some(&["src/a.rs"]), Some(unknown), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        let off = &graded["areas/demo/off.md"];
+        assert_eq!(off.grade, UNVERIFIED);
+        assert!(off.reason.as_deref().unwrap().contains("not an ancestor"));
+        let ghost = &graded["areas/demo/ghost.md"];
+        assert_eq!(ghost.grade, UNVERIFIED);
+        assert!(ghost.reason.as_deref().unwrap().contains("unknown to git"));
+    }
+
+    #[test]
+    fn a_checkout_without_git_grades_unverified_with_a_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("plain");
+        put(&root, "src/a.rs", "a\n");
+        put(
+            &root,
+            &area_path("x"),
+            &concept("x", Some(&["src/a.rs"]), Some("0123456789abcdef0123456789abcdef01234567"), "Body.\n"),
+        );
+        let grade = &grade_all(&root)["areas/demo/x.md"];
+        assert_eq!(grade.grade, UNVERIFIED);
+        assert!(grade.reason.as_deref().unwrap().contains("not a git repository"));
+    }
+
+    #[test]
+    fn a_merge_commit_that_brings_in_an_anchor_change_is_seen() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        put(&root, "src/a.rs", "a1\n");
+        put(&root, "src/other.rs", "o1\n");
+        let first = commit(&root, "code");
+        put(&root, &area_path("x"), &concept("x", Some(&["src/a.rs"]), Some(&first), "Body.\n"));
+        put(&root, &area_path("calm"), &concept("calm", Some(&["src/other.rs"]), Some(&first), "Body.\n"));
+        commit(&root, "concepts");
+        git(&root, &["checkout", "-q", "-b", "feature"]);
+        put(&root, "src/a.rs", "a2\n");
+        commit(&root, "feature change");
+        git(&root, &["checkout", "-q", "main"]);
+        put(&root, "notes.txt", "n\n");
+        commit(&root, "unrelated on main");
+        git(&root, &["merge", "-q", "--no-ff", "feature", "-m", "merge feature"]);
+
+        let graded = grade_all(&root);
+        assert_eq!(graded["areas/demo/x.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/x.md"].changed, vec!["src/a.rs".to_string()]);
+        assert_eq!(graded["areas/demo/calm.md"].grade, CONFIRMED);
+    }
+
+    #[test]
+    fn many_concepts_with_distinct_verified_commits_grade_in_one_pass() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        let mut shas = Vec::new();
+        for n in 0..6 {
+            put(&root, &format!("src/f{n}.rs"), "v1\n");
+            shas.push(commit(&root, &format!("f{n}")));
+        }
+        for (n, sha) in shas.iter().enumerate() {
+            put(
+                &root,
+                &area_path(&format!("c{n}")),
+                &concept(&format!("c{n}"), Some(&[format!("src/f{n}.rs").as_str()]), Some(sha), "Body.\n"),
+            );
+        }
+        commit(&root, "concepts");
+        put(&root, "src/f3.rs", "v2\n");
+        commit(&root, "touch f3");
+
+        let graded = grade_all(&root);
+        for n in 0..6 {
+            let want = if n == 3 { SUSPECT } else { CONFIRMED };
+            assert_eq!(graded[&format!("areas/demo/c{n}.md")].grade, want, "c{n}");
+        }
+    }
+
+    fn merged_branch_repo(root: &Path) -> (String, String, String) {
+        init_repo(root);
+        put(root, "src/a.rs", "a1\n");
+        put(root, "src/b.rs", "b1\n");
+        let base = commit(root, "base");
+        git(root, &["checkout", "-q", "-b", "side"]);
+        put(root, "src/a.rs", "a2\n");
+        let side_one = commit(root, "side changes a");
+        put(root, "src/side.rs", "s\n");
+        let side_two = commit(root, "side adds a file");
+        git(root, &["checkout", "-q", "main"]);
+        put(root, "notes.txt", "n\n");
+        commit(root, "main moves on");
+        git(root, &["merge", "-q", "--no-ff", "side", "-m", "merge side"]);
+        let _ = side_two;
+        (base, side_one, git(root, &["rev-parse", "HEAD"]))
+    }
+
+    #[test]
+    fn a_verified_commit_on_a_merged_branch_is_not_suspect_for_changes_that_precede_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let (base, side_one, _) = merged_branch_repo(&root);
+        put(&root, &area_path("onside"), &concept("onside", Some(&["src/a.rs"]), Some(&side_one), "Body.\n"));
+        put(&root, &area_path("early"), &concept("early", Some(&["src/b.rs"]), Some(&base), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        assert_eq!(graded["areas/demo/onside.md"].grade, CONFIRMED, "{:?}", graded["areas/demo/onside.md"].changed);
+        assert_eq!(graded["areas/demo/early.md"].grade, CONFIRMED);
+    }
+
+    #[test]
+    fn an_anchor_change_on_the_merged_branch_after_the_verified_commit_is_suspect() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let (base, side_one, _) = merged_branch_repo(&root);
+        put(&root, &area_path("early_a"), &concept("early_a", Some(&["src/a.rs"]), Some(&base), "Body.\n"));
+        put(&root, &area_path("dir"), &concept("dir", Some(&["src"]), Some(&side_one), "Body.\n"));
+        put(&root, &area_path("calm"), &concept("calm", Some(&["src/b.rs"]), Some(&side_one), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        assert_eq!(graded["areas/demo/early_a.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/early_a.md"].changed, vec!["src/a.rs".to_string()]);
+        assert_eq!(graded["areas/demo/dir.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/calm.md"].grade, CONFIRMED);
+    }
+
+    #[test]
+    fn a_merge_commit_that_edits_an_anchor_in_its_own_tree_makes_the_concept_suspect() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        put(&root, "src/a.rs", "a1\n");
+        put(&root, "src/b.rs", "b1\n");
+        let base = commit(&root, "base");
+        git(&root, &["checkout", "-q", "-b", "side"]);
+        put(&root, "src/side.rs", "s\n");
+        commit(&root, "side adds a file");
+        git(&root, &["checkout", "-q", "main"]);
+        put(&root, "notes.txt", "n\n");
+        commit(&root, "main moves on");
+        git(&root, &["merge", "-q", "--no-ff", "--no-commit", "side"]);
+        put(&root, "src/a.rs", "a-evil\n");
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-q", "-m", "merge side with an edit"]);
+        put(&root, &area_path("evil"), &concept("evil", Some(&["src/a.rs"]), Some(&base), "Body.\n"));
+        put(&root, &area_path("calm"), &concept("calm", Some(&["src/b.rs"]), Some(&base), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        assert_eq!(graded["areas/demo/evil.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/evil.md"].changed, vec!["src/a.rs".to_string()]);
+        assert_eq!(graded["areas/demo/calm.md"].grade, CONFIRMED);
+    }
+
+    #[test]
+    fn verified_commits_from_unrelated_histories_joined_into_head_stay_graded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        put(&root, "src/a.rs", "a1\n");
+        put(&root, "src/b.rs", "b1\n");
+        let main_root = commit(&root, "main root");
+        git(&root, &["checkout", "-q", "--orphan", "other"]);
+        git(&root, &["rm", "-rf", "-q", "."]);
+        put(&root, "lib/c.rs", "c1\n");
+        let other_root = commit(&root, "other root");
+        put(&root, "lib/c.rs", "c2\n");
+        commit(&root, "other changes c");
+        git(&root, &["checkout", "-q", "main"]);
+        git(&root, &["merge", "-q", "--allow-unrelated-histories", "--no-ff", "other", "-m", "join other"]);
+        put(&root, "src/b.rs", "b2\n");
+        commit(&root, "main changes b");
+        put(&root, &area_path("main_calm"), &concept("main_calm", Some(&["src/a.rs"]), Some(&main_root), "Body.\n"));
+        put(&root, &area_path("main_stale"), &concept("main_stale", Some(&["src/b.rs"]), Some(&main_root), "Body.\n"));
+        put(&root, &area_path("other_stale"), &concept("other_stale", Some(&["lib/c.rs"]), Some(&other_root), "Body.\n"));
+        put(&root, &area_path("other_calm"), &concept("other_calm", Some(&["src/a.rs"]), Some(&other_root), "Body.\n"));
+        commit(&root, "concepts");
+
+        let graded = grade_all(&root);
+        for name in ["main_calm", "main_stale", "other_stale", "other_calm"] {
+            let g = &graded[&format!("areas/demo/{name}.md")];
+            assert_ne!(g.grade, UNVERIFIED, "{name}: {:?}", g.reason);
+        }
+        assert_eq!(graded["areas/demo/main_calm.md"].grade, CONFIRMED);
+        assert_eq!(graded["areas/demo/main_stale.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/main_stale.md"].changed, vec!["src/b.rs".to_string()]);
+        assert_eq!(graded["areas/demo/other_stale.md"].grade, SUSPECT);
+        assert_eq!(graded["areas/demo/other_stale.md"].changed, vec!["lib/c.rs".to_string()]);
+        assert_eq!(graded["areas/demo/other_calm.md"].grade, SUSPECT);
+
+        let (calls, _) = counted_calls(&root, &[&main_root, &other_root]);
+        assert_eq!((calls_to(&calls, "log"), calls_to(&calls, "merge-base")), (1, 1), "{calls:?}");
+    }
+
+    #[test]
+    fn a_directory_anchor_covers_every_file_under_it_and_nothing_beside_it() {
+        assert!(anchor_covers("src", "src/a.rs"));
+        assert!(anchor_covers("./src/", "src/deep/a.rs"));
+        assert!(anchor_covers("src/a.rs", "src/a.rs"));
+        assert!(!anchor_covers("src", "src2/a.rs"));
+        assert!(!anchor_covers("src/a.rs", "src/a.rs.bak"));
+    }
+
+    fn counted_calls(root: &Path, vcs: &[&str]) -> (Vec<Vec<String>>, BTreeMap<String, Grade>) {
+        let mut text_concepts: Vec<(String, Map<String, Value>)> = Vec::new();
+        for (n, vc) in vcs.iter().enumerate() {
+            let rel = format!("areas/demo/k{n}.md");
+            put(root, &format!("docs/knowledge/{rel}"), &concept(&format!("k{n}"), Some(&["src/a.rs"]), Some(vc), "Body.\n"));
+            text_concepts.push((rel, bee_of(&parse_concept_data(root, n))));
+        }
+        let refs: Vec<(&str, &Map<String, Value>)> = text_concepts.iter().map(|(p, b)| (p.as_str(), b)).collect();
+        let calls: std::cell::RefCell<Vec<Vec<String>>> = std::cell::RefCell::new(Vec::new());
+        let runner = |cwd: &Path, args: &[&str]| {
+            calls.borrow_mut().push(args.iter().map(|a| a.to_string()).collect());
+            crate::verbs::worktree::run_git(cwd, args)
+        };
+        let graded = grade_bundle_with(root, &refs, &runner);
+        (calls.into_inner(), graded)
+    }
+
+    fn parse_concept_data(root: &Path, n: usize) -> Map<String, Value> {
+        let text = read(root, &format!("docs/knowledge/areas/demo/k{n}.md"));
+        match parse_frontmatter(&text) {
+            Fm::Parsed { data, .. } => data,
+            _ => panic!("fixture concept does not parse"),
+        }
+    }
+
+    fn calls_to(calls: &[Vec<String>], verb: &str) -> usize {
+        calls.iter().filter(|c| c.iter().any(|a| a == verb)).count()
+    }
+
+    #[test]
+    fn grading_a_bundle_costs_one_log_and_at_most_one_merge_base_per_distinct_verified_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        let mut shas = Vec::new();
+        for n in 0..3 {
+            put(&root, "src/a.rs", &format!("v{n}\n"));
+            shas.push(commit(&root, &format!("c{n}")));
+        }
+        let first_zero = "0000000000000000000000000000000000000001";
+        let last_f = "ffffffffffffffffffffffffffffffffffffffff";
+
+        let (calls, graded) = counted_calls(&root, &[&shas[0]]);
+        assert_eq!((calls_to(&calls, "log"), calls_to(&calls, "merge-base")), (1, 0), "{calls:?}");
+        assert_eq!(graded["areas/demo/k0.md"].grade, SUSPECT);
+
+        let (calls, _) = counted_calls(&root, &[&shas[0], &shas[1]]);
+        assert_eq!((calls_to(&calls, "log"), calls_to(&calls, "merge-base")), (1, 1), "{calls:?}");
+
+        for unknown in [first_zero, last_f] {
+            let vcs = [shas[0].as_str(), shas[1].as_str(), unknown];
+            let (calls, graded) = counted_calls(&root, &vcs);
+            assert_eq!(calls_to(&calls, "log"), 1, "{calls:?}");
+            assert!(calls_to(&calls, "merge-base") <= 3, "{calls:?}");
+            assert_eq!(calls.len(), calls_to(&calls, "log") + calls_to(&calls, "merge-base"), "{calls:?}");
+            assert_eq!(graded["areas/demo/k2.md"].grade, UNVERIFIED);
+            assert!(graded["areas/demo/k2.md"].reason.as_deref().unwrap().contains("unknown to git"));
+            assert_eq!(graded["areas/demo/k0.md"].grade, SUSPECT);
+            assert_eq!(graded["areas/demo/k1.md"].grade, SUSPECT);
+        }
+
+        let only_unknown = [first_zero];
+        let (calls, graded) = counted_calls(&root, &only_unknown);
+        assert!(calls.len() <= 1, "{calls:?}");
+        assert!(graded["areas/demo/k0.md"].reason.as_deref().unwrap().contains("unknown to git"));
+    }
+
+    fn seed_repo(root: &Path) {
+        init_repo(root);
+        put(root, "src/a.rs", "a\n");
+        put(root, "src/b.rs", "b\n");
+        put(root, "src/generated/g.rs", "g\n");
+        put(root, "docs/guide.md", "g\n");
+        put(
+            root,
+            &area_path("plain"),
+            &concept(
+                "plain",
+                None,
+                None,
+                "See `src/a.rs` and `src/a.rs:12`, also `docs/guide.md`, `src/generated/g.rs`, `.bee/config.json`, `missing/z.rs`, `not a path`.\n\n```\n`src/b.rs`\n```\n",
+            ),
+        );
+        put(
+            root,
+            &area_path("kept"),
+            &concept("kept", Some(&["src/b.rs"]), None, "Mentions `src/a.rs` too.\n"),
+        );
+        put(root, &area_path("bare"), &concept("bare", None, None, "No paths here, only `word`.\n"));
+        put(root, "docs/knowledge/patterns/pat.md", "---\ntype: bee.pattern\ntitle: pat\ndescription: pat\nbee:\n  id: pat-1\n  lifecycle: active\n---\nUses `src/a.rs`.\n");
+        commit(root, "seed fixture");
+        put(
+            root,
+            &area_path("fresh"),
+            &concept("fresh", None, None, "Untracked yet, uses `src/b.rs`.\n"),
+        );
+    }
+
+    #[test]
+    fn seed_anchors_writes_anchors_and_a_baseline_only_where_anchors_are_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        seed_repo(&root);
+        let plain_before = read(&root, &area_path("plain"));
+        let kept_before = read(&root, &area_path("kept"));
+        let bare_before = read(&root, &area_path("bare"));
+        let pattern_before = read(&root, "docs/knowledge/patterns/pat.md");
+
+        let _cwd = Cwd::enter(&root);
+        assert_eq!(run_verb(&["seed-anchors", "--dry-run"]), Some(ExitCode::SUCCESS));
+        assert_eq!(read(&root, &area_path("plain")), plain_before, "--dry-run must not write");
+
+        assert_eq!(run_verb(&["seed-anchors"]), Some(ExitCode::SUCCESS));
+        let plain = bees_of(&root).into_iter().find(|(p, _)| p.ends_with("plain.md")).unwrap().1;
+        assert_eq!(plain["anchors"], json!(["src/a.rs"]));
+        let seeded_at = git(&root, &["log", "-1", "--format=%H", "--", &area_path("plain")]);
+        assert_eq!(plain["verified_commit"], json!(seeded_at));
+        let day = git(&root, &["log", "-1", "--format=%cs", "--", &area_path("plain")]);
+        assert_eq!(plain["verified_at"], json!(day));
+
+        assert_eq!(read(&root, &area_path("kept")), kept_before, "a concept with anchors is never rewritten");
+        assert_eq!(read(&root, &area_path("bare")), bare_before, "zero resolving paths leaves the file alone");
+        assert_eq!(read(&root, "docs/knowledge/patterns/pat.md"), pattern_before, "patterns are never seeded");
+
+        let fresh = bees_of(&root).into_iter().find(|(p, _)| p.ends_with("fresh.md")).unwrap().1;
+        assert_eq!(fresh["anchors"], json!(["src/b.rs"]));
+        assert!(!fresh.contains_key("verified_commit"), "a concept with no commit gets anchors only");
+
+        let report = check_bundle(&root.join("docs").join("knowledge"), false).unwrap();
+        assert!(
+            report.warnings.iter().all(|w| w["code"] != "not_canonical"),
+            "seeded files must stay canonical: {:?}",
+            report.warnings
+        );
+        assert!(report.okf_errors.is_empty() && report.profile_errors.is_empty());
+
+        let seeded_plain = read(&root, &area_path("plain"));
+        assert_eq!(run_verb(&["seed-anchors"]), Some(ExitCode::SUCCESS));
+        assert_eq!(read(&root, &area_path("plain")), seeded_plain, "re-running is a no-op for anchored concepts");
+    }
+
+    fn confirm_repo(root: &Path) -> (String, String) {
+        init_repo(root);
+        put(root, "src/a.rs", "a1\n");
+        put(root, "src/b.rs", "b1\n");
+        let first = commit(root, "code");
+        put(root, &area_path("one"), &concept("one", Some(&["src/a.rs"]), Some(&first), "Body.\n"));
+        put(root, &area_path("two"), &concept("two", Some(&["src/a.rs", "src/b.rs"]), Some(&first), "Body.\n"));
+        put(root, &area_path("three"), &concept("three", Some(&["src/b.rs"]), Some(&first), "Body.\n"));
+        put(root, &area_path("gone"), &concept("gone", Some(&["src/gone.rs"]), Some(&first), "Body.\n"));
+        put(root, &area_path("bare"), &concept("bare", None, None, "Body.\n"));
+        commit(root, "concepts");
+        put(root, "src/a.rs", "a2\n");
+        let head = commit(root, "change a");
+        (first, head)
+    }
+
+    fn field(root: &Path, name: &str, key: &str) -> Option<String> {
+        let bees = bees_of(root);
+        let (_, bee) = bees.iter().find(|(p, _)| p.ends_with(&format!("/{name}.md")))?;
+        bee.get(key).and_then(Value::as_str).map(str::to_string)
+    }
+
+    #[test]
+    fn confirm_stamps_both_fields_by_id_and_by_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let (first, head) = confirm_repo(&root);
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let _cwd = Cwd::enter(&root);
+
+        assert_eq!(grade_all(&root)["areas/demo/one.md"].grade, SUSPECT);
+        assert_eq!(run_verb(&["confirm", "--id", "one"]), Some(ExitCode::SUCCESS));
+        assert_eq!(field(&root, "one", "verified_commit"), Some(head.clone()));
+        assert_eq!(field(&root, "one", "verified_at"), Some(today.clone()));
+        assert_eq!(grade_all(&root)["areas/demo/one.md"].grade, CONFIRMED);
+        assert_eq!(field(&root, "two", "verified_commit"), Some(first.clone()));
+
+        assert_eq!(run_verb(&["confirm", "--path", "src/b.rs"]), Some(ExitCode::SUCCESS));
+        assert_eq!(field(&root, "two", "verified_commit"), Some(head.clone()));
+        assert_eq!(field(&root, "three", "verified_commit"), Some(head.clone()));
+        assert_eq!(field(&root, "gone", "verified_commit"), Some(first.clone()));
+        assert_eq!(field(&root, "two", "verified_at"), Some(today.clone()));
+
+        assert_eq!(run_verb(&["confirm", "--id", "two", "--id", "gone"]), Some(ExitCode::SUCCESS));
+        assert_eq!(field(&root, "gone", "verified_commit"), Some(head.clone()));
+
+        let report = check_bundle(&root.join("docs").join("knowledge"), false).unwrap();
+        assert!(report.warnings.iter().all(|w| w["code"] != "not_canonical"), "{:?}", report.warnings);
+    }
+
+    #[test]
+    fn confirm_never_clears_an_orphan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let (_, head) = confirm_repo(&root);
+        let _cwd = Cwd::enter(&root);
+        assert_eq!(run_verb(&["confirm", "--id", "gone"]), Some(ExitCode::SUCCESS));
+        assert_eq!(field(&root, "gone", "verified_commit"), Some(head));
+        let grade = &grade_all(&root)["areas/demo/gone.md"];
+        assert_eq!(grade.grade, ORPHAN);
+        assert!(orphan_anchor_message(grade).contains("fix bee.anchors"));
+    }
+
+    #[test]
+    fn every_confirm_refusal_names_its_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        confirm_repo(&root);
+        let concepts = load_areas(&root.join("docs").join("knowledge")).unwrap();
+        let none: Vec<String> = Vec::new();
+
+        let unknown = confirm_targets(&concepts, &["nope".to_string()], None).unwrap_err();
+        assert_eq!(unknown, "no concept with bee.id nope — bee knowledge list");
+
+        let anchorless = confirm_targets(&concepts, &["bare".to_string()], None).unwrap_err();
+        assert_eq!(
+            anchorless,
+            "docs/knowledge/areas/demo/bare.md has no bee.anchors — run bee knowledge seed-anchors or add anchors"
+        );
+
+        let no_path = confirm_targets(&concepts, &none, Some("src/never.rs")).unwrap_err();
+        assert_eq!(no_path, "no concept anchors src/never.rs");
+
+        let before = read(&root, &area_path("one"));
+        let _cwd = Cwd::enter(&root);
+        assert_ne!(run_verb(&["confirm", "--id", "one", "--id", "nope"]), Some(ExitCode::SUCCESS));
+        assert_eq!(read(&root, &area_path("one")), before, "a refused confirm writes nothing");
+        assert_eq!(run_verb(&["confirm"]), None);
+        assert_eq!(run_verb(&["confirm", "--id", "one", "--path", "src/a.rs"]), None);
+    }
+
+    #[test]
+    fn a_confirm_from_a_granted_worktree_writes_the_worktrees_concept_and_leaves_main_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let (_, main_head) = confirm_repo(&main);
+        let granted = tmp.path().join("wt-granted");
+        git(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        put(&main, ".bee/runtime/worktree-grants.json", "{\"wt-granted\": true}\n");
+        put(&granted, ".bee/onboarding.json", "{}\n");
+        put(&granted, ".bee/runtime/worktree-identity.json", "{\"feature\":\"demo\"}\n");
+        put(&granted, "src/a.rs", "a3 from the worktree\n");
+        let worktree_head = commit(&granted, "worktree change");
+        assert_ne!(worktree_head, main_head);
+
+        let main_before = read(&main, &area_path("one"));
+        {
+            let _cwd = Cwd::enter(&granted);
+            assert_eq!(bundle_root(&main, None), granted.join("docs").join("knowledge"));
+            assert_eq!(run_verb(&["confirm", "--id", "one"]), Some(ExitCode::SUCCESS));
+        }
+        assert_eq!(field(&granted, "one", "verified_commit"), Some(worktree_head));
+        assert_eq!(read(&main, &area_path("one")), main_before, "main's tree is untouched");
+        {
+            let _cwd = Cwd::enter(&main);
+            assert_eq!(bundle_root(&main, None), main.join("docs").join("knowledge"));
+        }
+    }
+
+    #[test]
+    fn check_reports_freshness_counts_rows_warnings_and_never_grades_patterns() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        four_grade_repo(&root);
+        put(
+            &root,
+            "docs/knowledge/patterns/pat.md",
+            &concept("pat", Some(&["src/b.rs"]), Some("0123456789abcdef0123456789abcdef01234567"), "Body.\n")
+                .replace("type: bee.area", "type: bee.pattern"),
+        );
+        let report = check_bundle(&root.join("docs").join("knowledge"), false).unwrap();
+
+        assert_eq!(freshness_line(&report.freshness), "freshness: 1 confirmed, 1 suspect, 1 orphan, 2 unverified");
+        assert!(report.freshness.iter().all(|(p, _)| p.starts_with("areas/")));
+
+        let value = freshness_json(&report.freshness);
+        assert_eq!(value["confirmed"], 1);
+        assert_eq!(value["suspect"], 1);
+        assert_eq!(value["orphan"], 1);
+        assert_eq!(value["unverified"], 2);
+        let rows = value["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 5);
+        let susp = rows.iter().find(|r| r["path"] == "areas/demo/susp.md").unwrap();
+        assert_eq!(susp["grade"], "suspect");
+        assert_eq!(susp["changed"], json!(["src/b.rs"]));
+        assert!(susp["verified_commit"].is_string() && susp["verified_at"] == "2026-01-01");
+
+        let stale: Vec<&Value> = report.warnings.iter().filter(|w| w["code"] == "stale_anchor").collect();
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0]["file"], "areas/demo/susp.md");
+        let message = stale[0]["message"].as_str().unwrap();
+        assert!(message.contains("src/b.rs") && message.contains("bee knowledge confirm --id susp"), "{message}");
+
+        let orphan: Vec<&Value> = report.warnings.iter().filter(|w| w["code"] == "orphan_anchor").collect();
+        assert_eq!(orphan.len(), 1);
+        assert!(orphan[0]["message"].as_str().unwrap().contains("src/gone.rs"));
+        assert!(orphan[0]["message"].as_str().unwrap().contains("fix bee.anchors"));
+
+        assert!(report.warnings.iter().all(|w| w["file"] != "patterns/pat.md" || w["code"] != "stale_anchor"));
+        assert!(!report.notes.iter().any(|n| n.contains("seed-anchors")));
+    }
+
+    #[test]
+    fn check_prints_the_seed_note_when_no_area_concept_carries_anchors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        init_repo(&root);
+        put(&root, "src/a.rs", "a\n");
+        put(&root, &area_path("x"), &concept("x", None, None, "Body `src/a.rs`.\n"));
+        commit(&root, "init");
+        let report = check_bundle(&root.join("docs").join("knowledge"), false).unwrap();
+        assert!(report.notes.contains(&"no concept carries bee.anchors — run bee knowledge seed-anchors once".to_string()));
+        assert_eq!(freshness_line(&report.freshness), "freshness: 0 confirmed, 0 suspect, 0 orphan, 1 unverified");
+        assert!(report.warnings.iter().all(|w| w["code"] != "stale_anchor" && w["code"] != "orphan_anchor"));
+
+        let empty = tmp.path().join("empty");
+        std::fs::create_dir_all(empty.join("docs").join("knowledge")).unwrap();
+        let none = check_bundle(&empty.join("docs").join("knowledge"), false).unwrap();
+        assert!(!none.notes.iter().any(|n| n.contains("seed-anchors")));
+    }
+
+    fn pattern_concept() -> String {
+        "---\ntype: bee.pattern\ntitle: Body pattern\ndescription: Body pattern\ntimestamp: 2026-01-01\nbee:\n  id: pat\n  lifecycle: active\n---\nBody of the pattern.\n".to_string()
+    }
+
+    #[test]
+    fn search_rows_carry_the_grade_of_an_area_concept_and_patterns_print_pattern() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let first = four_grade_repo(&root);
+        put(&root, "docs/knowledge/patterns/pat.md", &pattern_concept());
+        let dir = root.join("docs").join("knowledge");
+
+        let hits = search_bundle(&dir, "body", 20).unwrap();
+        let find = |suffix: &str| hits.iter().find(|h| h.path.ends_with(suffix)).unwrap();
+
+        let conf = find("areas/demo/conf.md");
+        assert_eq!(conf.grade, Some(CONFIRMED));
+        assert_eq!(conf.verified_at.as_deref(), Some("2026-01-01"));
+        assert_eq!(conf.verified_commit.as_deref(), Some(first.as_str()));
+        assert!(hit_line(conf).contains(" — [confirmed @ 2026-01-01] — "), "{}", hit_line(conf));
+
+        let susp = find("areas/demo/susp.md");
+        assert_eq!(susp.grade, Some(SUSPECT));
+        assert!(hit_line(susp).contains(" — [suspect @ 2026-01-01] — "), "{}", hit_line(susp));
+
+        let unv = find("areas/demo/unv.md");
+        assert_eq!(unv.grade, Some(UNVERIFIED));
+        assert!(hit_line(unv).contains(" — [unverified @ never] — "), "{}", hit_line(unv));
+        assert!(hit_line(find("areas/demo/anchorless.md")).contains(" — [unverified @ never] — "));
+
+        let pat = find("patterns/pat.md");
+        assert_eq!(pat.grade, None);
+        assert!(hit_line(pat).contains(" — [pattern] — "), "{}", hit_line(pat));
+        assert!(!hit_line(pat).contains(" @ "), "{}", hit_line(pat));
+
+        let row = hit_row(susp);
+        assert_eq!(row["grade"], json!("suspect"));
+        assert_eq!(row["verified_at"], json!("2026-01-01"));
+        assert_eq!(row["verified_commit"], json!(first));
+        let prow = hit_row(pat);
+        assert_eq!(prow["grade"], Value::Null);
+        assert_eq!(prow["verified_at"], Value::Null);
+        assert_eq!(prow["verified_commit"], Value::Null);
+    }
+
+    #[test]
+    fn show_prints_the_freshness_line_and_carries_it_in_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let first = four_grade_repo(&root);
+        put(&root, "docs/knowledge/patterns/pat.md", &pattern_concept());
+        let dir = root.join("docs").join("knowledge");
+
+        let susp = show_concept(&dir, "susp").unwrap();
+        let bee_line = susp.lines.iter().position(|l| l.starts_with("bee.id:")).unwrap();
+        let fresh_line = susp.lines.iter().position(|l| l.starts_with("freshness: suspect @ 2026-01-01")).unwrap();
+        let links_line = susp.lines.iter().position(|l| l.starts_with("links_out:")).unwrap();
+        assert!(bee_line < fresh_line && fresh_line < links_line, "{:?}", susp.lines);
+        assert!(susp.lines[fresh_line].contains("src/b.rs"), "{}", susp.lines[fresh_line]);
+        let value = show_value(susp);
+        assert_eq!(value["grade"], json!("suspect"));
+        assert_eq!(value["verified_at"], json!("2026-01-01"));
+        assert_eq!(value["verified_commit"], json!(first));
+
+        let conf = show_concept(&dir, "conf").unwrap();
+        assert!(conf.lines.iter().any(|l| l == "freshness: confirmed @ 2026-01-01"), "{:?}", conf.lines);
+        assert_eq!(show_value(conf)["grade"], json!("confirmed"));
+
+        let pat = show_concept(&dir, "pat").unwrap();
+        assert!(!pat.lines.iter().any(|l| l.starts_with("freshness:")), "{:?}", pat.lines);
+        let pvalue = show_value(pat);
+        assert_eq!(pvalue["grade"], Value::Null);
+        assert_eq!(pvalue["verified_commit"], Value::Null);
+    }
+
+    #[test]
+    fn context_entries_carry_the_grade_and_a_stale_entry_names_its_anchor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        four_grade_repo(&root);
+        put(
+            &root,
+            "docs/knowledge/item.md",
+            "---\ntype: bee.work-item\ntitle: Item\ndescription: item\nbee:\n  id: w1\n  lifecycle: active\n  required_context: [areas/demo/conf.md, areas/demo/susp.md, areas/demo/orph.md]\n---\nitem body\n",
+        );
+        let dir = root.join("docs").join("knowledge");
+        let manifest = built(&dir, "w1", 100000.0);
+        let entry = |suffix: &str| {
+            manifest["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|e| e["path"].as_str().unwrap().ends_with(suffix))
+                .unwrap()
+                .clone()
+        };
+
+        let conf = entry("areas/demo/conf.md");
+        assert_eq!(conf["grade"], json!("confirmed"));
+        assert_eq!(conf["verified_at"], json!("2026-01-01"));
+        assert!(!conf["reason"].as_str().unwrap().contains("(grade:"), "{conf}");
+
+        let susp = entry("areas/demo/susp.md");
+        assert_eq!(susp["grade"], json!("suspect"));
+        assert_eq!(susp["reason"], json!("required_context depth 1 via item.md (grade: suspect — src/b.rs)"));
+
+        let orph = entry("areas/demo/orph.md");
+        assert_eq!(orph["grade"], json!("orphan"));
+        assert!(orph["reason"].as_str().unwrap().ends_with(" (grade: orphan — src/gone.rs)"), "{orph}");
+
+        let item = entry("item.md");
+        assert_eq!(item["grade"], Value::Null);
+        assert_eq!(item["verified_at"], Value::Null);
+        assert_eq!(item["reason"], json!("work item"));
+    }
+
+    #[test]
+    fn check_runs_natively_from_the_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        four_grade_repo(&root);
+        let _cwd = Cwd::enter(&root);
+        assert!(run_verb(&["check", "--json"]).is_some());
+    }
+
+    fn session_record(root: &Path, id: &str, lane: Option<&str>) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut rec = json!({"id": id, "last_heartbeat": "2026-11-07T00:00:00.000Z"});
+        if let Some(l) = lane {
+            rec["lane"] = json!(l);
+        }
+        std::fs::write(dir.join(format!("{id}.json")), rec.to_string()).unwrap();
+    }
+
+    fn timings_log(root: &Path, text: &str) {
+        let dir = root.join(".bee").join("logs");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("timings.jsonl"), text).unwrap();
+    }
+
+    #[test]
+    fn timings_feature_reads_the_bound_lane_of_the_env_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        session_record(tmp.path(), "s-bound", Some("alpha"));
+        session_record(tmp.path(), "s-free", None);
+        assert_eq!(crate::verbs::timing_feature(tmp.path(), Some("s-bound")), Some("alpha".to_string()));
+        assert_eq!(crate::verbs::timing_feature(tmp.path(), Some("s-free")), None);
+        assert_eq!(crate::verbs::timing_feature(tmp.path(), Some("s-missing")), None);
+    }
+
+    #[test]
+    fn timings_feature_is_null_without_an_env_session_even_with_one_live_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        session_record(tmp.path(), "s-only", Some("alpha"));
+        assert_eq!(crate::verbs::timing_feature(tmp.path(), None), None);
+    }
+
+    #[test]
+    fn timings_row_keeps_the_four_keys_and_adds_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        session_record(tmp.path(), "s-bound", Some("alpha"));
+        let row = crate::verbs::timing_row(tmp.path(), "knowledge show", 7, true, "2026-11-07T00:00:00.000Z", Some("s-bound"));
+        assert_eq!(
+            row,
+            json!({"ts": "2026-11-07T00:00:00.000Z", "cmd": "knowledge show", "ms": 7, "ok": true, "feature": "alpha"})
+        );
+        let bare = crate::verbs::timing_row(tmp.path(), "status", 3, true, "2026-11-07T00:00:00.000Z", None);
+        assert_eq!(bare["feature"], Value::Null);
+        assert_eq!(bare["cmd"], "status");
+    }
+
+    #[test]
+    fn timings_pull_rate_groups_by_feature_and_skips_malformed_rows() {
+        let tmp = tempfile::tempdir().unwrap();
+        let row = |cmd: &str, feature: Option<&str>| {
+            let mut v = json!({"ts": "2026-11-07T00:00:00.000Z", "cmd": cmd, "ms": 1, "ok": true});
+            if let Some(f) = feature {
+                v["feature"] = json!(f);
+            }
+            format!("{v}\n")
+        };
+        let mut log = String::new();
+        log += &row("knowledge search", Some("alpha"));
+        log += &row("knowledge context", Some("alpha"));
+        log += &row("knowledge show", Some("alpha"));
+        log += &row("status", Some("alpha"));
+        log += &row("knowledge search", Some("beta"));
+        log += &row("status", Some("beta"));
+        log += &row("status", Some("beta"));
+        log += &row("status", Some("beta"));
+        log += &row("knowledge show", None);
+        log += &row("knowledge check", None);
+        log += "{not json\n";
+        log += "[1,2]\n";
+        log += "\n";
+        timings_log(tmp.path(), &log);
+
+        let (section, lines) = build_pull_rate(tmp.path());
+        let rows = section["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 3, "{section}");
+        assert_eq!(rows[0]["feature"], "alpha");
+        assert_eq!(rows[0]["search"], 1);
+        assert_eq!(rows[0]["context"], 1);
+        assert_eq!(rows[0]["show"], 1);
+        assert_eq!(rows[0]["pulls"], 3);
+        assert_eq!(rows[0]["calls"], 4);
+        assert_eq!(rows[0]["rate"], 0.75);
+        assert_eq!(rows[1]["feature"], "beta");
+        assert_eq!(rows[1]["pulls"], 1);
+        assert_eq!(rows[1]["calls"], 4);
+        assert_eq!(rows[1]["rate"], 0.25);
+        assert_eq!(rows[2]["feature"], "(unbound)");
+        assert_eq!(rows[2]["show"], 1);
+        assert_eq!(rows[2]["calls"], 2);
+        assert_eq!(rows[2]["rate"], 0.5);
+        assert_eq!(section["total"]["search"], 2);
+        assert_eq!(section["total"]["pulls"], 5);
+        assert_eq!(section["total"]["calls"], 10);
+        assert_eq!(section["total"]["rate"], 0.5);
+        assert_eq!(section["malformed_count"], 2);
+        assert_eq!(lines[0], "Pull rate");
+        assert!(lines.iter().any(|l| l.contains("alpha") && l.contains("0.75")), "{lines:?}");
+        assert!(lines.iter().any(|l| l.contains("(unbound)")), "{lines:?}");
+        assert!(lines.iter().any(|l| l.contains("total")), "{lines:?}");
+    }
+
+    #[test]
+    fn timings_pull_rate_rounds_to_three_decimals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut log = String::from("{\"cmd\":\"knowledge search\",\"feature\":\"a\"}\n");
+        log += "{\"cmd\":\"status\",\"feature\":\"a\"}\n";
+        log += "{\"cmd\":\"status\",\"feature\":\"a\"}\n";
+        timings_log(tmp.path(), &log);
+        let (section, _) = build_pull_rate(tmp.path());
+        assert_eq!(section["rows"][0]["rate"], 0.333);
+    }
+
+    #[test]
+    fn timings_pull_rate_over_a_missing_log_is_an_empty_table() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (section, lines) = build_pull_rate(tmp.path());
+        assert_eq!(section["rows"].as_array().unwrap().len(), 0);
+        assert_eq!(section["total"]["calls"], 0);
+        assert_eq!(section["total"]["rate"], 0.0);
+        assert_eq!(section["malformed_count"], 0);
+        assert_eq!(lines[0], "Pull rate");
+    }
+}

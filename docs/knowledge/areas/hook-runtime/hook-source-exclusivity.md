@@ -11,6 +11,9 @@ bee:
   decisions: ["codex-hook-state-parity D1-D3, D8-D13", cf511ff3 (installed plugin package is authoritative; source arbitration and cleanup are proof-gated), "i54-closeout D5, D9"]
   sources: ["codex-hook-state-parity cells 2, 3, 5 (paired Codex subagent audit, package authority, exclusive hook-source arbitration, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "docs/specs/hook-runtime.md#B14", "docs/specs/hook-runtime.md#R15", "docs/specs/hook-runtime.md#R16", "docs/specs/hook-runtime.md#P11", "docs/specs/hook-runtime.md#P12", "i54-closeout cell i54-closeout-5 (doctor hook_sources both-present regression test; trace in .bee/cells/, 2026-07-24)"]
   authoritative_for: "hook-runtime: exclusive arbitration between the package and project hook sources"
+  anchors: [packages/bee/hooks/hooks.json, .codex/hooks.json, packages/bee/hooks/claude-hooks.json]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Hook Runtime — exactly one active hook source per installation

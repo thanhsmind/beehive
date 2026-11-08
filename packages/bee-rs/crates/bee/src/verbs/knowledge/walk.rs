@@ -51,6 +51,9 @@ pub(crate) fn list_bundle_markdown(dir: &Path) -> Option<Vec<String>> {
             let Ok(ft) = entry.file_type() else { continue };
             let child_rel = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
             if ft.is_dir() {
+                if rel.is_empty() && name == "work" {
+                    continue;
+                }
                 walk(&child_abs, &child_rel, out)?;
             } else if ft.is_file() && name.ends_with(".md") {
                 out.push(child_rel);
@@ -351,4 +354,5 @@ pub(crate) struct CheckReport {
     /// a warning: the bundle reaches patterns through the index and the
     /// context ranker, so an unlinked concept is a link debt, not a defect.
     pub(crate) orphans: Vec<String>,
+    pub(crate) freshness: Vec<(String, Grade)>,
 }

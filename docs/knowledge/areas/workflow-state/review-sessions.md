@@ -11,6 +11,9 @@ bee:
   decisions: [565e68d0-327f-404e-b49e-d1c61ba81bfd (independent review is user-invoked; a feature closes truthfully as unreviewed), a83a3613 (a conclusive repository answer outranks an auxiliary launch warning when review coverage is derived), c18ac30a (an approved review decision is refused while any P1 finding stands unresolved), 8388df3e (herding-route-role D2 — the cockpit-only, owner-armed review carve-out)]
   sources: ["review-on-demand cells review-od-1..3 (traces in .bee/cells/, reports docs/history/review-on-demand/reports/, 2026-07-12)", "codex-sandbox-baseline cell codex-sandbox-baseline-6 (status-first review history derivation, 2026-07-16)", "review-p1-teeth cell rp1-1 (approval refuses on an unresolved P1; trace .bee/cells/archive/review-p1-teeth/rp1-1.json, decision c18ac30a, 2026-08-04)", "docs/specs/workflow-state.md#B3", "docs/specs/workflow-state.md#B4", "docs/specs/workflow-state.md#B5", "docs/specs/workflow-state.md#B6", "docs/specs/workflow-state.md#R4", "docs/specs/workflow-state.md#R5", "docs/specs/workflow-state.md#R6", "docs/specs/workflow-state.md#R9", "docs/specs/workflow-state.md#R10", "docs/specs/workflow-state.md#R11", "docs/specs/workflow-state.md#R28", "docs/specs/workflow-state.md#E7", "docs/specs/workflow-state.md#E8", "docs/specs/workflow-state.md#E9", "docs/specs/workflow-state.md#P17"]
   authoritative_for: "workflow-state: review sessions, review candidates, and derived review status"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/reviews.rs]
+  verified_at: 2026-11-07
+  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
 
 # Workflow State — review sessions, the candidates ledger, and derived review status

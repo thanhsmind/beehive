@@ -191,6 +191,18 @@ pub(crate) fn num(v: f64) -> Value {
     Number::from_f64(v).map(Value::Number).unwrap_or(Value::Null)
 }
 
+fn first_stale_anchor(grade: &Grade) -> Option<String> {
+    match grade.grade {
+        SUSPECT => grade.changed.first().cloned(),
+        ORPHAN => {
+            let reason = grade.reason.as_deref()?;
+            let list = reason.split_once(": ").map(|(_, rest)| rest).unwrap_or(reason);
+            list.split(", ").next().map(str::to_string)
+        }
+        _ => None,
+    }
+}
+
 pub(crate) enum ManifestOut {
     Built(Value),
     Thrown(String),
@@ -410,7 +422,11 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         bytes: u64,
         est: f64,
         floor: bool,
+        grade: Option<&'static str>,
+        verified_at: Option<String>,
     }
+    let ranked_concepts: Vec<&Concept> = ranked.iter().filter_map(|(rel, _)| by_path.get(rel.as_str()).copied()).collect();
+    let graded = grade_area_concepts(root, &ranked_concepts);
     // A history, ledger, or backlog anchor is not a bundle concept:
     // `select()` never carries it into `ranked` (by_path only holds
     // docs/knowledge/ concepts), and sizing off `join_rel(dir, ...)` would
@@ -429,6 +445,8 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
                 bytes: *bytes,
                 est: (*bytes as f64 / 4.0).ceil(),
                 floor: false,
+                grade: None,
+                verified_at: None,
             });
         }
         Anchor::Ledger { paths, bytes, .. } => {
@@ -439,6 +457,8 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
                 bytes: *bytes,
                 est: (*bytes as f64 / 4.0).ceil(),
                 floor: false,
+                grade: None,
+                verified_at: None,
             });
         }
         Anchor::Backlog { paths, bytes, .. } => {
@@ -449,6 +469,8 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
                 bytes: *bytes,
                 est: (*bytes as f64 / 4.0).ceil(),
                 floor: false,
+                grade: None,
+                verified_at: None,
             });
         }
         Anchor::WorkItem(_) => {}
@@ -458,7 +480,17 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         let bytes = std::fs::metadata(join_rel(dir, rel)).map(|m| m.len()).unwrap_or(0);
         let est = (bytes as f64 / 4.0).ceil();
         let floor = floor_paths.contains(&repo_rel);
-        Sized { repo_rel, reason: reason.clone(), bytes, est, floor }
+        let (grade, verified_at, reason) = match graded.get(rel) {
+            Some(g) => {
+                let suffix = match (g.grade, first_stale_anchor(g)) {
+                    (SUSPECT | ORPHAN, Some(anchor)) => format!(" (grade: {} — {anchor})", g.grade),
+                    _ => String::new(),
+                };
+                (Some(g.grade), g.verified_at.clone(), format!("{reason}{suffix}"))
+            }
+            None => (None, None, reason.clone()),
+        };
+        Sized { repo_rel, reason, bytes, est, floor, grade, verified_at }
     }));
 
     let floor_cost: f64 = sized.iter().filter(|s| s.floor).map(|s| s.est).sum();
@@ -492,6 +524,8 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         m.insert("bytes".into(), Value::Number(Number::from(item.bytes)));
         m.insert("est_tokens".into(), num(item.est));
         m.insert("reason".into(), Value::String(item.reason.clone()));
+        m.insert("grade".into(), item.grade.map(|g| Value::String(g.to_string())).unwrap_or(Value::Null));
+        m.insert("verified_at".into(), item.verified_at.clone().map(Value::String).unwrap_or(Value::Null));
         entries.push(Value::Object(m));
     }
 
