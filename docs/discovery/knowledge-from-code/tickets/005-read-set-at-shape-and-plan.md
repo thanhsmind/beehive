@@ -1,6 +1,6 @@
 ---
 type: grilling
-status: open
+status: closed
 blocked-by: none
 ---
 
@@ -28,3 +28,5 @@ resolves), and gives planning's `read_first` a source to cite instead of
 a hunt.
 
 ## Answer
+
+A `## Read set` section in `docs/history/<feature>/CONTEXT.md` with two tables (knowledge: path, grade, why; code: path, what it decides), filled by shaping from `bee knowledge context` and `bee knowledge search`, extended by planning whose `read_first` cites it; shape approval checks the section exists and every knowledge path resolves; nothing pushed into briefs. Owner agreed 2026-11-08. Logged as D11 (f3c5ad0f).

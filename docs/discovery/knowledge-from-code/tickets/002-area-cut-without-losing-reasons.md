@@ -1,6 +1,6 @@
 ---
 type: grilling
-status: open
+status: closed
 blocked-by: 001-anchor-definition
 ---
 
@@ -20,3 +20,4 @@ refuse an area entry with no decision link.
 
 ## Answer
 
+Freeze the pre-cut tree under `docs/history/knowledge-archive/` (search still reaches it, the graded bundle does not); cut each area with a worker that lists every reason sentence it removes and cites or logs the decision that holds it; `bee knowledge check` refuses an area entry with no decision link. Owner agreed 2026-11-08. Logged as D10 (e2f6e8c3).

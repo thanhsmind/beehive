@@ -1,6 +1,6 @@
 ---
 type: grilling
-status: open
+status: closed
 blocked-by: 002-area-cut-without-losing-reasons
 ---
 
@@ -33,3 +33,5 @@ Gather Sources table of `skills/bee-capturing/references/area-spec.md`
 already does this for the area spec).
 
 ## Answer
+
+Every document type gets a named template whose sections open with the one question they answer and name their feeding sources, plus a deletion line; a rule bullet carries status and verification pointer only where it can differ from its concept, the decision link stays on the concept; the cut area template holds map, boundaries, invariants, entry points, pointers. Owner agreed 2026-11-08. Logged as D12 (2bc56fb6).

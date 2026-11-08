@@ -61,16 +61,30 @@ in the binary and skills, and bee's own bundle has been cut to it.
   every document type has a named template that says what to add and
   where, substance over volume — owner direction 2026-11-08; the shape
   of the read set and the templates are tickets 005 and 006.
+- D10 (e2f6e8c3): the area cut keeps its reasons — pre-cut tree frozen
+  under docs/history/knowledge-archive/, each removed reason sentence
+  cites or logs its decision, check refuses an area entry with no
+  decision link — tickets/002-area-cut-without-losing-reasons.md
+- D11 (f3c5ad0f): the read set is a `## Read set` section of CONTEXT.md
+  (knowledge table with grade and why, code table with what it decides),
+  filled by shaping, cited by planning's read_first, checked at shape
+  approval — tickets/005-read-set-at-shape-and-plan.md
+- D12 (2bc56fb6): every document type has a template whose sections ask
+  one question and name their sources; rule bullets carry status and a
+  verification pointer only where they differ from the concept; the cut
+  area template is map, boundaries, invariants, entry points, pointers —
+  tickets/006-template-per-document-type.md
+
+## Features spawned
+
+- knowledge-freshness-mechanic (D1–D8) — closed 2026-11-08.
+- knowledge-docs-in-the-flow (D9, D11, D12, the check half of D10) —
+  the mechanic: read set section and gate check, templates with
+  prompts, rule-level fields, the no-decision-link refusal.
+- The bee-only content cut (D5, the cut half of D10) — a later feature,
+  after the template it needs exists.
 
 ## Not yet specified
-
-- How the area cut preserves the reasons buried in narrative —
-  tickets/002-area-cut-without-losing-reasons.md
-- Where the read set is recorded at shape and plan time, and by whom —
-  tickets/005-read-set-at-shape-and-plan.md
-- Which document types get a template, what a cut area concept's
-  template holds, and whether a rule carries its own status and
-  verification pointer — tickets/006-template-per-document-type.md
 - Whether an event catalogue can be generated from code —
   tickets/003-event-catalogue-from-code.md (research, deferred by D5)
 - Glossary form and home — tickets/004-glossary-form.md (deferred by D5)
