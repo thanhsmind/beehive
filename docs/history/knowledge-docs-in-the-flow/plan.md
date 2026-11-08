@@ -78,25 +78,41 @@ Recommended path: one slice, four cells.
 
 - kdf-1 (per D2, D5): `parse_read_set` beside `parse_locked_decision_ids`
   returns the knowledge paths of the `## Read set` section's first table
-  whose header starts with `| Concept |`; a new `read_set_refusal` in
-  plan_packets.rs runs at the same two points as `gate_preview_refusal`
-  (claim 2): no `## Read set` section, or a knowledge path that does not
-  resolve under docs/knowledge/, refuses with the path and the remedy; a
-  `<!-- bee:no-read-set: <reason> -->` marker anywhere in CONTEXT.md passes
-  and is named in `--json` as `read_set_waived`. A missing CONTEXT.md is not
-  this door's case (the context gate owns it).
+  whose header starts with `| Concept |`; a new `read_set_refusal(root,
+  feature)` beside `claims_refusal` runs at ONE call site, the pre-lock peek
+  where `plan_claims_refusal` already runs for `shape` and `--merge`
+  approvals (set_gate.rs:934 `if let Some(msg) = plan_claims_refusal(root,
+  &peek, lane) {`), with the same `tiny|small|docs` lane exemption
+  `gate_preview_refusal` uses (plan_packets.rs:584 `let is_exempt =
+  matches!(mode.as_deref(), Some("tiny") | Some("small") | Some("docs"));`)
+  and CONTEXT.md resolved the worktree-aware way `advisor_plan_path`
+  resolves plan.md. No `## Read set` section, a CONTEXT.md that is missing,
+  or a knowledge path that does not resolve under docs/knowledge/, refuses
+  with the path and the remedy; a `<!-- bee:no-read-set: <reason> -->`
+  marker anywhere in CONTEXT.md passes — the marker in the file is the
+  record, no gate output field is added.
 - kdf-2 (per D4): `missing_decision_link` profile error in `check_bundle`
-  for an area concept (type bee.area, not an area overview's index) whose
-  `bee.decisions` is absent or empty; the five concepts that fail today gain
-  their decision links from `bee decisions search`.
+  for every concept of type bee.area — an area's overview.md included, only
+  the generated index.md (no frontmatter) excluded — whose `bee.decisions`
+  is absent or empty, added as a branch of the existing bee.area loop in
+  check.rs rather than a new per-concept loop. The error fires only when
+  the bundle already carries at least one area concept with a non-empty
+  `bee.decisions`; a bundle with none (a host that stood its bundle up with
+  `bee knowledge bootstrap` or `bee knowledge new`, which write no
+  decisions) gets one NOTE naming the rule, exactly as the no-anchors case
+  does today — so a host is never red on records it was never asked to
+  keep (D6; hat-user-impact gray area 5). The five bee concepts that fail
+  today gain their decision links from `bee decisions search`.
 - kdf-3 (per D2, D3): the templates — context-template.md gains `## Read
   set` with the two tables; bee-shaping Explore runs `bee knowledge context`
   and `bee knowledge search` and Lock renders the section; planning-reference
   `read_first` cites the read set and the plan's Discovery extends it;
   area-spec.md sections open with their question and sources and carry a
   deletion line, Business Rules bullets gain the optional `— status: <active|temporary|retired>; proves: <path>` tail, and a new "Cut area template"
-  section holds map, boundaries, invariants, entry points, pointers; then
-  `bee dev regen`.
+  section holds map, boundaries, invariants, entry points, pointers;
+  concept-authoring.md's "Write through the CLI" step points at the section
+  questions, the deletion line and the rule-bullet tail as the body contract
+  every concept type follows; then `bee dev regen`.
 - kdf-4 (per D1-D4): the okf-profile concept that records the read set, the
   templates rule and the decision-link error, with anchors, and the
   bee-capturing SKILL.md paragraph that cites it.
@@ -106,6 +122,14 @@ Rejected alternatives:
 - A warning instead of an error for the missing decision link — five
   concepts fail today, a warning would never clear them (D4 says refuse).
 - Pushing the read set into worker briefs — rejected by D5.
+- A `read_set_waived` field in the gate's `--json` output — no consumer
+  exists; the marker in CONTEXT.md is the record (hat-alternatives S2).
+- Merging kdf-3 and kdf-4 into one cell — loses kdf-3's parallel run beside
+  the Rust cells and mixes the docs and writer roles; a second regen costs
+  seconds (hat-alternatives S5).
+- Two call sites for the read-set refusal — CONTEXT.md is a file, not a
+  record field, so the pre-lock peek is the one place it can change the
+  answer (hat-alternatives S1).
 
 Risk map:
 
@@ -113,6 +137,7 @@ Risk map:
 |---|---|---|---|
 | Read-set refusal blocks a legacy CONTEXT.md mid-flight | MEDIUM — the only in-flight lane other than this one is paseo-worktree-workspace at phase idle (`bee orient` 2026-11-08: "phase=idle feature=paseo-worktree-workspace") | kdf-1 | test: a CONTEXT.md with the `bee:no-read-set` marker approves; the refusal text names the marker |
 | `missing_decision_link` reds bee's own bundle | MEDIUM — five concepts measured (claim 11) | kdf-2 | `bee knowledge check` exits 0 on the branch after the five are linked |
+| A host's in-flight features and never-linked bundles are unmeasurable from here | MEDIUM — the marker is the whole mitigation for a legacy CONTEXT.md; the arm-on-first-link rule is the whole mitigation for a bootstrapped bundle | kdf-1, kdf-2 | the two host matrix rows: tiny exempt and zero-link bundle NOTE |
 | Skill reference edits drift from the rendered trees | LOW | kdf-3 | parity tests green after `bee dev regen` |
 | Template growth makes agents fill shape instead of information | LOW | kdf-3 | each new section line is one question plus sources, no sub-bullets |
 
@@ -165,7 +190,7 @@ Phase plan (one slice):
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| kdf-1 | Refuse a shape or merged approval whose CONTEXT.md has no read set | packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs, packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs | — | `bee gate --merge --approved true` on a feature whose CONTEXT.md lacks `## Read set` prints the refusal naming the section and the `bee:no-read-set` marker; with the section and resolving paths it approves | `cargo test … --bin bee -- read_set` green |
+| kdf-1 | Refuse a shape or merged approval whose CONTEXT.md has no read set | packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs, packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs, packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs | — | `bee gate --merge --approved true` on a standard feature whose CONTEXT.md lacks `## Read set` prints the refusal naming the section and the `bee:no-read-set` marker; with the section and resolving paths it approves; tiny, small and docs lanes are exempt | `cargo test … --bin bee -- read_set` green |
 | kdf-2 | Refuse an area concept with no decision link in knowledge check | packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, docs/knowledge/areas/hook-runtime/argv-decidable-refusals-precede-the-stdin-read.md, docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md, docs/knowledge/areas/rust-runtime/parity-and-conformance-proof-discipline.md, docs/knowledge/areas/verify-pipeline/verify-pipeline-skill-trigger-cases.md, docs/knowledge/areas/worktree-parallelism/path-identity.md | — | `bee knowledge check` on a bundle with an unlinked area concept prints `missing_decision_link` with the remedy; bee's own bundle checks clean | `cargo test … --bin bee -- missing_decision_link` green and `bee knowledge check` OK |
 | kdf-3 | Give every document template its section questions, deletion lines, the read set and the rule bullet fields | skills/bee-shaping/references/context-template.md, skills/bee-shaping/SKILL.md, skills/bee-planning/SKILL.md, skills/bee-planning/references/planning-reference.md, skills/bee-capturing/references/area-spec.md, skills/bee-capturing/references/concept-authoring.md, .agents/skills/*, .claude/skills/*, .codex/skills/*, .bee/onboarding.json, docs/history/codex-harness-hardening/release-manifest.json | — | a new feature's CONTEXT.md template shows `## Read set`; bee-shaping tells the agent to run `bee knowledge context` and `bee knowledge search` before Lock; area-spec sections open with their question; a rule bullet can end `— status: temporary; proves: <path>` | parity tests green after `bee dev regen`; `bee dev release-manifest --check` match |
 | kdf-4 | Record the read set, the templates rule and the decision-link error in the OKF profile | docs/knowledge/areas/okf-profile/freshness-and-document-homes.md, docs/knowledge/areas/okf-profile/overview.md, docs/knowledge/areas/okf-profile/index.md, docs/knowledge/index.md, skills/bee-capturing/SKILL.md, .agents/skills/*, .claude/skills/*, .codex/skills/*, .bee/onboarding.json, docs/history/codex-harness-hardening/release-manifest.json | kdf-1, kdf-2, kdf-3 | `bee knowledge search --text "read set"` returns the okf-profile concept with its grade; bee-capturing names the templates rule | `bee knowledge check` OK and `bee knowledge index --check` 0 stale; parity tests green |
@@ -185,6 +210,7 @@ Phase plan (one slice):
       "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
       "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
       "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
       "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
     ],
     "read_first": [
@@ -196,31 +222,30 @@ Phase plan (one slice):
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Add `parse_read_set(text: &str) -> Option<Vec<String>>` to context_table.rs beside `parse_locked_decision_ids` (context_table.rs:23 `pub(crate) fn parse_locked_decision_ids(text: &str) -> Option<Vec<String>> {`), the same prefix-tolerant shape: find the `## Read set` heading, then before the next `## ` heading the first pipe table whose header row starts with `| Concept |`, and return its first-column cells trimmed of backticks; `None` when the heading or the table is absent (per D2; grammar fixed in plan.md Approach). Add `read_set_refusal(root: &Path, record: &Map<String, Value>, lane: Option<&str>) -> Option<String>` in plan_packets.rs beside `gate_preview_refusal` (plan_packets.rs:563 `pub(crate) fn gate_preview_refusal(`): resolve `docs/history/<feature>/CONTEXT.md` the way close.rs:1126 does (`let context_path = docs_root.join(\"docs\").join(\"history\").join(feature).join(\"CONTEXT.md\");`); a missing CONTEXT.md is not this door's case and returns None; when the file carries a `<!-- bee:no-read-set: <reason> -->` marker return None and surface the reason as `read_set_waived` in the approval's --json output; when `parse_read_set` is None refuse with a message that names `## Read set`, the two tables and the marker as the escape; when any returned path does not start with `docs/knowledge/` or does not exist under the repo root, refuse naming that path and the remedy (fix the path or remove the row). Call `read_set_refusal` at exactly the two points set_gate.rs already calls `gate_preview_refusal` for `shape` and `--merge` approvals (set_gate.rs:949-950 `if approved && (merge || name == \"shape\") {` / `if let Some(msg) = gate_preview_refusal(root, target.record(), target.lane()) {`), after the preview refusal, never on a plain `--name execution` (per D2). Write the five test-matrix rows for kdf-1 in drivers/tests.rs with fn names containing `read_set`, using the existing CONTEXT.md fixture helper (drivers/tests.rs:6332 `fn write_locked_decisions_table(root: &Path, feature: &str, ids: &[&str]) {`) as the model. No code comments. Do not touch brief.rs or the prompt renderer (per D5).",
+    "action": "Add `parse_read_set(text: &str) -> Option<Vec<String>>` to context_table.rs beside `parse_locked_decision_ids` (context_table.rs:23 `pub(crate) fn parse_locked_decision_ids(text: &str) -> Option<Vec<String>> {`), the same prefix-tolerant shape (reuse its loop, `is_separator_row` and `skip_table`): find the `## Read set` heading, then before the next `## ` heading the first pipe table whose header row starts with `| Concept |`, and return its first-column cells trimmed of backticks; `None` when the heading or the table is absent (per D2; grammar fixed in plan.md Approach). Add `read_set_refusal(root: &Path, feature: &str) -> Option<String>` in plan_packets.rs beside `claims_refusal`, copying its skeleton: exempt `tiny|small|docs` lanes exactly as plan_packets.rs:584 does (`let is_exempt = matches!(mode.as_deref(), Some(\"tiny\") | Some(\"small\") | Some(\"docs\"));`), resolve `docs/history/<feature>/CONTEXT.md` the worktree-aware way `advisor_plan_path` resolves plan.md; a CONTEXT.md that cannot be read refuses, naming the path it looked for; when the file carries a `<!-- bee:no-read-set: <reason> -->` marker anywhere return None (the marker in the file is the record; add no gate output field); when `parse_read_set` is None refuse with this message shape: `gate: approval refused — docs/history/<feature>/CONTEXT.md has no \"## Read set\" section. FIX: run \\`bee knowledge context --work <feature>\\` and \\`bee knowledge search --text \"<topic>\"\\`, write the section (skills/bee-shaping/references/context-template.md), or add \\`<!-- bee:no-read-set: <reason> -->\\` for a CONTEXT.md written before the read set existed.`; an empty knowledge table (section present, zero rows) passes; when any returned path does not start with `docs/knowledge/` or does not exist under the repo root, refuse naming that path and the remedy (fix the path or remove the row). Call `read_set_refusal` at exactly ONE site: the pre-lock peek where `plan_claims_refusal` already runs for `shape` and `--merge` approvals (set_gate.rs:934 `if let Some(msg) = plan_claims_refusal(root, &peek, lane) {`), right after it, never on a plain `--name execution` (per D2). Write the seven test-matrix rows for kdf-1 as tests whose fn names contain `read_set`: the parser cases in drivers/tests.rs beside the existing CONTEXT.md fixture helper (drivers/tests.rs:6332 `fn write_locked_decisions_table(root: &Path, feature: &str, ids: &[&str]) {`), the gate approval cases in state_group/tests.rs beside the existing gate approval tests. No code comments. Do not touch brief.rs or the prompt renderer (per D5).",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- read_set",
     "must_haves": {
       "truths": [
-        "bee gate --merge --approved true on a feature whose CONTEXT.md lacks ## Read set refuses, names the section and the bee:no-read-set marker, and writes no state",
+        "bee gate --merge --approved true on a standard feature whose CONTEXT.md lacks ## Read set refuses, names the section and the bee:no-read-set marker, and writes no state",
         "the same approval with the section and every knowledge path on disk approves",
-        "a CONTEXT.md carrying <!-- bee:no-read-set: legacy --> approves and the --json output carries read_set_waived",
-        "a plain --name execution approval never runs the check"
+        "a CONTEXT.md carrying <!-- bee:no-read-set: legacy --> approves",
+        "a tiny lane with no section approves; a plain --name execution approval never runs the check"
       ],
       "artifacts": [
         {"path": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs", "substantive": "parse_read_set with the heading-scoped, header-prefix table grammar"},
-        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs", "substantive": "read_set_refusal with the marker escape and the path check"},
-        {"path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs", "substantive": "five tests whose names contain read_set covering happy, missing path, marker, missing section, execution-only"}
+        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs", "substantive": "read_set_refusal with the lane exemption, the marker escape and the path check"},
+        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs", "substantive": "gate approval tests whose names contain read_set: happy, missing path, marker, missing section, absent file, tiny exempt, execution-only"}
       ],
       "key_links": [
-        "set_gate.rs calls read_set_refusal at both shape and --merge approval points, after gate_preview_refusal"
+        "set_gate.rs calls read_set_refusal once, at the pre-lock peek right after plan_claims_refusal"
       ],
       "prohibitions": [
         "No change to brief.rs or the dispatch prompt renderer",
-        "No change to gate_preview_refusal's behavior",
+        "No change to gate_preview_refusal's or claims_refusal's behavior",
+        "No new field in the gate's --json output",
         "No code comments"
       ],
-      "open_choices": [
-        "Whether read_set_waived is surfaced on the gate record or only in the command output"
-      ]
+      "open_choices": []
     },
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
@@ -251,12 +276,13 @@ Phase plan (one slice):
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "In `check_bundle` (check.rs:557 `pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {`) add the profile error `missing_decision_link` for every concept of type bee.area that is not an area overview or index and whose `bee.decisions` is absent or an empty list; the row uses the same `finding(path, code, message)` shape as `owns_missing` (check.rs:896 `\"owns_missing\",`) and its message names the concept path, the remedy `bee decisions search --text \"<topic>\"` then `bee decisions log`, and the `decisions` list the id goes into (per D4). Patterns, work items and decision concepts are never checked. Add tests in knowledge/tests.rs with fn names containing `missing_decision_link`, modelled on tests.rs:2045 `fn owns_missing_errors_when_area_overview_carries_no_owns_keys() {`: an area concept with one decision gives no row; an area concept with `decisions: []` gives exactly one profile error row with that code; a pattern concept with no decisions gives no row. Then link the five area concepts named in files: for each, find the decision that settled it with `bee decisions search --text` (or the feature's docs/history CONTEXT.md D-number) and add it to `bee.decisions` in the canonical form the rest of the bundle uses (`<feature> D<n> (<short8>): <gist>` when a history feature exists, else the short8 id and a gist), keeping the frontmatter canonical (frontmatter.rs:90 `pub(crate) fn emit_frontmatter(data: &Map<String, Value>) -> Result<String, ()> {`). Portable per D6: no bee-repo path in the check. No code comments.",
+    "action": "In `check_bundle` (check.rs:557 `pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {`) add the profile error `missing_decision_link` for every concept of type bee.area — an area's overview.md included, only the generated index.md (which has no frontmatter) excluded — whose `bee.decisions` is absent or an empty list, as a branch of the existing bee.area loop in check_bundle rather than a new per-concept loop. The error fires only when at least one area concept in the bundle carries a non-empty `bee.decisions`; when none does, emit one NOTE (the shape of the no-anchors NOTE) saying no area concept links a decision and that the rule arms on the first link, and no error rows (per D6; a bootstrapped host must not red). The row uses the same `finding(path, code, message)` shape as `owns_missing` (check.rs:896 `\"owns_missing\",`) and its message names the concept path, the remedy `bee decisions search --text \"<topic>\"` then `bee decisions log`, and the `decisions` list the id goes into (per D4). Patterns, work items and decision concepts are never checked. Add tests in knowledge/tests.rs with fn names containing `missing_decision_link`, modelled on tests.rs:2045 `fn owns_missing_errors_when_area_overview_carries_no_owns_keys() {`: an area concept with one decision gives no row; an area concept with `decisions: []` gives exactly one profile error row with that code; a pattern concept with no decisions gives no row. Then link the five area concepts named in files: for each, find the decision that settled it with `bee decisions search --text` (or the feature's docs/history CONTEXT.md D-number) and add it to `bee.decisions` in the canonical form the rest of the bundle uses (`<feature> D<n> (<short8>): <gist>` when a history feature exists, else the short8 id and a gist), keeping the frontmatter canonical (frontmatter.rs:90 `pub(crate) fn emit_frontmatter(data: &Map<String, Value>) -> Result<String, ()> {`). Portable per D6: no bee-repo path in the check. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- missing_decision_link && cargo run --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge check",
     "must_haves": {
       "truths": [
         "bee knowledge check on a bundle holding an area concept with decisions: [] prints one profile error row missing_decision_link whose message names bee decisions log and the concept path",
         "a pattern concept with no decisions produces no row",
+        "a bundle in which no area concept carries a decision gets one NOTE and no missing_decision_link row",
         "bee knowledge check on this branch's bundle reports 0 OKF errors and 0 profile errors"
       ],
       "artifacts": [
@@ -272,9 +298,7 @@ Phase plan (one slice):
         "No bee-repo-only path in the check",
         "No code comments"
       ],
-      "open_choices": [
-        "Whether an area overview (the area's overview.md) is exempt or must also carry decisions"
-      ]
+      "open_choices": []
     },
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
@@ -318,7 +342,7 @@ Phase plan (one slice):
       "skills/bee-capturing/references/concept-authoring.md"
     ],
     "affects_specs": [],
-    "action": "Templates ask for information, not shape (per D3), and the read set lives in CONTEXT.md (per D2). (1) context-template.md: add a `## Read set` section after `## Terms` with the grammar fixed in plan.md Approach — `### Knowledge` table `| Concept | Grade at read | Why it matters |` and `### Code` table `| Path | What it decides |` — each table preceded by one line saying the question it answers and the source that feeds it (`bee knowledge context --work <feature>`, `bee knowledge search --text`, the scout), and one deletion line (drop a row the plan never cites). (2) bee-shaping SKILL.md: in Explore, before any code read, the agent runs `bee knowledge context` and `bee knowledge search --text` and keeps the hits with their printed grade; in Lock, the `## Read set` section renders those hits and the scout's code paths, and the section is named as what the shape gate checks, with the `<!-- bee:no-read-set: <reason> -->` marker as the recorded escape for a context written before the section existed. (3) bee-planning SKILL.md Research and planning-reference.md: a cell's `read_first` cites paths from the read set first (planning-reference.md:282-283 `read_first` what it must read.`), and the plan's `## Discovery` extends the read set with what planning read. (4) area-spec.md: every template section (Entry Points & Triggers through Pointers) opens with one line naming the question the section answers for a rebuilder and the sources that may feed it, and the Business Rules section gains a deletion line (remove a bullet a test already states) and the optional rule-bullet tail `— status: active|temporary|retired; proves: <test or verify feature path>` used only where the rule differs from its concept; add a `## Cut area template` section holding exactly map, boundaries, invariants, entry points, pointers, each with its question line, for the later content cut. (5) concept-authoring.md: point at the new template rules. Keep every addition to one question line plus sources per section; no sub-bullets. Then run `.bee/bin/bee dev regen` so .agents/skills, .claude/skills, .codex/skills, .bee/onboarding.json and the release manifest record follow, and commit them with the cell. No code comments.",
+    "action": "Templates ask for information, not shape (per D3), and the read set lives in CONTEXT.md (per D2). (1) context-template.md: add a `## Read set` section after `## Terms` with the grammar fixed in plan.md Approach — `### Knowledge` table `| Concept | Grade at read | Why it matters |` and `### Code` table `| Path | What it decides |` — each table preceded by one line saying the question it answers and the source that feeds it (`bee knowledge context --work <feature>`, `bee knowledge search --text`, the scout), one deletion line (drop a row the plan never cites), and the one-row form a host with no docs/knowledge/ writes in the knowledge table (`| (no bundle) | — | this host has no docs/knowledge/ |`). (2) bee-shaping SKILL.md: in Explore, the scout that already starts at the area index runs `bee knowledge context` and `bee knowledge search --text` and keeps the hits with their printed grade — the read set is recorded from that scout, never a second read pass; in Lock, the `## Read set` section renders those hits and the scout's code paths, and the section is named as what the shape gate checks, with the `<!-- bee:no-read-set: <reason> -->` marker as the recorded escape for a context written before the section existed. (3) bee-planning SKILL.md Research and planning-reference.md: a cell's `read_first` cites paths from the read set first (planning-reference.md:282-283 `read_first` what it must read.`), and the plan's `## Discovery` extends the read set with what planning read. (4) area-spec.md: every template section (Entry Points & Triggers through Pointers) opens with one line naming the question the section answers for a rebuilder and pointing at its row of the Gather Sources table (never repeating the row), plus a deletion line specific to that section (Behaviors: a behavior a test already states; Business Rules: a bullet a test already states; Data Dictionary: an element the code names and nothing explains — one sentence each, no generic line repeated); the Business Rules section gains the optional rule-bullet tail `— status: active|temporary|retired; proves: <test or verify feature path>` used only where the rule differs from its concept, and this tail replaces the ad-hoc parenthetical status form the template shows today (`R2 (not yet implemented — backlog b-12)`); add a `## Cut area template` section holding exactly map, boundaries, invariants, entry points, pointers, each with its question line, opened by one line saying the content cut (PBI p-3a756890) uses it and hosts keep the nine-section template until told otherwise. (5) concept-authoring.md, step \"Write through the CLI\": one paragraph saying every concept type's body follows the section questions, the deletion line and the rule-bullet tail of area-spec.md, with a link to that section. Keep every addition to one question line plus sources per section; no sub-bullets. Then run `.bee/bin/bee dev regen` so .agents/skills, .claude/skills, .codex/skills, .bee/onboarding.json and the release manifest record follow, and commit them with the cell. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
@@ -417,14 +441,18 @@ anywhere in the file waives the check with its reason recorded.
 
 | Case | Cell | Pass when |
 |---|---|---|
-| Happy: CONTEXT.md with `## Read set`, both tables, every knowledge path on disk | kdf-1 | `bee gate --merge --approved true` approves; `--json` carries no `read_set_waived` |
+| Happy: CONTEXT.md with `## Read set`, both tables, every knowledge path on disk | kdf-1 | `bee gate --merge --approved true` approves |
 | Edge: section present, one knowledge path missing on disk | kdf-1 | refusal names the missing path and the remedy; no state write |
-| Edge: no section but `<!-- bee:no-read-set: legacy -->` | kdf-1 | approves; `--json` carries `read_set_waived: "legacy"` |
+| Edge: no section but `<!-- bee:no-read-set: legacy -->` | kdf-1 | approves |
 | Error: no section, no marker | kdf-1 | refusal names `## Read set` and the marker; no state write |
+| Error: CONTEXT.md absent on a standard lane | kdf-1 | the same refusal, naming the path it looked for; no state write |
+| Regression: a `tiny` lane with a short CONTEXT.md and no section | kdf-1 | approves (lane exemption) |
 | Regression: a plain `--name execution` approval never runs the check | kdf-1 | approval unchanged on a CONTEXT.md with no section |
 | Happy: area concept with one decision | kdf-2 | no `missing_decision_link` row |
 | Error: area concept with `decisions: []` | kdf-2 | one profile error row `missing_decision_link` whose message names `bee decisions log` and the concept path |
 | Edge: pattern concept with no decisions | kdf-2 | no row (patterns are not area concepts) |
+| Host: bundle where no area concept links a decision | kdf-2 | check OK with one NOTE, no `missing_decision_link` row |
+| Edge: `## Read set` present with an empty knowledge table (no-bundle host) | kdf-1 | approves |
 | Main vs head: `bee knowledge check` on bee's bundle | kdf-2 | main: 0 errors; head: 0 errors after the five are linked |
 | Parity: skill trees after regen | kdf-3, kdf-4 | `cargo test --test rule_index_parity --test pointer_integrity` green |
 
