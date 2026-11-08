@@ -67,6 +67,8 @@ Reading scales with the lane: tiny keeps its two targeted reads; small adds
 patterns, decisions, and prior learnings — precedent beats research. Remove
 uncertainty at the lowest cost: cite a pattern or verify one fact; unfamiliar
 territory or competing approaches dispatch `bee-researching`, findings merged in.
+Start from CONTEXT.md's `## Read set`: a cell's `read_first` cites paths from
+it first, and the plan's `## Discovery` extends it with what planning read.
 When `.bee/verify/verify-app/features/` maps the ask, read the ONE matching
 feature file: its "How to get to it" seeds the cell file lists, its
 "Gotchas" seed the risk map. Note its last-modified date — a stale map is

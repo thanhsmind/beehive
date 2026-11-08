@@ -90,6 +90,12 @@ pattern:
   cell id and commit, a review finding, a verification output path.
 - `bee.decisions` — the store ids or D-ids the concept applies.
 
+Every concept type's body follows the section questions, the deletion
+line and the rule-bullet tail of
+[`area-spec.md`](area-spec.md#area-spec-template): open each section with
+the one question it answers, and delete a line a test or the code already
+states.
+
 Hand edits reorder nothing: keep the emitted key order (`id`,
 `lifecycle`, `areas`, `required_context`, `decisions`, `sources`,
 `lane`, `polarity`, `critical`, …) or `not_canonical` fires at
