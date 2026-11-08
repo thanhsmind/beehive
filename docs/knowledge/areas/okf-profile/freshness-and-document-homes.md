@@ -139,7 +139,7 @@ The check arms conditionally. It verifies area concepts only when the bundle con
 Once armed, any area concept whose `bee.decisions` field is absent or empty produces a profile error finding with code `missing_decision_link`:
 `area concept "<path>" carries no decision link — run bee decisions search --text "<topic>", then bee decisions log, and put the decision id in this concept's bee.decisions list`
 
-In strict mode (`--strict`), profile errors cause `bee knowledge check` to fail with a non-zero exit code.
+A `missing_decision_link` profile error makes `bee knowledge check` exit non-zero in every mode; `--strict` only adds warnings to what fails the command.
 
 ## Pointers (implementation)
 
