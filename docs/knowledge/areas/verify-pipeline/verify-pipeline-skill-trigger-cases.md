@@ -8,6 +8,7 @@ bee:
   id: verify-pipeline-verify-pipeline-skill-trigger-cases
   lifecycle: active
   areas: [verify-pipeline]
+  decisions: ["skill-trigger-cases D2+D3+D4 (39b02fdb): one fixture of briefs with expect and near cases, and a brief never names its skill", "skill-trigger-cases D5+D6+D7 (516b603e): a model-free fence runs in the declared suite and an opt-in eval asks a real agent"]
   anchors: [skills/, packages/bee-rs/crates/bee/tests/skill_triggers.rs, packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json, skills/bee-writing-skills/SKILL.md]
   verified_at: 2026-09-23
   verified_commit: 00330b47416a8a64323e15cd6c1d286e3029bcee

@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: []
-  decisions: []
+  decisions: ["windows-path-tests (efa057d6): bee close compares worktree roots with roots::same_path so a Windows short path and the long path name the same worktree", "issues-sweep-1023 D4 (d8e689c8): path_identity compares dunce-canonicalized paths"]
   sources: ["windows-path-identity (cells wpi-1, wpi-2, wpi-3)", docs/history/windows-path-identity/plan.md, docs/history/windows-path-identity/reports/wpi-1.md]
   authoritative_for: "worktree-parallelism: deciding whether two path strings name the same location"
   anchors: [packages/bee-rs/crates/bee/src/path_identity.rs, packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs]

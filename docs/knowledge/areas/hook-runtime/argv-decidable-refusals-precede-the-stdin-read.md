@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: []
+  decisions: ["herding-activity-hook D1 (09f16084): under BEE_HERDING_WORKER=1 every hook but activity exits 0 before reading stdin"]
   sources: [packages/bee-rs/crates/bee/src/hooks/mod.rs — try_native dispatch order]
   authoritative_for: "hook-runtime: the fixed order between argv-decidable refusals and the stdin read"
   anchors: [packages/bee-rs/crates/bee/src/hooks/mod.rs]
