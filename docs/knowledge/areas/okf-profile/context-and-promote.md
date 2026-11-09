@@ -104,6 +104,12 @@ runs the assembler, prints the graded pack, and appends a `source: "pack"` recor
 `.bee/logs/dispatch.jsonl` with the feature's assigned arm (D8). The same pack feeds the shaping
 interview, CONTEXT.md and plan.md claims, hat-wave briefs, and worker cells.
 
+**Knowledge rides the flow, never a gate (knowledge-in-the-flow D1, D6).** Loading the pack and
+writing a knowledge delta are ordinary flow steps: no verb gained a refusal for a missing pack or
+delta, and the only knowledge doors are the ones that predate the feature (the read-set check and
+the cap sync door). Consolidated knowledge, critical patterns included, lands with no human review
+step; a wrong entry is corrected like code, by the next cell that touches its subject.
+
 **B6 — `context` returns a manifest, never content (D27).** `bee knowledge context --work <id>
 --budget <tokens>` resolves the work item by `bee.id`, walks its `bee.required_context`
 **transitively** with a cycle guard that dedupes silently (a cycle is never an error), adds every
