@@ -1,0 +1,172 @@
+{
+  "id": "kitf-5",
+  "feature": "knowledge-in-the-flow",
+  "title": "Record the knowledge delta on every cap",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4",
+    "5faa858a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-in-the-flow/plan.md",
+    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement contract decision 5faa858a (contract:cap-knowledge-delta). Where cap writes `trace.files_changed` (handlers_close.rs:551 `trace.insert(\"files_changed\".into(), Value::Array(f.files_changed.clone()));`) also write `trace.knowledge_delta`: the files_changed entries whose normalized path starts with `docs/knowledge/`, in order. The same holds on the `bee cells finish` path that reaches this code (`finish_cap_and_release`, handlers_close.rs:1448). The cap and finish text output gain one line `knowledge delta: N file(s)` or `knowledge delta: none`; the JSON result carries `knowledge_delta`. Nothing refuses (D1). Tests whose fn names contain `knowledge_delta`: a cap with two docs/knowledge files and one code file records two; a cap with none records an empty list and prints `knowledge delta: none`; finish records the same. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_delta",
+  "must_haves": {
+    "truths": [
+      "a capped cell's trace carries knowledge_delta listing its docs/knowledge files",
+      "cap prints knowledge delta: none when the cell changed no docs/knowledge file and still caps"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "knowledge_delta on the trace and the output line"
+      }
+    ],
+    "key_links": [
+      "knowledge_delta is derived from files_changed, never a new flag"
+    ],
+    "prohibitions": [
+      "No new cap refusal",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-kitf-5",
+    "outcome": "cap and finish record trace.knowledge_delta and print the knowledge delta line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: the workflow-state skills are updated by kitf-6, which depends on this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T14:30:24.417Z",
+    "behavior_change": true,
+    "verification_evidence": "3 knowledge_delta tests (cap two docs files, cap none, finish)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_delta",
+    "claimed_at": "2026-11-09T13:25:37.519Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "owner_bypassed": null,
+        "at": "2026-11-09T14:30:24.417Z"
+      }
+    ],
+    "sync_ack": "the workflow-state skills are updated by kitf-6, which depends on this cell",
+    "mistakes": [
+      {
+        "wrong": "worker ran its proof but did not commit before the ceiling",
+        "better": "commit right after the first green proof",
+        "fix_at": "doctrine"
+      }
+    ],
+    "inline_reason": "worker finished code and tests but hit the 1800s ceiling before committing; leader committed its edits unchanged and recorded the proof",
+    "report": {
+      "outcome": "cap and finish record trace.knowledge_delta and print the knowledge delta line",
+      "commit": "becfaccd6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_delta — green:unit — 3 knowledge_delta tests (cap two docs files, cap none, finish)",
+      "deviations": [],
+      "mistakes": [
+        "worker ran its proof but did not commit before the ceiling — commit right after the first green proof — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a capped cell's trace carries knowledge_delta listing its docs/knowledge files",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "cap prints knowledge delta: none when the cell changed no docs/knowledge file and still caps",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "knowledge_delta is derived from files_changed, never a new flag",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-09T14:30:33.968Z",
+        "recorded_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:552-558 writes trace.knowledge_delta filtering files_changed under docs/knowledge/; verified in cells::tests::knowledge_delta_cap_records_two_docs_files_and_one_code_file at line 12882 and knowledge_delta_finish_records_the_same_delta_and_prints_it at line 12930"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1352-1358 prints 'knowledge delta: none' when knowledge_delta is empty; verified in cells::tests::knowledge_delta_cap_with_no_docs_file_is_empty_and_prints_none at line 12915"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs substantively implements knowledge_delta on trace, JSON output, and cap/finish text output"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:552-557 derives knowledge_delta directly from f.files_changed with no new flag"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "No new cap refusals added; no code comments in implementation"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-09T22:14:14.169Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

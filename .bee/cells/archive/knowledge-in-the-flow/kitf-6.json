@@ -1,0 +1,507 @@
+{
+  "id": "kitf-6",
+  "feature": "knowledge-in-the-flow",
+  "title": "Teach shaping, planning, workers and capturing the pack and the delta",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "kitf-1",
+    "kitf-2",
+    "kitf-4",
+    "kitf-5"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D4",
+    "D5",
+    "D7"
+  ],
+  "files": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-shaping/references/context-template.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "packages/bee/prompts/worker-cell.md",
+    ".agents/skills/*",
+    ".claude/skills/*",
+    ".codex/skills/*",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-in-the-flow/plan.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    "packages/bee/prompts/worker-cell.md"
+  ],
+  "affects_skills": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Edit the sources in skills/ and packages/bee/prompts/, then run `bee dev regen` and commit the rendered trees with them. bee-shaping Explore: the scout runs `bee knowledge pack --feature <f> --stage shaping` first (replacing the separate `bee knowledge context` step; `bee knowledge search` stays for symptoms) and Lock fills `## Read set` from the pack's knowledge and code lines (context-template.md names that source). bee-planning: Research runs `bee knowledge pack --feature <f> --stage planning`, and load-bearing claims anchor into the pack's code paths where they apply; Prep adds a final `role: writer` consolidation cell to every code-touching standard or high-risk feature, depending on every other cell, whose action runs `bee knowledge consolidate --feature <f>`, writes the deduped knowledge and `docs/history/<f>/delivery.md`, and whose verify is `.bee/bin/bee knowledge check` (planning-reference.md carries the cell shape). gates-and-delegation.md Hat wave: seats are dispatched with `--feature <f>` so their brief carries the pack. worker-cell.md: one bullet telling the worker to write its knowledge delta (owning area concept update, a pitfall pattern when it hit one, bee.anchors for files it changed) in the same commit as its code, thin and anchored, no review step. bee-swarming: the same rule in the Execute contract by pointer to worker-cell.md. bee-capturing: close no longer writes proposals; consolidation happens in the writer cell before merge; old proposals drain once. State nowhere that any of this refuses (D1). Write plain global English. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity",
+  "must_haves": {
+    "truths": [
+      "bee-shaping's Explore runs bee knowledge pack --stage shaping and Lock fills the read set from it",
+      "bee-planning runs bee knowledge pack --stage planning and adds the writer consolidation cell",
+      "the worker brief tells every cell to commit its knowledge delta with its code"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-shaping/SKILL.md",
+        "substantive": "Explore and Lock use the pack"
+      },
+      {
+        "path": "skills/bee-planning/SKILL.md",
+        "substantive": "Research uses the pack; Prep adds the writer cell"
+      },
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "the knowledge delta bullet"
+      }
+    ],
+    "key_links": [
+      "rendered skill trees match their sources after bee dev regen"
+    ],
+    "prohibitions": [
+      "No wording that makes loading or writing knowledge a gate",
+      "No hand edit of a rendered skill tree"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "leader-kitf",
+    "outcome": "Taught shaping, planning, workers, capturing, and hive gates the knowledge pack and deltas, regenerated skill trees d600e3a55",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-capturing/SKILL.md",
+      ".agents/skills/bee-hive/references/gates-and-delegation.md",
+      ".agents/skills/bee-planning/SKILL.md",
+      ".agents/skills/bee-planning/references/planning-reference.md",
+      ".agents/skills/bee-shaping/SKILL.md",
+      ".agents/skills/bee-shaping/references/context-template.md",
+      ".agents/skills/bee-swarming/SKILL.md",
+      ".bee/bin/prompts/worker-cell.md",
+      ".bee/onboarding.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-capturing/SKILL.md",
+      ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
+      ".claude-plugin/skills/bee-planning/SKILL.md",
+      ".claude-plugin/skills/bee-planning/references/planning-reference.md",
+      ".claude-plugin/skills/bee-shaping/SKILL.md",
+      ".claude-plugin/skills/bee-shaping/references/context-template.md",
+      ".claude-plugin/skills/bee-swarming/SKILL.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-capturing/SKILL.md",
+      ".claude/skills/bee-hive/references/gates-and-delegation.md",
+      ".claude/skills/bee-planning/SKILL.md",
+      ".claude/skills/bee-planning/references/planning-reference.md",
+      ".claude/skills/bee-shaping/SKILL.md",
+      ".claude/skills/bee-shaping/references/context-template.md",
+      ".claude/skills/bee-swarming/SKILL.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-capturing/SKILL.md",
+      ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
+      ".codex-plugin/skills/bee-planning/SKILL.md",
+      ".codex-plugin/skills/bee-planning/references/planning-reference.md",
+      ".codex-plugin/skills/bee-shaping/SKILL.md",
+      ".codex-plugin/skills/bee-shaping/references/context-template.md",
+      ".codex-plugin/skills/bee-swarming/SKILL.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-capturing/SKILL.md",
+      ".opencode/skills/bee-hive/references/gates-and-delegation.md",
+      ".opencode/skills/bee-planning/SKILL.md",
+      ".opencode/skills/bee-planning/references/planning-reference.md",
+      ".opencode/skills/bee-shaping/SKILL.md",
+      ".opencode/skills/bee-shaping/references/context-template.md",
+      ".opencode/skills/bee-swarming/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-shaping/references/context-template.md",
+      "skills/bee-swarming/SKILL.md"
+    ],
+    "deviations": [
+      "sync-ack: plan named the reference files in cell files; affects_skills listed bee-hive/SKILL.md but the hat wave text lives in its reference file"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T17:58:07.522Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity — green:unit — rule index parity over updated skills doctrine",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "5cec676f-71b9-4127-8f21-bf8516ac0fb9",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity",
+    "claimed_at": "2026-11-09T17:49:59.773Z",
+    "sync_ack": "plan named the reference files in cell files; affects_skills listed bee-hive/SKILL.md but the hat wave text lives in its reference file",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Taught shaping, planning, workers, capturing, and hive gates the knowledge pack and deltas, regenerated skill trees d600e3a55",
+      "commit": "d600e3a5544d7d181a9b39c2d5f5988ee0c506aa",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-capturing/SKILL.md",
+        ".agents/skills/bee-hive/references/gates-and-delegation.md",
+        ".agents/skills/bee-planning/SKILL.md",
+        ".agents/skills/bee-planning/references/planning-reference.md",
+        ".agents/skills/bee-shaping/SKILL.md",
+        ".agents/skills/bee-shaping/references/context-template.md",
+        ".agents/skills/bee-swarming/SKILL.md",
+        ".bee/bin/prompts/worker-cell.md",
+        ".bee/onboarding.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-capturing/SKILL.md",
+        ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
+        ".claude-plugin/skills/bee-planning/SKILL.md",
+        ".claude-plugin/skills/bee-planning/references/planning-reference.md",
+        ".claude-plugin/skills/bee-shaping/SKILL.md",
+        ".claude-plugin/skills/bee-shaping/references/context-template.md",
+        ".claude-plugin/skills/bee-swarming/SKILL.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-capturing/SKILL.md",
+        ".claude/skills/bee-hive/references/gates-and-delegation.md",
+        ".claude/skills/bee-planning/SKILL.md",
+        ".claude/skills/bee-planning/references/planning-reference.md",
+        ".claude/skills/bee-shaping/SKILL.md",
+        ".claude/skills/bee-shaping/references/context-template.md",
+        ".claude/skills/bee-swarming/SKILL.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-capturing/SKILL.md",
+        ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
+        ".codex-plugin/skills/bee-planning/SKILL.md",
+        ".codex-plugin/skills/bee-planning/references/planning-reference.md",
+        ".codex-plugin/skills/bee-shaping/SKILL.md",
+        ".codex-plugin/skills/bee-shaping/references/context-template.md",
+        ".codex-plugin/skills/bee-swarming/SKILL.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-capturing/SKILL.md",
+        ".opencode/skills/bee-hive/references/gates-and-delegation.md",
+        ".opencode/skills/bee-planning/SKILL.md",
+        ".opencode/skills/bee-planning/references/planning-reference.md",
+        ".opencode/skills/bee-shaping/SKILL.md",
+        ".opencode/skills/bee-shaping/references/context-template.md",
+        ".opencode/skills/bee-swarming/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-capturing/SKILL.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-planning/references/planning-reference.md",
+        "skills/bee-shaping/SKILL.md",
+        "skills/bee-shaping/references/context-template.md",
+        "skills/bee-swarming/SKILL.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity — green:static — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity — green:unit — rule index parity over updated skills doctrine",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 858 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee-shaping's Explore runs bee knowledge pack --stage shaping and Lock fills the read set from it",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "bee-planning runs bee knowledge pack --stage planning and adds the writer consolidation cell",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "the worker brief tells every cell to commit its knowledge delta with its code",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "rendered skill trees match their sources after bee dev regen",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-shaping/SKILL.md",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-planning/SKILL.md",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/prompts/worker-cell.md",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/.bee-render.json",
+            "artifact": ".agents/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".agents/skills/bee-capturing/SKILL.md",
+            "artifact": ".agents/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": ".agents/skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-planning/SKILL.md",
+            "artifact": ".agents/skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-planning/references/planning-reference.md",
+            "artifact": ".agents/skills/bee-planning/references/planning-reference.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-shaping/SKILL.md",
+            "artifact": ".agents/skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-shaping/references/context-template.md",
+            "artifact": ".agents/skills/bee-shaping/references/context-template.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-swarming/SKILL.md",
+            "artifact": ".agents/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".bee/bin/prompts/worker-cell.md",
+            "artifact": ".bee/bin/prompts/worker-cell.md"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/.bee-render.json",
+            "artifact": ".claude-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-capturing/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-planning/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-planning/references/planning-reference.md",
+            "artifact": ".claude-plugin/skills/bee-planning/references/planning-reference.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-shaping/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-shaping/references/context-template.md",
+            "artifact": ".claude-plugin/skills/bee-shaping/references/context-template.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-swarming/SKILL.md",
+            "artifact": ".claude-plugin/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/.bee-render.json",
+            "artifact": ".claude/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude/skills/bee-capturing/SKILL.md",
+            "artifact": ".claude/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": ".claude/skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-planning/SKILL.md",
+            "artifact": ".claude/skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-planning/references/planning-reference.md",
+            "artifact": ".claude/skills/bee-planning/references/planning-reference.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-shaping/SKILL.md",
+            "artifact": ".claude/skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-shaping/references/context-template.md",
+            "artifact": ".claude/skills/bee-shaping/references/context-template.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-swarming/SKILL.md",
+            "artifact": ".claude/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/.bee-render.json",
+            "artifact": ".codex-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-capturing/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-planning/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-planning/references/planning-reference.md",
+            "artifact": ".codex-plugin/skills/bee-planning/references/planning-reference.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-shaping/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-shaping/references/context-template.md",
+            "artifact": ".codex-plugin/skills/bee-shaping/references/context-template.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-swarming/SKILL.md",
+            "artifact": ".codex-plugin/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/.bee-render.json",
+            "artifact": ".opencode/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".opencode/skills/bee-capturing/SKILL.md",
+            "artifact": ".opencode/skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": ".opencode/skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-planning/SKILL.md",
+            "artifact": ".opencode/skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-planning/references/planning-reference.md",
+            "artifact": ".opencode/skills/bee-planning/references/planning-reference.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-shaping/SKILL.md",
+            "artifact": ".opencode/skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-shaping/references/context-template.md",
+            "artifact": ".opencode/skills/bee-shaping/references/context-template.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-swarming/SKILL.md",
+            "artifact": ".opencode/skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "packages/bee/prompts/worker-cell.md",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "skills/bee-capturing/SKILL.md",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": "skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": "skills/bee-planning/SKILL.md",
+            "artifact": "skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-planning/references/planning-reference.md",
+            "artifact": "skills/bee-planning/references/planning-reference.md"
+          },
+          {
+            "requirement": "skills/bee-shaping/SKILL.md",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-shaping/references/context-template.md",
+            "artifact": "skills/bee-shaping/references/context-template.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/SKILL.md",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-09T22:06:17.804Z",
+        "recorded_by": "ed7703ff-b101-4b17-a000-caed562142b4",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "skills/bee-shaping/SKILL.md:35-40 instructs scout to run bee knowledge pack --stage shaping first and Lock to fill the read set from it; context-template.md:46-61 documents the source"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "skills/bee-planning/SKILL.md:70 runs bee knowledge pack --stage planning in Research; line 155 adds final role: writer consolidation cell in Prep; planning-reference.md:380-405 details cell shape"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee/prompts/worker-cell.md:67 instructs worker to commit knowledge delta with code in same commit; echoed in skills/bee-swarming/SKILL.md:220"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "skills/bee-shaping/SKILL.md, skills/bee-planning/SKILL.md, and packages/bee/prompts/worker-cell.md are present and updated with substantive instructions"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "Rendered skill trees in .claude-plugin, .codex-plugin, .agents, .claude, and .opencode match sources exactly; verified via bee dev regen and cargo test --release --test rule_index_parity"
+          },
+          {
+            "id": "c6",
+            "status": "PASS",
+            "evidence": "Knowledge loading/writing is framed as flow rather than a gate requirement; no hand-edits of rendered trees; no code comments"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-09T22:14:14.170Z"
+      }
+    ]
+  },
+  "regen_obligation_ack": "the action runs bee dev regen (render-skill-trees, onboard --apply, release-manifest --write) in this cell; the approved verify is frozen, so the leader runs bee dev release-manifest --check at the leader check",
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

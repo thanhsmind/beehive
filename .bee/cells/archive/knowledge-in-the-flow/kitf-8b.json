@@ -1,0 +1,120 @@
+{
+  "id": "kitf-8b",
+  "feature": "knowledge-in-the-flow",
+  "title": "Flush the pending capture stubs into the bundle",
+  "lane": "high-risk",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "kitf-8a"
+  ],
+  "decisions": [
+    "D6",
+    "D7",
+    "D9"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/knowledge-in-the-flow/drain-ledger.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "skills/bee-capturing/SKILL.md",
+    "docs/knowledge/index.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Drain every pending capture stub once (D9). List them from the main checkout with `.bee/bin/bee capture list`, oldest first. For each stub: check the settlement against today's code; when still true and not already in the bundle, merge it into the area concept that owns it (extend, never duplicate), anchored to code (bee.anchors), never restating code (D7), no human review (D6), citing history D-numbers, never raw decision ids. Then add one row to `docs/history/knowledge-in-the-flow/drain-ledger.md`: kind `stub`, the stub id, the concept path or `none`. Run NO bee command that writes the control store (no capture flush): the leader flushes from the ledger after the merge. When a stub yields nothing clearly still true, record `none` and move on. Run `.bee/bin/bee knowledge index`, then `.bee/bin/bee knowledge check` must be green. Commit the docs/knowledge changes and the ledger in one commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "drain-ledger.md has one stub row for every pending stub bee capture list names",
+      "bee knowledge check is green after the flush"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/index.md",
+        "substantive": "regenerated index after the flush"
+      },
+      {
+        "path": "docs/history/knowledge-in-the-flow/drain-ledger.md",
+        "substantive": "one stub row per pending stub"
+      }
+    ],
+    "key_links": [
+      "each flushed stub names the concept it landed in or none"
+    ],
+    "prohibitions": [
+      "No raw decision ids in area docs",
+      "No edit outside docs/knowledge/"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+    "outcome": "Flush 50 pending capture stubs into bundle and drain ledger: 0eec5906891aadb4450c49bf074f1ea8b12a5c2e",
+    "files_changed": [
+      "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+      "docs/history/knowledge-in-the-flow/drain-ledger.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-09T14:04:33.768Z",
+    "behavior_change": false,
+    "verification_evidence": "verified knowledge bundle conformance, anchors, and links across 322 concepts in 342 files",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-09T13:57:18.029Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Flush 50 pending capture stubs into bundle and drain ledger: 0eec5906891aadb4450c49bf074f1ea8b12a5c2e",
+      "commit": "0eec5906891aadb4450c49bf074f1ea8b12a5c2e",
+      "files": [
+        "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+        "docs/history/knowledge-in-the-flow/drain-ledger.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — verified knowledge bundle conformance, anchors, and links across 322 concepts in 342 files",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "drain-ledger.md has one stub row for every pending stub bee capture list names",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          },
+          {
+            "requirement": "bee knowledge check is green after the flush",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          },
+          {
+            "requirement": "each flushed stub names the concept it landed in or none",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          },
+          {
+            "requirement": "docs/history/knowledge-in-the-flow/drain-ledger.md",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+            "artifact": "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md"
+          },
+          {
+            "requirement": "docs/knowledge/index.md",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          }
+        ],
+        "recorded_at": "2026-11-09T14:04:45.563Z",
+        "recorded_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

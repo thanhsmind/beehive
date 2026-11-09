@@ -1,0 +1,246 @@
+{
+  "id": "kitf-4",
+  "feature": "knowledge-in-the-flow",
+  "title": "Consolidate knowledge before merge and stop writing proposals at close",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "kitf-1",
+    "kitf-2"
+  ],
+  "decisions": [
+    "D1",
+    "D5",
+    "D7",
+    "cde4316f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-in-the-flow/plan.md",
+    "docs/knowledge/areas/okf-profile/context-and-promote.md",
+    "docs/knowledge/areas/workflow-state/deferred-work-queue.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement contract decision cde4316f (contract:consolidate). (1) Add verbs/knowledge/consolidate.rs with `bee knowledge consolidate --feature <f> [--json]`, read-only, `writes: []`: reuse promote's builder (`build_promotion` in promote.rs) for the area-update and pattern-candidate sections; list the docs/knowledge files the feature's capped cells changed (their trace.knowledge_delta when present, else files_changed under docs/knowledge/), live and archived cells both; name the target `docs/history/<f>/delivery.md` and whether it exists; print the thin-layer rules in three lines: every entry anchors to code (bee.anchors), never restate what the code shows, extend the owning concept instead of adding a near-duplicate. Register it in routing.rs and registry_payload.json. Tests live in consolidate.rs's own test module. (2) In close.rs replace the proposal write (close.rs:3323-3353): do not write promote-proposals.md, do not call enqueue_promote_stub or enqueue_promote_deferred_record; push `Knowledge consolidated for \"<f>\": docs/history/<f>/delivery.md` when that file exists in the feature's docs root (`docs_root_for_feature`, which is main after a merge) AND its file modification time is not older than the newest `capped_at` of the feature's capped cells (a delivery left from an earlier slice or a reopen does not count); else `Knowledge not consolidated for \"<f>\": no current docs/history/<f>/delivery.md — its cell commits carry their own deltas; bee knowledge consolidate --feature <f> prints the writer brief for a follow-up writer cell`; put `knowledge: {consolidated: bool, delivery: <path|null>}` in the close JSON; the exit code is unchanged. Delete the two enqueue functions only if nothing else calls them, and rewrite the close tests that asserted the proposal file to assert its absence and the new line. `unapplied_promote_proposals` stays as is. (3) In the merge: compute the docs/knowledge files in the merged range with `branch_changed_files` (merge.rs:252) before the merge, carry `knowledge: {files: N, delivery: <path|null>}` on the merge result, and in `merge_text_lines` (handlers.rs:1506) print `  knowledge: N docs/knowledge file(s) in this merge; delivery: <path|none>` on a successful merge; when `branch_changed_files` returns None print `  knowledge: unknown (the merged range could not be read); delivery: <path|none>` and carry `files: null`. Nothing refuses (D1). The close and merge tests in drivers/tests.rs that assert the proposal file (`close_green_promote_ok_writes_the_proposals_file_and_a_headline`, `close_green_promote_ok_enqueues_one_capture_stub_pointing_at_it`, `close_green_promote_none_warns_once_and_writes_nothing`, `close_green_promote_skipped_enqueues_nothing`) are rewritten to the new contract and renamed to contain `knowledge_consolidat`. Tests whose fn names contain `knowledge_consolidat` for the verb, close and merge. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_consolidat",
+  "must_haves": {
+    "truths": [
+      "bee knowledge consolidate --feature f prints the proposal sections, the feature's docs/knowledge files, the delivery path and the thin-layer rules, and writes nothing",
+      "bee close writes no promote-proposals.md and prints whether the feature's knowledge was consolidated, with the same exit code as before",
+      "bee worktree merge prints the knowledge line and carries the knowledge object in --json"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+        "substantive": "the read-only consolidate verb and its tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "close without the proposal write, with the consolidated line"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "substantive": "the merge knowledge line"
+      }
+    ],
+    "key_links": [
+      "consolidate reuses build_promotion, never a second miner"
+    ],
+    "prohibitions": [
+      "No new refusal in close or merge",
+      "No change to unapplied_promote_proposals",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": null,
+    "outcome": "knowledge consolidate prints the writer brief; close reports consolidation instead of writing proposals; merge prints the knowledge line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "merge counts docs/knowledge files with a diff of the pre-merge head against the merge commit, not branch_changed_files, because the merge base equals the branch tip once the merge lands",
+      "deleted enqueue_promote_stub, dominant_promote_area and enqueue_promote_deferred_record with their in-file test; nothing else called them",
+      "the merge knowledge key sits after the companion and bookkeeping keys so the pinned key order holds",
+      "sync-ack: workflow-state skills are updated by kitf-6, which depends on this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T15:14:53.022Z",
+    "behavior_change": true,
+    "verification_evidence": "11 tests over the verb, close and merge; related close promote worktree merge deferred filters 778 passed; registry_contracts and registry_dispatch 21 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_consolidat",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "owner_bypassed": null,
+        "at": "2026-11-09T15:14:53.022Z"
+      }
+    ],
+    "sync_ack": "workflow-state skills are updated by kitf-6, which depends on this cell",
+    "no_mistakes": true,
+    "inline_reason": "escalated to the session model (decision 1ee5c734)",
+    "report": {
+      "outcome": "knowledge consolidate prints the writer brief; close reports consolidation instead of writing proposals; merge prints the knowledge line",
+      "commit": "aa41de11e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_consolidat — green:unit — 11 tests over the verb, close and merge; related close promote worktree merge deferred filters 778 passed; registry_contracts and registry_dispatch 21 passed",
+      "deviations": [
+        "merge counts docs/knowledge files with a diff of the pre-merge head against the merge commit, not branch_changed_files, because the merge base equals the branch tip once the merge lands",
+        "deleted enqueue_promote_stub, dominant_promote_area and enqueue_promote_deferred_record with their in-file test; nothing else called them",
+        "the merge knowledge key sits after the companion and bookkeeping keys so the pinned key order holds"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge consolidate --feature f prints the proposal sections, the feature's docs/knowledge files, the delivery path and the thin-layer rules, and writes nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs"
+          },
+          {
+            "requirement": "bee close writes no promote-proposals.md and prints whether the feature's knowledge was consolidated, with the same exit code as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "bee worktree merge prints the knowledge line and carries the knowledge object in --json",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"
+          },
+          {
+            "requirement": "consolidate reuses build_promotion, never a second miner",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-09T15:15:00.181Z",
+        "recorded_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs:48 sets writes: [] and outputs proposal sections, knowledge files, delivery existence, and THIN_LAYER_RULES; verified in consolidate::tests::knowledge_consolidate_writes_nothing_and_names_an_existing_delivery at line 172"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:3245-3258 does not write promote-proposals.md and prints Knowledge consolidated / not consolidated status; verified in drivers::tests::close_green_knowledge_consolidation_writes_no_proposals_file at line 4831 and close_green_knowledge_consolidated_when_a_current_delivery_exists at line 4808"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:973-980 and handlers.rs:1525 format knowledge line and attach knowledge object in JSON result; verified in worktree::tests::knowledge_consolidation_merge_names_the_knowledge_files_and_the_delivery at line 2530 and knowledge_consolidation_merge_without_knowledge_prints_zero_and_none at line 2550"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, and packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs are present and substantive"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs:35 reuses build_promotion_split directly from promote.rs"
+          },
+          {
+            "id": "c6",
+            "status": "PASS",
+            "evidence": "No new refusals added to close or merge; unapplied_promote_proposals function remains intact; no code comments were introduced"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-09T22:14:14.167Z"
+      }
+    ]
+  },
+  "escalate": true,
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}

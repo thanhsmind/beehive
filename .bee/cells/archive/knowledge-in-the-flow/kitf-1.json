@@ -1,0 +1,235 @@
+{
+  "id": "kitf-1",
+  "feature": "knowledge-in-the-flow",
+  "title": "Assemble one feature pack and load it with bee knowledge pack",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D3",
+    "D8",
+    "7faa7f3b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-in-the-flow/plan.md",
+    "docs/knowledge/areas/okf-profile/context-and-promote.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement contract decision 7faa7f3b (contract:feature-pack) exactly. (1) In prepare.rs extend `learned_context_lines` (prepare.rs:1075): keep the knowledge lines and their 8-line cap (LEARNED_CONTEXT_MAX_LINES, prepare.rs:654) byte-identical — apply that truncate to the knowledge lines BEFORE the code lines are appended, never to the combined list — then append at most 8 code lines `- code: <path> — anchored by <concept path>` built from the `bee.anchors` list of each listed concept in listed order: keep a path only when it exists under the bundle root's repo root, does not start with `docs/`, is not in the cell's read_first, and was not already listed; sanitize the path through the same one-line collapse the knowledge paths use. A bundle with no anchors renders exactly as before. (2) Add `feature_arm(root, feature)` beside `knowledge_arm` (prepare.rs:1118) hashing the string `feature:<slug>` with the same bucket rule and `knowledge_holdout_percent`. (3) Extend the cell prepare record (prepare.rs:3293 block) so `learned_context` keeps only knowledge paths and a new `pack_code` array holds the code paths. (4) Add `verbs/knowledge/pack.rs` with `bee knowledge pack --feature <f> --stage shaping|planning [--lane <l>] [--json]`: resolve the bundle root as prepare does for a feature with a granted worktree (the worktree checkout, else the repo root); compute the feature arm; for the knowledge arm call `learned_context_lines` with the value `{id: <feature>, feature: <feature>, lane: <lane or standard>}`; annotate each knowledge path with its freshness grade from the existing grader the context manifest uses (`grade_area_concepts`, search.rs:150; `null` when the concept has no anchors), so Lock can fill the read set's `Grade at read` column from the pack alone; print the lines in text mode with the grade appended as ` [<grade>]` on the pack verb's own output only (the cell and advisor blocks stay ungraded), and `{feature, stage, knowledge_arm, knowledge:[{path,title,grade}], code:[{path, anchored_by}], writes:[\".bee/logs/dispatch.jsonl\"]}` in JSON; for the holdout arm print empty lists and the one line `holdout: this feature loads no pack (measurement arm, knowledge_holdout_percent)`; append one row to the CONTROL ROOT's `.bee/logs/dispatch.jsonl` (the file `append_prepare_record` writes, resolved from the control root even when the verb runs inside a worktree, so the report finds every row in one log) with `source: \"pack\"`, `kind: \"pack\"`, `feature`, `stage`, `knowledge_arm`, `learned_context`, `pack_code`; a stage outside shaping|planning refuses as a typed usage error; an absent or empty bundle prints an empty pack, exit 0. Register the verb in routing.rs and registry_payload.json beside `knowledge search`. (5) Tests whose fn names contain `feature_pack`: anchored concept adds code lines; anchor under docs/ or missing on disk or in read_first is skipped; bundle with no anchors is byte-identical; holdout feature prints empty pack and records arm holdout; pack row shape; bad stage refuses; cell prepare record carries pack_code. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_pack",
+  "must_haves": {
+    "truths": [
+      "bee knowledge pack --feature f --stage shaping lists the feature's knowledge lines followed by the code lines their concepts anchor",
+      "a holdout feature gets an empty pack and its row records knowledge_arm holdout",
+      "every pack call appends one dispatch.jsonl row with source pack, stage, feature, knowledge_arm, learned_context and pack_code",
+      "a bundle whose concepts carry no anchors renders the cell Learned context block byte-identically to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs",
+        "substantive": "the pack verb, its text and JSON output and its dispatch.jsonl row"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "learned_context_lines code lines, feature_arm, pack_code on the cell record"
+      }
+    ],
+    "key_links": [
+      "pack.rs calls learned_context_lines, never a second assembler"
+    ],
+    "prohibitions": [
+      "No new refusal on any existing verb",
+      "No file bodies in the pack output",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-kitf-1",
+    "outcome": "bee knowledge pack prints the graded feature pack and records a pack row; learned_context_lines appends anchored code files",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "anchored code lines require a regular file, not a directory, so directory anchors such as packages/ never become code lines",
+      "leader removed a 18-line header comment from pack.rs (no-comments rule)",
+      "sync-ack: the workflow-state skills (bee-planning, bee-swarming, bee-capturing) are updated by kitf-6, which depends on this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T14:30:18.642Z",
+    "behavior_change": true,
+    "verification_evidence": "9 feature_pack tests; also learned_context and holdout filters 17 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_pack",
+    "claimed_at": "2026-11-09T13:25:36.566Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "owner_bypassed": null,
+        "at": "2026-11-09T14:30:18.642Z"
+      }
+    ],
+    "sync_ack": "the workflow-state skills (bee-planning, bee-swarming, bee-capturing) are updated by kitf-6, which depends on this cell",
+    "mistakes": [
+      {
+        "wrong": "two worker rounds hit the 1800s ceiling with the work nearly done",
+        "better": "split the cell or raise the ceiling for Rust cells",
+        "fix_at": "check"
+      }
+    ],
+    "inline_reason": "escalated to the session model after two worker ceiling timeouts (bee cells escalate); leader finished the worker's edits",
+    "report": {
+      "outcome": "bee knowledge pack prints the graded feature pack and records a pack row; learned_context_lines appends anchored code files",
+      "commit": "b8b65b828",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_pack — green:unit — 9 feature_pack tests; also learned_context and holdout filters 17 passed",
+      "deviations": [
+        "anchored code lines require a regular file, not a directory, so directory anchors such as packages/ never become code lines",
+        "leader removed a 18-line header comment from pack.rs (no-comments rule)"
+      ],
+      "mistakes": [
+        "two worker rounds hit the 1800s ceiling with the work nearly done — split the cell or raise the ceiling for Rust cells — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge pack --feature f --stage shaping lists the feature's knowledge lines followed by the code lines their concepts anchor",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs"
+          },
+          {
+            "requirement": "a holdout feature gets an empty pack and its row records knowledge_arm holdout",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs"
+          },
+          {
+            "requirement": "every pack call appends one dispatch.jsonl row with source pack, stage, feature, knowledge_arm, learned_context and pack_code",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a bundle whose concepts carry no anchors renders the cell Learned context block byte-identically to before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs"
+          },
+          {
+            "requirement": "pack.rs calls learned_context_lines, never a second assembler",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-09T14:30:33.042Z",
+        "recorded_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs:136-150 build_pack concatenates knowledge lines followed by code lines; tested in pack::tests::feature_pack_lists_knowledge_then_the_code_its_concepts_anchor at line 388"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs:107-112, 139-140 outputs HOLDOUT_NOTE and empty lists on holdout arm; tested in pack::tests::feature_pack_on_the_holdout_arm_prints_an_empty_pack_and_records_holdout at line 490"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs:219-224 calls append_pack_record with source: pack, stage, feature, knowledge_arm, learned_context, pack_code; prepare.rs:1211-1227 appends to dispatch.jsonl"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1145 anchored_code_lines returns empty vector when concepts have no anchors; tested in pack::tests::feature_pack_with_an_unanchored_bundle_leaves_the_cell_block_byte_identical at line 460"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs and packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs contain full implementations of the pack verb, record formatting, feature_arm, and pack_code field"
+          },
+          {
+            "id": "c6",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs:113 build_pack directly invokes learned_context_lines(&checkout, &cell)?"
+          },
+          {
+            "id": "c7",
+            "status": "PASS",
+            "evidence": "pack.rs and prepare.rs introduce no new refusals on existing verbs, output paths without file bodies, and contain no code comments"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-09T22:14:14.163Z"
+      }
+    ]
+  },
+  "escalate": true,
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

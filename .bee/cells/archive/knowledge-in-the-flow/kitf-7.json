@@ -1,0 +1,149 @@
+{
+  "id": "kitf-7",
+  "feature": "knowledge-in-the-flow",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "high-risk",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "kitf-1",
+    "kitf-2",
+    "kitf-3",
+    "kitf-4",
+    "kitf-5",
+    "kitf-6",
+    "kitf-8c",
+    "kitf-9"
+  ],
+  "decisions": [
+    "D5",
+    "D6",
+    "D7"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/knowledge-in-the-flow/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-in-the-flow/plan.md",
+    "docs/knowledge/areas/okf-profile/context-and-promote.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/workflow-state/deferred-work-queue.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the new writer step on this feature: build the worktree binary (`cargo build --release --manifest-path packages/bee-rs/Cargo.toml --bin bee`) and run its `bee knowledge consolidate --feature knowledge-in-the-flow`. Dedupe and trim the deltas the cells wrote and add what is missing: okf-profile context-and-promote (B5 now: close writes no proposal, consolidate is the writer's brief; the pack verb and the code lines of the one assembler), workflow-state dispatch (pack rows, advisor rows, feature arm), deferred-work-queue (close no longer enqueues promote records), the knowledge report concept (feature outcomes), the cells cap concept (knowledge_delta). Anchor each to the code it describes, never restate code (D7), cite this feature's CONTEXT.md D-numbers, never raw decision ids. Write docs/history/knowledge-in-the-flow/delivery.md: the concepts changed and why, one line each. Run `.bee/bin/bee knowledge index`, then `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "the okf-profile and workflow-state concepts describe the pack, the knowledge delta and consolidation, anchored to code",
+      "docs/history/knowledge-in-the-flow/delivery.md lists every concept the feature changed"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/knowledge-in-the-flow/delivery.md",
+        "substantive": "the feature's delivery record"
+      }
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No raw decision ids of this feature in area docs",
+      "No restating of code"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "leader-kitf",
+    "outcome": "Consolidated knowledge in the flow, updated area concepts, and wrote delivery.md b53c56ecdf721171f8bbcc9887490deb2cfac053",
+    "files_changed": [
+      "docs/history/knowledge-in-the-flow/delivery.md",
+      "docs/knowledge/areas/okf-profile/context-and-promote.md",
+      "docs/knowledge/areas/okf-profile/critical-bar.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "docs/knowledge/areas/workflow-state/deferred-work-queue.md",
+      "docs/knowledge/areas/workflow-state/dispatch.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-09T18:23:00.414Z",
+    "behavior_change": false,
+    "verification_evidence": "OKF profile and bundle conformance check clean across 322 concepts in 342 files",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "5cec676f-71b9-4127-8f21-bf8516ac0fb9",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-09T18:11:33.529Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Consolidated knowledge in the flow, updated area concepts, and wrote delivery.md b53c56ecdf721171f8bbcc9887490deb2cfac053",
+      "commit": "b53c56ecdf721171f8bbcc9887490deb2cfac053",
+      "files": [
+        "docs/history/knowledge-in-the-flow/delivery.md",
+        "docs/knowledge/areas/okf-profile/context-and-promote.md",
+        "docs/knowledge/areas/okf-profile/critical-bar.md",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "docs/knowledge/areas/workflow-state/deferred-work-queue.md",
+        "docs/knowledge/areas/workflow-state/dispatch.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — OKF profile and bundle conformance check clean across 322 concepts in 342 files",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the okf-profile and workflow-state concepts describe the pack, the knowledge delta and consolidation, anchored to code",
+            "artifact": "docs/history/knowledge-in-the-flow/delivery.md"
+          },
+          {
+            "requirement": "docs/history/knowledge-in-the-flow/delivery.md lists every concept the feature changed",
+            "artifact": "docs/history/knowledge-in-the-flow/delivery.md"
+          },
+          {
+            "requirement": "the delivery lands in the same merge as the code",
+            "artifact": "docs/history/knowledge-in-the-flow/delivery.md"
+          },
+          {
+            "requirement": "docs/history/knowledge-in-the-flow/delivery.md",
+            "artifact": "docs/history/knowledge-in-the-flow/delivery.md"
+          },
+          {
+            "requirement": "docs/history/knowledge-in-the-flow/delivery.md",
+            "artifact": "docs/history/knowledge-in-the-flow/delivery.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/context-and-promote.md",
+            "artifact": "docs/knowledge/areas/okf-profile/context-and-promote.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/critical-bar.md",
+            "artifact": "docs/knowledge/areas/okf-profile/critical-bar.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+            "artifact": "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/deferred-work-queue.md",
+            "artifact": "docs/knowledge/areas/workflow-state/deferred-work-queue.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/workflow-state/dispatch.md",
+            "artifact": "docs/knowledge/areas/workflow-state/dispatch.md"
+          }
+        ],
+        "recorded_at": "2026-11-09T22:06:17.814Z",
+        "recorded_by": "ed7703ff-b101-4b17-a000-caed562142b4",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

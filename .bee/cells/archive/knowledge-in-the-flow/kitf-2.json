@@ -1,0 +1,208 @@
+{
+  "id": "kitf-2",
+  "feature": "knowledge-in-the-flow",
+  "title": "Give hat-wave and advisor briefs the feature pack",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "kitf-1"
+  ],
+  "decisions": [
+    "D2",
+    "D3",
+    "D8",
+    "b05930b2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/advisor.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-in-the-flow/plan.md",
+    "packages/bee/prompts/advisor.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement contract decision b05930b2 (contract:advisor-pack). In the non-cell render path of prepare.rs (the `render(&template, &[(\"brief\", …), (\"expertise\", …), (\"purpose\", …), (\"original_request\", …), (\"seat\", …)])` call before the worker-cell branch), for kind advisor only: resolve the feature (the --feature flag, else the bound lane feature already used for original_request), resolve the bundle root the way the cell path does, compute `feature_arm` (from kitf-1), and for the knowledge arm build the lines with `learned_context_lines(bundle_root, {id: feature, feature, lane})`; pass them as a `learned_context` var. In packages/bee/prompts/advisor.md add, after the original_request block, `{{#if learned_context}}` / `Learned context (machine-assembled feature pack — read before answering; prefer it over re-deriving):` / `{{learned_context}}` / `{{/if}}`. Split `\"advisor\"` out of the shared `\"gather\" | \"reviewer\" | \"advisor\"` arm of `supported_vars_for` (prompt.rs:117) into its own arm that adds `learned_context` to brief, expertise, purpose, original_request, seat, so the prompt-skew check accepts the new template; gather and reviewer keep their var lists. Gather and reviewer templates stay unchanged; every template var still has a supplied value. The advisor prepare record gains `knowledge_arm`, `learned_context` (knowledge paths) and `pack_code` (code paths); a holdout feature renders no block and records arm holdout with empty lists; with no resolvable feature render no block and record no arm. Tests whose fn names contain `advisor_pack`: hat-* role advisor prompt carries the block; holdout feature carries none; record fields; gather prompt unchanged. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- advisor_pack",
+  "must_haves": {
+    "truths": [
+      "an advisor or hat-* dispatch for a knowledge-arm feature shows the Learned context block with the same lines bee knowledge pack prints",
+      "the advisor prepare row records knowledge_arm, learned_context and pack_code",
+      "gather and reviewer prompts render byte-identically to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/advisor.md",
+        "substantive": "the conditional Learned context block"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "advisor learned_context var and record fields"
+      }
+    ],
+    "key_links": [
+      "the advisor block is built by learned_context_lines"
+    ],
+    "prohibitions": [
+      "No change to gather.md or reviewer.md",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-kitf-2",
+    "outcome": "advisor and hat-wave prompts carry the feature pack and the prepare row records the feature arm",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+      "packages/bee/prompts/advisor.md",
+      ".bee/bin/prompts/advisor.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "an advisor dispatch that carries a --brief-file (a blind lane) renders no pack, keeping blind-lane isolation (prepare.rs brief_kind_not_advisor rationale)",
+      "synced the vendored .bee/bin/prompts/advisor.md so the prompt-skew test stays green; kitf-6 runs the full regen",
+      "sync-ack: workflow-state skills are updated by kitf-6, which depends on this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T15:04:30.398Z",
+    "behavior_change": true,
+    "verification_evidence": "4 advisor_pack tests; related filters advisor brief prompt skew holdout learned_context hat 434 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- advisor_pack",
+    "claimed_at": "2026-11-09T14:30:52.892Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "owner_bypassed": null,
+        "at": "2026-11-09T15:04:30.398Z"
+      }
+    ],
+    "sync_ack": "workflow-state skills are updated by kitf-6, which depends on this cell",
+    "no_mistakes": true,
+    "inline_reason": "escalated to the session model after the code role timed out three rounds (decision 1ee5c734)",
+    "report": {
+      "outcome": "advisor and hat-wave prompts carry the feature pack and the prepare row records the feature arm",
+      "commit": "c28c5c490",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+        "packages/bee/prompts/advisor.md",
+        ".bee/bin/prompts/advisor.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- advisor_pack — green:unit — 4 advisor_pack tests; related filters advisor brief prompt skew holdout learned_context hat 434 passed",
+      "deviations": [
+        "an advisor dispatch that carries a --brief-file (a blind lane) renders no pack, keeping blind-lane isolation (prepare.rs brief_kind_not_advisor rationale)",
+        "synced the vendored .bee/bin/prompts/advisor.md so the prompt-skew test stays green; kitf-6 runs the full regen"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "an advisor or hat-* dispatch for a knowledge-arm feature shows the Learned context block with the same lines bee knowledge pack prints",
+            "artifact": "packages/bee/prompts/advisor.md"
+          },
+          {
+            "requirement": "the advisor prepare row records knowledge_arm, learned_context and pack_code",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "gather and reviewer prompts render byte-identically to before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "the advisor block is built by learned_context_lines",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+          },
+          {
+            "requirement": "packages/bee/prompts/advisor.md",
+            "artifact": "packages/bee/prompts/advisor.md"
+          },
+          {
+            "requirement": ".bee/bin/prompts/advisor.md",
+            "artifact": ".bee/bin/prompts/advisor.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-09T15:04:34.896Z",
+        "recorded_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1239, 1432-1444 passes learned_context lines into advisor template; packages/bee/prompts/advisor.md:11-16 conditionally renders Learned context block; verified in drivers::tests::advisor_pack_renders_the_feature_pack_into_a_hat_seat_prompt at line 12876"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:3445-3453 records knowledge_arm, learned_context, and pack_code on advisor prepare record; verified in drivers::tests::advisor_pack_renders_the_feature_pack_into_a_hat_seat_prompt"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs:117-131 separates advisor from gather/reviewer; verified in drivers::tests::advisor_pack_leaves_gather_and_reviewer_prompts_without_a_block at line 12911"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee/prompts/advisor.md and packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs contain the conditional block and prepare wire implementation"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1239 feature_learned_context calls learned_context_lines"
+          },
+          {
+            "id": "c6",
+            "status": "PASS",
+            "evidence": "git diff confirms packages/bee/prompts/gather.md and reviewer.md were unchanged, and no code comments were added"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-09T22:14:14.164Z"
+      }
+    ]
+  },
+  "regen_obligation_ack": "kitf-6 depends on kitf-2 and runs bee dev regen and release-manifest --write for the advisor.md change in its own commit",
+  "escalate": true,
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

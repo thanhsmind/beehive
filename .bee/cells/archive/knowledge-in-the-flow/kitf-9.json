@@ -1,0 +1,117 @@
+{
+  "id": "kitf-9",
+  "feature": "knowledge-in-the-flow",
+  "title": "Prove the flow end to end in a throwaway repo",
+  "lane": "high-risk",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "kitf-1",
+    "kitf-2",
+    "kitf-3",
+    "kitf-4",
+    "kitf-5",
+    "kitf-6"
+  ],
+  "decisions": [
+    "D2",
+    "D4",
+    "D5",
+    "D8",
+    "7faa7f3b",
+    "cde4316f",
+    "5faa858a",
+    "4cfda42e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-in-the-flow/plan.md",
+    "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Write one integration test file that drives the built bee binary in a throwaway onboarded repo the way tests/knowledge_outcomes.rs does: a bundle with one area concept anchored to a code file; a feature; `bee knowledge pack --stage shaping` and `--stage planning` print the concept and the anchored code path and append two pack rows; a cell that changes the code file and the concept caps with `knowledge delta: 1 file(s)`; `bee knowledge consolidate --feature` lists that concept and writes nothing; after a delivery.md is written, `bee close` prints `Knowledge consolidated` and leaves no promote-proposals.md; `bee knowledge report --json` carries the cell arm and the feature arm for that feature. Use the fixture holdout percent 0 so the arms are deterministic; add one case with 100 that shows the holdout feature gets an empty pack and the report counts it in holdout. Assert observable outputs only. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test knowledge_in_the_flow_e2e",
+  "must_haves": {
+    "truths": [
+      "one test runs pack at shaping and planning, a capped cell with a knowledge delta, consolidate, close with no proposal file, and a report with cell and feature arms"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs",
+        "substantive": "the end-to-end flow test"
+      }
+    ],
+    "key_links": [
+      "the test drives the real binary, not internal functions"
+    ],
+    "prohibitions": [
+      "No assertion on internal call order",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "leader-kitf",
+    "outcome": "Prove knowledge in the flow end to end in a throwaway repo 6b33ca6f9f4189bde34b732650f820224ab7d22b",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+    ],
+    "deviations": [
+      "sync-ack: new test file only; the suspect concepts anchor the tests directory as a whole and their behavior is unchanged; okf-profile/context-and-promote is updated by the writer cell kitf-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T18:11:29.299Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test knowledge_in_the_flow_e2e — green:live — integration tests prove the entire knowledge in the flow pipeline end to end",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5cec676f-71b9-4127-8f21-bf8516ac0fb9",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test knowledge_in_the_flow_e2e",
+    "claimed_at": "2026-11-09T17:58:11.589Z",
+    "sync_ack": "new test file only; the suspect concepts anchor the tests directory as a whole and their behavior is unchanged; okf-profile/context-and-promote is updated by the writer cell kitf-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Prove knowledge in the flow end to end in a throwaway repo 6b33ca6f9f4189bde34b732650f820224ab7d22b",
+      "commit": "6b33ca6f9f4189bde34b732650f820224ab7d22b",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test knowledge_in_the_flow_e2e — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test knowledge_in_the_flow_e2e — green:live — integration tests prove the entire knowledge in the flow pipeline end to end",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "one test runs pack at shaping and planning, a capped cell with a knowledge delta, consolidate, close with no proposal file, and a report with cell and feature arms",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+          },
+          {
+            "requirement": "the test drives the real binary, not internal functions",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
+          }
+        ],
+        "recorded_at": "2026-11-09T22:06:17.823Z",
+        "recorded_by": "ed7703ff-b101-4b17-a000-caed562142b4",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

@@ -1,0 +1,114 @@
+{
+  "id": "kitf-8c",
+  "feature": "knowledge-in-the-flow",
+  "title": "Stamp the orphaned scribing debt through consolidation",
+  "lane": "high-risk",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "kitf-8b"
+  ],
+  "decisions": [
+    "D6",
+    "D7",
+    "D9"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/knowledge-in-the-flow/drain-ledger.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "skills/bee-capturing/SKILL.md",
+    "docs/knowledge/index.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Drain the orphaned scribing debt once (D9). From the main checkout, `.bee/bin/bee status --json` lists it under scribing_debt.orphaned.features (feature and cell ids). For each feature: read its capped cells' traces (`.bee/cells/archive/<feature>/` or `.bee/cells/`) and its docs/history/<feature>/ files; keep only behavior still true in today's code and missing from the bundle; write it into the owning area concept, anchored, thin (D7), no review (D6), history D-numbers only. Then add one row to `docs/history/knowledge-in-the-flow/drain-ledger.md`: kind `scribing`, the feature slug, the area names touched or `none` — owed even when nothing was kept. Run NO bee command that writes the control store (no scribing-run): the leader stamps from the ledger after the merge. Old traces carry little still-true behavior: when a feature's traces yield nothing clearly active in today's code, record `none` and move on rather than deep-diving. Run `.bee/bin/bee knowledge index`, then `.bee/bin/bee knowledge check` must be green. Commit the docs/knowledge changes and the ledger in one commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "drain-ledger.md has one scribing row for every orphaned feature bee status --json names",
+      "bee knowledge check is green after the drain"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/index.md",
+        "substantive": "regenerated index after the drain"
+      },
+      {
+        "path": "docs/history/knowledge-in-the-flow/drain-ledger.md",
+        "substantive": "one scribing row per orphaned feature"
+      }
+    ],
+    "key_links": [
+      "every orphaned feature has a scribing-run stamp"
+    ],
+    "prohibitions": [
+      "No raw decision ids in area docs",
+      "No edit outside docs/knowledge/"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-kitf-8c",
+    "outcome": "Drained 33 orphaned features into drain-ledger.md with existing behavior already in bundle, verified green knowledge check: 205714cdb",
+    "files_changed": [
+      "docs/history/knowledge-in-the-flow/drain-ledger.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-09T14:11:51.105Z",
+    "behavior_change": false,
+    "verification_evidence": "OKF bundle and knowledge index consistency verified",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-09T14:05:15.070Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Drained 33 orphaned features into drain-ledger.md with existing behavior already in bundle, verified green knowledge check: 205714cdb",
+      "commit": "205714cdbba5aa9c400acaacf67f43b58c59ad3d",
+      "files": [
+        "docs/history/knowledge-in-the-flow/drain-ledger.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — OKF bundle and knowledge index consistency verified",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "drain-ledger.md has one scribing row for every orphaned feature bee status --json names",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          },
+          {
+            "requirement": "bee knowledge check is green after the drain",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          },
+          {
+            "requirement": "every orphaned feature has a scribing-run stamp",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          },
+          {
+            "requirement": "docs/history/knowledge-in-the-flow/drain-ledger.md",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          },
+          {
+            "requirement": "docs/knowledge/index.md",
+            "artifact": "docs/history/knowledge-in-the-flow/drain-ledger.md"
+          }
+        ],
+        "recorded_at": "2026-11-09T14:12:04.693Z",
+        "recorded_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

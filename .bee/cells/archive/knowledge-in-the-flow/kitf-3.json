@@ -1,0 +1,221 @@
+{
+  "id": "kitf-3",
+  "feature": "knowledge-in-the-flow",
+  "title": "Compare features with and without the pack in the knowledge report",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "kitf-1"
+  ],
+  "decisions": [
+    "D8",
+    "4cfda42e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-in-the-flow/CONTEXT.md",
+    "docs/history/knowledge-in-the-flow/plan.md",
+    "docs/history/knowledge-outcome-measure/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement contract decision 4cfda42e (contract:report-feature-arms). Beside `build_outcomes` (report.rs:374) add `build_feature_outcomes(root)`: read dispatch.jsonl rows that carry `knowledge_arm` and `feature` and have `source: pack` or `kind: advisor`; a feature's arm is its first such row; its cells are the closed cells (the existing `closed_cells`) whose `feature` matches; count per arm features, cells and the four existing signals via `cell_signals`; `unrecorded_features` counts features of closed cells with no such row. Add `feature_outcomes` to the report JSON beside `outcomes`, and text lines `feature outcomes <arm>: N feature(s), M cell(s), B blocked, R reopened, X red round(s), W with mistakes` plus `feature outcomes unrecorded: K feature(s) with no recorded pack`. The cell-level `outcomes` block and its lines stay byte-identical. Add `knowledge pack` to `PULL_CMDS` (report.rs:428) and a `pack` column to the pull-rate rows, so the leader pull rate keeps counting the shaping and planning loads after the skills switch from `knowledge context` to `knowledge pack`. Tests whose fn names contain `feature_outcomes`, in knowledge/tests.rs and tests/knowledge_outcomes.rs. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_outcomes",
+  "must_haves": {
+    "truths": [
+      "bee knowledge report prints feature outcome lines for the knowledge and holdout arms",
+      "the cell-level outcome lines are unchanged",
+      "a knowledge pack call counts as a pull in the pull-rate section"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "substantive": "build_feature_outcomes and its JSON and text output"
+      }
+    ],
+    "key_links": [
+      "feature arms come from pack and advisor rows in dispatch.jsonl"
+    ],
+    "prohibitions": [
+      "No change to the cell-level outcomes block",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": null,
+    "outcome": "bee knowledge report prints feature outcomes per arm and counts knowledge pack as a pull",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+    ],
+    "deviations": [
+      "a feature arm row from an advisor dispatch counts as recorded, as from a pack row; first row wins",
+      "sync-ack: workflow-state skills are updated by kitf-6"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T15:07:15.090Z",
+    "behavior_change": true,
+    "verification_evidence": "6 feature_outcomes and timings_pull_rate tests; integration --test knowledge_outcomes 9 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_outcomes",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "owner_bypassed": null,
+        "at": "2026-11-09T15:07:15.090Z"
+      }
+    ],
+    "sync_ack": "workflow-state skills are updated by kitf-6",
+    "no_mistakes": true,
+    "inline_reason": "escalated to the session model (decision 1ee5c734)",
+    "report": {
+      "outcome": "bee knowledge report prints feature outcomes per arm and counts knowledge pack as a pull",
+      "commit": "8794b2917",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_outcomes — green:unit — 6 feature_outcomes and timings_pull_rate tests; integration --test knowledge_outcomes 9 passed",
+      "deviations": [
+        "a feature arm row from an advisor dispatch counts as recorded, as from a pack row; first row wins"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge report prints feature outcome lines for the knowledge and holdout arms",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "the cell-level outcome lines are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+          },
+          {
+            "requirement": "a knowledge pack call counts as a pull in the pull-rate section",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "feature arms come from pack and advisor rows in dispatch.jsonl",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+          }
+        ],
+        "recorded_at": "2026-11-09T15:07:15.163Z",
+        "recorded_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge report prints feature outcome lines for the knowledge and holdout arms",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "the cell-level outcome lines are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+          },
+          {
+            "requirement": "a knowledge pack call counts as a pull in the pull-rate section",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "feature arms come from pack and advisor rows in dispatch.jsonl",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs"
+          }
+        ],
+        "recorded_at": "2026-11-09T15:15:08.711Z",
+        "recorded_by": "077add21-b8c6-40c9-a5ad-6c962c629cec",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:469-482 build_feature_outcomes formats feature outcome lines for knowledge, holdout, and unrecorded; tested in freshness_tests::feature_outcomes_split_closed_cells_by_their_features_first_recorded_arm at line 3984 and knowledge_outcomes::feature_outcomes_report_the_feature_arm_beside_the_cell_arms at line 239"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:425 build_outcomes remains unchanged and cell-level outcome text remains byte-identical; verified in tests/knowledge_outcomes.rs:existing_report_sections_are_unchanged at line 235"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:490 PULL_CMDS includes 'knowledge pack' and line 505 increments pack count in pull_row; verified in freshness_tests::feature_outcomes_pull_rate_counts_a_knowledge_pack_call_as_a_pull at line 3961"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs defines build_feature_outcomes, records feature_outcomes in report JSON, and outputs text lines"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:432-435 recorded_feature_arms inspects dispatch.jsonl rows where source == 'pack' or kind == 'advisor'"
+          },
+          {
+            "id": "c6",
+            "status": "PASS",
+            "evidence": "Cell-level outcomes block in report.rs is untouched; no code comments were introduced"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-09T22:14:14.165Z"
+      }
+    ]
+  },
+  "escalate": true,
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
