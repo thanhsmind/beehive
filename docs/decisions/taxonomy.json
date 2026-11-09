@@ -839,6 +839,7 @@
     "contract:report-feature-arms",
     "contract:cap-knowledge-delta",
     "contract:consolidate",
-    "contract:kitf-suite-green"
+    "contract:kitf-suite-green",
+    "contract:manifest-area-step"
   ]
 }
