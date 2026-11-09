@@ -170,6 +170,7 @@ One slice; every cell below is in it.
 | kitf-8c | Stamp the orphaned scribing debt through consolidation | docs/knowledge/**, drain-ledger.md | kitf-8b | each orphaned feature is merged or marked none; after the merge the preamble shows no orphaned scribing debt | `bee knowledge check` |
 | kitf-6 | Teach shaping, planning, workers and capturing the pack and the delta | skills/*, packages/bee/prompts/worker-cell.md, rendered skill trees | kitf-1, kitf-2, kitf-4, kitf-5 | bee-shaping runs `bee knowledge pack` at Explore; workers commit their knowledge delta; planning adds the writer cell | `cargo test … --test rule_index_parity` |
 | kitf-9 | Prove the flow end to end in a throwaway repo | tests/knowledge_in_the_flow_e2e.rs (new) | kitf-1 to kitf-6 | one test runs pack, cap with delta, consolidate, close with no proposal, report with both arm levels | `cargo test … --test knowledge_in_the_flow_e2e` |
+| kitf-10 | Make the full suite green after the knowledge-in-the-flow cells | drivers/tests.rs, cells/tests.rs, hooks/cli_shape.rs, session_preamble/tests.rs, session_preamble/mod.rs | kitf-6, kitf-9 | the five red bin tests of the full suite pass; plan.md and comment baselines unchanged | `cargo test … --bin bee -- <the five tests>` |
 | kitf-7 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, docs/history/knowledge-in-the-flow/delivery.md | all | the okf-profile and workflow-state concepts describe the pack, the delta and consolidation | `bee knowledge check` |
 
 ```json
@@ -682,6 +683,73 @@ One slice; every cell below is in it.
       "open_choices": []
     },
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+  },
+  {
+      "id": "kitf-10",
+      "feature": "knowledge-in-the-flow",
+      "title": "Make the full suite green after the knowledge-in-the-flow cells",
+      "lane": "high-risk",
+      "role": "code",
+      "status": "open",
+      "deps": [
+          "kitf-6",
+          "kitf-9"
+      ],
+      "decisions": [
+          "a8e5afef",
+          "D4"
+      ],
+      "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/mod.rs"
+      ],
+      "read_first": [
+          "docs/history/knowledge-in-the-flow/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+          "packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs"
+      ],
+      "affects_skills": [],
+      "affects_specs": [],
+      "action": "The full suite is red in exactly five bin tests after kitf-1 to kitf-9. Fix each at its origin without weakening what the test protects. (1) verbs::drivers::tests::native_cell_prompt_render_is_byte_identical_to_golden: kitf-6 added the knowledge delta bullet to packages/bee/prompts/worker-cell.md on purpose; update the golden expectation to carry it. (2) devtools::comment_baseline::tests::every_code_file_is_at_or_below_its_comment_baseline: packages/bee-rs/crates/bee/src/verbs/cells/tests.rs has 1779 comment lines against a baseline of 1773; delete the comment lines this feature added since 4c05467a8, never raise the baseline. (3) hooks::cli_shape::documented_invocations::no_shipped_command_spelling_is_refused_by_the_widened_guard: four spellings inside the fenced cell JSON of docs/history/knowledge-in-the-flow/plan.md are refused because they omit a required flag; plan.md is gate-frozen, so pin the exact refused strings the test prints in KNOWN_HISTORICAL_EXCEPTIONS, the way earlier plan quotes are pinned. (4) and (5) hooks::session_preamble::tests::a_tighter_budget_drops_the_digest_next_and_keeps_the_command_surface and an_over_budget_render_drops_recent_decisions_first_and_names_where_to_fetch_it: first check whether they are red on base 4c05467a8 too; find why the full render no longer carries the Critical patterns digest section (likely the command surface grew with the new knowledge verbs) and restore the behavior the tests describe, in the preamble code or the fixture, whichever is the true origin; record the cause in the result. No code comments. One commit.",
+      "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- native_cell_prompt_render_is_byte_identical_to_golden every_code_file_is_at_or_below_its_comment_baseline no_shipped_command_spelling_is_refused_by_the_widened_guard session_preamble",
+      "must_haves": {
+          "truths": [
+              "the five named bin tests pass",
+              "docs/history/knowledge-in-the-flow/plan.md is byte-identical to HEAD"
+          ],
+          "artifacts": [
+              {
+                  "path": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+                  "substantive": "the four plan.md spellings pinned as historical exceptions"
+              },
+              {
+                  "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+                  "substantive": "golden carries the knowledge delta bullet"
+              }
+          ],
+          "key_links": [
+              "the comment baseline is not raised"
+          ],
+          "prohibitions": [
+              "No edit of plan.md",
+              "No raise of a comment baseline",
+              "No deleted or ignored test",
+              "No code comments"
+          ],
+          "open_choices": []
+      },
+      "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+      }
   }
 ]
 ```
