@@ -549,6 +549,13 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         }
         cell_map.insert("status".into(), Value::String("capped".into()));
         trace.insert("files_changed".into(), Value::Array(f.files_changed.clone()));
+        let knowledge_delta: Vec<Value> = f
+            .files_changed
+            .iter()
+            .filter(|v| v.as_str().is_some_and(|p| normalize_cell_path(p).starts_with("docs/knowledge/")))
+            .cloned()
+            .collect();
+        trace.insert("knowledge_delta".into(), Value::Array(knowledge_delta));
         // D5/D10: while ARMED, D5's explicit "followed the plan" statement
         // is a statement ABOUT deviations, never one of them. It is lifted
         // out of every source into `trace.plan_followed` below, because
@@ -1333,7 +1340,7 @@ pub(crate) fn cap_text(cell: &Value) -> String {
     let trace = cell.get("trace");
     let capped_at = trace.and_then(|t| t.get("capped_at"));
     let tests = trace.and_then(|t| t.get("tests"));
-    format!(
+    let headline = format!(
         "Capped {} at {} (tests: {}).",
         js_string_or_undefined(cell.get("id")),
         js_string_or_undefined(capped_at),
@@ -1341,7 +1348,14 @@ pub(crate) fn cap_text(cell: &Value) -> String {
             None | Some(Value::Null) => "not run".to_string(), // ?? 'not run'
             Some(v) => jsjson::js_to_string(v),
         }
-    )
+    );
+    let delta = match trace.and_then(|t| t.get("knowledge_delta")) {
+        Some(Value::Array(items)) if !items.is_empty() => {
+            format!("knowledge delta: {} file(s)", items.len())
+        }
+        _ => "knowledge delta: none".to_string(),
+    };
+    format!("{headline}\n{delta}")
 }
 
 /// `cells cap` stays on the narrow door (`dispatch`, `resolve_store_root`):
@@ -1650,6 +1664,11 @@ pub(crate) fn finish_cap_and_release(
     if let Some(source) = files_source {
         result.insert("files_source".into(), Value::String(source.to_string()));
     }
+    let knowledge_delta = match cell.get("trace").and_then(|t| t.get("knowledge_delta")) {
+        Some(v) => v.clone(),
+        None => Value::Array(Vec::new()),
+    };
+    result.insert("knowledge_delta".into(), knowledge_delta);
     let mut lines = vec![cap_text(&cell)];
     if let Some(source) = files_source {
         lines.push(format!("Files source: {source}."));

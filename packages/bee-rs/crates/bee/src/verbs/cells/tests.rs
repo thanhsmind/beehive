@@ -12855,3 +12855,104 @@ use std::time::Instant;
         assert!(all.contains("updateCell: RIGOR_FLOOR"), "{all}");
         assert_eq!(read_cell_fixture(root, "c-1")["title"], json!("title c-1"));
     }
+
+    // ══ kitf-5 — the knowledge delta a cap records ════════════════════════
+    //
+    // docs/history/knowledge-in-the-flow/CONTEXT.md D4 (decision 5faa858a):
+    // the cap records which docs/knowledge files the cell changed, derived
+    // from files_changed and never from a new flag, and prints it. Nothing
+    // refuses (D1).
+
+    fn knowledge_delta_cell(id: &str) -> Value {
+        cell(id, "claimed", "f", json!([]))
+    }
+
+    fn knowledge_delta_flags(id: &str, files: Vec<&str>) -> CapFlags {
+        let mut flags = wf_cap_flags(id);
+        flags.files_changed = files.into_iter().map(|f| json!(f)).collect();
+        flags.inline_reason = Some("fixture: more than one counted file".to_string());
+        flags
+    }
+
+    fn knowledge_delta_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        write_bee_config(tmp.path(), &json!({"commands": {"test": "none"}}));
+        tmp
+    }
+
+    #[test]
+    fn knowledge_delta_cap_records_two_docs_files_and_one_code_file() {
+        let tmp = knowledge_delta_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "kd-1", &knowledge_delta_cell("kd-1"));
+
+        let flags = knowledge_delta_flags(
+            "kd-1",
+            vec![
+                "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+                "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+                "./docs/knowledge/patterns/a-cap-records-its-own-delta.md",
+            ],
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["trace"]["knowledge_delta"],
+            json!([
+                "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+                "./docs/knowledge/patterns/a-cap-records-its-own-delta.md",
+            ]),
+            "the delta lists the docs/knowledge entries of files_changed, in order"
+        );
+        assert_eq!(
+            capped["trace"]["files_changed"].as_array().unwrap().len(),
+            3,
+            "files_changed itself is unchanged"
+        );
+        assert!(cap_text(&capped).contains("knowledge delta: 2 file(s)"), "{}", cap_text(&capped));
+    }
+
+    #[test]
+    fn knowledge_delta_cap_with_no_docs_file_is_empty_and_prints_none() {
+        let tmp = knowledge_delta_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "kd-2", &knowledge_delta_cell("kd-2"));
+
+        let flags = knowledge_delta_flags("kd-2", vec!["packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"]);
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(capped["status"], json!("capped"), "a cell with no knowledge change still caps (D1)");
+        assert_eq!(capped["trace"]["knowledge_delta"], json!([]));
+        assert!(cap_text(&capped).contains("knowledge delta: none"), "{}", cap_text(&capped));
+    }
+
+    #[test]
+    fn knowledge_delta_finish_records_the_same_delta_and_prints_it() {
+        let tmp = knowledge_delta_root();
+        let root = tmp.path();
+        commit_history_repo(root);
+        commit_with_message(root, "y", "land the cell\n\ncell: kd-3");
+        write_cell_fixture(root, "kd-3", &knowledge_delta_cell("kd-3"));
+
+        let flags = knowledge_delta_flags(
+            "kd-3",
+            vec![
+                "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+                "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+            ],
+        );
+        let out = finish_cap_and_release(root, None, flags, None).expect("a clean finish");
+        let Out::Emit(result, text, 0) = out else { panic!("expected a green finish") };
+
+        assert_eq!(
+            result["knowledge_delta"],
+            json!(["docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"]),
+            "the finish result carries the same delta the cap recorded"
+        );
+        assert_eq!(
+            result["trace"]["knowledge_delta"],
+            json!(["docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"])
+        );
+        assert!(text.contains("knowledge delta: 1 file(s)"), "{text}");
+    }
