@@ -1226,6 +1226,34 @@ pub(crate) fn append_pack_record(root: &Path, record: &Map<String, Value>) {
     );
 }
 
+pub(crate) fn feature_learned_context(root: &Path, feature: &str) -> D<(&'static str, Vec<String>)> {
+    let arm = feature_arm(root, feature);
+    if arm == "holdout" {
+        return Ok((arm, Vec::new()));
+    }
+    let bundle_root = match crate::verbs::status_full::find_granted_worktree_for_feature(root, feature) {
+        Some((_, worktree_root)) if Path::new(&worktree_root).is_dir() => std::path::PathBuf::from(worktree_root),
+        _ => root.to_path_buf(),
+    };
+    let anchor = serde_json::json!({ "id": feature, "feature": feature, "lane": "standard" });
+    Ok((arm, learned_context_lines(&bundle_root, &anchor)?))
+}
+
+pub(crate) fn advisor_learned_context(
+    root: &Path,
+    kind: &str,
+    feature: Option<&str>,
+    brief: Option<&str>,
+) -> D<Option<(&'static str, Vec<String>)>> {
+    if kind != "advisor" || brief.is_some_and(|b| !b.trim().is_empty()) {
+        return Ok(None);
+    }
+    match feature.map(str::trim).filter(|f| !f.is_empty()) {
+        Some(feature) => Ok(Some(feature_learned_context(root, feature)?)),
+        None => Ok(None),
+    }
+}
+
 pub(crate) fn cell_learned_context(
     root: &Path,
     bundle_root: &Path,
@@ -1401,6 +1429,10 @@ pub(crate) fn prompt_body_for(
         // bound lane feature, then the active feature from state, then nothing
         // (D5/D6: rendering the wrong request is worse than rendering none).
         let original_request = original_request_block(root, lane_feature);
+        let learned = match advisor_learned_context(root, kind, lane_feature, brief)? {
+            Some((_, lines)) => lines.join("\n"),
+            None => String::new(),
+        };
         return Ok(render(
             &template,
             &[
@@ -1409,6 +1441,7 @@ pub(crate) fn prompt_body_for(
                 ("purpose", purpose.unwrap_or("")),
                 ("original_request", &original_request),
                 ("seat", seat.unwrap_or("")),
+                ("learned_context", &learned),
             ],
         ));
     }
@@ -3406,6 +3439,15 @@ pub(crate) fn prepare_dispatch_wire(
         let paths = |listed: &[String]| {
             Value::Array(listed.iter().map(|l| Value::String(pack_line_path(l))).collect())
         };
+        record.insert("learned_context".into(), paths(&knowledge));
+        record.insert("pack_code".into(), paths(&code));
+    }
+    if let Some((arm, lines)) = advisor_learned_context(root, kind, lane_feature.as_deref(), brief)? {
+        let (knowledge, code) = split_pack_lines(&lines);
+        let paths = |listed: &[String]| {
+            Value::Array(listed.iter().map(|l| Value::String(pack_line_path(l))).collect())
+        };
+        record.insert("knowledge_arm".into(), Value::String(arm.to_string()));
         record.insert("learned_context".into(), paths(&knowledge));
         record.insert("pack_code".into(), paths(&code));
     }

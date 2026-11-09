@@ -12840,3 +12840,79 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             assert_eq!(record.get("learned_context"), None, "{line}");
         }
     }
+
+    fn advisor_pack_config(percent: u64) -> String {
+        format!(
+            r#"{{"models":{{"claude":{{"generation":"sonnet","review":"opus","advisor":"opus","hat-risks":"opus"}}}},"knowledge_holdout_percent":{percent}}}"#
+        )
+    }
+
+    fn advisor_pack_dispatch(
+        percent: u64,
+        kind: &str,
+        role: Option<&str>,
+        brief: Option<&str>,
+    ) -> (String, Value, Vec<String>) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &advisor_pack_config(percent));
+        bundle_fixture(&root);
+        let expected = learned_context_lines(&root, &json!({"id": "demo", "feature": "demo", "lane": "standard"}))
+            .unwrap();
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", kind, role, None, None, false, None, Some("check the plan"), true, None, brief,
+            Some("demo"), None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let prompt = v["payload"]["prompt"]
+            .as_str()
+            .or_else(|| v["payload"]["stdin"].as_str())
+            .unwrap_or_default()
+            .to_string();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        (prompt, record, expected)
+    }
+
+    #[test]
+    fn advisor_pack_renders_the_feature_pack_into_a_hat_seat_prompt() {
+        let (prompt, record, expected) = advisor_pack_dispatch(0, "advisor", Some("hat-risks"), None);
+        assert!(!expected.is_empty());
+        let block = format!("{LEARNED_HEADER} feature pack — read before answering; prefer it over re-deriving):\n{}\n", expected.join("\n"));
+        assert!(prompt.contains(&block), "{prompt}");
+        assert!(!prompt.contains("{{"), "{prompt}");
+        assert_eq!(record["knowledge_arm"], json!("knowledge"));
+        let listed: Vec<Value> = expected
+            .iter()
+            .filter(|l| !l.starts_with(PACK_CODE_PREFIX))
+            .map(|l| Value::String(pack_line_path(l)))
+            .collect();
+        assert_eq!(record["learned_context"], Value::Array(listed));
+        assert!(record["pack_code"].is_array());
+    }
+
+    #[test]
+    fn advisor_pack_on_a_holdout_feature_renders_no_block_and_records_holdout() {
+        let (prompt, record, _) = advisor_pack_dispatch(100, "advisor", None, None);
+        assert!(!prompt.contains(LEARNED_HEADER), "{prompt}");
+        assert_eq!(record["knowledge_arm"], json!("holdout"));
+        assert_eq!(record["learned_context"], json!([]));
+        assert_eq!(record["pack_code"], json!([]));
+    }
+
+    #[test]
+    fn advisor_pack_skips_a_blind_lane_that_carries_a_brief() {
+        let (prompt, record, _) = advisor_pack_dispatch(0, "advisor", None, Some("Which shape is cheapest?"));
+        assert!(!prompt.contains(LEARNED_HEADER), "{prompt}");
+        assert_eq!(record.get("knowledge_arm"), None);
+    }
+
+    #[test]
+    fn advisor_pack_leaves_gather_and_reviewer_prompts_without_a_block() {
+        for kind in ["gather", "reviewer"] {
+            let (prompt, record, _) = advisor_pack_dispatch(0, kind, None, None);
+            assert!(!prompt.contains(LEARNED_HEADER), "{kind}: {prompt}");
+            assert_eq!(record.get("knowledge_arm"), None, "{kind}");
+        }
+    }

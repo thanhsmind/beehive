@@ -8,6 +8,11 @@ Seat: {{seat}}. Your perspective and instrument are the row for this role in the
 
 {{original_request}}
 {{/if}}
+{{#if learned_context}}
+
+Learned context (machine-assembled feature pack — read before answering; prefer it over re-deriving):
+{{learned_context}}
+{{/if}}
 {{#if purpose}}
 
 Purpose:
