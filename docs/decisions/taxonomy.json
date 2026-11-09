@@ -831,6 +831,8 @@
     "contract:knowledge-bundle-walk",
     "contract:knowledge-pull-rate",
     "contract:read-set-gate",
-    "contract:missing-decision-link"
+    "contract:missing-decision-link",
+    "contract:tiny-cap-bound",
+    "contract:tiny-route-bound"
   ]
 }
