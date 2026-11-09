@@ -7238,6 +7238,107 @@ use std::time::Instant;
         assert_eq!(capped["status"], json!("capped"));
     }
 
+    #[test]
+    fn tiny_lane_inline_cap_refuses_more_than_one_counted_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "tb-1", &cell_body_wp("tb-1", "tiny", Some("solo")));
+        let refusal = thrown(cap_cell_from_flags(
+            root,
+            &cap_flags_wp("tb-1", vec!["a.rs", "b.rs"], None),
+            false,
+        ));
+        assert!(refusal.contains("a.rs"), "{refusal}");
+        assert!(refusal.contains("b.rs"), "{refusal}");
+        assert!(
+            refusal.contains("tiny = one hand-authored file plus mechanical companions"),
+            "{refusal}"
+        );
+        assert!(
+            refusal.contains("bee route --set --lane small"),
+            "{refusal}"
+        );
+        assert!(
+            refusal.contains("bee dispatch prepare --claim"),
+            "{refusal}"
+        );
+        assert!(refusal.contains("--inline-reason"), "{refusal}");
+    }
+
+    #[test]
+    fn tiny_lane_inline_cap_with_inline_reason_succeeds_and_records_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "tb-2", &cell_body_wp("tb-2", "tiny", Some("solo")));
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_wp("tb-2", vec!["a.rs", "b.rs"], Some("version bump companion")),
+            false,
+        )
+        .unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["trace"]["inline_reason"],
+            json!("version bump companion")
+        );
+    }
+
+    #[test]
+    fn tiny_lane_inline_cap_ignores_bee_and_docs_history_companions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "tb-3", &cell_body_wp("tb-3", "tiny", Some("solo")));
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_wp(
+                "tb-3",
+                vec![
+                    "src/lib.rs",
+                    ".bee/state.json",
+                    "docs/history/f/plan.md",
+                ],
+                None,
+            ),
+            false,
+        )
+        .unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn tiny_lane_cap_by_registered_worker_allows_multiple_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_workers_state(root, json!([{"nickname": "worker-1", "cell": "tb-4"}]));
+        write_cell_fixture(root, "tb-4", &cell_body_wp("tb-4", "tiny", Some("worker-1")));
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_wp("tb-4", vec!["a.rs", "b.rs"], None),
+            false,
+        )
+        .unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn tiny_lane_inline_cap_counts_doc_outside_docs_history_beside_code() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "tb-5", &cell_body_wp("tb-5", "tiny", Some("solo")));
+        let refusal = thrown(cap_cell_from_flags(
+            root,
+            &cap_flags_wp(
+                "tb-5",
+                vec!["docs/knowledge/a.md", "src/a.rs"],
+                None,
+            ),
+            false,
+        ));
+        assert!(refusal.contains("docs/knowledge/a.md"), "{refusal}");
+        assert!(refusal.contains("src/a.rs"), "{refusal}");
+        assert!(refusal.contains("tiny = one hand-authored file plus mechanical companions"), "{refusal}");
+    }
+
     // ══ fa-1 — diff-vs-test advisory (finish's green-cap-only nudge) ══════
     //
     // `trace.warnings`' new (and only) producer since the E1 impact-registry
@@ -9542,7 +9643,10 @@ use std::time::Instant;
             "demo-rule-1",
             &["skills/demo/SKILL.md", "docs/specs/demo.md"],
         );
-        write_cell_fixture(root, "sd-3", &cell("sd-3", "claimed", "f", json!([])));
+        write_workers_state(root, json!([{"nickname": "w", "cell": "sd-3"}]));
+        let mut c = cell("sd-3", "claimed", "f", json!([]));
+        c["trace"] = json!({"worker": "w"});
+        write_cell_fixture(root, "sd-3", &c);
 
         // Only the home is touched — neither applied_at file is.
         let flags = cap_flags_sync("sd-3", vec!["docs/knowledge/areas/demo/rule.md"], None);

@@ -1957,6 +1957,36 @@ use std::time::Instant;
         assert!(js_number_full("Infinity").is_err());
     }
 
+    #[test]
+    fn route_tiny_with_files_greater_than_one_is_refused() {
+        let f = route_flags(&[("class", "bugfix"), ("lane", "tiny"), ("flags", ""), ("files", "2")]);
+        let message = match ok(validate_route_set_flags(&f)) {
+            Err(m) => m,
+            Ok(_) => panic!("expected a refusal"),
+        };
+        assert!(message.contains("--lane small"));
+        assert!(message.contains("tiny"));
+    }
+
+    #[test]
+    fn route_tiny_with_files_zero_or_one_is_accepted() {
+        let f0 = route_flags(&[("class", "bugfix"), ("lane", "tiny"), ("flags", ""), ("files", "0")]);
+        let r0 = match ok(validate_route_set_flags(&f0)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(r0.get("lane"), Some(&json!("tiny")));
+        assert_eq!(r0.get("product_files"), Some(&json!(0.0)));
+
+        let f1 = route_flags(&[("class", "bugfix"), ("lane", "tiny"), ("flags", ""), ("files", "1")]);
+        let r1 = match ok(validate_route_set_flags(&f1)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(r1.get("lane"), Some(&json!("tiny")));
+        assert_eq!(r1.get("product_files"), Some(&json!(1.0)));
+    }
+
     /// psa-1 (D2, decision 1593e365): "perf" is the eighth class. Happy path
     /// end to end — `--set` accepts it, and the record `--show` reads back
     /// carries class=perf. (run_route's CLI entry is cwd-rooted and
