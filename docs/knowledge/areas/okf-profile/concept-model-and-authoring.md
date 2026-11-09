@@ -9,7 +9,7 @@ bee:
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
   decisions: [D4, D10, D11, D12, D17, D18, D19, D23, D31, D32, D33, D36, G12, G13, G14]
-  sources: ["okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#E1", "okf-switchover-f3 cells f3-2, f3-3 (bundle-first scribing target, the three-layer anti-fork gate, and both doc trees resolved off the product root; capped with verify evidence, trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-switchover-f3/CONTEXT.md`, "knowledge-show-new cell ksn-1 (`bee knowledge show` and `bee knowledge new`; trace .bee/cells/archive/knowledge-show-new/ksn-1.json, capped 2026-09-06)"]
+  sources: ["okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#E1", "okf-switchover-f3 cells f3-2, f3-3 (bundle-first scribing target, the three-layer anti-fork gate, and both doc trees resolved off the product root; capped with verify evidence, trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-switchover-f3/CONTEXT.md`, "knowledge-show-new cell ksn-1 (`bee knowledge show` and `bee knowledge new`; trace .bee/cells/archive/knowledge-show-new/ksn-1.json, capped 2026-09-06)", "pointer-rot sweep (2026-11-07 pointer sweep: 398 dangling pointers rewritten across 191 files)"]
   authoritative_for: "okf-profile: the concept model, its frontmatter, and concept authoring"
   anchors: [packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs, packages/bee-rs/crates/bee/src/state.rs, skills/bee-capturing/SKILL.md]
   verified_at: 2026-11-07
@@ -232,6 +232,7 @@ are different verbs. What a new concept still owes is an inbound link — the or
   and the malformed-claim throw are each fixed at the source (G14).
 - No subject is ever defaulted. A new-concept request without a usable subject is refused, never
   routed to the area's `overview` concept (G14).
+- **Pointer-rot repair convention (2026-11-07 pointer sweep).** In `docs/knowledge/` a retired path becomes `<rust home>` (formerly `<old path>`) when a same-stem Rust module owns the behaviour, or `'<old path> (retired with the Node runtime, 2026-08-02)'` without backticks when none does; a purged cell trace is cited as `'cell <id> (trace purged from .bee/cells/)'` in bodies and bare (unquoted) in frontmatter sources, which is the canonical emit form.
 
 ## Edge Cases Settled
 
