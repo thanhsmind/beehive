@@ -115,6 +115,7 @@ once at wave close.
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader writes this plan."},
     {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"No release rides this feature."},
     {"stage":"generation-fallback","classification":"not-applicable","role":"generation","reason":"generation is used directly for implementation."},
+    {"stage":"goal-check-judge","classification":"required","role":"review","reason":"bee close requires a semantic judge verdict on behavior_change cells tbdel-1 and tbdel-2; this is the goal-check judge, not the user-invoked independent review."},
     {"stage":"independent-review","classification":"not-applicable","role":"review","reason":"Independent review stays user-invoked."},
     {"stage":"generic-advisor","classification":"not-applicable","role":"advisor","reason":"No consult needed."},
     {"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"No unattended loop."},
@@ -268,6 +269,7 @@ Phase plan (one slice):
 ## Revisions
 
 - rev 1 (2026-11-09): two short command spellings in the cell actions were reworded to prose; the documented-invocations guard test read them as runnable commands missing `--runtime` and `--kind`. No scope change.
+- rev 2 (2026-11-09): add the goal-check-judge stage on role review; the close door needs a judge verdict for both behavior_change cells and the rev 1 plan had no stage for it. No scope change.
 
 ## Open Questions
 
