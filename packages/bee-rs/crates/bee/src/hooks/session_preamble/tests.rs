@@ -1013,8 +1013,10 @@ use crate::version::BEE_VERSION;
         let root = tmp.path();
         pathological_store(root);
 
-        let text = build_session_preamble_within(root, None, None, "claude", PREAMBLE_BUDGET_BYTES);
-        assert!(text.len() <= PREAMBLE_BUDGET_BYTES, "{} bytes", text.len());
+        let whole = build_session_preamble_within(root, None, None, "claude", usize::MAX);
+        let budget = whole.len() - 1;
+        let text = build_session_preamble_within(root, None, None, "claude", budget);
+        assert!(text.len() <= budget, "{} bytes over {budget}", text.len());
         assert!(!text.contains("### Recent decisions"), "{text}");
         assert!(text.contains("### Critical patterns (digest)"), "{text}");
         assert!(text.contains("### Command surface"), "{text}");
@@ -1034,7 +1036,7 @@ use crate::version::BEE_VERSION;
         let root = tmp.path();
         pathological_store(root);
 
-        let full = build_session_preamble_within(root, None, None, "claude", PREAMBLE_BUDGET_BYTES);
+        let full = build_session_preamble_within(root, None, None, "claude", usize::MAX);
         let digest_start = full.find("### Critical patterns (digest)").expect("digest rides the full render");
         let digest_end = digest_start
             + full[digest_start..]

@@ -12856,13 +12856,6 @@ use std::time::Instant;
         assert_eq!(read_cell_fixture(root, "c-1")["title"], json!("title c-1"));
     }
 
-    // ══ kitf-5 — the knowledge delta a cap records ════════════════════════
-    //
-    // docs/history/knowledge-in-the-flow/CONTEXT.md D4 (decision 5faa858a):
-    // the cap records which docs/knowledge files the cell changed, derived
-    // from files_changed and never from a new flag, and prints it. Nothing
-    // refuses (D1).
-
     fn knowledge_delta_cell(id: &str) -> Value {
         cell(id, "claimed", "f", json!([]))
     }
