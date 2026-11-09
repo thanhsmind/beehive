@@ -54,6 +54,8 @@ Labels: `read` = opened at that line; `ran` = executed. Evidence is a verbatim s
 | 11 | The advisor template is compiled into the binary | read | packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs:39 | `pub(crate) const PROMPT_ADVISOR: &str = include_str!("../../../../../../bee/prompts/advisor.md");` |
 | 12 | The unapplied-proposal detector is separate from close, so old proposals still surface until drained | read | packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs:263 | `pub(crate) fn unapplied_promote_proposals(root: &Path) -> Vec<UnappliedPromoteProposal> {` |
 | 13 | This repo already records cell arms; most closed cells predate the holdout | ran | .bee/bin/bee knowledge report | `outcomes unrecorded: 1287 closed cell(s) with no recorded arm` |
+| 14 | The advisor shares one supported-vars arm with gather and reviewer, so kitf-2 splits advisor out | read | packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs:117 | `"gather" \| "reviewer" \| "advisor" => Some(&[` |
+| 15 | Pull rate counts only search, context and show today | read | packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:428 | `const PULL_CMDS: [&str; 3] = ["knowledge search", "knowledge context", "knowledge show"];` |
 
 ## Discovery
 
@@ -70,7 +72,7 @@ Recommended path:
 
 - Extend the one assembler (D3): `learned_context_lines` keeps its knowledge lines and appends the
   code lines its concepts anchor, so cells, the pack verb and the advisor prompt print the same pack
-  (D2). Contract decision `cfc015c6` (contract:feature-pack).
+  (D2). Contract decision `7faa7f3b` (contract:feature-pack, supersedes `cfc015c6`).
 - `bee knowledge pack` is the shaping and planning load; it records a `source: pack` row with the
   feature arm (D8). Skills call it at Explore and at planning; Lock fills `## Read set` from it.
 - Advisor prepares render the pack (D2, hat-wave briefs) and record the arm (`b05930b2`, contract:advisor-pack).
@@ -94,10 +96,14 @@ Risk map:
 | Cell prompt bytes change for bundles with anchors | MEDIUM | kitf-1 | Existing learned-context tests stay green except the ones that assert the exact block on an anchored fixture, which gain the code lines; a bundle with no anchors renders byte-identically (`cargo test … -- learned_context`). |
 | Close tests assert the proposal file | MEDIUM | kitf-4 | The proposal-write tests are rewritten to assert no file and the new line; the unapplied detector tests stay unchanged. |
 | Drain writes to many area concepts | MEDIUM | kitf-8a/b/c | Serial cells, `bee knowledge check` green after each. |
-| Merge output shape | LOW | kitf-4 | Merge tests assert the new line and JSON key. |
+| Merge output shape | LOW | kitf-4 | Merge tests assert the new line and JSON key; an unreadable range prints unknown. |
+| Drain stamps hide debt if the branch is abandoned | MEDIUM | kitf-8a/b/c | Drain cells write no control-store state; the leader stamps from drain-ledger.md only after the merge. |
+| A stale delivery.md reads as consolidated | LOW | kitf-4 | Consolidated only when delivery.md is not older than the newest capped cell. |
+| Features planned before this ships lose their close-time proposal | LOW | kitf-4 | Their cell commits carry deltas; `bee knowledge consolidate` reads archived cells at any time. Accepted. |
 
-Waves: wave 1 = kitf-1, kitf-5, kitf-8a (no shared files). Wave 2 = kitf-2, kitf-3, kitf-4 (after
-kitf-1: they share prepare.rs, knowledge tests, the registry and routing). kitf-8b after kitf-8a,
+Waves: wave 1 = kitf-1, kitf-5, kitf-8a (no shared files). Wave 2 = kitf-2, kitf-3 (after kitf-1:
+prepare.rs, drivers tests, knowledge tests). kitf-4 after kitf-1 and kitf-2 (registry, routing and
+drivers tests). kitf-8b after kitf-8a,
 kitf-8c after kitf-8b (all write area concepts). Wave 3 = kitf-6 (after kitf-1, kitf-2, kitf-4, kitf-5:
 skills name the verbs). Wave 4 = kitf-9 (after every code cell and kitf-6). Wave 5 = kitf-7 (after
 everything, the consolidation of this feature).
@@ -156,12 +162,12 @@ One slice; every cell below is in it.
 |---|---|---|---|---|---|
 | kitf-1 | Assemble one feature pack and load it with bee knowledge pack | prepare.rs, knowledge/pack.rs (new), knowledge/mod.rs, knowledge/routing.rs, registry_payload.json, drivers/tests.rs, knowledge/tests.rs | — | `bee knowledge pack --feature f --stage shaping` lists concepts and the code they anchor, and dispatch.jsonl gets a pack row with the feature arm | `cargo test … --bin bee -- feature_pack` |
 | kitf-5 | Record the knowledge delta on every cap | cells/handlers_close.rs, cells/tests.rs | — | `bee cells cap` prints `knowledge delta: 2 file(s)` and the trace carries them | `cargo test … --bin bee -- knowledge_delta` |
-| kitf-8a | Drain the unapplied promote proposals into the bundle | docs/knowledge/** | — | `bee orient` names no unapplied proposal | `bee knowledge check` |
-| kitf-2 | Give hat-wave and advisor briefs the feature pack | prepare.rs, packages/bee/prompts/advisor.md, drivers/tests.rs | kitf-1 | an advisor prompt shows the Learned context block and its prepare row carries the arm | `cargo test … --bin bee -- advisor_pack` |
+| kitf-8a | Drain the unapplied promote proposals into the bundle | docs/knowledge/**, drain-ledger.md | — | each unapplied proposal is merged or marked none in the drain ledger; after the merge `bee orient` names none | `bee knowledge check` |
+| kitf-2 | Give hat-wave and advisor briefs the feature pack | prepare.rs, prompt.rs, packages/bee/prompts/advisor.md, drivers/tests.rs | kitf-1 | an advisor prompt shows the Learned context block and its prepare row carries the arm | `cargo test … --bin bee -- advisor_pack` |
 | kitf-3 | Compare features with and without the pack in the knowledge report | knowledge/report.rs, knowledge/tests.rs, tests/knowledge_outcomes.rs | kitf-1 | `bee knowledge report` prints feature outcome lines per arm | `cargo test … --bin bee -- feature_outcomes` |
-| kitf-4 | Consolidate knowledge before merge and stop writing proposals at close | knowledge/consolidate.rs (new), knowledge/mod.rs, knowledge/routing.rs, registry_payload.json, drivers/close.rs, worktree/handlers.rs, worktree/phases.rs, worktree/tests.rs | kitf-1 | `bee knowledge consolidate` prints the writer's brief; merge prints a knowledge line; close prints consolidated or not and writes no proposal file | `cargo test … --bin bee -- knowledge_consolidat` |
-| kitf-8b | Flush the pending capture stubs into the bundle | docs/knowledge/** | kitf-8a | `bee capture count` reads 0 | `bee knowledge check` |
-| kitf-8c | Stamp the orphaned scribing debt through consolidation | docs/knowledge/** | kitf-8b | the preamble shows no orphaned scribing debt | `bee knowledge check` |
+| kitf-4 | Consolidate knowledge before merge and stop writing proposals at close | knowledge/consolidate.rs (new), knowledge/mod.rs, knowledge/routing.rs, registry_payload.json, drivers/close.rs, drivers/tests.rs, worktree/handlers.rs, worktree/phases.rs, worktree/tests.rs | kitf-1, kitf-2 | `bee knowledge consolidate` prints the writer's brief; merge prints a knowledge line; close prints consolidated or not and writes no proposal file | `cargo test … --bin bee -- knowledge_consolidat` |
+| kitf-8b | Flush the pending capture stubs into the bundle | docs/knowledge/**, drain-ledger.md | kitf-8a | each stub is merged or marked none; after the merge `bee capture count` reads 0 | `bee knowledge check` |
+| kitf-8c | Stamp the orphaned scribing debt through consolidation | docs/knowledge/**, drain-ledger.md | kitf-8b | each orphaned feature is merged or marked none; after the merge the preamble shows no orphaned scribing debt | `bee knowledge check` |
 | kitf-6 | Teach shaping, planning, workers and capturing the pack and the delta | skills/*, packages/bee/prompts/worker-cell.md, rendered skill trees | kitf-1, kitf-2, kitf-4, kitf-5 | bee-shaping runs `bee knowledge pack` at Explore; workers commit their knowledge delta; planning adds the writer cell | `cargo test … --test rule_index_parity` |
 | kitf-9 | Prove the flow end to end in a throwaway repo | tests/knowledge_in_the_flow_e2e.rs (new) | kitf-1 to kitf-6 | one test runs pack, cap with delta, consolidate, close with no proposal, report with both arm levels | `cargo test … --test knowledge_in_the_flow_e2e` |
 | kitf-7 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, docs/history/knowledge-in-the-flow/delivery.md | all | the okf-profile and workflow-state concepts describe the pack, the delta and consolidation | `bee knowledge check` |
@@ -176,7 +182,7 @@ One slice; every cell below is in it.
     "role": "code",
     "status": "open",
     "deps": [],
-    "decisions": ["D2", "D3", "D8", "cfc015c6"],
+    "decisions": ["D2", "D3", "D8", "7faa7f3b"],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
       "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs",
@@ -196,7 +202,7 @@ One slice; every cell below is in it.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Implement contract decision cfc015c6 (contract:feature-pack) exactly. (1) In prepare.rs extend `learned_context_lines` (prepare.rs:1075): keep the knowledge lines and their 8-line cap (LEARNED_CONTEXT_MAX_LINES, prepare.rs:654) byte-identical, then append at most 8 code lines `- code: <path> — anchored by <concept path>` built from the `bee.anchors` list of each listed concept in listed order: keep a path only when it exists under the bundle root's repo root, does not start with `docs/`, is not in the cell's read_first, and was not already listed; sanitize the path through the same one-line collapse the knowledge paths use. A bundle with no anchors renders exactly as before. (2) Add `feature_arm(root, feature)` beside `knowledge_arm` (prepare.rs:1118) hashing the string `feature:<slug>` with the same bucket rule and `knowledge_holdout_percent`. (3) Extend the cell prepare record (prepare.rs:3293 block) so `learned_context` keeps only knowledge paths and a new `pack_code` array holds the code paths. (4) Add `verbs/knowledge/pack.rs` with `bee knowledge pack --feature <f> --stage shaping|planning [--lane <l>] [--json]`: resolve the bundle root as prepare does for a feature with a granted worktree (the worktree checkout, else the repo root); compute the feature arm; for the knowledge arm call `learned_context_lines` with the value `{id: <feature>, feature: <feature>, lane: <lane or standard>}`; print the lines in text mode and `{feature, stage, knowledge_arm, knowledge:[{path,title}], code:[{path, anchored_by}], writes:[\".bee/logs/dispatch.jsonl\"]}` in JSON; for the holdout arm print empty lists and the one line `holdout: this feature loads no pack (measurement arm, knowledge_holdout_percent)`; append one dispatch.jsonl row through `append_prepare_record`'s file with `source: \"pack\"`, `kind: \"pack\"`, `feature`, `stage`, `knowledge_arm`, `learned_context`, `pack_code`; a stage outside shaping|planning refuses as a typed usage error; an absent or empty bundle prints an empty pack, exit 0. Register the verb in routing.rs and registry_payload.json beside `knowledge search`. (5) Tests whose fn names contain `feature_pack`: anchored concept adds code lines; anchor under docs/ or missing on disk or in read_first is skipped; bundle with no anchors is byte-identical; holdout feature prints empty pack and records arm holdout; pack row shape; bad stage refuses; cell prepare record carries pack_code. No code comments.",
+    "action": "Implement contract decision 7faa7f3b (contract:feature-pack) exactly. (1) In prepare.rs extend `learned_context_lines` (prepare.rs:1075): keep the knowledge lines and their 8-line cap (LEARNED_CONTEXT_MAX_LINES, prepare.rs:654) byte-identical — apply that truncate to the knowledge lines BEFORE the code lines are appended, never to the combined list — then append at most 8 code lines `- code: <path> — anchored by <concept path>` built from the `bee.anchors` list of each listed concept in listed order: keep a path only when it exists under the bundle root's repo root, does not start with `docs/`, is not in the cell's read_first, and was not already listed; sanitize the path through the same one-line collapse the knowledge paths use. A bundle with no anchors renders exactly as before. (2) Add `feature_arm(root, feature)` beside `knowledge_arm` (prepare.rs:1118) hashing the string `feature:<slug>` with the same bucket rule and `knowledge_holdout_percent`. (3) Extend the cell prepare record (prepare.rs:3293 block) so `learned_context` keeps only knowledge paths and a new `pack_code` array holds the code paths. (4) Add `verbs/knowledge/pack.rs` with `bee knowledge pack --feature <f> --stage shaping|planning [--lane <l>] [--json]`: resolve the bundle root as prepare does for a feature with a granted worktree (the worktree checkout, else the repo root); compute the feature arm; for the knowledge arm call `learned_context_lines` with the value `{id: <feature>, feature: <feature>, lane: <lane or standard>}`; annotate each knowledge path with its freshness grade from the existing grader the context manifest uses (`grade_area_concepts`, search.rs:150; `null` when the concept has no anchors), so Lock can fill the read set's `Grade at read` column from the pack alone; print the lines in text mode with the grade appended as ` [<grade>]` on the pack verb's own output only (the cell and advisor blocks stay ungraded), and `{feature, stage, knowledge_arm, knowledge:[{path,title,grade}], code:[{path, anchored_by}], writes:[\".bee/logs/dispatch.jsonl\"]}` in JSON; for the holdout arm print empty lists and the one line `holdout: this feature loads no pack (measurement arm, knowledge_holdout_percent)`; append one row to the CONTROL ROOT's `.bee/logs/dispatch.jsonl` (the file `append_prepare_record` writes, resolved from the control root even when the verb runs inside a worktree, so the report finds every row in one log) with `source: \"pack\"`, `kind: \"pack\"`, `feature`, `stage`, `knowledge_arm`, `learned_context`, `pack_code`; a stage outside shaping|planning refuses as a typed usage error; an absent or empty bundle prints an empty pack, exit 0. Register the verb in routing.rs and registry_payload.json beside `knowledge search`. (5) Tests whose fn names contain `feature_pack`: anchored concept adds code lines; anchor under docs/ or missing on disk or in read_first is skipped; bundle with no anchors is byte-identical; holdout feature prints empty pack and records arm holdout; pack row shape; bad stage refuses; cell prepare record carries pack_code. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_pack",
     "must_haves": {
       "truths": [
@@ -273,7 +279,8 @@ One slice; every cell below is in it.
     "deps": [],
     "decisions": ["D5", "D6", "D7", "D9"],
     "files": [
-      "docs/knowledge/**"
+      "docs/knowledge/**",
+      "docs/history/knowledge-in-the-flow/drain-ledger.md"
     ],
     "read_first": [
       "docs/history/knowledge-in-the-flow/CONTEXT.md",
@@ -283,15 +290,16 @@ One slice; every cell below is in it.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Drain every unapplied promote proposal once (D9). Get the list from the main checkout: `.bee/bin/bee orient` names each unapplied `docs/history/<feature>/promote-proposals.md` and its `bee deferred-queue complete --kind promote --feature <feature>` line. For each feature, oldest first: read the proposal and the code it names; keep only what is still true in today's code and is not already in the bundle; write it into the existing area concept that owns it (extend, never add a near-duplicate), each kept bullet anchored to a code path that exists (add it to that concept's bee.anchors), never restating what the code shows (D7); a pitfall pattern becomes a docs/knowledge/patterns/ concept only when no pattern already covers it; no human review step (D6). Cite history D-numbers in area docs, never raw decision ids. Then run `.bee/bin/bee state scribing-run --feature <feature> --no-lane --areas \"<areas touched, or none>\" --next-action \"none\"` and `.bee/bin/bee deferred-queue complete --kind promote --feature <feature>` — the stamp is owed even when nothing was kept. Run `.bee/bin/bee knowledge index` after the edits, then `.bee/bin/bee knowledge check` must be green. Commit the docs/knowledge changes in one commit. No code comments.",
+    "action": "Drain every unapplied promote proposal once (D9). Get the list from the main checkout: `.bee/bin/bee orient` names each unapplied `docs/history/<feature>/promote-proposals.md` and its `bee deferred-queue complete --kind promote --feature <feature>` line. For each feature, oldest first: read the proposal and the code it names; keep only what is still true in today's code and is not already in the bundle; write it into the existing area concept that owns it (extend, never add a near-duplicate), each kept bullet anchored to a code path that exists (add it to that concept's bee.anchors), never restating what the code shows (D7); a pitfall pattern becomes a docs/knowledge/patterns/ concept only when no pattern already covers it; no human review step (D6). Cite history D-numbers in area docs, never raw decision ids. Then add one row per feature to `docs/history/knowledge-in-the-flow/drain-ledger.md` (create it with the header `| kind | id | landed in |` / `|---|---|---|`): kind `promote`, the feature slug, and the concept paths it changed or `none` — a row is owed even when nothing was kept. Run NO bee command that writes the control store (no scribing-run, no deferred-queue complete): the leader runs those stamps from the ledger after the merge, so an abandoned branch never hides debt. When a proposal yields nothing clearly still true, record `none` and move on rather than deep-diving. Run `.bee/bin/bee knowledge index` after the edits, then `.bee/bin/bee knowledge check` must be green. Commit the docs/knowledge changes and the ledger in one commit. No code comments.",
     "verify": ".bee/bin/bee knowledge check",
     "must_haves": {
       "truths": [
-        "bee orient names no unapplied promote proposal",
+        "drain-ledger.md has one promote row for every unapplied proposal bee orient names",
         "bee knowledge check is green after the drain"
       ],
       "artifacts": [
-        {"path": "docs/knowledge/index.md", "substantive": "regenerated index after the drain"}
+        {"path": "docs/knowledge/index.md", "substantive": "regenerated index after the drain"},
+        {"path": "docs/history/knowledge-in-the-flow/drain-ledger.md", "substantive": "one promote row per drained proposal"}
       ],
       "key_links": [
         "every kept bullet sits in an existing area concept and anchors to an existing code path"
@@ -317,6 +325,7 @@ One slice; every cell below is in it.
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
       "packages/bee/prompts/advisor.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
       "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
     ],
     "read_first": [
@@ -327,7 +336,7 @@ One slice; every cell below is in it.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Implement contract decision b05930b2 (contract:advisor-pack). In the non-cell render path of prepare.rs (the `render(&template, &[(\"brief\", …), (\"expertise\", …), (\"purpose\", …), (\"original_request\", …), (\"seat\", …)])` call before the worker-cell branch), for kind advisor only: resolve the feature (the --feature flag, else the bound lane feature already used for original_request), resolve the bundle root the way the cell path does, compute `feature_arm` (from kitf-1), and for the knowledge arm build the lines with `learned_context_lines(bundle_root, {id: feature, feature, lane})`; pass them as a `learned_context` var. In packages/bee/prompts/advisor.md add, after the original_request block, `{{#if learned_context}}` / `Learned context (machine-assembled feature pack — read before answering; prefer it over re-deriving):` / `{{learned_context}}` / `{{/if}}`. Gather and reviewer templates and their vars stay unchanged; every template var still has a supplied value. The advisor prepare record gains `knowledge_arm`, `learned_context` (knowledge paths) and `pack_code` (code paths); a holdout feature renders no block and records arm holdout with empty lists; with no resolvable feature render no block and record no arm. Tests whose fn names contain `advisor_pack`: hat-* role advisor prompt carries the block; holdout feature carries none; record fields; gather prompt unchanged. No code comments.",
+    "action": "Implement contract decision b05930b2 (contract:advisor-pack). In the non-cell render path of prepare.rs (the `render(&template, &[(\"brief\", …), (\"expertise\", …), (\"purpose\", …), (\"original_request\", …), (\"seat\", …)])` call before the worker-cell branch), for kind advisor only: resolve the feature (the --feature flag, else the bound lane feature already used for original_request), resolve the bundle root the way the cell path does, compute `feature_arm` (from kitf-1), and for the knowledge arm build the lines with `learned_context_lines(bundle_root, {id: feature, feature, lane})`; pass them as a `learned_context` var. In packages/bee/prompts/advisor.md add, after the original_request block, `{{#if learned_context}}` / `Learned context (machine-assembled feature pack — read before answering; prefer it over re-deriving):` / `{{learned_context}}` / `{{/if}}`. Split `\"advisor\"` out of the shared `\"gather\" | \"reviewer\" | \"advisor\"` arm of `supported_vars_for` (prompt.rs:117) into its own arm that adds `learned_context` to brief, expertise, purpose, original_request, seat, so the prompt-skew check accepts the new template; gather and reviewer keep their var lists. Gather and reviewer templates stay unchanged; every template var still has a supplied value. The advisor prepare record gains `knowledge_arm`, `learned_context` (knowledge paths) and `pack_code` (code paths); a holdout feature renders no block and records arm holdout with empty lists; with no resolvable feature render no block and record no arm. Tests whose fn names contain `advisor_pack`: hat-* role advisor prompt carries the block; holdout feature carries none; record fields; gather prompt unchanged. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- advisor_pack",
     "must_haves": {
       "truths": [
@@ -372,12 +381,13 @@ One slice; every cell below is in it.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Implement contract decision 4cfda42e (contract:report-feature-arms). Beside `build_outcomes` (report.rs:374) add `build_feature_outcomes(root)`: read dispatch.jsonl rows that carry `knowledge_arm` and `feature` and have `source: pack` or `kind: advisor`; a feature's arm is its first such row; its cells are the closed cells (the existing `closed_cells`) whose `feature` matches; count per arm features, cells and the four existing signals via `cell_signals`; `unrecorded_features` counts features of closed cells with no such row. Add `feature_outcomes` to the report JSON beside `outcomes`, and text lines `feature outcomes <arm>: N feature(s), M cell(s), B blocked, R reopened, X red round(s), W with mistakes` plus `feature outcomes unrecorded: K feature(s) with no recorded pack`. The cell-level `outcomes` block and its lines stay byte-identical. Tests whose fn names contain `feature_outcomes`, in knowledge/tests.rs and tests/knowledge_outcomes.rs. No code comments.",
+    "action": "Implement contract decision 4cfda42e (contract:report-feature-arms). Beside `build_outcomes` (report.rs:374) add `build_feature_outcomes(root)`: read dispatch.jsonl rows that carry `knowledge_arm` and `feature` and have `source: pack` or `kind: advisor`; a feature's arm is its first such row; its cells are the closed cells (the existing `closed_cells`) whose `feature` matches; count per arm features, cells and the four existing signals via `cell_signals`; `unrecorded_features` counts features of closed cells with no such row. Add `feature_outcomes` to the report JSON beside `outcomes`, and text lines `feature outcomes <arm>: N feature(s), M cell(s), B blocked, R reopened, X red round(s), W with mistakes` plus `feature outcomes unrecorded: K feature(s) with no recorded pack`. The cell-level `outcomes` block and its lines stay byte-identical. Add `knowledge pack` to `PULL_CMDS` (report.rs:428) and a `pack` column to the pull-rate rows, so the leader pull rate keeps counting the shaping and planning loads after the skills switch from `knowledge context` to `knowledge pack`. Tests whose fn names contain `feature_outcomes`, in knowledge/tests.rs and tests/knowledge_outcomes.rs. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- feature_outcomes",
     "must_haves": {
       "truths": [
         "bee knowledge report prints feature outcome lines for the knowledge and holdout arms",
-        "the cell-level outcome lines are unchanged"
+        "the cell-level outcome lines are unchanged",
+        "a knowledge pack call counts as a pull in the pull-rate section"
       ],
       "artifacts": [
         {"path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs", "substantive": "build_feature_outcomes and its JSON and text output"}
@@ -400,7 +410,7 @@ One slice; every cell below is in it.
     "lane": "high-risk",
     "role": "code",
     "status": "open",
-    "deps": ["kitf-1"],
+    "deps": ["kitf-1", "kitf-2"],
     "decisions": ["D1", "D5", "D7", "cde4316f"],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
@@ -408,6 +418,7 @@ One slice; every cell below is in it.
       "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
       "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
       "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
       "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
       "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
       "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
@@ -423,7 +434,7 @@ One slice; every cell below is in it.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Implement contract decision cde4316f (contract:consolidate). (1) Add verbs/knowledge/consolidate.rs with `bee knowledge consolidate --feature <f> [--json]`, read-only, `writes: []`: reuse promote's builder (`build_promotion` in promote.rs) for the area-update and pattern-candidate sections; list the docs/knowledge files the feature's capped cells changed (their trace.knowledge_delta when present, else files_changed under docs/knowledge/), live and archived cells both; name the target `docs/history/<f>/delivery.md` and whether it exists; print the thin-layer rules in three lines: every entry anchors to code (bee.anchors), never restate what the code shows, extend the owning concept instead of adding a near-duplicate. Register it in routing.rs and registry_payload.json. Tests live in consolidate.rs's own test module. (2) In close.rs replace the proposal write (close.rs:3323-3353): do not write promote-proposals.md, do not call enqueue_promote_stub or enqueue_promote_deferred_record; push `Knowledge consolidated for \"<f>\": docs/history/<f>/delivery.md` when that file exists in the feature's checkout, else `Knowledge not consolidated for \"<f>\" — run bee knowledge consolidate --feature <f>`; put `knowledge: {consolidated: bool, delivery: <path|null>}` in the close JSON; the exit code is unchanged. Delete the two enqueue functions only if nothing else calls them, and rewrite the close tests that asserted the proposal file to assert its absence and the new line. `unapplied_promote_proposals` stays as is. (3) In the merge: compute the docs/knowledge files in the merged range with `branch_changed_files` (merge.rs:252) before the merge, carry `knowledge: {files: N, delivery: <path|null>}` on the merge result, and in `merge_text_lines` (handlers.rs:1506) print `  knowledge: N docs/knowledge file(s) in this merge; delivery: <path|none>` on a successful merge. Nothing refuses (D1). Tests whose fn names contain `knowledge_consolidat` for the verb, close and merge. No code comments.",
+    "action": "Implement contract decision cde4316f (contract:consolidate). (1) Add verbs/knowledge/consolidate.rs with `bee knowledge consolidate --feature <f> [--json]`, read-only, `writes: []`: reuse promote's builder (`build_promotion` in promote.rs) for the area-update and pattern-candidate sections; list the docs/knowledge files the feature's capped cells changed (their trace.knowledge_delta when present, else files_changed under docs/knowledge/), live and archived cells both; name the target `docs/history/<f>/delivery.md` and whether it exists; print the thin-layer rules in three lines: every entry anchors to code (bee.anchors), never restate what the code shows, extend the owning concept instead of adding a near-duplicate. Register it in routing.rs and registry_payload.json. Tests live in consolidate.rs's own test module. (2) In close.rs replace the proposal write (close.rs:3323-3353): do not write promote-proposals.md, do not call enqueue_promote_stub or enqueue_promote_deferred_record; push `Knowledge consolidated for \"<f>\": docs/history/<f>/delivery.md` when that file exists in the feature's docs root (`docs_root_for_feature`, which is main after a merge) AND its file modification time is not older than the newest `capped_at` of the feature's capped cells (a delivery left from an earlier slice or a reopen does not count); else `Knowledge not consolidated for \"<f>\": no current docs/history/<f>/delivery.md — its cell commits carry their own deltas; bee knowledge consolidate --feature <f> prints the writer brief for a follow-up writer cell`; put `knowledge: {consolidated: bool, delivery: <path|null>}` in the close JSON; the exit code is unchanged. Delete the two enqueue functions only if nothing else calls them, and rewrite the close tests that asserted the proposal file to assert its absence and the new line. `unapplied_promote_proposals` stays as is. (3) In the merge: compute the docs/knowledge files in the merged range with `branch_changed_files` (merge.rs:252) before the merge, carry `knowledge: {files: N, delivery: <path|null>}` on the merge result, and in `merge_text_lines` (handlers.rs:1506) print `  knowledge: N docs/knowledge file(s) in this merge; delivery: <path|none>` on a successful merge; when `branch_changed_files` returns None print `  knowledge: unknown (the merged range could not be read); delivery: <path|none>` and carry `files: null`. Nothing refuses (D1). The close and merge tests in drivers/tests.rs that assert the proposal file (`close_green_promote_ok_writes_the_proposals_file_and_a_headline`, `close_green_promote_ok_enqueues_one_capture_stub_pointing_at_it`, `close_green_promote_none_warns_once_and_writes_nothing`, `close_green_promote_skipped_enqueues_nothing`) are rewritten to the new contract and renamed to contain `knowledge_consolidat`. Tests whose fn names contain `knowledge_consolidat` for the verb, close and merge. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge_consolidat",
     "must_haves": {
       "truths": [
@@ -458,7 +469,8 @@ One slice; every cell below is in it.
     "deps": ["kitf-8a"],
     "decisions": ["D6", "D7", "D9"],
     "files": [
-      "docs/knowledge/**"
+      "docs/knowledge/**",
+      "docs/history/knowledge-in-the-flow/drain-ledger.md"
     ],
     "read_first": [
       "docs/history/knowledge-in-the-flow/CONTEXT.md",
@@ -467,15 +479,16 @@ One slice; every cell below is in it.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Drain every pending capture stub once (D9). List them from the main checkout with `.bee/bin/bee capture list`, oldest first. For each stub: check the settlement against today's code; when still true and not already in the bundle, merge it into the area concept that owns it (extend, never duplicate), anchored to code (bee.anchors), never restating code (D7), no human review (D6), citing history D-numbers, never raw decision ids. Then `.bee/bin/bee capture flush --id <id> --into <concept path, or none>`. Run `.bee/bin/bee knowledge index`, then `.bee/bin/bee knowledge check` must be green. Commit the docs/knowledge changes in one commit.",
+    "action": "Drain every pending capture stub once (D9). List them from the main checkout with `.bee/bin/bee capture list`, oldest first. For each stub: check the settlement against today's code; when still true and not already in the bundle, merge it into the area concept that owns it (extend, never duplicate), anchored to code (bee.anchors), never restating code (D7), no human review (D6), citing history D-numbers, never raw decision ids. Then add one row to `docs/history/knowledge-in-the-flow/drain-ledger.md`: kind `stub`, the stub id, the concept path or `none`. Run NO bee command that writes the control store (no capture flush): the leader flushes from the ledger after the merge. When a stub yields nothing clearly still true, record `none` and move on. Run `.bee/bin/bee knowledge index`, then `.bee/bin/bee knowledge check` must be green. Commit the docs/knowledge changes and the ledger in one commit.",
     "verify": ".bee/bin/bee knowledge check",
     "must_haves": {
       "truths": [
-        "bee capture count reads 0 pending",
+        "drain-ledger.md has one stub row for every pending stub bee capture list names",
         "bee knowledge check is green after the flush"
       ],
       "artifacts": [
-        {"path": "docs/knowledge/index.md", "substantive": "regenerated index after the flush"}
+        {"path": "docs/knowledge/index.md", "substantive": "regenerated index after the flush"},
+        {"path": "docs/history/knowledge-in-the-flow/drain-ledger.md", "substantive": "one stub row per pending stub"}
       ],
       "key_links": [
         "each flushed stub names the concept it landed in or none"
@@ -498,7 +511,8 @@ One slice; every cell below is in it.
     "deps": ["kitf-8b"],
     "decisions": ["D6", "D7", "D9"],
     "files": [
-      "docs/knowledge/**"
+      "docs/knowledge/**",
+      "docs/history/knowledge-in-the-flow/drain-ledger.md"
     ],
     "read_first": [
       "docs/history/knowledge-in-the-flow/CONTEXT.md",
@@ -507,15 +521,16 @@ One slice; every cell below is in it.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Drain the orphaned scribing debt once (D9). From the main checkout, `.bee/bin/bee status --json` lists it under scribing_debt.orphaned.features (feature and cell ids). For each feature: read its capped cells' traces (`.bee/cells/archive/<feature>/` or `.bee/cells/`) and its docs/history/<feature>/ files; keep only behavior still true in today's code and missing from the bundle; write it into the owning area concept, anchored, thin (D7), no review (D6), history D-numbers only. Then `.bee/bin/bee state scribing-run --feature <feature> --no-lane --areas \"<areas touched, or none>\" --next-action \"none\"` — owed even when nothing was kept. Run `.bee/bin/bee knowledge index`, then `.bee/bin/bee knowledge check` must be green. Commit the docs/knowledge changes in one commit.",
+    "action": "Drain the orphaned scribing debt once (D9). From the main checkout, `.bee/bin/bee status --json` lists it under scribing_debt.orphaned.features (feature and cell ids). For each feature: read its capped cells' traces (`.bee/cells/archive/<feature>/` or `.bee/cells/`) and its docs/history/<feature>/ files; keep only behavior still true in today's code and missing from the bundle; write it into the owning area concept, anchored, thin (D7), no review (D6), history D-numbers only. Then add one row to `docs/history/knowledge-in-the-flow/drain-ledger.md`: kind `scribing`, the feature slug, the area names touched or `none` — owed even when nothing was kept. Run NO bee command that writes the control store (no scribing-run): the leader stamps from the ledger after the merge. Old traces carry little still-true behavior: when a feature's traces yield nothing clearly active in today's code, record `none` and move on rather than deep-diving. Run `.bee/bin/bee knowledge index`, then `.bee/bin/bee knowledge check` must be green. Commit the docs/knowledge changes and the ledger in one commit.",
     "verify": ".bee/bin/bee knowledge check",
     "must_haves": {
       "truths": [
-        "bee status --json shows scribing_debt.orphaned.count 0",
+        "drain-ledger.md has one scribing row for every orphaned feature bee status --json names",
         "bee knowledge check is green after the drain"
       ],
       "artifacts": [
-        {"path": "docs/knowledge/index.md", "substantive": "regenerated index after the drain"}
+        {"path": "docs/knowledge/index.md", "substantive": "regenerated index after the drain"},
+        {"path": "docs/history/knowledge-in-the-flow/drain-ledger.md", "substantive": "one scribing row per orphaned feature"}
       ],
       "key_links": [
         "every orphaned feature has a scribing-run stamp"
@@ -594,7 +609,7 @@ One slice; every cell below is in it.
     "role": "test",
     "status": "open",
     "deps": ["kitf-1", "kitf-2", "kitf-3", "kitf-4", "kitf-5", "kitf-6"],
-    "decisions": ["D2", "D4", "D5", "D8", "cfc015c6", "cde4316f", "5faa858a", "4cfda42e"],
+    "decisions": ["D2", "D4", "D5", "D8", "7faa7f3b", "cde4316f", "5faa858a", "4cfda42e"],
     "files": [
       "packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs"
     ],
@@ -695,6 +710,10 @@ A changed behavior row: close on main writes promote-proposals.md; close on head
 ## Open Questions
 
 (none)
+
+## After the merge (leader, from main)
+
+For each row of `docs/history/knowledge-in-the-flow/drain-ledger.md`: `promote` → `bee state scribing-run --feature <id> --no-lane --areas "<areas or none>" --next-action none` and `bee deferred-queue complete --kind promote --feature <id>`; `stub` → `bee capture flush --id <id> --into <concept or none>`; `scribing` → `bee state scribing-run --feature <id> --no-lane --areas "<areas or none>" --next-action none`. Then reinstall `.bee/bin/bee` from the merged build.
 
 ## Out of scope
 
