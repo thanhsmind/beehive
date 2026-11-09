@@ -5015,7 +5015,7 @@ exit 0
         // refusal, and close still proceeds to its own next: line.
         assert_eq!(
             lines[2],
-            "Promote skipped for \"demo\": knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"demo\" (D38)."
+            "Knowledge not consolidated for \"demo\": no current docs/history/demo/delivery.md — its cell commits carry their own deltas; bee knowledge consolidate --feature demo prints the writer brief for a follow-up writer cell"
         );
         assert_eq!(
             lines[3],
@@ -5035,7 +5035,7 @@ exit 0
     /// `product_root` is the one live path left that makes `bundle_dir`
     /// return `None` (see `bundle_dir`, frame.rs).
     #[test]
-    fn close_green_promote_none_warns_once_and_writes_nothing() {
+    fn close_green_knowledge_consolidation_line_with_no_bundle_writes_nothing() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         // defaults-and-agent-env D1: pin uat_stop off — this test is about
@@ -5056,7 +5056,7 @@ exit 0
         // checklist any more (no test process ever spawns).
         assert_eq!(
             lines[2],
-            "Promote skipped for \"demo\": no docs/knowledge/ bundle to mine here"
+            "Knowledge not consolidated for \"demo\": no current docs/history/demo/delivery.md — its cell commits carry their own deltas; bee knowledge consolidate --feature demo prints the writer brief for a follow-up writer cell"
         );
         assert_eq!(
             lines[3],
@@ -5078,7 +5078,7 @@ exit 0
     /// non-zero even though the same close call retires that cell a few
     /// lines later.
     #[test]
-    fn close_green_promote_ok_writes_the_proposals_file_and_a_headline() {
+    fn close_green_knowledge_consolidation_writes_no_proposals_file() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         // defaults-and-agent-env D1: absent uat_stop now reads as Close,
@@ -5125,16 +5125,15 @@ exit 0
         );
         assert_eq!(
             lines[3],
-            "Promote proposed for \"demo\": 1 capped cell(s) mined, 0 area bullet(s), 0 pattern candidate(s) — see docs/history/demo/promote-proposals.md."
+            "Knowledge not consolidated for \"demo\": no current docs/history/demo/delivery.md — its cell commits carry their own deltas; bee knowledge consolidate --feature demo prints the writer brief for a follow-up writer cell"
         );
         assert_eq!(
             lines[4],
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
-        let proposals = std::fs::read_to_string(root.join("docs/history/demo/promote-proposals.md")).unwrap();
-        assert!(!proposals.contains("DELIVERY"));
-        assert!(proposals.contains("(b) AREA UPDATES"));
-        assert!(proposals.contains("(c) PATTERN CANDIDATES"));
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
+        assert!(!root.join(".bee/capture-queue.jsonl").exists());
+        assert!(!root.join(".bee/deferred-queue.jsonl").exists());
         // D38/D5 still hold: promote proposes, close never writes under
         // docs/knowledge/.
         assert!(!root.join("docs/knowledge/work").exists());
@@ -5151,7 +5150,7 @@ exit 0
     /// (asserted above, in the sibling test this one shares its fixture
     /// with).
     #[test]
-    fn close_green_promote_ok_enqueues_one_capture_stub_pointing_at_it() {
+    fn close_green_knowledge_consolidated_when_a_current_delivery_exists() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         // defaults-and-agent-env D1: absent uat_stop now reads as Close,
@@ -5176,32 +5175,60 @@ exit 0
             "{\"feature\":\"demo\",\"ts\":\"2024-06-03T00:00:00.000Z\"}\n",
         );
         let declared = declared_test_commands(&root).unwrap();
-        let Out::Emit(_, _text, code) =
+        w(&root, "docs/history/demo/delivery.md", "# Delivery\n\n- docs/knowledge/areas/demo/a.md: the rule.\n");
+        let Out::Emit(result, text, code) =
             close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
         assert_eq!(code, 0);
-        let queue = std::fs::read_to_string(root.join(".bee/capture-queue.jsonl")).unwrap();
-        let rows: Vec<Value> = queue.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
-        assert_eq!(rows.len(), 1, "expected exactly one enqueued stub: {queue}");
-        let stub = &rows[0];
-        assert_eq!(stub.get("kind"), Some(&json!("stub")));
-        assert_eq!(
-            stub.get("outcome"),
-            Some(&json!("Promote proposal for \"demo\" — docs/history/demo/promote-proposals.md"))
+        assert!(
+            text.split('\n').any(|l| l == "Knowledge consolidated for \"demo\": docs/history/demo/delivery.md"),
+            "{text}"
         );
-        assert_eq!(
-            stub.get("files"),
-            Some(&json!(["docs/history/demo/promote-proposals.md"]))
+        assert_eq!(result["knowledge"], json!({"consolidated": true, "delivery": "docs/history/demo/delivery.md"}));
+        assert!(!root.join(".bee/capture-queue.jsonl").exists());
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
+    }
+
+    #[test]
+    fn close_green_knowledge_consolidation_ignores_a_delivery_older_than_the_newest_cap() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
+        std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
+        w(&root, "docs/history/demo/CONTEXT.md", "# Demo Context\n\nBody.\n");
+        w(&root, "docs/history/demo/delivery.md", "# Delivery\n");
+        filetime::set_file_mtime(
+            root.join("docs/history/demo/delivery.md"),
+            filetime::FileTime::from_unix_time(1_577_836_800, 0),
+        )
+        .unwrap();
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"did the thing","files_changed":["src/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
         );
-        assert_eq!(stub.get("source"), Some(&json!("promote")));
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2024-06-03T00:00:00.000Z\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        assert!(text.contains("Knowledge not consolidated for \"demo\""), "{text}");
+        assert_eq!(result["knowledge"], json!({"consolidated": false, "delivery": "docs/history/demo/delivery.md"}));
     }
 
     /// D2: a promote door that skips (no proposal was written) never
     /// enqueues a stub — nothing to point at.
     #[test]
-    fn close_green_promote_skipped_enqueues_nothing() {
+    fn close_green_knowledge_consolidation_enqueues_nothing() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         // defaults-and-agent-env D1: absent uat_stop now reads as Close,
