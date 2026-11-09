@@ -2719,6 +2719,109 @@ use std::time::Instant;
         assert_eq!(m["entries"][0]["bytes"], json!(ctx_bytes + plan_bytes));
     }
 
+    #[test]
+    fn history_anchor_ranks_bee_area_concepts_ahead_of_the_criticals() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/manifest.rs"), "x\n").unwrap();
+        put(
+            &dir,
+            "areas/dispatch/manifest.md",
+            Cx::new("a-manifest")
+                .ty("bee.area")
+                .title("Manifest ranking of area concepts")
+                .description("ranks area concepts by relevance against the anchor text")
+                .tags(&["dispatch"])
+                .areas(&["dispatch"])
+                .bee("anchors", json!(["src/manifest.rs"]))
+                .body("Area concepts are ranked by relevance against the anchor text, and the manifest keeps three."),
+        );
+        put(
+            &dir,
+            "areas/sourdough/hydration.md",
+            Cx::new("a-sourdough")
+                .ty("bee.area")
+                .title("Sourdough hydration")
+                .description("baking bread at home")
+                .tags(&["baking"])
+                .areas(&["baking"])
+                .body("Knead the dough, proof it overnight, then bake at a high heat."),
+        );
+        put(
+            &dir,
+            "patterns/dispatch.md",
+            Cx::new("p-dispatch")
+                .title("Dispatch prompts")
+                .description("dispatch prompts assembled")
+                .tags(&["dispatch"])
+                .areas(&["dispatch"])
+                .critical()
+                .body("Dispatch prompts are assembled from templates in rust."),
+        );
+
+        write_history(
+            root,
+            "ctx-areas",
+            "CONTEXT.md",
+            "# Dispatch Context\n\nThe manifest ranks area concepts by relevance against the anchor text.\n",
+        );
+        let m = built(&dir, "ctx-areas", 20_000.0);
+        let entries = m["entries"].as_array().unwrap();
+        assert_eq!(entries[0]["reason"], "history anchor");
+        assert_eq!(entries[1]["path"], "docs/knowledge/areas/dispatch/manifest.md");
+        assert!(
+            entries[1]["reason"].as_str().unwrap().starts_with("area concept"),
+            "the area reason must lead with the area step: {}",
+            entries[1]["reason"]
+        );
+        let paths = entry_paths(&m);
+        assert!(
+            !paths.iter().any(|p| p.contains("areas/sourdough/hydration.md")),
+            "an area scoring 0.0 against the anchor is never selected: {paths:?}"
+        );
+        let critical_at = entries
+            .iter()
+            .position(|e| e["reason"].as_str().unwrap().starts_with("critical pattern"))
+            .expect("the critical pattern must still make the manifest");
+        assert!(critical_at > 1, "the critical pattern comes after the area: {paths:?}");
+    }
+
+    #[test]
+    fn a_work_item_manifest_is_unchanged_by_bee_area_concepts_it_does_not_require() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "tasks/widgets/item.md",
+            Cx::new("widgets").ty("bee.work-item").title("Widget work").description("widgets and gears"),
+        );
+        put(
+            &dir,
+            "patterns/gears.md",
+            Cx::new("p-gears")
+                .title("Gears")
+                .description("gear teeth mesh")
+                .critical()
+                .body("Gears mesh with widgets on the shaft."),
+        );
+        let before = built(&dir, "widgets", 20_000.0);
+        put(
+            &dir,
+            "areas/widgets/gears.md",
+            Cx::new("a-gears")
+                .ty("bee.area")
+                .title("Gears and widgets")
+                .description("widgets and gears")
+                .body("Gears mesh with widgets on the shaft."),
+        );
+        let after = built(&dir, "widgets", 20_000.0);
+        assert_eq!(
+            jsjson::stringify(&before["entries"]),
+            jsjson::stringify(&after["entries"]),
+            "the work-item arm's entries are untouched by bee.area concepts"
+        );
+    }
+
     /// D5: an existing bee.work-item concept always wins over a present
     /// docs/history/ fallback, and its manifest keeps today's shape apart
     /// from the added `anchor` field.

@@ -33,6 +33,8 @@ pub(crate) const TAG_WEIGHT: f64 = 0.05;
 
 pub(crate) const AREA_WEIGHT: f64 = 0.05;
 
+pub(crate) const AREA_KEEP: usize = 3;
+
 pub(crate) const ZERO_SIGNAL_MIN_POPULATION: usize = 10;
 
 pub(crate) const ZERO_SIGNAL_MAX_RATIO: f64 = 0.5;
@@ -295,17 +297,13 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         }
     }
 
-    // (4) the critical concepts, ranked by relevance and cut (G5/G11)
-    let criticals: Vec<&Concept> = concepts
-        .iter()
-        .filter(|c| matches!(bee_of(&c.data).get("critical"), Some(Value::Bool(true))))
-        .collect();
     let (query_meta, query_body): (String, String) = match &anchor {
         Anchor::WorkItem(c) => (meta_text_of(c), concept_body(dir, &c.path).unwrap_or_default()),
         Anchor::History { meta, body, .. } | Anchor::Ledger { meta, body, .. } | Anchor::Backlog { meta, body, .. } => {
             (meta.clone(), body.clone())
         }
     };
+
     let query_tags: HashSet<String> = match work_concept {
         Some(c) => match c.data.get("tags") {
             Some(Value::Array(items)) => {
@@ -320,6 +318,43 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         Some(Value::Array(items)) => items.iter().filter_map(|v| v.as_str()).collect(),
         _ => HashSet::new(),
     };
+
+    if work_concept.is_none() {
+        let areas: Vec<&Concept> = concepts.iter().filter(|c| is_area_concept(&c.data)).collect();
+        if !areas.is_empty() {
+            let Some(area_scores) =
+                score_critical_relevance(dir, &areas, &query_meta, &query_body, &query_tags, &query_areas)
+            else {
+                return ManifestOut::NeedsNode;
+            };
+            let mut ranked_areas: Vec<(String, f64)> = area_scores
+                .into_iter()
+                .filter(|(path, score)| *score > 0.0 && !selected.contains(path))
+                .collect();
+            ranked_areas.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.0.cmp(&b.0))
+            });
+            for (index, (path, score)) in ranked_areas.into_iter().take(AREA_KEEP).enumerate() {
+                select(
+                    &path,
+                    format!(
+                        "area concept (relevance {}, rank {} of {})",
+                        jsjson::js_f64_to_string(score),
+                        index + 1,
+                        areas.len()
+                    ),
+                    &mut ranked,
+                    &mut selected,
+                );
+            }
+        }
+    }
+
+    // (4) the critical concepts, ranked by relevance and cut (G5/G11)
+    let criticals: Vec<&Concept> = concepts
+        .iter()
+        .filter(|c| matches!(bee_of(&c.data).get("critical"), Some(Value::Bool(true))))
+        .collect();
     let Some(relevance) = score_critical_relevance(dir, &criticals, &query_meta, &query_body, &query_tags, &query_areas)
     else {
         return ManifestOut::NeedsNode;
