@@ -350,7 +350,7 @@
         "paseo": {
           "provider": "pi",
           "model": "antigravity/gemini-3.8-flash",
-          "thinking": "high"
+          "thinking": "medium"
         }
       },
       "paseo-pi-flash": {
