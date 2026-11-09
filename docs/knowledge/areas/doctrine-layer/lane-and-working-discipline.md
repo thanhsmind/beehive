@@ -161,7 +161,9 @@ govern the working residue of a cell rather than its content.
   itself must touch. Workflow bookkeeping, history and specification documents,
   plans/briefs/reports, and generated projections or manifests never count
   toward a lane cap — the workflow's own artifacts can never promote a change
-  out of its honest lane.
+  out of its honest lane. One exception holds for `tiny` only (R42): a
+  hand-authored spec or knowledge doc beside code counts, so that pair is
+  `small`.
 - **R15** — The two experience-based risk flags are test-anchored
   (lane-ceremony-v3 D7): "changes behavior an existing test asserts (a covered
   contract must change)" and "the change requires weakening, deleting, or

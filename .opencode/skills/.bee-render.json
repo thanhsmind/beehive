@@ -28,7 +28,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "988a503a51d1d12a40eadc69e6140fa45c6bb6b474767667f8c1fe547f1bff06"
+      "sha256": "890bdbafb94b5aeb426d6c0479d4c5c6959fdc8901dc2b6ee99fa0644c3f4333"
     },
     {
       "name": "bee-how",
@@ -36,7 +36,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "f3c28579eb9bb9c2eca3dcefc82963c8be891d601538d650687c8e1ad70ff6e0"
+      "sha256": "37b1cbab4903fa1957ca06048f08bbac1d10ca952d4128376f6e6b123d740637"
     },
     {
       "name": "bee-principle-attack-the-premise",
@@ -124,7 +124,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "900c6af48110240e9aab5388d444bafa247a4bd80206bb1a6e4852a05eb71abe"
+      "sha256": "4b3358019c7bd49b609f9632b0fad2448e7cdc643e7ffbfdb6fe37b01d7f902f"
     },
     {
       "name": "bee-teach",

@@ -71,7 +71,7 @@ It fires on whichever path came first, and a feature that passed through explori
 
 **Demotion requires all three conditions, measured. One missing means no demotion:**
 
-1. **A counted product-file touch set within the target lane's threshold** (`small`: ≤3, `tiny`: one hand-authored file). Product files only, per the lane file-cap rule — `.bee/**`, `docs/**`, plans, reports, and generated projections never count. The number comes from counting the scouted file list; an estimate is not a count.
+1. **A counted product-file touch set within the target lane's threshold** (`small`: ≤3, `tiny`: one hand-authored file). Product files only, per the lane file-cap rule — `.bee/**`, `docs/**`, plans, reports, and generated projections never count — except for `tiny`, where a hand-authored spec or doc beside code is a second file and makes the work `small`. The number comes from counting the scouted file list; an estimate is not a count.
 2. **Zero hard-gate flags on that touch set** (auth · authorization · data loss · audit/security · external provider · validation removal · database migration/schema change).
 3. **No unresolved gray areas left in scope** — every gray area is locked in `CONTEXT.md`, or was resolved as immaterial. An open question is a no.
 

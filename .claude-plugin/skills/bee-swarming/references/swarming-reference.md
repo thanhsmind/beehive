@@ -12,7 +12,9 @@ template, same status-token protocol, same reservation and cap discipline),
 never a full bee-swarming wave: no wave analysis, no reviewers, no panels.
 `tiny` may instead execute inline in the orchestrator session — same merged
 gate, cap discipline, and done-report; dispatch stays legal and, when
-chosen, follows this same contract.
+chosen, follows this same contract. An inline tiny cap with more than one
+counted file (paths outside `.bee/` and `docs/history/`) is refused unless
+`--inline-reason "<why>"` is given.
 The orchestrator claims the cell itself before spawning — same as any
 wave — then spawns it per the Operating Contract's Spawn step (param-carrying
 dispatch — a `model` param or a pinned agent type, never a bare marker) and
