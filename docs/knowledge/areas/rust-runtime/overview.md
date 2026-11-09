@@ -16,8 +16,8 @@ bee:
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/src/doctor/tests.rs, packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs, packages/bee-rs/crates/bee/tests/front_door.rs, packages/bee-rs/crates/bee/tests/registry_contracts.rs, packages/bee-rs/crates/bee/tests/registry_dispatch.rs]
   anchors: [packages/bee-rs/crates/bee, packages/bee-rs/crates/bee/src/verbs/, packages/bee-rs/crates/bee/src/hooks/]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-09
+  verified_commit: 3e0ce089a38014deb2f1312112377c46bcd3f9cf
 ---
 
 ## Purpose

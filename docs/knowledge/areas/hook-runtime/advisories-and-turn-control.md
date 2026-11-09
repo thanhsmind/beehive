@@ -12,8 +12,8 @@ bee:
   sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "post-advisor-hardening cells pah-1/pah-3 (onboarding-generator drift check + B15 consult instruction, 2026-07-18)", "docs/specs/hook-runtime.md#B2", "docs/specs/hook-runtime.md#B10", "docs/specs/hook-runtime.md#B15", "docs/specs/hook-runtime.md#R4", "docs/specs/hook-runtime.md#R10", "docs/specs/hook-runtime.md#R14", "docs/specs/hook-runtime.md#P4", "docs/specs/hook-runtime.md#P5", "codex-loop-p0 cell clp-1 (the prompt reminder threads sessionId and stops reporting the on-demand review gate outside a review session; trace in `.bee/cells/`, 2026-07-23)", "loop-seams-1112 cell ls-1 (advisor issue #54 — both surfaces, terminal owes no gate, per-session dedup; trace in `.bee/cells/`, 2026-07-23)", "validation-diet cell vd-1 (trace in .bee/cells/, report docs/history/validation-diet/reports/vd-1.md, 2026-07-28 — the bypass net's fire matrix narrowed to the single phase now carrying the merged approval, since the standalone feasibility phase it used to also cover is retired)", "knowledge-first-lean-decisions cell kbc-1 (trace in .bee/cells/, 2026-11-07 — the knowledge-before-code nudge)"]
   authoritative_for: "hook-runtime: the advisory contract and the gate-bypass turn-control exception"
   anchors: [packages/bee/LEADER.md, packages/, packages/bee-rs/crates/bee/src/, skills/, packages/bee-rs/crates/bee/src/hooks/write_guard/knowledge_first.rs, packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-09
+  verified_commit: 3e0ce089a38014deb2f1312112377c46bcd3f9cf
 ---
 
 # Hook Runtime — advisories, session-stop output, and the one deliberate turn-control exception
