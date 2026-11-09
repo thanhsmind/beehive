@@ -833,6 +833,12 @@
     "contract:read-set-gate",
     "contract:missing-decision-link",
     "contract:tiny-cap-bound",
-    "contract:tiny-route-bound"
+    "contract:tiny-route-bound",
+    "contract:feature-pack",
+    "contract:advisor-pack",
+    "contract:report-feature-arms",
+    "contract:cap-knowledge-delta",
+    "contract:consolidate",
+    "contract:kitf-suite-green"
   ]
 }
