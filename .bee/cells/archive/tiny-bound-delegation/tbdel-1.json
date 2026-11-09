@@ -1,0 +1,194 @@
+{
+  "id": "tbdel-1",
+  "feature": "tiny-bound-delegation",
+  "title": "Refuse an oversize tiny at route and at inline cap",
+  "lane": "standard",
+  "role": "generation",
+  "deps": [],
+  "decisions": [
+    "4ee41332-a000-492e-ac2c-afd59c8efa02",
+    "48130f16-8a89-44a5-892f-113e0b49b0f9",
+    "4479e6fd-7614-4d52-b298-86b6ebd584c3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "read_first": [
+    "docs/history/tiny-bound-delegation/CONTEXT.md",
+    "docs/history/tiny-bound-delegation/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Make the tiny bound a check at route and at cap (D4 contract tiny-cap-bound 4ee41332, D5 contract tiny-route-bound 48130f16, D2 4479e6fd). Cap (handlers_close.rs, beside the small/standard/high-risk branch, anchor: `if lane == \"small\" || lane == \"standard\" || lane == \"high-risk\" {`): add one helper that returns the files_changed paths not under `.bee/` and not under `docs/history/` (do NOT reuse worktree/full_suite.rs `is_bookkeeping`, which exempts all docs and .md). When lane is `tiny`, `--inline-reason` is absent, the trace worker is not a registered worker for this cell (reuse `registered_worker_for_cell`), and the helper returns more than one path, refuse with an error that names the counted paths, the bound (tiny = one hand-authored file plus mechanical companions), the reroute (`bee route --set --lane small ...`, then dispatch the next cell with `bee dispatch prepare --claim`) and the escape (`--inline-reason \"<why>\"`, recorded on trace.inline_reason). With `--inline-reason` the cap proceeds and records it exactly as the existing branch does. Route (workflows.rs `validate_route_set_flags`, anchor: `let mut product_files: Option<f64> = None;`): when lane is `tiny` and the product-file count is greater than 1, push an invalid entry naming the one-file tiny bound and `--lane small`. Fix any existing fixture in cells/tests.rs or state_group/tests.rs that this new rule now refuses by giving it a registered worker, one counted file, or lane small, keeping each test's original intent. Tests red-first for every row of the plan's test matrix. skills/bee-swarming/references/swarming-reference.md: where it says tiny may execute inline (rg `may instead execute inline`), add one sentence stating the cap refusal and its escape. Do not run bee dev regen; the leader runs it at wave close.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells verbs::state_group",
+  "must_haves": {
+    "truths": [
+      "an inline tiny cap with more than one counted file is refused unless --inline-reason is given",
+      "paths under .bee/ and docs/history/ are not counted",
+      "a tiny cap by a registered worker is not refused by the new check",
+      "route --set with lane tiny and files greater than 1 is refused naming --lane small"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "tiny inline cap bound check and counting helper"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "substantive": "tiny route file bound"
+      }
+    ],
+    "key_links": [
+      "the cap check reuses registered_worker_for_cell",
+      "swarming-reference.md names the cap refusal and the --inline-reason escape"
+    ],
+    "prohibitions": [
+      "Do not change the small/standard/high-risk refusal or its wording",
+      "Do not add a new cap flag",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-tbdel-1",
+    "outcome": "Refuse oversize tiny cells at route and inline cap 3a9f25b99e81196978c06608831c2c552e2f352a",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "sync-ack: all 22 concepts were already suspect before this cell (store-wide freshness debt); the new tiny cap and route rules are recorded as R42 in doctrine-layer/lane-and-working-discipline.md by tbdel-2, and the leader updates workflow-state/cells-completion-judge-and-archive.md at the scribe step"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T07:05:31.066Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells verbs::state_group — green:unit — verifies tiny lane bound enforcement at route and inline cap across 732 tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "93226eee-eb4a-4eb0-a001-d6c369b308c6",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells verbs::state_group",
+    "claimed_at": "2026-11-09T06:51:01.370Z",
+    "sync_ack": "all 22 concepts were already suspect before this cell (store-wide freshness debt); the new tiny cap and route rules are recorded as R42 in doctrine-layer/lane-and-working-discipline.md by tbdel-2, and the leader updates workflow-state/cells-completion-judge-and-archive.md at the scribe step",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Refuse oversize tiny cells at route and inline cap 3a9f25b99e81196978c06608831c2c552e2f352a",
+      "commit": "3a9f25b99e81196978c06608831c2c552e2f352a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells verbs::state_group — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::cells verbs::state_group — green:unit — verifies tiny lane bound enforcement at route and inline cap across 732 tests",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "an inline tiny cap with more than one counted file is refused unless --inline-reason is given",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "paths under .bee/ and docs/history/ are not counted",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "a tiny cap by a registered worker is not refused by the new check",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "route --set with lane tiny and files greater than 1 is refused naming --lane small",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+          },
+          {
+            "requirement": "the cap check reuses registered_worker_for_cell",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "swarming-reference.md names the cap refusal and the --inline-reason escape",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          },
+          {
+            "requirement": "skills/bee-swarming/references/swarming-reference.md",
+            "artifact": "skills/bee-swarming/references/swarming-reference.md"
+          }
+        ],
+        "recorded_at": "2026-11-09T07:05:36.876Z",
+        "recorded_by": "93226eee-eb4a-4eb0-a001-d6c369b308c6",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:530-545: capCell checks lane == \"tiny\" && f.inline_reason.is_none() && !registered_worker_for_cell; if counted.len() > 1, returns Err(Fail::Thrown) refusing cap unless --inline-reason is given."
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:200-218: counted_tiny_files filters out paths starting with or equal to \".bee\" or \"docs/history\" (both slash and backslash variants)."
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:535: registered_worker_for_cell check bypasses counted file check when worker is registered for this cell."
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:619-623: validate_route_set_flags checks lane_value == \"tiny\" && n > 1.0 and pushes invalid error explicitly naming \"--lane small\"."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "paseo-pi-agy-flash",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-09T07:19:48.046Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"tiny-bound-delegation\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 6da672e; reload the product and test \"tiny-bound-delegation\", then either approve uat (\"bee gate --name uat --approved true --lane tiny-bound-delegation\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-09T06:40:54.452Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: tiny-bound-delegation",
-    "asked_at": "2026-11-09T07:11:05.927Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -34,8 +29,8 @@
   },
   "gate_preview": {
     "feature": "tiny-bound-delegation",
-    "plan_sha256": "198bb57f353bb0624ac7883cfd516af4528bff6cfd8f6c49d6d679c199f0de6c",
-    "previewed_at": "2026-11-09T07:08:58.977Z",
+    "plan_sha256": "c2536986812b02e25fbefbac00db760dcf90f5fa6c734a69568ce633f7a35484",
+    "previewed_at": "2026-11-09T07:14:48.947Z",
     "cells": [
       {
         "id": "tbdel-1",
@@ -256,6 +251,12 @@
           "classification": "not-applicable",
           "role": "generation",
           "reason": "generation is used directly for implementation."
+        },
+        {
+          "stage": "goal-check-judge",
+          "classification": "required",
+          "role": "review",
+          "reason": "bee close requires a semantic judge verdict on behavior_change cells tbdel-1 and tbdel-2; this is the goal-check judge, not the user-invoked independent review."
         },
         {
           "stage": "independent-review",
@@ -316,8 +317,8 @@
   },
   "approved_cell_packet": {
     "feature": "tiny-bound-delegation",
-    "plan_sha256": "198bb57f353bb0624ac7883cfd516af4528bff6cfd8f6c49d6d679c199f0de6c",
-    "previewed_at": "2026-11-09T07:08:58.977Z",
+    "plan_sha256": "c2536986812b02e25fbefbac00db760dcf90f5fa6c734a69568ce633f7a35484",
+    "previewed_at": "2026-11-09T07:14:48.947Z",
     "cells": [
       {
         "id": "tbdel-1",
@@ -538,6 +539,12 @@
           "classification": "not-applicable",
           "role": "generation",
           "reason": "generation is used directly for implementation."
+        },
+        {
+          "stage": "goal-check-judge",
+          "classification": "required",
+          "role": "review",
+          "reason": "bee close requires a semantic judge verdict on behavior_change cells tbdel-1 and tbdel-2; this is the goal-check judge, not the user-invoked independent review."
         },
         {
           "stage": "independent-review",

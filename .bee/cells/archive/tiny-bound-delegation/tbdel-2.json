@@ -1,0 +1,230 @@
+{
+  "id": "tbdel-2",
+  "feature": "tiny-bound-delegation",
+  "title": "Define tiny as one hand-authored file and name the delegation reason",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "d7959afc-58f6-493c-972a-60d75133b63f",
+    "4479e6fd-7614-4d52-b298-86b6ebd584c3",
+    "10bfd461-8a68-4033-b1a2-41aae689f6a2"
+  ],
+  "files": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-swarming/SKILL.md",
+    "packages/bee/LEADER.md",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "read_first": [
+    "docs/history/tiny-bound-delegation/CONTEXT.md",
+    "docs/history/tiny-bound-delegation/plan.md",
+    "skills/bee-planning/SKILL.md",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Rewrite every statement of the tiny trigger to the D2 bound (4479e6fd) and name the owner's reason for delegating small and up (D1 d7959afc, D3 10bfd461). skills/bee-planning/SKILL.md lane table (anchor: `| \\`tiny\\` | 0–1 flags, ≤2 product files, one direct task |`): tiny = 0–1 flags, one hand-authored file (mechanical companions such as a version bump or regen output do not count), no existing test rewritten, one cheap proof; add one line under the table: size from the whole blast radius (tests to update, docs, manifests, proof runs), never from the core edit; a second hand-authored file of any kind, a doc beside code included, is small; the small row is unchanged. skills/bee-hive/references/scout-and-ticks.md (anchor: `(\\`small\\`: ≤3, \\`tiny\\`: ≤2)` and the demotion bullet `measured touch set is ≤2 product files`): tiny threshold becomes one hand-authored file. routing-and-contracts.md tiny row and Tiny/small fast path, gates-and-delegation.md (rg `1-file tiny fix` and the execution-worker paragraph), go-mode.md line 7, skills/bee-hive/SKILL.md bee-swarming row, skills/bee-swarming/SKILL.md (rg `may run inline`): keep inline tiny legal, and state that from small up execution is dispatched through bee dispatch prepare because each role runs its own configured model; inline outside tiny is refused at cap without --inline-reason, and an inline tiny cap with more than one counted file (paths outside .bee/ and docs/history/) is refused the same way; bee route refuses --lane tiny with --files above 1. packages/bee/LEADER.md rule agents-never-zero-execution-workers (anchor: `From \\`small\\` up, cells run through dispatched workers`): add the tiny bound in one clause and the owner reason in one sentence; keep the rule markers. docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md: add rule R42 stating D1-D5 by CONTEXT D-number citing docs/history/tiny-bound-delegation/CONTEXT.md (never raw decision ids), and amend R13 and R16a where they state the tiny file count; add the feature to the decisions frontmatter list the same way. Write in ASD-STE100 plain English, short sentences. Do not run bee dev regen; the leader runs it at wave close.",
+  "verify": "! rg -n '≤2 product files' skills packages/bee/LEADER.md && .bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "the bee-planning lane table defines tiny as one hand-authored file with no rewritten test",
+      "no skill or LEADER.md sentence still states the old tiny count of two product files",
+      "LEADER.md names the owner reason for dispatching small and up",
+      "the doctrine-layer knowledge area carries the tiny bound rule citing the feature CONTEXT"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-planning/SKILL.md",
+        "substantive": "tiny row rewritten"
+      },
+      {
+        "path": "packages/bee/LEADER.md",
+        "substantive": "never-zero-execution-workers rule carries the bound and the reason"
+      },
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+        "substantive": "R42 added"
+      }
+    ],
+    "key_links": [
+      "every tiny trigger statement in skills matches the bee-planning table",
+      "the doctrine text names the cap refusal and the route refusal that tbdel-1 ships"
+    ],
+    "prohibitions": [
+      "Do not change the small, standard or high-risk triggers",
+      "Do not remove inline tiny execution",
+      "Do not cite raw decision ids in docs/knowledge"
+    ],
+    "open_choices": []
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-tbdel-2",
+    "outcome": "Defined tiny as one hand-authored file and documented delegation reason in 6325d8317c5d6dcdcff195f495b730ced09f9d5e",
+    "files_changed": [
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-hive/references/go-mode.md",
+      "skills/bee-swarming/SKILL.md",
+      "packages/bee/LEADER.md",
+      "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+    ],
+    "deviations": [
+      "sync-ack: the LEADER.md edit changes only rule agents-never-zero-execution-workers; agents-capture-line-at-close text is unchanged, so bee-capturing owes no update"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T06:59:17.084Z",
+    "behavior_change": true,
+    "verification_evidence": "! rg -n '≤2 product files' skills packages/bee/LEADER.md && .bee/bin/bee knowledge check — green:static — verify old count removed and knowledge check passes",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "93226eee-eb4a-4eb0-a001-d6c369b308c6",
+    "verify_command": "! rg -n '≤2 product files' skills packages/bee/LEADER.md && .bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-09T06:51:02.768Z",
+    "sync_ack": "the LEADER.md edit changes only rule agents-never-zero-execution-workers; agents-capture-line-at-close text is unchanged, so bee-capturing owes no update",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Defined tiny as one hand-authored file and documented delegation reason in 6325d8317c5d6dcdcff195f495b730ced09f9d5e",
+      "commit": "6325d8317c5d6dcdcff195f495b730ced09f9d5e",
+      "files": [
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-hive/SKILL.md",
+        "skills/bee-hive/references/scout-and-ticks.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "skills/bee-hive/references/go-mode.md",
+        "skills/bee-swarming/SKILL.md",
+        "packages/bee/LEADER.md",
+        "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+      ],
+      "tests": "! rg -n '≤2 product files' skills packages/bee/LEADER.md && .bee/bin/bee knowledge check — green:static — ! rg -n '≤2 product files' skills packages/bee/LEADER.md && .bee/bin/bee knowledge check — green:static — verify old count removed and knowledge check passes",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the bee-planning lane table defines tiny as one hand-authored file with no rewritten test",
+            "artifact": "skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": "no skill or LEADER.md sentence still states the old tiny count of two product files",
+            "artifact": "skills/bee-hive/references/scout-and-ticks.md"
+          },
+          {
+            "requirement": "LEADER.md names the owner reason for dispatching small and up",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "the doctrine-layer knowledge area carries the tiny bound rule citing the feature CONTEXT",
+            "artifact": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+          },
+          {
+            "requirement": "every tiny trigger statement in skills matches the bee-planning table",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "the doctrine text names the cap refusal and the route refusal that tbdel-1 ships",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-planning/SKILL.md",
+            "artifact": "skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-hive/SKILL.md",
+            "artifact": "skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/scout-and-ticks.md",
+            "artifact": "skills/bee-hive/references/scout-and-ticks.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/gates-and-delegation.md",
+            "artifact": "skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/go-mode.md",
+            "artifact": "skills/bee-hive/references/go-mode.md"
+          },
+          {
+            "requirement": "skills/bee-swarming/SKILL.md",
+            "artifact": "skills/bee-swarming/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/LEADER.md",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+            "artifact": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+          }
+        ],
+        "recorded_at": "2026-11-09T06:59:28.594Z",
+        "recorded_by": "93226eee-eb4a-4eb0-a001-d6c369b308c6",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "skills/bee-planning/SKILL.md:36: lane table defines tiny as '0–1 flags, one hand-authored file (mechanical companions such as a version bump or regen output do not count), no existing test rewritten, one cheap proof'."
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "skills/bee-hive/references/scout-and-ticks.md:74,82 and across all skills and LEADER.md: rg finds zero occurrences of '≤2 product files'; tiny trigger consistently states one hand-authored file."
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "packages/bee/LEADER.md:218-220: rule agents-never-zero-execution-workers states 'The owner prefers team delegation for all work that is not genuinely tiny because each role runs its own configured model.'"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md:39-47: rule R42 records D1-D5 citing docs/history/tiny-bound-delegation/CONTEXT.md."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "paseo-pi-agy-flash",
+        "model_independence": "same-model",
+        "recorded_at": "2026-11-09T07:19:48.048Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

@@ -2053,5 +2053,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-09T03:04:55.029Z"
+  },
+  "tiny-bound-delegation": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-09T07:20:00.164Z"
   }
 }
