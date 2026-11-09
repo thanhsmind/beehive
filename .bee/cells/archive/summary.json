@@ -2073,5 +2073,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-09T22:25:11.443Z"
+  },
+  "feature-pack-areas": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-09T23:29:52.097Z"
   }
 }

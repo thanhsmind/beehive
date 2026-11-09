@@ -1,0 +1,163 @@
+{
+  "id": "fpa-1",
+  "feature": "feature-pack-areas",
+  "title": "Rank area concepts into the manifest under a history anchor",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "cdc5cf02",
+    "30a45d2c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "docs/knowledge/areas/okf-profile/context-and-promote.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "docs/knowledge/areas/okf-profile/context-and-promote.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In build_context_manifest (packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs, after step (3) required_context and before step (4) the critical patterns), add one step for the non-work-item arms (Anchor::History, Anchor::Ledger, Anchor::Backlog): collect every concept whose type is bee.area, score them with score_critical_relevance against the same query_meta/query_body the critical step builds, and select the top AREA_KEEP = 3 whose score is > 0.0, ordered by score desc then path asc, with reason 'area concept (relevance <score>, rank <n> of <m>)' using jsjson::js_f64_to_string for the score exactly as the critical reason does. Skip a concept already in `selected`. The work-item arm (work_concept.is_some()) runs no area step and its manifest stays byte-identical. The zero_signal count and the critical conservation (entries + truncated + excluded == every critical) are untouched. Red first: in knowledge/tests.rs add a test next to history_anchor_resolves_from_whichever_of_context_and_plan_exist that puts one bee.area concept (with bee.anchors naming a real file under the temp root, via the Cx builder or a raw frontmatter put) whose title/body matches the CONTEXT.md text, one unrelated bee.area concept, and one critical pattern; assert the matching area is entry[1] with a reason starting 'area concept', the unrelated area is absent, and the critical pattern comes after the area. Add a second assertion (or test) that the work-item arm's entry list is unchanged by the presence of bee.area concepts. Watch the new test fail before the fix. Then run the existing knowledge tests. Knowledge delta in the same commit: in docs/knowledge/areas/okf-profile/context-and-promote.md extend the B6 paragraph that fixes the manifest order ('the work item, its bee.plan sibling, required_context in BFS depth order, critical patterns, then area decisions') to name the area step under the history/ledger/backlog arms and cite decision cdc5cf02; keep bee.anchors naming context.rs. One commit, no code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge::",
+  "must_haves": {
+    "truths": [
+      "Under a history anchor whose CONTEXT.md text matches a bee.area concept, build_context_manifest selects that area concept with a reason starting 'area concept' ahead of every critical pattern entry",
+      "A bee.area concept scoring 0.0 against the anchor is never selected",
+      "A work-item anchor's manifest entries are unchanged by the presence of bee.area concepts",
+      "The new test was red before the fix and is green after it"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+        "substantive": "an AREA_KEEP constant and an area-ranking step between the required_context step and the critical-pattern step, gated on the non-work-item arms"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "substantive": "a test asserting area selection under a history anchor and the unchanged work-item arm"
+      },
+      {
+        "path": "docs/knowledge/areas/okf-profile/context-and-promote.md",
+        "substantive": "the B6 manifest order names the area step under the fallback arms and cites cdc5cf02"
+      }
+    ],
+    "key_links": [
+      "learned_context_lines -> bundle_learned_lines -> build_context_manifest: the selected area entries flow into the pack's knowledge lines, so anchored_code_lines finds their bee.anchors"
+    ],
+    "prohibitions": [
+      "No new refusal or error path",
+      "No change to the critical-pattern cut, floor, conservation or zero_signal behavior",
+      "No code comments",
+      "No change to the work-item arm's output"
+    ],
+    "open_choices": [
+      "Whether to extract the shared scoring call into a helper used by both the area step and the critical step"
+    ]
+  },
+  "trace": {
+    "worker": "w-fpa-1",
+    "outcome": "build_context_manifest now ranks the bundle's bee.area concepts (AREA_KEEP=3, score>0, score-then-path) between required_context and the criticals under the history/ledger/backlog arms only; red-then-green tests plus the B6/cdc5cf02 knowledge delta land in commit 3e0ce089a.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "docs/knowledge/areas/okf-profile/context-and-promote.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-09T23:27:39.408Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge:: — green:unit — 159 passed, 0 failed, 4258 filtered, the whole knowledge module including both new tests; full suite green:unit except tests/opencode_plugin_contracts.rs::every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap, which fails identically on the base commit (env-limited: PATH opencode is a wrapper script, not the payload)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge::",
+    "claimed_at": "2026-11-09T23:05:18.926Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/okf-profile/context-and-promote.md"
+    ],
+    "mistakes": [
+      {
+        "wrong": "git add -A staged a generated timings.jsonl row beside the three declared files",
+        "better": "stage the declared paths by name",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "build_context_manifest now ranks the bundle's bee.area concepts (AREA_KEEP=3, score>0, score-then-path) between required_context and the criticals under the history/ledger/backlog arms only; red-then-green tests plus the B6/cdc5cf02 knowledge delta land in commit 3e0ce089a.",
+      "commit": "75b16e68401320a2b196e675ef55d83ca189adb2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "docs/knowledge/areas/okf-profile/context-and-promote.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge:: — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge:: — green:unit — 159 passed, 0 failed, 4258 filtered, the whole knowledge module including both new tests; full suite green:unit except tests/opencode_plugin_contracts.rs::every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap, which fails identically on the base commit (env-limited: PATH opencode is a wrapper script, not the payload)",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Under a history anchor whose CONTEXT.md text matches a bee.area concept, build_context_manifest selects that area concept with a reason starting 'area concept' ahead of every critical pattern entry",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs"
+          },
+          {
+            "requirement": "A bee.area concept scoring 0.0 against the anchor is never selected",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs"
+          },
+          {
+            "requirement": "A work-item anchor's manifest entries are unchanged by the presence of bee.area concepts",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "The new test was red before the fix and is green after it",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "an AREA_KEEP constant and an area-ranking step between the required_context step and the critical-pattern step, gated on the non-work-item arms",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs"
+          },
+          {
+            "requirement": "a test asserting area selection under a history anchor and the unchanged work-item arm",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "the B6 manifest order names the area step under the fallback arms and cites cdc5cf02",
+            "artifact": "docs/knowledge/areas/okf-profile/context-and-promote.md"
+          },
+          {
+            "requirement": "learned_context_lines -> bundle_learned_lines -> build_context_manifest: the selected area entries flow into the pack's knowledge lines, so anchored_code_lines finds their bee.anchors",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs"
+          },
+          {
+            "requirement": "No new refusal or error path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs"
+          },
+          {
+            "requirement": "No change to the critical-pattern cut, floor, conservation or zero_signal behavior",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs"
+          },
+          {
+            "requirement": "No change to the work-item arm's output",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-09T23:28:20.735Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}
