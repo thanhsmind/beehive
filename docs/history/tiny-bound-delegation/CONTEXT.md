@@ -45,3 +45,20 @@ runs. The size was read from the core edit, not from the blast radius.
 | hand-authored file | A file a person or agent writes by judgment: source, test, spec, knowledge doc, skill text. |
 | mechanical companion | A file changed only as a direct consequence of the hand-authored one: a version or `?v=` bump, regen output, the release manifest. |
 | counted file | For the D4 check: any `files_changed` path outside `.bee/**` and `docs/history/**`. |
+
+## Read set
+
+### Knowledge
+
+| Concept | Grade at read | Why it matters |
+|---------|---------------|----------------|
+| docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md | confirmed | Holds R13, R14 and R16a, the tiny trigger and file-cap rules this feature amends. |
+| docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md | suspect | The cap path where the D4 check lands. |
+
+### Code
+
+| Path | What it decides |
+|------|-----------------|
+| `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs` | Cap-time lane checks; the registered-worker refusal and `--inline-reason` escape (lines 482-507). |
+| `packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs` | `bee route --set` validation of lane and `--files` (lines 564-660). |
+| `docs/decisions/ab-tiny-protocol.md` | Why inline tiny stays legal. |
