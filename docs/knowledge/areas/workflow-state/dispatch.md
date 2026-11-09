@@ -8,10 +8,10 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [30606de4-5fae-4c9d-9e3f-8f47a494f8a3 (one unified command entry point publishing a machine-readable catalog), bbc6bcea (shim-retire D1 — the legacy per-group forwarders are deleted; bee is the sole shipped CLI), 8ef2bae6 (cli-ergonomics D1 — exhaustive refusal, every problem + a runnable example in one message), "80b64c20 (packages-engine-move D1-D5: onboarding/distribution engine relocated to packages/bee/scripts, strict-flag validation universal, migration-tooling pattern)", "b0ef4f66 (packages-engine-move-3: capture add --text friction record corrected — never a silent no-op, message now names the actual unknown flag via a universal dispatcher-level check)"]
-  sources: ["docs/history/knowledge-outcome-measure/plan.md (D2-D5: the holdout arm)", "harness-integration-adopt cells hia-1 and hia-2 (traces and reports, 2026-07-12)", "dispatcher-unify cells du-1..du-6 (traces and reports, 2026-07-12, flushed capture stubs b6a2233c/9e68432b)", "docs/specs/workflow-state.md#B8", "docs/specs/workflow-state.md#R12", "docs/specs/workflow-state.md#R13", "docs/specs/workflow-state.md#E10", "docs/specs/workflow-state.md#E11", "docs/specs/workflow-state.md#P6", "docs/specs/workflow-state.md#P10", docs/history/packages-engine-move/]
+  decisions: [30606de4-5fae-4c9d-9e3f-8f47a494f8a3 (one unified command entry point publishing a machine-readable catalog), bbc6bcea (shim-retire D1 — the legacy per-group forwarders are deleted; bee is the sole shipped CLI), 8ef2bae6 (cli-ergonomics D1 — exhaustive refusal, every problem + a runnable example in one message), "80b64c20 (packages-engine-move D1-D5: onboarding/distribution engine relocated to packages/bee/scripts, strict-flag validation universal, migration-tooling pattern)", "b0ef4f66 (packages-engine-move-3: capture add --text friction record corrected — never a silent no-op, message now names the actual unknown flag via a universal dispatcher-level check)", "knowledge-in-the-flow D2/D8 (feature pack rows, advisor rows, and feature-level holdout arm)"]
+  sources: ["docs/history/knowledge-outcome-measure/plan.md (D2-D5: the holdout arm)", "harness-integration-adopt cells hia-1 and hia-2 (traces and reports, 2026-07-12)", "dispatcher-unify cells du-1..du-6 (traces and reports, 2026-07-12, flushed capture stubs b6a2233c/9e68432b)", "docs/specs/workflow-state.md#B8", "docs/specs/workflow-state.md#R12", "docs/specs/workflow-state.md#R13", "docs/specs/workflow-state.md#E10", "docs/specs/workflow-state.md#E11", "docs/specs/workflow-state.md#P6", "docs/specs/workflow-state.md#P10", docs/history/packages-engine-move/, "knowledge-in-the-flow cell kitf-1 (dispatch.jsonl pack rows with feature arm, commit b8b65b828, 2026-11-09)", "knowledge-in-the-flow cell kitf-2 (advisor prompt carries feature pack and logs feature arm, commit c28c5c490, 2026-11-09)", CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md]
   authoritative_for: "workflow-state: unified command discovery, validation, and dispatch"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs]
   verified_at: 2026-11-07
   verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
 ---
@@ -97,6 +97,9 @@ door-prepared dispatch, because it keys on that id and the door never passed
 one; its tests had used a hand-built input. A guard is proven through the real
 caller that feeds it, here by reading the command `bee dispatch prepare`
 actually emits.
+
+**Feature-level holdout, pack rows, and advisor pack delivery (knowledge-in-the-flow D2, D8).**
+In addition to cell-level holdout (R21), holdout measurement operates at the feature level (D8): a feature slug's sha256 hash modulo 100 determines whether the feature is assigned to `holdout` or `knowledge` using `.bee/config.json`'s `knowledge_holdout_percent`. When `bee knowledge pack --feature <f>` is called at shaping or planning, it appends a `source: "pack"` row to `.bee/logs/dispatch.jsonl` recording `feature`, `knowledge_arm` (the feature arm), and `paths` (the concept and code paths loaded in the pack). When an advisor seat is dispatched (`dispatch prepare --kind advisor --feature <f>`), the brief carries the assembled feature pack and appends a `source: "prepare"`, `kind: "advisor"` row to `dispatch.jsonl` carrying `feature`, `knowledge_arm`, and `paths` (D8). To maintain blind-lane isolation, an advisor dispatch that supplies an explicit `--brief-file` renders no pack. A feature in the holdout arm receives an empty pack across shaping, planning, and advisor prompts, while its cells continue to resolve their own cell-level arm independently.
 
 **Worker Result form (workflow-lessons wfl-1, 2026-08-11).** The rendered
 worker prompt requires a fenced JSON Result form `{outcome, commit, files,
@@ -363,9 +366,11 @@ decision 80b64c20).
   block stay in both arms, and a worker may still search knowledge on its own,
   so the comparison is by assigned arm (plan D4). The kind `cell` prepare-time
   dispatch record carries `knowledge_arm` and `learned_context` (the
-  repo-relative paths the block lists, `[]` for a holdout); the gather,
-  reviewer and advisor records carry neither. A cell dispatched before the
-  record carried an arm has none and is never given one after the fact
+  repo-relative paths the block lists, `[]` for a holdout); gather and reviewer
+  records carry neither. An advisor dispatch prepared with `--feature` carries
+  `knowledge_arm` (the feature arm) and `paths` (knowledge-in-the-flow D2, D8),
+  except when a blind lane is dispatched with `--brief-file`. A cell dispatched
+  before the record carried an arm has none and is never given one after the fact
   (plan D5). `bee knowledge report` reads these records
   (`areas/okf-profile/critical-bar.md`, B6).
 
@@ -433,6 +438,7 @@ pretending to be behaviour.
   `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`; the record keys
   are appended in `prepare_dispatch_wire`. Plan:
   `docs/history/knowledge-outcome-measure/plan.md` (D2-D5).
+- Feature holdout and pack dispatch rows (D2, D8): `knowledge_arm`, `run_knowledge_pack`, and advisor prepare handling in `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` and `packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs`.
 - Contract-citation tripwire (R16, R17): one shared check,
   `contract_citation_refusal` in
   `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs`, called from

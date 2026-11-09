@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/capture-queue-and-the-blocker-threshold.md, areas/workflow-state/holds-and-the-coordination-lock.md]
-  decisions: ["traceable-runs D5 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — deferred capture, scribing, review, and promote-proposal work all become records in ONE claimable queue, each carrying feature, cells, areas, files, and a reason, plus a claim/lease, so a parallel agent absent when the item was queued can still execute it)"]
-  sources: ["traceable-runs cell trun-8 (trace .bee/cells/archive/traceable-runs/trun-8.json, capped 2026-08-14 — new deferred_queue.rs verb module: add/list/claim/release/complete, claim exclusivity proven by a real multi-process race in tests/concurrency.rs plus a negative control)", "traceable-runs cell trun-9 (trace .bee/cells/archive/traceable-runs/trun-9.json, capped 2026-08-14 after two rounds of judge rework — scribe/promote materialization from the two derived scans, reconciled across all six scribing-debt scan copies through state_group::ledger::deferred_debt_cleared and the shared fold scribe_queue_cells)", "docs/history/traceable-runs/plan.md (S4, the reusable primitives: lock::acquire_store_lock, resolve_session_id, backlog.rs's append-then-fold shape, cells/claims.rs's O_EXCL claim protocol and dual-condition stale sweep)"]
+  decisions: ["traceable-runs D5 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — deferred capture, scribing, review, and promote-proposal work all become records in ONE claimable queue, each carrying feature, cells, areas, files, and a reason, plus a claim/lease, so a parallel agent absent when the item was queued can still execute it)", "knowledge-in-the-flow D5 (close no longer enqueues promote records)"]
+  sources: ["traceable-runs cell trun-8 (trace .bee/cells/archive/traceable-runs/trun-8.json, capped 2026-08-14 — new deferred_queue.rs verb module: add/list/claim/release/complete, claim exclusivity proven by a real multi-process race in tests/concurrency.rs plus a negative control)", "traceable-runs cell trun-9 (trace .bee/cells/archive/traceable-runs/trun-9.json, capped 2026-08-14 after two rounds of judge rework — scribe/promote materialization from the two derived scans, reconciled across all six scribing-debt scan copies through state_group::ledger::deferred_debt_cleared and the shared fold scribe_queue_cells)", "docs/history/traceable-runs/plan.md (S4, the reusable primitives: lock::acquire_store_lock, resolve_session_id, backlog.rs's append-then-fold shape, cells/claims.rs's O_EXCL claim protocol and dual-condition stale sweep)", "knowledge-in-the-flow cell kitf-4 (close stops enqueuing promote records, commit aa41de11e, 2026-11-09)", "CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md"]
   authoritative_for: "workflow-state: the deferred-work queue (.bee/deferred-queue.jsonl), its claim protocol, and the scribe/promote scan-to-record materialization"
   anchors: [packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs, packages/bee-rs/crates/bee/tests/concurrency.rs, packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs, packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
   verified_at: 2026-11-07
@@ -85,12 +85,14 @@ that caps and is never followed by a call into that function before the
 process exits leaves no record until the next such call, not until the cap
 itself.
 
-**Promote-proposal enqueue is synchronous, at the moment `bee close` writes
-the proposal file (D5, trun-9).** Trigger: `bee close`'s soft promote door
-(`gates.md` R80) writing `docs/history/<feature>/promote-proposals.md`.
-What happens: a `promote` record enqueues in the same call, carrying the
-feature and the proposal path — `bee close`'s own write is in scope for
-trun-9, unlike the cap-time trigger above.
+**Promote-proposal enqueue retired at close (knowledge-in-the-flow D5, superseding trun-9).**
+Trigger: `bee close`. Historically, `bee close` synchronously enqueued a `promote` record when
+writing `docs/history/<feature>/promote-proposals.md` (trun-9). Under knowledge-in-the-flow (D5),
+`bee close` no longer writes proposal files and no longer enqueues promote records:
+`enqueue_promote_deferred_record` and `enqueue_promote_stub` are retired from `drivers/close.rs`.
+Knowledge consolidation moves upstream to a writer cell running `bee knowledge consolidate` in
+the worktree before merge. Existing queue items of kind `promote` remain supported for
+backward-compatible completion by `bee deferred-queue complete`.
 
 **All SIX scribing-debt scan copies across four files reconcile through one
 shared function — not three, and not five, the two counts two earlier judge
@@ -193,6 +195,9 @@ found the gap the previous round's own count had missed.
 
 ## Pointers (implementation)
 
+- Promote-proposal enqueue (D5): previously synchronous in `drivers/close.rs`,
+  retired under knowledge-in-the-flow (D5); historical records complete via
+  `deferred_queue::complete`.
 - Store and verbs (R120-R122): `packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs`
   — `KINDS`, `QUEUE_LOCK_NAME`, the event-sourced `fold`, and
   `run_add`/`run_list`/`run_claim`/`run_release`/`run_complete`, dispatched

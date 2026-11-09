@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)"]
-  sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)"]
+  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", "knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)"]
+  sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)", "knowledge-in-the-flow cell kitf-3 (feature outcomes by feature arm and pack pull rate in knowledge report, commit 8794b2917, 2026-11-09)", "CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md"]
   authoritative_for: "okf-profile: the bee.critical bar and what earns a pattern that label"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs]
   verified_at: 2026-11-07
@@ -77,6 +77,15 @@ section counts `cells` and four trace signals — `blocked` (`blocked_reason` a 
 is true only when both arms hold at least `min_per_arm` (30) cells; until then the text output names how
 many more cells each arm needs, and the rates are not a finding.
 
+**Feature-level outcomes and pack pull tracking (knowledge-in-the-flow D8).** In addition to cell
+outcomes, `bee knowledge report` outputs a `feature_outcomes` section comparing features by their
+assigned feature arm (`knowledge` or `holdout`). A feature's arm is read from the earliest
+`.bee/logs/dispatch.jsonl` row with `source: "pack"` or `kind: "advisor"`; closed features with no
+such row are tallied as unrecorded. For each arm, the report counts features, cells, and the four
+friction signals (blocked, reopened, red rounds, with mistakes). In the Pull rate table,
+`knowledge pack` is counted alongside `search`, `context`, and `show` as an active knowledge pull
+contributing to feature-level and total pull rates.
+
 ## Business Rules
 
 - The bar applies only to `bee.pattern` concepts; no other concept type carries `bee.critical`.
@@ -103,8 +112,10 @@ many more cells each arm needs, and the rates are not a finding.
 - Where the pool is consumed: `docs/knowledge/areas/okf-profile/context-and-promote.md` (the
   relevance ranking that "cuts critical patterns without losing one" under budget), and
   `docs/knowledge/index.md`'s generated "Critical patterns" section (`bee knowledge index`).
-- The outcomes measure (B6): `build_outcomes` in
+- The outcomes measure (B6): `build_outcomes`, `build_feature_outcomes`, and `build_pull_rate` in
   `packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs`, tested in
-  `packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs`; plan
-  `docs/history/knowledge-outcome-measure/plan.md` (D1-D5).
+  `packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs` and
+  `packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs`; plan
+  `docs/history/knowledge-outcome-measure/plan.md` (D1-D5),
+  `docs/history/knowledge-in-the-flow/plan.md` (D8).
 - The re-grade this concept documents: `docs/history/knowledge-usable/CONTEXT.md` (U6), cell `ku-6`.
