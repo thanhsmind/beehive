@@ -33,11 +33,13 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 | Lane | Trigger |
 |---|---|
 | `docs` | all touched files are knowledge, not runtime → write, format-check, capture — no plan, cells, or gates |
-| `tiny` | 0–1 flags, ≤2 product files, one direct task |
+| `tiny` | 0–1 flags, one hand-authored file (mechanical companions such as a version bump or regen output do not count), no existing test rewritten, one cheap proof |
 | `small` | 0–1 flags, ≤3 product files, no gray areas |
 | `standard` | 2–3 flags, or story-sized behavior |
 | `high-risk` | 4+ flags or any hard-gate flag (auth, authz, data loss, audit/security, external provider, validation removal) |
 | `spike` | one yes/no proof decides whether the plan is real — only for migration, security, an external side effect, or no in-repo precedent |
+
+Size from the whole blast radius (tests to update, docs, manifests, proof runs), never from the core edit. A second hand-authored file of any kind, a doc beside code included, is small.
 
 Record: a code-touching route opens its feature in one verb, run from the
 main checkout — `bee feature start --feature <slug> --class <c> --lane <l>
