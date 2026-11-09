@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"feature-pack-areas\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 9f1abc1; capture what settled, then bee close --feature feature-pack-areas.",
   "created_at": "2026-11-09T23:02:43.713Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-11-09T23:02:40.834Z",
     "feature": "feature-pack-areas"
-  },
-  "merge_ready": {
-    "since": "2026-11-09T23:27:40.333Z",
-    "branch": "wt/feature-pack-areas",
-    "worktree_id": "beehive--wt--feature-pack-areas",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
