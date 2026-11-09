@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"tiny-bound-delegation\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"tiny-bound-delegation\" (lane).",
+  "next_action": "Merged into main at 6da672e; reload the product and test \"tiny-bound-delegation\", then either approve uat (\"bee gate --name uat --approved true --lane tiny-bound-delegation\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-09T06:40:54.452Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: tiny-bound-delegation",
+    "asked_at": "2026-11-09T07:11:05.927Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -593,12 +598,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-09T06:50:26.643Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-09T07:05:31.102Z",
-    "branch": "wt/tiny-bound-delegation",
-    "worktree_id": "beehive--wt--tiny-bound-delegation",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
