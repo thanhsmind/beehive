@@ -2058,5 +2058,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-09T07:20:00.164Z"
+  },
+  "release-2-88-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-09T07:30:52.704Z"
   }
 }

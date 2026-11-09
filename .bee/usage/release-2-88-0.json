@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-88-0",
+  "closed_at": "2026-11-09T07:30:52.749Z",
+  "sessions": [
+    {
+      "session_id": "93226eee-eb4a-4eb0-a001-d6c369b308c6",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 372,
+          "output": 81059,
+          "cache_write": 508862,
+          "cache_read": 32805599,
+          "new": 590293,
+          "cached": 32805599,
+          "total": 33395892
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794206376031,
+      "ended_ms": 1794209450729,
+      "totals": {
+        "new": 590293,
+        "cached": 32805599,
+        "total": 33395892
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 590293,
+      "cached": 32805599,
+      "total": 33395892
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 590293,
+      "cached": 32805599,
+      "total": 33395892
+    }
+  }
+}

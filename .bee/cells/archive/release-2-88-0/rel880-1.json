@@ -1,0 +1,92 @@
+{
+  "id": "rel880-1",
+  "feature": "release-2-88-0",
+  "title": "Publish release 2.88.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-88-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.88.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-tbdel, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.88.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.88.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.88.0",
+      "tag v2.88.0 exists locally and on the remote",
+      "the GitHub release for v2.88.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.88.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.88.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader-rel880",
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "ran inline in the leader session under deploy permit 7051b1f6, the accepted path of decision 537d8a6d (pattern-20261027)",
+      "sync-ack: release version bump only: scripts/release.sh rewrites version stamps and the manifest; no behavior an anchored concept describes changed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-09T07:30:23.895Z",
+    "behavior_change": false,
+    "verification_evidence": "suite ran before tagging, v2.88.0 pushed, release-binaries run https://github.com/thanhsmind/beehive/actions/runs/42579130658 green, 6 assets verified, final OK line printed, manifest matches",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "93226eee-eb4a-4eb0-a001-d6c369b308c6",
+    "verify_command": "bash scripts/release.sh 2.88.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-09T07:21:32.832Z",
+    "sync_ack": "release version bump only: scripts/release.sh rewrites version stamps and the manifest; no behavior an anchored concept describes changed",
+    "no_mistakes": true,
+    "inline_reason": "both plugin.json files are mechanical version bumps written by scripts/release.sh; release runs inline per decision 537d8a6d",
+    "report": {
+      "outcome": "Published 2.88.0 (6394f51fd) through scripts/release.sh",
+      "commit": "6394f51fd",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.88.0 && bee dev release-manifest --check — green:live — suite ran before tagging, v2.88.0 pushed, release-binaries run https://github.com/thanhsmind/beehive/actions/runs/42579130658 green, 6 assets verified, final OK line printed, manifest matches",
+      "deviations": [
+        "ran inline in the leader session under deploy permit 7051b1f6, the accepted path of decision 537d8a6d (pattern-20261027)"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
