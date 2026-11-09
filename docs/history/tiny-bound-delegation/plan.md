@@ -121,6 +121,8 @@ once at wave close.
     {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"One clear design."},
     {"stage":"blind-lane-2","classification":"not-applicable","role":"lane-2","reason":"One clear design."},
     {"stage":"blind-lane-3","classification":"not-applicable","role":"lane-3","reason":"One clear design."},
+    {"stage":"code-slot","classification":"not-applicable","role":"code","reason":"The code slot model provider (paseo-pi-flash, hive) has no API key on this machine; generation carries tbd-1."},
+    {"stage":"writer-slot","classification":"not-applicable","role":"writer","reason":"docs carries the doctrine cell."},
     {"stage":"design-ui","classification":"not-applicable","role":"design","reason":"No rendered UI."}
   ]
 }
