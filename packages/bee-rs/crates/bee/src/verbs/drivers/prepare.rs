@@ -1070,9 +1070,30 @@ pub(crate) fn bundle_mode(root: &Path) -> D<bool> {
     Ok(false)
 }
 
-/// provenance: dispatch-prepare.mjs learnedContextLines — source resolution,
-/// first hit wins, capped at LEARNED_CONTEXT_MAX_LINES.
-pub(crate) fn learned_context_lines(root: &Path, cell: &Value) -> D<Vec<String>> {
+pub(crate) const PACK_CODE_PREFIX: &str = "- code: ";
+
+pub(crate) fn split_pack_lines(lines: &[String]) -> (Vec<String>, Vec<String>) {
+    let mut knowledge: Vec<String> = Vec::new();
+    let mut code: Vec<String> = Vec::new();
+    for line in lines {
+        if line.starts_with(PACK_CODE_PREFIX) {
+            code.push(line.clone());
+        } else {
+            knowledge.push(line.clone());
+        }
+    }
+    (knowledge, code)
+}
+
+pub(crate) fn pack_line_path(line: &str) -> String {
+    let body = line
+        .strip_prefix(PACK_CODE_PREFIX)
+        .or_else(|| line.strip_prefix("- "))
+        .unwrap_or(line);
+    body.split_once(" — ").map_or(body, |(path, _)| path).to_string()
+}
+
+fn read_first_set(cell: &Value) -> HashSet<String> {
     let mut read_first: HashSet<String> = HashSet::new();
     if let Some(Value::Array(items)) = vget(cell, "read_first") {
         for entry in items {
@@ -1083,6 +1104,63 @@ pub(crate) fn learned_context_lines(root: &Path, cell: &Value) -> D<Vec<String>>
             }
         }
     }
+    read_first
+}
+
+fn listed_concept_path(line: &str) -> Option<&str> {
+    let body = line.strip_prefix("- ")?;
+    let path = body.split_once(" — ").map_or(body, |(path, _)| path);
+    path.starts_with("docs/knowledge/").then_some(path)
+}
+
+fn pack_anchor_path(anchor: &str) -> Option<String> {
+    let path = anchor.trim().trim_start_matches("./").trim_end_matches('/');
+    if path.is_empty() || path.starts_with('/') || path.contains('\\') || path.contains(':') {
+        return None;
+    }
+    if path.split('/').any(|seg| seg == "..") {
+        return None;
+    }
+    Some(path.to_string())
+}
+
+fn anchored_code_lines(root: &Path, listed: &[String], read_first: &HashSet<String>) -> Vec<String> {
+    let Some(dir) = knowledge::bundle_dir(root) else { return Vec::new() };
+    let Some(concepts) = knowledge::collect_concepts(&dir) else { return Vec::new() };
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for line in listed {
+        let Some(concept_path) = listed_concept_path(line) else { continue };
+        let Some(rel) = concept_path.strip_prefix("docs/knowledge/") else { continue };
+        let Some(concept) = concepts.iter().find(|c| c.path == rel) else { continue };
+        let bee = knowledge::bee_of(&concept.data);
+        let Some(Value::Array(anchors)) = bee.get("anchors") else { continue };
+        for anchor in anchors {
+            if out.len() >= LEARNED_CONTEXT_MAX_LINES {
+                return out;
+            }
+            let Value::String(raw) = anchor else { continue };
+            let Some(path) = pack_anchor_path(raw) else { continue };
+            if path.starts_with("docs/") || read_first.contains(&path) || !seen.insert(path.clone()) {
+                continue;
+            }
+            if !root.join(&path).is_file() {
+                continue;
+            }
+            out.push(format!(
+                "{PACK_CODE_PREFIX}{} — anchored by {}",
+                one_line(Some(&Value::String(path)), 200),
+                one_line(Some(&Value::String(concept_path.to_string())), 200)
+            ));
+        }
+    }
+    out
+}
+
+/// provenance: dispatch-prepare.mjs learnedContextLines — source resolution,
+/// first hit wins, capped at LEARNED_CONTEXT_MAX_LINES.
+pub(crate) fn learned_context_lines(root: &Path, cell: &Value) -> D<Vec<String>> {
+    let read_first = read_first_set(cell);
     let mut lines = if bundle_mode(root)? {
         bundle_learned_lines(root, cell, &read_first)?
     } else if root
@@ -1101,6 +1179,8 @@ pub(crate) fn learned_context_lines(root: &Path, cell: &Value) -> D<Vec<String>>
         Vec::new()
     };
     lines.truncate(LEARNED_CONTEXT_MAX_LINES);
+    let code = anchored_code_lines(root, &lines, &read_first);
+    lines.extend(code);
     Ok(lines)
 }
 
@@ -1115,10 +1195,35 @@ pub(crate) fn knowledge_holdout_percent(root: &Path) -> u64 {
     }
 }
 
-pub(crate) fn knowledge_arm(root: &Path, cell_id: &str) -> &'static str {
-    let digest = crate::verbs::reservations::sha256_hex(cell_id);
+fn arm_of(root: &Path, key: &str) -> &'static str {
+    let digest = crate::verbs::reservations::sha256_hex(key);
     let bucket = u32::from_str_radix(&digest[..8], 16).unwrap_or(0) % 100;
     if u64::from(bucket) < knowledge_holdout_percent(root) { "holdout" } else { "knowledge" }
+}
+
+pub(crate) fn knowledge_arm(root: &Path, cell_id: &str) -> &'static str {
+    arm_of(root, cell_id)
+}
+
+pub(crate) fn feature_arm(root: &Path, feature: &str) -> &'static str {
+    arm_of(root, &format!("feature:{feature}"))
+}
+
+pub(crate) fn append_pack_record(root: &Path, record: &Map<String, Value>) {
+    let mut line = Map::new();
+    line.insert(
+        "ts".into(),
+        Value::String(chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
+    );
+    line.insert("source".into(), Value::String("pack".into()));
+    line.insert("kind".into(), Value::String("pack".into()));
+    for (k, v) in record {
+        line.insert(k.clone(), v.clone());
+    }
+    let _ = crate::fsutil::append_jsonl(
+        &root.join(".bee").join("logs").join("dispatch.jsonl"),
+        &Value::Object(line),
+    );
 }
 
 pub(crate) fn cell_learned_context(
@@ -3297,14 +3402,12 @@ pub(crate) fn prepare_dispatch_wire(
         };
         let (arm, lines) = cell_learned_context(root, bundle_root, c)?;
         record.insert("knowledge_arm".into(), Value::String(arm.to_string()));
-        let paths = lines
-            .iter()
-            .map(|l| {
-                let body = l.strip_prefix("- ").unwrap_or(l);
-                Value::String(body.split_once(" — ").map_or(body, |(path, _)| path).to_string())
-            })
-            .collect();
-        record.insert("learned_context".into(), Value::Array(paths));
+        let (knowledge, code) = split_pack_lines(&lines);
+        let paths = |listed: &[String]| {
+            Value::Array(listed.iter().map(|l| Value::String(pack_line_path(l))).collect())
+        };
+        record.insert("learned_context".into(), paths(&knowledge));
+        record.insert("pack_code".into(), paths(&code));
     }
     // `record_it` is false on the PROBE pass: run() builds the whole envelope
     // once to discover delegate-shaped inputs before a byte is produced, then

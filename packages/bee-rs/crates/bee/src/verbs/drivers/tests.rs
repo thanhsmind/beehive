@@ -12792,6 +12792,37 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
     }
 
     #[test]
+    fn feature_pack_code_paths_land_on_the_cell_record_not_in_learned_context() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &holdout_config(None));
+        w(
+            &root,
+            "docs/knowledge/tasks/demo/work-item.md",
+            "---\ntype: bee.work-item\ntitle: Demo work item\ndescription: demo\nbee:\n  id: demo\n  lifecycle: active\n  required_context: [areas/one.md]\n---\nbody\n",
+        );
+        w(
+            &root,
+            "docs/knowledge/areas/one.md",
+            "---\ntype: bee.area\ntitle: One\ndescription: one\nbee:\n  id: one\n  lifecycle: active\n  anchors: [src/alpha.rs, docs/knowledge/areas/one.md, src/gone.rs]\n---\nbody\n",
+        );
+        w(&root, "src/alpha.rs", "pub fn alpha() {}\n");
+        w(
+            &root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
+        );
+        prepare_dispatch(&root, "claude", "cell", Some("c-2"), Some("w"), false, None, None, true, None)
+            .unwrap();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        assert_eq!(
+            record["learned_context"],
+            json!(["docs/knowledge/tasks/demo/work-item.md", "docs/knowledge/areas/one.md"])
+        );
+        assert_eq!(record["pack_code"], json!(["src/alpha.rs"]));
+    }
+
+    #[test]
     fn non_cell_records_carry_neither_arm_key() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(
