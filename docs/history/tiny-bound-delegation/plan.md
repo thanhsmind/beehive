@@ -84,12 +84,12 @@ Risk map:
 
 | Component | Risk | Lands in | Proof |
 |---|---|---|---|
-| Cap refusal blocks a legitimate inline tiny with a mechanical bump | LOW — fact: `--inline-reason` already escapes the small+ refusal at handlers_close.rs:496 and is recorded on the trace | tbd-1 | test: two counted files plus `--inline-reason` caps and records the reason |
-| Existing tests cap tiny cells inline with several files | MEDIUM — fact: cells/tests.rs holds many `"lane": "tiny"` fixtures | tbd-1 | the cells test filter green after the change |
-| Route refusal breaks feature start or existing route tests | LOW — fact: state_group/tests.rs:2564 routes tiny with `files` 1 | tbd-1 | state_group test filter green |
-| Doctrine copies disagree after the edit | LOW | tbd-2 | `rg -n "≤2 product\|tiny\`: ≤2" skills packages/bee/LEADER.md` returns nothing; manifest check green |
+| Cap refusal blocks a legitimate inline tiny with a mechanical bump | LOW — fact: `--inline-reason` already escapes the small+ refusal at handlers_close.rs:496 and is recorded on the trace | tbdel-1 | test: two counted files plus `--inline-reason` caps and records the reason |
+| Existing tests cap tiny cells inline with several files | MEDIUM — fact: cells/tests.rs holds many `"lane": "tiny"` fixtures | tbdel-1 | the cells test filter green after the change |
+| Route refusal breaks feature start or existing route tests | LOW — fact: state_group/tests.rs:2564 routes tiny with `files` 1 | tbdel-1 | state_group test filter green |
+| Doctrine copies disagree after the edit | LOW | tbdel-2 | `rg -n "≤2 product\|tiny\`: ≤2" skills packages/bee/LEADER.md` returns nothing; manifest check green |
 
-Waves: tbd-1 and tbd-2 have disjoint product files and run in parallel.
+Waves: tbdel-1 and tbdel-2 have disjoint product files and run in parallel.
 Both touch hashed skill files, so both carry `regen_obligation_ack:
 "wave-barrier"` and the leader runs `bee dev regen` and the manifest check
 once at wave close.
@@ -102,8 +102,8 @@ once at wave close.
   "runtime": "claude",
   "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"generation","reason":"tbd-1 writes Rust code and tests; the code slot's model provider (paseo-pi-flash, hive) has no API key on this machine, so the generation slot carries the code cell."},
-    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"tbd-2 rewrites doctrine text in skills, LEADER.md and the knowledge area."},
+    {"stage":"implementation","classification":"required","role":"generation","reason":"tbdel-1 writes Rust code and tests; the code slot's model provider (paseo-pi-flash, hive) has no API key on this machine, so the generation slot carries the code cell."},
+    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"tbdel-2 rewrites doctrine text in skills, LEADER.md and the knowledge area."},
     {"stage":"fact-extraction","classification":"required","role":"extraction","reason":"The discovery gather ran on the extraction slot."},
     {"stage":"read-only-gather","classification":"not-applicable","role":"read","reason":"The read slot's provider has no API key; extraction carried the gather."},
     {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Tests ride each cell."},
@@ -121,7 +121,7 @@ once at wave close.
     {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"One clear design."},
     {"stage":"blind-lane-2","classification":"not-applicable","role":"lane-2","reason":"One clear design."},
     {"stage":"blind-lane-3","classification":"not-applicable","role":"lane-3","reason":"One clear design."},
-    {"stage":"code-slot","classification":"not-applicable","role":"code","reason":"The code slot model provider (paseo-pi-flash, hive) has no API key on this machine; generation carries tbd-1."},
+    {"stage":"code-slot","classification":"not-applicable","role":"code","reason":"The code slot model provider (paseo-pi-flash, hive) has no API key on this machine; generation carries tbdel-1."},
     {"stage":"writer-slot","classification":"not-applicable","role":"writer","reason":"docs carries the doctrine cell."},
     {"stage":"design-ui","classification":"not-applicable","role":"design","reason":"No rendered UI."}
   ]
@@ -140,13 +140,13 @@ Phase plan (one slice):
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| tbd-1 | Refuse an oversize tiny at route and at inline cap | cells/handlers_close.rs, cells/tests.rs, state_group/workflows.rs, state_group/tests.rs, skills/bee-swarming/references/swarming-reference.md | — | `bee route --set --lane tiny --files 2` refuses naming `--lane small`; an inline tiny cap of two counted files refuses naming the reroute and `--inline-reason`; a dispatched tiny cap and a `.bee/` or `docs/history/` path do not count | cells and state_group test filters green |
-| tbd-2 | Define tiny as one hand-authored file and name the delegation reason | skills/bee-planning/SKILL.md, skills/bee-hive/SKILL.md, skills/bee-hive/references/scout-and-ticks.md, skills/bee-hive/references/routing-and-contracts.md, skills/bee-hive/references/gates-and-delegation.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/SKILL.md, packages/bee/LEADER.md, docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md | — | every place that states the tiny trigger says one hand-authored file; LEADER.md names the owner reason for dispatching small and up; the knowledge area carries the new rule | old-wording rg empty; `bee knowledge check` 0 errors |
+| tbdel-1 | Refuse an oversize tiny at route and at inline cap | cells/handlers_close.rs, cells/tests.rs, state_group/workflows.rs, state_group/tests.rs, skills/bee-swarming/references/swarming-reference.md | — | `bee route --set --lane tiny --files 2` refuses naming `--lane small`; an inline tiny cap of two counted files refuses naming the reroute and `--inline-reason`; a dispatched tiny cap and a `.bee/` or `docs/history/` path do not count | cells and state_group test filters green |
+| tbdel-2 | Define tiny as one hand-authored file and name the delegation reason | skills/bee-planning/SKILL.md, skills/bee-hive/SKILL.md, skills/bee-hive/references/scout-and-ticks.md, skills/bee-hive/references/routing-and-contracts.md, skills/bee-hive/references/gates-and-delegation.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/SKILL.md, packages/bee/LEADER.md, docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md | — | every place that states the tiny trigger says one hand-authored file; LEADER.md names the owner reason for dispatching small and up; the knowledge area carries the new rule | old-wording rg empty; `bee knowledge check` 0 errors |
 
 ```json
 [
   {
-    "id": "tbd-1",
+    "id": "tbdel-1",
     "feature": "tiny-bound-delegation",
     "title": "Refuse an oversize tiny at route and at inline cap",
     "lane": "standard",
@@ -196,7 +196,7 @@ Phase plan (one slice):
     "behavior_change": true
   },
   {
-    "id": "tbd-2",
+    "id": "tbdel-2",
     "feature": "tiny-bound-delegation",
     "title": "Define tiny as one hand-authored file and name the delegation reason",
     "lane": "standard",
@@ -239,7 +239,7 @@ Phase plan (one slice):
       ],
       "key_links": [
         "every tiny trigger statement in skills matches the bee-planning table",
-        "the doctrine text names the cap refusal and the route refusal that tbd-1 ships"
+        "the doctrine text names the cap refusal and the route refusal that tbdel-1 ships"
       ],
       "prohibitions": [
         "Do not change the small, standard or high-risk triggers",
@@ -257,13 +257,13 @@ Phase plan (one slice):
 
 | Scenario | Cell | Pass when |
 |---|---|---|
-| Error: route tiny with files 2 | tbd-1 | refusal names `--lane small` |
-| Happy: route tiny with files 1 or 0 | tbd-1 | route recorded |
-| Error: inline tiny cap, files a.rs and b.rs, no registered worker | tbd-1 | refusal names both files, the bound, the reroute and `--inline-reason` |
-| Happy: same cap with `--inline-reason` | tbd-1 | capped, `trace.inline_reason` set |
-| Happy: inline tiny cap of one file plus `.bee/x` and `docs/history/f/y.md` | tbd-1 | capped |
-| Happy: tiny cap of two files by a registered worker | tbd-1 | capped |
-| Edge: a doc outside docs/history beside code (`docs/knowledge/a.md` + `src/a.rs`) inline | tbd-1 | refused (two counted) |
+| Error: route tiny with files 2 | tbdel-1 | refusal names `--lane small` |
+| Happy: route tiny with files 1 or 0 | tbdel-1 | route recorded |
+| Error: inline tiny cap, files a.rs and b.rs, no registered worker | tbdel-1 | refusal names both files, the bound, the reroute and `--inline-reason` |
+| Happy: same cap with `--inline-reason` | tbdel-1 | capped, `trace.inline_reason` set |
+| Happy: inline tiny cap of one file plus `.bee/x` and `docs/history/f/y.md` | tbdel-1 | capped |
+| Happy: tiny cap of two files by a registered worker | tbdel-1 | capped |
+| Edge: a doc outside docs/history beside code (`docs/knowledge/a.md` + `src/a.rs`) inline | tbdel-1 | refused (two counted) |
 
 ## Open Questions
 
