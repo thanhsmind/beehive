@@ -314,8 +314,9 @@ a spec draft — that is why this window survives the absorption above.
 
 #### The moves and the seat roles (both windows)
 
-**The moves.** Parallel `bee dispatch prepare --kind advisor --role <hat-role>`
-dispatches, one hat each, each naming its own role from the table above; the
+**The moves.** Parallel `bee dispatch prepare --kind advisor --role <hat-role> --feature <feature>`
+dispatches, one hat each, each naming its own role from the table above;
+passing `--feature <feature>` ensures the seat's brief carries the feature pack; the
 perspective rides the PROMPT body — never
 `--brief-file`, whose neutrality lint exists for lane briefs and would fight
 a brief whose leaning IS its job. Hats never see each other. The

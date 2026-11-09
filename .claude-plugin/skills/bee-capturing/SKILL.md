@@ -124,19 +124,12 @@ runs it.
 1. Flush the capture queue: `bee capture list`, then oldest-first give
    each stub its full spec merge and `bee capture flush --id <id>
    --into <spec>`. A stub is never dropped or summarized away.
-2. When `docs/history/<feature>/promote-proposals.md` exists it is the
-   FIRST input, not a second opinion: the close already mined that
-   feature's capped traces into a delivery draft, per-area candidate
-   bullets, and pattern candidates. Review it, never apply it as
-   written. Check every bullet against the bundle (already stated? and
-   is it filed under the concept that actually owns it — the area tag
-   comes from the work item and is routinely over-broad or wrong) and
-   against the shipped source (does the code it describes still exist,
-   or did a later port retire it?). Merge what survives; give what does
-   not a recorded reason. Either way the loop closes with `bee state
-   scribing-run --feature <feature>` — that stamp is the receipt the
-   unapplied-proposal reminder reads, and "reviewed, nothing worth
-   keeping" is a legitimate result that still owes it.
+2. Close no longer writes `promote-proposals.md` — consolidation happens in
+   the writer cell before merge so code and knowledge land in main together.
+   Older pre-existing `docs/history/<feature>/promote-proposals.md` files
+   from earlier features drain once: review the proposal, merge what
+   survives (check bullets against the bundle and shipped source), and close
+   the loop with `bee state scribing-run --feature <feature>`.
 3. From the feature's artifacts — CONTEXT.md, plan, cell traces,
    worker reports, review findings — write one dated learnings file
    (`references/promotion.md` ("Harvest Discipline", "Learnings File

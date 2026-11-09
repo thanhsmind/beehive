@@ -4,7 +4,7 @@
   "skills": [
     {
       "name": "bee-capturing",
-      "sha256": "2cd12ac1e73bd31c1e72229c50642da3b12e06b504274be4dd3458e4945ee962"
+      "sha256": "07f5b1eabbbc988eeabbbadaafc30464cb9d06680f40ef59470eaf0e95f4dfe3"
     },
     {
       "name": "bee-deploying",
@@ -28,7 +28,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "890bdbafb94b5aeb426d6c0479d4c5c6959fdc8901dc2b6ee99fa0644c3f4333"
+      "sha256": "aa2b89d3028b6af30bc70df3498308d0f3c072700452efe3d64e578980f4dcc9"
     },
     {
       "name": "bee-how",
@@ -36,7 +36,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "37b1cbab4903fa1957ca06048f08bbac1d10ca952d4128376f6e6b123d740637"
+      "sha256": "823e603edc6908ddd5c63f5468825f8fbd295a44b833885d2a2614b45869f21e"
     },
     {
       "name": "bee-principle-attack-the-premise",
@@ -120,11 +120,11 @@
     },
     {
       "name": "bee-shaping",
-      "sha256": "7c93fd46627d1fdf194d9d3f75aefb7180b2c5f3d2dbfe9ff67b123b41677180"
+      "sha256": "f83a9d7ca628362e42e532574b695cea6d338f81fc4a9f9efdc1eb3e9399858f"
     },
     {
       "name": "bee-swarming",
-      "sha256": "4b3358019c7bd49b609f9632b0fad2448e7cdc643e7ffbfdb6fe37b01d7f902f"
+      "sha256": "48fdfa5cc1cca1ce8390703cbc8f7b26250fc32852544a2348536329a2726676"
     },
     {
       "name": "bee-teach",
