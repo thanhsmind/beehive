@@ -317,6 +317,26 @@ keeps its verbatim text. The two sources are treated alike, string and
 non-string entries both, and an entry that renders the same as one already
 there counts once (deviation-one-list cell dol-1, 2026-08-22).
 
+**B44a — An inline `tiny` unit that changed more than one counted file is
+refused unless an explicit inline reason is given.** Trigger: a `tiny` unit is
+completed with no inline reason, and the worker on its capping record is not
+registered for it. What happens: the door counts the unit's changed files and
+leaves out every path under `.bee/` and `docs/history/`. More than one counted
+file refuses completion. The refusal names the counted files, the bound (tiny
+is one hand-authored file plus mechanical companions), the reroute (route the
+feature `small`, then dispatch the next unit through the dispatch door with
+its claim flag) and the escape (`--inline-reason`, recorded on the trace as in
+B44). A unit capped by a registered worker is never refused by this door. The
+route record holds the same bound one step earlier: `route --set --lane tiny`
+with `--files` above 1 is refused and names `--lane small`. What each actor
+observes: a change sized by its core edit but spread over tests, docs and
+manifests can no longer pass as tiny and run inline in silence
+(tiny-bound-delegation D2, D4, D5 — docs/history/tiny-bound-delegation/CONTEXT.md;
+cell tbdel-1, 2026-11-09). Code: `counted_tiny_files` and its call site in
+`packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs`;
+`validate_route_set_flags` in
+`packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs`.
+
 **B31 — A judge verdict is a structured, append-only record with an honest
 independence stamp.** Trigger: a judge examines a unit of work and renders a
 verdict. What happens: the verdict is validated against one fixed shape before
@@ -662,7 +682,7 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   (worker-conformance, wc-2c).
 - A `tiny` unit never reaches the registered-worker check (B44) — it is
   permitted to run inline by contract, exactly as before this door existed
-  (worker-proof, wp-1).
+  (worker-proof, wp-1). It meets a narrower door instead (B44a).
 - A unit that touches no owned path, and names no rule home, passes the sync
   door in silence — the door writes nothing, warns about nothing, and adds no
   deviation line. The legacy-cell note (a unit predating the prediction field)
