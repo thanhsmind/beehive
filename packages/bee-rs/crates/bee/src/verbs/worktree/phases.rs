@@ -955,6 +955,30 @@ fn lane_write_err_text(e: Err2) -> String {
 /// (P1), before `git merge` was ever attempted, so a blocking verdict never
 /// reaches here; `state.proof` carries only the CLEARED verdict, for
 /// reporting.
+pub(crate) fn merge_knowledge_record(main_root: &Path, pre_merge_head: &str, feature: Option<&str>) -> Value {
+    let diff = run_git(main_root, &["diff", "--no-renames", "--name-only", "-z", pre_merge_head, "HEAD"]);
+    let files = (diff.status == Some(0)).then(|| {
+        diff.stdout
+            .unwrap_or_default()
+            .split('\0')
+            .filter(|f| f.starts_with("docs/knowledge/"))
+            .count()
+    });
+    let delivery = feature
+        .map(|f| format!("docs/history/{f}/delivery.md"))
+        .filter(|rel| main_root.join(rel).is_file());
+    json!({"files": files, "delivery": delivery})
+}
+
+pub(crate) fn merge_knowledge_line(knowledge: &Value) -> Option<String> {
+    let record = knowledge.as_object()?;
+    let delivery = record.get("delivery").and_then(Value::as_str).unwrap_or("none");
+    Some(match record.get("files").and_then(Value::as_u64) {
+        Some(n) => format!("  knowledge: {n} docs/knowledge file(s) in this merge; delivery: {delivery}"),
+        None => format!("  knowledge: unknown (the merged range could not be read); delivery: {delivery}"),
+    })
+}
+
 pub(crate) fn merge_finish(
     main_root: &Path,
     state: &Staged,
@@ -1077,6 +1101,7 @@ pub(crate) fn merge_finish(
         if let Some(bookkeeping_commit) = bookkeeping_commit {
             result.insert("bookkeeping_commit".into(), bookkeeping_commit.clone());
         }
+        result.insert("knowledge".into(), merge_knowledge_record(main_root, pre_merge_head, feature.as_deref()));
 
         // Post-commit guard (D2-REVISED). Runs BEFORE the lane write below
         // (mcl-2 R2): the guard measures the whole tree honestly, and the

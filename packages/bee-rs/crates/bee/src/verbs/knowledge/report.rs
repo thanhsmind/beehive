@@ -425,12 +425,76 @@ pub(crate) fn build_outcomes(root: &Path) -> (Value, Vec<String>) {
     (Value::Object(outcomes), lines)
 }
 
-const PULL_CMDS: [&str; 3] = ["knowledge search", "knowledge context", "knowledge show"];
+pub(crate) fn recorded_feature_arms(root: &Path) -> std::collections::BTreeMap<String, String> {
+    let mut arms = std::collections::BTreeMap::new();
+    for row in read_jsonl(&root.join(".bee").join("logs").join("dispatch.jsonl")).rows {
+        let source = row.get("source").and_then(Value::as_str);
+        let kind = row.get("kind").and_then(Value::as_str);
+        if source != Some("pack") && kind != Some("advisor") {
+            continue;
+        }
+        let Some(feature) = row.get("feature").and_then(Value::as_str).filter(|f| !f.is_empty()) else { continue };
+        let Some(arm) = row.get("knowledge_arm").and_then(Value::as_str).filter(|a| ARMS.contains(a)) else { continue };
+        arms.entry(feature.to_string()).or_insert_with(|| arm.to_string());
+    }
+    arms
+}
+
+pub(crate) fn build_feature_outcomes(root: &Path) -> (Value, Vec<String>) {
+    let recorded = recorded_feature_arms(root);
+    let mut features: [std::collections::BTreeSet<String>; 2] = Default::default();
+    let mut cells = [0usize; 2];
+    let mut counts = [[0usize; 4]; 2];
+    let mut unrecorded: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for cell in closed_cells(root) {
+        let Some(feature) = cell.get("feature").and_then(Value::as_str).filter(|f| !f.is_empty()) else { continue };
+        let Some(arm) = ARMS.iter().position(|a| recorded.get(feature).map(String::as_str) == Some(*a)) else {
+            unrecorded.insert(feature.to_string());
+            continue;
+        };
+        features[arm].insert(feature.to_string());
+        cells[arm] += 1;
+        let signals = cell_signals(cell.get("trace").unwrap_or(&Value::Null));
+        for (slot, hit) in signals.iter().enumerate() {
+            counts[arm][slot] += usize::from(*hit);
+        }
+    }
+    for (feature, arm) in &recorded {
+        if let Some(i) = ARMS.iter().position(|a| *a == arm) {
+            features[i].insert(feature.clone());
+        }
+    }
+
+    let mut arms = Map::new();
+    let mut lines = Vec::new();
+    for (arm, name) in ARMS.iter().enumerate() {
+        let mut row = Map::new();
+        row.insert("features".into(), Value::from(features[arm].len()));
+        row.insert("cells".into(), Value::from(cells[arm]));
+        for (slot, signal) in SIGNALS.iter().enumerate() {
+            row.insert((*signal).into(), Value::from(counts[arm][slot]));
+        }
+        arms.insert((*name).into(), Value::Object(row));
+        lines.push(format!(
+            "feature outcomes {name}: {} feature(s), {} cell(s), {} blocked, {} reopened, {} red round(s), {} with mistakes",
+            features[arm].len(), cells[arm], counts[arm][0], counts[arm][1], counts[arm][2], counts[arm][3]
+        ));
+    }
+    lines.push(format!("feature outcomes unrecorded: {} feature(s) with no recorded pack", unrecorded.len()));
+
+    let mut section = Map::new();
+    section.insert("arms".into(), Value::Object(arms));
+    section.insert("unrecorded_features".into(), Value::from(unrecorded.len()));
+    (Value::Object(section), lines)
+}
+
+const PULL_CMDS: [&str; 4] = ["knowledge search", "knowledge context", "knowledge show", "knowledge pack"];
+const CALLS: usize = PULL_CMDS.len();
 const UNBOUND: &str = "(unbound)";
 
 fn pull_row(feature: Option<&str>, counts: &[usize; 5]) -> Value {
-    let [search, context, show, calls, _] = *counts;
-    let pulls = search + context + show;
+    let [search, context, show, pack, calls] = *counts;
+    let pulls = search + context + show + pack;
     let mut row = Map::new();
     if let Some(f) = feature {
         row.insert("feature".into(), Value::String(f.to_string()));
@@ -438,6 +502,7 @@ fn pull_row(feature: Option<&str>, counts: &[usize; 5]) -> Value {
     row.insert("search".into(), Value::from(search));
     row.insert("context".into(), Value::from(context));
     row.insert("show".into(), Value::from(show));
+    row.insert("pack".into(), Value::from(pack));
     row.insert("pulls".into(), Value::from(pulls));
     row.insert("calls".into(), Value::from(calls));
     row.insert("rate".into(), rate(pulls, calls));
@@ -446,8 +511,8 @@ fn pull_row(feature: Option<&str>, counts: &[usize; 5]) -> Value {
 
 fn pull_line(label: &str, row: &Value) -> String {
     format!(
-        "  {label:<28} {:>6} {:>7} {:>5} {:>6} {:>6} {:>6}",
-        row["search"], row["context"], row["show"], row["pulls"], row["calls"], row["rate"]
+        "  {label:<28} {:>6} {:>7} {:>5} {:>5} {:>6} {:>6} {:>6}",
+        row["search"], row["context"], row["show"], row["pack"], row["pulls"], row["calls"], row["rate"]
     )
 }
 
@@ -472,19 +537,19 @@ pub(crate) fn build_pull_rate(root: &Path) -> (Value, Vec<String>) {
             if let Some(i) = PULL_CMDS.iter().position(|c| *c == cmd) {
                 target[i] += 1;
             }
-            target[3] += 1;
+            target[CALLS] += 1;
         }
     }
 
     let mut rows: Vec<Value> = groups.iter().map(|(f, c)| pull_row(Some(f), c)).collect();
-    if unbound[3] > 0 {
+    if unbound[CALLS] > 0 {
         rows.push(pull_row(Some(UNBOUND), &unbound));
     }
     let total_row = pull_row(None, &total);
 
     let mut lines = vec![
         "Pull rate".to_string(),
-        format!("  {:<28} {:>6} {:>7} {:>5} {:>6} {:>6} {:>6}", "feature", "search", "context", "show", "pulls", "calls", "rate"),
+        format!("  {:<28} {:>6} {:>7} {:>5} {:>5} {:>6} {:>6} {:>6}", "feature", "search", "context", "show", "pack", "pulls", "calls", "rate"),
     ];
     for row in &rows {
         lines.push(pull_line(row["feature"].as_str().unwrap_or_default(), row));
@@ -517,6 +582,8 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     let (measured, unmeasured, evidence_ladder, mut lines) = build_report(&ctx.root, &concepts);
     let (outcomes, outcome_lines) = build_outcomes(&ctx.root);
     lines.extend(outcome_lines);
+    let (feature_outcomes, feature_lines) = build_feature_outcomes(&ctx.root);
+    lines.extend(feature_lines);
     let (pull_rate, pull_lines) = build_pull_rate(&ctx.root);
     lines.extend(pull_lines);
 
@@ -529,6 +596,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     result.insert("unmeasured_count".into(), Value::from(unmeasured_count));
     result.insert("evidence_ladder".into(), evidence_ladder);
     result.insert("outcomes".into(), outcomes);
+    result.insert("feature_outcomes".into(), feature_outcomes);
     result.insert("pull_rate".into(), pull_rate);
     Some(ctx.emit(&Value::Object(result), &lines.join("\n"), 0))
 }

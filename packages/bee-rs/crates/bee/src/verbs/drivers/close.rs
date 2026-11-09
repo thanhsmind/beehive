@@ -744,70 +744,6 @@ pub(crate) fn capture_queue_pending(root: &Path) -> (usize, f64) {
     (settlements.len(), oldest_ms)
 }
 
-/// U4 (docs/history/knowledge-usable/CONTEXT.md): the proposal's dominant
-/// area — the `area_updates` entry with the most attributed bullets, ties
-/// keeping the proposal's own order — names the stub's `area` field. `None`
-/// when the proposal named no area at all (D19: a work item with no
-/// `bee.areas` and no scribing stamp).
-pub(crate) fn dominant_promote_area(proposal: &Value) -> Option<String> {
-    proposal["area_updates"]
-        .as_array()?
-        .iter()
-        .max_by_key(|u| u["bullets"].as_array().map(Vec::len).unwrap_or(0))
-        .and_then(|u| u["area"].as_str())
-        .map(str::to_string)
-}
-
-/// U4: once close writes `promote-proposals.md`, it ALSO appends one
-/// capture-queue stub pointing at it — the queue is the living channel a
-/// proposal reaches flush through (the 22 dead files under
-/// docs/history/*/promote-proposals.md proved the standalone file is
-/// write-only); the file itself keeps being written unchanged (audit trail,
-/// D38). Same stub shape `capture add` writes (verbs/capture.rs run_add) so
-/// `bee capture list`/flush treat it identically to a hand-added one.
-/// Best-effort: an append failure here never fails close — the proposal file
-/// itself is still the durable record.
-pub(crate) fn enqueue_promote_stub(root: &Path, feature: &str, proposal: &Value, proposals_rel: &str) {
-    let mut stub = Map::new();
-    stub.insert("kind".into(), Value::String("stub".into()));
-    stub.insert("id".into(), Value::String(pseudo_uuid_v4()));
-    stub.insert("at".into(), Value::String(now_iso()));
-    stub.insert(
-        "outcome".into(),
-        Value::String(format!("Promote proposal for \"{feature}\" — {proposals_rel}")),
-    );
-    stub.insert("dids".into(), Value::Array(Vec::new()));
-    stub.insert(
-        "area".into(),
-        dominant_promote_area(proposal).map(Value::String).unwrap_or(Value::Null),
-    );
-    stub.insert("files".into(), Value::Array(vec![Value::String(proposals_rel.to_string())]));
-    stub.insert("lane".into(), Value::Null);
-    stub.insert("source".into(), Value::String("promote".into()));
-    let _ = append_jsonl(&root.join(".bee").join("capture-queue.jsonl"), &Value::Object(stub));
-}
-
-/// D5 (trun-9, docs/history/traceable-runs/plan.md): the SECOND, separate
-/// enqueue this same close writes — into `.bee/deferred-queue.jsonl`, never
-/// into `.bee/capture-queue.jsonl` (the stub above is untouched and keeps
-/// its own lifecycle; CONTEXT.md leaves absorbing it explicitly undecided).
-/// This is the record `status_full::unapplied_promote_proposals` reads back
-/// via `deferred_queue::items_for` so a proposal has a real, claimable
-/// payload instead of only a derived mtime scan. Best-effort, same as the
-/// stub above: an append failure here never fails close.
-pub(crate) fn enqueue_promote_deferred_record(root: &Path, feature: &str, proposals_rel: &str) {
-    let reason = format!("Promote proposal for \"{feature}\" awaiting apply — {proposals_rel}.");
-    let _ = crate::verbs::deferred_queue::enqueue(
-        root,
-        "promote",
-        feature,
-        &[],
-        &[],
-        &[proposals_rel.to_string()],
-        &reason,
-    );
-}
-
 pub(crate) fn has_capture_deferral_decision(root: &Path, feature: &str) -> D<bool> {
     Ok(deferral_reason(root, "capture-deferral", feature)?.is_some())
 }
@@ -3225,34 +3161,16 @@ pub(crate) fn close_handler(
     result.insert("ran_tests".into(), Value::Bool(false));
     result.insert("tests".into(), Value::Null);
 
-    // ── D2: soft promote door — computed BEFORE retirement ─────────────────
-    //
-    // Runs only here — past the tests door (GREEN or undeclared) and past
-    // the scribing-debt refusal above, so a red close or one stopped on
-    // capture debt never reaches it. It must run before the cells are
-    // retired below: `build_promotion` scans `.bee/cells/*.json`, and once
-    // retirement moves the feature's just-capped cells into
-    // `.bee/cells/archive/` that scan would come back empty. `build_promotion`
-    // is read-only, so computing it here has no effect beyond what it can
-    // see. `build_promotion`'s `None` arm means "delegate to Node", and
-    // there is no Node left to delegate to (`rg -l buildContextManifest
-    // --glob '*.mjs'` finds nothing); a `Thrown` is promote's own typed
-    // refusal (most commonly `unknown_work` for a feature with neither a
-    // work-item concept nor a history anchor). Both degrade through the
-    // SAME one-line warning pushed further below (line position unchanged)
-    // and close proceeds unchanged either way — SOFT means proposing the
-    // knowledge a feature earned never blocks finishing it, and D38
-    // (promote proposes, it never writes into docs/knowledge/) stays
-    // untouched by this door.
     let docs_root = docs_root_for_feature(root, feature);
-    let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(&docs_root) {
-        None => Err("no docs/knowledge/ bundle to mine here".to_string()),
-        Some(dir) => match crate::verbs::knowledge::build_promotion_split(root, &docs_root, &dir, feature) {
-            None => Err("no docs/knowledge/ bundle to mine here".to_string()),
-            Some(crate::verbs::knowledge::Promo::Thrown(msg)) => Err(msg),
-            Some(crate::verbs::knowledge::Promo::Ok(proposal)) => Ok(proposal),
-        },
-    };
+    let delivery_rel = format!("docs/history/{feature}/delivery.md");
+    let newest_capped_ms = crate::verbs::knowledge::read_capped_cell_traces(root, feature)
+        .unwrap_or_default()
+        .iter()
+        .filter(|c| !c.files_changed.iter().any(|f| f.trim_start_matches("./") == delivery_rel))
+        .filter_map(|c| c.capped_at.clone())
+        .map(|at| date_parse(Some(&Value::String(at))))
+        .filter(|ms| ms.is_finite())
+        .fold(f64::NAN, |acc, ms| if acc.is_nan() || ms > acc { ms } else { acc });
 
     // ── mistake-fix-at D2: file the fix-at rows ───────────────────────────
     //
@@ -3316,42 +3234,26 @@ pub(crate) fn close_handler(
     }
     result.insert("retired".into(), retired.value());
 
-    // `promote_outcome` was computed above, before retirement moved the
-    // feature's cells out of `.bee/cells/`, so `build_promotion` still saw
-    // them. Rendering the warning line here keeps its position in the
-    // output unchanged.
-    let promote_line = match promote_outcome {
-        Ok(proposal) => {
-            let proposals_rel = format!("docs/history/{feature}/promote-proposals.md");
-            let text = crate::verbs::knowledge::promote_text(&proposal);
-            match write_text_atomic(&root.join(&proposals_rel), &text) {
-                Ok(()) => {
-                    enqueue_promote_stub(root, feature, &proposal, &proposals_rel);
-                    enqueue_promote_deferred_record(root, feature, &proposals_rel);
-                    let cells_mined = proposal["cells"].as_array().map(Vec::len).unwrap_or(0);
-                    let area_bullets: usize = proposal["area_updates"]
-                        .as_array()
-                        .map(|updates| {
-                            updates
-                                .iter()
-                                .map(|u| u["bullets"].as_array().map(Vec::len).unwrap_or(0))
-                                .sum()
-                        })
-                        .unwrap_or(0);
-                    let pattern_candidates =
-                        proposal["pattern_candidates"].as_array().map(Vec::len).unwrap_or(0);
-                    format!(
-                        "Promote proposed for \"{feature}\": {cells_mined} capped cell(s) mined, {area_bullets} area bullet(s), {pattern_candidates} pattern candidate(s) — see {proposals_rel}."
-                    )
-                }
-                Err(e) => format!(
-                    "Promote proposed for \"{feature}\" but {proposals_rel} could not be written: {e}."
-                ),
-            }
-        }
-        Err(reason) => format!("Promote skipped for \"{feature}\": {reason}"),
-    };
-    lines.push(promote_line);
+    let delivery_ms = std::fs::metadata(docs_root.join(&delivery_rel))
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|at| at.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as f64);
+    let consolidated = delivery_ms.is_some_and(|ms| newest_capped_ms.is_nan() || ms >= newest_capped_ms);
+    let mut knowledge_record = Map::new();
+    knowledge_record.insert("consolidated".into(), Value::Bool(consolidated));
+    knowledge_record.insert(
+        "delivery".into(),
+        if delivery_ms.is_some() { Value::String(delivery_rel.clone()) } else { Value::Null },
+    );
+    result.insert("knowledge".into(), Value::Object(knowledge_record));
+    lines.push(if consolidated {
+        format!("Knowledge consolidated for \"{feature}\": {delivery_rel}")
+    } else {
+        format!(
+            "Knowledge not consolidated for \"{feature}\": no current {delivery_rel} — its cell commits carry their own deltas; bee knowledge consolidate --feature {feature} prints the writer brief for a follow-up writer cell"
+        )
+    });
 
     // ── the token-usage section (decision 2d3abd12) ───────────────────────
     //
@@ -4880,7 +4782,7 @@ mod tests {
     //
     // The judge's second FAIL: nothing exercised `scribing_debt`'s two
     // queue-facing behaviors (materializing a `scribe` record, and clearing
-    // once one completes) or `enqueue_promote_deferred_record`'s write —
+    // once one completes) —
     // every debt-door test elsewhere runs with no `.bee/deferred-queue.jsonl`
     // at all. These cover both enqueue paths directly.
 
@@ -4950,25 +4852,6 @@ mod tests {
 
         let debt = scribing_debt(root, "demo").unwrap();
         assert_eq!(debt.ids, Vec::<Value>::new(), "a completed record must clear the debt");
-    }
-
-    #[test]
-    fn enqueue_promote_deferred_record_writes_a_promote_record_naming_feature_and_path() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        enqueue_promote_deferred_record(root, "demo", "docs/history/demo/promote-proposals.md");
-
-        let raw = std::fs::read_to_string(root.join(".bee/deferred-queue.jsonl")).unwrap();
-        assert!(raw.contains("\"kind\":\"promote\""), "{raw}");
-        assert!(raw.contains("\"feature\":\"demo\""), "{raw}");
-        assert!(raw.contains("\"files\":[\"docs/history/demo/promote-proposals.md\"]"), "{raw}");
-
-        // `status_full::unapplied_promote_proposals` never checks `cells` for
-        // a `promote` record — `completed` alone is what `items_for` gives a
-        // caller who only asks "is this feature's proposal applied?".
-        let queued = crate::verbs::deferred_queue::items_for(root, "promote", "demo");
-        assert_eq!(queued.len(), 1);
-        assert!(!queued[0].completed);
     }
 
     // ─── mcl-3 (merge-closes-the-lane R2): green close sets the lane's

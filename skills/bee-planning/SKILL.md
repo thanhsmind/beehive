@@ -66,9 +66,11 @@ only after its uat gate.
 
 Reading scales with the lane: tiny keeps its two targeted reads; small adds
 `CONTEXT.md` and recent decisions; standard/high-risk add area truth, critical
-patterns, decisions, and prior learnings — precedent beats research. Remove
-uncertainty at the lowest cost: cite a pattern or verify one fact; unfamiliar
-territory or competing approaches dispatch `bee-researching`, findings merged in.
+patterns, decisions, and prior learnings — precedent beats research. Research runs
+`bee knowledge pack --feature <feature> --stage planning`, and load-bearing claims
+anchor into the pack's code paths where they apply. Remove uncertainty at the
+lowest cost: cite a pattern or verify one fact; unfamiliar territory or competing
+approaches dispatch `bee-researching`, findings merged in.
 Start from CONTEXT.md's `## Read set`: a cell's `read_first` cites paths from
 it first, and the plan's `## Discovery` extends it with what planning read.
 When `.bee/verify/verify-app/features/` maps the ask, read the ONE matching
@@ -149,6 +151,13 @@ later slices keep one-line headlines, not cells
 (`references/planning-reference.md` ("Pre-flight before cells add", "Cell
 quality rules")). A user-visible surface makes slice 1 a walking skeleton:
 end-to-end, real behavior, no stubs.
+
+Prep adds a final `role: writer` consolidation cell to every code-touching
+standard or high-risk feature, depending on every other cell, whose action runs
+`bee knowledge consolidate --feature <feature>`, writes the deduped knowledge
+and `docs/history/<feature>/delivery.md`, and whose verify is
+`.bee/bin/bee knowledge check` (`references/planning-reference.md` carries the
+cell shape).
 
 A cell that writes tests against an interface cites that interface's contract
 decision by its STORE id in `cell.decisions` — the mint trap refuses a

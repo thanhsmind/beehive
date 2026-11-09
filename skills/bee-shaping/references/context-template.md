@@ -43,13 +43,14 @@ scribing seeds the spec's Data Dictionary from this table. Remove if none came u
 
 ## Read set
 
-The shape gate checks this section. Fill it from the shaping scout, never a
-second read pass; a CONTEXT.md written before the section existed carries
+The shape gate checks this section. Fill it from the pack's knowledge and code lines
+(`bee knowledge pack --feature <feature> --stage shaping`), never a second read pass;
+a CONTEXT.md written before the section existed carries
 `<!-- bee:no-read-set: <reason> -->` instead.
 
 ### Knowledge
 
-Which concepts did this feature read, and how fresh was each? Fed by `bee knowledge context --work <feature>` and `bee knowledge search --text "<topic>"`, the grade copied as printed. Drop a row the plan never cites. A host with no `docs/knowledge/` writes the one row `| (no bundle) | — | this host has no docs/knowledge/ |`.
+Which concepts did this feature read, and how fresh was each? Fed by the pack's knowledge lines (`bee knowledge pack --feature <feature> --stage shaping`; symptom searches via `bee knowledge search --text "<symptom>"`), the grade copied as printed. Drop a row the plan never cites. A host with no `docs/knowledge/` writes the one row `| (no bundle) | — | this host has no docs/knowledge/ |`.
 
 | Concept | Grade at read | Why it matters |
 |---------|---------------|----------------|
@@ -57,7 +58,7 @@ Which concepts did this feature read, and how fresh was each? Fed by `bee knowle
 
 ### Code
 
-Which code paths decide this feature's behavior? Fed by the shaping scout. Drop a row the plan never cites.
+Which code paths decide this feature's behavior? Fed by the pack's anchored code lines and the shaping scout. Drop a row the plan never cites.
 
 | Path | What it decides |
 |------|-----------------|

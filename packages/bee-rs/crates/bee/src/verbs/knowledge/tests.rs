@@ -3957,4 +3957,79 @@ mod freshness_tests {
         assert_eq!(section["malformed_count"], 0);
         assert_eq!(lines[0], "Pull rate");
     }
+
+    #[test]
+    fn feature_outcomes_pull_rate_counts_a_knowledge_pack_call_as_a_pull() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut log = String::from("{\"cmd\":\"knowledge pack\",\"feature\":\"a\"}\n");
+        log += "{\"cmd\":\"status\",\"feature\":\"a\"}\n";
+        timings_log(tmp.path(), &log);
+        let (section, lines) = build_pull_rate(tmp.path());
+        assert_eq!(section["rows"][0]["pack"], 1);
+        assert_eq!(section["rows"][0]["pulls"], 1);
+        assert_eq!(section["rows"][0]["calls"], 2);
+        assert!(lines[1].contains("pack"), "{lines:?}");
+    }
+
+    fn feature_outcomes_fixture(root: &Path, rows: &[Value], cells: &[Value]) {
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+        let text: String = rows.iter().map(|r| format!("{r}\n")).collect();
+        std::fs::write(root.join(".bee").join("logs").join("dispatch.jsonl"), text).unwrap();
+        for cell in cells {
+            let id = cell["id"].as_str().unwrap();
+            std::fs::write(root.join(".bee").join("cells").join(format!("{id}.json")), cell.to_string()).unwrap();
+        }
+    }
+
+    #[test]
+    fn feature_outcomes_split_closed_cells_by_their_features_first_recorded_arm() {
+        let tmp = tempfile::tempdir().unwrap();
+        feature_outcomes_fixture(
+            tmp.path(),
+            &[
+                json!({"source": "pack", "kind": "pack", "feature": "alpha", "stage": "shaping", "knowledge_arm": "knowledge"}),
+                json!({"source": "prepare", "kind": "advisor", "feature": "alpha", "knowledge_arm": "holdout"}),
+                json!({"source": "prepare", "kind": "advisor", "feature": "beta", "knowledge_arm": "holdout"}),
+                json!({"source": "prepare", "kind": "gather", "feature": "gamma", "knowledge_arm": "knowledge"}),
+                json!({"source": "pack", "kind": "pack", "feature": "delta", "stage": "planning", "knowledge_arm": "knowledge"}),
+            ],
+            &[
+                json!({"id": "a-1", "feature": "alpha", "status": "capped", "trace": {"blocked_reason": "x"}}),
+                json!({"id": "a-2", "feature": "alpha", "status": "capped", "trace": {"mistakes": ["m"]}}),
+                json!({"id": "a-3", "feature": "alpha", "status": "open", "trace": {}}),
+                json!({"id": "b-1", "feature": "beta", "status": "dropped", "trace": {"attempts": [{}]}}),
+                json!({"id": "g-1", "feature": "gamma", "status": "capped", "trace": {}}),
+            ],
+        );
+        let (section, lines) = build_feature_outcomes(tmp.path());
+        let k = &section["arms"]["knowledge"];
+        assert_eq!(k["features"], 2, "{section}");
+        assert_eq!(k["cells"], 2);
+        assert_eq!(k["blocked"], 1);
+        assert_eq!(k["with_mistakes"], 1);
+        let h = &section["arms"]["holdout"];
+        assert_eq!(h["features"], 1);
+        assert_eq!(h["cells"], 1);
+        assert_eq!(h["red_rounds"], 1);
+        assert_eq!(section["unrecorded_features"], 1);
+        assert!(lines.iter().any(|l| l.starts_with("feature outcomes knowledge: 2 feature(s), 2 cell(s)")), "{lines:?}");
+        assert!(lines.iter().any(|l| l.starts_with("feature outcomes holdout: 1 feature(s), 1 cell(s)")), "{lines:?}");
+        assert!(lines.iter().any(|l| l == "feature outcomes unrecorded: 1 feature(s) with no recorded pack"), "{lines:?}");
+    }
+
+    #[test]
+    fn feature_outcomes_over_a_missing_log_count_every_feature_unrecorded() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("cells").join("c.json"),
+            json!({"id": "c", "feature": "solo", "status": "capped", "trace": {}}).to_string(),
+        )
+        .unwrap();
+        let (section, _) = build_feature_outcomes(tmp.path());
+        assert_eq!(section["arms"]["knowledge"]["features"], 0);
+        assert_eq!(section["arms"]["holdout"]["features"], 0);
+        assert_eq!(section["unrecorded_features"], 1);
+    }
 }

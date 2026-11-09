@@ -5015,7 +5015,7 @@ exit 0
         // refusal, and close still proceeds to its own next: line.
         assert_eq!(
             lines[2],
-            "Promote skipped for \"demo\": knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"demo\" (D38)."
+            "Knowledge not consolidated for \"demo\": no current docs/history/demo/delivery.md — its cell commits carry their own deltas; bee knowledge consolidate --feature demo prints the writer brief for a follow-up writer cell"
         );
         assert_eq!(
             lines[3],
@@ -5035,7 +5035,7 @@ exit 0
     /// `product_root` is the one live path left that makes `bundle_dir`
     /// return `None` (see `bundle_dir`, frame.rs).
     #[test]
-    fn close_green_promote_none_warns_once_and_writes_nothing() {
+    fn close_green_knowledge_consolidation_line_with_no_bundle_writes_nothing() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         // defaults-and-agent-env D1: pin uat_stop off — this test is about
@@ -5056,7 +5056,7 @@ exit 0
         // checklist any more (no test process ever spawns).
         assert_eq!(
             lines[2],
-            "Promote skipped for \"demo\": no docs/knowledge/ bundle to mine here"
+            "Knowledge not consolidated for \"demo\": no current docs/history/demo/delivery.md — its cell commits carry their own deltas; bee knowledge consolidate --feature demo prints the writer brief for a follow-up writer cell"
         );
         assert_eq!(
             lines[3],
@@ -5078,7 +5078,7 @@ exit 0
     /// non-zero even though the same close call retires that cell a few
     /// lines later.
     #[test]
-    fn close_green_promote_ok_writes_the_proposals_file_and_a_headline() {
+    fn close_green_knowledge_consolidation_writes_no_proposals_file() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         // defaults-and-agent-env D1: absent uat_stop now reads as Close,
@@ -5125,16 +5125,15 @@ exit 0
         );
         assert_eq!(
             lines[3],
-            "Promote proposed for \"demo\": 1 capped cell(s) mined, 0 area bullet(s), 0 pattern candidate(s) — see docs/history/demo/promote-proposals.md."
+            "Knowledge not consolidated for \"demo\": no current docs/history/demo/delivery.md — its cell commits carry their own deltas; bee knowledge consolidate --feature demo prints the writer brief for a follow-up writer cell"
         );
         assert_eq!(
             lines[4],
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
-        let proposals = std::fs::read_to_string(root.join("docs/history/demo/promote-proposals.md")).unwrap();
-        assert!(!proposals.contains("DELIVERY"));
-        assert!(proposals.contains("(b) AREA UPDATES"));
-        assert!(proposals.contains("(c) PATTERN CANDIDATES"));
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
+        assert!(!root.join(".bee/capture-queue.jsonl").exists());
+        assert!(!root.join(".bee/deferred-queue.jsonl").exists());
         // D38/D5 still hold: promote proposes, close never writes under
         // docs/knowledge/.
         assert!(!root.join("docs/knowledge/work").exists());
@@ -5151,7 +5150,7 @@ exit 0
     /// (asserted above, in the sibling test this one shares its fixture
     /// with).
     #[test]
-    fn close_green_promote_ok_enqueues_one_capture_stub_pointing_at_it() {
+    fn close_green_knowledge_consolidated_when_a_current_delivery_exists() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         // defaults-and-agent-env D1: absent uat_stop now reads as Close,
@@ -5176,32 +5175,60 @@ exit 0
             "{\"feature\":\"demo\",\"ts\":\"2024-06-03T00:00:00.000Z\"}\n",
         );
         let declared = declared_test_commands(&root).unwrap();
-        let Out::Emit(_, _text, code) =
+        w(&root, "docs/history/demo/delivery.md", "# Delivery\n\n- docs/knowledge/areas/demo/a.md: the rule.\n");
+        let Out::Emit(result, text, code) =
             close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
         assert_eq!(code, 0);
-        let queue = std::fs::read_to_string(root.join(".bee/capture-queue.jsonl")).unwrap();
-        let rows: Vec<Value> = queue.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
-        assert_eq!(rows.len(), 1, "expected exactly one enqueued stub: {queue}");
-        let stub = &rows[0];
-        assert_eq!(stub.get("kind"), Some(&json!("stub")));
-        assert_eq!(
-            stub.get("outcome"),
-            Some(&json!("Promote proposal for \"demo\" — docs/history/demo/promote-proposals.md"))
+        assert!(
+            text.split('\n').any(|l| l == "Knowledge consolidated for \"demo\": docs/history/demo/delivery.md"),
+            "{text}"
         );
-        assert_eq!(
-            stub.get("files"),
-            Some(&json!(["docs/history/demo/promote-proposals.md"]))
+        assert_eq!(result["knowledge"], json!({"consolidated": true, "delivery": "docs/history/demo/delivery.md"}));
+        assert!(!root.join(".bee/capture-queue.jsonl").exists());
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
+    }
+
+    #[test]
+    fn close_green_knowledge_consolidation_ignores_a_delivery_older_than_the_newest_cap() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
+        std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
+        w(&root, "docs/history/demo/CONTEXT.md", "# Demo Context\n\nBody.\n");
+        w(&root, "docs/history/demo/delivery.md", "# Delivery\n");
+        filetime::set_file_mtime(
+            root.join("docs/history/demo/delivery.md"),
+            filetime::FileTime::from_unix_time(1_577_836_800, 0),
+        )
+        .unwrap();
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"did the thing","files_changed":["src/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
         );
-        assert_eq!(stub.get("source"), Some(&json!("promote")));
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2024-06-03T00:00:00.000Z\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        assert!(text.contains("Knowledge not consolidated for \"demo\""), "{text}");
+        assert_eq!(result["knowledge"], json!({"consolidated": false, "delivery": "docs/history/demo/delivery.md"}));
     }
 
     /// D2: a promote door that skips (no proposal was written) never
     /// enqueues a stub — nothing to point at.
     #[test]
-    fn close_green_promote_skipped_enqueues_nothing() {
+    fn close_green_knowledge_consolidation_enqueues_nothing() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         // defaults-and-agent-env D1: absent uat_stop now reads as Close,
@@ -10649,6 +10676,7 @@ Contract:
 - Never stop to offer the leader a menu of implementation options: choose inside the cell's scope and record the choice as a departure. A decision outside the scope is one short yes/no question, returned through `[PARKED]` or `[BLOCKED]`.
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
 - Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
+- Write your knowledge delta (owning area concept update, a pitfall pattern when you hit one, bee.anchors for files you changed) in the same commit as your code, thin and anchored, no review step.
 - Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: c-golden` (the words "cell:" then the id — a bare id alone fails the cap).
 - Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), [PARKED] (question, cell id — after `bee cells park`), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
 
@@ -12792,6 +12820,37 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
     }
 
     #[test]
+    fn feature_pack_code_paths_land_on_the_cell_record_not_in_learned_context() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &holdout_config(None));
+        w(
+            &root,
+            "docs/knowledge/tasks/demo/work-item.md",
+            "---\ntype: bee.work-item\ntitle: Demo work item\ndescription: demo\nbee:\n  id: demo\n  lifecycle: active\n  required_context: [areas/one.md]\n---\nbody\n",
+        );
+        w(
+            &root,
+            "docs/knowledge/areas/one.md",
+            "---\ntype: bee.area\ntitle: One\ndescription: one\nbee:\n  id: one\n  lifecycle: active\n  anchors: [src/alpha.rs, docs/knowledge/areas/one.md, src/gone.rs]\n---\nbody\n",
+        );
+        w(&root, "src/alpha.rs", "pub fn alpha() {}\n");
+        w(
+            &root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
+        );
+        prepare_dispatch(&root, "claude", "cell", Some("c-2"), Some("w"), false, None, None, true, None)
+            .unwrap();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        assert_eq!(
+            record["learned_context"],
+            json!(["docs/knowledge/tasks/demo/work-item.md", "docs/knowledge/areas/one.md"])
+        );
+        assert_eq!(record["pack_code"], json!(["src/alpha.rs"]));
+    }
+
+    #[test]
     fn non_cell_records_carry_neither_arm_key() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(
@@ -12807,5 +12866,81 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             let record: Value = serde_json::from_str(line).unwrap();
             assert_eq!(record.get("knowledge_arm"), None, "{line}");
             assert_eq!(record.get("learned_context"), None, "{line}");
+        }
+    }
+
+    fn advisor_pack_config(percent: u64) -> String {
+        format!(
+            r#"{{"models":{{"claude":{{"generation":"sonnet","review":"opus","advisor":"opus","hat-risks":"opus"}}}},"knowledge_holdout_percent":{percent}}}"#
+        )
+    }
+
+    fn advisor_pack_dispatch(
+        percent: u64,
+        kind: &str,
+        role: Option<&str>,
+        brief: Option<&str>,
+    ) -> (String, Value, Vec<String>) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &advisor_pack_config(percent));
+        bundle_fixture(&root);
+        let expected = learned_context_lines(&root, &json!({"id": "demo", "feature": "demo", "lane": "standard"}))
+            .unwrap();
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", kind, role, None, None, false, None, Some("check the plan"), true, None, brief,
+            Some("demo"), None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let prompt = v["payload"]["prompt"]
+            .as_str()
+            .or_else(|| v["payload"]["stdin"].as_str())
+            .unwrap_or_default()
+            .to_string();
+        let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let record: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+        (prompt, record, expected)
+    }
+
+    #[test]
+    fn advisor_pack_renders_the_feature_pack_into_a_hat_seat_prompt() {
+        let (prompt, record, expected) = advisor_pack_dispatch(0, "advisor", Some("hat-risks"), None);
+        assert!(!expected.is_empty());
+        let block = format!("{LEARNED_HEADER} feature pack — read before answering; prefer it over re-deriving):\n{}\n", expected.join("\n"));
+        assert!(prompt.contains(&block), "{prompt}");
+        assert!(!prompt.contains("{{"), "{prompt}");
+        assert_eq!(record["knowledge_arm"], json!("knowledge"));
+        let listed: Vec<Value> = expected
+            .iter()
+            .filter(|l| !l.starts_with(PACK_CODE_PREFIX))
+            .map(|l| Value::String(pack_line_path(l)))
+            .collect();
+        assert_eq!(record["learned_context"], Value::Array(listed));
+        assert!(record["pack_code"].is_array());
+    }
+
+    #[test]
+    fn advisor_pack_on_a_holdout_feature_renders_no_block_and_records_holdout() {
+        let (prompt, record, _) = advisor_pack_dispatch(100, "advisor", None, None);
+        assert!(!prompt.contains(LEARNED_HEADER), "{prompt}");
+        assert_eq!(record["knowledge_arm"], json!("holdout"));
+        assert_eq!(record["learned_context"], json!([]));
+        assert_eq!(record["pack_code"], json!([]));
+    }
+
+    #[test]
+    fn advisor_pack_skips_a_blind_lane_that_carries_a_brief() {
+        let (prompt, record, _) = advisor_pack_dispatch(0, "advisor", None, Some("Which shape is cheapest?"));
+        assert!(!prompt.contains(LEARNED_HEADER), "{prompt}");
+        assert_eq!(record.get("knowledge_arm"), None);
+    }
+
+    #[test]
+    fn advisor_pack_leaves_gather_and_reviewer_prompts_without_a_block() {
+        for kind in ["gather", "reviewer"] {
+            let (prompt, record, _) = advisor_pack_dispatch(0, kind, None, None);
+            assert!(!prompt.contains(LEARNED_HEADER), "{kind}: {prompt}");
+            assert_eq!(record.get("knowledge_arm"), None, "{kind}");
         }
     }

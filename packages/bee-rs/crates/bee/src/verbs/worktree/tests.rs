@@ -2509,6 +2509,61 @@ use std::time::Instant;
         created
     }
 
+    #[test]
+    fn knowledge_consolidation_merge_names_the_knowledge_files_and_the_delivery() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let wt = &created.worktree_root;
+        std::fs::create_dir_all(wt.join("docs/knowledge/areas/demo")).unwrap();
+        std::fs::create_dir_all(wt.join("docs/history/demo")).unwrap();
+        std::fs::write(wt.join("docs/knowledge/areas/demo/a.md"), "a\n").unwrap();
+        std::fs::write(wt.join("docs/knowledge/areas/demo/b.md"), "b\n").unwrap();
+        std::fs::write(wt.join("docs/history/demo/delivery.md"), "delivery\n").unwrap();
+        git_ok(wt, &["add", "-A"]);
+        git_ok(wt, &["commit", "-qm", "knowledge"]);
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the knowledge line must never refuse a merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(
+            answer.result["knowledge"],
+            json!({"files": 2, "delivery": "docs/history/demo/delivery.md"}),
+            "{:?}",
+            answer.result
+        );
+        let printed = merge_text_lines(&created.id, &main, &answer).join("\n");
+        assert!(
+            printed.contains("  knowledge: 2 docs/knowledge file(s) in this merge; delivery: docs/history/demo/delivery.md"),
+            "{printed}"
+        );
+    }
+
+    #[test]
+    fn knowledge_consolidation_merge_without_knowledge_prints_zero_and_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the knowledge line must never refuse a merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["knowledge"], json!({"files": 0, "delivery": null}));
+        let printed = merge_text_lines(&created.id, &main, &answer).join("\n");
+        assert!(printed.contains("  knowledge: 0 docs/knowledge file(s) in this merge; delivery: none"), "{printed}");
+    }
+
+    #[test]
+    fn knowledge_consolidation_line_reads_unknown_when_the_range_is_unreadable() {
+        let line = merge_knowledge_line(&json!({"files": null, "delivery": null})).unwrap();
+        assert_eq!(line, "  knowledge: unknown (the merged range could not be read); delivery: none");
+    }
+
     /// Truth 1: `.bee`-only dirt in main — no config override, no manual
     /// commit — merges clean. Reproduces the deadlock this cell closes: an
     /// orchestrator's normal state calls (`bee decisions log`, cell traces)

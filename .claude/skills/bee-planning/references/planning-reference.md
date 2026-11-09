@@ -367,6 +367,59 @@ history.
 }
 ```
 
+## Consolidation cell shape (role: writer)
+
+Every code-touching standard or high-risk feature adds a final `role: writer`
+consolidation cell to its plan, depending on every other cell. It runs before
+merge so code and knowledge land together in main.
+
+```json
+{
+  "id": "<feature-abbrev>-<final-n>",
+  "feature": "<feature-slug>",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "<standard|high-risk>",
+  "role": "writer",
+  "status": "open",
+  "deps": ["<every-other-cell-id>", "..."],
+  "decisions": ["<feature-d-ids>"],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/<feature-slug>/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/<feature-slug>/CONTEXT.md",
+    "docs/history/<feature-slug>/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature <feature-slug>`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/<feature-slug>/delivery.md listing the concepts changed and why, one line each. Run `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "area and pattern concepts describe the feature's changes, anchored to code",
+      "docs/history/<feature-slug>/delivery.md lists every concept the feature changed"
+    ],
+    "artifacts": [
+      {"path": "docs/history/<feature-slug>/delivery.md", "substantive": "the feature's delivery record"}
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No restating of code in area concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": null, "outcome": null, "files_changed": [],
+    "deviations": [], "friction": null, "capped_at": null,
+    "behavior_change": false
+  }
+}
+```
+
 ## Pre-flight before cells add
 
 Walk this checklist BEFORE drafting cells — it is the map, the validator

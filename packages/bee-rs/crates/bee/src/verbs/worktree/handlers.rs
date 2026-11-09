@@ -1522,6 +1522,9 @@ pub(crate) fn merge_text_lines(id: &str, main_root: &Path, answer: &MergeAnswer)
                 p(main_root)
             ));
             lines.push(format!("  verify: {}", s("verify")));
+            if let Some(line) = r.get("knowledge").and_then(merge_knowledge_line) {
+                lines.push(line);
+            }
         }
         // The companion block, shared by BOTH ok outcomes (issues-46-53 D3).
         if let Some(companion) = r.get("companion").filter(|v| js_truthy(v)) {

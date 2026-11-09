@@ -213,7 +213,11 @@ included: add guidance beside those words, never over them.
    product question only the human can answer parks your cell, never the
    lane: `bee cells park --id <cell> --question "<question>"`, then return
    `[PARKED]`.
-4. Before the commit, run `bee knowledge check --json`. For every
+4. Write your knowledge delta in the same commit as your code, per the
+   contract in `packages/bee/prompts/worker-cell.md`: update the owning
+   area concept, add a pitfall pattern if you hit one, and update
+   `bee.anchors` for files you changed — thin and anchored, no review step.
+   Before the commit, run `bee knowledge check --json`. For every
    suspect concept anchored by a file you changed, fix the concept or run
    `bee knowledge confirm --id <id>`, then reserve the concept file and
    commit it with the cell — the cap door refuses otherwise (grade rule:

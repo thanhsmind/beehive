@@ -1191,7 +1191,7 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 22] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 26] = [
         r#"bee state waiting-on set --kind gate"#,
         r#"bee state waiting-on set --kind question"#,
         // prd-1 (pi-relocation-delivery): the fenced cells JSON of that closed
@@ -1246,6 +1246,10 @@ mod documented_invocations {
         r#"bee backlog briefs --id""#,
         r#"bee backlog pbi add --brief-file with the reason and cost in the cost paragraph""#,
         r#"bee herding notify --kind progress writes progress.jsonl only, refuses a note over 120 characters, and accepts --job with no job.json""#,
+        r#"bee knowledge pack --stage shaping and Lock fills the read set from it""#,
+        r#"bee knowledge pack --stage planning and adds the writer consolidation cell""#,
+        r#"bee knowledge pack --stage shaping"#,
+        r#"bee knowledge consolidate --feature"#,
     ];
 
     #[cfg(test)]

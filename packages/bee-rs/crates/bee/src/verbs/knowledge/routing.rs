@@ -36,6 +36,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "list" => run_list(flags, json, pre_json, t0),
         "context" => run_context(flags, json, pre_json, t0),
         "search" => run_search(flags, json, pre_json, t0),
+        "pack" => run_pack(flags, json, pre_json, t0),
+        "consolidate" => run_consolidate(flags, json, pre_json, t0),
         "promote" => run_promote(flags, json, pre_json, t0),
         "bootstrap" => run_bootstrap(flags, json, pre_json, t0),
         "report" => run_report(flags, json, pre_json, t0),

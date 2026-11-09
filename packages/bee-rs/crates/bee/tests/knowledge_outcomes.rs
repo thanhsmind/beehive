@@ -235,3 +235,23 @@ fn existing_report_sections_are_unchanged() {
     assert_eq!(body["measured_count"], 0);
     assert_eq!(body["evidence_ladder"]["counts"]["present"], 0);
 }
+
+#[test]
+fn feature_outcomes_report_the_feature_arm_beside_the_cell_arms() {
+    let fx = fixture();
+    write_cell(&fx.root, false, "c-1", "capped", json!({"blocked_reason": "x"}));
+    let pack = json!({"ts": "2026-11-09T00:00:00.000Z", "source": "pack", "kind": "pack", "feature": "demo", "stage": "shaping", "knowledge_arm": "holdout"});
+    write_dispatch(&fx.root, &format!("{}{pack}\n", dispatch_line("prepare", "cell", "c-1", Some("knowledge"))));
+    let (_, v) = report(&fx, true);
+    let section = v
+        .get("feature_outcomes")
+        .or_else(|| v.get("result").and_then(|r| r.get("feature_outcomes")))
+        .unwrap_or_else(|| panic!("no feature_outcomes in: {v}"))
+        .clone();
+    assert_eq!(section["arms"]["holdout"]["features"], 1, "{section}");
+    assert_eq!(section["arms"]["holdout"]["cells"], 1);
+    assert_eq!(section["arms"]["holdout"]["blocked"], 1);
+    assert_eq!(outcomes(&fx)["arms"]["knowledge"]["cells"], 1);
+    let (text, _) = report(&fx, false);
+    assert!(text.contains("feature outcomes holdout: 1 feature(s), 1 cell(s)"), "{text}");
+}
