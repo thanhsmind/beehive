@@ -35,8 +35,8 @@ main is control-plane and fine; execution depends on transport:
 <!-- bee:end -->
 - **External herding workers** (bee herding run with --cwd) receive an
   explicit cwd at process start. The leader can stay in main while the
-  worker writes in the worktree — no manual entry required. A `tiny` cell may run inline in this
-session; `small` and up always dispatches — one worker per cell
+  worker writes in the worktree — no manual entry required. A `tiny` cell (one hand-authored file) may run inline in this
+session. From `small` up, execution is dispatched through `bee dispatch prepare` because each role runs its own configured model. Inline outside `tiny` is refused at cap without `--inline-reason`, and an inline `tiny` cap with more than one counted file (paths outside `.bee/` and `docs/history/`) is refused the same way. `bee route` refuses `--lane tiny` with `--files` above 1. Dispatches run one worker per cell
 (`references/swarming-reference.md` ("Single execution worker in full")),
 parallel by default: disjoint cells fan out concurrently (reservations
 prove it, the machine-aware limit caps it (`herding.limits.concurrency`; unset, bee sizes it from the CPU count — `docs/knowledge/areas/bee-herding/waves-and-occupancy.md`), the same number for native workers, never a fixed count), serial needs a named file conflict.

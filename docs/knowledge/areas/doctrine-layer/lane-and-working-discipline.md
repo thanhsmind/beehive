@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)", "pstack-adoption D1/D2/D3/D4/D5 (docs/history/pstack-adoption/CONTEXT.md, 2026-09-01 — the route class gets a procedure: four cited playbooks, the perf class, the checkable-CoS refusal, and the dismissed-findings duty)", "code-shape-doctrine D1/D2/D3/D4/D5 (docs/history/code-shape-doctrine/CONTEXT.md, 2026-09-01 — four code-shape rules placed in the worker brief rather than the always-loaded contract)", "pstack-gaps D1/D2/D3 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — the research class gains named Trace and Provenance sweep procedures, homed once in bee-researching)", "bee-playbooks D1/D2/D3/D4/D5/D6 (docs/history/bee-playbooks/CONTEXT.md, 2026-09-24 — the playbook word becomes first-class vocabulary in AGENTS.md, a fresh craft comparison against pstack's 23-playbook catalog is recorded, and content ships as the ninth, first non-code, route class)", "playbook-file-split D1/D2/D3/D4/D5/D6 (docs/history/playbook-file-split/CONTEXT.md, 2026-09-25 — supersedes bee-playbooks D1/D2/D4 (c2aa0417/fe8ff6a5/ac42cc07): each class's playbook body moves from a shared file's `### <class>` section to its own file under `bee-planning/playbooks/`, and citation shifts from heading-anchor to file path)"]
+  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)", "pstack-adoption D1/D2/D3/D4/D5 (docs/history/pstack-adoption/CONTEXT.md, 2026-09-01 — the route class gets a procedure: four cited playbooks, the perf class, the checkable-CoS refusal, and the dismissed-findings duty)", "code-shape-doctrine D1/D2/D3/D4/D5 (docs/history/code-shape-doctrine/CONTEXT.md, 2026-09-01 — four code-shape rules placed in the worker brief rather than the always-loaded contract)", "pstack-gaps D1/D2/D3 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — the research class gains named Trace and Provenance sweep procedures, homed once in bee-researching)", "bee-playbooks D1/D2/D3/D4/D5/D6 (docs/history/bee-playbooks/CONTEXT.md, 2026-09-24 — the playbook word becomes first-class vocabulary in AGENTS.md, a fresh craft comparison against pstack's 23-playbook catalog is recorded, and content ships as the ninth, first non-code, route class)", "playbook-file-split D1/D2/D3/D4/D5/D6 (docs/history/playbook-file-split/CONTEXT.md, 2026-09-25 — supersedes bee-playbooks D1/D2/D4 (c2aa0417/fe8ff6a5/ac42cc07): each class's playbook body moves from a shared file's `### <class>` section to its own file under `bee-planning/playbooks/`, and citation shifts from heading-anchor to file path)", "tiny-bound-delegation D1-D5 (docs/history/tiny-bound-delegation/CONTEXT.md, 2026-11-09)"]
   sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)", "validation-diet cells vd-9/vd-12 (traces in .bee/cells/, reports docs/history/validation-diet/reports/, 2026-07-28 — the predictive-validation stage's two survivors folded into the shape step, the feasibility matrix and its delta rule retired with no replacement, the never-author-as-evidence rule added, and the disposable-proof area narrowed to two uses)", "bee-playbooks cells bpb-1..bpb-3 (traces in .bee/cells/, 2026-09-24 — AGENTS.md vocabulary pointer, the content class end to end, and the pstack-playbooks-gap-check research artifact plus its two backlogged deferred gaps)", "playbook-file-split cells pfs-1..pfs-2 (traces in .bee/cells/, 2026-09-25 — the 9-file split plus the rewritten class_playbook_parity fence, then the citer/regen sweep)"]
   authoritative_for: "doctrine-layer: lane classification and working discipline"
   anchors: [packages/bee-rs/crates/bee/tests/route_class_parity.rs, packages/bee/prompts/worker-cell.md, packages/bee/agents/bee-worker.md.tmpl, skills/bee-hive/references/gates-and-delegation.md, packages/bee-rs/crates/bee/tests/proof_gate.rs]
@@ -36,6 +36,12 @@ govern the working residue of a cell rather than its content.
   "ready" as usable from an empty data directory with the evidence attached
   (pstack-verify-trust, decisions `b2ded703`, `fcc20192`, `05a27950`; cell
   pvt-1, 2026-10-17).
+- **R42 — Tiny bound and team delegation (tiny-bound-delegation D1-D5, docs/history/tiny-bound-delegation/CONTEXT.md, 2026-11-09).**
+  The owner prefers team delegation for all work that is not genuinely tiny (D1). Each role runs its own configured model. Dispatched work is more effective. The leader keeps deciding, gating, synthesis, and human conversation.
+  `tiny` means exactly one hand-authored file plus mechanical companions (a version bump, regen output, the release manifest) (D2). It rewrites no existing test. It requires one cheap proof. Any second hand-authored file, including a doc beside code, makes the work `small` or above. The `small` trigger (0–1 flags, ≤3 product files) does not change.
+  From `small` up, execution goes through `bee dispatch prepare` to the configured role (D3). Inline execution outside tiny requires a recorded named reason (`--inline-reason`). Inline tiny execution stays legal.
+  At cap, bee refuses an inline tiny cell with more than one counted file unless `--inline-reason` is given (D4). Counted files include every path except `.bee/**` and `docs/history/**`. The refusal names the reroute (`bee route --set --lane small ...`, then dispatch the next cell with `bee dispatch prepare --claim`) and the escape (`--inline-reason`). A dispatched tiny cell is not refused.
+  At route, `bee route --set --lane tiny --files N` refuses N > 1 and names `--lane small` (D5).
 - **R18** — A route class carries a PLAYBOOK, and a plan CITES it rather than
   copying it (pstack-adoption D1 as superseded by `132551fb`, D2, D3; cells
   psa-1..psa-6, 2026-09-01). `bee route --set --class` was a validated enum that
@@ -139,9 +145,9 @@ govern the working residue of a cell rather than its content.
 - **R13** — Small work starts from an executable work packet, never a shrunken
   feature plan (lane-ceremony-v3 D3/D4/D5). The tiny lane's complete work shape
   is the request plus one work unit — the unit is the micro-plan, carrying the
-  touched paths, the directive, the acceptance contract, the verification
-  command, and the classification record (flag count, product-file count, lane);
-  no plan document exists. The small lane's default shape is a short scoping
+  touched paths (one hand-authored file plus mechanical companions only), the
+  directive, the acceptance contract, the verification command, and the
+  classification record (flag count, file count, lane); no plan document exists. The small lane's default shape is a short scoping
   synthesis logged through the decision log plus one-to-three units; a plan
   document is opt-in, written only when a durable multi-slice strategy genuinely
   needs one. In both lanes the approval order is fixed: draft unit(s) are
@@ -155,7 +161,9 @@ govern the working residue of a cell rather than its content.
   itself must touch. Workflow bookkeeping, history and specification documents,
   plans/briefs/reports, and generated projections or manifests never count
   toward a lane cap — the workflow's own artifacts can never promote a change
-  out of its honest lane.
+  out of its honest lane. One exception holds for `tiny` only (R42): a
+  hand-authored spec or knowledge doc beside code counts, so that pair is
+  `small`.
 - **R15** — The two experience-based risk flags are test-anchored
   (lane-ceremony-v3 D7): "changes behavior an existing test asserts (a covered
   contract must change)" and "the change requires weakening, deleting, or
@@ -172,11 +180,11 @@ govern the working residue of a cell rather than its content.
 - **R16a — Evidence demotion is default-on and the ladder reaches tiny (lane-lean
   D1/D2, 2026-07-27).** The single per-feature re-lane checkpoint, fired after the
   first evidence pass, demotes to the smallest lane the measured evidence honestly
-  supports: when the counted product-file touch set is within the target lane's
-  threshold (small: at most 3; tiny: at most 2 plus one direct task), zero
-  hard-gate flags sit on that touch set, and no gray area remains open, demotion
-  is the default — staying in the heavier lane requires naming which condition
-  actually failed. High-risk work never demotes, a hard-gate flag is an absolute
+  supports: when the counted touch set is within the target lane's threshold
+  (small: at most 3 product files; tiny: one hand-authored file plus one direct
+  task), zero hard-gate flags sit on that touch set, and no gray area remains open,
+  demotion is the default — staying in the heavier lane requires naming which
+  condition actually failed. High-risk work never demotes, a hard-gate flag is an absolute
   floor, the checkpoint fires at most once per feature, and promotion on
   discovered risk stays available always. A demoted lane carries its full target
   contract (a demoted tiny is a real tiny: one direct task, merged gate, one

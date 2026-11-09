@@ -4,7 +4,7 @@ Load this when executing go mode — the full bee pipeline from raw feature requ
 
 Trigger: `/go [feature]`, "run the full pipeline", or "go mode".
 
-**Lane fast paths short-circuit this diagram** (`routing-and-contracts.md` "Lane ceremony in full"): `docs` lane skips the pipeline entirely (announce → write → format-check → capture). `tiny`/`small` collapse Steps 2–5 into: no plan.md (`tiny`) or an opt-in scoping synthesis + plan.md (`small`) → draft cell(s) previewed before persist, inline reality check → **one merged shape+execution gate** → execution (tiny: inline; small: one dispatched execution worker) → orchestrator-authored done-report → capture. The full diagram below is the `standard`/`high-risk` pipeline.
+**Lane fast paths short-circuit this diagram** (`routing-and-contracts.md` "Lane ceremony in full"): `docs` lane skips the pipeline entirely (announce → write → format-check → capture). `tiny`/`small` collapse Steps 2–5 into: no plan.md (`tiny`) or an opt-in scoping synthesis + plan.md (`small`) → draft cell(s) previewed before persist, inline reality check → **one merged shape+execution gate** → execution (tiny: inline or dispatched; small and up: dispatched through `bee dispatch prepare` because each role runs its own configured model) → orchestrator-authored done-report → capture. The full diagram below is the `standard`/`high-risk` pipeline.
 
 ```text
 User: "/go [feature]"

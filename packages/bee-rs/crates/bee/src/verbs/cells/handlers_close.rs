@@ -197,6 +197,26 @@ pub(crate) fn registered_worker_for_cell(root: &Path, id: &str, worker: Option<&
     }))
 }
 
+pub(crate) fn counted_tiny_files(paths: &[Value]) -> Vec<String> {
+    paths
+        .iter()
+        .filter_map(|v| v.as_str())
+        .map(|p| {
+            let trimmed = p.trim();
+            trimmed.strip_prefix("./").unwrap_or(trimmed)
+        })
+        .filter(|p| {
+            !(p == &".bee"
+                || p.starts_with(".bee/")
+                || p.starts_with(".bee\\")
+                || p == &"docs/history"
+                || p.starts_with("docs/history/")
+                || p.starts_with("docs\\history\\"))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
 pub(crate) fn cap_flags_with_report_file(
     mut cap_flags: CapFlags,
     file: Option<&str>,
@@ -502,6 +522,22 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                     let worker_disp = worker.unwrap_or("unknown");
                     return Err(Fail::Thrown(format!(
                         "capCell: lane \"{lane}\" cell \"{id}\" refused — no registered execution worker: trace.worker \"{worker_disp}\" does not appear in state.json workers[] with cell \"{id}\" (AGENTS.md: cells from small up run through dispatched workers, never zero execution workers). FIX: registration rides on the dispatch that claims — have the orchestrator dispatch this cell with `bee dispatch prepare --claim`, which registers the worker as part of claiming it. A worker reading this from inside a granted worktree cannot self-register: `bee state worker add` is control-plane and refuses there, so it is the ORCHESTRATOR's move from the main checkout, not yours. Retry after it registers — or, if the dispatch genuinely did not claim, re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
+                    )));
+                }
+            }
+        }
+        if lane == "tiny" && f.inline_reason.is_none() {
+            let worker = match trace.get("worker") {
+                Some(Value::String(w)) if !w.is_empty() => Some(w.as_str()),
+                _ => None,
+            };
+            if !registered_worker_for_cell(root, id, worker)? {
+                let counted = counted_tiny_files(&f.files_changed);
+                if counted.len() > 1 {
+                    let count = counted.len();
+                    let counted_disp = counted.join(", ");
+                    return Err(Fail::Thrown(format!(
+                        "capCell: lane \"tiny\" cell \"{id}\" refused — {count} counted files changed ({counted_disp}). Bound: tiny = one hand-authored file plus mechanical companions only. Reroute: `bee route --set --lane small ...`, then dispatch the next cell with `bee dispatch prepare --claim`. Escape: re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
                     )));
                 }
             }

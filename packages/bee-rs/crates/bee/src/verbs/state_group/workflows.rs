@@ -616,7 +616,13 @@ pub(crate) fn validate_route_set_flags(flags: &Flags) -> Ex<Result<Map<String, V
             let n = js_number_full(&raw)?;
             match n {
                 Some(n) if n.is_finite() && n.fract() == 0.0 && n >= 0.0 => {
-                    product_files = Some(n);
+                    if lane_value.as_deref() == Some("tiny") && n > 1.0 {
+                        invalid.push(format!(
+                            "--files \"{raw}\" (tiny lane bound is at most 1 product file; use --lane small)"
+                        ));
+                    } else {
+                        product_files = Some(n);
+                    }
                 }
                 _ => invalid.push(format!("--files \"{raw}\" (must be a non-negative integer)")),
             }

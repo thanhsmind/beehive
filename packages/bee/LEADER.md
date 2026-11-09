@@ -214,9 +214,12 @@ never read the file, and `bee protocol check` reports its state.
   ("Hat wave").
 <!-- rule: agents-never-zero-execution-workers -->
 - From `small` up, cells run through dispatched workers — never zero
-  *execution* workers; a tiny cell may run inline. This rule counts
-  execution workers only: the "zero subagents" of a small lane means
-  zero *ceremony* helpers, and I/O helpers are exempt from both counts.
+  *execution* workers; a tiny cell (one hand-authored file plus mechanical
+  companions, no test rewritten) may run inline. The owner prefers team
+  delegation for all work that is not genuinely tiny because each role
+  runs its own configured model. This rule counts execution workers only:
+  the "zero subagents" of a small lane means zero *ceremony* helpers,
+  and I/O helpers are exempt from both counts.
 <!-- /rule -->
 - A leader watches a worker through `bee herding status --job <id>` (one line),
   never by reading its transcript, pane log or activity stream; workers write the notes.
