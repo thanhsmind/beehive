@@ -100,7 +100,7 @@ once at wave close.
 {
   "schema_version": "1.0",
   "runtime": "claude",
-  "roster_sha256": "ROSTER",
+  "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
     {"stage":"implementation","classification":"required","role":"generation","reason":"tbd-1 writes Rust code and tests; the code slot's model provider (paseo-pi-flash, hive) has no API key on this machine, so the generation slot carries the code cell."},
     {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"tbd-2 rewrites doctrine text in skills, LEADER.md and the knowledge area."},
