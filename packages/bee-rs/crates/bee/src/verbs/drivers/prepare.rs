@@ -992,6 +992,7 @@ pub(crate) fn bundle_learned_lines(
                 Some(Value::String(t)) if !t.is_empty() => Some(t.clone()),
                 _ => None,
             };
+            let title = read_when_of(&dir, &concept.path).or(title);
             if let Some(slot) = titles.iter_mut().find(|(k, _)| *k == key) {
                 slot.1 = title;
             } else {
@@ -1123,6 +1124,29 @@ fn pack_anchor_path(anchor: &str) -> Option<String> {
     }
     Some(path.to_string())
 }
+
+fn read_when_of(dir: &Path, rel: &str) -> Option<String> {
+    let body = knowledge::concept_body(dir, rel)?;
+    let mut seen = 0usize;
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        seen += 1;
+        if trimmed.starts_with(READ_WHEN_PREFIX) {
+            return Some(trimmed.to_string());
+        }
+        if seen >= READ_WHEN_SCAN_LINES {
+            return None;
+        }
+    }
+    None
+}
+
+const READ_WHEN_PREFIX: &str = "Read when:";
+
+const READ_WHEN_SCAN_LINES: usize = 10;
 
 fn anchored_code_lines(root: &Path, listed: &[String], read_first: &HashSet<String>) -> Vec<String> {
     let Some(dir) = knowledge::bundle_dir(root) else { return Vec::new() };
@@ -1476,6 +1500,11 @@ pub(crate) fn prompt_body_for(
     let native_bookkeeping = if is_herding { "" } else { "1" };
     let herding = if is_herding { "1" } else { "" };
     let native_worktree_check = if !is_herding && !worktree_root.is_empty() { "1" } else { "" };
+    let knowledge_rules = knowledge::KNOWLEDGE_RULES
+        .iter()
+        .map(|rule| format!("  - {rule}"))
+        .collect::<Vec<_>>()
+        .join("\n");
     Ok(render(
         &template,
         &[
@@ -1493,6 +1522,7 @@ pub(crate) fn prompt_body_for(
             ("native_bookkeeping", native_bookkeeping),
             ("herding", herding),
             ("native_worktree_check", native_worktree_check),
+            ("knowledge_rules", &knowledge_rules),
         ],
     ))
 }

@@ -180,6 +180,88 @@ use std::time::Instant;
     // ── oneLine ────────────────────────────────────────────────────────────
 
     #[test]
+    fn worker_prompt_carries_the_five_knowledge_rules() {
+        let cell = json!({"id": "c-1", "feature": "feat", "status": "claimed"});
+        let rendered = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        let bullet = "- Write your knowledge delta (owning area concept update, a pitfall pattern when you hit one, bee.anchors for files you changed) in the same commit as your code, thin and anchored, no review step.\n";
+        let at = rendered.find(bullet).expect("the knowledge-delta bullet");
+        let block = &rendered[at + bullet.len()..];
+        for line in [
+            "  - Anchor every entry to the code files it describes in bee.anchors — files, never directories.",
+            "  - Never restate what the code or a test shows: keep the why, the boundary, and the rejected option with how it failed; drop the how.",
+            "  - Extend the concept that owns the subject; find it with bee knowledge search --text and bee knowledge list --area, and never file a near-duplicate beside it.",
+            "  - Open the body with one line Read when: <the situation the reader is in>, and put the words a reader will search for — the error text, the symptom, the mechanism — in the title and description.",
+            "  - Split a concept that passes 300 lines along its lifecycles.",
+        ] {
+            assert!(block.contains(line), "missing knowledge rule line {line:?} in {block}");
+        }
+    }
+
+    #[test]
+    fn worker_prompt_result_form_names_the_knowledge_used_key() {
+        let cell = json!({"id": "c-1", "feature": "feat", "status": "claimed"});
+        let rendered = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            rendered.contains("\"knowledge_used\": [\"<docs/knowledge path> — <the decision it changed>\"]"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("An empty `knowledge_used` array means no concept changed a decision."),
+            "{rendered}"
+        );
+        let herded = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            true,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            herded.contains("The result file may carry the same `knowledge_used` array"),
+            "{herded}"
+        );
+    }
+
+    #[test]
     fn one_line_collapses_whitespace_and_ellipsises() {
         assert_eq!(one_line(Some(&json!("  a \n b  ")), 140), "a b");
         assert_eq!(one_line(None, 140), "");
@@ -4799,6 +4881,43 @@ exit 0
         // A normal path is byte-identical to before the fix — one_line is a
         // no-op on text with no whitespace to collapse.
         assert!(lines.contains(&"- docs/knowledge/tasks/demo/work-item.md — Demo work item".to_string()));
+    }
+
+    fn read_when_fixture(root: &Path) {
+        w(root, "docs/knowledge/index.md", "# Knowledge\n\n## Critical patterns\n\n- none yet\n");
+        w(root, "docs/knowledge/tasks/demo/work-item.md",
+          "---\ntype: bee.work-item\ntitle: Demo work item\ndescription: the demo work item\nbee:\n  id: demo\n  lifecycle: active\n  areas: [dispatch]\n  decisions: [d-1]\n---\n\nDemo work item body.\n");
+        w(root, "docs/knowledge/patterns/situated.md",
+          "---\ntype: bee.pattern\ntitle: Situated pattern\ndescription: a pattern with a Read-when line\nbee:\n  id: p-situated\n  lifecycle: active\n  critical: true\n  areas: [dispatch]\n---\n\n\n# Situated pattern\n\nRead when: a dispatch prompt renders without its learned context block.\n\nBody.\n");
+        w(root, "docs/knowledge/patterns/plain.md",
+          "---\ntype: bee.pattern\ntitle: Plain pattern\ndescription: a pattern with no Read-when line\nbee:\n  id: p-plain\n  lifecycle: active\n  critical: true\n  areas: [dispatch]\n---\n\nPlain body with no read-when line at all.\n");
+        w(root, "docs/knowledge/patterns/deep.md",
+          "---\ntype: bee.pattern\ntitle: Deep pattern\ndescription: a Read-when line past the tenth body line\nbee:\n  id: p-deep\n  lifecycle: active\n  critical: true\n  areas: [dispatch]\n---\n\n1\n\n2\n\n3\n\n4\n\n5\n\n6\n\n7\n\n8\n\n9\n\n10\n\nRead when: too late to count.\n");
+    }
+
+    #[test]
+    fn learned_context_shows_a_read_when_line_in_place_of_the_title() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        read_when_fixture(&root);
+        let cell = json!({"id": "c-1", "feature": "demo", "lane": "high-risk"});
+        let lines = learned_context_lines(&root, &cell).unwrap();
+        assert!(
+            lines.contains(
+                &"- docs/knowledge/patterns/situated.md — Read when: a dispatch prompt renders without its learned context block."
+                    .to_string()
+            ),
+            "{lines:?}"
+        );
+        assert!(
+            lines.contains(&"- docs/knowledge/patterns/plain.md — Plain pattern".to_string()),
+            "{lines:?}"
+        );
+        assert!(
+            lines.contains(&"- docs/knowledge/patterns/deep.md — Deep pattern".to_string()),
+            "{lines:?}"
+        );
+        assert!(!lines.iter().any(|l| l.contains("too late to count")), "{lines:?}");
     }
 
     #[test]
@@ -10677,6 +10796,12 @@ Contract:
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
 - Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
 - Write your knowledge delta (owning area concept update, a pitfall pattern when you hit one, bee.anchors for files you changed) in the same commit as your code, thin and anchored, no review step.
+  Knowledge rules (the same list `bee knowledge consolidate` prints):
+  - Anchor every entry to the code files it describes in bee.anchors — files, never directories.
+  - Never restate what the code or a test shows: keep the why, the boundary, and the rejected option with how it failed; drop the how.
+  - Extend the concept that owns the subject; find it with bee knowledge search --text and bee knowledge list --area, and never file a near-duplicate beside it.
+  - Open the body with one line Read when: <the situation the reader is in>, and put the words a reader will search for — the error text, the symptom, the mechanism — in the title and description.
+  - Split a concept that passes 300 lines along its lifecycles.
 - Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: c-golden` (the words "cell:" then the id — a bare id alone fails the cap).
 - Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), [PARKED] (question, cell id — after `bee cells park`), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
 
@@ -10685,8 +10810,9 @@ Result form: beside the token, in the same message, emit exactly one fenced JSON
 - `green:unit` — automated tests passed.
 - `green:static` — it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.
 ```json
-{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "baseline": "<optional: what the same proof produced on base>"}
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "knowledge_used": ["<docs/knowledge path> — <the decision it changed>"], "baseline": "<optional: what the same proof produced on base>"}
 ```
+An empty `knowledge_used` array means no concept changed a decision.
 
 Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --files <a,b> --report '<json>'"#;
 
