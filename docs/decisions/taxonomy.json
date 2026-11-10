@@ -845,6 +845,7 @@
     "contract:pack-read-when",
     "contract:check-writing-warnings",
     "contract:knowledge-used",
-    "contract:report-knowledge-used"
+    "contract:report-knowledge-used",
+    "contract:claude-settings-baseline"
   ]
 }
