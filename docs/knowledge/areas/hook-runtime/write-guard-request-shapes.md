@@ -217,10 +217,12 @@ than executed and checked afterwards (proven 2026-09-01 while building
   line says to expand the variable first or pass a plain in-worktree path.
   A literal dollar in a filename must be escaped or quoted so the shell never
   expands it.
-- **A write after a `cd` in the same compound command.** The target is resolved
-  against the request's own worktree root, not against the directory the
-  compound command would have moved to, so the write is refused instead of
-  landing somewhere the guard never checked.
+- **A write after a `cd` in the same compound command.** The refusal applies to
+  relative targets only: the target is resolved against the request's own
+  worktree root, not against the directory the compound command would have
+  moved to, so the write is refused instead of landing somewhere the guard never
+  checked. An absolute target after a `cd` is checked normally
+  (docs/history/guard-cd-absolute-targets/CONTEXT.md D1).
 - **A redirect to an absolute path outside the worktree.**
 
 The consequence for tooling: a harness that drives bee against an out-of-tree
