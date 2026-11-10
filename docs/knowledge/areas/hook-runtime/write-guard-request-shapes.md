@@ -222,7 +222,7 @@ than executed and checked afterwards (proven 2026-09-01 while building
   worktree root, not against the directory the compound command would have
   moved to, so the write is refused instead of landing somewhere the guard never
   checked. An absolute target after a `cd` is checked normally
-  (docs/history/guard-cd-absolute-targets/CONTEXT.md D1).
+  (guard-cd-absolute-targets D1, docs/history/guard-cd-absolute-targets/CONTEXT.md).
 - **A redirect to an absolute path outside the worktree.**
 
 The consequence for tooling: a harness that drives bee against an out-of-tree
@@ -312,7 +312,7 @@ bytes are identical across runs. `bee dev comment-baseline --check` reports ever
 file above its baseline and fails; `--write` lowers and drops entries and REFUSES
 to raise one, naming the file. Both are source-checkout-only verbs. The seed is
 taken once from the per-file MAXIMUM over main and every unmerged `wt/*` branch
-(0add770d), so a sibling feature that merges later cannot push a file above its
+(0add770d), so a sibling feature that merges after the seed cannot push a file above its
 baseline and turn CI red; after those merges, `--write` lowers every entry that
 now sits above the tree. A count that rose from a merge is fixed by deleting the
 merged comment lines, never by raising the entry. The declared suite carries the
