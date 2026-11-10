@@ -12,8 +12,8 @@ bee:
   sources: ["gh-issue-fixes-172 cell ghf-2 (GH #26: Windows staged source carries the full release identity — sparse checkout includes both package manifests; absent-package removal probed before attempted; trace in .bee/cells/, 2026-07-20)", "installer-probe-quiet cells installer-probe-quiet-1/-2 (tolerated runtime-CLI probe failures — captured stderr, one condensed warning per broken tool, repo-copy proceeds / plugin-first names the broken tool; reports docs/history/installer-probe-quiet/, 2026-07-20)", "codex-sandbox-baseline cells codex-sandbox-baseline-1/codex-sandbox-baseline-2 (real onboarding entrypoint through the shared isolated test runner; full onboarding suite green, 2026-07-16)", "installer-version-parity-1-3-1 D2/D8 Linux Bash E2E (cells -3, 2026-07-16)", "docs/specs/onboarding.md#R20b", "docs/specs/onboarding.md#R23", "docs/specs/onboarding.md#R27", "docs/specs/onboarding.md#P1", "docs/specs/onboarding.md#P2", "docs/specs/onboarding.md#P4", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)", docs/history/packages-engine-move/, docs/history/install-tty-fix/]
   authoritative_for: "onboarding: installer entry points and source staging"
   anchors: [packages/bee-rs/crates/bee/src/devtools/, packages/bee/, skills/, packages/bee-rs/crates/bee/tests/, packages/bee/hooks/, scripts/install.ps1, scripts/install.sh, .codex-plugin/plugin.json, .claude-plugin/marketplace.json]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: b6d22143098dc6a5632aa27ad76f739fde1077c7
 ---
 
 # Onboarding — Installer Entry Points and Source Staging

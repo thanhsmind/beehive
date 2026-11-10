@@ -12,8 +12,8 @@ bee:
   sources: ["cell onboard-statusline-1 (verification_evidence, 2026-07-11)", docs/history/onboard-statusline/reports/review-correctness.md, "codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "docs/specs/onboarding.md#R1", "docs/specs/onboarding.md#R2", "docs/specs/onboarding.md#R3", "docs/specs/onboarding.md#R4", "docs/specs/onboarding.md#E2", "docs/specs/onboarding.md#E3", "docs/specs/onboarding.md#E4", "docs/specs/onboarding.md#E5", "docs/specs/onboarding.md#E7", "docs/specs/onboarding.md#P7", "docs/specs/onboarding.md#P8", "docs/specs/onboarding.md#P9", "docs/specs/onboarding.md#P10", "docs/specs/onboarding.md#P11", "docs/specs/onboarding.md#P12"]
   authoritative_for: "onboarding: the default status display"
   anchors: [packages/bee-rs/crates/bee/tests/statusline_contract.rs, .claude/statusline-command.sh, packages/bee/statusline/statusline-command.sh, .claude/, packages/bee-rs/crates/bee/, packages/bee-rs/crates/bee/src/onboard/source.rs, packages/bee-rs/crates/bee/src/devtools/statusline.rs, packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs, packages/bee-rs/crates/bee/src/onboard/tests.rs, .claude/settings.json, packages/bee-rs/crates/bee/src/onboard/templates.rs, .pi/extensions/bee-guard/, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs]
-  verified_at: 2026-11-09
-  verified_commit: 3e0ce089a38014deb2f1312112377c46bcd3f9cf
+  verified_at: 2026-11-10
+  verified_commit: b6d22143098dc6a5632aa27ad76f739fde1077c7
 ---
 
 # Onboarding — The Default Status Display

@@ -13,8 +13,8 @@ bee:
   sources: [docs/specs/prompt-files.md, packages/bee/prompts, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
   authoritative_for: "rust-runtime: prompt file rendering and the worker learned-context block"
   anchors: [packages/bee/prompts/, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
-  verified_at: 2026-11-04
-  verified_commit: 8c0366c75f0a498a4f38f6fd454e8849a2485cd4
+  verified_at: 2026-11-10
+  verified_commit: b6d22143098dc6a5632aa27ad76f739fde1077c7
 ---
 
 # Compiled runtime — prompt files and learned context
@@ -96,7 +96,10 @@ trade than a worker occasionally re-deriving something.
 - R2 — The renderer substitutes and includes/omits. It never computes.
 - R3 — Rendering is byte-identical to the pre-move output for every existing
   case.
-- R4 — The learned-context block carries paths and titles only, never contents.
+- R4 — The learned-context block carries paths and one line per concept, never contents. The line is the
+  concept's own `Read when:` line when its body opens with one, else its title (knowledge-useful-rules D2).
+- R4b — The worker prompt also carries the knowledge-writing rules, rendered from the one list
+  `bee knowledge consolidate` prints, so the brief and the writer cell cannot disagree (knowledge-useful-rules D6).
 - R5 — The block is capped at 8 pointer lines; the header line is not counted
   (the same convention as the Prior-rounds event-line cap).
 - R6 — Every source in the resolution chain fails silently; the block is omitted
