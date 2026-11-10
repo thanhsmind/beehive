@@ -9,15 +9,17 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [areas/rust-runtime/overview.md]
-  decisions: [prompt-files]
-  sources: [docs/specs/prompt-files.md, packages/bee/prompts, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
+  decisions: [prompt-files, "knowledge-useful-rules CONTEXT.md D2, D6 (learned-context line shows Read-when line; worker brief renders consolidate rule list)"]
+  sources: [docs/specs/prompt-files.md, packages/bee/prompts, packages/bee-rs/crates/bee/src/devtools/prompts.rs, docs/history/knowledge-useful-rules/CONTEXT.md]
   authoritative_for: "rust-runtime: prompt file rendering and the worker learned-context block"
-  anchors: [packages/bee/prompts/, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
+  anchors: [packages/bee/prompts/worker-cell.md, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
   verified_at: 2026-11-10
-  verified_commit: b6d22143098dc6a5632aa27ad76f739fde1077c7
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Compiled runtime — prompt files and learned context
+
+Read when: editing prompt template wording or inspecting how learned context is injected into agent briefings.
 
 Two coupled changes to the dispatch layer, both aimed at the same thing: a
 prompt is content, and content that lives inside code can only be changed by
