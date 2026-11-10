@@ -1,0 +1,99 @@
+{
+  "id": "rel900-1",
+  "feature": "release-2-90-0",
+  "title": "Publish release 2.90.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-90-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.90.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel290, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.90.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.90.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.90.0",
+      "tag v2.90.0 exists locally and on the remote",
+      "the GitHub release for v2.90.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.90.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.90.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "Published release 2.90.0",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the first deployment permit was refused (deploy_authorization_wrong_commit) because lane bookkeeping was committed after prepare; a fresh permit on the current commit ran green",
+      "sync-ack: the release commit only bumps version strings and regenerated stamps; no anchored behavior changed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-10T02:28:13.817Z",
+    "behavior_change": false,
+    "verification_evidence": "script printed release OK bee 2.90.0 is live; git ls-remote shows refs/tags/v2.90.0 at 702dc1752; gh release view lists 5 binaries and SHA256SUMS; evidence: https://github.com/thanhsmind/beehive/releases/tag/v2.90.0 and /mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1794277076995-411686-1/report-1.md",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": "bash scripts/release.sh 2.90.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-10T02:15:13.922Z",
+    "knowledge_delta": [],
+    "sync_ack": "the release commit only bumps version strings and regenerated stamps; no anchored behavior changed",
+    "mistakes": [
+      {
+        "wrong": "prepared the deployment permit before committing lane bookkeeping, so release.sh refused it",
+        "better": "commit first, prepare the permit last",
+        "fix_at": "doctrine"
+      }
+    ],
+    "commit_pending": "scripts/release.sh writes the release commit 702dc1752 with subject Release 2.90.0 and no cell trailer",
+    "inline_reason": "the deploy role ran the script through bee herding; the leader caps from the verified tag and release",
+    "report": {
+      "outcome": "Published release 2.90.0 through scripts/release.sh; tag v2.90.0 on origin at 702dc1752; release carries 5 binaries and SHA256SUMS",
+      "commit": "702dc17522dc1ef81b68c969a3f9b759a4277cae",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.90.0 && bee dev release-manifest --check — green:live — script printed release OK bee 2.90.0 is live; git ls-remote shows refs/tags/v2.90.0 at 702dc1752; gh release view lists 5 binaries and SHA256SUMS; evidence: https://github.com/thanhsmind/beehive/releases/tag/v2.90.0 and /mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1794277076995-411686-1/report-1.md",
+      "deviations": [
+        "the first deployment permit was refused (deploy_authorization_wrong_commit) because lane bookkeeping was committed after prepare; a fresh permit on the current commit ran green"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
