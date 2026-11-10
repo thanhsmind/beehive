@@ -466,6 +466,12 @@ task rests on a false premise, finish the part that does not, set \"reaction\" \
 to \"partial\", and name the stopped part with its evidence in \"stopped\". A \
 dissent on a point that was already ruled on also carries \"new_evidence\" \
 inside \"dissent\": what is new since the ruling.\n\n\
+Knowledge used (OPTIONAL — the sibling of the native Result form's \"mistakes\"): \
+name every concept whose content changed a decision in this cell, one entry per \
+concept as \"<docs/knowledge path> — <the decision it changed>\", or an empty \
+array when no concept changed a decision. Omitting the key states nothing at all; \
+it is never required, and no shape of it is ever refused (knowledge-in-the-flow \
+D1 forbids a mandatory knowledge-ref check).\n\n\
 {question_section}\
 # How to write it — write to a temp file, then rename (do not skip this)\n\n\
 Write the JSON above to a temp file in the SAME directory as the result file,\n\
@@ -544,6 +550,7 @@ pub(crate) struct MailboxResult {
     pub summary: String,
     pub files_changed: Vec<String>,
     pub proof: String,
+    pub knowledge_used: Option<Vec<String>>,
     /// StopAndAsk (a2affcba): the ways forward the worker offers instead of
     /// guessing — one self-contained sentence each. OPTIONAL at parse and
     /// empty when absent, because a foreign agent that skips it still owes a
@@ -835,12 +842,17 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         .filter(|s| !s.is_empty())
         .map(str::to_string);
 
+    let knowledge_used = obj.get("knowledge_used").and_then(Value::as_array).map(|arr| {
+        arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
+    });
+
     Ok(MailboxResult {
         round,
         status,
         summary,
         files_changed,
         proof,
+        knowledge_used,
         options,
         leaning,
         dissent,
@@ -1414,7 +1426,7 @@ mod tests {
         let spec = sample_spec(worktree_root, bee_dir, &files, 1);
         let text = render_brief(&spec);
 
-        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"report_path\": \"<the report file's path, exactly as named above>\"\n}\n\nFill \"report_path\" with the report file's path whenever you wrote one — that is the only pointer anyone gets to your deliverable; leave it out only when the round genuinely produced no report.\n\nOptional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n{\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\n"), "Result-form block drifted:\n{text}");
+        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"report_path\": \"<the report file's path, exactly as named above>\"\n}\n\nFill \"report_path\" with the report file's path whenever you wrote one — that is the only pointer anyone gets to your deliverable; leave it out only when the round genuinely produced no report.\n\nOptional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n{\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\nHandback fields (OPTIONAL — omit any key you have nothing for):\n\n{\n\"reaction\": \"confirm\" | \"partial\" | \"challenge\" | \"blocked\",\n\"skipped\": [\"<check you did not run> — <why>\", \"...\"],\n\"unknowns\": [\"<assumption you could not prove>\", \"...\"],\n\"found\": [\"<discovery outside your task>\", \"...\"],\n\"stopped\": \"<part you did not do> — <evidence that its premise is false>\"\n}\n\n\"reaction\" is your stance toward the task as handed to you. When part of the task rests on a false premise, finish the part that does not, set \"reaction\" to \"partial\", and name the stopped part with its evidence in \"stopped\". A dissent on a point that was already ruled on also carries \"new_evidence\" inside \"dissent\": what is new since the ruling.\n\nKnowledge used (OPTIONAL — the sibling of the native Result form's \"mistakes\"): name every concept whose content changed a decision in this cell, one entry per concept as \"<docs/knowledge path> — <the decision it changed>\", or an empty array when no concept changed a decision. Omitting the key states nothing at all; it is never required, and no shape of it is ever refused (knowledge-in-the-flow D1 forbids a mandatory knowledge-ref check).\n\n"), "Result-form block drifted:\n{text}");
         assert!(
             text.contains(&format!(
                 "temp file (write your JSON here):   {}/result-1.json.tmp\n",

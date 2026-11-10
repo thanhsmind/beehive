@@ -12,8 +12,8 @@ bee:
   sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-brief-file/CONTEXT.md, docs/history/herding-worker-standalone/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, live smoke smoke-agy-delivery-1/-2/-3, live case job hws-1-r1]
   authoritative_for: "bee-herding: the brief mailbox, the standalone-worker contract, and delivery receipts"
   anchors: [packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, scripts/release.sh, skills/bee-herding/references/operational-invariants.md]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee Herding — handing a foreign agent its brief, and knowing it arrived

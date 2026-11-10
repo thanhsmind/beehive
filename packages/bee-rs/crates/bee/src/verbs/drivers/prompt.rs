@@ -113,6 +113,7 @@ fn supported_vars_for(name: &str) -> Option<&'static [&'static str]> {
             "native_bookkeeping",
             "herding",
             "native_worktree_check",
+            "knowledge_rules",
         ]),
         "gather" | "reviewer" => Some(&[
             "brief",

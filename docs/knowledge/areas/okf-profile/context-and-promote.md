@@ -1,22 +1,24 @@
 ---
 type: bee.area
 title: "Bee OKF Profile — the context consumer, the promote proposer, and the session preamble"
-description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, the shared anchor resolver that lets both verbs work from a docs/history/ fallback when no work-item concept exists, the symptom-text search verb that pulls matching patterns and area concepts mid-flow, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate, including the critical-patterns digest's own relevance ranking."
+description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, the one home of the five knowledge writing rules the worker brief renders, the Read-when line the pack prints in place of a title, the shared anchor resolver that lets both verbs work from a docs/history/ fallback when no work-item concept exists, the symptom-text search verb that pulls matching patterns and area concepts mid-flow, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate, including the critical-patterns digest's own relevance ranking."
 timestamp: 2026-08-11
 bee:
   id: okf-profile-context-and-promote
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3, "knowledge-loop D1/D5/D6/D7/D8 (one shared anchor resolver; a history CONTEXT.md/plan.md fallback when no work-item concept matches; zero_signal reported not thrown under it; the fallback reaches context, promote, kctx and dispatch prepare)", "07dce495 (capture-reads-proposals: review-then-merge a promote proposal, never apply it as written; the area tag and the code it describes are both verified first, and the scribing stamp is owed even when nothing is kept)", "knowledge-search D1-D7 (symptom pull verb `bee knowledge search`: decisions-search grammar, patterns+areas corpus only, read-only at any phase from any checkout, skill wiring at the two debug moments — docs/history/knowledge-search/CONTEXT.md)", "backlog-anchor D1 a98e27c2 (fourth, last anchor arm: a folded .bee/backlog.jsonl PBI row whose id or feature whole-matches the work — the exploring-time anchor, before CONTEXT.md exists)", "knowledge-in-the-flow D2/D3/D5/D7 (feature pack assembly, close consolidation, thin layer)", "feature-pack-areas 2026-11-09 (the fallback arms rank the bundle's bee.area concepts and select the top three between required_context and the criticals; the work-item arm unchanged)"]
+  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3, "knowledge-loop D1/D5/D6/D7/D8 (one shared anchor resolver; a history CONTEXT.md/plan.md fallback when no work-item concept matches; zero_signal reported not thrown under it; the fallback reaches context, promote, kctx and dispatch prepare)", "07dce495 (capture-reads-proposals: review-then-merge a promote proposal, never apply it as written; the area tag and the code it describes are both verified first, and the scribing stamp is owed even when nothing is kept)", "knowledge-search D1-D7 (symptom pull verb `bee knowledge search`: decisions-search grammar, patterns+areas corpus only, read-only at any phase from any checkout, skill wiring at the two debug moments — docs/history/knowledge-search/CONTEXT.md)", "backlog-anchor D1 a98e27c2 (fourth, last anchor arm: a folded .bee/backlog.jsonl PBI row whose id or feature whole-matches the work — the exploring-time anchor, before CONTEXT.md exists)", "knowledge-in-the-flow D2/D3/D5/D7 (feature pack assembly, close consolidation, thin layer)", "CONTEXT.md docs/history/knowledge-useful-rules/CONTEXT.md (D2 the Read-when line in the pack, D6 the rules' one home)", "feature-pack-areas 2026-11-09 (the fallback arms rank the bundle's bee.area concepts and select the top three between required_context and the criticals; the work-item arm unchanged)"]
   sources: ["knowledge-search cells ks-1 (`bee knowledge search` verb; commit 448287b7, 2026-08-10) and ks-2 (skill wiring; commit f693f20f, 2026-08-10)", CONTEXT.md `docs/history/knowledge-search/CONTEXT.md`, "okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)", "knowledge-loop cell kl-1 (anchor.rs + context.rs/kctx.rs fallback, D5/D6/D7/D8; commit 1b2a8253, 2026-08-05)", "knowledge-loop cell kl-2 (promote.rs consumes the resolver; dispatch-prepare manifest proof; commit e6f99a7a, 2026-08-05)", CONTEXT.md `docs/history/knowledge-loop/CONTEXT.md`, "capture-reads-proposals cell crp-1 (the capture doctrine names the proposal as the first input of a compounding run and the scribing stamp as its receipt; skills/bee-capturing/SKILL.md, 2026-08-06)", "backlog-anchor cell ba-1 (Anchor::Backlog fourth arm + kctx.rs parity; commit 6dda58db, 2026-08-11)", CONTEXT.md `docs/history/backlog-anchor/CONTEXT.md`, "knowledge-in-the-flow cell kitf-1 (bee knowledge pack, learned_context_lines code anchors, commit b8b65b828, 2026-11-09)", "knowledge-in-the-flow cell kitf-4 (bee knowledge consolidate, close stops writing proposals, commit aa41de11e, 2026-11-09)", CONTEXT.md `docs/history/knowledge-in-the-flow/CONTEXT.md`]
   authoritative_for: "okf-profile: the context consumer, the promote proposer, and the session preamble"
-  anchors: [packages/bee-rs/crates/bee/tests/registry_contracts.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs]
-  verified_at: 2026-11-07
-  verified_commit: 5e715b42536c2fb2acd1d3b1e08d77452a9ee402
+  anchors: [packages/bee-rs/crates/bee/tests/registry_contracts.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee/prompts/worker-cell.md, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs]
+  verified_at: 2026-11-10
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee OKF Profile — The Context Consumer, the Promote Proposer, and the Session Preamble
+
+Read when: a worker brief or a feature pack prints the wrong knowledge — a rule list that disagrees with `bee knowledge consolidate`, or a concept line that shows a title where its Read-when line should be.
 
 This concept owns the two verbs that read the bundle on a work item's behalf — `context`, which
 returns an ordered manifest inside a budget, and `promote`, which proposes the knowledge finished
@@ -64,9 +66,29 @@ Instead, `bee knowledge consolidate --feature <f>` serves as the consolidation b
 feature's writer cell before merge (D5). It mines capped cells from `.bee/cells/` and the cell
 archive, lists the `docs/knowledge/` files the feature's cells touched, and surfaces candidate area
 updates and pitfall patterns (`Promo::Ok`). The consolidation command writes nothing (`writes: []`),
-enforcing the thin-layer rules: every entry anchors to code, never restates what code shows, and
-extends the concept that owns the subject (D7). The writer consolidates these changes and writes
+enforcing the knowledge writing rules: every entry anchors to the code files it describes in
+`bee.anchors` (files, never directories), never restates what code or a test shows, extends the
+concept that owns the subject, opens its body with one `Read when:` line and puts the searched
+words in its title and description, and splits past 300 lines along its lifecycles (D7). The
+writer consolidates these changes and writes
 `docs/history/<f>/delivery.md`, so knowledge lands in main in the same merge as code.
+
+The five rules have ONE home — the rule list `bee knowledge consolidate` prints — and that one
+home is what the worker brief renders (this feature's CONTEXT.md D6). Before it, the list held
+three rules and the brief carried a single sentence, so the two could not agree: a rule added to
+one was invisible to the other until someone remembered. `knowledge_rules` in
+`packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` renders the same constant one line per
+rule under the brief's knowledge-delta bullet, so a worker reads the rules at the moment it
+writes its delta, and no second copy of the sentence exists to drift. The worker writes the delta
+at cap and never runs `consolidate`, which is why the list has to reach it.
+
+The pack also prints a concept's `Read when:` line in place of its title when it has one (this
+feature's CONTEXT.md D2). The line rides the existing title slot of the one assembler — a
+learned-context line was already a path and a title, and the pack shows a path and one line per
+concept — so cells, `bee knowledge pack` and advisors all get it with no new line shape and no
+second transport. The lookup reads the first 10 non-blank, non-heading body lines; a concept
+without one keeps its title byte for byte, which is what every concept printed before the line
+existed.
 
 `bee knowledge promote --work <id>` resolves
 the work item by `bee.id` (the same resolution `context` performs — an unresolvable id exits 1 with
@@ -300,7 +322,11 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
 - Proposal builder (B5): `buildPromotion` in the same module, with `readCappedCellTraces` as its
   read-only view of `.bee/cells/` and cell archive/<feature>/ (trace purged from .bee/cells/). Neither function writes; the CLI handler
   (`handleKnowledgePromote` in `.bee/bin/bee`) only prints what they return.
-- Feature pack assembler (D2, D3): `learned_context_lines` in `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`; CLI verb `bee knowledge pack` in `packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs`.
+- Feature pack assembler (D2, D3): `learned_context_lines` in `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`; CLI verb `bee knowledge pack` in `packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs`; the `Read when:` lookup is `read_when_of` in `prepare.rs` calling the shared `read_when_line` in `packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs`.
+- The five writing rules' one home and the brief's render of them: `KNOWLEDGE_RULES` in
+  `packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs`, rendered as `knowledge_rules`
+  in `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` and printed by
+  `packages/bee/prompts/worker-cell.md`.
 - Consolidation brief (D5, D7): `build_consolidation` and `consolidation_text` in `packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs`, called by `bee knowledge consolidate`.
 - CLI wiring: `packages/bee-rs/crates/bee/src/registry.rs` (formerly .bee/bin/lib/command-registry.mjs) (the `knowledge` group) +
   `.bee/bin/bee` dispatch (`HANDLERS`).

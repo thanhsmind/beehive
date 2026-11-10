@@ -12,8 +12,8 @@ bee:
   sources: ["docs/history/slp-blind-lanes/CONTEXT.md (locked decisions D1-D7, terms, boundary)", "docs/history/slp-blind-lanes/plan.md (the slice queue 1a, 1b, 2, 3, 4, 5)", "slp-blind-lanes cell bln-1 (the brief carried into the advisor payload and its stamped digest; trace .bee/cells/archive/slp-blind-lanes/bln-1.json, commit 2f1d57ae)", "slp-blind-lanes cell bln-2 (the leaning guard refusing at the dispatch door; trace .bee/cells/archive/slp-blind-lanes/bln-2.json, commit 5f16ef6f)", "slp-blind-lanes cell bln-3 (the dossier's fixed section contract, refusing by section name; trace .bee/cells/archive/slp-blind-lanes/bln-3.json, commit 5678b2f8)", "slp-blind-lanes cell bln-4 (the three evidence checks: citation, brief digest, read diet; trace .bee/cells/archive/slp-blind-lanes/bln-4.json, commit c47fd241)", "slp-blind-lanes cells bln-5, bln-6, bln-7 (three judge rounds over the sentence-boundary rule: the abbreviation dot, the enumerator dot, the curly-quote panic; traces in .bee/cells/, commits 6eaf4955, 417fff74, a5ad7864)", "docs/history/slp-blind-lanes/blind/example-run.md (the worked dossier shape, pinned green by the door's own test)", docs/knowledge/patterns/20260812-a-guard-and-its-tests-are-one-model-so-green-proves-only-that-the-model-agrees-with-itself.md]
   authoritative_for: "advisor-protocol: blind lanes and the convergence dossier"
   anchors: [skills/bee-hive/references/gates-and-delegation.md, packages/bee-rs/crates/bee/src/verbs/blind/mod.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee/prompts/advisor.md, skills/bee-shaping/SKILL.md]
-  verified_at: 2026-09-15
-  verified_commit: ade418c9e1d3c05d51cf43de590b8236a79e3c4e
+  verified_at: 2026-11-10
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Advisor Protocol — Blind Lanes and the Convergence Dossier

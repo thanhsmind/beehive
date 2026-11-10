@@ -72,8 +72,9 @@ pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests"
 /// result is read against. Optional here so callers without a baseline keep
 /// capping cleanly; validated as a non-empty string when present and stored
 /// on the cell trace.
-pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 7] = [
+pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 8] = [
     "mistakes",
+    "knowledge_used",
     "baseline",
     "reaction",
     "skipped",
@@ -228,6 +229,14 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
         _ => {
             return Err(Fail::Thrown(
                 "cells finish: --report key \"mistakes\" must be an array — one entry per mistake, each \"<what went wrong> — <what would have been better> — <fix-at>\" (fix-at is one of architecture | check | doctrine | none) or {wrong, better, fix_at}; an empty array states that this cell hit none.".to_string(),
+            ))
+        }
+    }
+    match map.get("knowledge_used") {
+        None | Some(Value::Array(_)) => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"knowledge_used\" must be an array — one entry per concept that changed a decision, each \"<docs/knowledge path> — <the decision it changed>\"; an empty array states that no concept changed a decision.".to_string(),
             ))
         }
     }
@@ -1037,6 +1046,12 @@ pub(crate) fn report_from_job(
     );
     map.insert("tests".to_string(), Value::String(tests));
     map.insert("deviations".to_string(), Value::Array(deviations));
+    if let Some(entries) = &result.knowledge_used {
+        map.insert(
+            "knowledge_used".to_string(),
+            Value::Array(entries.iter().cloned().map(Value::String).collect()),
+        );
+    }
     serde_json::to_string(&Value::Object(map)).map_err(|e| e.to_string())
 }
 

@@ -6,10 +6,12 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
-pub(crate) const THIN_LAYER_RULES: [&str; 3] = [
-    "Every entry anchors to code: list the files it describes in the concept's bee.anchors.",
-    "Never restate what the code shows: keep the why, the boundary and the pitfall, drop the how.",
-    "Extend the concept that owns the subject; never file a near-duplicate beside it.",
+pub(crate) const KNOWLEDGE_RULES: [&str; 5] = [
+    "Anchor every entry to the code files it describes in bee.anchors — files, never directories.",
+    "Never restate what the code or a test shows: keep the why, the boundary, and the rejected option with how it failed; drop the how.",
+    "Extend the concept that owns the subject; find it with bee knowledge search --text and bee knowledge list --area, and never file a near-duplicate beside it.",
+    "Open the body with one line Read when: <the situation the reader is in>, and put the words a reader will search for — the error text, the symptom, the mechanism — in the title and description.",
+    "Split a concept that passes 300 lines along its lifecycles.",
 ];
 
 pub(crate) fn delivery_rel(feature: &str) -> String {
@@ -47,7 +49,7 @@ pub(crate) fn build_consolidation(store_root: &Path, docs_root: &Path, feature: 
         "proposal": proposal,
         "knowledge_files": feature_knowledge_files(store_root, feature),
         "delivery": {"path": delivery, "exists": exists},
-        "rules": THIN_LAYER_RULES,
+        "rules": KNOWLEDGE_RULES,
         "writes": [],
     }))
 }
@@ -72,8 +74,8 @@ pub(crate) fn consolidation_text(value: &Value) -> String {
         if delivery["exists"].as_bool() == Some(true) { "exists" } else { "to write" }
     ));
     lines.push(String::new());
-    lines.push("Thin-layer rules:".to_string());
-    for rule in THIN_LAYER_RULES {
+    lines.push("Knowledge rules:".to_string());
+    for rule in KNOWLEDGE_RULES {
         lines.push(format!("- {rule}"));
     }
     lines.push(String::new());
@@ -162,7 +164,16 @@ mod tests {
         );
         assert_eq!(value["writes"], json!([]));
         assert_eq!(value["delivery"], json!({"path": "docs/history/demo/delivery.md", "exists": false}));
-        assert_eq!(value["rules"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            value["rules"],
+            json!([
+                "Anchor every entry to the code files it describes in bee.anchors — files, never directories.",
+                "Never restate what the code or a test shows: keep the why, the boundary, and the rejected option with how it failed; drop the how.",
+                "Extend the concept that owns the subject; find it with bee knowledge search --text and bee knowledge list --area, and never file a near-duplicate beside it.",
+                "Open the body with one line Read when: <the situation the reader is in>, and put the words a reader will search for — the error text, the symptom, the mechanism — in the title and description.",
+                "Split a concept that passes 300 lines along its lifecycles.",
+            ])
+        );
         assert!(value["proposal"]["pattern_candidates"].as_array().is_some_and(|p| !p.is_empty()), "{value}");
     }
 
@@ -178,7 +189,12 @@ mod tests {
         let text = consolidation_text(&value);
         assert!(text.contains("Delivery record: docs/history/demo/delivery.md (exists)"), "{text}");
         assert!(text.contains("- docs/knowledge/areas/demo/rules.md"), "{text}");
-        assert!(text.contains(THIN_LAYER_RULES[0]), "{text}");
+        assert!(
+            text.contains(
+                "- Anchor every entry to the code files it describes in bee.anchors — files, never directories."
+            ),
+            "{text}"
+        );
     }
 
     #[test]

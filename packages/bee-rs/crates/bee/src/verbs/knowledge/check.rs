@@ -151,6 +151,24 @@ pub(crate) fn dangling_source_candidate(entry: &str) -> Option<String> {
 
 pub(crate) const EVIDENCE_STATES: [&str; 3] = ["present", "wired", "exercised"];
 
+pub(crate) const MAX_CONCEPT_BODY_LINES: usize = 300;
+
+pub(crate) const READ_WHEN_PREFIX: &str = "Read when:";
+
+pub(crate) const READ_WHEN_SCAN_LINES: usize = 10;
+
+pub(crate) fn read_when_line(body: &str) -> Option<&str> {
+    body.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .take(READ_WHEN_SCAN_LINES)
+        .find(|line| line.starts_with(READ_WHEN_PREFIX))
+}
+
+fn anchor_names_a_directory(anchor: &str, repo_root: Option<&Path>) -> bool {
+    anchor.trim().ends_with('/') || repo_root.is_some_and(|root| root.join(anchor.trim()).is_dir())
+}
+
 // ─── body link scanning (dangling_md_link / dangling_wiki_link) ───────────
 //
 // A concept body is free prose, not a spec grammar — these two extractors
@@ -690,10 +708,49 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
             ));
         }
 
+        if matches!(str_field(&data, "type"), Some("bee.area") | Some("bee.pattern"))
+            && read_when_line(&body).is_none()
+        {
+            warnings.push(finding(
+                rel,
+                "missing_read_when",
+                format!(
+                    "body carries no \"{READ_WHEN_PREFIX} <situation>\" line among its first {READ_WHEN_SCAN_LINES} non-blank, non-heading lines — every area and pattern concept opens with one line naming the situation the reader is in (D2)"
+                ),
+            ));
+        }
+
+        let bee = bee_of(&data);
+        if let Some(Value::Array(anchors)) = bee.get("anchors") {
+            for anchor in anchors {
+                let Value::String(anchor) = anchor else { continue };
+                if anchor_names_a_directory(anchor, repo_root) {
+                    warnings.push(finding(
+                        rel,
+                        "directory_anchor",
+                        format!(
+                            "bee.anchors entry \"{anchor}\" names a directory — anchors name files, never directories (D4): a directory anchor grades the concept suspect on almost every commit"
+                        ),
+                    ));
+                }
+            }
+        }
+
+        let body_lines = body.lines().count();
+        if body_lines > MAX_CONCEPT_BODY_LINES {
+            warnings.push(finding(
+                rel,
+                "long_concept",
+                format!(
+                    "body is {body_lines} lines, past the {MAX_CONCEPT_BODY_LINES}-line limit — split the concept along its lifecycles (D4)"
+                ),
+            ));
+        }
+
         // Optional bee.evidence: an absent field stays valid (reads as
         // `present`, D-el-1); anything present that is not one of the three
         // enum states warns by file and value, never errors the bundle.
-        if let Some(value) = bee_of(&data).get("evidence") {
+        if let Some(value) = bee.get("evidence") {
             let valid = matches!(value, Value::String(s) if EVIDENCE_STATES.contains(&s.as_str()));
             if !valid {
                 warnings.push(finding(

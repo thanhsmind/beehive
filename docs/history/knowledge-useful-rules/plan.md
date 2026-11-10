@@ -134,7 +134,7 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_rules read_when consolidat",
     "must_haves": {
       "truths": [
-        "bee knowledge consolidate --json returns a rules array of the five strings in the stated order",
+        "The consolidate verb's JSON output carries a rules array of the five strings in the stated order",
         "A rendered worker-cell prompt contains the five rule lines under the knowledge-delta bullet",
         "A learned-context line for a concept with a Read when: line shows that line; one without shows its title as before",
         "The worker prompt's Result form names the knowledge_used key",

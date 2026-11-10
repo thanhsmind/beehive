@@ -12,8 +12,8 @@ bee:
   sources: [docs/history/workspace-protocol/CONTEXT.md (D1-D12), docs/history/workspace-protocol/plan.md, workspace-protocol cells wsp-1..wsp-4, docs/history/protocol-init-from-project/CONTEXT.md (D1-D8)]
   authoritative_for: "workflow-state: WORKSPACE_PROTOCOL.md, bee protocol, the prepare digests, bee dispatch verify, the purpose leaning lint"
   anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs]
-  verified_at: 2026-11-07
-  verified_commit: 0def8142ff60817457851f228b3c974515adad83
+  verified_at: 2026-11-10
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Workflow State — the workspace protocol file, dispatch receipts, and brief discipline

@@ -8,15 +8,17 @@ bee:
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", "knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)"]
-  sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)", "knowledge-in-the-flow cell kitf-3 (feature outcomes by feature arm and pack pull rate in knowledge report, commit 8794b2917, 2026-11-09)", "CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md"]
+  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", "knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)", "knowledge-useful-rules CONTEXT.md D5 (knowledge report records concept use counts and loaded-never-used findings)"]
+  sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)", "knowledge-in-the-flow cell kitf-3 (feature outcomes by feature arm and pack pull rate in knowledge report, commit 8794b2917, 2026-11-09)", "CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md", "docs/history/knowledge-useful-rules/CONTEXT.md"]
   authoritative_for: "okf-profile: the bee.critical bar and what earns a pattern that label"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs]
-  verified_at: 2026-11-07
-  verified_commit: a642b9433884e773bf58372b78f7eb27db1165a9
+  verified_at: 2026-11-10
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee OKF Profile — The `bee.critical` Bar and the Selective Pool It Grades
+
+Read when: deciding whether a pattern earns bee.critical, or investigating why bee knowledge report lists concepts as loaded but never used.
 
 This concept owns what `bee.critical: true` **means** on a `bee.pattern` concept, the three-leg bar
 a pattern must clear to carry it, and why an unbarred label had already stopped working before this
@@ -86,6 +88,26 @@ friction signals (blocked, reopened, red rounds, with mistakes). In the Pull rat
 `knowledge pack` is counted alongside `search`, `context`, and `show` as an active knowledge pull
 contributing to feature-level and total pull rates.
 
+**The use measure — which concepts answered, and which were loaded and never used (knowledge-useful-rules
+D5).** The outcome signals above say whether a brief helped; this section says which concept did. It reads
+two existing sources and writes nothing. From every `capped` or `dropped` cell's own trace: an entry in
+`trace.knowledge_used` (`[{path, changed}]`, written by the cap on `--knowledge-used` or the report's
+`knowledge_used` array) counts the cell as `used` and credits `uses` to each path it names; a
+`trace.no_knowledge_used: true` counts the cell as `none`; a trace carrying neither counts the cell as
+`silent`. `answered` is `used + none`, so silence stays visible beside the two answers rather than
+folding into either — the same distinction the cap itself keeps. From the `learned_context` lists of
+`.bee/logs/dispatch.jsonl` rows with `source: "prepare"` and `kind: "cell"`: every entry starting
+`docs/knowledge/` counts one load, and a concept loaded five or more times with zero recorded uses is a
+`never used` finding. The text output prints one `knowledge used: <a> cell(s) answered (<u> used a
+concept, <n> none), <s> silent` line, then up to ten `  <uses>  <path>` lines ordered by uses
+descending then path, then one `loaded, never used: <path> — loaded <n> time(s)` line per finding,
+ordered by loads descending then path; the JSON carries `knowledge_used {answered, used, none, silent,
+concepts: [{path, uses}], never_used: [{path, loads}]}` and keeps every concept in `concepts` while the
+text truncates at ten. Two limits are deliberate: a use count only ever comes from a cap's own answer,
+because nothing else records it, so a concept that helped without being named reads as unused; and
+`uses` counts the concept per cell, not per decision, so one cell naming a concept twice credits it
+once. Both directions under-count, which is the safe way to read a metric whose absence is silence.
+
 ## Business Rules
 
 - The bar applies only to `bee.pattern` concepts; no other concept type carries `bee.critical`.
@@ -118,4 +140,8 @@ contributing to feature-level and total pull rates.
   `packages/bee-rs/crates/bee/tests/knowledge_in_the_flow_e2e.rs`; plan
   `docs/history/knowledge-outcome-measure/plan.md` (D1-D5),
   `docs/history/knowledge-in-the-flow/plan.md` (D8).
+- The use measure: `build_knowledge_used` in the same `report.rs`, reading `trace.knowledge_used` and
+  `trace.no_knowledge_used` off closed cells and `learned_context` off cell prepare rows
+  (`knowledge-useful-rules` CONTEXT.md D5; the trace shape is written in
+  `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs`).
 - The re-grade this concept documents: `docs/history/knowledge-usable/CONTEXT.md` (U6), cell `ku-6`.

@@ -9,15 +9,17 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [areas/rust-runtime/overview.md]
-  decisions: [prompt-files]
-  sources: [docs/specs/prompt-files.md, packages/bee/prompts, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
+  decisions: [prompt-files, "knowledge-useful-rules CONTEXT.md D2, D6 (learned-context line shows Read-when line; worker brief renders consolidate rule list)"]
+  sources: [docs/specs/prompt-files.md, packages/bee/prompts, packages/bee-rs/crates/bee/src/devtools/prompts.rs, docs/history/knowledge-useful-rules/CONTEXT.md]
   authoritative_for: "rust-runtime: prompt file rendering and the worker learned-context block"
-  anchors: [packages/bee/prompts/, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
-  verified_at: 2026-11-04
-  verified_commit: 8c0366c75f0a498a4f38f6fd454e8849a2485cd4
+  anchors: [packages/bee/prompts/worker-cell.md, packages/bee-rs/crates/bee/src/devtools/prompts.rs]
+  verified_at: 2026-11-10
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Compiled runtime — prompt files and learned context
+
+Read when: editing prompt template wording or inspecting how learned context is injected into agent briefings.
 
 Two coupled changes to the dispatch layer, both aimed at the same thing: a
 prompt is content, and content that lives inside code can only be changed by
@@ -96,7 +98,10 @@ trade than a worker occasionally re-deriving something.
 - R2 — The renderer substitutes and includes/omits. It never computes.
 - R3 — Rendering is byte-identical to the pre-move output for every existing
   case.
-- R4 — The learned-context block carries paths and titles only, never contents.
+- R4 — The learned-context block carries paths and one line per concept, never contents. The line is the
+  concept's own `Read when:` line when its body opens with one, else its title (knowledge-useful-rules D2).
+- R4b — The worker prompt also carries the knowledge-writing rules, rendered from the one list
+  `bee knowledge consolidate` prints, so the brief and the writer cell cannot disagree (knowledge-useful-rules D6).
 - R5 — The block is capped at 8 pointer lines; the header line is not counted
   (the same convention as the Prior-rounds event-line cap).
 - R6 — Every source in the resolution chain fails silently; the block is omitted

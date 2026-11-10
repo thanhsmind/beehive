@@ -718,11 +718,12 @@ bee:
         assert!(file_path.exists());
 
         // Check canonical form via check_bundle
-        let report = check_bundle(&dir, true).expect("check_bundle");
+        let report = check_bundle(&dir, false).expect("check_bundle");
         assert!(report.ok, "check_bundle must pass: {:?}", report.warnings);
         assert!(report.okf_errors.is_empty(), "OKF errors: {:?}", report.okf_errors);
         assert!(report.profile_errors.is_empty(), "Profile errors: {:?}", report.profile_errors);
-        assert!(report.warnings.is_empty(), "Warnings (incl not_canonical): {:?}", report.warnings);
+        let codes: Vec<&str> = report.warnings.iter().filter_map(|w| w["code"].as_str()).collect();
+        assert_eq!(codes, vec!["missing_read_when"], "a title-only body is canonical and only lacks its Read when: line: {:?}", report.warnings);
 
         // Indexes must be re-rendered
         assert!(dir.join("index.md").exists());
@@ -741,7 +742,7 @@ bee:
             area: "auth",
             tags: None,
             lifecycle: Some("draft"),
-            body: Some("# Auth Gateway\n\nDetailed gateway design.\n".into()),
+            body: Some("# Auth Gateway\n\nRead when: a request is refused at the gateway.\n\nDetailed gateway design.\n".into()),
             today_iso: "2026-09-06",
             today_nodash: "20260906",
         };

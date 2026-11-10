@@ -3649,6 +3649,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -5688,6 +5690,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -5766,6 +5770,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -5867,6 +5873,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -6121,6 +6129,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -7003,6 +7013,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: commit_pending.map(str::to_string),
@@ -7124,6 +7136,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -8268,6 +8282,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -9558,6 +9574,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -10118,6 +10136,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -11866,6 +11886,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: true,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -12948,4 +12970,208 @@ use std::time::Instant;
             json!(["docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"])
         );
         assert!(text.contains("knowledge delta: 1 file(s)"), "{text}");
+    }
+
+    fn knowledge_used_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        write_bee_config(tmp.path(), &json!({"commands": {"test": "none"}}));
+        tmp
+    }
+
+    fn knowledge_used_flags(id: &str) -> CapFlags {
+        let mut flags = wf_cap_flags(id);
+        flags.commit_pending = Some("fixture: no commit trailer".to_string());
+        flags
+    }
+
+    #[test]
+    fn knowledge_used_the_flag_records_the_path_and_what_it_changed() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "ku-1", &cell("ku-1", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("ku-1");
+        flags.knowledge_used = Some(
+            "docs/knowledge/areas/workflow-state/gates.md — chose a hard refusal over a warning"
+                .to_string(),
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["trace"]["knowledge_used"],
+            json!([{
+                "path": "docs/knowledge/areas/workflow-state/gates.md",
+                "changed": "chose a hard refusal over a warning",
+            }])
+        );
+        assert!(
+            capped["trace"].get("no_knowledge_used").is_none(),
+            "a recorded concept is not the explicit none"
+        );
+    }
+
+    #[test]
+    fn knowledge_used_a_line_with_no_separator_keeps_the_path_and_an_empty_changed() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "ku-2", &cell("ku-2", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("ku-2");
+        flags.knowledge_used = Some("docs/knowledge/patterns/some-pattern.md".to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(
+            capped["trace"]["knowledge_used"],
+            json!([{"path": "docs/knowledge/patterns/some-pattern.md", "changed": ""}]),
+            "no separator is not a refusal: the whole value is the path"
+        );
+    }
+
+    #[test]
+    fn knowledge_used_the_report_array_records_every_entry() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "ku-3", &cell("ku-3", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("ku-3");
+        flags.report = Some(
+            json!({
+                "outcome": "o", "commit": "abc1234", "files": [],
+                "tests": "echo ok — green:unit — fixture", "deviations": [],
+                "knowledge_used": [
+                    "docs/knowledge/areas/a.md — dropped the second home for the rule",
+                    "docs/knowledge/patterns/b.md — proved the guard never fires",
+                ],
+            })
+            .to_string(),
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(
+            capped["trace"]["knowledge_used"],
+            json!([
+                {"path": "docs/knowledge/areas/a.md", "changed": "dropped the second home for the rule"},
+                {"path": "docs/knowledge/patterns/b.md", "changed": "proved the guard never fires"},
+            ])
+        );
+        assert!(capped["trace"].get("no_knowledge_used").is_none());
+    }
+
+    #[test]
+    fn knowledge_used_the_explicit_none_is_recorded_and_an_empty_array_says_it_too() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+
+        write_cell_fixture(root, "ku-4", &cell("ku-4", "claimed", "f", json!([])));
+        let mut flag_none = knowledge_used_flags("ku-4");
+        flag_none.no_knowledge_used = true;
+        let capped = cap_cell_from_flags(root, &flag_none, false).unwrap();
+        assert_eq!(capped["trace"]["no_knowledge_used"], json!(true));
+        assert!(capped["trace"].get("knowledge_used").is_none());
+
+        write_cell_fixture(root, "ku-5", &cell("ku-5", "claimed", "f", json!([])));
+        let mut report_none = knowledge_used_flags("ku-5");
+        report_none.report = Some(
+            json!({
+                "outcome": "o", "commit": "abc1234", "files": [],
+                "tests": "echo ok — green:unit — fixture", "deviations": [],
+                "knowledge_used": [],
+            })
+            .to_string(),
+        );
+        let capped = cap_cell_from_flags(root, &report_none, false).unwrap();
+        assert_eq!(
+            capped["trace"]["no_knowledge_used"],
+            json!(true),
+            "a present-but-empty array IS the explicit none"
+        );
+        assert!(capped["trace"].get("knowledge_used").is_none());
+    }
+
+    #[test]
+    fn knowledge_used_silence_records_neither_key() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "ku-6", &cell("ku-6", "claimed", "f", json!([])));
+
+        let capped = cap_cell_from_flags(root, &knowledge_used_flags("ku-6"), false).unwrap();
+
+        assert_eq!(capped["status"], json!("capped"), "silence caps: nothing here may refuse");
+        assert!(capped["trace"].get("knowledge_used").is_none());
+        assert!(capped["trace"].get("no_knowledge_used").is_none());
+    }
+
+    #[test]
+    fn knowledge_used_an_entry_outranks_the_none_flag_and_never_refuses() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "ku-7", &cell("ku-7", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("ku-7");
+        flags.no_knowledge_used = true;
+        flags.knowledge_used = Some("not-even-a-path — still an answer".to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(
+            capped["trace"]["knowledge_used"],
+            json!([{"path": "not-even-a-path", "changed": "still an answer"}]),
+            "an entry is a fact somebody wrote down; it outranks the claim of none"
+        );
+        assert!(capped["trace"].get("no_knowledge_used").is_none());
+    }
+
+    #[test]
+    fn knowledge_used_reaches_the_trace_through_a_from_job_result() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "ku-job-1";
+        let job_id = "job-ku-1";
+
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", &format!("worker commit\n\ncell: {cell_id}")]);
+
+        write_from_job_mailbox(
+            &main,
+            job_id,
+            cell_id,
+            &wt,
+            "done",
+            &["file.txt"],
+            "cargo test --bin bee",
+            None,
+        );
+        let res_path = main.join(".bee").join("mailbox").join(job_id).join("result-1.json");
+        let mut res: Value = serde_json::from_str(&std::fs::read_to_string(&res_path).unwrap()).unwrap();
+        res["knowledge_used"] = json!(["docs/knowledge/areas/x.md — the flag pair earned its own names"]);
+        std::fs::write(&res_path, jsjson::stringify_pretty(&res)).unwrap();
+
+        write_cell_fixture(
+            &main,
+            cell_id,
+            &json!({
+                "id": cell_id, "feature": "myfeat", "title": "job cell",
+                "action": "do work", "verify": "cargo test --bin bee",
+                "lane": "tiny", "status": "claimed", "deps": [], "files": [],
+                "trace": { "worker": "w-worker" },
+            }),
+        );
+
+        let flags = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        let out = finish_cap_and_release(&main, None, flags, None).unwrap();
+        let Out::Emit(result_val, _, 0) = out else { panic!("expected Out::Emit") };
+
+        assert_eq!(
+            result_val["trace"]["knowledge_used"],
+            json!([{
+                "path": "docs/knowledge/areas/x.md",
+                "changed": "the flag pair earned its own names",
+            }]),
+            "a herding result's knowledge_used reaches the trace through --from-job"
+        );
+        assert_eq!(
+            result_val["trace"]["report"]["knowledge_used"],
+            json!(["docs/knowledge/areas/x.md — the flag pair earned its own names"]),
+            "report_from_job carries the array into the report the cap reads"
+        );
     }

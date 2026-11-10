@@ -67,6 +67,10 @@ Contract:
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
 - Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
 - Write your knowledge delta (owning area concept update, a pitfall pattern when you hit one, bee.anchors for files you changed) in the same commit as your code, thin and anchored, no review step.
+{{#if knowledge_rules}}
+  Knowledge rules (the same list `bee knowledge consolidate` prints):
+{{knowledge_rules}}
+{{/if}}
 - Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: {{cell_id}}` (the words "cell:" then the id — a bare id alone fails the cap).
 {{#if native_bookkeeping}}
 - Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), [PARKED] (question, cell id — after `bee cells park`), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
@@ -76,11 +80,12 @@ Result form: beside the token, in the same message, emit exactly one fenced JSON
 - `green:unit` — automated tests passed.
 - `green:static` — it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.
 ```json
-{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "baseline": "<optional: what the same proof produced on base>"}
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "knowledge_used": ["<docs/knowledge path> — <the decision it changed>"], "baseline": "<optional: what the same proof produced on base>"}
 ```
+An empty `knowledge_used` array means no concept changed a decision.
 
 Finish with: .bee/bin/bee cells finish --id {{cell_id}} --outcome "<one line>" --files <a,b> --report '<json>'
 {{/if}}
 {{#if herding}}
-- Run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell.
+- Run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell. The result file may carry the same `knowledge_used` array the Result form names.
 {{/if}}

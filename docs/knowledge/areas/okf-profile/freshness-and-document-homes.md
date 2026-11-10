@@ -1,22 +1,24 @@
 ---
 type: bee.area
 title: "Bee OKF Profile — freshness, anchors and the document homes"
-description: "Which kinds of truth live in docs/knowledge and which live in code, how an area concept names the files it depends on and is graded against git, the cap re-confirm step, the one-time host seed, the pull-rate measure that tells whether any of it is read, the read set, the templates rule, and the decision-link error."
+description: "Which kinds of truth live in docs/knowledge and which live in code, how an area concept names the files it depends on and is graded against git, the cap re-confirm step, the one-time host seed, the pull-rate measure that tells whether any of it is read, the read set, the templates rule and its three writing warnings, and the decision-link error."
 timestamp: 2026-11-07
 bee:
   id: okf-profile-freshness-and-document-homes
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: ["knowledge-freshness-mechanic D1 (2b11f025): knowledge is pulled on demand, never pushed into briefs", "knowledge-freshness-mechanic D2 (93e1001d): the document homes rule", "knowledge-freshness-mechanic D3 (27ad96a5): freshness is derived from git through verified_at and verified_commit", "knowledge-freshness-mechanic D4 (e7e80d78): updates ride the cap sync door and promote", "knowledge-freshness-mechanic D5 (28fb074d): delete before write, work/ leaves the bundle", "knowledge-freshness-mechanic D6 (e7e133dc): pull rate is the measure", "knowledge-freshness-mechanic D7 (6a502ad0): the mechanic is portable and reaches hosts through onboarding", "knowledge-freshness-mechanic D8 (4148025d): bee.anchors is an explicit, seeded path list", "knowledge-docs-in-the-flow D1 (5c5ae146): documentation is a working part of the flow", "knowledge-docs-in-the-flow D2 (f3c5ad0f): the read set lives in CONTEXT.md and shape approval checks it", "knowledge-docs-in-the-flow D3 (2bc56fb6): every template's sections open with their question and sources, plus a deletion line", "knowledge-docs-in-the-flow D4 (e2f6e8c3): bee knowledge check refuses an unlinked area concept as missing_decision_link", "knowledge-docs-in-the-flow D5: the read set is pulled, nothing new is pushed into briefs (restates knowledge-freshness-mechanic D1)", "knowledge-docs-in-the-flow D6: the read-set gate and the decision-link check live in the binary and skills and reach hosts through onboarding (restates knowledge-freshness-mechanic D7)"]
-  sources: [docs/history/knowledge-freshness-mechanic/CONTEXT.md, docs/history/knowledge-freshness-mechanic/plan.md, docs/history/knowledge-docs-in-the-flow/CONTEXT.md, docs/history/knowledge-docs-in-the-flow/plan.md]
-  authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step, the pull-rate measure, the read set, the templates rule, and the decision-link error"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs]
-  verified_at: 2026-11-08
-  verified_commit: c64ed1b9413e010c2daee47ed79fca879c02af8e
+  decisions: ["knowledge-freshness-mechanic D1 (2b11f025): knowledge is pulled on demand, never pushed into briefs", "knowledge-freshness-mechanic D2 (93e1001d): the document homes rule", "knowledge-freshness-mechanic D3 (27ad96a5): freshness is derived from git through verified_at and verified_commit", "knowledge-freshness-mechanic D4 (e7e80d78): updates ride the cap sync door and promote", "knowledge-freshness-mechanic D5 (28fb074d): delete before write, work/ leaves the bundle", "knowledge-freshness-mechanic D6 (e7e133dc): pull rate is the measure", "knowledge-freshness-mechanic D7 (6a502ad0): the mechanic is portable and reaches hosts through onboarding", "knowledge-freshness-mechanic D8 (4148025d): bee.anchors is an explicit, seeded path list", "knowledge-docs-in-the-flow D1 (5c5ae146): documentation is a working part of the flow", "knowledge-docs-in-the-flow D2 (f3c5ad0f): the read set lives in CONTEXT.md and shape approval checks it", "knowledge-docs-in-the-flow D3 (2bc56fb6): every template's sections open with their question and sources, plus a deletion line", "knowledge-docs-in-the-flow D4 (e2f6e8c3): bee knowledge check refuses an unlinked area concept as missing_decision_link", "knowledge-docs-in-the-flow D5: the read set is pulled, nothing new is pushed into briefs (restates knowledge-freshness-mechanic D1)", "knowledge-docs-in-the-flow D6: the read-set gate and the decision-link check live in the binary and skills and reach hosts through onboarding (restates knowledge-freshness-mechanic D7)", "knowledge-useful-rules CONTEXT.md D2, D4 (check warns on missing Read-when, directory anchors, and long concepts; check and pack share read_when_line)"]
+  sources: [docs/history/knowledge-freshness-mechanic/CONTEXT.md, docs/history/knowledge-freshness-mechanic/plan.md, docs/history/knowledge-docs-in-the-flow/CONTEXT.md, docs/history/knowledge-docs-in-the-flow/plan.md, docs/history/knowledge-useful-rules/CONTEXT.md]
+  authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step, the pull-rate measure, the read set, the templates rule and its three writing warnings, and the decision-link error"
+  anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
+  verified_at: 2026-11-10
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee OKF Profile (freshness, anchors and the document homes)
+
+Read when: deciding whether a truth belongs in docs/knowledge or code, anchoring an area concept, or fixing freshness check warnings.
 
 ## Purpose
 
@@ -129,6 +131,10 @@ Use this tail only where a rule's status or verification differs from its concep
 
 The cut area template provides a lean five-section structure for area concepts during content trimming: `## Map`, `## Boundaries`, `## Invariants`, `## Entry Points`, and `## Pointers`. Each section carries its question line, sources, and deletion line. Host repositories use the standard nine-section area template until instructed otherwise.
 
+The template the writer fills is also a check: three writing rules are machine-visible, and `bee knowledge check` names the file that breaks one. Every area and pattern body opens with one line `Read when: <situation>` inside its first ten non-blank, non-heading lines, so the pack can print that line in place of the title (knowledge-useful-rules D2); a concept whose anchors name a directory rather than a file, or whose body passes 300 lines, is split or re-anchored before it is filed (knowledge-useful-rules D4). The three findings — `missing_read_when`, `directory_anchor`, `long_concept` — are profile warnings on the same finding shape the older profile warnings use. They never block: `bee knowledge check` stays green without `--strict`, and the close knowledge-freshness door ignores codes it does not name, so a directory anchor cannot stop a cap.
+
+The check and the pack read the line through one function, `read_when_line` in `verbs/knowledge/check.rs`, and no second copy of its prefix or its ten-line window exists (knowledge-useful-rules D2). Two reads of one rule drift, and the drift is silent: the pack would print a line the check did not see, or the reverse.
+
 ## The decision-link error
 
 `bee knowledge check` requires every area concept (`type: bee.area`) to link at least one decision through a non-empty `bee.decisions` list in its frontmatter. This rule applies to area concepts and area `overview.md` files. Generated `index.md` files carry no frontmatter and are excluded. Patterns, work items, and decision concepts are never checked.
@@ -148,6 +154,7 @@ A `missing_decision_link` profile error makes `bee knowledge check` exit non-zer
 - Read set table parser: `packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs`.
 - Read set gate refusal: `packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs`.
 - Decision-link check error: `packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs`.
+- The three writing warnings (missing_read_when, directory_anchor, long_concept) and shared read_when_line: `packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs` (knowledge-useful-rules CONTEXT.md D2, D4).
 - The pull-rate section of the report: `packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs`.
 - The locked decisions and the grade rule: `docs/history/knowledge-freshness-mechanic/CONTEXT.md` and
   `docs/history/knowledge-freshness-mechanic/plan.md`.

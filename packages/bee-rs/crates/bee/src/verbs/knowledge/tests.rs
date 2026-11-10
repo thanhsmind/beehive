@@ -106,7 +106,7 @@ use std::time::Instant;
         std::fs::create_dir_all(dir.join("areas/billing")).unwrap();
         std::fs::write(
             dir.join("areas/billing/refunds.md"),
-            "---\ntype: bee.pattern\ntitle: Refund flow\ndescription: How refunds settle\nbee:\n  id: pat-1\n  lifecycle: active\n  critical: true\n---\nBody here.\n",
+            "---\ntype: bee.pattern\ntitle: Refund flow\ndescription: How refunds settle\nbee:\n  id: pat-1\n  lifecycle: active\n  critical: true\n---\nRead when: a refund has to settle.\n\nBody here.\n",
         )
         .unwrap();
         std::fs::write(dir.join("notes.md"), "no frontmatter\n").unwrap();
@@ -896,6 +896,8 @@ use std::time::Instant;
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
@@ -1118,7 +1120,7 @@ use std::time::Instant;
                 tags: vec!["demo".into()],
                 areas: vec!["demo-area".into()],
                 bee_extra: Vec::new(),
-                body: "Body.".into(),
+                body: "Read when: a fixture concept is checked.\n\nBody.".into(),
             }
         }
         fn ty(mut self, t: &'static str) -> Self {
@@ -1250,6 +1252,69 @@ use std::time::Instant;
         assert_eq!(got[2].0, "patterns/undescribed.md");
         assert!(got[2].1.contains("\"description\""), "{}", got[2].1);
         assert!(report.ok, "a missing profile field is a warning, green un-strict");
+    }
+
+    #[test]
+    fn writing_warnings_name_only_the_breaking_file() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src/widgets")).unwrap();
+        std::fs::write(root.join("src/widgets/render.rs"), "pub fn render() {}\n").unwrap();
+
+        put(
+            &dir,
+            "patterns/compliant.md",
+            Cx::new("compliant")
+                .bee("anchors", json!(["src/widgets/render.rs"]))
+                .body("Read when: you add a warning code to knowledge check.\n\nKeep it short."),
+        );
+        put(&dir, "patterns/no-read-when.md", Cx::new("no-read-when").body("No opening line here.\n\nJust prose."));
+        put(
+            &dir,
+            "patterns/dir-anchor.md",
+            Cx::new("dir-anchor")
+                .bee("anchors", json!(["src/widgets/", "src/widgets", "src/widgets/render.rs"]))
+                .body("Read when: an anchor grades suspect on every commit.\n\nAnchors name files."),
+        );
+        put(
+            &dir,
+            "patterns/long.md",
+            Cx::new("long")
+                .body(&format!("Read when: a concept grows past its budget.\n\n{}", "One line of prose.\n".repeat(320))),
+        );
+
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(report.okf_errors.is_empty(), "a writing rule is never an OKF error: {:?}", report.okf_errors);
+        assert!(
+            report.profile_errors.is_empty(),
+            "a writing rule is never a profile error: {:?}",
+            report.profile_errors
+        );
+        assert!(report.ok, "warnings alone must not fail un-strict");
+        assert!(!check_bundle(&dir, true).unwrap().ok, "--strict promotes them, as it promotes every warning");
+
+        let files_of = |code: &str| -> Vec<String> {
+            of_code(&report.warnings, code).iter().map(|f| f["file"].as_str().unwrap().to_string()).collect()
+        };
+        assert_eq!(files_of("missing_read_when"), vec!["patterns/no-read-when.md".to_string()], "{:?}", report.warnings);
+        assert_eq!(
+            files_of("directory_anchor"),
+            vec!["patterns/dir-anchor.md".to_string(), "patterns/dir-anchor.md".to_string()],
+            "one finding per directory anchor, and the file anchor beside them stays silent: {:?}",
+            report.warnings
+        );
+        assert_eq!(files_of("long_concept"), vec!["patterns/long.md".to_string()], "{:?}", report.warnings);
+
+        let compliant = ["missing_read_when", "directory_anchor", "long_concept"]
+            .iter()
+            .filter(|code| files_of(code).iter().any(|f| f == "patterns/compliant.md"))
+            .collect::<Vec<_>>();
+        assert!(compliant.is_empty(), "the compliant concept must draw none of the three: {compliant:?}");
+
+        let long = of_code(&report.warnings, "long_concept");
+        assert!(msg(long[0]).contains("300"), "the limit must be named: {}", msg(long[0]));
+        let dir_anchor = of_code(&report.warnings, "directory_anchor");
+        assert!(dir_anchor.iter().all(|f| msg(f).contains("src/widgets")), "{:?}", dir_anchor);
     }
 
     /// Node: 'profile warning: dangling required_context path; a resolving
@@ -1766,7 +1831,7 @@ use std::time::Instant;
                 .bee("owns.skills", json!(["skills/bee-hive/SKILL.md"]))
                 .bee("owns.tests", json!(["tests/registry_contracts.rs"]))
                 .bee("applied_at", json!(["docs/history/knowledge-one-home/CONTEXT.md", "crates/bee/src/verbs/cells/obligation.rs"]))
-                .body("<!-- rule: rule-demo -->\nDemo rule\n<!-- /rule -->"),
+                .body("Read when: the four new frontmatter keys are read.\n\n<!-- rule: rule-demo -->\nDemo rule\n<!-- /rule -->"),
         );
         let report = check_bundle(&dir, false).unwrap();
         assert!(report.okf_errors.is_empty(), "okf errors: {:?}", report.okf_errors);
