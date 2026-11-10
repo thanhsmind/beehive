@@ -13,7 +13,7 @@ bee:
   authoritative_for: "onboarding: the default status display"
   anchors: [packages/bee-rs/crates/bee/tests/statusline_contract.rs, .claude/statusline-command.sh, packages/bee/statusline/statusline-command.sh, .claude/, packages/bee-rs/crates/bee/, packages/bee-rs/crates/bee/src/onboard/source.rs, packages/bee-rs/crates/bee/src/devtools/statusline.rs, packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs, packages/bee-rs/crates/bee/src/onboard/tests.rs, .claude/settings.json, packages/bee-rs/crates/bee/src/onboard/templates.rs, .pi/extensions/bee-guard/, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs]
   verified_at: 2026-11-10
-  verified_commit: b6d22143098dc6a5632aa27ad76f739fde1077c7
+  verified_commit: bb9baff3c63e47ea85537f768dadf7a60ab482fb
 ---
 
 # Onboarding — The Default Status Display

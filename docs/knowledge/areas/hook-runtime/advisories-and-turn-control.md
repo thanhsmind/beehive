@@ -13,7 +13,7 @@ bee:
   authoritative_for: "hook-runtime: the advisory contract and the gate-bypass turn-control exception"
   anchors: [packages/bee/LEADER.md, packages/, packages/bee-rs/crates/bee/src/, skills/, packages/bee-rs/crates/bee/src/hooks/write_guard/knowledge_first.rs, packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, packages/bee-rs/crates/bee/tests/knowledge_first_nudge.rs, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs]
   verified_at: 2026-11-10
-  verified_commit: b6d22143098dc6a5632aa27ad76f739fde1077c7
+  verified_commit: bb9baff3c63e47ea85537f768dadf7a60ab482fb
 ---
 
 # Hook Runtime — advisories, session-stop output, and the one deliberate turn-control exception

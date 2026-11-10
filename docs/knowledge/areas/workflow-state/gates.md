@@ -13,7 +13,7 @@ bee:
   authoritative_for: "workflow-state: feature start, the phase vocabulary, phase-owned routing mutation, and the closing tail"
   anchors: [skills/bee-hive/references/gates-and-delegation.md, packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs, packages/bee-rs/crates/bee/tests/gate_preview.rs, packages/bee-rs/crates/bee/src/state.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs, packages/bee-rs/crates/bee/src/, packages/bee-rs/crates/bee/src/verbs/cells/mod.rs, packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs, packages/bee-rs/crates/bee/tests/registry_contracts.rs, packages/bee-rs/crates/bee/tests/registry_dispatch.rs, packages/bee-rs/crates/bee/src/hooks/compaction.rs, packages/bee-rs/crates/bee/src/verbs/feature_group.rs]
   verified_at: 2026-11-10
-  verified_commit: b6d22143098dc6a5632aa27ad76f739fde1077c7
+  verified_commit: bb9baff3c63e47ea85537f768dadf7a60ab482fb
 ---
 
 # Workflow State — starting a feature, the phase vocabulary, phase-owned routing, and closing
