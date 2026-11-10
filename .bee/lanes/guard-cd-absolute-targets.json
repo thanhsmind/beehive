@@ -1,0 +1,170 @@
+{
+  "schema_version": "1.0",
+  "feature": "guard-cd-absolute-targets",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"guard-cd-absolute-targets\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"guard-cd-absolute-targets\" (lane).",
+  "created_at": "2026-11-10T13:31:32.845Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "write guard refuses absolute Bash targets after cd; guard source is a judge-required root",
+    "updated_at": "2026-11-10T13:32:57.312Z",
+    "feature": "guard-cd-absolute-targets"
+  },
+  "gate_preview": {
+    "feature": "guard-cd-absolute-targets",
+    "plan_sha256": "db73c676daaae96c2465590581e616b20adf4cee04322d0a54e66df3f3b25267",
+    "previewed_at": "2026-11-10T13:33:14.052Z",
+    "cells": [
+      {
+        "id": "gcd-1",
+        "feature": "guard-cd-absolute-targets",
+        "title": "Check absolute write targets after a cd instead of refusing them",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "d199ac87"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "read_first": [
+          "docs/history/guard-cd-absolute-targets/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Keep contract d199ac87 (guard-cd-absolute-targets). In write_guard/guards.rs extract_bash_targets, mark a target cd-opaque only when its index is at or after the cd marker AND std::path::Path::new(target).is_absolute() is false; an absolute target after a cd is then resolved and checked by main.rs exactly like a target with no cd. Targets before a cd and relative targets after a cd keep their current behavior; a ~ path stays relative here. Red first in write_guard/tests.rs: extend or add extractor tests named with cd_ so the filter runs them (an absolute target after cd is not opaque, a relative one is, mixed commands mark per target), and fixture tests named with cd_ through the existing bash()/expect_done helpers: cd /tmp && touch <fixture root absolute path to an ordinary in-root file> is allowed; cd /tmp && touch <fixture root absolute path>/.bee/state.json is refused with the direct-edit wording and never the cd wording; cd /tmp && touch out.txt is still refused with the cd wording. Watch the new tests fail before the fix. Knowledge delta in the same commit: in docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md change the cd bullet to say the refusal applies to relative targets only and an absolute target after a cd is checked normally, citing docs/history/guard-cd-absolute-targets/CONTEXT.md D1 (not the raw decision id). No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cd_",
+        "must_haves": {
+          "truths": [
+            "An absolute write target after a cd is resolved and checked like a target with no cd",
+            "A relative write target after a cd is still refused with the cd wording",
+            "An absolute target after a cd that hits a guarded bee state file is still refused"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+              "substantive": "cd_opaque excludes absolute targets"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "red-first tests for absolute and relative targets after cd"
+            }
+          ],
+          "key_links": [
+            "main.rs refuses only targets that guards.rs marks cd_opaque"
+          ],
+          "prohibitions": [
+            "Never skip containment or direct-edit checks for an absolute target",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "guard-cd-absolute-targets",
+    "plan_sha256": "db73c676daaae96c2465590581e616b20adf4cee04322d0a54e66df3f3b25267",
+    "previewed_at": "2026-11-10T13:33:14.052Z",
+    "cells": [
+      {
+        "id": "gcd-1",
+        "feature": "guard-cd-absolute-targets",
+        "title": "Check absolute write targets after a cd instead of refusing them",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "d199ac87"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "read_first": [
+          "docs/history/guard-cd-absolute-targets/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Keep contract d199ac87 (guard-cd-absolute-targets). In write_guard/guards.rs extract_bash_targets, mark a target cd-opaque only when its index is at or after the cd marker AND std::path::Path::new(target).is_absolute() is false; an absolute target after a cd is then resolved and checked by main.rs exactly like a target with no cd. Targets before a cd and relative targets after a cd keep their current behavior; a ~ path stays relative here. Red first in write_guard/tests.rs: extend or add extractor tests named with cd_ so the filter runs them (an absolute target after cd is not opaque, a relative one is, mixed commands mark per target), and fixture tests named with cd_ through the existing bash()/expect_done helpers: cd /tmp && touch <fixture root absolute path to an ordinary in-root file> is allowed; cd /tmp && touch <fixture root absolute path>/.bee/state.json is refused with the direct-edit wording and never the cd wording; cd /tmp && touch out.txt is still refused with the cd wording. Watch the new tests fail before the fix. Knowledge delta in the same commit: in docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md change the cd bullet to say the refusal applies to relative targets only and an absolute target after a cd is checked normally, citing docs/history/guard-cd-absolute-targets/CONTEXT.md D1 (not the raw decision id). No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cd_",
+        "must_haves": {
+          "truths": [
+            "An absolute write target after a cd is resolved and checked like a target with no cd",
+            "A relative write target after a cd is still refused with the cd wording",
+            "An absolute target after a cd that hits a guarded bee state file is still refused"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+              "substantive": "cd_opaque excludes absolute targets"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "red-first tests for absolute and relative targets after cd"
+            }
+          ],
+          "key_links": [
+            "main.rs refuses only targets that guards.rs marks cd_opaque"
+          ],
+          "prohibitions": [
+            "Never skip containment or direct-edit checks for an absolute target",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-11-10T13:42:52.900Z",
+    "branch": "wt/guard-cd-absolute-targets",
+    "worktree_id": "beehive--wt--guard-cd-absolute-targets",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
