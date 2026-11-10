@@ -15,8 +15,8 @@ bee:
   owns.skills: [skills/bee-herding/*]
   owns.tests: [packages/bee-rs/crates/fleet/tests/choreography.rs, packages/bee-rs/crates/fleet/tests/herdr_backend.rs, packages/bee-rs/crates/fleet/tests/tmux_backend.rs, packages/bee-rs/crates/fleet/tests/manifest_boundary.rs]
   anchors: [skills/bee-herding/references/route-prompt.md, skills/, .claude/skills, .agents/skills, .opencode/skills, skills/bee-herding/SKILL.md, packages/bee-rs/crates/bee/src/herding/control_loop.rs, skills/bee-herding/scripts/bootstrap-cockpit.sh, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/catalog.rs, packages/bee-rs/crates/bee/src/herding/notify.rs, packages/bee-rs/crates/bee/src/herding/pane_verbs.rs, packages/bee-rs/crates/fleet/src/backend/tmux.rs, packages/bee-rs/crates/fleet/src/screen.rs, skills/bee-herdr/SKILL.md]
-  verified_at: 2026-11-07
-  verified_commit: 3b9d2e2a363470dd1365e42b07f88d186942ed64
+  verified_at: 2026-11-10
+  verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
 
 # Bee Herding — the four-role cockpit, its safety boundaries, and adoption

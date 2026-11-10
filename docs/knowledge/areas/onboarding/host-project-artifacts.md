@@ -13,6 +13,7 @@ bee:
   authoritative_for: "onboarding: the artifacts a host project receives and keeps"
   anchors: [.claude/settings.json, packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs, packages/bee-rs/crates/bee/src/onboard/notices.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee/AGENTS.windows.md, packages/bee-rs/crates/bee/src/onboard/merge.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs]
   verified_at: 2026-11-10
+  verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
 
 # Onboarding — The Artifacts a Host Project Receives and Keeps

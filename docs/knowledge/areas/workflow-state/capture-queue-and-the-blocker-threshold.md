@@ -13,8 +13,8 @@ bee:
   authoritative_for: "workflow-state: the capture queue's pending membership and its escalation from offer to blocker"
   applied_at: [skills/bee-capturing/SKILL.md, packages/bee-rs/crates/bee/src/verbs/capture.rs]
   anchors: [packages/bee-rs/crates/bee/src/catalog.rs, packages/bee-rs/crates/bee/src/verbs/capture.rs]
-  verified_at: 2026-09-08
-  verified_commit: fcc91f2f25e63b07d716b778eb6a7c8ec1144451
+  verified_at: 2026-11-10
+  verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
 
 # Workflow State — the capture queue, its pending membership, and the threshold that turns an offer into a blocker
