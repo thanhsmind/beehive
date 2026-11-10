@@ -218,5 +218,6 @@
         ]
       }
     ]
-  }
+  },
+  "syncClaudeAiSkills": false
 }
