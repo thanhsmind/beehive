@@ -13,7 +13,7 @@ bee:
   authoritative_for: "bee-herding: the brief mailbox, the standalone-worker contract, and delivery receipts"
   anchors: [packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/hooks/mod.rs, scripts/release.sh, skills/bee-herding/references/operational-invariants.md]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee Herding — handing a foreign agent its brief, and knowing it arrived

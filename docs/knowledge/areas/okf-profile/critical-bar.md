@@ -8,12 +8,12 @@ bee:
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", "knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)"]
-  sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)", "knowledge-in-the-flow cell kitf-3 (feature outcomes by feature arm and pack pull rate in knowledge report, commit 8794b2917, 2026-11-09)", "CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md"]
+  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)]
+  sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)", "knowledge-in-the-flow cell kitf-3 (feature outcomes by feature arm and pack pull rate in knowledge report, commit 8794b2917, 2026-11-09)", CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md]
   authoritative_for: "okf-profile: the bee.critical bar and what earns a pattern that label"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs]
-  verified_at: 2026-11-07
-  verified_commit: a642b9433884e773bf58372b78f7eb27db1165a9
+  verified_at: 2026-11-10
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee OKF Profile — The `bee.critical` Bar and the Selective Pool It Grades

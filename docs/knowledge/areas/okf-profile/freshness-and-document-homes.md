@@ -13,7 +13,7 @@ bee:
   authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step, the pull-rate measure, the read set, the templates rule and its three writing warnings, and the decision-link error"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
   verified_at: 2026-11-10
-  verified_commit: 92d62fa4e05d9cc8cf6c3efb3a0eb0821d2fa568
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee OKF Profile (freshness, anchors and the document homes)

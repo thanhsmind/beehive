@@ -13,7 +13,7 @@ bee:
   authoritative_for: "workflow-state: unified command discovery, validation, and dispatch"
   anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Workflow State — the unified command entry point and its catalog

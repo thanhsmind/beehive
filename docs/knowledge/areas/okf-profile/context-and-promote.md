@@ -13,7 +13,7 @@ bee:
   authoritative_for: "okf-profile: the context consumer, the promote proposer, and the session preamble"
   anchors: [packages/bee-rs/crates/bee/tests/registry_contracts.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee/prompts/worker-cell.md, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee OKF Profile — The Context Consumer, the Promote Proposer, and the Session Preamble

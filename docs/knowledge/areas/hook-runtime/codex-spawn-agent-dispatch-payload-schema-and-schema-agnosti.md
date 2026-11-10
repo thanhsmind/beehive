@@ -13,7 +13,7 @@ bee:
   authoritative_for: "hook-runtime: codex spawn_agent dispatch payload schema and schema-agnostic guard evaluation by tool name and marker"
   anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, skills/bee-swarming/references/swarming-reference.md, packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Hook Runtime — The Codex spawn_agent Dispatch Payload Schema and Schema-Agnostic Guard Evaluation

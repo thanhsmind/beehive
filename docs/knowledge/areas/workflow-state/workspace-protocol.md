@@ -13,7 +13,7 @@ bee:
   authoritative_for: "workflow-state: WORKSPACE_PROTOCOL.md, bee protocol, the prepare digests, bee dispatch verify, the purpose leaning lint"
   anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Workflow State — the workspace protocol file, dispatch receipts, and brief discipline

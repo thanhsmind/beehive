@@ -13,7 +13,7 @@ bee:
   authoritative_for: "hook-runtime: native spawn override pass-through and native-transport classification"
   anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/doctor.rs, scripts/codex-parity-canary.sh]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Hook Runtime — the native spawn checkpoint and transport classification

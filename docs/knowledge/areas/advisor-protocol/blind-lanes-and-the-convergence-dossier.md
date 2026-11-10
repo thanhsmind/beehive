@@ -13,7 +13,7 @@ bee:
   authoritative_for: "advisor-protocol: blind lanes and the convergence dossier"
   anchors: [skills/bee-hive/references/gates-and-delegation.md, packages/bee-rs/crates/bee/src/verbs/blind/mod.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee/prompts/advisor.md, skills/bee-shaping/SKILL.md]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Advisor Protocol — Blind Lanes and the Convergence Dossier

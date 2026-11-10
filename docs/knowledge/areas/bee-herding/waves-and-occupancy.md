@@ -13,7 +13,7 @@ bee:
   authoritative_for: "bee-herding: waves, the wave ledger, and occupancy"
   anchors: [packages/bee-rs/crates/bee/src/herding/wave.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/devtools/statusline.rs, packages/bee-rs/crates/bee/src/hooks/activity.rs, packages/bee-rs/crates/fleet/, packages/bee-rs/crates/fleet/src/backend/herdr.rs, packages/bee-rs/crates/fleet/src/backend/tmux.rs, packages/bee-rs/crates/fleet/src/screen.rs, packages/bee-rs/crates/fleet/tests/tmux_backend.rs]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee Herding — waves over running workers, and counting the slots they occupy

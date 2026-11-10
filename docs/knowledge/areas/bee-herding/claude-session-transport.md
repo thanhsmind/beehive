@@ -14,7 +14,7 @@ bee:
   owns.code: [packages/bee-rs/crates/bee/src/herding/claude_session.rs]
   anchors: [packages/bee-rs/crates/bee/src/herding/claude_session.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/verbs/report_usage.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Bee Herding — the claude-session transport, and how a leader steers a Claude worker

@@ -13,7 +13,7 @@ bee:
   authoritative_for: "advisor-protocol: slots, transports, staleness"
   anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/config.rs, skills/bee-hive/references/routing-and-contracts.md, packages/bee-rs/crates/bee/src/state.rs]
   verified_at: 2026-11-10
-  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
+  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
 
 # Advisor Protocol — Slots, Transports, and Staleness
