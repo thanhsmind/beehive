@@ -488,6 +488,105 @@ pub(crate) fn build_feature_outcomes(root: &Path) -> (Value, Vec<String>) {
     (Value::Object(section), lines)
 }
 
+const NEVER_USED_MIN_LOADS: usize = 5;
+const TOP_CONCEPT_LINES: usize = 10;
+
+pub(crate) fn build_knowledge_used(root: &Path) -> (Value, Vec<String>) {
+    let mut answered = 0usize;
+    let mut used = 0usize;
+    let mut none = 0usize;
+    let mut silent = 0usize;
+    let mut uses: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    for cell in closed_cells(root) {
+        let trace = cell.get("trace").unwrap_or(&Value::Null);
+        let entries: Vec<&Value> = match trace.get("knowledge_used") {
+            Some(Value::Array(items)) => items.iter().collect(),
+            _ => Vec::new(),
+        };
+        if !entries.is_empty() {
+            answered += 1;
+            used += 1;
+            for entry in entries {
+                let item = match entry {
+                    Value::String(s) => Some(s.as_str()),
+                    Value::Object(o) => o.get("path").and_then(Value::as_str),
+                    _ => None,
+                };
+                let Some(path) = item.map(js_trim).filter(|p| !p.is_empty()) else { continue };
+                *uses.entry(path.to_string()).or_insert(0) += 1;
+            }
+            continue;
+        }
+        match trace.get("no_knowledge_used") {
+            Some(Value::Bool(true)) => {
+                answered += 1;
+                none += 1;
+            }
+            _ => silent += 1,
+        }
+    }
+
+    let mut ranked: Vec<(String, usize)> = uses.iter().map(|(p, u)| (p.clone(), *u)).collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+    let mut loads: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for row in read_jsonl(&root.join(".bee").join("logs").join("dispatch.jsonl")).rows {
+        if row.get("source").and_then(Value::as_str) != Some("prepare") || row.get("kind").and_then(Value::as_str) != Some("cell") {
+            continue;
+        }
+        let Some(Value::Array(listed)) = row.get("learned_context") else { continue };
+        for item in listed {
+            let Some(raw) = item.as_str() else { continue };
+            let path = js_trim(raw);
+            if !path.starts_with("docs/knowledge/") {
+                continue;
+            }
+            *loads.entry(path.to_string()).or_insert(0) += 1;
+        }
+    }
+    let mut never_used: Vec<(String, usize)> = loads
+        .into_iter()
+        .filter(|(path, count)| *count >= NEVER_USED_MIN_LOADS && !uses.contains_key(path))
+        .collect();
+    never_used.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+    let mut lines = vec![format!(
+        "knowledge used: {answered} cell(s) answered ({used} used a concept, {none} none), {silent} silent"
+    )];
+    for (path, count) in ranked.iter().take(TOP_CONCEPT_LINES) {
+        lines.push(format!("  {count}  {path}"));
+    }
+    for (path, count) in &never_used {
+        lines.push(format!("loaded, never used: {path} — loaded {count} time(s)"));
+    }
+
+    let mut section = Map::new();
+    section.insert("answered".into(), Value::from(answered));
+    section.insert("used".into(), Value::from(used));
+    section.insert("none".into(), Value::from(none));
+    section.insert("silent".into(), Value::from(silent));
+    section.insert(
+        "concepts".into(),
+        Value::Array(
+            ranked
+                .iter()
+                .map(|(path, count)| json!({"path": path, "uses": count}))
+                .collect(),
+        ),
+    );
+    section.insert(
+        "never_used".into(),
+        Value::Array(
+            never_used
+                .iter()
+                .map(|(path, count)| json!({"path": path, "loads": count}))
+                .collect(),
+        ),
+    );
+    (Value::Object(section), lines)
+}
+
 const PULL_CMDS: [&str; 4] = ["knowledge search", "knowledge context", "knowledge show", "knowledge pack"];
 const CALLS: usize = PULL_CMDS.len();
 const UNBOUND: &str = "(unbound)";
@@ -584,6 +683,8 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     lines.extend(outcome_lines);
     let (feature_outcomes, feature_lines) = build_feature_outcomes(&ctx.root);
     lines.extend(feature_lines);
+    let (knowledge_used, knowledge_used_lines) = build_knowledge_used(&ctx.root);
+    lines.extend(knowledge_used_lines);
     let (pull_rate, pull_lines) = build_pull_rate(&ctx.root);
     lines.extend(pull_lines);
 
@@ -597,6 +698,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     result.insert("evidence_ladder".into(), evidence_ladder);
     result.insert("outcomes".into(), outcomes);
     result.insert("feature_outcomes".into(), feature_outcomes);
+    result.insert("knowledge_used".into(), knowledge_used);
     result.insert("pull_rate".into(), pull_rate);
     Some(ctx.emit(&Value::Object(result), &lines.join("\n"), 0))
 }
@@ -905,5 +1007,194 @@ mod tests {
         let (count, last_seen) = measure_recurrence(tmp.path(), "anything", "2026-08-05");
         assert_eq!(count, 0);
         assert_eq!(last_seen, None);
+    }
+
+    fn closed_cell(root: &Path, id: &str, trace: Value) {
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        let cell = json!({"id": id, "feature": "demo", "status": "capped", "trace": trace});
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
+    fn prepare_row(cell: &str, learned: &[&str]) -> String {
+        let row = json!({
+            "ts": "2026-11-10T00:00:00.000Z",
+            "source": "prepare",
+            "kind": "cell",
+            "cell": cell,
+            "learned_context": learned,
+        });
+        format!("{row}\n")
+    }
+
+    #[test]
+    fn report_knowledge_used_counts_answered_used_none_and_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        closed_cell(
+            root,
+            "a",
+            json!({"knowledge_used": [{"path": "docs/knowledge/patterns/one.md", "changed": "x"}]}),
+        );
+        closed_cell(root, "b", json!({"knowledge_used": [{"path": "docs/knowledge/patterns/two.md", "changed": "y"}]}));
+        closed_cell(root, "c", json!({"no_knowledge_used": true}));
+        closed_cell(root, "d", json!({}));
+        closed_cell(root, "e", json!({"mistakes": ["m"]}));
+
+        let (section, lines) = build_knowledge_used(root);
+
+        assert_eq!(section["answered"], 3, "{section}");
+        assert_eq!(section["used"], 2, "{section}");
+        assert_eq!(section["none"], 1, "{section}");
+        assert_eq!(section["silent"], 2, "two closed cells answered nothing at all: {section}");
+        let concepts = section["concepts"].as_array().unwrap();
+        assert_eq!(concepts.len(), 2, "{section}");
+        assert_eq!(lines[0], "knowledge used: 3 cell(s) answered (2 used a concept, 1 none), 2 silent");
+    }
+
+    #[test]
+    fn report_knowledge_used_ranks_concepts_by_uses_then_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let used = |path: &str| json!({"knowledge_used": [{"path": path, "changed": "c"}]});
+        closed_cell(root, "a", used("docs/knowledge/patterns/b.md"));
+        closed_cell(root, "b", used("docs/knowledge/patterns/b.md"));
+        closed_cell(root, "c", used("docs/knowledge/areas/z.md"));
+        closed_cell(root, "d", used("docs/knowledge/areas/z.md"));
+        closed_cell(root, "e", used("docs/knowledge/patterns/a.md"));
+
+        let (section, lines) = build_knowledge_used(root);
+        let concepts = section["concepts"].as_array().unwrap();
+        let order: Vec<(&str, u64)> = concepts
+            .iter()
+            .map(|c| (c["path"].as_str().unwrap(), c["uses"].as_u64().unwrap()))
+            .collect();
+        assert_eq!(
+            order,
+            vec![
+                ("docs/knowledge/areas/z.md", 2),
+                ("docs/knowledge/patterns/b.md", 2),
+                ("docs/knowledge/patterns/a.md", 1),
+            ],
+            "uses descending, then path ascending: {section}"
+        );
+        assert!(lines.contains(&"  2  docs/knowledge/areas/z.md".to_string()), "{lines:?}");
+        assert!(lines.contains(&"  1  docs/knowledge/patterns/a.md".to_string()), "{lines:?}");
+    }
+
+    #[test]
+    fn report_knowledge_used_prints_at_most_ten_concept_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for i in 0..12 {
+            closed_cell(root, &format!("c{i}"), json!({"knowledge_used": [{"path": format!("docs/knowledge/patterns/p{i:02}.md"), "changed": "c"}]}));
+        }
+        let (section, lines) = build_knowledge_used(root);
+        assert_eq!(section["concepts"].as_array().unwrap().len(), 12, "the JSON keeps every concept: {section}");
+        let concept_lines = lines.iter().filter(|l| l.starts_with("  ") && l.contains("docs/knowledge/")).count();
+        assert_eq!(concept_lines, 10, "the text output caps at ten lines: {lines:?}");
+    }
+
+    #[test]
+    fn report_knowledge_used_names_a_concept_loaded_five_times_with_no_use() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut log = String::new();
+        for i in 0..5 {
+            log += &prepare_row(&format!("c{i}"), &["docs/knowledge/patterns/never.md"]);
+        }
+        for i in 0..4 {
+            log += &prepare_row(&format!("d{i}"), &["docs/knowledge/patterns/four-only.md"]);
+        }
+        for i in 0..6 {
+            log += &prepare_row(&format!("e{i}"), &["docs/knowledge/patterns/used-it.md"]);
+        }
+        write_root(root, "logs/dispatch.jsonl", &log);
+        closed_cell(root, "e0", json!({"knowledge_used": [{"path": "docs/knowledge/patterns/used-it.md", "changed": "c"}]}));
+
+        let (section, lines) = build_knowledge_used(root);
+        let never = section["never_used"].as_array().unwrap();
+        assert_eq!(never.len(), 1, "four loads is under the threshold and a used concept never lands here: {section}");
+        assert_eq!(never[0]["path"], "docs/knowledge/patterns/never.md");
+        assert_eq!(never[0]["loads"], 5);
+        assert!(
+            lines.contains(&"loaded, never used: docs/knowledge/patterns/never.md — loaded 5 time(s)".to_string()),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn report_knowledge_used_ignores_non_cell_prepare_rows_and_code_paths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let advisor = json!({
+            "source": "prepare",
+            "kind": "advisor",
+            "feature": "demo",
+            "learned_context": ["docs/knowledge/patterns/advisor-only.md"],
+        });
+        let mut log = format!("{advisor}\n");
+        for i in 0..5 {
+            log += &format!(
+                "{}\n",
+                json!({
+                    "source": "prepare",
+                    "kind": "cell",
+                    "cell": format!("c{i}"),
+                    "learned_context": ["docs/knowledge/patterns/listed.md", "packages/bee/src/x.rs"],
+                })
+            );
+        }
+        write_root(root, "logs/dispatch.jsonl", &log);
+
+        let (section, _lines) = build_knowledge_used(root);
+        let never: Vec<&str> = section["never_used"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["path"].as_str().unwrap())
+            .collect();
+        assert_eq!(never, vec!["docs/knowledge/patterns/listed.md"], "only docs/knowledge paths from cell prepare rows count: {section}");
+    }
+
+    #[test]
+    fn report_knowledge_used_sorts_never_used_by_loads_then_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut log = String::new();
+        for i in 0..5 {
+            log += &prepare_row(&format!("a{i}"), &["docs/knowledge/patterns/rare.md", "docs/knowledge/patterns/common.md"]);
+        }
+        for i in 0..4 {
+            log += &prepare_row(&format!("b{i}"), &["docs/knowledge/patterns/rare.md"]);
+        }
+        write_root(root, "logs/dispatch.jsonl", &log);
+
+        let (section, lines) = build_knowledge_used(root);
+        let never: Vec<&str> = section["never_used"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["path"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            never,
+            vec!["docs/knowledge/patterns/rare.md", "docs/knowledge/patterns/common.md"],
+            "loads descending (9 before 5): {section}"
+        );
+        let first_never = lines.iter().position(|l| l.starts_with("loaded, never used: docs/knowledge/patterns/rare.md"));
+        let second_never = lines.iter().position(|l| l.starts_with("loaded, never used: docs/knowledge/patterns/common.md"));
+        assert!(first_never < second_never, "{lines:?}");
+    }
+
+    #[test]
+    fn report_knowledge_used_over_an_empty_root_is_a_zero_line_and_no_findings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (section, lines) = build_knowledge_used(tmp.path());
+        assert_eq!(section["answered"], 0);
+        assert_eq!(section["silent"], 0);
+        assert!(section["concepts"].as_array().unwrap().is_empty());
+        assert!(section["never_used"].as_array().unwrap().is_empty());
+        assert_eq!(lines, vec!["knowledge used: 0 cell(s) answered (0 used a concept, 0 none), 0 silent".to_string()]);
     }
 }
