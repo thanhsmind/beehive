@@ -13,7 +13,7 @@ bee:
   authoritative_for: "onboarding: installer entry points and source staging"
   anchors: [packages/bee-rs/crates/bee/src/devtools/, packages/bee/, skills/, packages/bee-rs/crates/bee/tests/, packages/bee/hooks/, scripts/install.ps1, scripts/install.sh, .codex-plugin/plugin.json, .claude-plugin/marketplace.json]
   verified_at: 2026-11-10
-  verified_commit: b6d22143098dc6a5632aa27ad76f739fde1077c7
+  verified_commit: 32878a03635a413a538709e9ca05050fccd6e6fb
 ---
 
 # Onboarding — Installer Entry Points and Source Staging

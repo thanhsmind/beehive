@@ -13,7 +13,7 @@ bee:
   authoritative_for: "onboarding: release identity, version parity, and honest reporting"
   anchors: [scripts/release-dirt.sh, packages/bee, packages/, .claude/skills, .agents/skills, .claude-plugin/plugin.json, packages/bee-rs/crates/bee/build.rs, scripts/release.sh, packages/bee-rs/crates/bee/src/devtools/mod.rs, .github/workflows/ci.yml, .codex-plugin/plugin.json, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/, packages/bee-rs/crates/bee/src/devtools/release_manifest.rs, packages/bee/, packages/bee-rs/crates/bee/src/hooks/, skills/, packages/bee/hooks/, packages/bee/hooks/claude-hooks.json, packages/bee/hooks/hooks.json, .opencode/skills/, scripts/install.sh]
   verified_at: 2026-11-10
-  verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
+  verified_commit: 32878a03635a413a538709e9ca05050fccd6e6fb
 ---
 
 # Onboarding — Release Identity, Version Parity, and Honest Reporting
