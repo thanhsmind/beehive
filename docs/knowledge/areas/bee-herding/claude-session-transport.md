@@ -13,8 +13,8 @@ bee:
   authoritative_for: "bee-herding: the claude-session transport, its spawn argv and poll decisions, steer_to, and the dispatch door switch that selects it"
   owns.code: [packages/bee-rs/crates/bee/src/herding/claude_session.rs]
   anchors: [packages/bee-rs/crates/bee/src/herding/claude_session.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/verbs/report_usage.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
-  verified_at: 2026-11-07
-  verified_commit: 5e32ec7330e5f54f62047b7f592588ffc34f60d1
+  verified_at: 2026-11-10
+  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
 ---
 
 # Bee Herding — the claude-session transport, and how a leader steers a Claude worker

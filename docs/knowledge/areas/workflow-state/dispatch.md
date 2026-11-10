@@ -12,8 +12,8 @@ bee:
   sources: ["docs/history/knowledge-outcome-measure/plan.md (D2-D5: the holdout arm)", "harness-integration-adopt cells hia-1 and hia-2 (traces and reports, 2026-07-12)", "dispatcher-unify cells du-1..du-6 (traces and reports, 2026-07-12, flushed capture stubs b6a2233c/9e68432b)", "docs/specs/workflow-state.md#B8", "docs/specs/workflow-state.md#R12", "docs/specs/workflow-state.md#R13", "docs/specs/workflow-state.md#E10", "docs/specs/workflow-state.md#E11", "docs/specs/workflow-state.md#P6", "docs/specs/workflow-state.md#P10", docs/history/packages-engine-move/, "knowledge-in-the-flow cell kitf-1 (dispatch.jsonl pack rows with feature arm, commit b8b65b828, 2026-11-09)", "knowledge-in-the-flow cell kitf-2 (advisor prompt carries feature pack and logs feature arm, commit c28c5c490, 2026-11-09)", CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md]
   authoritative_for: "workflow-state: unified command discovery, validation, and dispatch"
   anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs, packages/bee-rs/crates/bee/src/verbs/cells/validate.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
 ---
 
 # Workflow State — the unified command entry point and its catalog

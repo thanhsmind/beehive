@@ -12,8 +12,8 @@ bee:
   sources: ["i54-closeout cell i54-closeout-1 (helper + guard + doc converge on the live-probed codex 0.145.0 spawn_agent schema; round-trip tests both directions; trace in .bee/cells/, 2026-07-24)", "docs/history/i54-closeout/reports/validation-canary.md (live probe evidence: tool-schema self-inspection, override-rejection probe)", docs/history/i54-closeout/CONTEXT.md D1]
   authoritative_for: "hook-runtime: codex spawn_agent dispatch payload schema and schema-agnostic guard evaluation by tool name and marker"
   anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, skills/bee-swarming/references/swarming-reference.md, packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
 ---
 
 # Hook Runtime — The Codex spawn_agent Dispatch Payload Schema and Schema-Agnostic Guard Evaluation

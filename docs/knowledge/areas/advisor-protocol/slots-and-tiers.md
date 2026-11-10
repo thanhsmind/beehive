@@ -12,8 +12,8 @@ bee:
   sources: ["advisor-and-orchestration Slices 2A-i..2A-iv, 2B, 3A, 3B, 4, 5 (cells ao-2ai-1..ao-5-1, traces in .bee/cells/, reports docs/history/advisor-and-orchestration/reports/, 2026-07-17)", dogfood run .bee/spikes/advisor-and-orchestration/2aiv-cli-gather-dogfood.md, "codex-native-transport cells cnt-1/cnt-2/cnt-3 (resolver + config native slot shape, capability classification, dispatch-prepare native branch + honest economics; traces in .bee/cells/, reports docs/history/codex-native-transport/reports/, 2026-07-19)", "codex-native-transport cell cnt-7 (Claude guard allowlist folds the adviser slot, closing a live adviser-dispatch refusal; trace in .bee/cells/, report docs/history/codex-native-transport/reports/cnt-7.md, 2026-07-19)", "docs/specs/advisor-protocol.md#R1", "docs/specs/advisor-protocol.md#R2", "docs/specs/advisor-protocol.md#R3", "docs/specs/advisor-protocol.md#R4", "docs/specs/advisor-protocol.md#R5", "docs/specs/advisor-protocol.md#R6", "docs/specs/advisor-protocol.md#R8", "docs/specs/advisor-protocol.md#R9", "docs/specs/advisor-protocol.md#E1", "docs/specs/advisor-protocol.md#E2", "docs/specs/advisor-protocol.md#E4", "docs/specs/advisor-protocol.md#E5", "docs/specs/advisor-protocol.md#E6", "docs/specs/advisor-protocol.md#P3", "docs/specs/advisor-protocol.md#P4", "docs/specs/advisor-protocol.md#P5", "docs/specs/advisor-protocol.md#P7"]
   authoritative_for: "advisor-protocol: slots, transports, staleness"
   anchors: [packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/config.rs, skills/bee-hive/references/routing-and-contracts.md, packages/bee-rs/crates/bee/src/state.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: 6b4942a0131b8ee1657aa314495e01bb74823e91
 ---
 
 # Advisor Protocol — Slots, Transports, and Staleness
