@@ -5989,6 +5989,18 @@ use std::process::ExitCode;
         let t = extract_bash_targets("touch before.txt && cd /tmp && touch after.txt");
         assert_eq!(t.paths, vec!["before.txt", "after.txt"]);
         assert_eq!(t.cd_opaque, vec![false, true]);
+
+        let t = extract_bash_targets("cd /tmp && touch /abs/file.txt");
+        assert_eq!(t.paths, vec!["/abs/file.txt"]);
+        assert_eq!(t.cd_opaque, vec![false]);
+
+        let t = extract_bash_targets("cd /tmp && touch /abs/file.txt && touch rel.txt");
+        assert_eq!(t.paths, vec!["/abs/file.txt", "rel.txt"]);
+        assert_eq!(t.cd_opaque, vec![false, true]);
+
+        let t = extract_bash_targets("cd /tmp && touch ~/file.txt");
+        assert_eq!(t.paths, vec!["~/file.txt"]);
+        assert_eq!(t.cd_opaque, vec![true]);
     }
 
     #[test]
@@ -6020,6 +6032,26 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("cd"), "{}", e.stderr);
         assert!(e.stderr.contains("out.txt"), "{}", e.stderr);
         assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_cd_absolute_target_in_root_is_allowed() {
+        let fx = build_fixture("swarming", true);
+        let target = fx.root.join("in_root.txt");
+        let cmd = format!("cd /tmp && touch {}", target.display());
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_cd_absolute_target_bee_state_refused_with_direct_edit_wording() {
+        let fx = build_fixture("swarming", true);
+        let target = fx.root.join(".bee").join("state.json");
+        let cmd = format!("cd /tmp && touch {}", target.display());
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee direct-edit guard") || e.stderr.contains("bee state"), "{}", e.stderr);
+        assert!(!e.stderr.contains("could not be resolved"), "{}", e.stderr);
     }
 
     #[test]

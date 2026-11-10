@@ -1048,7 +1048,11 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
         i += 1;
     }
     let cd_opaque = match cd_marker {
-        Some(marker) => (0..paths.len()).map(|idx| idx >= marker).collect(),
+        Some(marker) => paths
+            .iter()
+            .enumerate()
+            .map(|(idx, target)| idx >= marker && !std::path::Path::new(target).is_absolute())
+            .collect(),
         None => vec![false; paths.len()],
     };
     BashTargets { paths, broad_write, cd_opaque }
