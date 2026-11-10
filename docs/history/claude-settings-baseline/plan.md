@@ -75,7 +75,7 @@ One slice: the Rust projection, then the installer pass-through, then the writer
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
 | csb-1 | Project the Claude settings baseline add-only in onboarding | onboard/hooks_wiring.rs, onboard/plan.rs, onboard/apply.rs, onboard/mod.rs, onboard/tests.rs, registry_payload.json, catalog.rs, hooks/cli_shape.rs, reservations/flags.rs | — | onboarding a fresh repo writes the baseline; a second run plans nothing; a present defaultMode stays | `cargo test … -p bee -- claude_settings onboard` |
-| csb-2 | Pass --no-claude-settings through both installers | scripts/install.sh, scripts/install.ps1 | csb-1 | both installers name the flag in their help and hand it to onboarding | `bash -n scripts/install.sh` |
+| csb-2 | Pass --no-claude-settings through both installers | scripts/install.sh, scripts/install.ps1 | csb-1 | both installers name the flag in their help and hand it to onboarding | `bash -n scripts/install.sh && bee dev release-manifest --check` |
 | csb-3 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | csb-1, csb-2 | the onboarding concept states the baseline and its add-only rules | `bee knowledge check` |
 
 ```json
@@ -180,7 +180,8 @@ One slice: the Rust projection, then the installer pass-through, then the writer
     ],
     "files": [
       "scripts/install.sh",
-      "scripts/install.ps1"
+      "scripts/install.ps1",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/claude-settings-baseline/CONTEXT.md",
@@ -189,8 +190,8 @@ One slice: the Rust projection, then the installer pass-through, then the writer
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Mirror --no-statusline exactly. scripts/install.sh: add --no-claude-settings to the usage text (one entry saying it skips the Claude settings baseline — bypass mode, the denied tools and the six switches — and keeps the worktree-tool allow), to the argument parser, and to the ONBOARD_FLAGS pass-through; add one Safety bullet saying the baseline is add-only and never overwrites a present value, that an already-onboarded project gains it on its next install or onboard apply, that it is written even with --no-hooks, and that \"claude_settings\": false in .bee/config.json opts out for good. scripts/install.ps1: add the matching -NoClaudeSettings switch, its help line, and the '--no-claude-settings' pass-through into $onboardFlags. Prove with bash -n scripts/install.sh, a pwsh parse check of install.ps1 when pwsh exists (name it skipped otherwise), and rg showing the flag in both scripts. One commit.",
-    "verify": "bash -n scripts/install.sh",
+    "action": "Mirror --no-statusline exactly. scripts/install.sh: add --no-claude-settings to the usage text (one entry saying it skips the Claude settings baseline — bypass mode, the denied tools and the six switches — and keeps the worktree-tool allow), to the argument parser, and to the ONBOARD_FLAGS pass-through; add one Safety bullet saying the baseline is add-only and never overwrites a present value, that an already-onboarded project gains it on its next install or onboard apply, that it is written even with --no-hooks, and that \"claude_settings\": false in .bee/config.json opts out for good. scripts/install.ps1: add the matching -NoClaudeSettings switch, its help line, and the '--no-claude-settings' pass-through into $onboardFlags. Prove with bash -n scripts/install.sh, a pwsh parse check of install.ps1 when pwsh exists (name it skipped otherwise), and rg showing the flag in both scripts. Then run .bee/bin/bee dev regen so the release manifest records the new installer bytes, and commit the manifest with the scripts. One commit.",
+    "verify": "bash -n scripts/install.sh && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "install.sh names --no-claude-settings in its help and passes it to onboarding",
