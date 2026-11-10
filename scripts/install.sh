@@ -98,8 +98,8 @@ Safety (brownfield):
   - Claude settings baseline: bypass mode, the denied tools and the switches are
     add-only and never overwrite a present value; a project already onboarded
     gains it on its next install or `bee onboard --apply`, and it is written
-    even with --no-hooks. Pass --no-claude-settings, or set
-    "claude_settings": false in .bee/config.json, to opt out for good.
+    even with --no-hooks. Pass --no-claude-settings to skip it for one run,
+    or set "claude_settings": false in .bee/config.json to opt out for good.
   - Skills: onboarding syncs the bee skills per-project by default into
     <repo>/.claude/skills (Claude Code) and <repo>/.agents/skills (Codex);
     these trees are committed, not gitignored. Pass --global-skills to also
