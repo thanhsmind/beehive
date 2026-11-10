@@ -91,7 +91,8 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
 | kur-3 | Record on each cap which concepts changed a decision | handlers_close.rs, finish_support.rs, cells/tests.rs, herding/mailbox.rs, registry_payload.json, hooks/cli_shape.rs | — | `bee cells finish --knowledge-used "<path> — <what>"` lands on trace.knowledge_used | `cargo test … -p bee -- knowledge_used` |
 | kur-4 | Report concept use and concepts loaded but never used | knowledge/report.rs | kur-3 | `bee knowledge report` prints a knowledge-used line, top uses, and never-used concepts | `cargo test … -p bee -- report_knowledge_used` |
 | kur-5 | Teach the rules in the skills and point at the one rule list | bee-swarming SKILL.md, bee-capturing SKILL.md and concept-authoring.md, rendered skill trees, release-manifest.json | kur-1, kur-3 | the skills point at the one rule list and name the knowledge-used answer; the regen chain also covers kur-1's prompt | `bee dev regen --check` and `bee dev release-manifest --check` |
-| kur-6 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | all | the okf-profile and workflow-state concepts describe the rules, warnings and use record | `bee knowledge check` |
+| kur-7 | Read the Read-when line through one shared helper | knowledge/check.rs, drivers/prepare.rs, knowledge/mod.rs | kur-1, kur-2 | nothing visible changes; one Read-when rule read in one place (added after kur-1 and kur-2 each wrote a copy) | `cargo test … -p bee -- writing_warnings read_when knowledge_rules` |
+| kur-6 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | all, kur-7 | the okf-profile and workflow-state concepts describe the rules, warnings and use record | `bee knowledge check` |
 
 ```json
 [
@@ -430,6 +431,67 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
     }
   },
   {
+    "id": "kur-7",
+    "feature": "knowledge-useful-rules",
+    "title": "Read the Read-when line through one shared helper",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": [
+      "kur-1",
+      "kur-2"
+    ],
+    "decisions": [
+      "71241c48",
+      "f4b38727",
+      "e8899530"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "docs/knowledge/patterns/20260818-a-rule-checked-at-two-points-needs-one-shared.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "The Read-when rule is read at two points with two copies of its constants: READ_WHEN_PREFIX and READ_WHEN_SCAN_LINES plus body_opens_with_read_when in knowledge/check.rs (kur-2), and READ_WHEN_PREFIX, READ_WHEN_SCAN_LINES and read_when_of in drivers/prepare.rs (kur-1). Keep ONE pair of constants and ONE function in knowledge/check.rs, `pub(crate) fn read_when_line(body: &str) -> Option<&str>` returning the first line starting 'Read when:' among the first 10 non-blank lines that are not headings (trimmed). check.rs's missing_read_when uses `.is_none()`; prepare.rs's read_when_of keeps reading the body through knowledge::concept_body and calls the shared function (re-export through knowledge/mod.rs if needed). Delete the copies in prepare.rs. Behavior must not change: the existing writing_warnings and read_when tests stay green unchanged. No code comments. One commit.",
+    "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- writing_warnings read_when knowledge_rules",
+    "must_haves": {
+      "truths": [
+        "One READ_WHEN_PREFIX and one scan-line constant exist in the crate",
+        "knowledge check and the learned-context line both call the one helper",
+        "writing_warnings and read_when tests pass unchanged"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+          "substantive": "pub(crate) fn read_when_line"
+        }
+      ],
+      "key_links": [
+        "prepare.rs read_when_of calls knowledge read_when_line"
+      ],
+      "prohibitions": [
+        "No behavior change",
+        "No code comments"
+      ],
+      "open_choices": []
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  },
+  {
     "id": "kur-6",
     "feature": "knowledge-useful-rules",
     "title": "Consolidate this feature's knowledge and write its delivery",
@@ -441,7 +503,8 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
       "kur-2",
       "kur-3",
       "kur-4",
-      "kur-5"
+      "kur-5",
+      "kur-7"
     ],
     "decisions": [
       "71241c48"
