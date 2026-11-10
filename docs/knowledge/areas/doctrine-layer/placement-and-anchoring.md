@@ -12,8 +12,8 @@ bee:
   sources: ["tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "docs/specs/doctrine-layer.md#B1", "docs/specs/doctrine-layer.md#B2", "docs/specs/doctrine-layer.md#B3a", "docs/specs/doctrine-layer.md#B4", "docs/specs/doctrine-layer.md#R1", "docs/specs/doctrine-layer.md#R2", "docs/specs/doctrine-layer.md#E1", "docs/specs/doctrine-layer.md#P1", "docs/specs/doctrine-layer.md#P2", "docs/specs/doctrine-layer.md#P4", "derived-check-hardening cells dch-5/dch-7 (retired-stage currency check with derived tokens; research-brief and write-guard fixture residuals cleared; traces .bee/cells/dch-{5,7}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)"]
   authoritative_for: "doctrine-layer: rule placement, propagation, and anchoring"
   anchors: [packages/bee/AGENTS.block.md, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/tests/instruction_laws.rs, packages/bee-rs/crates/bee/src/state.rs, skills/bee-researching/references/research-brief-template.md, packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, skills/, skills/bee-hive/references/routing-and-contracts.md, scripts/, packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: f1c771b12fbf1a9b491a54191cb1f6423e911ec3
 ---
 
 # Doctrine Layer — Rule Placement, Propagation, and Anchoring

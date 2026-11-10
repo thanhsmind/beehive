@@ -14,8 +14,8 @@ bee:
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
   anchors: [scripts/]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: f1c771b12fbf1a9b491a54191cb1f6423e911ec3
 ---
 
 # Bee OKF Profile (purpose, entry points, and actors)

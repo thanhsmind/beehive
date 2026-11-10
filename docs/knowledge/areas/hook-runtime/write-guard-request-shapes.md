@@ -12,8 +12,8 @@ bee:
   sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7", "guard-parser-depth cell gpd-1 (trace .bee/cells/archive/guard-parser-depth/gpd-1.json, commit 98888896, plan docs/history/guard-parser-depth/plan.md, capped 2026-08-05)", "js-parity-cleanup cell jp-9 (heading guard restored to the platform's counting unit, the ASCII-only repair and its fall-through named; trace .bee/cells/archive/js-parity-cleanup/jp-9.json, 2026-08-04 — full suite 1006 passed, 0 failed)"]
   authoritative_for: "hook-runtime: write-guard request-shape recognition and per-target decisions"
   anchors: [scripts/, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/session_close/html.rs, packages/bee-rs/crates/bee/tests/hook_contracts.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs, packages/bee-rs/crates/bee/src/hooks/cli_shape.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs, packages/bee-rs/crates/bee/src/textutil.rs, packages/bee-rs/crates/bee/src/comments.rs, packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: f1c771b12fbf1a9b491a54191cb1f6423e911ec3
 ---
 
 # Hook Runtime — the request shapes the write guard can read
