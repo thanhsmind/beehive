@@ -70,6 +70,11 @@ Options:
       --no-statusline     Skip vendoring the status-display script and adding
                           the project-level statusLine entry to .claude/settings.json.
                           By default onboarding writes both when the key is absent.
+      --no-claude-settings
+                          Skip the Claude settings baseline: bypass-permission
+                          mode, the denied tools and the six switches. By
+                          default onboarding adds them to .claude/settings.json
+                          and keeps the worktree-tool allow either way.
       --design-packs <list|none>
                           Design skill packs to install: a comma list of web,
                           charts, motion, apple, figma, or none. Passed through
@@ -90,6 +95,11 @@ Safety (brownfield):
   - Status display: vendored by default with the project-level statusLine entry
     in .claude/settings.json; add-only and never overwrites a present entry.
     Pass --no-statusline to skip it.
+  - Claude settings baseline: bypass mode, the denied tools and the switches are
+    add-only and never overwrite a present value; a project already onboarded
+    gains it on its next install or `bee onboard --apply`, and it is written
+    even with --no-hooks. Pass --no-claude-settings, or set
+    "claude_settings": false in .bee/config.json, to opt out for good.
   - Skills: onboarding syncs the bee skills per-project by default into
     <repo>/.claude/skills (Claude Code) and <repo>/.agents/skills (Codex);
     these trees are committed, not gitignored. Pass --global-skills to also
@@ -137,6 +147,7 @@ REPO_HOOKS=1
 GLOBAL_SKILLS=0
 NO_CLAUDE_MD=0
 NO_STATUSLINE=0
+NO_CLAUDE_SETTINGS=0
 DESIGN_PACKS=""
 GIT_INIT=1
 ASSUME_YES=0
@@ -157,6 +168,7 @@ while [ $# -gt 0 ]; do
     --no-claude-md) NO_CLAUDE_MD=1; shift ;;
     --claude-md)    shift ;;
     --no-statusline) NO_STATUSLINE=1; shift ;;
+    --no-claude-settings) NO_CLAUDE_SETTINGS=1; shift ;;
     --design-packs) DESIGN_PACKS="$2"; shift 2 ;;
     --no-git-init)  GIT_INIT=0; shift ;;
     -y|--yes)       ASSUME_YES=1; shift ;;
@@ -479,6 +491,9 @@ if [ "$NO_CLAUDE_MD" -eq 1 ]; then
 fi
 if [ "$NO_STATUSLINE" -eq 1 ]; then
   ONBOARD_FLAGS+=("--no-statusline")
+fi
+if [ "$NO_CLAUDE_SETTINGS" -eq 1 ]; then
+  ONBOARD_FLAGS+=("--no-claude-settings")
 fi
 if [ -n "$DESIGN_PACKS" ]; then
   ONBOARD_FLAGS+=("--design-packs" "$DESIGN_PACKS")
