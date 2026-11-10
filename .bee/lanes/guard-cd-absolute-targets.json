@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"guard-cd-absolute-targets\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 78eab14; reload the product and test \"guard-cd-absolute-targets\", then either approve uat (\"bee gate --name uat --approved true --lane guard-cd-absolute-targets\") or fix it in the worktree and merge again.",
   "created_at": "2026-11-10T13:31:32.845Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: guard-cd-absolute-targets",
-    "asked_at": "2026-11-10T13:54:28.734Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",

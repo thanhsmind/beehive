@@ -2098,5 +2098,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-10T05:08:32.211Z"
+  },
+  "guard-cd-absolute-targets": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-10T13:57:49.671Z"
   }
 }

@@ -1,0 +1,181 @@
+{
+  "id": "gcd-1",
+  "feature": "guard-cd-absolute-targets",
+  "title": "Check absolute write targets after a cd instead of refusing them",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "d199ac87"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+  ],
+  "read_first": [
+    "docs/history/guard-cd-absolute-targets/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Keep contract d199ac87 (guard-cd-absolute-targets). In write_guard/guards.rs extract_bash_targets, mark a target cd-opaque only when its index is at or after the cd marker AND std::path::Path::new(target).is_absolute() is false; an absolute target after a cd is then resolved and checked by main.rs exactly like a target with no cd. Targets before a cd and relative targets after a cd keep their current behavior; a ~ path stays relative here. Red first in write_guard/tests.rs: extend or add extractor tests named with cd_ so the filter runs them (an absolute target after cd is not opaque, a relative one is, mixed commands mark per target), and fixture tests named with cd_ through the existing bash()/expect_done helpers: cd /tmp && touch <fixture root absolute path to an ordinary in-root file> is allowed; cd /tmp && touch <fixture root absolute path>/.bee/state.json is refused with the direct-edit wording and never the cd wording; cd /tmp && touch out.txt is still refused with the cd wording. Watch the new tests fail before the fix. Knowledge delta in the same commit: in docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md change the cd bullet to say the refusal applies to relative targets only and an absolute target after a cd is checked normally, citing docs/history/guard-cd-absolute-targets/CONTEXT.md D1 (not the raw decision id). No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cd_",
+  "must_haves": {
+    "truths": [
+      "An absolute write target after a cd is resolved and checked like a target with no cd",
+      "A relative write target after a cd is still refused with the cd wording",
+      "An absolute target after a cd that hits a guarded bee state file is still refused"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "substantive": "cd_opaque excludes absolute targets"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "red-first tests for absolute and relative targets after cd"
+      }
+    ],
+    "key_links": [
+      "main.rs refuses only targets that guards.rs marks cd_opaque"
+    ],
+    "prohibitions": [
+      "Never skip containment or direct-edit checks for an absolute target",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "gcd-1-worker",
+    "outcome": "Allow absolute write targets after a cd while preserving refusal for relative targets b79cf2cc22674284d1a853847443e5f362666e42",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+    ],
+    "deviations": [
+      "sync-ack: the owning concept write-guard-request-shapes.md was updated in this commit; the other listed concepts anchor the write_guard directory broadly and none states the cd rule"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-10T13:42:52.860Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cd_ — green:unit — unit tests cover cd_opaque classification and write guard resolution for relative vs absolute targets after cd",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d8d9a354-2b97-4a28-b551-5d43719d6372",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cd_",
+    "claimed_at": "2026-11-10T13:33:31.853Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+    ],
+    "sync_ack": "the owning concept write-guard-request-shapes.md was updated in this commit; the other listed concepts anchor the write_guard directory broadly and none states the cd rule",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Allow absolute write targets after a cd while preserving refusal for relative targets b79cf2cc22674284d1a853847443e5f362666e42",
+      "commit": "b79cf2cc22674284d1a853847443e5f362666e42",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cd_ — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cd_ — green:unit — unit tests cover cd_opaque classification and write guard resolution for relative vs absolute targets after cd",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An absolute write target after a cd is resolved and checked like a target with no cd",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+          },
+          {
+            "requirement": "A relative write target after a cd is still refused with the cd wording",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "An absolute target after a cd that hits a guarded bee state file is still refused",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "main.rs refuses only targets that guards.rs marks cd_opaque",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+          }
+        ],
+        "recorded_at": "2026-11-10T13:43:03.057Z",
+        "recorded_by": "d8d9a354-2b97-4a28-b551-5d43719d6372",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "abs-after-cd-checked-like-no-cd",
+            "status": "PASS",
+            "evidence": "guards.rs:1054 clears cd_opaque for is_absolute targets; main.rs:388 falls through to canonical_rel_path (main.rs:397); probe `cd /tmp && touch ROOT/in.txt` code=0, `echo x > ROOT/in.txt` code=0; test bash_cd_absolute_target_in_root_is_allowed ok"
+          },
+          {
+            "id": "rel-after-cd-still-cd-wording",
+            "status": "PASS",
+            "evidence": "probe `cd /tmp && echo x > rel.txt` and `touch ROOT/ok.txt rel.txt` code=2 with 'could not be resolved — a `cd` earlier'; bash_cd_then_write_denies_naming_cd_opacity ok"
+          },
+          {
+            "id": "abs-after-cd-bee-state-refused",
+            "status": "PASS",
+            "evidence": "probes touch/echo >/cp/sed -i/rm/tee + ROOT/sub/../.bee/state.json after cd all code=2 'bee direct-edit guard'; bash_cd_absolute_target_bee_state_refused_with_direct_edit_wording ok"
+          },
+          {
+            "id": "no-skip-containment-or-direct-edit",
+            "status": "PASS",
+            "evidence": "hook_local.rs:366-380 resolves absolute via np_resolve1+realpath, cwd unused; probes OUT/outside.txt, ROOT/sub/../../outside.txt, symlink ROOT/link/x, redirect > OUT/out.txt after cd all code=2 containment"
+          },
+          {
+            "id": "before-cd-and-cd-segment-unchanged",
+            "status": "PASS",
+            "evidence": "cd_marker set after cd-segment redirects (guards.rs:836-860); bash_write_before_cd_keeps_its_own_denial_wording and bash_cd_segment_redirect_denies_the_protected_file_again ok"
+          },
+          {
+            "id": "only-consumer-of-cd_opaque",
+            "status": "PASS",
+            "evidence": "grep: cd_opaque read only at main.rs:388; no other target shape depends on it"
+          },
+          {
+            "id": "verify-command",
+            "status": "PASS",
+            "evidence": "cargo test ... -- cd_ : 8 passed; 0 failed. Full proof: exit 0, 49 ok results, 0 FAILED"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "paseo-pi-agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-10T13:54:12.646Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

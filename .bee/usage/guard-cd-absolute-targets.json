@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "guard-cd-absolute-targets",
+  "closed_at": "2026-11-10T13:57:49.709Z",
+  "sessions": [
+    {
+      "session_id": "d8d9a354-2b97-4a28-b551-5d43719d6372",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 192,
+          "output": 30006,
+          "cache_write": 124602,
+          "cache_read": 8001683,
+          "new": 154800,
+          "cached": 8001683,
+          "total": 8156483
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794317244379,
+      "ended_ms": 1794319067582,
+      "totals": {
+        "new": 154800,
+        "cached": 8001683,
+        "total": 8156483
+      }
+    }
+  ],
+  "skipped": 1,
+  "totals": {
+    "main": {
+      "new": 154800,
+      "cached": 8001683,
+      "total": 8156483
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 217478,
+      "cached": 8520896,
+      "total": 8738374
+    },
+    "herding": {
+      "new": 62678,
+      "cached": 519213,
+      "total": 581891,
+      "models": {
+        "claude-opus-5-5": {
+          "input": 30,
+          "output": 11298,
+          "cache_write": 51350,
+          "cache_read": 519213,
+          "new": 62678,
+          "cached": 519213,
+          "total": 581891
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "7739ffc8-4140-4467-8a19-819004c0245d",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 30,
+          "output": 11298,
+          "cache_write": 51350,
+          "cache_read": 519213,
+          "new": 62678,
+          "cached": 519213,
+          "total": 581891
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794318219774,
+      "ended_ms": 1794318840079,
+      "totals": {
+        "new": 62678,
+        "cached": 519213,
+        "total": 581891
+      },
+      "job_id": "job-1794318216535-2708962-1"
+    }
+  ]
+}
