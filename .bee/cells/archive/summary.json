@@ -2088,5 +2088,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-10T02:28:25.116Z"
+  },
+  "claude-settings-baseline": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-11-10T04:57:57.500Z"
   }
 }

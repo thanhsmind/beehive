@@ -1,0 +1,173 @@
+{
+  "id": "csb-2",
+  "feature": "claude-settings-baseline",
+  "title": "Pass --no-claude-settings through both installers",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "csb-1"
+  ],
+  "decisions": [
+    "bd6ebab1",
+    "118c4686",
+    "9f22ec8d"
+  ],
+  "files": [
+    "scripts/install.sh",
+    "scripts/install.ps1",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/claude-settings-baseline/CONTEXT.md",
+    "scripts/install.sh",
+    "scripts/install.ps1"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Mirror --no-statusline exactly. scripts/install.sh: add --no-claude-settings to the usage text (one entry saying it skips the Claude settings baseline — bypass mode, the denied tools and the six switches — and keeps the worktree-tool allow), to the argument parser, and to the ONBOARD_FLAGS pass-through; add one Safety bullet saying the baseline is add-only and never overwrites a present value, that an already-onboarded project gains it on its next install or onboard apply, that it is written even with --no-hooks, and that \"claude_settings\": false in .bee/config.json opts out for good. scripts/install.ps1: add the matching -NoClaudeSettings switch, its help line, and the '--no-claude-settings' pass-through into $onboardFlags. Prove with bash -n scripts/install.sh, a pwsh parse check of install.ps1 when pwsh exists (name it skipped otherwise), and rg showing the flag in both scripts. Then run .bee/bin/bee dev regen so the release manifest records the new installer bytes, and commit the manifest with the scripts. One commit.",
+  "verify": "bash -n scripts/install.sh && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "install.sh names --no-claude-settings in its help and passes it to onboarding",
+      "install.ps1 accepts -NoClaudeSettings and passes --no-claude-settings to onboarding",
+      "install.sh's Safety section says the baseline is add-only"
+    ],
+    "artifacts": [
+      {
+        "path": "scripts/install.sh",
+        "substantive": "flag in usage, parser and ONBOARD_FLAGS"
+      },
+      {
+        "path": "scripts/install.ps1",
+        "substantive": "switch, help and pass-through"
+      }
+    ],
+    "key_links": [
+      "both installers reach the same onboarding flag"
+    ],
+    "prohibitions": [
+      "No settings edit in shell or PowerShell code",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-csb-2",
+    "outcome": "both installers pass --no-claude-settings to onboarding",
+    "files_changed": [
+      "scripts/install.sh",
+      "scripts/install.ps1",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the leader corrected the Safety sentence that said the per-run flag opts out for good (commit after 26a6ee8c1)"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-10T04:45:02.294Z",
+    "behavior_change": true,
+    "verification_evidence": "syntax ok and 605 files match the stored manifest after bee dev regen; pwsh was not run (not installed here), so install.ps1 is checked by reading only; the worker's sandbox install.sh --dry-run printed 'bee onboard --runtime both --repo-hooks --no-claude-settings'",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": "bash -n scripts/install.sh && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-10T04:37:16.428Z",
+    "knowledge_delta": [],
+    "mistakes": [
+      {
+        "wrong": "csb-2's Safety bullet said the per-run --no-claude-settings flag opts out for good",
+        "better": "state each opt-out's scope separately",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Both installers name --no-claude-settings (install.ps1 -NoClaudeSettings) and pass it to onboarding; install.sh's Safety text describes the add-only baseline, the upgrade path, the no-hooks case and both opt-outs",
+      "commit": "26a6ee8c1",
+      "files": [
+        "scripts/install.sh",
+        "scripts/install.ps1",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash -n scripts/install.sh && .bee/bin/bee dev release-manifest --check — green:static — syntax ok and 605 files match the stored manifest after bee dev regen; pwsh was not run (not installed here), so install.ps1 is checked by reading only; the worker's sandbox install.sh --dry-run printed 'bee onboard --runtime both --repo-hooks --no-claude-settings'",
+      "deviations": [
+        "the leader corrected the Safety sentence that said the per-run flag opts out for good (commit after 26a6ee8c1)"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "install.sh names --no-claude-settings in its help and passes it to onboarding",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "install.ps1 accepts -NoClaudeSettings and passes --no-claude-settings to onboarding",
+            "artifact": "scripts/install.ps1"
+          },
+          {
+            "requirement": "install.sh's Safety section says the baseline is add-only",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "flag in usage, parser and ONBOARD_FLAGS",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "switch, help and pass-through",
+            "artifact": "scripts/install.ps1"
+          },
+          {
+            "requirement": "both installers reach the same onboarding flag",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "No settings edit in shell or PowerShell code",
+            "artifact": "scripts/install.sh"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "scripts/install.sh"
+          }
+        ],
+        "recorded_at": "2026-11-10T04:45:10.391Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "scripts/install.sh:73-76 usage entry, :150 NO_CLAUDE_SETTINGS=0, :171 parser case, :495-496 ONBOARD_FLAGS+=(\"--no-claude-settings\"); bash -n scripts/install.sh ok"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "scripts/install.ps1:57 [switch]$NoClaudeSettings, :23-26 help entry, :553 $onboardFlags += '--no-claude-settings'; pwsh absent so parse check skipped, read-only check"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "scripts/install.sh:98-102 Safety bullet: baseline 'add-only and never overwrite a present value', already-onboarded gains it, written even with --no-hooks, \"claude_settings\": false opts out for good"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-10T04:57:50.625Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

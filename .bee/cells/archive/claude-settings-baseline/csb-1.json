@@ -1,0 +1,259 @@
+{
+  "id": "csb-1",
+  "feature": "claude-settings-baseline",
+  "title": "Project the Claude settings baseline add-only in onboarding",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "bd6ebab1",
+    "282a650f",
+    "5fd24d1b",
+    "118c4686",
+    "a9daf9d2",
+    "9f22ec8d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+  ],
+  "read_first": [
+    "docs/history/claude-settings-baseline/CONTEXT.md",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Keep contract 282a650f. In onboard/hooks_wiring.rs widen the worktree-tool projection into the Claude settings baseline of decision bd6ebab1: one constant set (allow EnterWorktree, ExitWorktree; deny EnterPlanMode, ExitPlanMode, DesignSync, NotebookEdit, SendMessage, PushNotification, RemoteTrigger, ReportFindings, ScheduleWakeup, AskUserQuestion, CronCreate, CronDelete, CronList; permissions.defaultMode bypassPermissions; top-level disableBundledSkills, disableWorkflows, disableRemoteControl, disableClaudeAiConnectors, disableArtifact true and syncClaudeAiSkills false). Replace worktree_tool_allow_missing and merge_worktree_tool_allow with claude_settings_missing(repo_root, full) and merge_claude_settings(path, full); full=false owns only the two allow names, exactly today's behavior. Add-only: append missing allow/deny names after existing entries in baseline order; write defaultMode only when permissions has none; write a top-level key only when absent; keep every other key, entry and order; a parse failure, non-object top level, non-object permissions or non-array allow/deny returns the text unchanged. Rename the plan item to merge_claude_settings in plan.rs and its apply arm in apply.rs (apply re-checks before writing). Add the --no-claude-settings onboard flag (bool, default off) in mod.rs and the registry, and a project preference read exactly like statusline_config_preference (.bee/config.json \"claude_settings\": false, never written by onboarding); full is false when the flag is given OR the preference is false (D5). claude_settings_missing returns false for every shape the merge refuses, and deny, defaultMode and the switches are inspected only when full is true. In notices.rs add claude_settings_notices, emitted in plan and apply output whenever merge_claude_settings with full=true is listed: one 'notice: ' line saying Claude permission prompts are turned off for this project and the baseline tools are denied, naming each baseline key kept at the project's own value and each baseline deny name the project's allow list already carried, saying the baseline is written even when bee's guard hooks are not wired, and naming --no-claude-settings and \"claude_settings\": false as the opt-outs (D6, D7); bump any pinned flag count (catalog.rs PINNED_FLAG_COUNT, reservations/flags.rs, cli_shape.rs) with the new flag. Red first: keep the assertions of the four hooks_wiring.rs worktree tests (hooks_wiring.rs:1422, :1444, :1474, :1492) under full=false, renamed, and update the six onboard/tests.rs end-to-end tests at :2827-:2929 that pin the item name merge_worktree_tool_allow; and add tests: a fresh file gets the whole baseline; a file with defaultMode default and an allow list keeps both and gains the rest; deny entries are appended once; a second merge is unchanged; --no-claude-settings on a fresh repo writes only the two allow names; an onboard apply then a plan reports up_to_date; an already-onboarded host shape (the two allow names, hooks and statusLine present, no deny, no defaultMode) gains the baseline, keeps every hooks and statusLine key in order, and takes one .bak; a non-array deny plans nothing and reports up_to_date; \"claude_settings\": false with a bare apply writes no defaultMode, deny or switch; the notice names a kept defaultMode and an allowed-then-denied tool. Knowledge delta in the same commit: in docs/knowledge/areas/onboarding/host-project-artifacts.md widen the worktree-tool paragraph to the baseline and its opt-out, citing this feature's CONTEXT.md D1-D3 (not raw decision ids), with a Read when: line if the concept lacks one. No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- claude_settings onboard",
+  "must_haves": {
+    "truths": [
+      "Onboarding a repo with no .claude/settings.json writes the whole baseline",
+      "A present permissions.defaultMode, a present top-level key and existing allow/deny entries are never changed or reordered",
+      "Missing allow and deny names are appended once; a second apply plans nothing",
+      "The --no-claude-settings flag writes only EnterWorktree and ExitWorktree, as before",
+      "An unparsable or odd-shaped settings file is left unchanged",
+      "An opted-out host (flag or config preference) gets no baseline on a later bare apply",
+      "Onboarding prints a notice whenever it plans or writes the full baseline, naming kept keys and the opt-outs",
+      "An already-onboarded host gains the baseline with its hooks and statusLine untouched"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+        "substantive": "the baseline constant set, claude_settings_missing and merge_claude_settings with tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+        "substantive": "the --no-claude-settings flag"
+      }
+    ],
+    "key_links": [
+      "plan.rs plans merge_claude_settings only when claude_settings_missing; apply.rs re-checks before writing"
+    ],
+    "prohibitions": [
+      "Never overwrite a present value",
+      "Never touch ~/.claude/settings.json",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Whether full=false is a separate constant or a filter over the baseline"
+    ]
+  },
+  "trace": {
+    "worker": "w-csb-1",
+    "outcome": "Widened onboarding's worktree-tool projection into the add-only Claude settings baseline (merge_claude_settings + --no-claude-settings + durable claude_settings preference + one notice), knowledge concept updated, committed 471430df1.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "deviations": [
+      "sync-ack: the capture-queue rule home changed only by a freshness re-confirm stamp (bee knowledge confirm), not by its rule text, so its applied_at files owe nothing"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-10T04:37:06.560Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- claude_settings onboard — green:unit — 268 passed, 0 failed, 1 ignored (the 1 ignored is pre-existing and outside onboarding); plus green:live against throwaway sandboxes for the fresh-repo baseline, the already-onboarded upgrade with one .bak, both opt-outs, kept defaultMode/switch values and the non-array-deny no-op",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- claude_settings onboard",
+    "claimed_at": "2026-11-10T03:48:22.055Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "sync_ack": "the capture-queue rule home changed only by a freshness re-confirm stamp (bee knowledge confirm), not by its rule text, so its applied_at files owe nothing",
+    "no_mistakes": true,
+    "knowledge_used": [
+      {
+        "path": "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+        "changed": "its worktree-tool paragraph and its never-overwrite/add-only discipline set the shape of merge_claude_settings and told me the re-run convergence (a second apply plans nothing) is a behaviour a host relies on, not an incidental property"
+      }
+    ],
+    "report": {
+      "outcome": "Widened onboarding's worktree-tool projection into the add-only Claude settings baseline (merge_claude_settings + --no-claude-settings + durable claude_settings preference + one notice), knowledge concept updated, committed 471430df1.",
+      "commit": "cd84686054597d3a14071e0fe55e9a63b0f9fb8e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- claude_settings onboard — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- claude_settings onboard — green:unit — 268 passed, 0 failed, 1 ignored (the 1 ignored is pre-existing and outside onboarding); plus green:live against throwaway sandboxes for the fresh-repo baseline, the already-onboarded upgrade with one .bak, both opt-outs, kept defaultMode/switch values and the non-array-deny no-op",
+      "deviations": [],
+      "knowledge_used": [
+        "docs/knowledge/areas/onboarding/host-project-artifacts.md — its worktree-tool paragraph and its never-overwrite/add-only discipline set the shape of merge_claude_settings and told me the re-run convergence (a second apply plans nothing) is a behaviour a host relies on, not an incidental property"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Onboarding a repo with no .claude/settings.json writes the whole baseline",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "A present permissions.defaultMode, a present top-level key and existing allow/deny entries are never changed or reordered",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          },
+          {
+            "requirement": "Missing allow and deny names are appended once; a second apply plans nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          },
+          {
+            "requirement": "The --no-claude-settings flag writes only EnterWorktree and ExitWorktree, as before",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+          },
+          {
+            "requirement": "An unparsable or odd-shaped settings file is left unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          },
+          {
+            "requirement": "An opted-out host (flag or config preference) gets no baseline on a later bare apply",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+          },
+          {
+            "requirement": "Onboarding prints a notice whenever it plans or writes the full baseline, naming kept keys and the opt-outs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs"
+          },
+          {
+            "requirement": "An already-onboarded host gains the baseline with its hooks and statusLine untouched",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "the baseline constant set, claude_settings_missing and merge_claude_settings with tests",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          },
+          {
+            "requirement": "the --no-claude-settings flag",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+          },
+          {
+            "requirement": "plan.rs plans merge_claude_settings only when claude_settings_missing; apply.rs re-checks before writing",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "Never overwrite a present value",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          },
+          {
+            "requirement": "Never touch ~/.claude/settings.json",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+          }
+        ],
+        "recorded_at": "2026-11-10T04:37:14.443Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "hooks_wiring.rs:601-625: empty/absent file writes defaultMode, allow, deny and all six switches when full; test a_fresh_file_gets_the_whole_baseline and tests.rs a_virgin_settings_file_gains_the_whole_baseline pass (268 passed)"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "hooks_wiring.rs:648-686: allow/deny start from existing arrays and only push absent names; defaultMode written only if !contains_key; switches filtered on !existing.contains_key; preserve_order on serde_json (packages/bee-rs/Cargo.toml:13) keeps key order on insert; tests a_present_default_mode_and_allow_list_stay_and_gain_the_rest, a_present_switch_keeps_its_value... pass"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "hooks_wiring.rs:649-661 dedupe by name; :667 returns changed=false when nothing missing; claude_settings_missing (:594) is the merge's own verdict used by plan.rs compute_plan and apply.rs:777; tests a_second_run_after_apply_reports_up_to_date_for_the_baseline_projection and the second-merge assertion at hooks_wiring.rs:1668/1703 pass"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "full=false paths skip deny/defaultMode/switches (hooks_wiring.rs:603-617,641-647,665); mod.rs parse_args --no-claude-settings sets claude_settings=false; tests merge_claude_settings_without_the_baseline_* and no_claude_settings_on_a_fresh_repo_writes_only_the_two_allow_names pass"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "hooks_wiring.rs:627-647 return text unchanged with changed=false for parse error, non-object top, non-object permissions, non-array allow, non-array deny (when full); tests the_odd_shapes_and_a_non_array_deny_are_left_unchanged and an_unparseable_settings_file_is_never_written_by_the_baseline_projection pass"
+          },
+          {
+            "id": "c6",
+            "status": "PASS",
+            "evidence": "mod.rs: claude_settings = args.claude_settings && claude_settings_config_preference(repo_root) reading .bee/config.json \"claude_settings\"; test the_config_opt_out_keeps_the_baseline_off_on_a_later_bare_apply passes. Flag-only opt-out is per-run by design (action, CONTEXT.md:27 D5, install.sh:101-102) — see report note 1"
+          },
+          {
+            "id": "c7",
+            "status": "PASS",
+            "evidence": "notices.rs claude_settings_notices emits when full && an item merge_claude_settings is listed; names bypassPermissions, denied tools, kept keys (claude_settings_kept hooks_wiring.rs:702-737), allowed-then-denied, written-without-hooks, both opt-outs; printed with 'notice: ' prefix at mod.rs:326; test the_baseline_notice_names_a_kept_default_mode_and_an_allowed_then_denied_tool passes"
+          },
+          {
+            "id": "c8",
+            "status": "PASS",
+            "evidence": "merge only inserts permissions and missing switch keys into the existing Map (hooks_wiring.rs:680-686), hooks/statusLine untouched; apply.rs:780 backup_once; test an_already_onboarded_host_gains_the_baseline_and_keeps_its_hooks_and_statusline passes"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-10T04:57:50.623Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

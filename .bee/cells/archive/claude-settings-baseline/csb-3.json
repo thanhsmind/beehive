@@ -1,0 +1,109 @@
+{
+  "id": "csb-3",
+  "feature": "claude-settings-baseline",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "high-risk",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "csb-1",
+    "csb-2"
+  ],
+  "decisions": [
+    "bd6ebab1",
+    "118c4686",
+    "a9daf9d2",
+    "9f22ec8d"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/claude-settings-baseline/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/claude-settings-baseline/CONTEXT.md",
+    "docs/history/claude-settings-baseline/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature claude-settings-baseline`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/claude-settings-baseline/delivery.md listing the concepts changed and why, one line each. Cite this feature's CONTEXT.md D-numbers, never raw decision ids, and state in one sentence that denying AskUserQuestion makes gate questions plain chat text in hosts, and route every D-ID (D1-D7) into a docs/knowledge concept. Run `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "the onboarding concept states the baseline, add-only rules and opt-out, anchored to code",
+      "delivery.md lists each concept changed with one line on why"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/claude-settings-baseline/delivery.md",
+        "substantive": "one line per concept changed"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No raw decision ids in docs outside docs/history/claude-settings-baseline/"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-csb-3",
+    "outcome": "Consolidate claude-settings-baseline knowledge and write delivery 79bbc0891",
+    "files_changed": [
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+      "docs/history/claude-settings-baseline/delivery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-10T04:50:19.411Z",
+    "behavior_change": false,
+    "verification_evidence": "322 concepts in 342 files checked 0 OKF and 0 profile errors",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-10T04:45:12.334Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Consolidate claude-settings-baseline knowledge and write delivery 79bbc0891",
+      "commit": "79bbc0891c82e30b606dbfa7701ed01b7e11ba1f",
+      "files": [
+        "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+        "docs/history/claude-settings-baseline/delivery.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — 322 concepts in 342 files checked 0 OKF and 0 profile errors",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the onboarding concept states the baseline, add-only rules and opt-out, anchored to code",
+            "artifact": "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+          },
+          {
+            "requirement": "delivery.md lists each concept changed with one line on why",
+            "artifact": "docs/history/claude-settings-baseline/delivery.md"
+          },
+          {
+            "requirement": "one line per concept changed",
+            "artifact": "docs/history/claude-settings-baseline/delivery.md"
+          },
+          {
+            "requirement": "No raw decision ids in docs outside docs/history/claude-settings-baseline/",
+            "artifact": "docs/history/claude-settings-baseline/delivery.md"
+          }
+        ],
+        "recorded_at": "2026-11-10T04:50:32.429Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}
