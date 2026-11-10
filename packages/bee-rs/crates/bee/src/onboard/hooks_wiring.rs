@@ -556,43 +556,71 @@ pub fn codex_statusline_next_text(text: &str) -> String {
 
 pub const WORKTREE_TOOL_ALLOW: [&str; 2] = ["EnterWorktree", "ExitWorktree"];
 
-pub fn worktree_tool_allow_missing(repo_root: &Path) -> bool {
-    let settings_path = repo_root.join(".claude").join("settings.json");
-    if !exists(&settings_path) {
-        return true;
-    }
-    let text = read_text_if_exists(&settings_path);
-    if text.trim().is_empty() {
-        return true;
-    }
-    let parsed: Value = match serde_json::from_str(&text) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    let Value::Object(m) = parsed else { return false };
-    match m.get("permissions") {
-        None => true,
-        Some(Value::Object(p)) => match p.get("allow") {
-            None => true,
-            Some(Value::Array(a)) => {
-                !WORKTREE_TOOL_ALLOW.iter().all(|name| a.iter().any(|v| v.as_str() == Some(*name)))
-            }
-            Some(_) => false,
-        },
-        Some(_) => false,
-    }
+pub struct ClaudeSettingsBaseline {
+    pub allow: &'static [&'static str],
+    pub deny: &'static [&'static str],
+    pub default_mode: &'static str,
+    pub switches: &'static [(&'static str, bool)],
 }
 
-pub fn merge_worktree_tool_allow(settings_path: &Path) -> Merged {
+pub const CLAUDE_SETTINGS_BASELINE: ClaudeSettingsBaseline = ClaudeSettingsBaseline {
+    allow: &WORKTREE_TOOL_ALLOW,
+    deny: &[
+        "EnterPlanMode",
+        "ExitPlanMode",
+        "DesignSync",
+        "NotebookEdit",
+        "SendMessage",
+        "PushNotification",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "AskUserQuestion",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+    ],
+    default_mode: "bypassPermissions",
+    switches: &[
+        ("disableBundledSkills", true),
+        ("disableWorkflows", true),
+        ("disableRemoteControl", true),
+        ("disableClaudeAiConnectors", true),
+        ("disableArtifact", true),
+        ("syncClaudeAiSkills", false),
+    ],
+};
+
+pub fn claude_settings_missing(repo_root: &Path, full: bool) -> bool {
+    let settings_path = repo_root.join(".claude").join("settings.json");
+    merge_claude_settings(&settings_path, full).changed
+}
+
+pub fn merge_claude_settings(settings_path: &Path, full: bool) -> Merged {
     let text = read_text_if_exists(settings_path);
+    let baseline = &CLAUDE_SETTINGS_BASELINE;
     if text.trim().is_empty() {
         let mut permissions = Map::new();
+        if full {
+            permissions.insert("defaultMode".into(), json!(baseline.default_mode));
+        }
         permissions.insert(
             "allow".into(),
-            Value::Array(WORKTREE_TOOL_ALLOW.iter().map(|n| json!(n)).collect()),
+            Value::Array(baseline.allow.iter().map(|n| json!(n)).collect()),
         );
+        if full {
+            permissions.insert(
+                "deny".into(),
+                Value::Array(baseline.deny.iter().map(|n| json!(n)).collect()),
+            );
+        }
         let mut out = Map::new();
         out.insert("permissions".into(), Value::Object(permissions));
+        if full {
+            for (name, value) in baseline.switches {
+                out.insert((*name).into(), json!(value));
+            }
+        }
         return Merged {
             text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))),
             changed: true,
@@ -606,35 +634,102 @@ pub fn merge_worktree_tool_allow(settings_path: &Path) -> Merged {
         Value::Object(m) => m,
         _ => return Merged { text, changed: false },
     };
-    let mut allow: Vec<Value> = match existing.get("permissions") {
+    let mut permissions = match existing.get("permissions") {
+        None => Map::new(),
+        Some(Value::Object(p)) => p.clone(),
+        Some(_) => return Merged { text, changed: false },
+    };
+    let mut allow: Vec<Value> = match permissions.get("allow") {
         None => Vec::new(),
-        Some(Value::Object(p)) => match p.get("allow") {
+        Some(Value::Array(a)) => a.clone(),
+        Some(_) => return Merged { text, changed: false },
+    };
+    let mut deny: Vec<Value> = if full {
+        match permissions.get("deny") {
             None => Vec::new(),
             Some(Value::Array(a)) => a.clone(),
             Some(_) => return Merged { text, changed: false },
-        },
-        Some(_) => return Merged { text, changed: false },
+        }
+    } else {
+        Vec::new()
     };
     let mut changed = false;
-    for name in WORKTREE_TOOL_ALLOW {
-        if !allow.iter().any(|v| v.as_str() == Some(name)) {
+    for name in baseline.allow {
+        if !allow.iter().any(|v| v.as_str() == Some(*name)) {
             allow.push(json!(name));
             changed = true;
         }
     }
-    if !changed {
+    if full {
+        for name in baseline.deny {
+            if !deny.iter().any(|v| v.as_str() == Some(*name)) {
+                deny.push(json!(name));
+                changed = true;
+            }
+        }
+    }
+    let write_default_mode = full && !permissions.contains_key("defaultMode");
+    let missing_switches: Vec<&(&'static str, bool)> = if full {
+        baseline.switches.iter().filter(|(name, _)| !existing.contains_key(*name)).collect()
+    } else {
+        Vec::new()
+    };
+    if !changed && !write_default_mode && missing_switches.is_empty() {
         return Merged { text, changed: false };
     }
-    let mut permissions = match existing.get("permissions") {
-        Some(Value::Object(p)) => p.clone(),
-        _ => Map::new(),
-    };
     permissions.insert("allow".into(), Value::Array(allow));
+    if full {
+        if write_default_mode {
+            permissions.insert("defaultMode".into(), json!(baseline.default_mode));
+        }
+        permissions.insert("deny".into(), Value::Array(deny));
+    }
     existing.insert("permissions".into(), Value::Object(permissions));
+    for (name, value) in missing_switches {
+        existing.insert((*name).into(), json!(value));
+    }
     Merged {
         text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(existing))),
         changed: true,
     }
+}
+
+pub struct ClaudeSettingsKept {
+    pub kept_keys: Vec<String>,
+    pub allowed_then_denied: Vec<String>,
+}
+
+pub fn claude_settings_kept(settings_path: &Path) -> ClaudeSettingsKept {
+    let parsed = read_json_if_exists(settings_path);
+    let Some(obj) = parsed.as_ref().and_then(Value::as_object) else {
+        return ClaudeSettingsKept { kept_keys: Vec::new(), allowed_then_denied: Vec::new() };
+    };
+    let mut kept_keys: Vec<String> = Vec::new();
+    for (name, value) in CLAUDE_SETTINGS_BASELINE.switches {
+        if let Some(current) = obj.get(*name) {
+            if current != &json!(value) {
+                kept_keys.push(format!("{name}={}", jsjson::stringify(current)));
+            }
+        }
+    }
+    let permissions = obj.get("permissions").and_then(Value::as_object);
+    if let Some(mode) = permissions.and_then(|p| p.get("defaultMode")) {
+        if mode.as_str() != Some(CLAUDE_SETTINGS_BASELINE.default_mode) {
+            kept_keys.push(format!("permissions.defaultMode={}", jsjson::stringify(mode)));
+        }
+    }
+    let empty: Vec<Value> = Vec::new();
+    let allow = permissions
+        .and_then(|p| p.get("allow"))
+        .and_then(Value::as_array)
+        .unwrap_or(&empty);
+    let allowed_then_denied = CLAUDE_SETTINGS_BASELINE
+        .deny
+        .iter()
+        .filter(|name| allow.iter().any(|v| v.as_str() == Some(**name)))
+        .map(|name| (*name).to_string())
+        .collect();
+    ClaudeSettingsKept { kept_keys, allowed_then_denied }
 }
 
 // ── statusline opt-in ──────────────────────────────────────────────────────
@@ -1419,11 +1514,11 @@ mod tests {
     }
 
     #[test]
-    fn merge_worktree_tool_allow_writes_a_fresh_file_with_both_names() {
+    fn merge_claude_settings_without_the_baseline_writes_a_fresh_file_with_both_names() {
         let dir = tempfile::tempdir().unwrap();
         let settings = dir.path().join(".claude").join("settings.json");
 
-        let res = merge_worktree_tool_allow(&settings);
+        let res = merge_claude_settings(&settings, false);
         assert!(res.changed);
         let expected = format!(
             "{}\n",
@@ -1435,13 +1530,13 @@ mod tests {
 
         std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
         std::fs::write(&settings, "   \n\t").unwrap();
-        let res = merge_worktree_tool_allow(&settings);
+        let res = merge_claude_settings(&settings, false);
         assert!(res.changed);
         assert_eq!(res.text, expected);
     }
 
     #[test]
-    fn merge_worktree_tool_allow_appends_only_missing_names_and_keeps_everything() {
+    fn merge_claude_settings_without_the_baseline_appends_only_missing_names_and_keeps_everything() {
         let dir = tempfile::tempdir().unwrap();
         let settings = dir.path().join(".claude").join("settings.json");
         std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
@@ -1451,7 +1546,7 @@ mod tests {
         )
         .unwrap();
 
-        let res = merge_worktree_tool_allow(&settings);
+        let res = merge_claude_settings(&settings, false);
         assert!(res.changed);
         let v: Value = serde_json::from_str(&res.text).unwrap();
         let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
@@ -1465,13 +1560,13 @@ mod tests {
         );
 
         std::fs::write(&settings, &res.text).unwrap();
-        let again = merge_worktree_tool_allow(&settings);
+        let again = merge_claude_settings(&settings, false);
         assert!(!again.changed);
         assert_eq!(again.text, res.text);
     }
 
     #[test]
-    fn merge_worktree_tool_allow_leaves_unchanged_the_shapes_it_cannot_merge() {
+    fn merge_claude_settings_without_the_baseline_leaves_unchanged_the_shapes_it_cannot_merge() {
         let dir = tempfile::tempdir().unwrap();
         let settings = dir.path().join(".claude").join("settings.json");
         std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
@@ -1482,42 +1577,187 @@ mod tests {
             r#"{"permissions": {"allow": "not-an-array"}}"#,
         ] {
             std::fs::write(&settings, body).unwrap();
-            let res = merge_worktree_tool_allow(&settings);
+            let res = merge_claude_settings(&settings, false);
             assert!(!res.changed, "must not change {body}");
             assert_eq!(res.text, body);
         }
     }
 
     #[test]
-    fn worktree_tool_allow_missing_detection() {
+    fn without_the_baseline_missing_detection_reports_only_the_two_allow_names() {
         let dir = tempfile::tempdir().unwrap();
         let settings = dir.path().join(".claude").join("settings.json");
 
-        assert!(worktree_tool_allow_missing(dir.path()));
+        assert!(claude_settings_missing(dir.path(), false));
 
         std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
         std::fs::write(&settings, "").unwrap();
-        assert!(worktree_tool_allow_missing(dir.path()));
+        assert!(claude_settings_missing(dir.path(), false));
         std::fs::write(&settings, "   \n\t ").unwrap();
-        assert!(worktree_tool_allow_missing(dir.path()));
+        assert!(claude_settings_missing(dir.path(), false));
         std::fs::write(&settings, r#"{"model": "opus"}"#).unwrap();
-        assert!(worktree_tool_allow_missing(dir.path()));
+        assert!(claude_settings_missing(dir.path(), false));
         std::fs::write(&settings, r#"{"permissions": {"allow": ["EnterWorktree"]}}"#).unwrap();
-        assert!(worktree_tool_allow_missing(dir.path()));
+        assert!(claude_settings_missing(dir.path(), false));
         std::fs::write(
             &settings,
             r#"{"permissions": {"allow": ["EnterWorktree", "ExitWorktree"]}}"#,
         )
         .unwrap();
-        assert!(!worktree_tool_allow_missing(dir.path()));
+        assert!(!claude_settings_missing(dir.path(), false));
 
         std::fs::write(&settings, "{ this is not json").unwrap();
-        assert!(!worktree_tool_allow_missing(dir.path()));
+        assert!(!claude_settings_missing(dir.path(), false));
         std::fs::write(&settings, "[1, 2, 3]").unwrap();
-        assert!(!worktree_tool_allow_missing(dir.path()));
+        assert!(!claude_settings_missing(dir.path(), false));
         std::fs::write(&settings, r#"{"permissions": "not-an-object"}"#).unwrap();
-        assert!(!worktree_tool_allow_missing(dir.path()));
+        assert!(!claude_settings_missing(dir.path(), false));
         std::fs::write(&settings, r#"{"permissions": {"allow": "not-an-array"}}"#).unwrap();
-        assert!(!worktree_tool_allow_missing(dir.path()));
+        assert!(!claude_settings_missing(dir.path(), false));
+    }
+
+    fn baseline_value() -> Value {
+        let b = &CLAUDE_SETTINGS_BASELINE;
+        let mut permissions = Map::new();
+        permissions.insert("defaultMode".into(), json!(b.default_mode));
+        permissions.insert("allow".into(), Value::Array(b.allow.iter().map(|n| json!(n)).collect()));
+        permissions.insert("deny".into(), Value::Array(b.deny.iter().map(|n| json!(n)).collect()));
+        let mut out = Map::new();
+        out.insert("permissions".into(), Value::Object(permissions));
+        for (name, value) in b.switches {
+            out.insert((*name).into(), json!(value));
+        }
+        Value::Object(out)
+    }
+
+    #[test]
+    fn a_fresh_file_gets_the_whole_baseline() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        let res = merge_claude_settings(&settings, true);
+        assert!(res.changed);
+        assert_eq!(res.text, format!("{}\n", jsjson::stringify_pretty(&baseline_value())));
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(&settings, &res.text).unwrap();
+        assert!(!claude_settings_missing(dir.path(), true));
+    }
+
+    #[test]
+    fn a_present_default_mode_and_allow_list_stay_and_gain_the_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(
+            &settings,
+            "{\n  \"permissions\": { \"defaultMode\": \"default\", \"allow\": [\"Bash(ls:*)\"] }\n}\n",
+        )
+        .unwrap();
+
+        let res = merge_claude_settings(&settings, true);
+        assert!(res.changed);
+        let v: Value = serde_json::from_str(&res.text).unwrap();
+        assert_eq!(v["permissions"]["defaultMode"], "default", "a present mode is never changed");
+        assert_eq!(v["permissions"]["allow"], json!(["Bash(ls:*)", "EnterWorktree", "ExitWorktree"]));
+        assert_eq!(v["permissions"]["deny"], json!(CLAUDE_SETTINGS_BASELINE.deny));
+        for (name, value) in CLAUDE_SETTINGS_BASELINE.switches {
+            assert_eq!(v[name], json!(value), "{name}");
+        }
+
+        std::fs::write(&settings, &res.text).unwrap();
+        let again = merge_claude_settings(&settings, true);
+        assert!(!again.changed, "a second merge is unchanged");
+    }
+
+    #[test]
+    fn a_present_switch_keeps_its_value_and_deny_entries_are_appended_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(
+            &settings,
+            "{\n  \"disableWorkflows\": false,\n  \"permissions\": { \"deny\": [\"Read\", \"NotebookEdit\"] }\n}\n",
+        )
+        .unwrap();
+
+        let res = merge_claude_settings(&settings, true);
+        assert!(res.changed);
+        let v: Value = serde_json::from_str(&res.text).unwrap();
+        assert_eq!(v["disableWorkflows"], false, "a present switch is never changed");
+        assert_eq!(
+            v["permissions"]["deny"][0],
+            json!("Read"),
+            "existing entries keep their order and position"
+        );
+        assert_eq!(v["permissions"]["deny"][1], json!("NotebookEdit"));
+        let deny: Vec<&str> =
+            v["permissions"]["deny"].as_array().unwrap().iter().map(|x| x.as_str().unwrap()).collect();
+        assert_eq!(
+            deny.iter().filter(|n| **n == "NotebookEdit").count(),
+            1,
+            "an already-present deny name is not appended twice"
+        );
+        assert_eq!(deny.len(), 1 + CLAUDE_SETTINGS_BASELINE.deny.len());
+
+        std::fs::write(&settings, &res.text).unwrap();
+        assert!(!merge_claude_settings(&settings, true).changed);
+    }
+
+    #[test]
+    fn a_settings_file_missing_only_the_switches_still_merges() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        let complete = baseline_value();
+        std::fs::write(&settings, format!("{}\n", jsjson::stringify_pretty(&complete))).unwrap();
+        assert!(!claude_settings_missing(dir.path(), true), "the whole baseline is present");
+
+        let mut fewer = complete.clone();
+        let obj = fewer.as_object_mut().unwrap();
+        obj.shift_remove("disableArtifact");
+        std::fs::write(&settings, format!("{}\n", jsjson::stringify_pretty(&fewer))).unwrap();
+        assert!(claude_settings_missing(dir.path(), true), "one missing switch is planned");
+        let res = merge_claude_settings(&settings, true);
+        assert!(res.changed);
+        assert_eq!(serde_json::from_str::<Value>(&res.text).unwrap(), complete);
+    }
+
+    #[test]
+    fn the_odd_shapes_and_a_non_array_deny_are_left_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        for body in [
+            "{ this is not json",
+            "[1, 2, 3]",
+            r#"{"permissions": "not-an-object"}"#,
+            r#"{"permissions": {"allow": "not-an-array"}}"#,
+            r#"{"permissions": {"deny": "not-an-array"}}"#,
+            r#"{"permissions": {"allow": [], "deny": "not-an-array"}}"#,
+        ] {
+            std::fs::write(&settings, body).unwrap();
+            let res = merge_claude_settings(&settings, true);
+            assert!(!res.changed, "must not change {body}");
+            assert_eq!(res.text, body);
+            assert!(!claude_settings_missing(dir.path(), true), "nothing planned for {body}");
+        }
+    }
+
+    #[test]
+    fn the_kept_report_names_a_present_mode_and_an_allowed_then_denied_tool() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(
+            &settings,
+            "{\n  \"disableArtifact\": false,\n  \"permissions\": { \"defaultMode\": \"default\", \"allow\": [\"CronList\"] }\n}\n",
+        )
+        .unwrap();
+        let kept = claude_settings_kept(&settings);
+        assert_eq!(
+            kept.kept_keys,
+            vec!["disableArtifact=false".to_string(), "permissions.defaultMode=\"default\"".to_string()]
+        );
+        assert_eq!(kept.allowed_then_denied, vec!["CronList".to_string()]);
     }
 }

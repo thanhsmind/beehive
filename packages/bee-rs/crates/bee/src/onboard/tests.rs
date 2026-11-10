@@ -1211,6 +1211,7 @@ fn remove_pi_extension_arm_refuses_out_of_scope_paths() {
         force_downgrade: false,
         plugin_source: false,
         statusline: false,
+        claude_settings: true,
         runtime: "all".into(),
         design_packs: None,
         current_exe: None,
@@ -2529,7 +2530,15 @@ fn a_settings_file_without_the_key_gains_exactly_one_key_and_keeps_the_rest() {
     let settings: Value =
         serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
     let keys: Vec<&str> = settings.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-    assert_eq!(keys, vec!["model", "permissions", "statusLine"], "one key added, in place");
+    assert_eq!(
+        keys,
+        vec![
+            "model", "permissions", "statusLine", "disableBundledSkills", "disableWorkflows",
+            "disableRemoteControl", "disableClaudeAiConnectors", "disableArtifact",
+            "syncClaudeAiSkills"
+        ],
+        "statusLine in place, the baseline switches appended after it"
+    );
     assert_eq!(settings["model"], "opus");
     assert_eq!(settings["permissions"]["allow"][0], "Bash(ls:*)");
     // The file existed, so a backup was taken — and it holds the ORIGINAL.
@@ -2717,7 +2726,15 @@ fn repo_hooks_and_the_statusline_default_share_one_backup_holding_the_original()
     let settings: Value =
         serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
     let keys: Vec<&str> = settings.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-    assert_eq!(keys, vec!["model", "hooks", "statusLine", "permissions"], "all three writers landed");
+    assert_eq!(
+        keys,
+        vec![
+            "model", "hooks", "statusLine", "permissions", "disableBundledSkills",
+            "disableWorkflows", "disableRemoteControl", "disableClaudeAiConnectors",
+            "disableArtifact", "syncClaudeAiSkills"
+        ],
+        "all four writers landed, the switches appended last"
+    );
 }
 
 #[test]
@@ -2823,17 +2840,52 @@ fn allow_list(fx: &Fixture) -> Vec<String> {
         .collect()
 }
 
+fn baseline_json() -> Value {
+    let b = &hooks_wiring::CLAUDE_SETTINGS_BASELINE;
+    let mut permissions = serde_json::Map::new();
+    permissions.insert("defaultMode".into(), json!(b.default_mode));
+    permissions.insert(
+        "allow".into(),
+        Value::Array(b.allow.iter().map(|n| json!(n)).collect()),
+    );
+    permissions.insert(
+        "deny".into(),
+        Value::Array(b.deny.iter().map(|n| json!(n)).collect()),
+    );
+    let mut out = serde_json::Map::new();
+    out.insert("permissions".into(), Value::Object(permissions));
+    for (name, value) in b.switches {
+        out.insert((*name).into(), json!(value));
+    }
+    Value::Object(out)
+}
+
+fn notice_about_claude_settings(payload: &Value) -> Option<String> {
+    payload["notices"].as_array()?.iter().find_map(|n| {
+        let n = n.as_str()?;
+        n.starts_with("Claude settings baseline:").then(|| n.to_string())
+    })
+}
+
 #[test]
-fn a_virgin_settings_file_gains_both_worktree_tools_in_permissions_allow() {
+fn a_virgin_settings_file_gains_the_whole_baseline() {
     let fx = posix_fixture();
     assert!(!settings_path(&fx).exists());
 
-    let acts = actions(&plan(&fx, &[]), "plan");
-    assert!(acts.contains(&"merge_worktree_tool_allow".to_string()));
+    let p = plan(&fx, &[]);
+    assert!(actions(&p, "plan").contains(&"merge_claude_settings".to_string()));
+    assert!(notice_about_claude_settings(&p).is_some(), "plan names the baseline");
 
-    apply(&fx, &[]);
-
+    let a = apply(&fx, &[]);
+    assert!(notice_about_claude_settings(&a).is_some(), "apply names the baseline");
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    for (name, value) in hooks_wiring::CLAUDE_SETTINGS_BASELINE.switches {
+        assert_eq!(v[name], json!(value), "{name}");
+    }
+    assert_eq!(v["permissions"]["defaultMode"], json!("bypassPermissions"));
     assert_eq!(allow_list(&fx), vec!["EnterWorktree".to_string(), "ExitWorktree".to_string()]);
+    assert_eq!(v["permissions"]["deny"], json!(hooks_wiring::CLAUDE_SETTINGS_BASELINE.deny));
 }
 
 #[test]
@@ -2849,10 +2901,21 @@ fn an_existing_allow_list_is_appended_add_only_and_keeps_foreign_keys() {
     let v: Value =
         serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
     let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-    assert_eq!(keys, vec!["model", "permissions", "zeta"], "top-level keys untouched");
+    assert_eq!(
+        keys,
+        vec![
+            "model", "permissions", "zeta", "disableBundledSkills", "disableWorkflows",
+            "disableRemoteControl", "disableClaudeAiConnectors", "disableArtifact",
+            "syncClaudeAiSkills"
+        ],
+        "top-level keys untouched, the missing switches appended"
+    );
     assert_eq!(v["model"], "opus");
     assert_eq!(v["zeta"], 1);
-    assert_eq!(v["permissions"]["deny"], json!(["Read"]), "deny survives");
+    assert_eq!(v["permissions"]["deny"][0], json!("Read"), "existing deny survives in place");
+    let deny: Vec<&str> =
+        v["permissions"]["deny"].as_array().unwrap().iter().map(|x| x.as_str().unwrap()).collect();
+    assert_eq!(deny.len(), 1 + hooks_wiring::CLAUDE_SETTINGS_BASELINE.deny.len());
     assert_eq!(
         v["permissions"]["allow"],
         json!(["Bash(ls:*)", "EnterWorktree", "ExitWorktree"]),
@@ -2861,20 +2924,20 @@ fn an_existing_allow_list_is_appended_add_only_and_keeps_foreign_keys() {
 }
 
 #[test]
-fn settings_that_already_hold_both_names_plan_nothing_and_write_no_backup() {
+fn settings_that_already_hold_the_baseline_plan_nothing_and_write_no_backup() {
     let fx = posix_fixture();
     write(
         &settings_path(&fx),
-        "{\n  \"permissions\": { \"allow\": [\"EnterWorktree\", \"ExitWorktree\"] }\n}\n",
+        &format!("{}\n", jsjson::stringify_pretty(&baseline_json())),
     );
     let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
 
     let acts = actions(&plan(&fx, &["--no-statusline"]), "plan");
     assert!(
-        !acts.contains(&"merge_worktree_tool_allow".to_string()),
-        "both names present must not replan"
+        !acts.contains(&"merge_claude_settings".to_string()),
+        "a settled baseline must not replan"
     );
-    assert!(!actions(&plan(&fx, &[]), "plan").contains(&"merge_worktree_tool_allow".to_string()));
+    assert!(!actions(&plan(&fx, &[]), "plan").contains(&"merge_claude_settings".to_string()));
 
     apply(&fx, &["--no-statusline"]);
     assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), original);
@@ -2882,13 +2945,13 @@ fn settings_that_already_hold_both_names_plan_nothing_and_write_no_backup() {
 }
 
 #[test]
-fn an_unparseable_settings_file_is_never_written_by_the_worktree_projection() {
+fn an_unparseable_settings_file_is_never_written_by_the_baseline_projection() {
     let fx = posix_fixture();
     let broken = "{ this is not json";
     write(&settings_path(&fx), broken);
 
     let acts = actions(&plan(&fx, &["--no-statusline"]), "plan");
-    assert!(!acts.contains(&"merge_worktree_tool_allow".to_string()));
+    assert!(!acts.contains(&"merge_claude_settings".to_string()));
 
     let a = apply(&fx, &["--no-statusline"]);
     assert_ne!(a["status"], "blocked_hooks_merge");
@@ -2900,12 +2963,13 @@ fn an_unmergeable_permissions_shape_is_left_alone_and_still_converges() {
     for body in [
         "{\n  \"permissions\": \"not-an-object\"\n}\n",
         "{\n  \"permissions\": { \"allow\": \"not-an-array\" }\n}\n",
+        "{\n  \"permissions\": { \"allow\": [], \"deny\": \"not-an-array\" }\n}\n",
     ] {
         let fx = posix_fixture();
         write(&settings_path(&fx), body);
 
-        let acts = actions(&plan(&fx, &["--no-statusline"]), "plan");
-        assert!(!acts.contains(&"merge_worktree_tool_allow".to_string()), "{body}");
+        let p = plan(&fx, &["--no-statusline"]);
+        assert!(!actions(&p, "plan").contains(&"merge_claude_settings".to_string()), "{body}");
 
         apply(&fx, &["--no-statusline"]);
         assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), body);
@@ -2914,18 +2978,125 @@ fn an_unmergeable_permissions_shape_is_left_alone_and_still_converges() {
 }
 
 #[test]
-fn a_second_run_after_apply_reports_up_to_date_for_the_worktree_projection() {
+fn a_second_run_after_apply_reports_up_to_date_for_the_baseline_projection() {
     let fx = posix_fixture();
     apply(&fx, &[]);
 
     let p = plan(&fx, &[]);
     assert_eq!(p["status"], "up_to_date");
     assert!(
-        !actions(&p, "plan").contains(&"merge_worktree_tool_allow".to_string()),
+        !actions(&p, "plan").contains(&"merge_claude_settings".to_string()),
         "a settled projection replans nothing"
     );
+    assert!(notice_about_claude_settings(&p).is_none(), "nothing planned, nothing announced");
     let a = apply(&fx, &[]);
     assert_eq!(a["recheck"], "up_to_date");
+}
+
+#[test]
+fn no_claude_settings_on_a_fresh_repo_writes_only_the_two_allow_names() {
+    let fx = posix_fixture();
+
+    let p = plan(&fx, &["--no-statusline", "--no-claude-settings"]);
+    assert!(actions(&p, "plan").contains(&"merge_claude_settings".to_string()));
+    assert!(notice_about_claude_settings(&p).is_none(), "no baseline, no baseline notice");
+
+    apply(&fx, &["--no-statusline", "--no-claude-settings"]);
+
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    assert_eq!(keys, vec!["permissions"], "no switch is written without the baseline");
+    let perms: Vec<&str> =
+        v["permissions"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    assert_eq!(perms, vec!["allow"], "no defaultMode, no deny");
+    assert_eq!(allow_list(&fx), vec!["EnterWorktree".to_string(), "ExitWorktree".to_string()]);
+    assert_eq!(
+        plan(&fx, &["--no-statusline", "--no-claude-settings"])["status"],
+        "up_to_date"
+    );
+}
+
+#[test]
+fn an_already_onboarded_host_gains_the_baseline_and_keeps_its_hooks_and_statusline() {
+    let fx = posix_fixture();
+    let original = "{\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"bash mine.sh\"\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo mine\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\"EnterWorktree\", \"ExitWorktree\"]\n  }\n}\n";
+    write(&settings_path(&fx), original);
+
+    let a = apply(&fx, &["--repo-hooks"]);
+    assert_ne!(a["status"], "blocked_hooks_merge");
+    let notice = notice_about_claude_settings(&a).expect("the upgrade is announced");
+
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    assert_eq!(
+        keys,
+        vec![
+            "statusLine", "hooks", "permissions", "disableBundledSkills", "disableWorkflows",
+            "disableRemoteControl", "disableClaudeAiConnectors", "disableArtifact",
+            "syncClaudeAiSkills"
+        ],
+        "every foreign key keeps its place"
+    );
+    assert_eq!(v["statusLine"]["command"], json!("bash mine.sh"));
+    assert_eq!(v["hooks"]["PreToolUse"][0]["hooks"][0]["command"], json!("echo mine"));
+    assert_eq!(v["permissions"]["defaultMode"], json!("bypassPermissions"));
+    assert_eq!(v["permissions"]["deny"], json!(hooks_wiring::CLAUDE_SETTINGS_BASELINE.deny));
+    assert!(notice.contains("--no-claude-settings"), "{notice}");
+    assert!(
+        std::fs::read_to_string(fx.repo.join(".claude").join("settings.json.bak")).unwrap()
+            == original,
+        "one .bak holding the pre-bee file"
+    );
+}
+
+#[test]
+fn the_config_opt_out_keeps_the_baseline_off_on_a_later_bare_apply() {
+    let fx = fixture();
+    write(
+        &fx.repo.join(".bee").join("config.json"),
+        "{\n  \"host_shell\": \"posix\",\n  \"claude_settings\": false\n}\n",
+    );
+
+    let a = apply(&fx, &[]);
+    assert!(notice_about_claude_settings(&a).is_none(), "opted out, nothing announced");
+
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    assert!(v.get("disableBundledSkills").is_none(), "no switch");
+    assert!(v.get("syncClaudeAiSkills").is_none(), "no switch");
+    assert!(v["permissions"].get("defaultMode").is_none(), "no defaultMode");
+    assert!(v["permissions"].get("deny").is_none(), "no deny");
+    assert_eq!(allow_list(&fx), vec!["EnterWorktree".to_string(), "ExitWorktree".to_string()]);
+    assert_eq!(
+        plan(&fx, &["--no-statusline"])["status"],
+        "up_to_date",
+        "a bare re-run makes no baseline"
+    );
+}
+
+#[test]
+fn the_baseline_notice_names_a_kept_default_mode_and_an_allowed_then_denied_tool() {
+    let fx = posix_fixture();
+    write(
+        &settings_path(&fx),
+        "{\n  \"permissions\": {\n    \"defaultMode\": \"default\",\n    \"allow\": [\"CronList\"]\n  }\n}\n",
+    );
+
+    let notice = notice_about_claude_settings(&plan(&fx, &["--no-statusline"]))
+        .expect("a planned baseline is announced");
+    assert!(notice.contains("permission prompts are turned off"), "{notice}");
+    assert!(notice.contains("permissions.defaultMode=\"default\""), "{notice}");
+    assert!(notice.contains("CronList"), "{notice}");
+    assert!(notice.contains("guard hooks are not wired"), "{notice}");
+    assert!(notice.contains("--no-claude-settings"), "{notice}");
+    assert!(notice.contains("\"claude_settings\": false"), "{notice}");
+
+    apply(&fx, &["--no-statusline"]);
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    assert_eq!(v["permissions"]["defaultMode"], json!("default"), "a present mode is never changed");
 }
 
 fn test_options(current_exe: Option<PathBuf>, repo_hooks: bool) -> Options {
@@ -2938,6 +3109,7 @@ fn test_options(current_exe: Option<PathBuf>, repo_hooks: bool) -> Options {
         force_downgrade: false,
         plugin_source: false,
         statusline: false,
+        claude_settings: true,
         runtime: "all".into(),
         design_packs: None,
         current_exe,

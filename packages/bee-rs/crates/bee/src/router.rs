@@ -104,7 +104,7 @@ pub const PORTED: &[&str] = &[
     "onboard [--repo-root R] [--apply] [--json] [--repo-hooks] [--plugin-source] \
      [--runtime R] [--claude-md|--no-claude-md] [--global-skills] [--skillstation] \
      [--force-downgrade] \
-     [--no-statusline] [--design-packs <list|none>]",
+     [--no-statusline] [--no-claude-settings] [--design-packs <list|none>]",
     "dev render-skill-trees",
     "dev render-prompt <name> [--var K=V]",
     "dev statusline",

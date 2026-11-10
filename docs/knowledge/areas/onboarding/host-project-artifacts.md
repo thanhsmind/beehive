@@ -1,22 +1,26 @@
 ---
 type: bee.area
 title: Onboarding — the artifacts a host project receives and keeps
-description: "The instructions import created by default, the single unified command surface that retires nine superseded helper scripts, the state-layer landing pages created but never overwritten, and the annotated configuration sample an operator copies from."
+description: "The instructions import created by default, the Claude settings baseline projected add-only into the host's .claude/settings.json (permissions.defaultMode bypassPermissions, the denied tools, the top-level switches) and its opt-out, the single unified command surface that retires nine superseded helper scripts, the state-layer landing pages created but never overwritten, and the annotated configuration sample an operator copies from."
 timestamp: 2026-07-22
 bee:
   id: onboarding-host-project-artifacts
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["verification-ships-to-hosts D1/D2/D3 (a host project also receives a verification skill pair and, once generated, its own project verification skill rendered into every runtime home; the generated drive command composes into the declared test command)", "0d3e4f89 (that render creates and updates only, never removes)", "3318374a (installer hardening: default instructions import, D1)", "bbc6bcea (shim-retire: unified command surface; retired helper scripts removed from hosts)", de967733 (advisor mode removed; stale config key warned-and-ignored), capture flush b57f6470 (shipped configuration sample is the annotated reference; 2026-07-19)]
-  sources: ["verification-ships-to-hosts cells vsh-1..vsh-4 (2026-09-01; the skill pair, the copy-only render path, the offer notice and the consent split — capped traces, independently goal-checked, and driven end to end against a throwaway host repo)", "shim-retire D2 retirement pass (cells shim-retire-2, shim-retire-6 self-onboard proof, 2026-07-14)", "installer-hardening ih-1..ih-6 (cells, 2026-07-13; flushed capture stub 92c9bcf6)", "fanout-delegation D1 (stale advisor key tolerance, 2026-07-12)", "capture stub b57f6470-bac2-422a-9dea-1bb4cc93bc0e (shipped config sample carries a per-surface doc block, all model-slot shapes, gate-bypass levels, hook toggles, and the external-command tier's gather-only contract; flushed 2026-07-19)", "docs/specs/onboarding.md#R13", "docs/specs/onboarding.md#R14", "docs/specs/onboarding.md#E6", "docs/specs/onboarding.md#E15", "docs/specs/onboarding.md#P14"]
+  decisions: ["claude-settings-baseline D1-D3, D5-D7 (onboarding projects the owner's Claude settings baseline add-only into the host's own .claude/settings.json, on by default, with a durable opt-out; the projection announces itself whenever it runs; CONTEXT.md)", "verification-ships-to-hosts D1/D2/D3 (a host project also receives a verification skill pair and, once generated, its own project verification skill rendered into every runtime home; the generated drive command composes into the declared test command)", "0d3e4f89 (that render creates and updates only, never removes)", "3318374a (installer hardening: default instructions import, D1)", "bbc6bcea (shim-retire: unified command surface; retired helper scripts removed from hosts)", de967733 (advisor mode removed; stale config key warned-and-ignored), capture flush b57f6470 (shipped configuration sample is the annotated reference; 2026-07-19)]
+  sources: ["claude-settings-baseline cell csb-1 (2026-11-10; the baseline constant, the add-only merge, the durable opt-out and the notice)", "verification-ships-to-hosts cells vsh-1..vsh-4 (2026-09-01; the skill pair, the copy-only render path, the offer notice and the consent split — capped traces, independently goal-checked, and driven end to end against a throwaway host repo)", "shim-retire D2 retirement pass (cells shim-retire-2, shim-retire-6 self-onboard proof, 2026-07-14)", "installer-hardening ih-1..ih-6 (cells, 2026-07-13; flushed capture stub 92c9bcf6)", "fanout-delegation D1 (stale advisor key tolerance, 2026-07-12)", "capture stub b57f6470-bac2-422a-9dea-1bb4cc93bc0e (shipped config sample carries a per-surface doc block, all model-slot shapes, gate-bypass levels, hook toggles, and the external-command tier's gather-only contract; flushed 2026-07-19)", "docs/specs/onboarding.md#R13", "docs/specs/onboarding.md#R14", "docs/specs/onboarding.md#E6", "docs/specs/onboarding.md#E15", "docs/specs/onboarding.md#P14"]
   authoritative_for: "onboarding: the artifacts a host project receives and keeps"
-  anchors: [.claude/settings.json, packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs, packages/bee/AGENTS.windows.md, packages/bee-rs/crates/bee/src/onboard/merge.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  anchors: [.claude/settings.json, packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs, packages/bee-rs/crates/bee/src/onboard/notices.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee/AGENTS.windows.md, packages/bee-rs/crates/bee/src/onboard/merge.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs]
+  verified_at: 2026-11-10
 ---
 
 # Onboarding — The Artifacts a Host Project Receives and Keeps
+
+Read when: deciding what `bee onboard` writes into a host project, debugging why
+an onboard run kept or overwrote one of the host's own files, or changing the
+`.claude/settings.json` projection — the permission-mode baseline, its
+add-only rules, or its opt-out.
 
 Beyond the distribution question of *where* things come from, a host project ends up
 holding a small set of concrete artifacts: an import line that makes the standing
@@ -89,18 +93,46 @@ bee's source.
 [`repo-local-guardrails.md`](repo-local-guardrails.md)'s pointer, which carries the
 same source bullet.)
 
-**Allow the worktree tools the host project needs (every run).** Trigger: an
-onboarded repo whose `.claude/settings.json` carries no `permissions.allow`, or
-one missing `EnterWorktree` or `ExitWorktree`. What blocks it: nothing. What
-changes: the two names are projected ADD-ONLY into the host repo's own
-settings file — `permissions` and `allow` are created when absent, only the
-names not already present are appended, and every existing key, entry and order
-stays in place. Both names present, or a file that does not parse, or a
-non-object top level, `permissions` or `allow`: the text is left unchanged.
-What the human observes: a host session stopped asking permission for the
-worktree tools bee's own worktree-first rule calls, without either the user's
-`~/.claude/settings.json` or a foreign settings entry being touched. Re-runs
-converge: a second apply plans nothing. (Decision 5fd24d1b.)
+**Project the Claude settings baseline (every run, unless opted out).**
+Trigger: any onboard run against a repo whose `.claude/settings.json` is
+missing, and whose planned baseline merge would change a byte. What blocks it:
+nothing. What changes: one add-only merge writes the owner's Claude settings
+baseline into the host repo's OWN settings file — `permissions.defaultMode`
+`bypassPermissions`, `EnterWorktree` and `ExitWorktree` allowed, thirteen tools
+denied, and six top-level switches — appending allow and deny names after the
+existing entries in baseline order, writing `defaultMode` only when
+`permissions` carries none, and writing a top-level key only when it is absent.
+Every other key, entry and order stays in place, and no value the project
+already set is overwritten. A parse failure, a non-object top level, a
+non-object `permissions`, or a non-array `allow` or `deny` leaves the text
+unchanged and plans nothing, so a broken host file never turns a default into
+a blocked install. Re-runs converge: a second apply plans nothing.
+
+**That projection is a permission-mode change, so it announces itself.** Every
+plan or apply that includes the full baseline emits one notice: permission
+prompts are off for this project, the baseline tools are denied, each baseline
+key the project already sets to its own value is named, each baseline deny name
+the project's allow list already carried is named, and the two opt-outs are
+spelled out — `--no-claude-settings` for one run, or `.bee/config.json`
+`"claude_settings": false` for good. The baseline is written whether or not
+bee's guard hooks are wired, so on an install with `--no-hooks` bee's guards are
+NOT the safety net behind bypass mode, and the notice says so.
+
+The opt-out is narrower and older than the baseline: `--no-claude-settings`, or
+the recorded `"claude_settings": false`, leaves the two worktree-tool allow names
+as the whole projection — exactly what onboarding did before the baseline
+existed. What the human observes: a host session stopped asking permission for
+the worktree tools bee's own worktree-first rule calls, then stopped asking
+altogether, without either the user's `~/.claude/settings.json` or a foreign
+settings entry being touched. (Feature claude-settings-baseline, CONTEXT.md
+D1-D3 and D5-D7, widening decision 5fd24d1b.)
+
+**Cost the owner accepted, stated where a reader will meet it.** Denying
+`AskUserQuestion` makes a host's gate questions plain chat text instead of a
+picker, and denying `SendMessage` removes a leader's way to steer a Claude
+worker. Both are how this repo already runs; both surprise a host that did not
+ask for them, which is why the notice names the denied set rather than
+mentioning it in passing.
 
 **Publish the deploy skill to the skillstation hub (only with `--skillstation`).**
 Trigger: an onboard run with `--skillstation` while the skill sync is on and not
@@ -205,15 +237,28 @@ not thereby agreed that every future commit should become slower.
 
 ## Pointers (implementation)
 
-- `.claude/settings.json` `permissions.allow` worktree-tool projection:
-  `WORKTREE_TOOL_ALLOW`, `worktree_tool_allow_missing` and
-  `merge_worktree_tool_allow` in
-  `packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs`; planned at the
-  `5b-worktree-tools` stage of `onboard/plan.rs` and applied by the
-  `merge_worktree_tool_allow` arm of `onboard/apply.rs`, re-checking the
-  missing condition at apply time and taking one `backup_once` before the
-  write. Tests: `plan_/apply` round trips in `onboard/tests.rs`.
-  Provenance: cell `oawt-1`, decision 5fd24d1b.
+- `.claude/settings.json` Claude settings baseline projection: the
+  `CLAUDE_SETTINGS_BASELINE` constant (with `WORKTREE_TOOL_ALLOW` as its allow
+  half), `claude_settings_missing(repo_root, full)` and
+  `merge_claude_settings(path, full)` in
+  `packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs`; the notice text in
+  `claude_settings_notices` (`onboard/notices.rs`), fed by
+  `claude_settings_kept` so an apply reports what the project had before the
+  write. `full = false` is the opt-out and owns only the two allow names.
+  Planned at the `5b-statusline` stage of `onboard/plan.rs` as one
+  `merge_claude_settings` item and applied by that arm of `onboard/apply.rs`,
+  which re-checks `claude_settings_missing` at apply time and takes one
+  `backup_once` before the write. `full` is the `--no-claude-settings` flag AND
+  the project's `"claude_settings": false` preference (`onboard/mod.rs`), never
+  written by onboarding. Tests: `merge_claude_settings_without_the_baseline_*`,
+  `a_fresh_file_gets_the_whole_baseline`, `the_odd_shapes_and_a_non_array_deny_are_left_unchanged`
+  and `the_kept_report_names_a_present_mode_and_an_allowed_then_denied_tool` in
+  `onboard/hooks_wiring.rs`; `a_virgin_settings_file_gains_the_whole_baseline`,
+  `no_claude_settings_on_a_fresh_repo_writes_only_the_two_allow_names`,
+  `an_already_onboarded_host_gains_the_baseline_and_keeps_its_hooks_and_statusline`
+  and `the_baseline_notice_names_a_kept_default_mode_and_an_allowed_then_denied_tool`
+  in `onboard/tests.rs`. Provenance: cells `oawt-1` (decision 5fd24d1b) and
+  `csb-1` (feature claude-settings-baseline).
 
 - Windows shell section: template `packages/bee/AGENTS.windows.md`, appended by
   `render_agents_block` and resolved by `host_shell_is_powershell` (config key

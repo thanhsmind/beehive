@@ -774,9 +774,9 @@ pub fn apply_computed_plan(
                     }
                 }
             }
-            "merge_worktree_tool_allow" => {
-                if hw::worktree_tool_allow_missing(repo_root) {
-                    let merged = hw::merge_worktree_tool_allow(&target);
+            "merge_claude_settings" => {
+                if hw::claude_settings_missing(repo_root, opts.claude_settings) {
+                    let merged = hw::merge_claude_settings(&target, opts.claude_settings);
                     if merged.changed {
                         backup_once(&target, &mut backed_up);
                         let _ = write_file_atomic(&target, merged.text.as_bytes());
