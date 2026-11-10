@@ -840,6 +840,11 @@
     "contract:cap-knowledge-delta",
     "contract:consolidate",
     "contract:kitf-suite-green",
-    "contract:manifest-area-step"
+    "contract:manifest-area-step",
+    "contract:knowledge-rules",
+    "contract:pack-read-when",
+    "contract:check-writing-warnings",
+    "contract:knowledge-used",
+    "contract:report-knowledge-used"
   ]
 }
