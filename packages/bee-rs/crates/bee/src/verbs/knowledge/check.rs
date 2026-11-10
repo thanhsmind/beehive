@@ -153,16 +153,16 @@ pub(crate) const EVIDENCE_STATES: [&str; 3] = ["present", "wired", "exercised"];
 
 pub(crate) const MAX_CONCEPT_BODY_LINES: usize = 300;
 
-const READ_WHEN_PREFIX: &str = "Read when:";
+pub(crate) const READ_WHEN_PREFIX: &str = "Read when:";
 
-const READ_WHEN_SCAN_LINES: usize = 10;
+pub(crate) const READ_WHEN_SCAN_LINES: usize = 10;
 
-fn body_opens_with_read_when(body: &str) -> bool {
+pub(crate) fn read_when_line(body: &str) -> Option<&str> {
     body.lines()
-        .map(str::trim_start)
+        .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .take(READ_WHEN_SCAN_LINES)
-        .any(|line| line.starts_with(READ_WHEN_PREFIX))
+        .find(|line| line.starts_with(READ_WHEN_PREFIX))
 }
 
 fn anchor_names_a_directory(anchor: &str, repo_root: Option<&Path>) -> bool {
@@ -709,7 +709,7 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         }
 
         if matches!(str_field(&data, "type"), Some("bee.area") | Some("bee.pattern"))
-            && !body_opens_with_read_when(&body)
+            && read_when_line(&body).is_none()
         {
             warnings.push(finding(
                 rel,

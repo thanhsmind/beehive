@@ -1127,26 +1127,8 @@ fn pack_anchor_path(anchor: &str) -> Option<String> {
 
 fn read_when_of(dir: &Path, rel: &str) -> Option<String> {
     let body = knowledge::concept_body(dir, rel)?;
-    let mut seen = 0usize;
-    for line in body.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        seen += 1;
-        if trimmed.starts_with(READ_WHEN_PREFIX) {
-            return Some(trimmed.to_string());
-        }
-        if seen >= READ_WHEN_SCAN_LINES {
-            return None;
-        }
-    }
-    None
+    knowledge::read_when_line(&body).map(str::to_string)
 }
-
-const READ_WHEN_PREFIX: &str = "Read when:";
-
-const READ_WHEN_SCAN_LINES: usize = 10;
 
 fn anchored_code_lines(root: &Path, listed: &[String], read_first: &HashSet<String>) -> Vec<String> {
     let Some(dir) = knowledge::bundle_dir(root) else { return Vec::new() };
