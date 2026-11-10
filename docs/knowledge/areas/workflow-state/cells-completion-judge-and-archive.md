@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: "Workflow State — completion teeth, the judge verdict, and the archive transaction"
-description: "What a unit must prove before it may be completed — proof scaled to change-class × lane, a diff_stats-backed test-shape guard, and the older hard door for red-first branches — the structured append-only judge verdict with its honest independence stamp and the reopen it can force on an already-capped unit, why archiving a cell is a journaled transaction serialized against every other mutator, and why a unit that changed files does not complete until a commit claims it by name."
+description: "What a unit must prove before it may be completed — proof scaled to change-class × lane, a diff_stats-backed test-shape guard, and the older hard door for red-first branches — the structured append-only judge verdict with its honest independence stamp and the reopen it can force on an already-capped unit, why archiving a cell is a journaled transaction serialized against every other mutator, why a unit that changed files does not complete until a commit claims it by name, and how a cap records which knowledge concepts changed a decision."
 timestamp: 2026-08-06
 bee:
   id: workflow-state-cells-completion-judge-and-archive
@@ -495,6 +495,28 @@ the trace as `trace.knowledge_delta` (an array of paths). Both `cells cap` and
 commit alongside code at cap (D4) so knowledge never trails code, without
 introducing any new gate or refusal (D1).
 
+**B51a — A cap records which concepts changed a decision, and the answer is
+read the way the mistakes answer is (knowledge-useful-rules D5).** Trigger:
+completing a cell via `cells cap` or `cells finish`, and (for a dispatched
+worker) the result file that `--from-job` reads. What happens: the answer has
+two sources read in this order — `--knowledge-used "<docs/knowledge path> —
+<the decision it changed>"` on the flag, then the worker report's
+`knowledge_used` array (which `--from-job` fills from the result's own array
+through `report_from_job`, and never requires). Any entry lands on the trace
+as `trace.knowledge_used`, a list of `{path, changed}` split on the FIRST
+` — ` separator; a line carrying no separator keeps the whole value as the
+path and leaves `changed` empty. With no entry, a `--no-knowledge-used` flag
+or a present-but-EMPTY `knowledge_used` array states the explicit none and
+records `trace.no_knowledge_used: true`. With neither, the cap writes NEITHER
+key — silence stays distinct from a none, exactly as it does for mistakes.
+What each actor observes: nothing here refuses a cap — not silence, not a
+contradiction (an entry outranks the none flag, because an entry is a fact
+somebody wrote down and the flag is a claim about the absence of one), and not
+a path that names no concept. That is not leniency but the locked boundary:
+knowledge-in-the-flow D1 forbids a mandatory knowledge-ref check, so the cap's
+only duty is to record what it was told and let `bee knowledge report` count
+the silent cells.
+
 ## Business Rules
 
 - R47 — *(Superseded twice, kept for lineage — read R55 and R89 for the live
@@ -815,3 +837,12 @@ introducing any new gate or refusal (D1).
   `cap_text` formatting in
   `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs`
   (`cap_cell_from_flags`, `finish_cap_and_release`).
+- The knowledge-used answer (B51a, knowledge-useful-rules D5):
+  `read_knowledge_used_answer` beside `read_mistakes_answer` in
+  `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs`, and the
+  `trace.knowledge_used` / `trace.no_knowledge_used` write in
+  `cap_cell_from_flags`. The herding half is `MailboxResult.knowledge_used`
+  in `packages/bee-rs/crates/bee/src/herding/mailbox.rs` and the
+  `knowledge_used` key `report_from_job` adds to the report in
+  `packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs`, where the
+  key is also accepted among `REPORT_OPTIONAL_KEYS`.

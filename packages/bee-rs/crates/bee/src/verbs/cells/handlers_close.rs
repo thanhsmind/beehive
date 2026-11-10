@@ -32,7 +32,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 17] = [
+pub(crate) const CAP_FLAGS: [&str; 19] = [
     "id",
     "outcome",
     "files",
@@ -50,9 +50,11 @@ pub(crate) const CAP_FLAGS: [&str; 17] = [
     "mistake",
     "no-mistakes",
     "fix-at",
+    "knowledge-used",
+    "no-knowledge-used",
 ];
 
-pub(crate) const FINISH_FLAGS: [&str; 20] = [
+pub(crate) const FINISH_FLAGS: [&str; 22] = [
     "id",
     "outcome",
     "files",
@@ -70,6 +72,8 @@ pub(crate) const FINISH_FLAGS: [&str; 20] = [
     "mistake",
     "no-mistakes",
     "fix-at",
+    "knowledge-used",
+    "no-knowledge-used",
     "from-job",
     "proof-result",
     "proof-reason",
@@ -158,6 +162,8 @@ pub(crate) struct CapFlags {
     /// that this cell hit none. It is the OTHER half of the answer, and the
     /// reason silence and a clean run do not read alike.
     pub(crate) no_mistakes: bool,
+    pub(crate) knowledge_used: Option<String>,
+    pub(crate) no_knowledge_used: bool,
     /// wfl-1/D8: `--report <json-string>`, RAW — validated against the
     /// worker Result-form shape (finish_support.rs's `parse_report_flag`)
     /// before any write, then stored verbatim as `trace.report`. `None`
@@ -370,6 +376,8 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     // departure door above: `bee close` files its letter unconditionally, so
     // the answer it will ask for must be recorded unconditionally too.
     let mistakes_answer = read_mistakes_answer(id, f, &report_value)?;
+
+    let knowledge_used_answer = read_knowledge_used_answer(f, &report_value);
 
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
     // to run the declared command HERE and refuse a red cap — that run and
@@ -682,6 +690,22 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 trace.insert("no_mistakes".into(), Value::Bool(true));
             }
             MistakesAnswer::Silent => {}
+        }
+        match &knowledge_used_answer {
+            KnowledgeUsedAnswer::Recorded(list) => {
+                trace.insert(
+                    "knowledge_used".into(),
+                    Value::Array(
+                        list.iter()
+                            .map(|k| json!({"path": k.path, "changed": k.changed}))
+                            .collect(),
+                    ),
+                );
+            }
+            KnowledgeUsedAnswer::None => {
+                trace.insert("no_knowledge_used".into(), Value::Bool(true));
+            }
+            KnowledgeUsedAnswer::Silent => {}
         }
         trace.insert(
             "friction".into(),
@@ -1076,6 +1100,60 @@ pub(crate) fn read_mistakes_answer(id: &str, f: &CapFlags, report: &Value) -> MR
     Ok(MistakesAnswer::Silent)
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct KnowledgeUsed {
+    pub(crate) path: String,
+    pub(crate) changed: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum KnowledgeUsedAnswer {
+    Silent,
+    Recorded(Vec<KnowledgeUsed>),
+    None,
+}
+
+pub(crate) fn read_knowledge_used_answer(f: &CapFlags, report: &Value) -> KnowledgeUsedAnswer {
+    let mut asked = f.no_knowledge_used;
+    let mut lines: Vec<Value> = Vec::new();
+    if let Some(raw) = &f.knowledge_used {
+        lines.push(Value::String(raw.clone()));
+    }
+    if let Some(Value::Array(reported)) = report.get("knowledge_used") {
+        asked = true;
+        lines.extend(reported.iter().cloned());
+    }
+    let mut recorded: Vec<KnowledgeUsed> = Vec::new();
+    for line in &lines {
+        let rendered = jsjson::js_to_string(line);
+        let text = match line {
+            Value::String(s) => js_trim(s),
+            _ => js_trim(&rendered),
+        };
+        if text.is_empty() {
+            continue;
+        }
+        let (path, changed) = match text.split_once(PROOF_SEPARATOR) {
+            Some((path, changed)) => (js_trim(path), js_trim(changed)),
+            None => (text, ""),
+        };
+        if path.is_empty() {
+            continue;
+        }
+        let entry = KnowledgeUsed { path: path.to_string(), changed: changed.to_string() };
+        if !recorded.contains(&entry) {
+            recorded.push(entry);
+        }
+    }
+    if !recorded.is_empty() {
+        return KnowledgeUsedAnswer::Recorded(recorded);
+    }
+    if asked {
+        return KnowledgeUsedAnswer::None;
+    }
+    KnowledgeUsedAnswer::Silent
+}
+
 /// D4/D8/D9 (docs/history/human-mailbox/CONTEXT.md): record this cap as one
 /// human-mailbox entry, THE MOMENT the cap lands.
 ///
@@ -1229,6 +1307,8 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     // a blank layer rather than this probe reading it as "not passed".
     let fix_at = opt_string_flag(flags, "fix-at")?;
     let no_mistakes = bool_flag(flags, "no-mistakes")?;
+    let knowledge_used = opt_string_flag(flags, "knowledge-used")?;
+    let no_knowledge_used = bool_flag(flags, "no-knowledge-used")?;
     let force_ownership = bool_flag(flags, "force-ownership")?;
     // D2's --fix-first convention: trimmed; empty/absent = None.
     let commit_pending = match opt_string_flag(flags, "commit-pending")? {
@@ -1259,6 +1339,8 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         mistake,
         fix_at,
         no_mistakes,
+        knowledge_used,
+        no_knowledge_used,
         session_flag,
         force_ownership,
         commit_pending,
@@ -2257,6 +2339,8 @@ mod tests {
             mistake: None,
             fix_at: None,
             no_mistakes: false,
+            knowledge_used: None,
+            no_knowledge_used: false,
             // Pinned so the run this test reads back can never depend on a
             // BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID the test process inherited.
             session_flag: Some("mb-run".to_string()),
