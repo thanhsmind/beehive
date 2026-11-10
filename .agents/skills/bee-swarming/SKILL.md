@@ -216,13 +216,17 @@ included: add guidance beside those words, never over them.
    lane: `bee cells park --id <cell> --question "<question>"`, then return
    `[PARKED]`.
 4. Write your knowledge delta in the same commit as your code, per the
-   contract in `packages/bee/prompts/worker-cell.md`: update the owning
-   area concept, add a pitfall pattern if you hit one, and update
-   `bee.anchors` for files you changed — thin and anchored, no review step.
-   Before the commit, run `bee knowledge check --json`. For every
-   suspect concept anchored by a file you changed, fix the concept or run
-   `bee knowledge confirm --id <id>`, then reserve the concept file and
-   commit it with the cell — the cap door refuses otherwise (grade rule:
+   contract in `packages/bee/prompts/worker-cell.md`: the worker brief
+   prints the knowledge rules (the same list `bee knowledge consolidate`
+   prints). Update the owning area concept, add a pitfall pattern if you
+   hit one, and update `bee.anchors` for files you changed — thin and
+   anchored, no review step. The cap answers which concepts changed a
+   decision with `--knowledge-used '<path> — <what it changed>'` or
+   `--no-knowledge-used`, never refused. Before the commit, run `bee
+   knowledge check --json`. For every suspect concept anchored by a file
+   you changed, fix the concept or run `bee knowledge confirm --id <id>`,
+   then reserve the concept file and commit it with the cell — the cap door
+   refuses otherwise (grade rule:
    `docs/history/knowledge-freshness-mechanic/CONTEXT.md` D4).
 5. Revert any edit the proof did not need. Commit
    once: subject describes the change in imperative mood; the last line of

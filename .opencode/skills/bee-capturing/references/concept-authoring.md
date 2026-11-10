@@ -90,11 +90,14 @@ pattern:
   cell id and commit, a review finding, a verification output path.
 - `bee.decisions` — the store ids or D-ids the concept applies.
 
-Every concept type's body follows the section questions, the deletion
-line and the rule-bullet tail of
-[`area-spec.md`](area-spec.md#area-spec-template): open each section with
-the one question it answers, and delete a line a test or the code already
-states.
+Every concept follows the writing rules printed by `bee knowledge consolidate`.
+The body opens with one line `Read when: <situation>`, and title and
+description carry the words a reader will search for — the error text,
+the symptom, the mechanism. `bee knowledge check` checks these rules and
+emits three warnings: `missing_read_when` when an area or pattern concept
+body lacks the `Read when:` opening line, `directory_anchor` when an anchor
+names a directory instead of a file, and `long_concept` when a concept
+body exceeds 300 lines.
 
 Hand edits reorder nothing: keep the emitted key order (`id`,
 `lifecycle`, `areas`, `required_context`, `decisions`, `sources`,
@@ -135,10 +138,12 @@ bee knowledge check --strict
 bee knowledge index --check
 ```
 
-Both green, or the write is not done. `check` reads the file back
-through the same emitter `new` used, so a clean hand edit passes and a
-reordered or misspelled key does not. `index --check` proves the
-re-rendered `index.md` files match the tree.
+Both green, or the write is not done. Note that `check --strict` also
+fails on existing bundle warnings, so the bar is no NEW finding on the
+files you wrote. `check` reads the file back through the same emitter
+`new` used, so a clean hand edit passes and a reordered or misspelled
+key does not. `index --check` proves the re-rendered `index.md` files
+match the tree.
 
 ## End-of-task review
 

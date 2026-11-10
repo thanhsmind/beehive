@@ -93,8 +93,12 @@ Spec craft — what to write, what to omit, honest gaps:
 `references/area-spec.md` ("Area Spec Template", "Merge Rules",
 "Harvest Interview", "Rebuild Checklist"). In a bundle repo the CLI
 names the write target and emits the frontmatter — `bee knowledge new`;
-never pick paths or type frontmatter blocks by eye. The full loop —
-search, decide, write, relate, validate — is
+never pick paths or type frontmatter blocks by eye. Concept authoring
+follows the knowledge rules printed by `bee knowledge consolidate`: the
+body opens with one line `Read when: <situation>`, title and description
+carry the searched words, and `bee knowledge check` warns on
+`missing_read_when`, `directory_anchor`, and `long_concept`. The full loop
+— search, decide, write, relate, validate — is
 `references/concept-authoring.md`.
 
 When a captured behavior change touches a file an area concept anchors,
