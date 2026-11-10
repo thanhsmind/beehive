@@ -57,6 +57,7 @@ the existing concepts to the new rules is a separate backlog item.
 - `docs/history/knowledge-in-the-flow/CONTEXT.md` — D1 flow not gate, D7 thin layer.
 - `docs/history/feature-pack-areas/` — area concepts enter the pack under a history anchor.
 
+<!-- bee:not-a-deferral: template section names with no open question under them, not a promise to act later -->
 ## Outstanding Questions
 
 ### Resolve Before Planning
@@ -66,3 +67,4 @@ the existing concepts to the new rules is a separate backlog item.
 ### Deferred To Planning
 
 - (none)
+<!-- /bee:not-a-deferral -->

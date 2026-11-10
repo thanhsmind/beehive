@@ -13,7 +13,7 @@ bee:
   authoritative_for: "okf-profile: the document homes rule, the anchor and verified fields, the cap re-confirm step, the host seed step, the pull-rate measure, the read set, the templates rule and its three writing warnings, and the decision-link error"
   anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/freshness.rs, packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs]
   verified_at: 2026-11-10
-  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
+  verified_commit: f49dc03cd38d1e2df53a161680ecc37a570a10c6
 ---
 
 # Bee OKF Profile (freshness, anchors and the document homes)
@@ -134,6 +134,8 @@ The cut area template provides a lean five-section structure for area concepts d
 The template the writer fills is also a check: three writing rules are machine-visible, and `bee knowledge check` names the file that breaks one. Every area and pattern body opens with one line `Read when: <situation>` inside its first ten non-blank, non-heading lines, so the pack can print that line in place of the title (knowledge-useful-rules D2); a concept whose anchors name a directory rather than a file, or whose body passes 300 lines, is split or re-anchored before it is filed (knowledge-useful-rules D4). The three findings — `missing_read_when`, `directory_anchor`, `long_concept` — are profile warnings on the same finding shape the older profile warnings use. They never block: `bee knowledge check` stays green without `--strict`, and the close knowledge-freshness door ignores codes it does not name, so a directory anchor cannot stop a cap.
 
 The check and the pack read the line through one function, `read_when_line` in `verbs/knowledge/check.rs`, and no second copy of its prefix or its ten-line window exists (knowledge-useful-rules D2). Two reads of one rule drift, and the drift is silent: the pack would print a line the check did not see, or the reverse.
+
+Two writing rules have no machine check and live only in the rule list the worker brief prints. The title and description carry the words a reader searches for — the error text, the symptom, the mechanism — because search and the relevance ranker score those tokens and the pack shows one line per concept (knowledge-useful-rules D1). An entry keeps the why, the boundary and the rejected option with how it failed, and drops the how that code or a test already shows, because only the knowledge layer can hold what was decided against (knowledge-useful-rules D3).
 
 ## The decision-link error
 
