@@ -8,17 +8,17 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"knowledge-useful-rules\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at b38823c; reload the product and test \"knowledge-useful-rules\", then either approve uat (\"bee gate --name uat --approved true --lane knowledge-useful-rules\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-11-10T00:10:18.006Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: knowledge-useful-rules",
-    "asked_at": "2026-11-10T02:00:59.711Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for knowledge-useful-rules: five knowledge rules merged into main",
+    "asked_at": "2026-11-10T02:01:19.945Z",
+    "session": "a58819df-0ccb-45ff-a324-410b582a92c3"
   },
   "route": {
     "class": "feature",

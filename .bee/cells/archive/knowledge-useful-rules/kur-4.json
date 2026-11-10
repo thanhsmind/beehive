@@ -1,0 +1,152 @@
+{
+  "id": "kur-4",
+  "feature": "knowledge-useful-rules",
+  "title": "Report concept use and concepts loaded but never used",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "kur-3"
+  ],
+  "decisions": [
+    "71241c48",
+    "e759fbaa"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "docs/knowledge/areas/okf-profile/critical-bar.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-useful-rules/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Keep contract e759fbaa. In knowledge/report.rs add a knowledge-used section built from closed_cells traces (knowledge_used, no_knowledge_used) and the learned_context lists of dispatch.jsonl prepare rows of kind cell. Text: 'knowledge used: <a> cell(s) answered (<u> used a concept, <n> none), <s> silent'; up to 10 lines '  <uses>  <path>' sorted by uses desc then path; one line 'loaded, never used: <path> — loaded <n> time(s)' per docs/knowledge path loaded in 5 or more cell prepare rows with zero uses, sorted by loads desc then path. JSON: knowledge_used {answered, used, none, silent, concepts:[{path, uses}], never_used:[{path, loads}]}. Place it after the feature outcomes and before the pull rate. Red first in report.rs mod tests with a temp root holding cells and a dispatch.jsonl. Knowledge delta in the same commit: extend B6 in docs/knowledge/areas/okf-profile/critical-bar.md with the use measure, citing this feature's CONTEXT.md D5. No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- report_knowledge_used",
+  "must_haves": {
+    "truths": [
+      "bee knowledge report prints the knowledge-used line with answered, used, none and silent counts",
+      "A concept loaded 5 or more times with no recorded use prints a 'loaded, never used' line",
+      "The JSON output carries the knowledge_used object"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "substantive": "a build_knowledge_used function and its tests"
+      }
+    ],
+    "key_links": [
+      "reads trace.knowledge_used written by kur-3"
+    ],
+    "prohibitions": [
+      "No change to the arm outcome lines",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-kur-4",
+    "outcome": "knowledge report lists concept use and never-used concepts",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "docs/knowledge/areas/okf-profile/critical-bar.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-10T01:50:11.385Z",
+    "behavior_change": true,
+    "verification_evidence": "7 builder tests over a temp root with cells and dispatch.jsonl, all red against a stub first",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- report_knowledge_used",
+    "claimed_at": "2026-11-10T01:32:56.159Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/okf-profile/critical-bar.md"
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee knowledge report prints a knowledge-used section: answered, used, none and silent counts, top uses, and concepts loaded 5 or more times but never used",
+      "commit": "87f425cf6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "docs/knowledge/areas/okf-profile/critical-bar.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- report_knowledge_used — green:unit — 7 builder tests over a temp root with cells and dispatch.jsonl, all red against a stub first",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge report prints the knowledge-used line with answered, used, none and silent counts",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "A concept loaded 5 or more times with no recorded use prints a 'loaded, never used' line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "The JSON output carries the knowledge_used object",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "a build_knowledge_used function and its tests",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "reads trace.knowledge_used written by kur-3",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "No change to the arm outcome lines",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          }
+        ],
+        "recorded_at": "2026-11-10T01:50:12.676Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:553-555 builds knowledge used text line with answered, used, none, silent counts; verified by verbs::knowledge::report::tests::report_knowledge_used_counts_answered_used_none_and_silent (lines 1028-1050)"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:491,547-550,559-561 formats loaded, never used line for concepts loaded >= 5 times with 0 uses; verified by verbs::knowledge::report::tests::report_knowledge_used_names_a_concept_loaded_five_times_with_no_use (lines 1094-1120)"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs:563-587,701 emits knowledge_used object in report JSON with answered, used, none, silent, concepts, never_used; verified by verbs::knowledge::report::tests::report_knowledge_used_counts_answered_used_none_and_silent (lines 1043-1049)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-10T02:14:36.427Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

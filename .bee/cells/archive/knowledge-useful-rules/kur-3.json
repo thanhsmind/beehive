@@ -1,0 +1,216 @@
+{
+  "id": "kur-3",
+  "feature": "knowledge-useful-rules",
+  "title": "Record on each cap which concepts changed a decision",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "71241c48",
+    "721d06f5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-useful-rules/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Keep contract 721d06f5. Add --knowledge-used (string, '<path> — <what it changed>') and --no-knowledge-used (bool) to every cap verb that takes --no-mistakes, in the registry and in CapFlags parsing. Read the answer the way read_mistakes_answer reads mistakes: the flag, then the report JSON's knowledge_used array; a present-but-empty array counts as the explicit none. Persist trace.knowledge_used as [{path, changed}] when any entry exists (split on the first ' — '; no separator keeps the path with an empty changed), else trace.no_knowledge_used true when the none was given, else neither key. Never refuse: not on silence, not on a contradiction (entries win), not on an odd path. Herding: add an optional knowledge_used string array to MailboxResult (absent when the key is absent) and to the result contract text in mailbox.rs, and carry it through report_from_job in finish_support.rs into the report's knowledge_used. --from-job must not require it. Red first in cells/tests.rs: cap with the flag, with the report array, with the explicit none, and silent; assert the four trace shapes; and a from-job cap whose result carries knowledge_used. Keep the registry contract tests green. Knowledge delta in the same commit: extend docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md beside the mistakes answer, citing this feature's CONTEXT.md D5 and knowledge-in-the-flow D1. No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_used registry",
+  "must_haves": {
+    "truths": [
+      "bee cells finish --knowledge-used \"docs/knowledge/x.md — chose y\" records trace.knowledge_used [{path, changed}]",
+      "--no-knowledge-used records trace.no_knowledge_used true; silence records neither key",
+      "No input shape refuses a cap",
+      "A herding result's knowledge_used array reaches the trace through --from-job"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "a knowledge-used answer reader and the trace write"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "the two flags on each cap verb"
+      }
+    ],
+    "key_links": [
+      "finish_support.rs report_from_job passes knowledge_used from MailboxResult"
+    ],
+    "prohibitions": [
+      "No refusal on any knowledge-used input",
+      "No change to the mistakes answer",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Whether --knowledge-used is repeatable"
+    ]
+  },
+  "trace": {
+    "worker": "w-kur-3b",
+    "outcome": "Caps now record which concepts changed a decision: --knowledge-used/--no-knowledge-used on both cap verbs, the report's knowledge_used array read like mistakes, trace.knowledge_used [{path,changed}] else trace.no_knowledge_used, carried through --from-job, nothing refused; B51a recorded; commit 905f60495",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+    ],
+    "deviations": [
+      "sync-ack: the herding change is one optional result-file field; its contract text lives in the brief herding/mailbox.rs renders, which this cell updated, and skills/bee-herding names no result-file fields"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-10T01:32:49.802Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_used registry — green:unit — 42 passed, 0 failed; the 6 recording rows went red when the reader was neutered to Silent (red-before-green verified); live on the built binary all four trace shapes confirmed (flag, explicit none, silence, empty array) plus --help --json --all declares both flags on cells.cap and cells.finish; commit 905f60495 carries trailer cell: kur-3 and the tree is clean",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_used registry",
+    "claimed_at": "2026-11-10T00:47:45.454Z",
+    "ownership_overrides": [
+      {
+        "verb": "unclaimCell",
+        "forced_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "owner_bypassed": null,
+        "at": "2026-11-10T00:46:29.386Z"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+    ],
+    "sync_ack": "the herding change is one optional result-file field; its contract text lives in the brief herding/mailbox.rs renders, which this cell updated, and skills/bee-herding names no result-file fields",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Caps now record which concepts changed a decision: --knowledge-used/--no-knowledge-used on both cap verbs, the report's knowledge_used array read like mistakes, trace.knowledge_used [{path,changed}] else trace.no_knowledge_used, carried through --from-job, nothing refused; B51a recorded; commit 905f60495",
+      "commit": "905f60495ed73ad16c4adf6d8f2c5cc8c1f24bb7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_used registry — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_used registry — green:unit — 42 passed, 0 failed; the 6 recording rows went red when the reader was neutered to Silent (red-before-green verified); live on the built binary all four trace shapes confirmed (flag, explicit none, silence, empty array) plus --help --json --all declares both flags on cells.cap and cells.finish; commit 905f60495 carries trailer cell: kur-3 and the tree is clean",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee cells finish --knowledge-used \"docs/knowledge/x.md — chose y\" records trace.knowledge_used [{path, changed}]",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "--no-knowledge-used records trace.no_knowledge_used true; silence records neither key",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "No input shape refuses a cap",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "A herding result's knowledge_used array reaches the trace through --from-job",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+          },
+          {
+            "requirement": "a knowledge-used answer reader and the trace write",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "the two flags on each cap verb",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "finish_support.rs report_from_job passes knowledge_used from MailboxResult",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+          },
+          {
+            "requirement": "No refusal on any knowledge-used input",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "No change to the mistakes answer",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          }
+        ],
+        "recorded_at": "2026-11-10T01:33:05.027Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:695-703,1116-1144 parses --knowledge-used and records trace.knowledge_used [{path, changed}]; verified by verbs::cells::tests::knowledge_used_the_flag_records_the_path_and_what_it_changed (lines 12988-13009)"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:704-708 records trace.no_knowledge_used true on KnowledgeUsedAnswer::None and neither key on Silent; verified by verbs::cells::tests::knowledge_used_the_explicit_none_is_recorded_and_an_empty_array_says_it_too and knowledge_used_silence_records_neither_key (lines 13054-13098)"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1130-1135,1145 splits on separator or falls back cleanly without error; verified by verbs::cells::tests::knowledge_used_a_line_with_no_separator_keeps_the_path_and_an_empty_changed and knowledge_used_an_entry_outranks_the_none_flag_and_never_refuses (lines 13012-13028, 13101-13117)"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs:1049-1054 report_from_job copies MailboxResult.knowledge_used into report; verified by verbs::cells::tests::knowledge_used_reaches_the_trace_through_a_from_job_result (lines 13123-13166)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-10T02:14:36.426Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}

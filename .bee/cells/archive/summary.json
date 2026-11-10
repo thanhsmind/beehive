@@ -2078,5 +2078,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-09T23:29:52.097Z"
+  },
+  "knowledge-useful-rules": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-11-10T02:14:43.420Z"
   }
 }

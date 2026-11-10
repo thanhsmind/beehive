@@ -1,0 +1,208 @@
+{
+  "id": "kur-1",
+  "feature": "knowledge-useful-rules",
+  "title": "Give workers the five knowledge rules and print Read-when lines in the pack",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "71241c48",
+    "90988b99",
+    "f4b38727",
+    "721d06f5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs",
+    "packages/bee/prompts/worker-cell.md",
+    ".bee/bin/prompts/worker-cell.md",
+    "docs/knowledge/areas/okf-profile/context-and-promote.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-useful-rules/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "docs/knowledge/patterns/20260819-a-test-that-derives-its-fixture-from-the-constant-under-test-only-proves-the-code-agrees-with-itself.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Keep contracts 90988b99 and f4b38727. (1) In knowledge/consolidate.rs replace THIN_LAYER_RULES with a five-rule list, in this order: 'Anchor every entry to the code files it describes in bee.anchors — files, never directories.'; 'Never restate what the code or a test shows: keep the why, the boundary, and the rejected option with how it failed; drop the how.'; 'Extend the concept that owns the subject; find it with bee knowledge search --text and bee knowledge list --area, and never file a near-duplicate beside it.'; 'Open the body with one line Read when: <the situation the reader is in>, and put the words a reader will search for — the error text, the symptom, the mechanism — in the title and description.'; 'Split a concept that passes 300 lines along its lifecycles.' Update the consolidate test that pins three rules to assert the five literal strings (never derive the expected value from the constant). (2) Add a knowledge_rules variable to the worker-cell supported vars in drivers/prompt.rs, fill it in prepare.rs from the same list (one line per rule, each prefixed '  - '), and render it in packages/bee/prompts/worker-cell.md directly under the knowledge-delta bullet. In the same prompt: name the knowledge_used key in the native Result form JSON as \"knowledge_used\": [\"<docs/knowledge path> — <the decision it changed>\"] with one sentence saying an empty array means no concept changed a decision; in the herding paragraph add that the result file may carry the same knowledge_used array. Copy the prompt byte-identical to .bee/bin/prompts/worker-cell.md. (3) In prepare.rs bundle_learned_lines, when a selected concept's body (knowledge::concept_body) has a line starting 'Read when:' among its first 10 non-blank lines that are not headings, render that line in place of the title through the same one_line 140 cap; otherwise keep the title exactly as today. Red first for (2) and (3) in drivers/tests.rs: a rendered worker prompt contains each of the five rule lines, and a learned-context line for a fixture concept with a Read-when line shows it while one without keeps its title. Knowledge delta in the same commit: extend B5 in docs/knowledge/areas/okf-profile/context-and-promote.md with the five rules' one home and the Read-when line in the pack, citing this feature's CONTEXT.md D2 and D6 (not raw decision ids). No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_rules read_when consolidat",
+  "must_haves": {
+    "truths": [
+      "bee knowledge consolidate --json returns a rules array of the five strings in the stated order",
+      "A rendered worker-cell prompt contains the five rule lines under the knowledge-delta bullet",
+      "A learned-context line for a concept with a Read when: line shows that line; one without shows its title as before",
+      "The worker prompt's Result form names the knowledge_used key",
+      "packages/bee/prompts/worker-cell.md and .bee/bin/prompts/worker-cell.md are byte-identical"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+        "substantive": "a five-rule list replacing THIN_LAYER_RULES and a test asserting the literal strings"
+      },
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "a knowledge_rules block under the delta bullet and the knowledge_used result key"
+      }
+    ],
+    "key_links": [
+      "prepare.rs fills knowledge_rules from the consolidate list, so the brief and consolidate cannot disagree"
+    ],
+    "prohibitions": [
+      "No new refusal",
+      "No second copy of the rule text in Rust",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Whether the Read-when lookup lives in prepare.rs or a small helper in knowledge/"
+    ]
+  },
+  "trace": {
+    "worker": "w-kur-1",
+    "outcome": "Five knowledge rules now have one home in consolidate's list and render into the worker brief; a concept's Read when: line prints in place of its title in the pack; the prompt names the knowledge_used result key; commit 6b4942a01",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee/prompts/worker-cell.md",
+      ".bee/bin/prompts/worker-cell.md",
+      "docs/knowledge/areas/okf-profile/context-and-promote.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-10T00:47:28.031Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_rules read_when consolidat — green:unit — 13 passed, 0 failed; the two new tests failed before the implementation (read_when_of short-circuited, knowledge_rules truncated) and pass after. Full suite: 4887 passed / 9 failed, all 9 from a sibling worker's live edits to knowledge/check.rs + knowledge/tests.rs (kur-2's cell) plus one opencode-binary environment failure — none in my files.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_rules read_when consolidat",
+    "claimed_at": "2026-11-10T00:14:08.502Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/okf-profile/context-and-promote.md"
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Five knowledge rules now have one home in consolidate's list and render into the worker brief; a concept's Read when: line prints in place of its title in the pack; the prompt names the knowledge_used result key; commit 6b4942a01",
+      "commit": "92d62fa4e05d9cc8cf6c3efb3a0eb0821d2fa568",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee/prompts/worker-cell.md",
+        ".bee/bin/prompts/worker-cell.md",
+        "docs/knowledge/areas/okf-profile/context-and-promote.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_rules read_when consolidat — green:unit — PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge_rules read_when consolidat — green:unit — 13 passed, 0 failed; the two new tests failed before the implementation (read_when_of short-circuited, knowledge_rules truncated) and pass after. Full suite: 4887 passed / 9 failed, all 9 from a sibling worker's live edits to knowledge/check.rs + knowledge/tests.rs (kur-2's cell) plus one opencode-binary environment failure — none in my files.",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge consolidate --json returns a rules array of the five strings in the stated order",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs"
+          },
+          {
+            "requirement": "A rendered worker-cell prompt contains the five rule lines under the knowledge-delta bullet",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "A learned-context line for a concept with a Read when: line shows that line; one without shows its title as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "The worker prompt's Result form names the knowledge_used key",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "packages/bee/prompts/worker-cell.md and .bee/bin/prompts/worker-cell.md are byte-identical",
+            "artifact": ".bee/bin/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "a five-rule list replacing THIN_LAYER_RULES and a test asserting the literal strings",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs"
+          },
+          {
+            "requirement": "a knowledge_rules block under the delta bullet and the knowledge_used result key",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "prepare.rs fills knowledge_rules from the consolidate list, so the brief and consolidate cannot disagree",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "No new refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs"
+          },
+          {
+            "requirement": "No second copy of the rule text in Rust",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs"
+          }
+        ],
+        "recorded_at": "2026-11-10T00:47:59.257Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs:9-15 defines KNOWLEDGE_RULES; consolidate.rs:52 serializes rules array; verbs::knowledge::consolidate::tests::knowledge_consolidate_lists_the_features_knowledge_files_from_live_and_archived_cells (lines 167-175) asserts 5 strings in stated order"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1485-1490 formats knowledge::KNOWLEDGE_RULES; rendered in packages/bee/prompts/worker-cell.md:70-74 under knowledge-delta bullet; verified by verbs::drivers::tests::worker_prompt_carries_the_five_knowledge_rules (lines 183-214)"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:995 reads read_when_of(&dir, &concept.path).or(title); verified by verbs::drivers::tests::learned_context_shows_a_read_when_line_in_place_of_the_title (lines 4899-4927)"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee/prompts/worker-cell.md:83 names knowledge_used key in Result form JSON and line 85 states empty array meaning; verified by verbs::drivers::tests::worker_prompt_result_form_names_the_knowledge_used_key (lines 216-267)"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "ran diff packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md with 0 exit code (byte-identical)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-10T02:14:36.423Z"
+      }
+    ]
+  },
+  "regen_obligation_ack": "kur-5 runs the full bee dev regen chain (render-skill-trees, onboard --apply, release-manifest --write) after this cell, in its own commit",
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (1 unreadable)"
+}

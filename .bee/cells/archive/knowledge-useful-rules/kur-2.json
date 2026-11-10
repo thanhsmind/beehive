@@ -1,0 +1,259 @@
+{
+  "id": "kur-2",
+  "feature": "knowledge-useful-rules",
+  "title": "Warn on missing Read-when, directory anchors and long concepts",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "71241c48",
+    "e8899530"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+    "docs/history/knowledge-useful-rules/plan.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-useful-rules/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Keep contract e8899530. In knowledge/check.rs check_bundle add three profile warnings through the existing finding shape, never errors: missing_read_when on a concept of type bee.area or bee.pattern whose first 10 non-blank lines that are not headings hold no line starting 'Read when:'; directory_anchor once per bee.anchors entry that ends with '/' or resolves to a directory under the repo root (repo_root is already derived in check_bundle); long_concept on a concept whose body exceeds 300 lines. Exit status without --strict stays unchanged. Red first in knowledge/tests.rs: a fixture bundle with one compliant concept and one breaking each rule; assert each code appears exactly for the breaking file, the compliant one gets none, and okf errors and profile errors stay empty. Confirm by reading build_knowledge_freshness_door in drivers/close.rs that the new codes fall to its default arm (no change there). Knowledge delta in the same commit: in docs/knowledge/areas/okf-profile/freshness-and-document-homes.md extend 'The templates rule' with the Read-when line and the three warnings, citing this feature's CONTEXT.md D2 and D4. No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- writing_warnings",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check reports missing_read_when, directory_anchor and long_concept as profile warnings on the breaking files only",
+      "A compliant concept gets none of the three",
+      "bee knowledge check without --strict exits as before",
+      "The close knowledge-freshness door never blocks on the three codes"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "substantive": "three warning codes in check_bundle"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "substantive": "a writing_warnings test over a fixture bundle"
+      }
+    ],
+    "key_links": [
+      "drivers/close.rs build_knowledge_freshness_door default arm ignores the new codes"
+    ],
+    "prohibitions": [
+      "No new error or refusal",
+      "No code comments"
+    ],
+    "open_choices": [
+      "How the directory test treats an anchor that does not exist (orphan_anchor already covers it)"
+    ]
+  },
+  "trace": {
+    "worker": "leader",
+    "outcome": "bee knowledge check warns on missing Read-when, directory anchors and long concepts; knowledge new tests fit the warning",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+      "docs/history/knowledge-useful-rules/plan.md"
+    ],
+    "deviations": [
+      "the Read-when prefix and the 10-line scan are defined in check.rs and again in kur-1's prepare.rs; a follow-up cell makes them one shared read",
+      "reopened by the leader: kur-2's warning reddened two knowledge new tests that asserted zero warnings; fixed inline as a two-assertion test change",
+      "sync-ack: kur-2 changes knowledge check and its tests; the bee-herding area claims them through a broad ownership match"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-10T01:56:33.608Z",
+    "behavior_change": true,
+    "verification_evidence": "rework after the full suite went red: writing_warnings plus new_writes_canonical_pattern_and_rerenders_indexes, new_writes_canonical_area_concept and no_shipped_command_spelling_is_refused_by_the_widened_guard, 4 passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a58819df-0ccb-45ff-a324-410b582a92c3",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- writing_warnings",
+    "claimed_at": "2026-11-10T01:55:02.814Z",
+    "ownership_overrides": [
+      {
+        "verb": "unclaimCell",
+        "forced_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "owner_bypassed": null,
+        "at": "2026-11-10T00:46:29.313Z"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [],
+    "sync_ack": "kur-2 changes knowledge check and its tests; the bee-herding area claims them through a broad ownership match",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee knowledge check warns missing_read_when, directory_anchor and long_concept as profile warnings only",
+      "commit": "f938a1ce2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "docs/knowledge/areas/okf-profile/freshness-and-document-homes.md",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+        "docs/history/knowledge-useful-rules/plan.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- writing_warnings — green:unit — rework after the full suite went red: writing_warnings plus new_writes_canonical_pattern_and_rerenders_indexes, new_writes_canonical_area_concept and no_shipped_command_spelling_is_refused_by_the_widened_guard, 4 passed",
+      "deviations": [
+        "the Read-when prefix and the 10-line scan are defined in check.rs and again in kur-1's prepare.rs; a follow-up cell makes them one shared read",
+        "reopened by the leader: kur-2's warning reddened two knowledge new tests that asserted zero warnings; fixed inline as a two-assertion test change"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge check reports missing_read_when, directory_anchor and long_concept as profile warnings on the breaking files only",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "A compliant concept gets none of the three",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "bee knowledge check without --strict exits as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "The close knowledge-freshness door never blocks on the three codes",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "three warning codes in check_bundle",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "a writing_warnings test over a fixture bundle",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "drivers/close.rs build_knowledge_freshness_door default arm ignores the new codes",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "No new error or refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          }
+        ],
+        "recorded_at": "2026-11-10T01:35:50.064Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge check reports missing_read_when, directory_anchor and long_concept as profile warnings on the breaking files only",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "A compliant concept gets none of the three",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "bee knowledge check without --strict exits as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "The close knowledge-freshness door never blocks on the three codes",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "three warning codes in check_bundle",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "a writing_warnings test over a fixture bundle",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+          },
+          {
+            "requirement": "drivers/close.rs build_knowledge_freshness_door default arm ignores the new codes",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "No new error or refusal",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "No code comments",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+          },
+          {
+            "requirement": "the full suite's knowledge new tests pass with the new warning",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs"
+          }
+        ],
+        "recorded_at": "2026-11-10T01:56:37.376Z",
+        "recorded_by": "a58819df-0ccb-45ff-a324-410b582a92c3",
+        "commit_diff": "checked"
+      }
+    ],
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-11-10T01:54:57.951Z",
+    "reopened_reason": "the full suite went red: two knowledge new tests in knowledge/author.rs assert zero check warnings, and kur-2's missing_read_when now fires on their fixtures",
+    "mistakes": [
+      {
+        "wrong": "kur-2 added a warning without running the tests that assert a clean check on a new concept, so two knowledge new tests went red in the full suite",
+        "better": "grep the crate for warnings.is_empty() before adding a warning code",
+        "fix_at": "doctrine"
+      }
+    ],
+    "inline_reason": "a two-assertion test rework after the full suite; a worker round costs more than the edit",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs:711-748 pushes profile warnings for missing_read_when, directory_anchor, and long_concept on breaking files; verified by verbs::knowledge::tests::writing_warnings_name_only_the_breaking_file (lines 1257-1317)"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs:1309-1314 verifies compliant concept in writing_warnings_name_only_the_breaking_file receives none of the three warning codes"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs:1293 verifies report.ok is true without --strict (check_bundle(&dir, false))"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:818-825 build_knowledge_freshness_door matches only dangling_source and dangling_required_context as blocking; new codes fall through to _ => {}"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-11-10T02:14:36.424Z"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "herding job(s) named this cell but no readable session transcript (2 unreadable)"
+}
