@@ -99,6 +99,12 @@ body lacks the `Read when:` opening line, `directory_anchor` when an anchor
 names a directory instead of a file, and `long_concept` when a concept
 body exceeds 300 lines.
 
+Every concept type's body also follows the section questions, the deletion
+line and the rule-bullet tail of
+[`area-spec.md`](area-spec.md#area-spec-template): open each section with
+the one question it answers, and delete a line a test or the code already
+states.
+
 Hand edits reorder nothing: keep the emitted key order (`id`,
 `lifecycle`, `areas`, `required_context`, `decisions`, `sources`,
 `lane`, `polarity`, `critical`, …) or `not_canonical` fires at

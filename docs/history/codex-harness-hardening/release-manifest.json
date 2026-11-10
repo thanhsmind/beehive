@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "c9e6dd2240d5853b12f0daeb459f6dbe05dd32bf0e02d74711df18a3279fb3a2",
+      "sha256": "3ca4666b3637ee20bf91e156e1505d72f1dbb18e70bd5520aa9cb912d4d4ef86",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -164,7 +164,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/references/concept-authoring.md",
-      "sha256": "d2b68cde613a86ac46144f183b3b754bd5b9cbd274eb0c66b3a6a931838614cd",
+      "sha256": "4e269c9310814ebc5faeec684f5699cc0b564cb4c8c9b09efcbe5c0b0bba5df0",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-capturing/references/concept-authoring.md"
@@ -1004,7 +1004,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "32b9b3eae4faf438fd3afec7ca61701419fa5c1863528774d2a40a8d7230f040",
+      "sha256": "f468b2c4edd87a9144011a6f7d6de998d76a7e42ab964bbd9fbaa7747472f01d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1032,7 +1032,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/references/concept-authoring.md",
-      "sha256": "d2b68cde613a86ac46144f183b3b754bd5b9cbd274eb0c66b3a6a931838614cd",
+      "sha256": "4e269c9310814ebc5faeec684f5699cc0b564cb4c8c9b09efcbe5c0b0bba5df0",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-capturing/references/concept-authoring.md"
@@ -3378,7 +3378,7 @@
     },
     {
       "path": "skills/bee-capturing/references/concept-authoring.md",
-      "sha256": "d2b68cde613a86ac46144f183b3b754bd5b9cbd274eb0c66b3a6a931838614cd",
+      "sha256": "4e269c9310814ebc5faeec684f5699cc0b564cb4c8c9b09efcbe5c0b0bba5df0",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-capturing/references/concept-authoring.md"
