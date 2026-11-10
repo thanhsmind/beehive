@@ -13,7 +13,7 @@ bee:
   authoritative_for: "hook-runtime: the catalog of record, projection parity, and checkpoint activation"
   anchors: [.opencode/plugins/bee-guard.ts, packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs, packages/bee-rs/crates/bee/src/catalog.rs, packages/bee/hooks/hooks.json, packages/bee/hooks/claude-hooks.json, .claude-plugin/plugin.json, .pi/extensions/bee-guard/, .agents/skills, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, packages/bee-rs/crates/bee/src/herding/mailbox.rs, packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs]
   verified_at: 2026-11-10
-  verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
+  verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
 
 # Hook Runtime — the catalog of record, its rendered projections, the third runtime's own belt, and checkpoint activation

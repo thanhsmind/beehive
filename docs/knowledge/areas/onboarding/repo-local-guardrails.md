@@ -12,8 +12,8 @@ bee:
   sources: ["sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity D2 (lifecycle enforcement contract, 2026-07-11)", "codex-runtime-parity D3 (nested-executor safety boundary, 2026-07-11)", "codex-runtime-parity D4 (dispatch-contract scope, 2026-07-11)", "opencode-support cells oc-11, oc-13 (team.opencode made real across every tier reader; bee onboard --apply vendors the third runtime's skill tree and guard file idempotently; capped traces .bee/cells/archive/opencode-support/oc-11.json, .bee/cells/archive/opencode-support/oc-13.json, 2026-08-11)", "docs/specs/onboarding.md#R6", "docs/specs/onboarding.md#R7", "docs/specs/onboarding.md#R8", "docs/specs/onboarding.md#E9", "docs/specs/onboarding.md#P13", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)"]
   authoritative_for: "onboarding: repo-local guardrails and multi-runtime lifecycle wiring"
   anchors: [.pi/extensions/bee-guard/, packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/catalog.rs, .codex/hooks.json, .opencode/plugins/bee-guard.ts, .opencode/skills/, packages/bee-rs/crates/bee/src/hooks/model_guard.rs, packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, packages/bee-rs/crates/bee/src/onboard/plan.rs, packages/bee-rs/crates/bee/src/onboard/apply.rs, packages/bee-rs/crates/bee/build.rs, packages/bee-rs/crates/bee/src/doctor.rs]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-10
+  verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
 
 # Onboarding — Repo-Local Guardrails and Multi-Runtime Lifecycle Wiring

@@ -13,8 +13,8 @@ bee:
   sources: [docs/specs/porcelain.md, docs/handbook/register.md, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
   authoritative_for: "rust-runtime: the porcelain/plumbing command surface and the teach-at-point-of-contact contract"
   anchors: [packages/bee-rs/crates/bee/src/router.rs]
-  verified_at: 2026-11-06
-  verified_commit: b30737f041dfd4377537b84003d1977c8d1be0fd
+  verified_at: 2026-11-10
+  verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
 
 # Compiled runtime — the command surface

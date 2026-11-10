@@ -20,6 +20,11 @@
 #                   onboarding's per-project sync (layer 2) is the default.
 #   -NoClaudeMd     Skip writing/extending CLAUDE.md with the bare @AGENTS.md
 #                   import. By default onboarding writes it.
+#   -NoClaudeSettings
+#                   Skip the Claude settings baseline (bypass-permission mode,
+#                   the denied tools and the six switches). By default
+#                   onboarding adds them to .claude/settings.json and keeps
+#                   the worktree-tool allow either way.
 #   -ClaudeMd       Accepted for compatibility; a no-op alias of the default
 #                   (CLAUDE.md is written unless -NoClaudeMd is passed).
 #
@@ -49,6 +54,7 @@ param(
   [switch]$NoClaudeMd,
   [switch]$ClaudeMd,
   [switch]$NoStatusline,
+  [switch]$NoClaudeSettings,
   [switch]$NoGitInit,
   [switch]$Yes,
   [switch]$DryRun
@@ -544,6 +550,7 @@ try {
   if ($NoClaudeMd) { $onboardFlags += '--no-claude-md' }
   if ($ClaudeMd) { $onboardFlags += '--claude-md' }
   if ($NoStatusline) { $onboardFlags += '--no-statusline' }
+  if ($NoClaudeSettings) { $onboardFlags += '--no-claude-settings' }
   if ($DesignPacks) { $onboardFlags += @('--design-packs', $DesignPacks) }
   if ($GlobalSkills) { $onboardFlags += '--global-skills' }
 

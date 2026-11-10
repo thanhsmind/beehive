@@ -51,6 +51,7 @@ pub struct Options {
     /// plugin cannot supply a `statusLine`, so a plugin-first host gets the
     /// display only if onboarding writes it.
     pub statusline: bool,
+    pub claude_settings: bool,
     pub runtime: String,
     pub design_packs: Option<Vec<String>>,
     pub current_exe: Option<PathBuf>,
@@ -1354,8 +1355,8 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         plan.push(plan_item("merge_statusline_settings", ".claude/settings.json"));
     }
 
-    if hw::worktree_tool_allow_missing(repo_root) {
-        plan.push(plan_item("merge_worktree_tool_allow", ".claude/settings.json"));
+    if hw::claude_settings_missing(repo_root, opts.claude_settings) {
+        plan.push(plan_item("merge_claude_settings", ".claude/settings.json"));
     }
 
     // 5c. Codex user-config status line (machine-level, add-only)

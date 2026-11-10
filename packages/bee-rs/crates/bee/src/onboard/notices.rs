@@ -169,6 +169,40 @@ Onboarding adds them once; delete them to opt out and they stay deleted."
         .collect()
 }
 
+pub fn claude_settings_notices(
+    items: &[Value],
+    kept: &super::hooks_wiring::ClaudeSettingsKept,
+    full: bool,
+) -> Vec<String> {
+    if !full || !items.iter().any(|i| i["action"] == "merge_claude_settings") {
+        return Vec::new();
+    }
+    let mut line = String::from(
+        "Claude settings baseline: permission prompts are turned off for this project \
+(permissions.defaultMode bypassPermissions) and the baseline tools are denied. The baseline \
+is written even when bee's guard hooks are not wired, so on a --no-hooks install bee's guards \
+are not the safety net behind it.",
+    );
+    if !kept.kept_keys.is_empty() {
+        line.push_str(&format!(
+            " Left at this project's own value: {}.",
+            kept.kept_keys.join(", ")
+        ));
+    }
+    if !kept.allowed_then_denied.is_empty() {
+        line.push_str(&format!(
+            " Your allow list still carries {}, which the baseline also denies.",
+            kept.allowed_then_denied.join(", ")
+        ));
+    }
+    line.push_str(
+        " The write is add-only: no value this project already set is overwritten. Opt out with \
+`bee onboard --no-claude-settings`, or for good with \
+`.bee/config.json` \"claude_settings\": false.",
+    );
+    vec![line]
+}
+
 /// commandsNotices (l. 2594): propose-only (decision D3) — this script never
 /// writes detected values to .bee/config.json.
 pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {

@@ -17,7 +17,7 @@ bee:
   owns.tests: [packages/bee-rs/crates/bee/src/doctor/tests.rs, packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs, packages/bee-rs/crates/bee/tests/front_door.rs, packages/bee-rs/crates/bee/tests/registry_contracts.rs, packages/bee-rs/crates/bee/tests/registry_dispatch.rs]
   anchors: [packages/bee-rs/crates/bee, packages/bee-rs/crates/bee/src/verbs/, packages/bee-rs/crates/bee/src/hooks/]
   verified_at: 2026-11-10
-  verified_commit: bb9baff3c63e47ea85537f768dadf7a60ab482fb
+  verified_commit: 471430df16c5b9bc6af2a3f891ee1180729d1916
 ---
 
 ## Purpose

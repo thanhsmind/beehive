@@ -5,7 +5,7 @@
 //   bee onboard [--repo-root <path>] [--apply] [--json] [--repo-hooks]
 //               [--plugin-source] [--runtime claude|codex|pi|both]
 //               [--no-claude-md] [--claude-md] [--global-skills]
-//               [--force-downgrade] [--no-statusline]
+//               [--force-downgrade] [--no-statusline] [--no-claude-settings]
 //
 // The flag set is the .mjs's own parseArgs (l. 4022), verbatim.
 //
@@ -121,6 +121,7 @@ struct Args {
     plugin_source: bool,
     force_downgrade: bool,
     statusline: bool,
+    claude_settings: bool,
     runtime: String,
     design_packs: Option<Vec<String>>,
 }
@@ -143,6 +144,7 @@ impl Default for Args {
             // --no-statusline opts out for this run, and a project opts out
             // permanently with `.bee/config.json` "statusline": false.
             statusline: true,
+            claude_settings: true,
             // GH #22 P0-1: default "both" matches install.sh's own default.
             runtime: "both".to_string(),
             design_packs: None,
@@ -163,9 +165,17 @@ enum ParseOutcome {
 /// the way `merge::host_shell_is_powershell` reads `host_shell`, and never
 /// written by onboarding. Absent or unrecognised means true.
 fn statusline_config_preference(repo_root: &Path) -> bool {
+    config_bool_preference(repo_root, "statusline")
+}
+
+fn claude_settings_config_preference(repo_root: &Path) -> bool {
+    config_bool_preference(repo_root, "claude_settings")
+}
+
+fn config_bool_preference(repo_root: &Path, key: &str) -> bool {
     let text = util::read_text_if_exists(&repo_root.join(".bee").join("config.json"));
     match serde_json::from_str::<Value>(&text).ok().and_then(|v| {
-        v.get("statusline").and_then(Value::as_bool)
+        v.get(key).and_then(Value::as_bool)
     }) {
         Some(v) => v,
         None => true,
@@ -209,6 +219,8 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
             args.claude_md = false;
         } else if arg == "--no-statusline" {
             args.statusline = false;
+        } else if arg == "--no-claude-settings" {
+            args.claude_settings = false;
         } else if arg == "--global-skills" {
             args.global_skills = true;
         } else if arg == "--skillstation" {
@@ -410,6 +422,10 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
 
     let is_powershell = merge::host_shell_is_powershell(&repo_root);
     let statusline_config_allowed = statusline_config_preference(&repo_root);
+    let claude_settings_config_allowed = claude_settings_config_preference(&repo_root);
+    let claude_settings_kept = hooks_wiring::claude_settings_kept(
+        &repo_root.join(".claude").join("settings.json"),
+    );
     let opts = Options {
         // --repo-hooks opts a repo IN; it is not a re-consent owed on every
         // upgrade (the record is sticky).
@@ -427,6 +443,7 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
         // 4cac0774: on by default, three ways off — this run's flag, the
         // project's recorded preference, and a PowerShell host.
         statusline: args.statusline && statusline_config_allowed && !is_powershell,
+        claude_settings: args.claude_settings && claude_settings_config_allowed,
         runtime: args.runtime.clone(),
         design_packs: args.design_packs.clone(),
         current_exe: None,
@@ -469,6 +486,11 @@ does run a POSIX shell."
             out.push(json!(n));
         }
         for n in notices::pi_team_notices(items) {
+            out.push(json!(n));
+        }
+        for n in
+            notices::claude_settings_notices(items, &claude_settings_kept, opts.claude_settings)
+        {
             out.push(json!(n));
         }
         Value::Array(out)
