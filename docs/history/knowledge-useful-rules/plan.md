@@ -90,7 +90,7 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
 | kur-2 | Warn on missing Read-when, directory anchors and long concepts | check.rs, knowledge/tests.rs | — | `bee knowledge check` names `missing_read_when`, `directory_anchor`, `long_concept` | `cargo test … -p bee -- writing_warnings` |
 | kur-3 | Record on each cap which concepts changed a decision | handlers_close.rs, finish_support.rs, cells/tests.rs, herding/mailbox.rs, registry_payload.json, hooks/cli_shape.rs | — | `bee cells finish --knowledge-used "<path> — <what>"` lands on trace.knowledge_used | `cargo test … -p bee -- knowledge_used` |
 | kur-4 | Report concept use and concepts loaded but never used | knowledge/report.rs | kur-3 | `bee knowledge report` prints a knowledge-used line, top uses, and never-used concepts | `cargo test … -p bee -- report_knowledge_used` |
-| kur-5 | Teach the rules in the skills and the owning concept | bee-swarming SKILL.md, bee-capturing SKILL.md and concept-authoring.md, freshness-and-document-homes.md, rendered skill trees | kur-1, kur-3 | the skills point at the one rule list and name the knowledge-used answer | `bee dev regen --check` and `bee knowledge check` |
+| kur-5 | Teach the rules in the skills and point at the one rule list | bee-swarming SKILL.md, bee-capturing SKILL.md and concept-authoring.md, rendered skill trees, release-manifest.json | kur-1, kur-3 | the skills point at the one rule list and name the knowledge-used answer; the regen chain also covers kur-1's prompt | `bee dev regen --check` and `bee dev release-manifest --check` |
 | kur-6 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | all | the okf-profile and workflow-state concepts describe the rules, warnings and use record | `bee knowledge check` |
 
 ```json
@@ -103,7 +103,12 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
     "role": "code",
     "status": "open",
     "deps": [],
-    "decisions": ["71241c48", "90988b99", "f4b38727", "721d06f5"],
+    "decisions": [
+      "71241c48",
+      "90988b99",
+      "f4b38727",
+      "721d06f5"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
@@ -135,8 +140,14 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
         "packages/bee/prompts/worker-cell.md and .bee/bin/prompts/worker-cell.md are byte-identical"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs", "substantive": "a five-rule list replacing THIN_LAYER_RULES and a test asserting the literal strings"},
-        {"path": "packages/bee/prompts/worker-cell.md", "substantive": "a knowledge_rules block under the delta bullet and the knowledge_used result key"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs",
+          "substantive": "a five-rule list replacing THIN_LAYER_RULES and a test asserting the literal strings"
+        },
+        {
+          "path": "packages/bee/prompts/worker-cell.md",
+          "substantive": "a knowledge_rules block under the delta bullet and the knowledge_used result key"
+        }
       ],
       "key_links": [
         "prepare.rs fills knowledge_rules from the consolidate list, so the brief and consolidate cannot disagree"
@@ -150,7 +161,16 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
         "Whether the Read-when lookup lives in prepare.rs or a small helper in knowledge/"
       ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    },
+    "regen_obligation_ack": "kur-5 runs the full bee dev regen chain (render-skill-trees, onboard --apply, release-manifest --write) after this cell, in its own commit"
   },
   {
     "id": "kur-2",
@@ -160,7 +180,10 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
     "role": "code",
     "status": "open",
     "deps": [],
-    "decisions": ["71241c48", "e8899530"],
+    "decisions": [
+      "71241c48",
+      "e8899530"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
       "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
@@ -183,14 +206,35 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
         "The close knowledge-freshness door never blocks on the three codes"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs", "substantive": "three warning codes in check_bundle"},
-        {"path": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs", "substantive": "a writing_warnings test over a fixture bundle"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+          "substantive": "three warning codes in check_bundle"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+          "substantive": "a writing_warnings test over a fixture bundle"
+        }
       ],
-      "key_links": ["drivers/close.rs build_knowledge_freshness_door default arm ignores the new codes"],
-      "prohibitions": ["No new error or refusal", "No code comments"],
-      "open_choices": ["How the directory test treats an anchor that does not exist (orphan_anchor already covers it)"]
+      "key_links": [
+        "drivers/close.rs build_knowledge_freshness_door default arm ignores the new codes"
+      ],
+      "prohibitions": [
+        "No new error or refusal",
+        "No code comments"
+      ],
+      "open_choices": [
+        "How the directory test treats an anchor that does not exist (orphan_anchor already covers it)"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
   },
   {
     "id": "kur-3",
@@ -200,7 +244,10 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
     "role": "code",
     "status": "open",
     "deps": [],
-    "decisions": ["71241c48", "721d06f5"],
+    "decisions": [
+      "71241c48",
+      "721d06f5"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
       "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
@@ -228,14 +275,36 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
         "A herding result's knowledge_used array reaches the trace through --from-job"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs", "substantive": "a knowledge-used answer reader and the trace write"},
-        {"path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json", "substantive": "the two flags on each cap verb"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "substantive": "a knowledge-used answer reader and the trace write"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "substantive": "the two flags on each cap verb"
+        }
       ],
-      "key_links": ["finish_support.rs report_from_job passes knowledge_used from MailboxResult"],
-      "prohibitions": ["No refusal on any knowledge-used input", "No change to the mistakes answer", "No code comments"],
-      "open_choices": ["Whether --knowledge-used is repeatable"]
+      "key_links": [
+        "finish_support.rs report_from_job passes knowledge_used from MailboxResult"
+      ],
+      "prohibitions": [
+        "No refusal on any knowledge-used input",
+        "No change to the mistakes answer",
+        "No code comments"
+      ],
+      "open_choices": [
+        "Whether --knowledge-used is repeatable"
+      ]
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
   },
   {
     "id": "kur-4",
@@ -244,8 +313,13 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
     "lane": "standard",
     "role": "code",
     "status": "open",
-    "deps": ["kur-3"],
-    "decisions": ["71241c48", "e759fbaa"],
+    "deps": [
+      "kur-3"
+    ],
+    "decisions": [
+      "71241c48",
+      "e759fbaa"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
       "docs/knowledge/areas/okf-profile/critical-bar.md"
@@ -264,12 +338,30 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
         "A concept loaded 5 or more times with no recorded use prints a 'loaded, never used' line",
         "The JSON output carries the knowledge_used object"
       ],
-      "artifacts": [{"path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs", "substantive": "a build_knowledge_used function and its tests"}],
-      "key_links": ["reads trace.knowledge_used written by kur-3"],
-      "prohibitions": ["No change to the arm outcome lines", "No code comments"],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "substantive": "a build_knowledge_used function and its tests"
+        }
+      ],
+      "key_links": [
+        "reads trace.knowledge_used written by kur-3"
+      ],
+      "prohibitions": [
+        "No change to the arm outcome lines",
+        "No code comments"
+      ],
       "open_choices": []
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
   },
   {
     "id": "kur-5",
@@ -278,37 +370,64 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
     "lane": "standard",
     "role": "docs",
     "status": "open",
-    "deps": ["kur-1", "kur-3"],
-    "decisions": ["71241c48", "90988b99"],
+    "deps": [
+      "kur-1",
+      "kur-3"
+    ],
+    "decisions": [
+      "71241c48",
+      "90988b99"
+    ],
     "files": [
       "skills/bee-swarming/SKILL.md",
       "skills/bee-capturing/SKILL.md",
       "skills/bee-capturing/references/concept-authoring.md",
       ".claude/skills/**",
       ".agents/skills/**",
-      ".opencode/skills/**"
+      ".opencode/skills/**",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/knowledge-useful-rules/CONTEXT.md",
       "skills/bee-swarming/SKILL.md",
       "skills/bee-capturing/references/concept-authoring.md"
     ],
-    "affects_skills": ["skills/bee-swarming/SKILL.md", "skills/bee-capturing/SKILL.md"],
+    "affects_skills": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-capturing/SKILL.md"
+    ],
     "affects_specs": [],
     "action": "Point the skills at the one rule list, never copy its text. bee-swarming Execute step 4: say the worker brief prints the knowledge rules (the same list bee knowledge consolidate prints) and that the cap answers which concepts changed a decision with --knowledge-used '<path> — <what it changed>' or --no-knowledge-used, never refused. bee-capturing Scribe and references/concept-authoring.md step 3: add the Read-when opening line and the searched words in title and description, name the three check warnings (missing_read_when, directory_anchor, long_concept), and change step 5 to say check --strict also fails on existing bundle warnings, so the bar is no NEW finding on the files you wrote. Then regenerate the skill trees with .bee/bin/bee dev regen and prove with .bee/bin/bee dev regen --check. One commit.",
-    "verify": ".bee/bin/bee dev regen --check",
+    "verify": ".bee/bin/bee dev regen --check && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "bee-swarming step 4 names the brief's rule list and the knowledge-used answer",
         "concept-authoring.md names the Read-when line and the three warnings",
         "The rendered skill trees match the sources"
       ],
-      "artifacts": [{"path": "skills/bee-capturing/references/concept-authoring.md", "substantive": "Read-when, searched words, the three warnings"}],
-      "key_links": ["the skills cite the consolidate rule list instead of copying it"],
-      "prohibitions": ["No copy of the five rule sentences in a skill"],
+      "artifacts": [
+        {
+          "path": "skills/bee-capturing/references/concept-authoring.md",
+          "substantive": "Read-when, searched words, the three warnings"
+        }
+      ],
+      "key_links": [
+        "the skills cite the consolidate rule list instead of copying it"
+      ],
+      "prohibitions": [
+        "No copy of the five rule sentences in a skill"
+      ],
       "open_choices": []
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
   },
   {
     "id": "kur-6",
@@ -317,8 +436,16 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
     "lane": "standard",
     "role": "writer",
     "status": "open",
-    "deps": ["kur-1", "kur-2", "kur-3", "kur-4", "kur-5"],
-    "decisions": ["71241c48"],
+    "deps": [
+      "kur-1",
+      "kur-2",
+      "kur-3",
+      "kur-4",
+      "kur-5"
+    ],
+    "decisions": [
+      "71241c48"
+    ],
     "files": [
       "docs/knowledge/**",
       "docs/history/knowledge-useful-rules/delivery.md"
@@ -336,12 +463,27 @@ writer cell. kur-4 waits on kur-3 for the trace field name.
         "area and pattern concepts describe the feature's changes, anchored to code",
         "delivery.md lists each concept changed with one line on why"
       ],
-      "artifacts": [{"path": "docs/history/knowledge-useful-rules/delivery.md", "substantive": "one line per concept changed"}],
+      "artifacts": [
+        {
+          "path": "docs/history/knowledge-useful-rules/delivery.md",
+          "substantive": "one line per concept changed"
+        }
+      ],
       "key_links": [],
-      "prohibitions": ["No raw decision ids in docs outside docs/history/knowledge-useful-rules/"],
+      "prohibitions": [
+        "No raw decision ids in docs outside docs/history/knowledge-useful-rules/"
+      ],
       "open_choices": []
     },
-    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
   }
 ]
 ```
