@@ -243,7 +243,7 @@ fn refusal(raw: &str, other: &Path) -> String {
     format!(
         "bee cross-project guard: \"{raw}\" belongs to another project ({}). \
 Do not read or work it from this session. \
-FIX: call waggledance_ask_state for that project, then waggledance_dispatch with leader: true so its own leader does the work. \
+FIX: hand it to that project's own leader: run waggledance state <project-id>, then waggledance dispatch --project <project-id> --leader --request-id <id> --task \"<task>\" (the project id from waggledance list --json, never a path); if the waggledance CLI is missing, does not know the verb, is refused, or fails, call waggledance_ask_state for that project, then waggledance_dispatch with leader: true and the same request_id. \
 If the user asked you to research that repo from here, ask the user to add the path to guards.cross_project_allow in .bee/config.json.",
         other.display()
     )

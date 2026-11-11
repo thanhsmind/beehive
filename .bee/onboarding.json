@@ -43,11 +43,11 @@
       "worker-cell.md": "f7eb44d7aef519c845454df24d415020510c9f6f0829b3f927c62cb89360605c"
     },
     "leader": {
-      "LEADER.md": "e46ac125e283200a6383127da61a0bc719046cf642902aabe14611c0ae139ece"
+      "LEADER.md": "f42cc5f8e035e9409ed3dabbeaceedcab07277b2ca89116e280237d11bf887e4"
     },
     "playbooks": {
       "bee-defects.md": "128820aaccc3644492f753d10cfba5231bfd7939624aba943da7ab74340a5dc5",
-      "handoff.md": "c4555ec494f174ee425b1ebd35153c9f5aa393a9bd2c8e3c568bab4477cd6557",
+      "handoff.md": "fe7b029350efcdf73d9992bc66a366d956f3497362f037d3e8a8fbfa87fc5a99",
       "multi-session.md": "1e820395d0daabd521c5d3b7d3a46fcbc8d24f3ce893ca43e6636693a44b6ea8"
     },
     "repo_hooks": {
@@ -151,5 +151,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-11-11T15:29:35.433Z"
+  "updated_at": "2026-11-11T17:24:32.424Z"
 }

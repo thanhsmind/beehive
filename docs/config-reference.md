@@ -469,7 +469,7 @@ unchanged. The `apply_patch` tool path never honors a memory root.
 
 The write guard refuses every read, search or shell command that touches the tree of another
 project, and the refusal names the remedy: hand the work to that project's leader through
-waggledance (`waggledance_ask_state`, then `waggledance_dispatch` with `leader: true`). This key is
+waggledance (`waggledance state <project-id>`, then `waggledance dispatch --project <project-id> --leader`; the fallback is `waggledance_ask_state`, then `waggledance_dispatch` with `leader: true`). This key is
 the one exception for a user who wants a research read of another repo from this session.
 
 ```jsonc
