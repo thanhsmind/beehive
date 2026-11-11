@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"release-2-93-0\" started at phase \"exploring\" (lane).",
   "next_action": "Continue bee-exploring for \"release-2-93-0\" (lane).",
   "created_at": "2026-11-11T15:26:57.765Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Main and tag `v2.93.0` are pushed, and the `release-binaries` CI is still running. I wait for CI, then re-run the script so it verifies the",
-    "asked_at": "2026-11-11T15:40:20.035Z",
-    "session": "d19ea25d-937a-4dbd-a8ac-91a0a0b44502"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "gate_preview": {
     "feature": "release-2-93-0",
     "plan_sha256": "15743fe337fa747248faa084538a023ca6a5dbdcbb9d55aeba51fe582662b935",
