@@ -75,11 +75,11 @@ copies of one fact, D7); switching the registry read to `projects` (the
 installed binary refuses it, claim 7).
 
 Risk map:
-- Agents on an older waggledance follow the CLI and stall — MEDIUM — Lands in: wcf-2 — proof: the rule text names the unknown-verb fallback; claim 7 shows the case is real.
-- Rendered copies drift from the source — MEDIUM — Lands in: wcf-2 — proof: `bee dev release-manifest --check` clean after `bee dev regen`.
-- The refusal loses a part another test or agent relies on — LOW — Lands in: wcf-1 — proof: `cross_project` tests green, MCP names still present.
+- Agents on an older waggledance follow the CLI and stall — MEDIUM — Lands in: wcli-2 — proof: the rule text names the unknown-verb fallback; claim 7 shows the case is real.
+- Rendered copies drift from the source — MEDIUM — Lands in: wcli-2 — proof: `bee dev release-manifest --check` clean after `bee dev regen`.
+- The refusal loses a part another test or agent relies on — LOW — Lands in: wcli-1 — proof: `cross_project` tests green, MCP names still present.
 
-Waves: wcf-1 and wcf-2 run in parallel (no shared files); wcf-3 waits for both.
+Waves: wcli-1 and wcli-2 run in parallel (no shared files); wcli-3 waits for both.
 
 ## Role assignments
 
@@ -89,9 +89,9 @@ Waves: wcf-1 and wcf-2 run in parallel (no shared files); wcf-3 waits for both.
   "runtime": "claude",
   "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"wcf-1 changes the guard refusal and its tests."},
-    {"stage":"docs","classification":"required","role":"docs","reason":"wcf-2 rewrites the doctrine, skill and handbook homes and runs regen."},
-    {"stage":"writing","classification":"required","role":"writer","reason":"wcf-3 consolidates knowledge and writes delivery.md."},
+    {"stage":"implementation","classification":"required","role":"code","reason":"wcli-1 changes the guard refusal and its tests."},
+    {"stage":"docs","classification":"required","role":"docs","reason":"wcli-2 rewrites the doctrine, skill and handbook homes and runs regen."},
+    {"stage":"writing","classification":"required","role":"writer","reason":"wcli-3 consolidates knowledge and writes delivery.md."},
     {"stage":"hat-facts-gaps","classification":"required","role":"hat-facts-gaps","reason":"Standard: the hat wave is the plan check."},
     {"stage":"hat-risks","classification":"required","role":"hat-risks","reason":"Standard hat wave."},
     {"stage":"hat-value","classification":"required","role":"hat-value","reason":"Standard hat wave."},
@@ -99,7 +99,7 @@ Waves: wcf-1 and wcf-2 run in parallel (no shared files); wcf-3 waits for both.
     {"stage":"hat-user-impact","classification":"required","role":"hat-user-impact","reason":"Standard hat wave."},
     {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"Release runs through scripts/release.sh by the leader."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
-    {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"wcf-1 writes its own red-first asserts."},
+    {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"wcli-1 writes its own red-first asserts."},
     {"stage":"read-only-gather","classification":"not-applicable","role":"read","reason":"The leader read every home during planning."},
     {"stage":"fact-extraction","classification":"not-applicable","role":"extraction","reason":"No narrow lookup is left."},
     {"stage":"generation-fallback","classification":"not-applicable","role":"generation","reason":"Every job has a specific role."},
@@ -120,20 +120,20 @@ Phase plan, one slice. Playbook: `skills/bee-planning/playbooks/feature.md` (cit
 
 SMALLER PATH: change only the rule home and leave the handoff homes and the guard text on MCP — cheaper, but D1 says every home, and the guard text is the remedy agents read most. One cell for all text — cheaper in dispatches, but it mixes a Rust test change with regen output and loses the parallel wave. PASS.
 
-Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-17944173198*` and `job-1794417477185-*`): no BLOCKER. Accepted: a dispatch fallback can start a second run (facts-gaps 1, user-impact F1, risks R1, value F3) — closed by the shared request id in D2; a guard-refused CLI call had no next step and `<project>` invited a path (risks R2, value F4, user-impact F3) — closed by D2 and D8; only `--task-file` named (user-impact F4, value F5) — closed by D8; the installed binary's `state`/`dispatch` unproven (facts-gaps 2, risks R3) — claims 9-11 ran: both unknown, exit 2, so this machine takes the fallback until waggledance is upgraded; doc verify ran no test that reads LEADER.md (risks R4) — wcf-2 and wcf-3 verify now run the integration tests. Noted, no change: the refusal text is longer (value F6); the hook binary carries the new text only after release reinstalls it (risks R5); the leader auto-handoff of a CLI dispatch is pre-existing behavior and out of scope (risks R3). Rejected: dropping wcf-3 into the other cells (alternatives A).
+Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-17944173198*` and `job-1794417477185-*`): no BLOCKER. Accepted: a dispatch fallback can start a second run (facts-gaps 1, user-impact F1, risks R1, value F3) — closed by the shared request id in D2; a guard-refused CLI call had no next step and `<project>` invited a path (risks R2, value F4, user-impact F3) — closed by D2 and D8; only `--task-file` named (user-impact F4, value F5) — closed by D8; the installed binary's `state`/`dispatch` unproven (facts-gaps 2, risks R3) — claims 9-11 ran: both unknown, exit 2, so this machine takes the fallback until waggledance is upgraded; doc verify ran no test that reads LEADER.md (risks R4) — wcli-2 and wcli-3 verify now run the integration tests. Noted, no change: the refusal text is longer (value F6); the hook binary carries the new text only after release reinstalls it (risks R5); the leader auto-handoff of a CLI dispatch is pre-existing behavior and out of scope (risks R3). Rejected: dropping wcli-3 into the other cells (alternatives A).
 
 ## Cells — current slice (preview)
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| wcf-1 | Name the waggledance CLI first in the cross-project refusal | cross_project.rs, write_guard/tests.rs | — | A cross-project refusal tells the agent to run `waggledance state` and `waggledance dispatch --leader`, with the MCP tools as fallback | `cargo test … --bin bee -- cross_project` |
-| wcf-2 | Name the waggledance CLI first in doctrine, skills and handbook | LEADER.md, handoff.md, 3 skill files, handbook, config-reference, rendered copies | — | The leader rule and every handoff home show the CLI call first and the MCP fallback | `bee dev release-manifest --check` + rule_index_parity, pointer_integrity, verification_contract_parity, knowledge_first_nudge |
-| wcf-3 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | wcf-1, wcf-2 | the rule index and guard concept show CLI first | `.bee/bin/bee knowledge check` + rule_index_parity |
+| wcli-1 | Name the waggledance CLI first in the cross-project refusal | cross_project.rs, write_guard/tests.rs | — | A cross-project refusal tells the agent to run `waggledance state` and `waggledance dispatch --leader`, with the MCP tools as fallback | `cargo test … --bin bee -- cross_project` |
+| wcli-2 | Name the waggledance CLI first in doctrine, skills and handbook | LEADER.md, handoff.md, 3 skill files, handbook, config-reference, rendered copies | — | The leader rule and every handoff home show the CLI call first and the MCP fallback | `bee dev release-manifest --check` + rule_index_parity, pointer_integrity, verification_contract_parity, knowledge_first_nudge |
+| wcli-3 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | wcli-1, wcli-2 | the rule index and guard concept show CLI first | `.bee/bin/bee knowledge check` + rule_index_parity |
 
 ```json
 [
   {
-    "id": "wcf-1",
+    "id": "wcli-1",
     "feature": "waggledance-cli-first",
     "title": "Name the waggledance CLI first in the cross-project refusal",
     "lane": "standard",
@@ -152,7 +152,7 @@ Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-1794
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Implement docs/history/waggledance-cli-first/CONTEXT.md D4 with D2 and D8, keeping D3 and D5. In fn refusal in cross_project.rs (anchor: `FIX: call waggledance_ask_state for that project, then waggledance_dispatch with leader: true so its own leader does the work.`) replace that one FIX sentence with exactly: `FIX: hand it to that project's own leader: run waggledance state <project-id>, then waggledance dispatch --project <project-id> --leader --request-id <id> --task \"<task>\" (the project id from waggledance list --json, never a path); if the waggledance CLI is missing, does not know the verb, is refused, or fails, call waggledance_ask_state for that project, then waggledance_dispatch with leader: true and the same request_id.` Every other sentence of the refusal, the supervisor sentences, the registry read (`waggledance list --json`) and every function signature stay unchanged. Red first in write_guard/tests.rs: in fn cp_refused add asserts that stderr contains `waggledance state`, `waggledance dispatch --project`, `--leader`, `--request-id` and `request_id` (keep the existing asserts for waggledance_ask_state, waggledance_dispatch, leader: true and guards.cross_project_allow), and update fn refusal_text_for_test to the new sentence; run the cross_project tests and watch the new asserts fail before you change cross_project.rs. The string `wg ` must not appear in the refusal. No code comments. One commit with the trailer `cell: wcf-1`.",
+    "action": "Implement docs/history/waggledance-cli-first/CONTEXT.md D4 with D2 and D8, keeping D3 and D5. In fn refusal in cross_project.rs (anchor: `FIX: call waggledance_ask_state for that project, then waggledance_dispatch with leader: true so its own leader does the work.`) replace that one FIX sentence with exactly: `FIX: hand it to that project's own leader: run waggledance state <project-id>, then waggledance dispatch --project <project-id> --leader --request-id <id> --task \"<task>\" (the project id from waggledance list --json, never a path); if the waggledance CLI is missing, does not know the verb, is refused, or fails, call waggledance_ask_state for that project, then waggledance_dispatch with leader: true and the same request_id.` Every other sentence of the refusal, the supervisor sentences, the registry read (`waggledance list --json`) and every function signature stay unchanged. Red first in write_guard/tests.rs: in fn cp_refused add asserts that stderr contains `waggledance state`, `waggledance dispatch --project`, `--leader`, `--request-id` and `request_id` (keep the existing asserts for waggledance_ask_state, waggledance_dispatch, leader: true and guards.cross_project_allow), and update fn refusal_text_for_test to the new sentence; run the cross_project tests and watch the new asserts fail before you change cross_project.rs. The string `wg ` must not appear in the refusal. No code comments. One commit with the trailer `cell: wcli-1`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
     "must_haves": {
       "truths": [
@@ -171,7 +171,7 @@ Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-1794
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "wcf-2",
+    "id": "wcli-2",
     "feature": "waggledance-cli-first",
     "title": "Name the waggledance CLI first in doctrine, skills and handbook",
     "lane": "standard",
@@ -203,7 +203,8 @@ Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-1794
       ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
       ".opencode/skills/bee-hive/references/go-mode.md",
       ".opencode/skills/bee-swarming/SKILL.md",
-      ".opencode/skills/bee-swarming/references/swarming-reference.md"
+      ".opencode/skills/bee-swarming/references/swarming-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/waggledance-cli-first/CONTEXT.md",
@@ -211,9 +212,9 @@ Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-1794
       "packages/bee/LEADER.md",
       "packages/bee/playbooks/handoff.md"
     ],
-    "affects_skills": ["bee-hive", "bee-swarming"],
+    "affects_skills": ["skills/bee-hive/references/go-mode.md", "skills/bee-swarming/SKILL.md", "skills/bee-swarming/references/swarming-reference.md"],
     "affects_specs": [],
-    "action": "Implement docs/history/waggledance-cli-first/CONTEXT.md D1, D2, D3, D7 and D8 in the hand-authored homes, ASD-STE100 style, short sentences. (1) packages/bee/LEADER.md, rule block agents-other-project-to-its-leader: keep the marker lines and the never-read and cross_project_allow sentences; say the agent uses the waggledance CLI first: `waggledance state <project-id>`, then `waggledance dispatch --project <project-id> --leader --request-id <id>` with the task through `--task`, `--task-file` or stdin (add `--follow-up-of <run>` when a `leaders[].runs` row of the state output shows its leader already runs the same work; add `--handoff` for a handoff); `<project-id>` is the `id` field of `waggledance list --json`; output is JSON. The MCP tools are the fallback: `waggledance_ask_state`, then `waggledance_dispatch` with `leader: true` (`follow_up_of`, `handoff: true`) and the SAME `request_id`, called when the `waggledance` binary is not on PATH, does not know the verb (`unrecognized subcommand`, exit 2), a guard or permission refuses the shell call, or it fails with a tool error; the shared request id means a fallback never starts a second run; with `--task-file` the fallback passes the file text as `task`. `<project-id>` is never a path, and a task file stays inside this project. Never call `wg`. This rule block is the one home of the mapping and the fallback (D7). (2) packages/bee/playbooks/handoff.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/SKILL.md, skills/bee-swarming/references/swarming-reference.md and docs/handbook/stages/swarming.md: where each says `waggledance: waggledance_dispatch with leader: true and follow_up_of ... plus handoff: true`, name the CLI call first — `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>` with the task through `--task`, `--task-file` or stdin — and say the MCP fallback follows rule agents-other-project-to-its-leader; use the same CLI string byte for byte in all five homes; keep every other sentence. (3) docs/config-reference.md, section guards.cross_project_allow: the remedy names `waggledance state` then `waggledance dispatch --leader` first, with `waggledance_ask_state` / `waggledance_dispatch` as the fallback. (4) Run `.bee/bin/bee dev regen` and keep every file it rewrites; list each in the cap. If regen rewrites a file outside this cell's list, name it as a scope deviation. Do not edit docs/knowledge (wcf-3 owns it) or any Rust file (wcf-1 owns them). No `wg` anywhere. One commit with the trailer `cell: wcf-2`.",
+    "action": "Implement docs/history/waggledance-cli-first/CONTEXT.md D1, D2, D3, D7 and D8 in the hand-authored homes, ASD-STE100 style, short sentences. (1) packages/bee/LEADER.md, rule block agents-other-project-to-its-leader: keep the marker lines and the never-read and cross_project_allow sentences; say the agent uses the waggledance CLI first: `waggledance state <project-id>`, then `waggledance dispatch --project <project-id> --leader --request-id <id>` with the task through `--task`, `--task-file` or stdin (add `--follow-up-of <run>` when a `leaders[].runs` row of the state output shows its leader already runs the same work; add `--handoff` for a handoff); `<project-id>` is the `id` field of `waggledance list --json`; output is JSON. The MCP tools are the fallback: `waggledance_ask_state`, then `waggledance_dispatch` with `leader: true` (`follow_up_of`, `handoff: true`) and the SAME `request_id`, called when the `waggledance` binary is not on PATH, does not know the verb (`unrecognized subcommand`, exit 2), a guard or permission refuses the shell call, or it fails with a tool error; the shared request id means a fallback never starts a second run; with `--task-file` the fallback passes the file text as `task`. `<project-id>` is never a path, and a task file stays inside this project. Never call `wg`. This rule block is the one home of the mapping and the fallback (D7). (2) packages/bee/playbooks/handoff.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/SKILL.md, skills/bee-swarming/references/swarming-reference.md and docs/handbook/stages/swarming.md: where each says `waggledance: waggledance_dispatch with leader: true and follow_up_of ... plus handoff: true`, name the CLI call first — `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>` with the task through `--task`, `--task-file` or stdin — and say the MCP fallback follows rule agents-other-project-to-its-leader; use the same CLI string byte for byte in all five homes; keep every other sentence. (3) docs/config-reference.md, section guards.cross_project_allow: the remedy names `waggledance state` then `waggledance dispatch --leader` first, with `waggledance_ask_state` / `waggledance_dispatch` as the fallback. (4) Run `.bee/bin/bee dev regen` and keep every file it rewrites; list each in the cap. If regen rewrites a file outside this cell's list, name it as a scope deviation. Do not edit docs/knowledge (wcli-3 owns it) or any Rust file (wcli-1 owns them). No `wg` anywhere. One commit with the trailer `cell: wcli-2`.",
     "verify": ".bee/bin/bee dev release-manifest --check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test verification_contract_parity --test knowledge_first_nudge",
     "must_haves": {
       "truths": [
@@ -233,13 +234,13 @@ Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-1794
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
   },
   {
-    "id": "wcf-3",
+    "id": "wcli-3",
     "feature": "waggledance-cli-first",
     "title": "Consolidate this feature's knowledge and write its delivery",
     "lane": "standard",
     "role": "writer",
     "status": "open",
-    "deps": ["wcf-1", "wcf-2"],
+    "deps": ["wcli-1", "wcli-2"],
     "decisions": ["bffdaf85", "76216feb", "e1ca4356", "b469ea90", "3738deac", "a57bea25", "e770bb53"],
     "files": [
       "docs/knowledge/**",
@@ -253,7 +254,7 @@ Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-1794
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Run the writer consolidation step: `bee knowledge consolidate --feature waggledance-cli-first`. In docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md rewrite the spoken lines of rule agents-other-project-to-its-leader and agents-context-handoff-65 so they name the waggledance CLI first and the MCP tools as fallback, citing docs/history/waggledance-cli-first/CONTEXT.md D1, D2, D7. In docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md, cross-project section, update the quoted remedy to the CLI-first sentence wcf-1 wrote (D4) and note that the registry read keeps `waggledance list --json` (D5). Record D6 (no bee reader of the runs task field or the dropped rollup keys) where the waggledance contract is documented, one line. Write docs/history/waggledance-cli-first/delivery.md listing each concept changed and why, one line each. Cite CONTEXT.md D-numbers, never raw decision ids. Never name a wg command. Run `.bee/bin/bee knowledge check` green. One commit with the trailer `cell: wcf-3`.",
+    "action": "Run the writer consolidation step: `bee knowledge consolidate --feature waggledance-cli-first`. In docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md rewrite the spoken lines of rule agents-other-project-to-its-leader and agents-context-handoff-65 so they name the waggledance CLI first and the MCP tools as fallback, citing docs/history/waggledance-cli-first/CONTEXT.md D1, D2, D7. In docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md, cross-project section, update the quoted remedy to the CLI-first sentence wcli-1 wrote (D4) and note that the registry read keeps `waggledance list --json` (D5). Record D6 (no bee reader of the runs task field or the dropped rollup keys) where the waggledance contract is documented, one line. Write docs/history/waggledance-cli-first/delivery.md listing each concept changed and why, one line each. Cite CONTEXT.md D-numbers, never raw decision ids. Never name a wg command. Run `.bee/bin/bee knowledge check` green. One commit with the trailer `cell: wcli-3`.",
     "verify": ".bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity",
     "must_haves": {
       "truths": [
@@ -279,7 +280,7 @@ Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-1794
 | Happy path | Read a file in a sibling repo | exit 2; stderr contains `waggledance state`, `waggledance dispatch --project`, `--leader`, `--request-id`, `waggledance_ask_state`, `waggledance_dispatch`, `request_id` |
 | Byte-identical opt-out | supervisor fixture with no key | refusal equals the new full text |
 | Doctrine copies | `bee dev release-manifest --check` | no drift |
-| Main vs head | wcf-1 red-first: the new asserts run against the old text, then the new | red before the edit, green after |
+| Main vs head | wcli-1 red-first: the new asserts run against the old text, then the new | red before the edit, green after |
 
 ## Open Questions
 
