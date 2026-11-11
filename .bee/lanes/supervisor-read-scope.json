@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "supervisor-read-scope",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"supervisor-read-scope\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 5b4d354; capture what settled, then bee close --feature supervisor-read-scope.",
+  "next_action": "bee close finished \"supervisor-read-scope\" — feature is closed.",
   "created_at": "2026-11-11T13:24:00.192Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
