@@ -21,6 +21,7 @@ use std::time::Instant;
 
 pub(crate) struct GCtx {
     pub(crate) root: PathBuf,
+    pub(crate) timing_root: Option<PathBuf>,
     pub(crate) cmd: &'static str,
     pub(crate) json: bool,
     pub(crate) t0: Instant,
@@ -38,16 +39,44 @@ pub(crate) enum GPre {
 /// `json` is the authoritative post-parse flag. Ok wrapped in Option:
 /// None => delegate (linked worktree, corrupt drift cache).
 pub(crate) fn g_prelude(cmd: &'static str, json: bool, pre_json: bool, t0: Instant) -> Option<GPre> {
+    g_prelude_at(cmd, json, pre_json, t0, None)
+}
+
+pub(crate) fn g_prelude_at(
+    cmd: &'static str,
+    json: bool,
+    pre_json: bool,
+    t0: Instant,
+    target: Option<&Path>,
+) -> Option<GPre> {
     let cwd = std::env::current_dir().ok()?;
-    let root = match resolve_store_root(&cwd) {
+    let start = target.map(|t| cwd.join(t)).unwrap_or_else(|| cwd.clone());
+    let root = match resolve_store_root(&start) {
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => {
             return Some(GPre::Emitted(emit_unsupported_root(&cwd, cmd, pre_json, t0, &why)))
         }
-        Roots::None => return Some(GPre::Emitted(emit_no_root_error(&cwd, cmd, pre_json, t0))),
+        Roots::None => {
+            return Some(GPre::Emitted(match target {
+                Some(t) => emit_no_root_error_at(&cwd, t, cmd, pre_json, t0),
+                None => emit_no_root_error(&cwd, cmd, pre_json, t0),
+            }))
+        }
     };
+    if target.is_some() {
+        return Some(GPre::Go(GCtx {
+            root,
+            timing_root: cwd_store_root(&cwd),
+            cmd,
+            json,
+            t0,
+            drift_changed: false,
+            drift_hint: "",
+        }));
+    }
     let drift = check_manifest_drift(&root);
     Some(GPre::Go(GCtx {
+        timing_root: Some(root.clone()),
         root,
         cmd,
         json,
@@ -55,6 +84,29 @@ pub(crate) fn g_prelude(cmd: &'static str, json: bool, pre_json: bool, t0: Insta
         drift_changed: drift.manifest_changed,
         drift_hint: drift.hint,
     }))
+}
+
+pub(crate) fn cwd_store_root(cwd: &Path) -> Option<PathBuf> {
+    match resolve_store_root(cwd) {
+        Roots::Ordinary(r) => Some(r),
+        _ => None,
+    }
+}
+
+pub(crate) fn emit_no_root_error_at(cwd: &Path, target: &Path, cmd: &str, use_json: bool, t0: Instant) -> ExitCode {
+    let msg = format!(
+        "No bee repo root found at {} (no .bee/onboarding.json or .git up the tree). Run bee-hive onboarding.",
+        target.display()
+    );
+    if use_json {
+        println!("{}", jsjson::stringify(&json!({ "error": msg })));
+    } else {
+        eprintln!("{msg}");
+    }
+    if let Some(root) = cwd_store_root(cwd) {
+        crate::verbs::record_timing(&root, cmd, t0, false);
+    }
+    ExitCode::FAILURE
 }
 
 impl GCtx {
@@ -68,7 +120,7 @@ impl GCtx {
         } else {
             println!("{text}");
         }
-        crate::verbs::record_timing(&self.root, self.cmd, self.t0, exit_code == 0);
+        self.record(exit_code == 0);
         ExitCode::from(exit_code)
     }
 
@@ -80,8 +132,14 @@ impl GCtx {
         } else {
             eprintln!("{message}");
         }
-        crate::verbs::record_timing(&self.root, self.cmd, self.t0, false);
+        self.record(false);
         ExitCode::FAILURE
+    }
+
+    fn record(&self, ok: bool) {
+        if let Some(root) = &self.timing_root {
+            crate::verbs::record_timing(root, self.cmd, self.t0, ok);
+        }
     }
 }
 

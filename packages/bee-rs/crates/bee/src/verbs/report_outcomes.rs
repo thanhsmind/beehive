@@ -1,5 +1,6 @@
 use crate::jsjson;
 use crate::roots::{resolve_store_root_worktree, RootsWt, StoreRoots};
+use crate::verbs::knowledge::{cwd_store_root, emit_no_root_error_at};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -12,12 +13,23 @@ const CMD: &str = "report outcomes";
 
 struct Opts {
     feature: Option<String>,
+    root: Option<PathBuf>,
     json: bool,
+}
+
+impl Opts {
+    fn start(&self, cwd: &Path) -> PathBuf {
+        match &self.root {
+            Some(r) => cwd.join(r),
+            None => cwd.to_path_buf(),
+        }
+    }
 }
 
 fn parse(tokens: &[OsString]) -> Option<Opts> {
     let toks: Vec<&str> = tokens.iter().map(|t| t.to_str()).collect::<Option<_>>()?;
     let mut feature = None;
+    let mut root = None;
     let mut json = false;
     let mut i = 0;
     while i < toks.len() {
@@ -38,9 +50,20 @@ fn parse(tokens: &[OsString]) -> Option<Opts> {
             i += 1;
             continue;
         }
+        if tok == "--root" {
+            i += 1;
+            root = Some(PathBuf::from(toks.get(i)?));
+            i += 1;
+            continue;
+        }
+        if let Some(val) = tok.strip_prefix("--root=") {
+            root = Some(PathBuf::from(val));
+            i += 1;
+            continue;
+        }
         return None;
     }
-    Some(Opts { feature, json })
+    Some(Opts { feature, root, json })
 }
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
@@ -56,12 +79,17 @@ fn run(opts: &Opts, t0: Instant) -> ExitCode {
         Ok(c) => c,
         Err(e) => return fail(Path::new("."), opts.json, "bad_cwd", format!("bee {CMD}: {e}"), t0),
     };
-    let roots = match resolve_store_root_worktree(&cwd) {
+    let roots = match resolve_store_root_worktree(&opts.start(&cwd)) {
         RootsWt::Go(r) => r,
         RootsWt::Unsupported(why) => {
             return emit_unsupported_root(&cwd, CMD, opts.json, t0, &why)
         }
-        RootsWt::None => return emit_no_root_error(&cwd, CMD, opts.json, t0),
+        RootsWt::None => {
+            return match &opts.root {
+                Some(target) => emit_no_root_error_at(&cwd, target, CMD, opts.json, t0),
+                None => emit_no_root_error(&cwd, CMD, opts.json, t0),
+            }
+        }
     };
     let report = collect_outcomes(&ledger_root(&roots), opts.feature.as_deref());
     if opts.json {
@@ -69,7 +97,13 @@ fn run(opts: &Opts, t0: Instant) -> ExitCode {
     } else {
         println!("{}", render_text(&report));
     }
-    record_timing(&roots.root, CMD, t0, true);
+    let timing_root = match &opts.root {
+        Some(_) => cwd_store_root(&cwd),
+        None => Some(roots.root.clone()),
+    };
+    if let Some(root) = timing_root {
+        record_timing(&root, CMD, t0, true);
+    }
     ExitCode::SUCCESS
 }
 
@@ -1075,5 +1109,126 @@ mod tests {
         assert_eq!(report.cells_scanned, 1);
         assert_eq!(report.reaction.confirm, 1);
         assert_eq!(report.reaction.blocked, 0);
+    }
+
+    fn report_root_args(extra: &[&str]) -> Vec<OsString> {
+        let mut v: Vec<OsString> = vec!["report".into(), "outcomes".into(), "--json".into()];
+        v.extend(extra.iter().map(OsString::from));
+        v
+    }
+
+    fn report_root_snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        fn walk(dir: &Path, out: &mut Vec<(PathBuf, Vec<u8>)>) {
+            let mut entries: Vec<_> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
+            entries.sort();
+            for p in entries {
+                if p.is_dir() {
+                    walk(&p, out);
+                } else {
+                    out.push((p.clone(), std::fs::read(&p).unwrap()));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(root, &mut out);
+        out
+    }
+
+    fn report_root_store(cells: usize) -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee/cells")).unwrap();
+        std::fs::write(tmp.path().join(".bee/onboarding.json"), "{}").unwrap();
+        for i in 0..cells {
+            std::fs::write(
+                tmp.path().join(format!(".bee/cells/c{i}.json")),
+                format!("{{\"id\":\"c{i}\",\"feature\":\"f\",\"trace\":{{\"reaction\":\"confirm\"}}}}"),
+            )
+            .unwrap();
+        }
+        tmp
+    }
+
+    struct ReportRootCwd {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl ReportRootCwd {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for ReportRootCwd {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    #[test]
+    fn report_root_counts_the_target_stores_cells_not_the_cwd_store() {
+        let cwd_store = report_root_store(1);
+        let target = report_root_store(3);
+        let _cwd = ReportRootCwd::enter(cwd_store.path());
+        let opts = parse(&report_root_args(&["--root", target.path().to_str().unwrap()])[2..]).unwrap();
+        let RootsWt::Go(roots) = resolve_store_root_worktree(&opts.start(&std::env::current_dir().unwrap())) else {
+            panic!("target did not resolve");
+        };
+        assert_eq!(collect_outcomes(&ledger_root(&roots), None).cells_scanned, 3);
+        let plain = parse(&report_root_args(&[])[2..]).unwrap();
+        let RootsWt::Go(here) = resolve_store_root_worktree(&plain.start(&std::env::current_dir().unwrap())) else {
+            panic!("cwd did not resolve");
+        };
+        assert_eq!(collect_outcomes(&ledger_root(&here), None).cells_scanned, 1);
+    }
+
+    #[test]
+    fn report_root_accepts_a_path_inside_the_store_and_the_equals_form() {
+        let cwd_store = report_root_store(0);
+        let target = report_root_store(2);
+        let _cwd = ReportRootCwd::enter(cwd_store.path());
+        let inside = format!("--root={}", target.path().join(".bee").display());
+        let opts = parse(&report_root_args(&[&inside])[2..]).unwrap();
+        let RootsWt::Go(roots) = resolve_store_root_worktree(&opts.start(&std::env::current_dir().unwrap())) else {
+            panic!("inside path did not resolve");
+        };
+        assert_eq!(collect_outcomes(&ledger_root(&roots), None).cells_scanned, 2);
+    }
+
+    #[test]
+    fn report_root_outside_a_store_exits_with_the_no_root_error() {
+        let cwd_store = report_root_store(1);
+        let bare = tempfile::tempdir().unwrap();
+        let _cwd = ReportRootCwd::enter(cwd_store.path());
+        let args = report_root_args(&["--root", bare.path().to_str().unwrap()]);
+        assert_eq!(try_native(&args, Instant::now()), Some(ExitCode::FAILURE));
+        assert!(!bare.path().join(".bee").exists());
+    }
+
+    #[test]
+    fn report_root_leaves_every_byte_of_the_target_store_alone() {
+        let cwd_store = report_root_store(1);
+        let target = report_root_store(2);
+        let before = report_root_snapshot(target.path());
+        let _cwd = ReportRootCwd::enter(cwd_store.path());
+        let args = report_root_args(&["--root", target.path().to_str().unwrap()]);
+        assert_eq!(try_native(&args, Instant::now()), Some(ExitCode::SUCCESS));
+        assert_eq!(report_root_snapshot(target.path()), before);
+        assert!(cwd_store.path().join(".bee/logs/timings.jsonl").exists());
+    }
+
+    #[test]
+    fn report_root_skips_timing_when_the_cwd_holds_no_store() {
+        let bare = tempfile::tempdir().unwrap();
+        let target = report_root_store(2);
+        let before = report_root_snapshot(target.path());
+        let _cwd = ReportRootCwd::enter(bare.path());
+        let args = report_root_args(&["--root", target.path().to_str().unwrap()]);
+        assert_eq!(try_native(&args, Instant::now()), Some(ExitCode::SUCCESS));
+        assert_eq!(report_root_snapshot(target.path()), before);
+        assert!(!bare.path().join(".bee").exists());
     }
 }
