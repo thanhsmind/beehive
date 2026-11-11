@@ -458,3 +458,34 @@ containment.
   with `leader: true`; a user who wants the repo researched from here adds the
   path to `guards.cross_project_allow`. Tests: the `cross_project_*` cases in
   `write_guard/tests.rs` and `verbs/config.rs`.
+
+### Supervisor grant — a supervising repo reads a managed project's bee store
+
+Read when: a managed project's `.bee/` or `docs/knowledge/` read is refused from a repo that supervises
+waggledance, or you are changing what that grant opens. Rules are D1-D5 and D7 of
+`docs/history/supervisor-read-scope/CONTEXT.md`.
+
+- Opt-in (D1): `guards.supervises: "waggledance"`, governed in `config_governed_view` /
+  `diff_governed_views` beside `guards.cross_project_allow`. Only that key is governed: `worker_outward` and
+  `memory_root` are user toggles, so locking the whole `guards` subtree was rejected.
+- Registry (D2): `waggledance_registry_roots` in `cross_project.rs` runs `waggledance list --json` only
+  after a candidate already resolved to another project, so a repo without the key pays nothing. The 2 s
+  kill and fail-closed result exist because a hang or panic reads as allow on a fail-open host. No cache:
+  the registry is the owner's authority. A binary that resolves inside this project is never used.
+- Match (D3): canonical root or shared git common dir, so the stale `/home/...` roots waggledance still
+  holds and `--wt--` worktrees count as managed.
+- Surface (D4): `.bee/**` and `docs/knowledge/**` minus secret-shaped files and `config.local.json`.
+  `is_secret_path` checks a basename, so a directory-wide Grep would print secrets; `holds_secret_below`
+  refuses such a directory.
+- Shell (D5): a literal-token allowlist, not a deny list. A newline hides a second command, `$` and
+  backticks defeat the path check, `sqlite3` and `sort` run programs, and a `/x/bee` head runs any binary,
+  so none is granted. A command that mixes a granted head with anything else is refused whole.
+- Refusal text (D7): with the key, the refusal adds the rule that tripped and the readable surface, or that
+  the registry was unreadable, or that the project is unmanaged; without it, byte-identical to before.
+- Tests: `cross_project_supervisor_*` in `write_guard/tests.rs`, `verbs/config.rs` and `hook_contracts.rs`.
+
+Owner setup, in order: hand-edit `guards.supervises` into the supervising repo's `.bee/config.json` (the
+guard refuses `bee config set` and agent edits to it); refresh that repo's `.bee/bin/bee` to the release
+that carries the grant, because source that ships without the reinstalled binary is inert; then Read
+`<managed>/.bee/state.json` as a smoke check. `--root` for measuring a managed store is in
+`areas/okf-profile/critical-bar.md`.

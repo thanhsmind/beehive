@@ -6800,3 +6800,326 @@ use std::process::ExitCode;
         assert!(config_governed_change_deny(".bee/config.json", Some(&added), &changed).is_some());
         assert!(config_governed_change_deny(".bee/config.json", Some(&added), &added).is_none());
     }
+
+    struct SupFx {
+        fx: CpFx,
+        managed: PathBuf,
+        cwd: String,
+    }
+
+    fn sup_fixture(value: Option<&str>) -> SupFx {
+        let fx = build_cross_project_fixture("swarming");
+        let managed = fx.sibling.clone();
+        std::fs::create_dir_all(managed.join(".bee").join("cells")).unwrap();
+        std::fs::create_dir_all(managed.join("docs").join("knowledge")).unwrap();
+        std::fs::create_dir_all(managed.join("src")).unwrap();
+        std::fs::write(managed.join(".bee").join("state.json"), "{}\n").unwrap();
+        std::fs::write(managed.join(".bee").join("cells").join("a.json"), "{}\n").unwrap();
+        std::fs::write(managed.join("src").join("main.rs"), "fn main() {}\n").unwrap();
+        if let Some(v) = value {
+            std::fs::write(
+                fx.root.join(".bee").join("config.json"),
+                json!({ "guards": { "supervises": v } }).to_string(),
+            )
+            .unwrap();
+        }
+        let cwd = fx.root.to_string_lossy().into_owned();
+        SupFx { fx, managed, cwd }
+    }
+
+    fn sup_call(s: &SupFx, roots: Option<Vec<PathBuf>>, tool: &str, input: Value) -> Option<String> {
+        let map = input.as_object().unwrap().clone();
+        let provider = move |_: &[PathBuf]| roots.clone();
+        cross_project_denial_with_registry(
+            &s.fx.root,
+            &s.fx.root,
+            None,
+            &HarnessRoots::from_bases(None, None),
+            tool,
+            &map,
+            &s.cwd,
+            &provider,
+        )
+    }
+
+    fn sup_managed(s: &SupFx, tool: &str, input: Value) -> Option<String> {
+        sup_call(s, Some(vec![s.managed.clone()]), tool, input)
+    }
+
+    fn sup_read(s: &SupFx, rel: &str) -> Option<String> {
+        let path = s.managed.join(rel);
+        sup_managed(s, "Read", json!({ "file_path": path.to_string_lossy() }))
+    }
+
+    fn sup_sh(s: &SupFx, template: &str) -> Option<String> {
+        let command = template.replace("<m>", &s.managed.to_string_lossy());
+        sup_managed(s, "Bash", json!({ "command": command }))
+    }
+
+    #[test]
+    fn cross_project_supervisor_reads_a_managed_bee_file() {
+        let s = sup_fixture(Some("waggledance"));
+        assert_eq!(sup_read(&s, ".bee/state.json"), None);
+        assert_eq!(sup_read(&s, ".bee/cells/a.json"), None);
+    }
+
+    #[test]
+    fn cross_project_supervisor_refuses_write_shaped_shell_commands() {
+        let s = sup_fixture(Some("waggledance"));
+        for cmd in [
+            "echo x > <m>/.bee/state.json",
+            "cat <m>/.bee/state.json | tee x",
+            "git -C <m> status",
+            "cat <m>/.bee/state.json\nrm <m>/.bee/state.json",
+            "cat <m>/.bee/state.json\r\nrm <m>/.bee/state.json",
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert!(denied.is_some(), "{cmd:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn cross_project_supervisor_refuses_managed_source_and_names_the_surface() {
+        let s = sup_fixture(Some("waggledance"));
+        let denied = sup_read(&s, "src/main.rs").expect("source is outside the surface");
+        assert!(denied.starts_with("bee cross-project guard:"), "{denied}");
+        assert!(denied.contains(".bee/**"), "{denied}");
+        assert!(denied.contains("docs/knowledge/**"), "{denied}");
+    }
+
+    #[test]
+    fn cross_project_supervisor_refuses_an_unregistered_sibling() {
+        let s = sup_fixture(Some("waggledance"));
+        let path = s.managed.join(".bee").join("state.json");
+        let input = json!({ "file_path": path.to_string_lossy() });
+        let other = s.fx.plain.join("elsewhere");
+        std::fs::create_dir_all(&other).unwrap();
+        let denied = sup_call(&s, Some(vec![other]), "Read", input).expect("not registered");
+        assert!(denied.contains("is not in the waggledance registry"), "{denied}");
+    }
+
+    #[test]
+    fn cross_project_supervisor_resolves_a_symlinked_registry_root() {
+        let s = sup_fixture(Some("waggledance"));
+        let link = s.fx.plain.join("link-to-managed");
+        std::os::unix::fs::symlink(&s.managed, &link).unwrap();
+        let path = s.managed.join(".bee").join("state.json");
+        let input = json!({ "file_path": path.to_string_lossy() });
+        assert_eq!(sup_call(&s, Some(vec![link]), "Read", input), None);
+    }
+
+    #[test]
+    fn cross_project_supervisor_grants_a_worktree_of_a_managed_repo() {
+        let s = sup_fixture(Some("waggledance"));
+        let wt_dir = tempfile::tempdir().unwrap();
+        let wt = dunce::canonicalize(wt_dir.path()).unwrap();
+        let gitdir = s.managed.join(".git").join("worktrees").join("w");
+        std::fs::create_dir_all(&gitdir).unwrap();
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", gitdir.to_string_lossy())).unwrap();
+        std::fs::create_dir_all(wt.join(".bee")).unwrap();
+        std::fs::write(wt.join(".bee").join("state.json"), "{}\n").unwrap();
+        let input = json!({ "file_path": wt.join(".bee").join("state.json").to_string_lossy() });
+        assert_eq!(sup_managed(&s, "Read", input), None);
+        let src = json!({ "file_path": wt.join("src").join("x.rs").to_string_lossy() });
+        assert!(sup_managed(&s, "Read", src).is_some());
+    }
+
+    #[test]
+    fn cross_project_supervisor_keeps_secrets_and_local_config_unreadable() {
+        let s = sup_fixture(Some("waggledance"));
+        std::fs::write(s.managed.join(".bee").join("config.local.json"), "{}\n").unwrap();
+        std::fs::write(s.managed.join(".bee").join(".env"), "K=v\n").unwrap();
+        assert!(sup_read(&s, ".bee/config.local.json").is_some());
+        assert!(sup_read(&s, ".bee/.env").is_some());
+        let grep = |rel: &str| {
+            let path = s.managed.join(rel);
+            sup_managed(&s, "Grep", json!({ "pattern": "x", "path": path.to_string_lossy() }))
+        };
+        assert!(grep(".bee").is_some(), "a directory holding config.local.json is refused");
+        assert_eq!(grep(".bee/cells"), None);
+        assert_eq!(grep("docs/knowledge"), None);
+    }
+
+    #[test]
+    fn cross_project_supervisor_glob_needs_no_parent_segment() {
+        let s = sup_fixture(Some("waggledance"));
+        let path = s.managed.join(".bee");
+        let glob = |pattern: &str| {
+            sup_managed(&s, "Glob", json!({ "pattern": pattern, "path": path.to_string_lossy() }))
+        };
+        assert_eq!(glob("cells/*.json"), None);
+        assert!(glob("../src/**").is_some());
+    }
+
+    #[test]
+    fn cross_project_supervisor_grants_read_only_shell_shapes() {
+        let s = sup_fixture(Some("waggledance"));
+        for cmd in [
+            "cat <m>/.bee/state.json | jq .",
+            "cat <m>/.bee/state.json 2>/dev/null",
+            "cat <m>/.bee/state.json 2>&1",
+            "head -n 3 <m>/.bee/state.json && wc -l <m>/.bee/cells/a.json",
+            "ls <m>/.bee/cells",
+            "bee knowledge report --root <m>",
+            "bee report outcomes --root <m>/.bee",
+            ".bee/bin/bee report outcomes --root <m>/.bee",
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert_eq!(denied, None, "{cmd:?} must be granted");
+        }
+    }
+
+    #[test]
+    fn cross_project_supervisor_refuses_shell_leak_shapes() {
+        let s = sup_fixture(Some("waggledance"));
+        let unmanaged = s.fx.folder.join("child");
+        std::fs::write(unmanaged.join("x"), "x\n").unwrap();
+        let mixed = format!("cat <m>/.bee/state.json {}/x", unmanaged.to_string_lossy());
+        for cmd in [
+            "cat <m>/.bee/{state.json,../src/main.rs}",
+            "cat <m>/.bee/$x/state.json",
+            "cat <m>/.bee/`id`/state.json",
+            "cat <m>/.bee/*",
+            "cat <m>/.bee/state.json /tmp/{a,../m/src/main.rs}",
+            "cd <m>/.bee && cat state.json",
+            "sqlite3 -readonly <m>/.bee/x.db",
+            "rg x <m>/.bee/cells",
+            "grep x <m>/.bee/cells/a.json",
+            "/tmp/x/bee knowledge report --root <m>",
+            "bee cells add --root <m>",
+            "bee knowledge report --root <m>/src",
+            "cat <m>/.bee/state.json > /tmp/out",
+            "cat <m>/.bee/state.json 2>/tmp/out",
+            "cat <m>/.bee/../src/main.rs",
+            mixed.as_str(),
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert!(denied.is_some(), "{cmd:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn cross_project_supervisor_shell_needs_the_cwd_inside_this_project() {
+        let s = sup_fixture(Some("waggledance"));
+        let command = format!("cat {}/.bee/state.json", s.managed.to_string_lossy());
+        let map = json!({ "command": command }).as_object().unwrap().clone();
+        let roots = vec![s.managed.clone()];
+        let provider = move |_: &[PathBuf]| Some(roots.clone());
+        let denied = cross_project_denial_with_registry(
+            &s.fx.root,
+            &s.fx.root,
+            None,
+            &HarnessRoots::from_bases(None, None),
+            "Bash",
+            &map,
+            &s.fx.plain.to_string_lossy(),
+            &provider,
+        );
+        assert!(denied.is_some(), "a cwd outside this project is refused");
+        let denied = cross_project_denial_with_registry(
+            &s.fx.root,
+            &s.fx.root,
+            None,
+            &HarnessRoots::from_bases(None, None),
+            "Bash",
+            &map,
+            &s.managed.to_string_lossy(),
+            &provider,
+        );
+        assert!(denied.is_some(), "a cwd inside the managed project is refused");
+    }
+
+    #[test]
+    fn cross_project_supervisor_key_absent_leaves_the_text_unchanged() {
+        let s = sup_fixture(None);
+        let denied = sup_read(&s, "src/main.rs").expect("refused");
+        let plain = refusal_text_for_test(&s.managed.join("src").join("main.rs"), &s.managed);
+        assert_eq!(denied, plain);
+        assert!(!denied.contains("registry"), "{denied}");
+        let state = sup_read(&s, ".bee/state.json").expect("refused without the key");
+        assert!(!state.contains("registry"), "{state}");
+    }
+
+    fn refusal_text_for_test(path: &Path, other: &Path) -> String {
+        format!(
+            "bee cross-project guard: \"{}\" belongs to another project ({}). \
+Do not read or work it from this session. \
+FIX: call waggledance_ask_state for that project, then waggledance_dispatch with leader: true so its own leader does the work. \
+If the user asked you to research that repo from here, ask the user to add the path to guards.cross_project_allow in .bee/config.json.",
+            path.display(),
+            other.display()
+        )
+    }
+
+    #[test]
+    fn cross_project_supervisor_other_key_values_grant_nothing() {
+        for value in ["other", "", "Waggledance"] {
+            let s = sup_fixture(Some(value));
+            assert!(sup_read(&s, ".bee/state.json").is_some(), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn cross_project_supervisor_key_in_local_config_grants() {
+        let s = sup_fixture(None);
+        std::fs::write(
+            s.fx.root.join(".bee").join("config.local.json"),
+            json!({ "guards": { "supervises": "waggledance" } }).to_string(),
+        )
+        .unwrap();
+        assert_eq!(sup_read(&s, ".bee/state.json"), None);
+    }
+
+    #[test]
+    fn cross_project_supervisor_unreadable_registry_names_itself() {
+        let s = sup_fixture(Some("waggledance"));
+        let path = s.managed.join(".bee").join("state.json");
+        let input = || json!({ "file_path": path.to_string_lossy() });
+        for roots in [None, Some(Vec::new())] {
+            let denied = sup_call(&s, roots, "Read", input()).expect("nothing is managed");
+            assert!(denied.starts_with("bee cross-project guard:"), "{denied}");
+            assert!(denied.contains("registry was not readable"), "{denied}");
+        }
+    }
+
+    #[test]
+    fn cross_project_supervisor_does_not_call_the_provider_for_this_project() {
+        let s = sup_fixture(Some("waggledance"));
+        let called = std::cell::Cell::new(false);
+        let provider = |_: &[PathBuf]| {
+            called.set(true);
+            None
+        };
+        let map = json!({ "file_path": s.fx.root.join("in.txt").to_string_lossy() })
+            .as_object()
+            .unwrap()
+            .clone();
+        let out = cross_project_denial_with_registry(
+            &s.fx.root,
+            &s.fx.root,
+            None,
+            &HarnessRoots::from_bases(None, None),
+            "Read",
+            &map,
+            &s.cwd,
+            &provider,
+        );
+        assert_eq!(out, None);
+        assert!(!called.get());
+    }
+
+    #[test]
+    fn cross_project_supervisor_key_is_a_governed_config_key() {
+        let old = json!({}).to_string();
+        let added = json!({ "guards": { "supervises": "waggledance" } }).to_string();
+        let changed = json!({ "guards": { "supervises": "other" } }).to_string();
+        let deny = config_governed_change_deny(".bee/config.json", Some(&old), &added).unwrap();
+        assert!(deny.contains("guards.supervises"), "{deny}");
+        assert!(config_governed_change_deny(".bee/config.json", Some(&added), &changed).is_some());
+        assert!(config_governed_change_deny(".bee/config.json", Some(&added), &added).is_none());
+        let other = json!({ "guards": { "worker_outward": true } }).to_string();
+        assert!(config_governed_change_deny(".bee/config.json", Some(&old), &other).is_none());
+        let both = json!({ "guards": { "supervises": "waggledance", "cross_project_allow": ["/x"] } }).to_string();
+        let drop_allow = json!({ "guards": { "supervises": "waggledance" } }).to_string();
+        assert!(config_governed_change_deny(".bee/config.json", Some(&both), &drop_allow).is_some());
+    }

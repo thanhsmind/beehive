@@ -668,10 +668,15 @@ pub(crate) fn build_pull_rate(root: &Path) -> (Value, Vec<String>) {
 // ─── routing ────────────────────────────────────────────────────────────
 
 pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !keys_known(&flags, &[]) {
+    if !keys_known(&flags, &["root"]) {
         return None;
     }
-    let ctx = match g_prelude("knowledge report", json, pre_json, t0)? {
+    let target = match flags.get("root") {
+        None => None,
+        Some(FlagV::S(s)) if !s.is_empty() => Some(PathBuf::from(s)),
+        Some(_) => return None,
+    };
+    let ctx = match g_prelude_at("knowledge report", json, pre_json, t0, target.as_deref())? {
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
@@ -1196,5 +1201,112 @@ mod tests {
         assert!(section["concepts"].as_array().unwrap().is_empty());
         assert!(section["never_used"].as_array().unwrap().is_empty());
         assert_eq!(lines, vec!["knowledge used: 0 cell(s) answered (0 used a concept, 0 none), 0 silent".to_string()]);
+    }
+
+    fn report_root_snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        fn walk(dir: &Path, out: &mut Vec<(PathBuf, Vec<u8>)>) {
+            let mut entries: Vec<_> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
+            entries.sort();
+            for p in entries {
+                if p.is_dir() {
+                    walk(&p, out);
+                } else {
+                    out.push((p.clone(), std::fs::read(&p).unwrap()));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(root, &mut out);
+        out
+    }
+
+    fn report_root_store() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee/onboarding.json"), "{}").unwrap();
+        tmp
+    }
+
+    struct ReportRootCwd {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl ReportRootCwd {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for ReportRootCwd {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    #[test]
+    fn report_root_measures_the_target_store_not_the_cwd_store() {
+        let cwd_store = report_root_store();
+        let target = report_root_store();
+        write(
+            &target.path().join("docs").join("knowledge"),
+            "patterns/sig.md",
+            &critical_pattern("Signature thing", "2026-08-05", Some("stale-installed-binary")),
+        );
+        let _cwd = ReportRootCwd::enter(cwd_store.path());
+        let GPre::Go(ctx) = g_prelude_at("knowledge report", true, true, Instant::now(), Some(target.path())).unwrap() else {
+            panic!("target did not resolve");
+        };
+        assert_eq!(ctx.root, target.path().canonicalize().unwrap_or(target.path().to_path_buf()));
+        let concepts = collect_concepts(&bundle_dir(&ctx.root).unwrap()).unwrap();
+        let (measured, unmeasured, _, _) = build_report(&ctx.root, &concepts);
+        assert_eq!(measured.len(), 1);
+        assert!(unmeasured.is_empty());
+        let GPre::Go(here) = g_prelude_at("knowledge report", true, true, Instant::now(), None).unwrap() else {
+            panic!("cwd did not resolve");
+        };
+        assert!(collect_concepts(&bundle_dir(&here.root).unwrap()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn report_root_accepts_the_bee_directory_of_a_store() {
+        let cwd_store = report_root_store();
+        let target = report_root_store();
+        let _cwd = ReportRootCwd::enter(cwd_store.path());
+        let inside = target.path().join(".bee");
+        let GPre::Go(ctx) = g_prelude_at("knowledge report", true, true, Instant::now(), Some(&inside)).unwrap() else {
+            panic!(".bee did not resolve");
+        };
+        assert_eq!(ctx.root.file_name(), target.path().file_name());
+    }
+
+    #[test]
+    fn report_root_outside_a_store_exits_with_the_no_root_error() {
+        let cwd_store = report_root_store();
+        let bare = tempfile::tempdir().unwrap();
+        let _cwd = ReportRootCwd::enter(cwd_store.path());
+        let (flags, json) = parse_flags(&["--root", bare.path().to_str().unwrap(), "--json"]).unwrap();
+        assert_eq!(run_report(flags, json, json, Instant::now()), Some(ExitCode::FAILURE));
+        assert!(!bare.path().join(".bee").exists());
+    }
+
+    #[test]
+    fn report_root_leaves_every_byte_of_the_target_store_alone() {
+        let cwd_store = report_root_store();
+        let target = report_root_store();
+        write(
+            &target.path().join("docs").join("knowledge"),
+            "patterns/sig.md",
+            &critical_pattern("Signature thing", "2026-08-05", Some("stale-installed-binary")),
+        );
+        let before = report_root_snapshot(target.path());
+        let _cwd = ReportRootCwd::enter(cwd_store.path());
+        let (flags, json) = parse_flags(&["--root", target.path().to_str().unwrap(), "--json"]).unwrap();
+        assert_eq!(run_report(flags, json, json, Instant::now()), Some(ExitCode::SUCCESS));
+        assert_eq!(report_root_snapshot(target.path()), before);
+        assert!(cwd_store.path().join(".bee/logs/timings.jsonl").exists());
     }
 }

@@ -365,3 +365,19 @@ mod cross_project_allow_tests {
         assert!(reason.contains("guards.cross_project_allow"), "{reason}");
     }
 }
+
+#[cfg(test)]
+mod cross_project_supervisor_tests {
+    use super::governed_refusal;
+    use serde_json::json;
+
+    #[test]
+    fn cross_project_supervisor_cannot_be_set_through_config_set() {
+        let before = json!({});
+        let after = json!({ "guards": { "supervises": "waggledance" } });
+        let reason = governed_refusal("guards.supervises", ".bee/config.json", &before, &after)
+            .expect("the governed key is refused");
+        assert!(reason.starts_with("refused, nothing changed."), "{reason}");
+        assert!(reason.contains("guards.supervises"), "{reason}");
+    }
+}
