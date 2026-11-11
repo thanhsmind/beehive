@@ -77,13 +77,13 @@ whole `guards` subtree (claim 11: it would lock user toggles); a Bash grant
 of the two bee verbs only (drops `cat | jq`, which the spec names).
 
 Risk map:
-- A write or program run slips through the shell grant — HIGH — Lands in: srs-1 — proof: refusal tests for newline, `$`, backtick, brace/glob path, redirect, `cd`, `tee`, `rm`, `git`, `sqlite3`, `rg`, mutating `bee`, a `/tmp/x/bee` head, and a mixed managed/unmanaged command.
-- Secret content readable — HIGH — Lands in: srs-1 — proof: `<m>/.bee/config.local.json`, `<m>/.bee/.env` Read refused; Grep `path=<m>/.bee` with `config.local.json` present refused.
-- Provider hang, panic or failure becomes an allow — HIGH — Lands in: srs-1 — proof: unit tests with an empty provider, and hook contract tests with a fake `waggledance` on PATH that exits 1, prints garbage, or sleeps past 2 s: exit 2 each.
-- Repos without the key change behavior — MEDIUM — Lands in: srs-1 — proof: byte-identical refusal text test with no key, and a test that a key value other than `waggledance` grants nothing.
-- `--root` writes into the target store — HIGH — Lands in: srs-2 — proof: a test that snapshots the target store's file list and bytes before and after both verbs.
+- A write or program run slips through the shell grant — HIGH — Lands in: sprs-1 — proof: refusal tests for newline, `$`, backtick, brace/glob path, redirect, `cd`, `tee`, `rm`, `git`, `sqlite3`, `rg`, mutating `bee`, a `/tmp/x/bee` head, and a mixed managed/unmanaged command.
+- Secret content readable — HIGH — Lands in: sprs-1 — proof: `<m>/.bee/config.local.json`, `<m>/.bee/.env` Read refused; Grep `path=<m>/.bee` with `config.local.json` present refused.
+- Provider hang, panic or failure becomes an allow — HIGH — Lands in: sprs-1 — proof: unit tests with an empty provider, and hook contract tests with a fake `waggledance` on PATH that exits 1, prints garbage, or sleeps past 2 s: exit 2 each.
+- Repos without the key change behavior — MEDIUM — Lands in: sprs-1 — proof: byte-identical refusal text test with no key, and a test that a key value other than `waggledance` grants nothing.
+- `--root` writes into the target store — HIGH — Lands in: sprs-2 — proof: a test that snapshots the target store's file list and bytes before and after both verbs.
 
-Waves: srs-1 and srs-2 run in parallel (no shared files); srs-3 waits for both. After merge the leader reinstalls `.bee/bin/bee` from the release build and checks the new refusal text in the installed binary before any live check.
+Waves: sprs-1 and sprs-2 run in parallel (no shared files); sprs-3 waits for both. After merge the leader reinstalls `.bee/bin/bee` from the release build and checks the new refusal text in the installed binary before any live check.
 
 ## Role assignments
 
@@ -93,14 +93,14 @@ Waves: srs-1 and srs-2 run in parallel (no shared files); srs-3 waits for both. 
   "runtime": "claude",
   "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"srs-1 writes the guard grant and its tests; srs-2 writes the --root flags."},
-    {"stage":"writing","classification":"required","role":"writer","reason":"srs-3 consolidates knowledge, the owner setup steps and delivery.md."},
+    {"stage":"implementation","classification":"required","role":"code","reason":"sprs-1 writes the guard grant and its tests; sprs-2 writes the --root flags."},
+    {"stage":"writing","classification":"required","role":"writer","reason":"sprs-3 consolidates knowledge, the owner setup steps and delivery.md."},
     {"stage":"hat-facts-gaps","classification":"required","role":"hat-facts-gaps","reason":"High-risk: all five hat seats run the plan check."},
     {"stage":"hat-risks","classification":"required","role":"hat-risks","reason":"High-risk: a guard opens a read path."},
     {"stage":"hat-value","classification":"required","role":"hat-value","reason":"High-risk hat wave."},
     {"stage":"hat-alternatives","classification":"required","role":"hat-alternatives","reason":"High-risk hat wave; cites the SMALLER PATH check below."},
     {"stage":"hat-user-impact","classification":"required","role":"hat-user-impact","reason":"High-risk hat wave."},
-    {"stage":"docs","classification":"not-applicable","role":"docs","reason":"srs-1 carries the config-reference delta; srs-3 the knowledge delta."},
+    {"stage":"docs","classification":"not-applicable","role":"docs","reason":"sprs-1 carries the config-reference delta; sprs-3 the knowledge delta."},
     {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"Release runs through scripts/release.sh by the leader."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
     {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Each cell writes its own red-first tests."},
@@ -129,20 +129,20 @@ Epic map, one slice. Playbook: `skills/bee-planning/playbooks/feature.md` (cited
 
 SMALLER PATH: a script that writes every registry root into `guards.cross_project_allow` is cheaper, but it is the hand-kept list the owner refused and it opens source reads too. A Bash grant of the two bee verbs only is cheaper, but drops `cat | jq`, which the spec names; the strict literal-token allowlist keeps it at a small, tested cost. Dropping D6 is cheaper, but the spec lists it. PASS.
 
-Plan check (hat wave synthesis) — STRUCTURE: BLOCKERS from round 1 (newline, `cd`/root exception, fake `bee` head, sqlite3) are closed by D5 8452f29c; the `--root` write is closed by D6 a8d8ad76; the directory secret leak by D4 2c92af66; the provider hang by D2 5c498adf. WARNINGS applied: knowledge edit moved to srs-3; `frame.rs` added to srs-2; governed view builds a `guards` map holding either key; test names carry `cross_project_supervisor`. Rejected: govern the whole `guards` subtree (claim 11). Deferred: a `bee doctor` line showing the grant is active (not asked for). CELLS: cold pickup checked for each cell; no CRITICAL.
+Plan check (hat wave synthesis) — STRUCTURE: BLOCKERS from round 1 (newline, `cd`/root exception, fake `bee` head, sqlite3) are closed by D5 8452f29c; the `--root` write is closed by D6 a8d8ad76; the directory secret leak by D4 2c92af66; the provider hang by D2 5c498adf. WARNINGS applied: knowledge edit moved to sprs-3; `frame.rs` added to sprs-2; governed view builds a `guards` map holding either key; test names carry `cross_project_supervisor`. Rejected: govern the whole `guards` subtree (claim 11). Deferred: a `bee doctor` line showing the grant is active (not asked for). CELLS: cold pickup checked for each cell; no CRITICAL.
 
 ## Cells — current slice (preview)
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| srs-1 | Let a supervising repo read the bee store and knowledge of its managed projects | cross_project.rs, guards.rs, tests.rs, hook_contracts.rs, verbs/config.rs, docs/config-reference.md | — | From a repo with `guards.supervises`, `Read <managed>/.bee/state.json` and `cat <managed>/.bee/x \| jq .` pass; `src/`, writes, secrets, tricks and unregistered repos are still refused, with a reason | `cargo test … --bin bee -- cross_project` and `--test hook_contracts cross_project_supervisor` |
-| srs-2 | Measure another project's store with --root | knowledge/report.rs, knowledge/frame.rs, report_outcomes.rs, generated/registry_payload.json | — | `bee knowledge report --root <other>` and `bee report outcomes --root <other>` print that project's numbers and leave its store untouched | `cargo test … --bin bee -- report_root` |
-| srs-3 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | srs-1, srs-2 | the guard concept and delivery.md describe the grant and the owner setup steps | `.bee/bin/bee knowledge check` |
+| sprs-1 | Let a supervising repo read the bee store and knowledge of its managed projects | cross_project.rs, guards.rs, tests.rs, hook_contracts.rs, verbs/config.rs, docs/config-reference.md | — | From a repo with `guards.supervises`, `Read <managed>/.bee/state.json` and `cat <managed>/.bee/x \| jq .` pass; `src/`, writes, secrets, tricks and unregistered repos are still refused, with a reason | `cargo test … --bin bee -- cross_project` and `--test hook_contracts cross_project_supervisor` |
+| sprs-2 | Measure another project's store with --root | knowledge/report.rs, knowledge/frame.rs, report_outcomes.rs, generated/registry_payload.json | — | `bee knowledge report --root <other>` and `bee report outcomes --root <other>` print that project's numbers and leave its store untouched | `cargo test … --bin bee -- report_root` |
+| sprs-3 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | sprs-1, sprs-2 | the guard concept and delivery.md describe the grant and the owner setup steps | `.bee/bin/bee knowledge check` |
 
 ```json
 [
   {
-    "id": "srs-1",
+    "id": "sprs-1",
     "feature": "supervisor-read-scope",
     "title": "Let a supervising repo read the bee store and knowledge of its managed projects",
     "lane": "high-risk",
@@ -169,7 +169,7 @@ Plan check (hat wave synthesis) — STRUCTURE: BLOCKERS from round 1 (newline, `
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Implement docs/history/supervisor-read-scope/CONTEXT.md D1-D5, D7 and contract C1 in the cross-project guard; CONTEXT.md is the full rule text, follow it exactly. Inputs: the existing cross_project_denial arguments plus guards.supervises from .bee/config.json and .bee/config.local.json (same merge as cross_project_allow in Scope::load). Grant entry: in the candidate loop of cross_project_denial (anchor: `let Some(other) = scope.other_root(&raw, base) else { continue };`), only when guards.supervises is exactly the string \"waggledance\" and a candidate resolved to another root, ask a managed-roots provider once per call. Production provider (D2): resolve waggledance on the hook PATH, skip it when its canonical path lies inside this project, run `waggledance list --json` with a 2 s kill, take projects[].root_path; any failure yields a distinct 'registry unreadable' result, never a panic and never an unwrap on the spawn path. Managed match per D3, surface per D4 built from the resolved other root (so a worktree's own .bee counts). Read/Grep/Glob and Bash/exec grant rules exactly per D5, evaluated over the whole command: every other-project candidate must pass, and a single failing candidate or segment refuses the call. bee head check: bare `bee`, or a token whose canonical path equals <store root>/.bee/bin/bee of this project; segment shape must be `bee knowledge report ...` or `bee report outcomes ...`. Refusal text per D7: with no key, byte-identical to today; with the key, today's text plus one sentence naming the tripped rule and the readable surface, or that the registry was unreadable, or that the project is not in the registry. Keep cross_project_denial's signature; add a sibling entry point taking the provider (C1). Governed key (D1): make config_governed_view build the `guards` map when either cross_project_allow or supervises is present and carry both; make diff_governed_views refuse a change to guards.supervises like guards.cross_project_allow; leave other guards keys ungoverned. Red first, every new test name contains cross_project_supervisor. In write_guard/tests.rs with an injected provider: (a) Read <m>/.bee/state.json allowed; (b) Bash `echo x > <m>/.bee/state.json`, `cat <m>/.bee/state.json | tee x`, `git -C <m> status`, `cat <m>/.bee/state.json` followed by a newline and `rm <m>/.bee/state.json` all refused; (c) Read <m>/src/main.rs refused and stderr names the surface; (d) unregistered sibling refused with the not-in-registry sentence; (e) a provider root that is a symlink to <m> grants; plus: <m>/.bee/config.local.json and <m>/.bee/.env Read refused; Grep path=<m>/.bee with config.local.json present refused, Grep path=<m>/.bee/cells granted; `cat <m>/.bee/state.json | jq .` and `cat <m>/.bee/state.json 2>/dev/null` granted; `cat <m>/.bee/{state.json,../src/main.rs}`, `cat <m>/.bee/$x/state.json`, backtick, `cd <m>/.bee && cat state.json`, `sqlite3 -readonly <m>/.bee/x.db`, `rg x <m>/.bee/cells`, `/tmp/x/bee knowledge report --root <m>`, `bee cells add` with --root <m>, and a mixed `cat <m>/.bee/state.json <unmanaged>/x` refused; `bee knowledge report --root <m>` and `.bee/bin/bee report outcomes --root <m>/.bee` granted; Glob path=<m>/.bee pattern=../src/** refused; a git worktree of <m> granted; key absent gives byte-identical text; key value other than waggledance grants nothing; key set only in config.local.json grants; empty or failed provider gives the registry-unreadable sentence. In tests/hook_contracts.rs: run the real hook with a fake waggledance first on PATH that exits 1, prints garbage, or sleeps 5 s; each gives exit 2 within 4 s. In verbs/config.rs: a cross_project_supervisor test that bee config set guards.supervises is refused. Watch them fail before the fix. Document guards.supervises in docs/config-reference.md beside guards.cross_project_allow, including that only the user sets it by hand-editing .bee/config.json, citing docs/history/supervisor-read-scope/CONTEXT.md D-numbers, never raw decision ids. Do not edit docs/knowledge (srs-3 owns it). No code comments. One commit.",
+    "action": "Implement docs/history/supervisor-read-scope/CONTEXT.md D1-D5, D7 and contract C1 in the cross-project guard; CONTEXT.md is the full rule text, follow it exactly. Inputs: the existing cross_project_denial arguments plus guards.supervises from .bee/config.json and .bee/config.local.json (same merge as cross_project_allow in Scope::load). Grant entry: in the candidate loop of cross_project_denial (anchor: `let Some(other) = scope.other_root(&raw, base) else { continue };`), only when guards.supervises is exactly the string \"waggledance\" and a candidate resolved to another root, ask a managed-roots provider once per call. Production provider (D2): resolve waggledance on the hook PATH, skip it when its canonical path lies inside this project, run `waggledance list --json` with a 2 s kill, take projects[].root_path; any failure yields a distinct 'registry unreadable' result, never a panic and never an unwrap on the spawn path. Managed match per D3, surface per D4 built from the resolved other root (so a worktree's own .bee counts). Read/Grep/Glob and Bash/exec grant rules exactly per D5, evaluated over the whole command: every other-project candidate must pass, and a single failing candidate or segment refuses the call. bee head check: bare `bee`, or a token whose canonical path equals <store root>/.bee/bin/bee of this project; segment shape must be `bee knowledge report ...` or `bee report outcomes ...`. Refusal text per D7: with no key, byte-identical to today; with the key, today's text plus one sentence naming the tripped rule and the readable surface, or that the registry was unreadable, or that the project is not in the registry. Keep cross_project_denial's signature; add a sibling entry point taking the provider (C1). Governed key (D1): make config_governed_view build the `guards` map when either cross_project_allow or supervises is present and carry both; make diff_governed_views refuse a change to guards.supervises like guards.cross_project_allow; leave other guards keys ungoverned. Red first, every new test name contains cross_project_supervisor. In write_guard/tests.rs with an injected provider: (a) Read <m>/.bee/state.json allowed; (b) Bash `echo x > <m>/.bee/state.json`, `cat <m>/.bee/state.json | tee x`, `git -C <m> status`, `cat <m>/.bee/state.json` followed by a newline and `rm <m>/.bee/state.json` all refused; (c) Read <m>/src/main.rs refused and stderr names the surface; (d) unregistered sibling refused with the not-in-registry sentence; (e) a provider root that is a symlink to <m> grants; plus: <m>/.bee/config.local.json and <m>/.bee/.env Read refused; Grep path=<m>/.bee with config.local.json present refused, Grep path=<m>/.bee/cells granted; `cat <m>/.bee/state.json | jq .` and `cat <m>/.bee/state.json 2>/dev/null` granted; `cat <m>/.bee/{state.json,../src/main.rs}`, `cat <m>/.bee/$x/state.json`, backtick, `cd <m>/.bee && cat state.json`, `sqlite3 -readonly <m>/.bee/x.db`, `rg x <m>/.bee/cells`, `/tmp/x/bee knowledge report --root <m>`, `bee cells add` with --root <m>, and a mixed `cat <m>/.bee/state.json <unmanaged>/x` refused; `bee knowledge report --root <m>` and `.bee/bin/bee report outcomes --root <m>/.bee` granted; Glob path=<m>/.bee pattern=../src/** refused; a git worktree of <m> granted; key absent gives byte-identical text; key value other than waggledance grants nothing; key set only in config.local.json grants; empty or failed provider gives the registry-unreadable sentence. In tests/hook_contracts.rs: run the real hook with a fake waggledance first on PATH that exits 1, prints garbage, or sleeps 5 s; each gives exit 2 within 4 s. In verbs/config.rs: a cross_project_supervisor test that bee config set guards.supervises is refused. Watch them fail before the fix. Document guards.supervises in docs/config-reference.md beside guards.cross_project_allow, including that only the user sets it by hand-editing .bee/config.json, citing docs/history/supervisor-read-scope/CONTEXT.md D-numbers, never raw decision ids. Do not edit docs/knowledge (sprs-3 owns it). No code comments. One commit.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
     "must_haves": {
       "truths": [
@@ -203,7 +203,7 @@ Plan check (hat wave synthesis) — STRUCTURE: BLOCKERS from round 1 (newline, `
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "srs-2",
+    "id": "sprs-2",
     "feature": "supervisor-read-scope",
     "title": "Measure another project's store with --root",
     "lane": "high-risk",
@@ -247,13 +247,13 @@ Plan check (hat wave synthesis) — STRUCTURE: BLOCKERS from round 1 (newline, `
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "srs-3",
+    "id": "sprs-3",
     "feature": "supervisor-read-scope",
     "title": "Consolidate this feature's knowledge and write its delivery",
     "lane": "high-risk",
     "role": "writer",
     "status": "open",
-    "deps": ["srs-1", "srs-2"],
+    "deps": ["sprs-1", "sprs-2"],
     "decisions": ["902d1477", "5c498adf", "318dee0d", "2c92af66", "8452f29c", "a8d8ad76", "06fe4cb5"],
     "files": [
       "docs/knowledge/**",
@@ -266,7 +266,7 @@ Plan check (hat wave synthesis) — STRUCTURE: BLOCKERS from round 1 (newline, `
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature supervisor-read-scope`. Extend the section 'Cross-project refusal' of docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md with the supervisor grant (D1-D5, D7) anchored to the code srs-1 wrote, and add the --root flag (D6) to the concept that documents bee knowledge report or bee report outcomes. Include the owner setup steps: hand-edit guards.supervises into the supervising repo's .bee/config.json, refresh that repo's .bee/bin/bee to the release that carries it, then Read <managed>/.bee/state.json as a smoke check. Dedupe and trim, never restate code, and write docs/history/supervisor-read-scope/delivery.md listing the concepts changed and why, one line each. Cite CONTEXT.md D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge check` green. One commit.",
+    "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature supervisor-read-scope`. Extend the section 'Cross-project refusal' of docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md with the supervisor grant (D1-D5, D7) anchored to the code sprs-1 wrote, and add the --root flag (D6) to the concept that documents bee knowledge report or bee report outcomes. Include the owner setup steps: hand-edit guards.supervises into the supervising repo's .bee/config.json, refresh that repo's .bee/bin/bee to the release that carries it, then Read <managed>/.bee/state.json as a smoke check. Dedupe and trim, never restate code, and write docs/history/supervisor-read-scope/delivery.md listing the concepts changed and why, one line each. Cite CONTEXT.md D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge check` green. One commit.",
     "verify": ".bee/bin/bee knowledge check",
     "must_haves": {
       "truths": [
@@ -287,7 +287,7 @@ Plan check (hat wave synthesis) — STRUCTURE: BLOCKERS from round 1 (newline, `
 
 ## Test matrix
 
-High-risk: the applicable edge dimensions, each row in srs-1 or srs-2.
+High-risk: the applicable edge dimensions, each row in sprs-1 or sprs-2.
 
 | Dimension | Probe | Pass when |
 |---|---|---|
