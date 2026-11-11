@@ -349,3 +349,19 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         Err(message) => ctx.fail(&format!("bee {cmd}: {message}")),
     })
 }
+
+#[cfg(test)]
+mod cross_project_allow_tests {
+    use super::governed_refusal;
+    use serde_json::json;
+
+    #[test]
+    fn cross_project_allow_cannot_be_added_through_config_set() {
+        let before = json!({});
+        let after = json!({ "guards": { "cross_project_allow": ["/somewhere"] } });
+        let reason = governed_refusal("guards.cross_project_allow", ".bee/config.json", &before, &after)
+            .expect("the governed key is refused");
+        assert!(reason.starts_with("refused, nothing changed."), "{reason}");
+        assert!(reason.contains("guards.cross_project_allow"), "{reason}");
+    }
+}

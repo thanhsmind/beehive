@@ -1138,6 +1138,12 @@ pub(crate) fn config_governed_view(text: &str) -> Option<Value> {
         view.insert("hooks".to_string(), hooks_val.clone());
     }
 
+    if let Some(allow) = root_obj.get("guards").and_then(|g| g.get("cross_project_allow")) {
+        let mut guards_view = Map::new();
+        guards_view.insert("cross_project_allow".to_string(), allow.clone());
+        view.insert("guards".to_string(), Value::Object(guards_view));
+    }
+
     Some(Value::Object(view))
 }
 
@@ -1394,6 +1400,17 @@ fn diff_governed_views(rel: &str, old_view: &Value, new_view: &Value) -> Option<
             address,
             &format_diff_old(old_hooks),
             &format_diff_val(new_hooks),
+        ));
+    }
+
+    let old_allow = old_view.get("guards").and_then(|g| g.get("cross_project_allow"));
+    let new_allow = new_view.get("guards").and_then(|g| g.get("cross_project_allow"));
+    if old_allow != new_allow {
+        return Some(build_config_denial(
+            rel,
+            "guards.cross_project_allow",
+            &format_diff_old(old_allow),
+            &format_diff_val(new_allow),
         ));
     }
 

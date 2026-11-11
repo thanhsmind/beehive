@@ -6569,3 +6569,204 @@ use std::process::ExitCode;
             assert_ne!(code, ExitCode::from(2), "an Edit call must stay allowed");
         });
     }
+
+    struct CpFx {
+        _dir: tempfile::TempDir,
+        root: PathBuf,
+        sibling: PathBuf,
+        folder: PathBuf,
+        plain: PathBuf,
+    }
+
+    fn build_cross_project_fixture(phase: &str) -> CpFx {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dunce::canonicalize(dir.path()).unwrap();
+        let root = base.join("proj");
+        let sibling = base.join("sibling");
+        let folder = base.join("folder");
+        let plain = base.join("plain");
+        for d in [&root, &sibling, &plain, &folder.join("child")] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::create_dir_all(sibling.join(".git")).unwrap();
+        std::fs::create_dir_all(folder.join("child").join(".git")).unwrap();
+        std::fs::write(sibling.join("x.txt"), "x\n").unwrap();
+        std::fs::write(plain.join("p.txt"), "p\n").unwrap();
+        std::fs::write(root.join("in.txt"), "i\n").unwrap();
+        copy_lib(&root);
+        let mut st = swarming_state(true);
+        st["phase"] = json!(phase);
+        write_state(&root, &st);
+        CpFx { _dir: dir, root, sibling, folder, plain }
+    }
+
+    fn cp_read(path: &Path) -> Value {
+        json!({ "tool_name": "Read", "tool_input": { "file_path": path.to_string_lossy() } })
+    }
+
+    fn cp_refused(e: &Emit, other: &Path) {
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.starts_with("bee cross-project guard:"), "{}", e.stderr);
+        assert!(e.stderr.contains(&other.to_string_lossy().into_owned()), "{}", e.stderr);
+        assert!(e.stderr.contains("waggledance_ask_state"), "{}", e.stderr);
+        assert!(e.stderr.contains("waggledance_dispatch"), "{}", e.stderr);
+        assert!(e.stderr.contains("leader: true"), "{}", e.stderr);
+        assert!(e.stderr.contains("guards.cross_project_allow"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn cross_project_read_of_a_sibling_repo_file_is_refused_with_the_remedy() {
+        let fx = build_cross_project_fixture("swarming");
+        let e = expect_done(cp_read(&fx.sibling.join("x.txt")), &fx.root);
+        cp_refused(&e, &fx.sibling);
+    }
+
+    #[test]
+    fn cross_project_check_runs_while_phase_is_idle() {
+        let fx = build_cross_project_fixture("idle");
+        let e = expect_done(cp_read(&fx.sibling.join("x.txt")), &fx.root);
+        cp_refused(&e, &fx.sibling);
+    }
+
+    #[test]
+    fn cross_project_grep_path_at_a_folder_of_repos_is_refused() {
+        let fx = build_cross_project_fixture("swarming");
+        let e = expect_done(
+            json!({ "tool_name": "Grep", "tool_input": { "pattern": "x", "path": fx.folder.to_string_lossy() } }),
+            &fx.root,
+        );
+        cp_refused(&e, &fx.folder.join("child"));
+    }
+
+    #[test]
+    fn cross_project_glob_absolute_pattern_prefix_is_refused() {
+        let fx = build_cross_project_fixture("swarming");
+        let pattern = format!("{}/**/*.txt", fx.sibling.to_string_lossy());
+        let e = expect_done(
+            json!({ "tool_name": "Glob", "tool_input": { "pattern": pattern } }),
+            &fx.root,
+        );
+        cp_refused(&e, &fx.sibling);
+    }
+
+    #[test]
+    fn cross_project_bash_path_token_and_cd_are_refused() {
+        let fx = build_cross_project_fixture("swarming");
+        let cat = format!("cat {}/x.txt", fx.sibling.to_string_lossy());
+        cp_refused(&expect_done(bash(&cat), &fx.root), &fx.sibling);
+        let cd = format!("cd {} && ls", fx.sibling.to_string_lossy());
+        cp_refused(&expect_done(bash(&cd), &fx.root), &fx.sibling);
+        let flag = format!("grep --include=x --file={}/x.txt y", fx.sibling.to_string_lossy());
+        cp_refused(&expect_done(bash(&flag), &fx.root), &fx.sibling);
+    }
+
+    #[test]
+    fn cross_project_bash_cwd_inside_the_sibling_is_refused() {
+        let fx = build_cross_project_fixture("swarming");
+        let input = json!({ "command": "ls" }).as_object().unwrap().clone();
+        let denied = cross_project_denial(
+            &fx.root,
+            &fx.root,
+            None,
+            &HarnessRoots::from_bases(None, None),
+            "Bash",
+            &input,
+            &fx.sibling.to_string_lossy(),
+        )
+        .expect("a hook cwd inside another project is refused");
+        assert!(denied.starts_with("bee cross-project guard:"), "{denied}");
+        assert!(denied.contains(&fx.sibling.to_string_lossy().into_owned()), "{denied}");
+    }
+
+    #[test]
+    fn cross_project_in_repo_and_no_repo_paths_stay_allowed() {
+        let fx = build_cross_project_fixture("swarming");
+        assert_eq!(expect_done(cp_read(&fx.root.join("in.txt")), &fx.root).code, 0);
+        assert_eq!(expect_done(cp_read(&fx.plain.join("p.txt")), &fx.root).code, 0);
+        assert_eq!(expect_done(bash("cat /etc/hostname /dev/null"), &fx.root).code, 0);
+        let tmp = std::env::temp_dir().join("cp-nothing-here.txt");
+        assert_eq!(expect_done(cp_read(&tmp), &fx.root).code, 0);
+    }
+
+    #[test]
+    fn cross_project_a_sibling_worktree_of_this_repo_is_this_project() {
+        let lx = build_linked(true);
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = dunce::canonicalize(other_dir.path()).unwrap();
+        let gitdir = lx.main_root.join(".git").join("worktrees").join("other");
+        std::fs::create_dir_all(&gitdir).unwrap();
+        std::fs::write(other.join(".git"), format!("gitdir: {}\n", gitdir.to_string_lossy())).unwrap();
+        std::fs::write(other.join("w.txt"), "w\n").unwrap();
+        let e = expect_done(cp_read(&other.join("w.txt")), &lx.work_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = expect_done(bash(&format!("cat {}/w.txt", other.to_string_lossy())), &lx.work_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn cross_project_allow_config_entry_allows_the_path() {
+        let fx = build_cross_project_fixture("swarming");
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            json!({ "guards": { "cross_project_allow": [fx.sibling.to_string_lossy()] } }).to_string(),
+        )
+        .unwrap();
+        let e = expect_done(cp_read(&fx.sibling.join("x.txt")), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = expect_done(bash(&format!("cat {}/x.txt", fx.sibling.to_string_lossy())), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let still = expect_done(
+            json!({ "tool_name": "Grep", "tool_input": { "pattern": "x", "path": fx.folder.to_string_lossy() } }),
+            &fx.root,
+        );
+        assert_eq!(still.code, 2, "an unrelated project stays refused");
+    }
+
+    #[test]
+    fn cross_project_additional_directories_entry_allows_the_path() {
+        let fx = build_cross_project_fixture("swarming");
+        std::fs::create_dir_all(fx.root.join(".claude")).unwrap();
+        std::fs::write(
+            fx.root.join(".claude").join("settings.local.json"),
+            json!({ "permissions": { "additionalDirectories": [fx.sibling.to_string_lossy()] } }).to_string(),
+        )
+        .unwrap();
+        let e = expect_done(cp_read(&fx.sibling.join("x.txt")), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn cross_project_user_settings_additional_directories_and_tilde_expand_from_home() {
+        let fx = build_cross_project_fixture("swarming");
+        let home_dir = tempfile::tempdir().unwrap();
+        let home = dunce::canonicalize(home_dir.path()).unwrap();
+        std::fs::create_dir_all(home.join(".claude")).unwrap();
+        std::fs::create_dir_all(home.join("repo").join(".git")).unwrap();
+        let roots = HarnessRoots::from_bases(None, None);
+        let input = |p: &str| json!({ "file_path": p }).as_object().unwrap().clone();
+        let cwd = fx.root.to_string_lossy().into_owned();
+        let denied = cross_project_denial(
+            &fx.root, &fx.root, Some(home.clone()), &roots, "Read", &input("~/repo/a.txt"), &cwd,
+        );
+        assert!(denied.unwrap().starts_with("bee cross-project guard:"));
+        std::fs::write(
+            home.join(".claude").join("settings.json"),
+            json!({ "permissions": { "additionalDirectories": ["~/repo"] } }).to_string(),
+        )
+        .unwrap();
+        let allowed = cross_project_denial(
+            &fx.root, &fx.root, Some(home), &roots, "Read", &input("~/repo/a.txt"), &cwd,
+        );
+        assert!(allowed.is_none());
+    }
+
+    #[test]
+    fn cross_project_allow_key_is_a_governed_config_key() {
+        let old = json!({}).to_string();
+        let added = json!({ "guards": { "cross_project_allow": ["/x"] } }).to_string();
+        let changed = json!({ "guards": { "cross_project_allow": ["/y"] } }).to_string();
+        let deny = config_governed_change_deny(".bee/config.json", Some(&old), &added).unwrap();
+        assert!(deny.contains("guards.cross_project_allow"), "{deny}");
+        assert!(config_governed_change_deny(".bee/config.json", Some(&added), &changed).is_some());
+        assert!(config_governed_change_deny(".bee/config.json", Some(&added), &added).is_none());
+    }

@@ -11,7 +11,7 @@ bee:
   decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)", "761515d4 (guard-parser-depth Gate 2: close the compound-command and shell-wrapper bypasses in one parse every guard consumer shares, depth-bounded with truncation marked — cell gpd-1, 2026-08-05)", "js-parity-cleanup D3 as corrected by jp-9 (docs/history/js-parity-cleanup/CONTEXT.md, 2026-08-04 — display caps count characters, but the question-heading limit keeps the platform validator's own counting unit; judge finding bc2e2d44)", "38e323d6 (no-code-comments D1: no comment in a code file, in any language; three exceptions only)", "80ec3cd1 (no-code-comments D2: the ratchet — a committed per-file baseline that only ever goes down)", "0add770d (no-code-comments D2b, touches D2: the baseline is seeded from the per-file maximum over main and every unmerged wt/* branch)", "c2477366 (no-code-comments D3: the write guard refuses a write that adds a comment line to a code file, naming file, line and remedy)", "0ee8248d (no-code-comments D4: the why has two homes — a docs/knowledge concept or a bee decisions log entry — and no third)", "002a935d (no-code-comments D5: the rule lands in packages/bee/AGENTS.block.md and packages/bee/prompts/worker-cell.md)", "69326d15 (no-code-comments D6: removing the existing comments is separate, batched grooming work)", "e3bf4a57 (no-code-comments D7: one config key no_code_comments, default false; this repo sets it true, hosts opt in)"]
   sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7", "guard-parser-depth cell gpd-1 (trace .bee/cells/archive/guard-parser-depth/gpd-1.json, commit 98888896, plan docs/history/guard-parser-depth/plan.md, capped 2026-08-05)", "js-parity-cleanup cell jp-9 (heading guard restored to the platform's counting unit, the ASCII-only repair and its fall-through named; trace .bee/cells/archive/js-parity-cleanup/jp-9.json, 2026-08-04 — full suite 1006 passed, 0 failed)"]
   authoritative_for: "hook-runtime: write-guard request-shape recognition and per-target decisions"
-  anchors: [scripts/, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/session_close/html.rs, packages/bee-rs/crates/bee/tests/hook_contracts.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs, packages/bee-rs/crates/bee/src/hooks/cli_shape.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs, packages/bee-rs/crates/bee/src/textutil.rs, packages/bee-rs/crates/bee/src/comments.rs, packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs]
+  anchors: [scripts/, packages/bee-rs/crates/bee/src/hooks/adapter.rs, packages/bee-rs/crates/bee/src/hooks/session_close/html.rs, packages/bee-rs/crates/bee/tests/hook_contracts.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs, packages/bee-rs/crates/bee/src/hooks/cli_shape.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs, packages/bee-rs/crates/bee/src/textutil.rs, packages/bee-rs/crates/bee/src/comments.rs, packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs, packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs]
   verified_at: 2026-11-10
   verified_commit: f1c771b12fbf1a9b491a54191cb1f6423e911ec3
 ---
@@ -409,3 +409,45 @@ lowers the baseline (69326d15).
   (`packages/bee-rs/crates/bee/tests/hook_contracts.rs`), and the ratchet in `comment_baseline.rs`'s own
   test module. Provenance: feature `no-code-comments`, cells ncc-1 through ncc-4
   (`docs/history/no-code-comments/CONTEXT.md`).
+
+## Cross-project refusal — another project's tree is never read from this session
+
+Read when: a Read, Glob, Grep or shell call was refused with "bee cross-project
+guard:", or you are changing which paths count as another project.
+
+The rule and its four decisions are `docs/history/cross-project-guard/CONTEXT.md`
+D1-D4. The check is `cross_project_denial` in
+`packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs`, called from
+`run_native_with_roots` right after the `hook_enabled` switch, so it runs in
+every phase (idle included) for leaders and workers. It looks only at Read,
+Glob, Grep and Bash/exec; a write outside the root was already refused by
+containment.
+
+- Ownership (D1): this project is the store/main root, the work root, and any
+  directory whose `.git` resolves to the same git common dir (its worktrees).
+  Anything else is walked up to the nearest ancestor holding `.git` or
+  `.bee/onboarding.json`; a different root is another project. A directory in
+  no repo that has a direct child root also counts, so `ls` of a folder of repos
+  is refused. `/`, HOME and the system temp dir never count as a root or as such
+  a folder: without the temp exclusion every `/tmp` fixture of another run made
+  `cd /tmp` a refusal.
+- Allowed despite a match (D4): `guards.cross_project_allow` in `.bee/config.json`
+  (and the local overlay), `permissions.additionalDirectories` of
+  `~/.claude/settings.json`, `<root>/.claude/settings.json` and
+  `settings.local.json`, and the harness-owned surfaces `harness_allowlisted_target`
+  already exempts. `guards.cross_project_allow` is a governed key in
+  `config_governed_view` / `diff_governed_views` (`write_guard/guards.rs`), so
+  `bee config set` and an agent Edit/Write that adds or changes it are refused;
+  only the user edits it. No environment variable turns the check off; HOME is
+  read only to expand `~`.
+- Shell candidates: the hook cwd, plus every token of
+  `tokenize_deep(fence_heredocs(command))` that starts with `/` or `~`, with a
+  leading `--flag=` stripped. A relative `cd ../sibling` is not a candidate.
+  The hook root is itself resolved from the cwd, so the cwd candidate only fires
+  when a caller hands in a root and a cwd that disagree; the unit test calls the
+  check directly for that reason.
+- Refusal (D3): names the path and the other root, says not to read or work it
+  here, and gives the remedy `waggledance_ask_state` then `waggledance_dispatch`
+  with `leader: true`; a user who wants the repo researched from here adds the
+  path to `guards.cross_project_allow`. Tests: the `cross_project_*` cases in
+  `write_guard/tests.rs` and `verbs/config.rs`.
