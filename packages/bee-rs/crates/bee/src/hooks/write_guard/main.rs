@@ -234,6 +234,25 @@ FIX: repair or recreate the Git worktree before retrying; no worktree-local .bee
     };
     let cwd = ctx.cwd.to_string_lossy().into_owned();
 
+    if matches!(tool_name.as_str(), "Read" | "Glob" | "Grep" | "Bash" | "exec") {
+        let home = std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(PathBuf::from);
+        if let Some(reason) = cross_project_denial(
+            &root_pb,
+            &store_root_pb,
+            home,
+            harness_roots,
+            &tool_name,
+            &tool_input,
+            &cwd,
+        ) {
+            emit.stderr.push_str(&reason);
+            emit.code = 2;
+            return Ok(emit);
+        }
+    }
+
     let mut denial: Option<String> = None;
     let mut fixed_ask: Option<(Value, Vec<String>)> = None;
     let mut reservation_warnings: Vec<String> = Vec::new();

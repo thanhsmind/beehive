@@ -380,7 +380,7 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `commands` | the host project's `setup` / `start` / `test` commands — full section above | none — captured at onboarding |
 | `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via `bee-hive`'s "Gates" section (gate-bypass levels) | `false` |
 | `hooks` | per-hook kill switch — nine hooks: `session-init`, `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`, `session-close`, `tools-logger`, `codex-subagent-audit` | all `true` (an absent key also reads `true`) |
-| `guards` | `idle_gate` (`false` disables the idle intake gate) · `worker_outward` (`false` disables the worker-outward guard — see the section below) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) | idle gate on · worker-outward guard on · `800` · no memory root |
+| `guards` | `idle_gate` (`false` disables the idle intake gate) · `worker_outward` (`false` disables the worker-outward guard — see the section below) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) · `cross_project_allow` (list of paths the guard lets this session read although another project owns them — see below) | idle gate on · worker-outward guard on · `800` · no memory root · empty list |
 | `cells_archive_on_close` | whether a green `bee close` retires the feature's cells into `.bee/cells/archive/<feature>/`, out of the scan path `status`/`orient` parse on every call. Only fires when every one of the feature's cells is capped or dropped; reverse with `bee cells unarchive --feature <f>`. Set `false` for a repo whose own tooling reads `.bee/cells/*.json` by path | `true` |
 | `ship_visibility` | how finished work is surfaced — `"off"` or `"draft-pr"`. An unrecognized value normalizes to `"off"` and says so once, by name | `"off"` |
 | `worktree_first` | code-touching feature work lives in its own worktree and the write guard refuses feature edits made in the main checkout; the exact string `"off"` disables that refusal — see [specs/worktree-first.md](specs/worktree-first.md) | on |
@@ -464,6 +464,23 @@ root is refused outright — after resolving symlinks — if it is the filesyste
 directory, a directory that contains this worktree, anything inside or containing a `.git`/`.bee`
 directory, or not an existing directory. Refused, malformed, or unset means today's behavior,
 unchanged. The `apply_patch` tool path never honors a memory root.
+
+### `guards.cross_project_allow` — reading another project on purpose
+
+The write guard refuses every read, search or shell command that touches the tree of another
+project, and the refusal names the remedy: hand the work to that project's leader through
+waggledance (`waggledance_ask_state`, then `waggledance_dispatch` with `leader: true`). This key is
+the one exception for a user who wants a research read of another repo from this session.
+
+```jsonc
+// .bee/config.json
+{ "guards": { "cross_project_allow": ["/home/me/work/other-repo", "~/work/shared"] } }
+```
+
+- The value is a list of absolute or `~` path prefixes. A path under one of them is not refused.
+- The key is governed: `bee config set` and agent edits are refused. Only the user edits it.
+- A path under a `permissions.additionalDirectories` entry in the user, project or project-local
+  Claude settings is also allowed. Those entries need no copy in this key.
 
 ### `dogfood_repos` (P18, evolving loop)
 
