@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"supervisor-read-scope\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"supervisor-read-scope\" (lane).",
+  "next_action": "Merged into main at 5b4d354; capture what settled, then bee close --feature supervisor-read-scope.",
   "created_at": "2026-11-11T13:24:00.192Z",
   "run_state": "done",
   "waiting_on": null,
@@ -750,12 +750,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-11-11T13:36:36.585Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-11T15:25:41.853Z",
-    "branch": "wt/supervisor-read-scope",
-    "worktree_id": "beehive--wt--supervisor-read-scope",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
