@@ -232,6 +232,10 @@ Discipline rules are homed in `packages/bee/LEADER.md` or a file under `packages
   - applied_at:
     - `CLAUDE.md`
     - `skills/bee-capturing/SKILL.md`
+- `agents-other-project-to-its-leader` (packages/bee/LEADER.md § Work in parallel, coordinate through the store):
+  spoken: work for another project goes to that project's leader through waggledance, after waggledance_ask_state — never read or explore its code here; the write-guard refuses it, and a research read needs the user to add the path to guards.cross_project_allow (cross-project-guard D5)
+  - applied_at:
+    - `docs/config-reference.md`
 - `agents-context-handoff-65` (packages/bee/playbooks/handoff.md § Handoff):
   spoken: a context mark never stops work — finish the user's task; write the handoff only when the user asks for a switch or at feature close, then hand the rest to waggledance (leader: true, follow_up_of the current run, handoff: true) and release the session — never tell the user to open a new session (docs/history/context-mark-advisory D1, D3; handoff-flag-doctrine D1)
   - applied_at:

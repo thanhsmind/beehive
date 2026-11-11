@@ -3275,7 +3275,7 @@
     },
     {
       "path": "packages/bee/LEADER.md",
-      "sha256": "e235085a07bbfa1034c8a4e0b8cb50ff60e1a2ceb96d8e2f3cb0e84da16ecef7",
+      "sha256": "e46ac125e283200a6383127da61a0bc719046cf642902aabe14611c0ae139ece",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/LEADER.md"

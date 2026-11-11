@@ -230,6 +230,15 @@ never read the file, and `bee protocol check` reports its state.
   shell commands with `BEE_AGENT_NAME=<name>`. On a reservation or
   hold conflict, stop and report it — never write through it. A worker
   executes exactly the one cell it was handed.
+<!-- rule: agents-other-project-to-its-leader -->
+- Work that belongs to another project goes to that project's leader
+  through waggledance. Call `waggledance_ask_state` for that project,
+  then `waggledance_dispatch` with `leader: true` (add `follow_up_of`
+  when its leader already runs the same work). Never read, search or
+  explore that project's code from this session: the write-guard
+  refuses it and names the project root. For a research read of another
+  repo, the user adds its path to `guards.cross_project_allow`.
+<!-- /rule -->
 
 ## Capture what settles
 
