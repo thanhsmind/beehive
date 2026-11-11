@@ -477,9 +477,17 @@ waggledance, or you are changing what that grant opens. Rules are D1-D5 and D7 o
 - Surface (D4): `.bee/**` and `docs/knowledge/**` minus secret-shaped files and `config.local.json`.
   `is_secret_path` checks a basename, so a directory-wide Grep would print secrets; `holds_secret_below`
   refuses such a directory.
-- Shell (D5): a literal-token allowlist, not a deny list. A newline hides a second command, `$` and
-  backticks defeat the path check, `sqlite3` and `sort` run programs, and a `/x/bee` head runs any binary,
-  so none is granted. A command that mixes a granted head with anything else is refused whole.
+- Shell (D5, D5a): the grant never trusts the shared `tokenize_deep` for structure. `lex_shell` in
+  `cross_project.rs` accepts only a plain pipeline: blank-separated words joined by a single `|`, a small
+  word alphabet outside quotes, no `$` or backtick in any span, and the two exact words `2>/dev/null` and
+  `2>&1`. Everything else (`;`, `&`, parentheses, braces, globs, redirects, backslash) refuses the grant.
+  Why: three judge rounds hid a second command or a secret read past token-level checks: a `\"` inside
+  double quotes, a shell function `cat () ( rm … )`, then `jq -L <m>/.bee 'import "config.local" as $c'`
+  and a `--`-prefixed operand. The shared tokenizer splits commands for best-effort target detection, not
+  as bash does; that gap in the base guard is backlog item "Write-guard tokenizer ignores
+  backslash-escaped quotes". On top of the grammar: heads `cat head tail wc ls jq` plus the two bee report
+  verbs; `jq -L` refused; a shell directory candidate is walked for secrets like a Grep path.
+  `sqlite3` and `sort` run programs and a `/x/bee` head runs any binary, so none is granted.
 - Refusal text (D7): with the key, the refusal adds the rule that tripped and the readable surface, or that
   the registry was unreadable, or that the project is unmanaged; without it, byte-identical to before.
 - Tests: `cross_project_supervisor_*` in `write_guard/tests.rs`, `verbs/config.rs` and `hook_contracts.rs`.
