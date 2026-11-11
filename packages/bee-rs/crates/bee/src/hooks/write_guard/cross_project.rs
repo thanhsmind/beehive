@@ -10,7 +10,7 @@ const REGISTRY_TIMEOUT: Duration = Duration::from_secs(2);
 const SURFACE_WALK_LIMIT: usize = 50000;
 const SHELL_HEADS: [&str; 6] = ["cat", "head", "tail", "wc", "ls", "jq"];
 
-struct Scope {
+pub(crate) struct Scope {
     roots: Vec<PathBuf>,
     common: Option<PathBuf>,
     home: Option<PathBuf>,
@@ -243,7 +243,7 @@ If the user asked you to research that repo from here, ask the user to add the p
     )
 }
 
-pub(crate) type RegistryProvider<'a> = &'a dyn Fn(&[PathBuf]) -> Option<Vec<PathBuf>>;
+pub(crate) type RegistryProvider<'a> = &'a dyn Fn(&Scope) -> Option<Vec<PathBuf>>;
 
 enum Why {
     Rule(String),
@@ -271,12 +271,12 @@ fn rule(text: &str) -> Why {
     Why::Rule(text.to_string())
 }
 
-fn waggledance_binary(own: &[PathBuf]) -> Option<PathBuf> {
+fn waggledance_binary(scope: &Scope) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         let candidate = dir.join("waggledance");
         let Ok(real) = std::fs::canonicalize(&candidate) else { continue };
-        if real.is_file() && !own.iter().any(|r| real.starts_with(r)) {
+        if real.is_file() && !real.parent().is_some_and(|d| scope.is_this_project(d)) {
             return Some(candidate);
         }
     }
@@ -296,8 +296,8 @@ fn parse_registry(bytes: &[u8]) -> Option<Vec<PathBuf>> {
     )
 }
 
-pub(crate) fn waggledance_registry_roots(own: &[PathBuf]) -> Option<Vec<PathBuf>> {
-    let binary = waggledance_binary(own)?;
+pub(crate) fn waggledance_registry_roots(scope: &Scope) -> Option<Vec<PathBuf>> {
+    let binary = waggledance_binary(scope)?;
     let mut child = Command::new(binary)
         .args(["list", "--json"])
         .stdin(Stdio::null())
@@ -380,7 +380,7 @@ impl Grant<'_> {
     fn managed_roots(&self) -> Option<&Vec<PathBuf>> {
         self.managed
             .get_or_init(|| {
-                let roots = (self.provider)(&self.scope.roots)?;
+                let roots = (self.provider)(self.scope)?;
                 let canon: Vec<PathBuf> = roots
                     .iter()
                     .map(|r| std::fs::canonicalize(r).unwrap_or_else(|_| r.clone()))
@@ -463,6 +463,9 @@ impl Grant<'_> {
         let bail = |text: &str| Err((rule(text), None));
         if command.contains('\n') || command.contains('\r') {
             return bail("newline");
+        }
+        if command.contains('\\') {
+            return bail("backslash");
         }
         if truncated {
             return bail("undecidable wrapper");

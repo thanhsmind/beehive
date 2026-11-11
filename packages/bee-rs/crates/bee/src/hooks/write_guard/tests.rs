@@ -6829,7 +6829,7 @@ use std::process::ExitCode;
 
     fn sup_call(s: &SupFx, roots: Option<Vec<PathBuf>>, tool: &str, input: Value) -> Option<String> {
         let map = input.as_object().unwrap().clone();
-        let provider = move |_: &[PathBuf]| roots.clone();
+        let provider = move |_: &super::cross_project::Scope| roots.clone();
         cross_project_denial_with_registry(
             &s.fx.root,
             &s.fx.root,
@@ -6999,12 +6999,26 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn cross_project_supervisor_refuses_backslash_quote_smuggling() {
+        let s = sup_fixture(Some("waggledance"));
+        for cmd in [
+            "cat <m>/.bee/state.json \"a\\\" \" ; rm <m>/.bee/state.json ; \" \"",
+            "cat <m>/.bee/state.json 'a\\' ; rm <m>/.bee/state.json ; ' '",
+            "cat <m>/.bee/state.json \\\n rm <m>/.bee/state.json",
+            "cat <m>/.bee/config.local.json",
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert!(denied.is_some(), "{cmd:?} must be refused");
+        }
+    }
+
+    #[test]
     fn cross_project_supervisor_shell_needs_the_cwd_inside_this_project() {
         let s = sup_fixture(Some("waggledance"));
         let command = format!("cat {}/.bee/state.json", s.managed.to_string_lossy());
         let map = json!({ "command": command }).as_object().unwrap().clone();
         let roots = vec![s.managed.clone()];
-        let provider = move |_: &[PathBuf]| Some(roots.clone());
+        let provider = move |_: &super::cross_project::Scope| Some(roots.clone());
         let denied = cross_project_denial_with_registry(
             &s.fx.root,
             &s.fx.root,
@@ -7086,7 +7100,7 @@ If the user asked you to research that repo from here, ask the user to add the p
     fn cross_project_supervisor_does_not_call_the_provider_for_this_project() {
         let s = sup_fixture(Some("waggledance"));
         let called = std::cell::Cell::new(false);
-        let provider = |_: &[PathBuf]| {
+        let provider = |_: &super::cross_project::Scope| {
             called.set(true);
             None
         };
