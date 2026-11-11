@@ -454,8 +454,11 @@ containment.
   when a caller hands in a root and a cwd that disagree; the unit test calls the
   check directly for that reason.
 - Refusal (D3): names the path and the other root, says not to read or work it
-  here, and gives the remedy `waggledance_ask_state` then `waggledance_dispatch`
-  with `leader: true`; a user who wants the repo researched from here adds the
+  here, and gives the remedy CLI first: `waggledance state <project-id>`, then
+  `waggledance dispatch --project <project-id> --leader --request-id <id>`, with the
+  MCP tools `waggledance_ask_state` then `waggledance_dispatch` (`leader: true`, same
+  `request_id`) as the fallback (waggledance-cli-first D4, D2,
+  `docs/history/waggledance-cli-first/CONTEXT.md`); a user who wants the repo researched from here adds the
   path to `guards.cross_project_allow`. Tests: the `cross_project_*` cases in
   `write_guard/tests.rs` and `verbs/config.rs`.
 
@@ -468,7 +471,7 @@ waggledance, or you are changing what that grant opens. Rules are supervisor-rea
 - Opt-in (D1): `guards.supervises: "waggledance"`, governed in `config_governed_view` /
   `diff_governed_views` beside `guards.cross_project_allow`. Only that key is governed: `worker_outward` and
   `memory_root` are user toggles, so locking the whole `guards` subtree was rejected.
-- Registry (D2): `waggledance_registry_roots` in `cross_project.rs` runs `waggledance list --json` only
+- Registry (D2): `waggledance_registry_roots` in `cross_project.rs` runs `waggledance list --json` (kept unchanged under waggledance-cli-first D5) only
   after a candidate already resolved to another project, so a repo without the key pays nothing. The 2 s
   kill and fail-closed result exist because a hang or panic reads as allow on a fail-open host. No cache:
   the registry is the owner's authority. A binary that resolves inside this project is never used.
