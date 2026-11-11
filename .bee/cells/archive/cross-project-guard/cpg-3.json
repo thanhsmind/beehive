@@ -1,0 +1,115 @@
+{
+  "id": "cpg-3",
+  "feature": "cross-project-guard",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "standard",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "cpg-1",
+    "cpg-2",
+    "cpg-4"
+  ],
+  "decisions": [
+    "cc1d4957"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/cross-project-guard/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/cross-project-guard/CONTEXT.md",
+    "docs/history/cross-project-guard/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature cross-project-guard`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/cross-project-guard/delivery.md listing the concepts changed and why, one line each. Run `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "area concepts describe the feature's changes, anchored to code",
+      "docs/history/cross-project-guard/delivery.md lists every concept the feature changed"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/cross-project-guard/delivery.md",
+        "substantive": "the feature's delivery record"
+      }
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No restating of code in area concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-cpg-3",
+    "outcome": "Wrote cross-project-guard delivery.md; knowledge deltas already thin and anchored; knowledge check OK; commit 1d4e9f380fa988efb0cb86b2be5fb33e4b10e2f5",
+    "files_changed": [
+      "docs/history/cross-project-guard/delivery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-11T09:00:28.816Z",
+    "behavior_change": false,
+    "verification_evidence": "full suite 0 failed; .bee/bin/bee knowledge check — green:static — 0 errors, delivery only",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "988173ac-48c1-4d57-8db3-9bd0c3f193c7",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-11T08:57:27.028Z",
+    "knowledge_delta": [],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Wrote cross-project-guard delivery.md; knowledge deltas already thin and anchored; knowledge check OK; commit 1d4e9f380fa988efb0cb86b2be5fb33e4b10e2f5",
+      "commit": "1d4e9f380fa988efb0cb86b2be5fb33e4b10e2f5",
+      "files": [
+        "docs/history/cross-project-guard/delivery.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:unit — full suite 0 failed; .bee/bin/bee knowledge check — green:static — 0 errors, delivery only",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "area concepts describe the feature's changes, anchored to code",
+            "artifact": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+          },
+          {
+            "requirement": "docs/history/cross-project-guard/delivery.md lists every concept the feature changed",
+            "artifact": "docs/history/cross-project-guard/delivery.md"
+          },
+          {
+            "requirement": "the delivery lands in the same merge as the code",
+            "artifact": "docs/history/cross-project-guard/delivery.md"
+          }
+        ],
+        "recorded_at": "2026-11-11T09:00:43.994Z",
+        "recorded_by": "988173ac-48c1-4d57-8db3-9bd0c3f193c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 52728,
+    "cached": 398889,
+    "total": 451617,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 52728,
+        "cached": 398889,
+        "total": 451617
+      }
+    },
+    "jobs": [
+      "job-1794387448846-3280920-1"
+    ]
+  }
+}

@@ -2108,5 +2108,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-10T14:16:16.549Z"
+  },
+  "cross-project-guard": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-11-11T09:31:00.252Z"
   }
 }

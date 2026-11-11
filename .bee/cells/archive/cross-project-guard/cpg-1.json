@@ -1,0 +1,194 @@
+{
+  "id": "cpg-1",
+  "feature": "cross-project-guard",
+  "title": "Refuse reads and commands that touch another project's tree",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "cc1d4957",
+    "118414b3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/config.rs",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+  ],
+  "read_first": [
+    "docs/history/cross-project-guard/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/verbs/config.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Keep contract cc1d4957 (docs/history/cross-project-guard/CONTEXT.md D1-D4). Add write_guard/cross_project.rs with a check that, given this project's roots, the hook cwd and a candidate path, returns the other project's root when the path belongs to another project per D1: resolve the path (absolute, cwd-relative, or ~ expanded from HOME); it is this project when it is under the store/main root or under a directory whose .git resolves to the same git common dir (this repo's worktrees); otherwise walk up from the path to the nearest ancestor holding .git or .bee/onboarding.json, never counting HOME or / as a root; a different root means another project; a directory that is in no repo but has a direct child holding .git or .bee/onboarding.json (not this project) also counts. Allowed despite a match (D4): a path under any entry of guards.cross_project_allow in .bee/config.json (absolute or ~ prefixes), under any permissions.additionalDirectories entry of ~/.claude/settings.json, <root>/.claude/settings.json or <root>/.claude/settings.local.json, or a harness-allowlisted target (hook_local.rs harness_allowlisted_target). In main.rs run the check after the hook_enabled switch and before the AskUserQuestion/read/write branches, for every phase: Read uses file_path; Glob and Grep use path, and an absolute Glob pattern prefix; Bash/exec checks the hook cwd and every token from tokenize_deep(fence_heredocs(command)) that starts with / or ~ (strip a leading key= of --flag=value tokens). The first hit denies with exit 2 and a message that starts with 'bee cross-project guard:', names the path and the other project root, says not to read or work it from this session, and gives the remedy: waggledance_ask_state for that project, then waggledance_dispatch with leader: true; if the user asked to research that repo from here, ask the user to add the path to guards.cross_project_allow in .bee/config.json. Make guards.cross_project_allow a governed key: extend config_governed_change_deny so bee config set and an agent Edit/Write that adds or changes it are refused like the other governed keys. Red first in write_guard/tests.rs with test names containing cross_project: Read of a file in a sibling fixture repo is refused with the remedy; Grep path at a folder whose child is a repo is refused; Bash 'cat <sibling>/x' and 'cd <sibling> && ls' are refused; Bash with hook cwd inside the sibling is refused; in-repo Read, /tmp Read, a sibling worktree of this repo, a path under guards.cross_project_allow, and a path under a fixture permissions.additionalDirectories entry are all allowed; the check runs while phase is idle; bee config set guards.cross_project_allow is refused. Watch them fail before the fix. Knowledge delta in the same commit: add a cross-project section to docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md citing docs/history/cross-project-guard/CONTEXT.md D1-D4 (not the raw decision id). No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+  "must_haves": {
+    "truths": [
+      "A Read, Glob, Grep or Bash call that touches another repo's tree is refused with exit 2 and the waggledance remedy",
+      "In-repo paths, this repo's worktrees, no-repo paths, guards.cross_project_allow entries and Claude additionalDirectories entries stay allowed",
+      "The refusal fires in every phase, idle included, for leaders and workers",
+      "bee config set cannot add guards.cross_project_allow"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+        "substantive": "the D1 ownership check and the D4 allowances"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "red-first cross_project tests for every D1-D4 case"
+      }
+    ],
+    "key_links": [
+      "main.rs calls the cross-project check before the read and write branches",
+      "config_governed_change_deny protects guards.cross_project_allow"
+    ],
+    "prohibitions": [
+      "Never weaken an existing read, privacy or write check",
+      "Never let an environment variable turn the check off",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Cache the walked roots per hook call"
+    ]
+  },
+  "trace": {
+    "worker": "w-cpg-1",
+    "outcome": "Write guard now refuses Read/Glob/Grep/Bash touching another project's tree in every phase, with the waggledance remedy; guards.cross_project_allow is governed; commit c7bd396483258e7871e2250030fff0d11426794a",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/config.rs",
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+    ],
+    "deviations": [
+      "sync-ack: These 17 concepts were suspect before this cell from earlier anchor drift; cpg-1 adds a new check and changes none of the behavior they state; the new behavior is documented in write-guard-request-shapes.md, and cpg-3 consolidation updates governed-paths-and-the-intake-gate for the new governed key"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-11T08:49:52.595Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite exit 0 after the guard change; cross_project tests red first, then green",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "988173ac-48c1-4d57-8db3-9bd0c3f193c7",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+    "claimed_at": "2026-11-11T08:38:40.097Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+    ],
+    "sync_ack": "These 17 concepts were suspect before this cell from earlier anchor drift; cpg-1 adds a new check and changes none of the behavior they state; the new behavior is documented in write-guard-request-shapes.md, and cpg-3 consolidation updates governed-paths-and-the-intake-gate for the new governed key",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Write guard now refuses Read/Glob/Grep/Bash touching another project's tree in every phase, with the waggledance remedy; guards.cross_project_allow is governed; commit c7bd396483258e7871e2250030fff0d11426794a",
+      "commit": "c7bd396483258e7871e2250030fff0d11426794a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/config.rs",
+        "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite exit 0 after the guard change; cross_project tests red first, then green",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A Read, Glob, Grep or Bash call that touches another repo's tree is refused with exit 2 and the waggledance remedy",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "In-repo paths, this repo's worktrees, no-repo paths, guards.cross_project_allow entries and Claude additionalDirectories entries stay allowed",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "The refusal fires in every phase, idle included, for leaders and workers",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+          },
+          {
+            "requirement": "bee config set cannot add guards.cross_project_allow",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+          },
+          {
+            "requirement": "main.rs calls the cross-project check before the read and write branches",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+          },
+          {
+            "requirement": "config_governed_change_deny protects guards.cross_project_allow",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/config.rs"
+          }
+        ],
+        "recorded_at": "2026-11-11T08:49:52.690Z",
+        "recorded_by": "988173ac-48c1-4d57-8db3-9bd0c3f193c7",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "read-other-repo-refused",
+            "status": "PASS",
+            "evidence": "live probe with target/release/bee hook write-guard: Read /mnt/data/Projects/anphabe/anphabe-goglbe/assets/js/ranking-pdf.js -> exit 2, 'bee cross-project guard: ... belongs to another project'"
+          },
+          {
+            "id": "bash-cd-and-folder-of-repos-refused",
+            "status": "PASS",
+            "evidence": "probe: 'cd /mnt/data/Projects/anphabe/anphabe-goglbe && rg' -> exit 2; 'cd /mnt/data/Projects/anphabe && rg -l logo_en .' -> exit 2"
+          },
+          {
+            "id": "remedy-named",
+            "status": "PASS",
+            "evidence": "full message names waggledance_ask_state, waggledance_dispatch with leader: true, and guards.cross_project_allow"
+          },
+          {
+            "id": "allowed-paths-pass",
+            "status": "PASS",
+            "evidence": "probe: in-repo Read, main checkout of same repo, ~/skillstation-hub/runtime/cache/skills (additionalDirectories), /tmp -> exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-11T08:57:39.093Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 119890,
+    "cached": 1505028,
+    "total": 1624918,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 119890,
+        "cached": 1505028,
+        "total": 1624918
+      }
+    },
+    "jobs": [
+      "job-1794386322161-3106523-1"
+    ]
+  }
+}

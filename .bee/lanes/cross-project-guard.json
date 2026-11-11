@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"cross-project-guard\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 90dda5f; reload the product and test \"cross-project-guard\", then either approve uat (\"bee gate --name uat --approved true --lane cross-project-guard\") or fix it in the worktree and merge again.",
+  "next_action": "close",
   "created_at": "2026-11-11T08:32:18.917Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: cross-project-guard",
-    "asked_at": "2026-11-11T09:02:29.942Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

@@ -1,0 +1,135 @@
+{
+  "id": "cpg-2",
+  "feature": "cross-project-guard",
+  "title": "Add the other-project-to-its-leader doctrine rule",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "cc1d4957"
+  ],
+  "files": [
+    "packages/bee/LEADER.md",
+    ".bee/LEADER.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/history/cross-project-guard/CONTEXT.md",
+    "packages/bee/LEADER.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/config-reference.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Keep contract cc1d4957 (docs/history/cross-project-guard/CONTEXT.md D5, D3, D4). In packages/bee/LEADER.md, section Work in parallel, coordinate through the store, add a marked rule block <!-- rule: agents-other-project-to-its-leader --> ... <!-- /rule -->: work that belongs to another project goes to that project's leader through waggledance — waggledance_ask_state for that project, then waggledance_dispatch with leader: true (follow_up_of when its leader already runs the same work); the session never reads, searches or explores that project's code, and the write-guard refuses it; a research read of another repo needs the user to add it to guards.cross_project_allow. Regenerate the vendored copy with the repo's regen command (bee dev regen) so .bee/LEADER.md matches. Add the rule to the rule index in the router-triage doc beside agents-feedback-changes-framework, same shape: home, spoken line citing cross-project-guard D5, applied_at. Add guards.cross_project_allow to docs/config-reference.md: list of absolute or ~ path prefixes, governed (user edits only), with Claude permissions.additionalDirectories also allowed. ASD-STE100 style, no bee jargon beyond rule ids. One commit.",
+  "verify": ".bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- doctrine",
+  "must_haves": {
+    "truths": [
+      "packages/bee/LEADER.md and .bee/LEADER.md carry rule agents-other-project-to-its-leader",
+      "The rule index lists it with home, spoken line and applied_at",
+      "docs/config-reference.md documents guards.cross_project_allow as governed"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/LEADER.md",
+        "substantive": "the marked rule block"
+      }
+    ],
+    "key_links": [
+      "the rule names the write-guard refusal and the waggledance remedy"
+    ],
+    "prohibitions": [
+      "No hand edit of .bee/LEADER.md beyond the regen output"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "w-cpg-2",
+    "outcome": "Added rule agents-other-project-to-its-leader to LEADER.md (regenerated .bee copy), rule index entry and guards.cross_project_allow docs; commit ba483cc2a6713990c553882e3499d91ffb6a943a",
+    "files_changed": [
+      "packages/bee/LEADER.md",
+      ".bee/LEADER.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/config-reference.md"
+    ],
+    "deviations": [
+      "sync-ack: agents-capture-line-at-close text is unchanged; the diff only adds a new rule block before its section"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-11T08:38:50.593Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- doctrine — green:unit — doc-only change; knowledge check OK (0 errors), 6 doctrine tests passed",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "988173ac-48c1-4d57-8db3-9bd0c3f193c7",
+    "verify_command": ".bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- doctrine",
+    "claimed_at": "2026-11-11T08:36:17.105Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+    ],
+    "sync_ack": "agents-capture-line-at-close text is unchanged; the diff only adds a new rule block before its section",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added rule agents-other-project-to-its-leader to LEADER.md (regenerated .bee copy), rule index entry and guards.cross_project_allow docs; commit ba483cc2a6713990c553882e3499d91ffb6a943a",
+      "commit": "ba483cc2a6713990c553882e3499d91ffb6a943a",
+      "files": [
+        "packages/bee/LEADER.md",
+        ".bee/LEADER.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/config-reference.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- doctrine — green:static — .bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- doctrine — green:unit — doc-only change; knowledge check OK (0 errors), 6 doctrine tests passed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "packages/bee/LEADER.md and .bee/LEADER.md carry rule agents-other-project-to-its-leader",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "The rule index lists it with home, spoken line and applied_at",
+            "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+          },
+          {
+            "requirement": "docs/config-reference.md documents guards.cross_project_allow as governed",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "the rule names the write-guard refusal and the waggledance remedy",
+            "artifact": ".bee/LEADER.md"
+          }
+        ],
+        "recorded_at": "2026-11-11T08:38:59.790Z",
+        "recorded_by": "988173ac-48c1-4d57-8db3-9bd0c3f193c7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "usage": {
+    "new": 44788,
+    "cached": 378676,
+    "total": 423464,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 44788,
+        "cached": 378676,
+        "total": 423464
+      }
+    },
+    "jobs": [
+      "job-1794386179044-3098620-1"
+    ]
+  }
+}
