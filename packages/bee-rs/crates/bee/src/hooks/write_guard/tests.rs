@@ -6608,6 +6608,11 @@ use std::process::ExitCode;
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert!(e.stderr.starts_with("bee cross-project guard:"), "{}", e.stderr);
         assert!(e.stderr.contains(&other.to_string_lossy().into_owned()), "{}", e.stderr);
+        assert!(e.stderr.contains("waggledance state"), "{}", e.stderr);
+        assert!(e.stderr.contains("waggledance dispatch --project"), "{}", e.stderr);
+        assert!(e.stderr.contains("--leader"), "{}", e.stderr);
+        assert!(e.stderr.contains("--request-id"), "{}", e.stderr);
+        assert!(e.stderr.contains("request_id"), "{}", e.stderr);
         assert!(e.stderr.contains("waggledance_ask_state"), "{}", e.stderr);
         assert!(e.stderr.contains("waggledance_dispatch"), "{}", e.stderr);
         assert!(e.stderr.contains("leader: true"), "{}", e.stderr);
@@ -7110,7 +7115,7 @@ use std::process::ExitCode;
         format!(
             "bee cross-project guard: \"{}\" belongs to another project ({}). \
 Do not read or work it from this session. \
-FIX: call waggledance_ask_state for that project, then waggledance_dispatch with leader: true so its own leader does the work. \
+FIX: hand it to that project's own leader: run waggledance state <project-id>, then waggledance dispatch --project <project-id> --leader --request-id <id> --task \"<task>\" (the project id from waggledance list --json, never a path); if the waggledance CLI is missing, does not know the verb, is refused, or fails, call waggledance_ask_state for that project, then waggledance_dispatch with leader: true and the same request_id. \
 If the user asked you to research that repo from here, ask the user to add the path to guards.cross_project_allow in .bee/config.json.",
             path.display(),
             other.display()
