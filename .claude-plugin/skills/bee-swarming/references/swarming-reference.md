@@ -744,10 +744,8 @@ a context mark alone never ends it), claim the next unit (`bee cells claim-next`
 handoff (`bee state handoff write --kind planned-next --writer-session <id>
 --previous-cell <capped-id> --next-cell <claimed-id>`), and hand the
 remaining work to a fresh leader through the host's leader door when one
-exists (waggledance: `waggledance_dispatch` with `leader: true` and
-`follow_up_of` naming the current run plus
-`handoff: true`, so the successor joins the same
-run family; task text naming what is done, what is next, and the user's
+exists (waggledance: `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>` with the task through `--task`, `--task-file` or stdin; the MCP fallback follows rule `agents-other-project-to-its-leader`, so the
+successor joins the same run family; task text naming what is done, what is next, and the user's
 standing orders),
 then release this session. The fresh leader adopts the carried claim
 automatically and opens straight into the next cell, no confirmation

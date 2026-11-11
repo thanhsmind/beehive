@@ -97,8 +97,7 @@ unwound and nothing is left half-done),
 - A context mark never stops work: the session finishes the user's task. Write
   `.bee/HANDOFF.json` only when the user asks for a switch, or at feature close.
   Then hand the rest to a fresh leader through the host's leader door when one
-  exists (waggledance: `waggledance_dispatch` with `leader: true` and
-  `follow_up_of` naming the current run plus `handoff: true`), and release the
+  exists (waggledance: `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>` with the task through `--task`, `--task-file` or stdin; the MCP fallback follows rule `agents-other-project-to-its-leader`), and release the
   session — never tell the user to open a new session. Show the handoff and wait only when a gate or
   decision the user owns is pending, or when the host has no leader door.
   Finishing a unit is never on its own a reason to stop.
