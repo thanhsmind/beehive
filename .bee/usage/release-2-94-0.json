@@ -1,0 +1,114 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-2-94-0",
+  "closed_at": "2026-11-11T17:47:11.158Z",
+  "sessions": [
+    {
+      "session_id": "55a40427-deca-4709-8271-1cfb9eacd76d",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 356,
+          "output": 75829,
+          "cache_write": 241775,
+          "cache_read": 26888950,
+          "new": 317960,
+          "cached": 26888950,
+          "total": 27206910
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794416814122,
+      "ended_ms": 1794419229230,
+      "totals": {
+        "new": 317960,
+        "cached": 26888950,
+        "total": 27206910
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 317960,
+      "cached": 26888950,
+      "total": 27206910
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 376365,
+      "cached": 27193622,
+      "total": 27569987
+    },
+    "herding": {
+      "new": 58405,
+      "cached": 304672,
+      "total": 363077,
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 28,
+          "output": 7803,
+          "cache_write": 50574,
+          "cache_read": 304672,
+          "new": 58405,
+          "cached": 304672,
+          "total": 363077
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "4896968a-ceca-43bf-a029-24cc98c0b920",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 14,
+          "output": 4292,
+          "cache_write": 28624,
+          "cache_read": 143908,
+          "new": 32930,
+          "cached": 143908,
+          "total": 176838
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794418385387,
+      "ended_ms": 1794418540502,
+      "totals": {
+        "new": 32930,
+        "cached": 143908,
+        "total": 176838
+      },
+      "job_id": "job-1794418383901-2468867-1"
+    },
+    {
+      "session_id": "61b002d6-c5ae-4bfb-8a62-7961c3ba78cf",
+      "models": {
+        "claude-haiku-5-5": {
+          "input": 14,
+          "output": 3511,
+          "cache_write": 21950,
+          "cache_read": 160764,
+          "new": 25475,
+          "cached": 160764,
+          "total": 186239
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794418590175,
+      "ended_ms": 1794419137973,
+      "totals": {
+        "new": 25475,
+        "cached": 160764,
+        "total": 186239
+      },
+      "job_id": "job-1794418588638-2510207-1"
+    }
+  ]
+}
