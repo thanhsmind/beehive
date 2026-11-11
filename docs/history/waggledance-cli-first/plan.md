@@ -20,12 +20,13 @@ Why this is the least workflow that protects the work: the change is text, but t
 ## Requirements (from CONTEXT.md)
 
 - D1: CLI verb first, MCP tool second, in every home that names waggledance.
-- D2: fallback on missing binary, unknown verb, or non-zero exit; once, same arguments.
+- D2 (revised): fallback on missing binary, unknown verb (`unrecognized subcommand`, exit 2), a guard-refused shell call, or a tool error; one request id shared by the CLI dispatch and its MCP fallback.
 - D3: no `wg` command anywhere.
 - D4: guard refusal names the CLI first and the MCP tools as fallback; the rest stays.
 - D5: registry read keeps `waggledance list --json`.
 - D6: no bee reader of `waggledance_runs.task` or the rollup `sessions`/`recent_decisions`; prove by search.
 - D7: one home for the mapping and fallback — rule `agents-other-project-to-its-leader`; handoff homes cite it.
+- D8: `<project>` is the registry id, never a path; a task file stays in this project; task through `--task`, `--task-file` or stdin; `--follow-up-of` run from `leaders[].runs` of `waggledance state`.
 
 ## Load-bearing claims
 
@@ -41,6 +42,9 @@ Labels: `read` = opened at that line; `ran` = executed. Evidence is a verbatim s
 | 6 | The handoff playbook names only the MCP dispatch | read | packages/bee/playbooks/handoff.md:22 | `door when one exists (waggledance:` |
 | 7 | The installed waggledance binary predates the agent-cli verbs | ran | waggledance projects | `error: unrecognized subcommand 'projects'` |
 | 8 | The installed binary still serves the registry list | ran | waggledance list --json | `{"projects":[{"id":"openmausbot","name":"OpenMausBot","root_path":"/mnt/data/Projects/refs/OpenMausBot"}` |
+| 9 | The installed binary (0.5.5) does not know state | ran | waggledance state --help | `error: unrecognized subcommand 'state'` |
+| 10 | The installed binary does not know dispatch | ran | waggledance dispatch --help | `error: unrecognized subcommand 'dispatch'` |
+| 11 | An unknown verb exits 2 | ran | waggledance projects; echo exit | `projects exit=2` |
 
 ## Discovery
 
@@ -116,13 +120,15 @@ Phase plan, one slice. Playbook: `skills/bee-planning/playbooks/feature.md` (cit
 
 SMALLER PATH: change only the rule home and leave the handoff homes and the guard text on MCP — cheaper, but D1 says every home, and the guard text is the remedy agents read most. One cell for all text — cheaper in dispatches, but it mixes a Rust test change with regen output and loses the parallel wave. PASS.
 
+Plan check (hat wave synthesis, five seats; reports under `.bee/mailbox/job-17944173198*` and `job-1794417477185-*`): no BLOCKER. Accepted: a dispatch fallback can start a second run (facts-gaps 1, user-impact F1, risks R1, value F3) — closed by the shared request id in D2; a guard-refused CLI call had no next step and `<project>` invited a path (risks R2, value F4, user-impact F3) — closed by D2 and D8; only `--task-file` named (user-impact F4, value F5) — closed by D8; the installed binary's `state`/`dispatch` unproven (facts-gaps 2, risks R3) — claims 9-11 ran: both unknown, exit 2, so this machine takes the fallback until waggledance is upgraded; doc verify ran no test that reads LEADER.md (risks R4) — wcf-2 and wcf-3 verify now run the integration tests. Noted, no change: the refusal text is longer (value F6); the hook binary carries the new text only after release reinstalls it (risks R5); the leader auto-handoff of a CLI dispatch is pre-existing behavior and out of scope (risks R3). Rejected: dropping wcf-3 into the other cells (alternatives A).
+
 ## Cells — current slice (preview)
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
 | wcf-1 | Name the waggledance CLI first in the cross-project refusal | cross_project.rs, write_guard/tests.rs | — | A cross-project refusal tells the agent to run `waggledance state` and `waggledance dispatch --leader`, with the MCP tools as fallback | `cargo test … --bin bee -- cross_project` |
-| wcf-2 | Name the waggledance CLI first in doctrine, skills and handbook | LEADER.md, handoff.md, 3 skill files, handbook, config-reference, rendered copies | — | The leader rule and every handoff home show the CLI call first and the MCP fallback | `bee dev release-manifest --check` + doctrine tests |
-| wcf-3 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | wcf-1, wcf-2 | the rule index and guard concept show CLI first | `.bee/bin/bee knowledge check` |
+| wcf-2 | Name the waggledance CLI first in doctrine, skills and handbook | LEADER.md, handoff.md, 3 skill files, handbook, config-reference, rendered copies | — | The leader rule and every handoff home show the CLI call first and the MCP fallback | `bee dev release-manifest --check` + rule_index_parity, pointer_integrity, verification_contract_parity, knowledge_first_nudge |
+| wcf-3 | Consolidate this feature's knowledge and write its delivery | docs/knowledge/**, delivery.md | wcf-1, wcf-2 | the rule index and guard concept show CLI first | `.bee/bin/bee knowledge check` + rule_index_parity |
 
 ```json
 [
@@ -134,7 +140,7 @@ SMALLER PATH: change only the rule home and leave the handoff homes and the guar
     "role": "code",
     "status": "open",
     "deps": [],
-    "decisions": ["e1ca4356", "118414b3", "b469ea90", "7d181bf7"],
+    "decisions": ["e1ca4356", "118414b3", "b469ea90", "7d181bf7", "76216feb", "e770bb53"],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
@@ -146,7 +152,7 @@ SMALLER PATH: change only the rule home and leave the handoff homes and the guar
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Implement docs/history/waggledance-cli-first/CONTEXT.md D4, keeping D3 and D5. In fn refusal in cross_project.rs (anchor: `FIX: call waggledance_ask_state for that project, then waggledance_dispatch with leader: true so its own leader does the work.`) replace that one FIX sentence with exactly: `FIX: hand it to that project's own leader: run waggledance state <project>, then waggledance dispatch --project <project> --leader --task-file <file>; if the waggledance CLI is missing, does not know the verb, or fails, call waggledance_ask_state for that project, then waggledance_dispatch with leader: true.` Every other sentence of the refusal, the supervisor sentences, the registry read (`waggledance list --json`) and every function signature stay unchanged. Red first in write_guard/tests.rs: in fn cp_refused add asserts that stderr contains `waggledance state` and `waggledance dispatch --project` and `--leader` (keep the existing asserts for waggledance_ask_state, waggledance_dispatch, leader: true and guards.cross_project_allow), and update fn refusal_text_for_test to the new sentence; run the cross_project tests and watch the new asserts fail before you change cross_project.rs. The string `wg ` must not appear in the refusal. No code comments. One commit with the trailer `cell: wcf-1`.",
+    "action": "Implement docs/history/waggledance-cli-first/CONTEXT.md D4 with D2 and D8, keeping D3 and D5. In fn refusal in cross_project.rs (anchor: `FIX: call waggledance_ask_state for that project, then waggledance_dispatch with leader: true so its own leader does the work.`) replace that one FIX sentence with exactly: `FIX: hand it to that project's own leader: run waggledance state <project-id>, then waggledance dispatch --project <project-id> --leader --request-id <id> --task \"<task>\" (the project id from waggledance list --json, never a path); if the waggledance CLI is missing, does not know the verb, is refused, or fails, call waggledance_ask_state for that project, then waggledance_dispatch with leader: true and the same request_id.` Every other sentence of the refusal, the supervisor sentences, the registry read (`waggledance list --json`) and every function signature stay unchanged. Red first in write_guard/tests.rs: in fn cp_refused add asserts that stderr contains `waggledance state`, `waggledance dispatch --project`, `--leader`, `--request-id` and `request_id` (keep the existing asserts for waggledance_ask_state, waggledance_dispatch, leader: true and guards.cross_project_allow), and update fn refusal_text_for_test to the new sentence; run the cross_project tests and watch the new asserts fail before you change cross_project.rs. The string `wg ` must not appear in the refusal. No code comments. One commit with the trailer `cell: wcf-1`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
     "must_haves": {
       "truths": [
@@ -172,7 +178,7 @@ SMALLER PATH: change only the rule home and leave the handoff homes and the guar
     "role": "docs",
     "status": "open",
     "deps": [],
-    "decisions": ["bffdaf85", "829b33f8", "7d181bf7", "a57bea25"],
+    "decisions": ["bffdaf85", "76216feb", "7d181bf7", "a57bea25", "e770bb53"],
     "files": [
       "packages/bee/LEADER.md",
       "packages/bee/playbooks/handoff.md",
@@ -207,12 +213,12 @@ SMALLER PATH: change only the rule home and leave the handoff homes and the guar
     ],
     "affects_skills": ["bee-hive", "bee-swarming"],
     "affects_specs": [],
-    "action": "Implement docs/history/waggledance-cli-first/CONTEXT.md D1, D2, D3 and D7 in the hand-authored homes, ASD-STE100 style, short sentences. (1) packages/bee/LEADER.md, rule block agents-other-project-to-its-leader: keep the marker lines and the never-read and cross_project_allow sentences; say the agent uses the waggledance CLI first: `waggledance state <project>`, then `waggledance dispatch --project <project> --leader --task-file <file>` (add `--follow-up-of <run>` when its leader already runs the same work; add `--handoff` for a handoff); output is JSON. The MCP tools are the fallback: `waggledance_ask_state`, then `waggledance_dispatch` with `leader: true` (`follow_up_of`, `handoff: true`), called once with the same arguments when the `waggledance` binary is not on PATH, does not know the verb, or exits non-zero. Never call `wg`. This rule block is the one home of the mapping and the fallback (D7). (2) packages/bee/playbooks/handoff.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/SKILL.md, skills/bee-swarming/references/swarming-reference.md and docs/handbook/stages/swarming.md: where each says `waggledance: waggledance_dispatch with leader: true and follow_up_of ... plus handoff: true`, name the CLI call first — `waggledance dispatch --project <this project> --leader --follow-up-of <current run> --handoff --task-file <file>` — and say the MCP fallback follows rule agents-other-project-to-its-leader; keep every other sentence. (3) docs/config-reference.md, section guards.cross_project_allow: the remedy names `waggledance state` then `waggledance dispatch --leader` first, with `waggledance_ask_state` / `waggledance_dispatch` as the fallback. (4) Run `.bee/bin/bee dev regen` and keep every file it rewrites; list each in the cap. If regen rewrites a file outside this cell's list, name it as a scope deviation. Do not edit docs/knowledge (wcf-3 owns it) or any Rust file (wcf-1 owns them). No `wg` anywhere. One commit with the trailer `cell: wcf-2`.",
-    "verify": ".bee/bin/bee dev release-manifest --check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- doctrine",
+    "action": "Implement docs/history/waggledance-cli-first/CONTEXT.md D1, D2, D3, D7 and D8 in the hand-authored homes, ASD-STE100 style, short sentences. (1) packages/bee/LEADER.md, rule block agents-other-project-to-its-leader: keep the marker lines and the never-read and cross_project_allow sentences; say the agent uses the waggledance CLI first: `waggledance state <project-id>`, then `waggledance dispatch --project <project-id> --leader --request-id <id>` with the task through `--task`, `--task-file` or stdin (add `--follow-up-of <run>` when a `leaders[].runs` row of the state output shows its leader already runs the same work; add `--handoff` for a handoff); `<project-id>` is the `id` field of `waggledance list --json`; output is JSON. The MCP tools are the fallback: `waggledance_ask_state`, then `waggledance_dispatch` with `leader: true` (`follow_up_of`, `handoff: true`) and the SAME `request_id`, called when the `waggledance` binary is not on PATH, does not know the verb (`unrecognized subcommand`, exit 2), a guard or permission refuses the shell call, or it fails with a tool error; the shared request id means a fallback never starts a second run; with `--task-file` the fallback passes the file text as `task`. `<project-id>` is never a path, and a task file stays inside this project. Never call `wg`. This rule block is the one home of the mapping and the fallback (D7). (2) packages/bee/playbooks/handoff.md, skills/bee-hive/references/go-mode.md, skills/bee-swarming/SKILL.md, skills/bee-swarming/references/swarming-reference.md and docs/handbook/stages/swarming.md: where each says `waggledance: waggledance_dispatch with leader: true and follow_up_of ... plus handoff: true`, name the CLI call first — `waggledance dispatch --project <this project id> --leader --follow-up-of <current run> --handoff --request-id <id>` with the task through `--task`, `--task-file` or stdin — and say the MCP fallback follows rule agents-other-project-to-its-leader; use the same CLI string byte for byte in all five homes; keep every other sentence. (3) docs/config-reference.md, section guards.cross_project_allow: the remedy names `waggledance state` then `waggledance dispatch --leader` first, with `waggledance_ask_state` / `waggledance_dispatch` as the fallback. (4) Run `.bee/bin/bee dev regen` and keep every file it rewrites; list each in the cap. If regen rewrites a file outside this cell's list, name it as a scope deviation. Do not edit docs/knowledge (wcf-3 owns it) or any Rust file (wcf-1 owns them). No `wg` anywhere. One commit with the trailer `cell: wcf-2`.",
+    "verify": ".bee/bin/bee dev release-manifest --check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity --test pointer_integrity --test verification_contract_parity --test knowledge_first_nudge",
     "must_haves": {
       "truths": [
         "Rule agents-other-project-to-its-leader names waggledance state and waggledance dispatch --leader first and the MCP tools as the fallback",
-        "The rule names the three fallback triggers: binary missing, unknown verb, non-zero exit",
+        "The rule names the four fallback triggers: binary missing, unknown verb, refused shell call, tool error, and one request id shared by the CLI call and its MCP fallback",
         "Every handoff home names waggledance dispatch --leader --follow-up-of --handoff first and cites the rule for the fallback",
         "The rendered copies match the sources after bee dev regen"
       ],
@@ -234,7 +240,7 @@ SMALLER PATH: change only the rule home and leave the handoff homes and the guar
     "role": "writer",
     "status": "open",
     "deps": ["wcf-1", "wcf-2"],
-    "decisions": ["bffdaf85", "829b33f8", "e1ca4356", "b469ea90", "3738deac", "a57bea25"],
+    "decisions": ["bffdaf85", "76216feb", "e1ca4356", "b469ea90", "3738deac", "a57bea25", "e770bb53"],
     "files": [
       "docs/knowledge/**",
       "docs/history/waggledance-cli-first/delivery.md"
@@ -248,7 +254,7 @@ SMALLER PATH: change only the rule home and leave the handoff homes and the guar
     "affects_skills": [],
     "affects_specs": [],
     "action": "Run the writer consolidation step: `bee knowledge consolidate --feature waggledance-cli-first`. In docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md rewrite the spoken lines of rule agents-other-project-to-its-leader and agents-context-handoff-65 so they name the waggledance CLI first and the MCP tools as fallback, citing docs/history/waggledance-cli-first/CONTEXT.md D1, D2, D7. In docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md, cross-project section, update the quoted remedy to the CLI-first sentence wcf-1 wrote (D4) and note that the registry read keeps `waggledance list --json` (D5). Record D6 (no bee reader of the runs task field or the dropped rollup keys) where the waggledance contract is documented, one line. Write docs/history/waggledance-cli-first/delivery.md listing each concept changed and why, one line each. Cite CONTEXT.md D-numbers, never raw decision ids. Never name a wg command. Run `.bee/bin/bee knowledge check` green. One commit with the trailer `cell: wcf-3`.",
-    "verify": ".bee/bin/bee knowledge check",
+    "verify": ".bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test rule_index_parity",
     "must_haves": {
       "truths": [
         "area and pattern concepts describe the feature's changes, anchored to code",
@@ -270,11 +276,10 @@ SMALLER PATH: change only the rule home and leave the handoff homes and the guar
 
 | Case | Probe | Pass when |
 |---|---|---|
-| Happy path | Read a file in a sibling repo | exit 2; stderr contains `waggledance state`, `waggledance dispatch --project`, `--leader`, `waggledance_ask_state`, `waggledance_dispatch` |
+| Happy path | Read a file in a sibling repo | exit 2; stderr contains `waggledance state`, `waggledance dispatch --project`, `--leader`, `--request-id`, `waggledance_ask_state`, `waggledance_dispatch`, `request_id` |
 | Byte-identical opt-out | supervisor fixture with no key | refusal equals the new full text |
-| Registry read | fake waggledance tests in hook_contracts | unchanged, green |
 | Doctrine copies | `bee dev release-manifest --check` | no drift |
-| Main vs head | same sibling Read on main and head | main stderr lacks `waggledance state`; head has it |
+| Main vs head | wcf-1 red-first: the new asserts run against the old text, then the new | red before the edit, green after |
 
 ## Open Questions
 
