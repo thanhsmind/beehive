@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-92-0",
   "mode": "tiny",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"release-2-92-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"release-2-92-0\" (lane).",
+  "next_action": "bee close finished \"release-2-92-0\" — feature is closed.",
   "created_at": "2026-11-11T09:31:23.993Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Trước khi release, tôi cất tạm dòng settings của bạn. Nếu không, script sẽ gộp nó vào commit release. Release xong tôi trả lại.",
-    "asked_at": "2026-11-11T09:32:16.513Z",
-    "session": "988173ac-48c1-4d57-8db3-9bd0c3f193c7"
-  },
+  "waiting_on": null,
   "route": {
     "class": "release",
     "lane": "tiny",
