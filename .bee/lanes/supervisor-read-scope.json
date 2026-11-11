@@ -1,0 +1,761 @@
+{
+  "schema_version": "1.0",
+  "feature": "supervisor-read-scope",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"supervisor-read-scope\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"supervisor-read-scope\" (lane).",
+  "created_at": "2026-11-11T13:24:00.192Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "audit-security"
+    ],
+    "product_files": 5,
+    "rationale": null,
+    "updated_at": "2026-11-11T13:23:57.075Z",
+    "feature": "supervisor-read-scope"
+  },
+  "gate_preview": {
+    "feature": "supervisor-read-scope",
+    "plan_sha256": "59e337e100b8713f6d2fbb51348fa6d5e2c397c5f3be1f519ab6addfde65c258",
+    "previewed_at": "2026-11-11T13:36:44.401Z",
+    "cells": [
+      {
+        "id": "sprs-1",
+        "feature": "supervisor-read-scope",
+        "title": "Let a supervising repo read the bee store and knowledge of its managed projects",
+        "lane": "high-risk",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "902d1477",
+          "5c498adf",
+          "318dee0d",
+          "2c92af66",
+          "8452f29c",
+          "06fe4cb5",
+          "68db537b"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs",
+          "docs/config-reference.md"
+        ],
+        "read_first": [
+          "docs/history/supervisor-read-scope/CONTEXT.md",
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          "docs/knowledge/patterns/20260714-a-fail-open-host-swallows-fail-closed-throws.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement docs/history/supervisor-read-scope/CONTEXT.md D1-D5, D7 and contract C1 in the cross-project guard; CONTEXT.md is the full rule text, follow it exactly. Inputs: the existing cross_project_denial arguments plus guards.supervises from .bee/config.json and .bee/config.local.json (same merge as cross_project_allow in Scope::load). Grant entry: in the candidate loop of cross_project_denial (anchor: `let Some(other) = scope.other_root(&raw, base) else { continue };`), only when guards.supervises is exactly the string \"waggledance\" and a candidate resolved to another root, ask a managed-roots provider once per call. Production provider (D2): resolve waggledance on the hook PATH, skip it when its canonical path lies inside this project, run `waggledance list --json` with a 2 s kill, take projects[].root_path; any failure yields a distinct 'registry unreadable' result, never a panic and never an unwrap on the spawn path. Managed match per D3, surface per D4 built from the resolved other root (so a worktree's own .bee counts). Read/Grep/Glob and Bash/exec grant rules exactly per D5, evaluated over the whole command: every other-project candidate must pass, and a single failing candidate or segment refuses the call. bee head check: bare `bee`, or a token whose canonical path equals <store root>/.bee/bin/bee of this project; segment shape must be `bee knowledge report ...` or `bee report outcomes ...`. Refusal text per D7: with no key, byte-identical to today; with the key, today's text plus one sentence naming the tripped rule and the readable surface, or that the registry was unreadable, or that the project is not in the registry. Keep cross_project_denial's signature; add a sibling entry point taking the provider (C1). Governed key (D1): make config_governed_view build the `guards` map when either cross_project_allow or supervises is present and carry both; make diff_governed_views refuse a change to guards.supervises like guards.cross_project_allow; leave other guards keys ungoverned. Red first, every new test name contains cross_project_supervisor. In write_guard/tests.rs with an injected provider: (a) Read <m>/.bee/state.json allowed; (b) Bash `echo x > <m>/.bee/state.json`, `cat <m>/.bee/state.json | tee x`, `git -C <m> status`, `cat <m>/.bee/state.json` followed by a newline and `rm <m>/.bee/state.json` all refused; (c) Read <m>/src/main.rs refused and stderr names the surface; (d) unregistered sibling refused with the not-in-registry sentence; (e) a provider root that is a symlink to <m> grants; plus: <m>/.bee/config.local.json and <m>/.bee/.env Read refused; Grep path=<m>/.bee with config.local.json present refused, Grep path=<m>/.bee/cells granted; `cat <m>/.bee/state.json | jq .` and `cat <m>/.bee/state.json 2>/dev/null` granted; `cat <m>/.bee/{state.json,../src/main.rs}`, `cat <m>/.bee/$x/state.json`, backtick, `cd <m>/.bee && cat state.json`, `sqlite3 -readonly <m>/.bee/x.db`, `rg x <m>/.bee/cells`, `/tmp/x/bee knowledge report --root <m>`, `bee cells add` with --root <m>, and a mixed `cat <m>/.bee/state.json <unmanaged>/x` refused; `bee knowledge report --root <m>` and `.bee/bin/bee report outcomes --root <m>/.bee` granted; Glob path=<m>/.bee pattern=../src/** refused; a git worktree of <m> granted; key absent gives byte-identical text; key value other than waggledance grants nothing; key set only in config.local.json grants; empty or failed provider gives the registry-unreadable sentence. In tests/hook_contracts.rs: run the real hook with a fake waggledance first on PATH that exits 1, prints garbage, or sleeps 5 s; each gives exit 2 within 4 s. In verbs/config.rs: a cross_project_supervisor test that bee config set guards.supervises is refused. Watch them fail before the fix. Document guards.supervises in docs/config-reference.md beside guards.cross_project_allow, including that only the user sets it by hand-editing .bee/config.json, citing docs/history/supervisor-read-scope/CONTEXT.md D-numbers, never raw decision ids. Do not edit docs/knowledge (sprs-3 owns it). No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+        "must_haves": {
+          "truths": [
+            "With guards.supervises set to waggledance, a Read of a managed project's .bee/state.json is allowed",
+            "A write-shaped shell command, a git command, a mutating bee verb or a newline-joined second command on a managed project is refused",
+            "A managed project's source outside .bee/ and docs/knowledge/ is refused, and the refusal names the readable surface",
+            "A project absent from the waggledance registry is refused",
+            "A symlinked registry root and a worktree of a managed repo both resolve to the managed project",
+            "Secret-shaped files and config.local.json inside a managed .bee/ stay unreadable, a directory-wide Grep included",
+            "A failing, garbage or hanging waggledance gives exit 2 with the registry-unreadable sentence",
+            "Without guards.supervises every refusal text is byte-identical to before",
+            "guards.supervises cannot be added or changed through bee config set or an agent edit"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+              "substantive": "the supervisor grant, the registry provider and the shell allowlist"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "red-first cross_project_supervisor tests (a)-(e) and the leak cases"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+              "substantive": "fake-waggledance hook contract tests"
+            }
+          ],
+          "key_links": [
+            "cross_project_denial consults the supervisor grant only after a candidate resolved to another project",
+            "config_governed_change_deny protects guards.supervises"
+          ],
+          "prohibitions": [
+            "Never weaken the existing refusal for a repo without guards.supervises",
+            "Never let an environment variable other than the hook PATH lookup of waggledance affect the grant",
+            "Never parse waggledance's sqlite registry directly",
+            "No code comments"
+          ],
+          "open_choices": [
+            "Memoise the provider result within one hook call"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "sprs-2",
+        "feature": "supervisor-read-scope",
+        "title": "Measure another project's store with --root",
+        "lane": "high-risk",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "a8d8ad76"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+          "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/supervisor-read-scope/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+          "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement docs/history/supervisor-read-scope/CONTEXT.md D6. Add an optional --root <path> flag to bee knowledge report (entry run_report in verbs/knowledge/report.rs, which takes its root through g_prelude in verbs/knowledge/frame.rs and rejects unknown keys through keys_known) and bee report outcomes (entry run in verbs/report_outcomes.rs, which resolves with resolve_store_root_worktree(&cwd) and then calls record_timing(&roots.root, CMD, t0, true)). With --root, resolve the store root from that path (a store root or any path inside one) exactly as each verb resolves it from the cwd today; without it, behavior is unchanged. With --root, no byte of the target store changes: record timing and any log row in the cwd store, or skip them when the cwd holds no store. A --root that is not inside a bee store exits with the verb's existing no-root error naming that path. If g_prelude needs a new parameter, keep every other caller's behavior unchanged. Register the flag in packages/bee-rs/crates/bee/src/generated/registry_payload.json for both verbs so bee <verb> --help lists it, and keep bee dev regen clean. Red first, test names containing report_root: knowledge report --root <fixture store> reads that store while the cwd is a different store; report outcomes --root <fixture store> counts that store's cells; --root <fixture>/.bee works; a non-store --root exits with the no-root error; after both verbs the fixture store's file list and every file's bytes are identical to before. No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_root",
+        "must_haves": {
+          "truths": [
+            "bee knowledge report --root <path> measures the store at that path, not the cwd store",
+            "bee report outcomes --root <path> counts the cells of the store at that path",
+            "No byte of the --root store changes, timing included",
+            "A --root that is not a bee store exits with the no-root error",
+            "Without --root both verbs behave as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+              "substantive": "--root resolution, timing kept off the target, report_root tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+              "substantive": "--root resolution and report_root tests"
+            }
+          ],
+          "key_links": [
+            "bee <verb> --help lists --root for both verbs"
+          ],
+          "prohibitions": [
+            "No write to the --root store",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "sprs-3",
+        "feature": "supervisor-read-scope",
+        "title": "Consolidate this feature's knowledge and write its delivery",
+        "lane": "high-risk",
+        "role": "writer",
+        "status": "open",
+        "deps": [
+          "sprs-1",
+          "sprs-2"
+        ],
+        "decisions": [
+          "902d1477",
+          "5c498adf",
+          "318dee0d",
+          "2c92af66",
+          "8452f29c",
+          "a8d8ad76",
+          "06fe4cb5"
+        ],
+        "files": [
+          "docs/knowledge/**",
+          "docs/history/supervisor-read-scope/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/supervisor-read-scope/CONTEXT.md",
+          "docs/history/supervisor-read-scope/plan.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature supervisor-read-scope`. Extend the section 'Cross-project refusal' of docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md with the supervisor grant (D1-D5, D7) anchored to the code sprs-1 wrote, and add the --root flag (D6) to the concept that documents bee knowledge report or bee report outcomes. Include the owner setup steps: hand-edit guards.supervises into the supervising repo's .bee/config.json, refresh that repo's .bee/bin/bee to the release that carries it, then Read <managed>/.bee/state.json as a smoke check. Dedupe and trim, never restate code, and write docs/history/supervisor-read-scope/delivery.md listing the concepts changed and why, one line each. Cite CONTEXT.md D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge check` green. One commit.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "area and pattern concepts describe the feature's changes, anchored to code",
+            "docs/history/supervisor-read-scope/delivery.md lists every concept the feature changed"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/supervisor-read-scope/delivery.md",
+              "substantive": "the feature's delivery record"
+            }
+          ],
+          "key_links": [
+            "the delivery lands in the same merge as the code"
+          ],
+          "prohibitions": [
+            "No restating of code in area concepts",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "sprs-1 writes the guard grant and its tests; sprs-2 writes the --root flags."
+        },
+        {
+          "stage": "writing",
+          "classification": "required",
+          "role": "writer",
+          "reason": "sprs-3 consolidates knowledge, the owner setup steps and delivery.md."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "High-risk: all five hat seats run the plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "High-risk: a guard opens a read path."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "High-risk hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "High-risk hat wave; cites the SMALLER PATH check below."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "High-risk hat wave."
+        },
+        {
+          "stage": "docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "sprs-1 carries the config-reference delta; sprs-3 the knowledge delta."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "Release runs through scripts/release.sh by the leader."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each cell writes its own red-first tests."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader read the guard during planning."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow lookup is left."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-11-11T13:36:44.602Z",
+    "feature": "supervisor-read-scope",
+    "newest_decision_id": "a8d8ad76-1805-4738-8c0a-0127cf22240c",
+    "plan_sha256": "59e337e100b8713f6d2fbb51348fa6d5e2c397c5f3be1f519ab6addfde65c258",
+    "advisor": "hat-wave:5-seat(opus,fable)",
+    "digest_head": "# Hat wave synthesis — supervisor-read-scope\n\nSeats: hat-facts-gaps (opus), hat-risks (fable), hat-value (opus), hat-alternatives (opus), hat-user-impact (opus). All five returned. hat-value first failed with a false worker-guard refusal and was re-run once.\n\n## Adopted\n\n- Newline hides a second command (facts-gaps B1, risks B1): D5 refuses newline and CR in the raw command.\n- Shell expansion defeats the path check (risks B2): D5 refuses `$`, backtick, and glob/brace signs in path tokens.\n- `cd`"
+  },
+  "approved_cell_packet": {
+    "feature": "supervisor-read-scope",
+    "plan_sha256": "59e337e100b8713f6d2fbb51348fa6d5e2c397c5f3be1f519ab6addfde65c258",
+    "previewed_at": "2026-11-11T13:36:44.401Z",
+    "cells": [
+      {
+        "id": "sprs-1",
+        "feature": "supervisor-read-scope",
+        "title": "Let a supervising repo read the bee store and knowledge of its managed projects",
+        "lane": "high-risk",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "902d1477",
+          "5c498adf",
+          "318dee0d",
+          "2c92af66",
+          "8452f29c",
+          "06fe4cb5",
+          "68db537b"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs",
+          "docs/config-reference.md"
+        ],
+        "read_first": [
+          "docs/history/supervisor-read-scope/CONTEXT.md",
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          "docs/knowledge/patterns/20260714-a-fail-open-host-swallows-fail-closed-throws.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement docs/history/supervisor-read-scope/CONTEXT.md D1-D5, D7 and contract C1 in the cross-project guard; CONTEXT.md is the full rule text, follow it exactly. Inputs: the existing cross_project_denial arguments plus guards.supervises from .bee/config.json and .bee/config.local.json (same merge as cross_project_allow in Scope::load). Grant entry: in the candidate loop of cross_project_denial (anchor: `let Some(other) = scope.other_root(&raw, base) else { continue };`), only when guards.supervises is exactly the string \"waggledance\" and a candidate resolved to another root, ask a managed-roots provider once per call. Production provider (D2): resolve waggledance on the hook PATH, skip it when its canonical path lies inside this project, run `waggledance list --json` with a 2 s kill, take projects[].root_path; any failure yields a distinct 'registry unreadable' result, never a panic and never an unwrap on the spawn path. Managed match per D3, surface per D4 built from the resolved other root (so a worktree's own .bee counts). Read/Grep/Glob and Bash/exec grant rules exactly per D5, evaluated over the whole command: every other-project candidate must pass, and a single failing candidate or segment refuses the call. bee head check: bare `bee`, or a token whose canonical path equals <store root>/.bee/bin/bee of this project; segment shape must be `bee knowledge report ...` or `bee report outcomes ...`. Refusal text per D7: with no key, byte-identical to today; with the key, today's text plus one sentence naming the tripped rule and the readable surface, or that the registry was unreadable, or that the project is not in the registry. Keep cross_project_denial's signature; add a sibling entry point taking the provider (C1). Governed key (D1): make config_governed_view build the `guards` map when either cross_project_allow or supervises is present and carry both; make diff_governed_views refuse a change to guards.supervises like guards.cross_project_allow; leave other guards keys ungoverned. Red first, every new test name contains cross_project_supervisor. In write_guard/tests.rs with an injected provider: (a) Read <m>/.bee/state.json allowed; (b) Bash `echo x > <m>/.bee/state.json`, `cat <m>/.bee/state.json | tee x`, `git -C <m> status`, `cat <m>/.bee/state.json` followed by a newline and `rm <m>/.bee/state.json` all refused; (c) Read <m>/src/main.rs refused and stderr names the surface; (d) unregistered sibling refused with the not-in-registry sentence; (e) a provider root that is a symlink to <m> grants; plus: <m>/.bee/config.local.json and <m>/.bee/.env Read refused; Grep path=<m>/.bee with config.local.json present refused, Grep path=<m>/.bee/cells granted; `cat <m>/.bee/state.json | jq .` and `cat <m>/.bee/state.json 2>/dev/null` granted; `cat <m>/.bee/{state.json,../src/main.rs}`, `cat <m>/.bee/$x/state.json`, backtick, `cd <m>/.bee && cat state.json`, `sqlite3 -readonly <m>/.bee/x.db`, `rg x <m>/.bee/cells`, `/tmp/x/bee knowledge report --root <m>`, `bee cells add` with --root <m>, and a mixed `cat <m>/.bee/state.json <unmanaged>/x` refused; `bee knowledge report --root <m>` and `.bee/bin/bee report outcomes --root <m>/.bee` granted; Glob path=<m>/.bee pattern=../src/** refused; a git worktree of <m> granted; key absent gives byte-identical text; key value other than waggledance grants nothing; key set only in config.local.json grants; empty or failed provider gives the registry-unreadable sentence. In tests/hook_contracts.rs: run the real hook with a fake waggledance first on PATH that exits 1, prints garbage, or sleeps 5 s; each gives exit 2 within 4 s. In verbs/config.rs: a cross_project_supervisor test that bee config set guards.supervises is refused. Watch them fail before the fix. Document guards.supervises in docs/config-reference.md beside guards.cross_project_allow, including that only the user sets it by hand-editing .bee/config.json, citing docs/history/supervisor-read-scope/CONTEXT.md D-numbers, never raw decision ids. Do not edit docs/knowledge (sprs-3 owns it). No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+        "must_haves": {
+          "truths": [
+            "With guards.supervises set to waggledance, a Read of a managed project's .bee/state.json is allowed",
+            "A write-shaped shell command, a git command, a mutating bee verb or a newline-joined second command on a managed project is refused",
+            "A managed project's source outside .bee/ and docs/knowledge/ is refused, and the refusal names the readable surface",
+            "A project absent from the waggledance registry is refused",
+            "A symlinked registry root and a worktree of a managed repo both resolve to the managed project",
+            "Secret-shaped files and config.local.json inside a managed .bee/ stay unreadable, a directory-wide Grep included",
+            "A failing, garbage or hanging waggledance gives exit 2 with the registry-unreadable sentence",
+            "Without guards.supervises every refusal text is byte-identical to before",
+            "guards.supervises cannot be added or changed through bee config set or an agent edit"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+              "substantive": "the supervisor grant, the registry provider and the shell allowlist"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "red-first cross_project_supervisor tests (a)-(e) and the leak cases"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+              "substantive": "fake-waggledance hook contract tests"
+            }
+          ],
+          "key_links": [
+            "cross_project_denial consults the supervisor grant only after a candidate resolved to another project",
+            "config_governed_change_deny protects guards.supervises"
+          ],
+          "prohibitions": [
+            "Never weaken the existing refusal for a repo without guards.supervises",
+            "Never let an environment variable other than the hook PATH lookup of waggledance affect the grant",
+            "Never parse waggledance's sqlite registry directly",
+            "No code comments"
+          ],
+          "open_choices": [
+            "Memoise the provider result within one hook call"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "sprs-2",
+        "feature": "supervisor-read-scope",
+        "title": "Measure another project's store with --root",
+        "lane": "high-risk",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "a8d8ad76"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+          "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+        ],
+        "read_first": [
+          "docs/history/supervisor-read-scope/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+          "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement docs/history/supervisor-read-scope/CONTEXT.md D6. Add an optional --root <path> flag to bee knowledge report (entry run_report in verbs/knowledge/report.rs, which takes its root through g_prelude in verbs/knowledge/frame.rs and rejects unknown keys through keys_known) and bee report outcomes (entry run in verbs/report_outcomes.rs, which resolves with resolve_store_root_worktree(&cwd) and then calls record_timing(&roots.root, CMD, t0, true)). With --root, resolve the store root from that path (a store root or any path inside one) exactly as each verb resolves it from the cwd today; without it, behavior is unchanged. With --root, no byte of the target store changes: record timing and any log row in the cwd store, or skip them when the cwd holds no store. A --root that is not inside a bee store exits with the verb's existing no-root error naming that path. If g_prelude needs a new parameter, keep every other caller's behavior unchanged. Register the flag in packages/bee-rs/crates/bee/src/generated/registry_payload.json for both verbs so bee <verb> --help lists it, and keep bee dev regen clean. Red first, test names containing report_root: knowledge report --root <fixture store> reads that store while the cwd is a different store; report outcomes --root <fixture store> counts that store's cells; --root <fixture>/.bee works; a non-store --root exits with the no-root error; after both verbs the fixture store's file list and every file's bytes are identical to before. No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_root",
+        "must_haves": {
+          "truths": [
+            "bee knowledge report --root <path> measures the store at that path, not the cwd store",
+            "bee report outcomes --root <path> counts the cells of the store at that path",
+            "No byte of the --root store changes, timing included",
+            "A --root that is not a bee store exits with the no-root error",
+            "Without --root both verbs behave as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+              "substantive": "--root resolution, timing kept off the target, report_root tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+              "substantive": "--root resolution and report_root tests"
+            }
+          ],
+          "key_links": [
+            "bee <verb> --help lists --root for both verbs"
+          ],
+          "prohibitions": [
+            "No write to the --root store",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "sprs-3",
+        "feature": "supervisor-read-scope",
+        "title": "Consolidate this feature's knowledge and write its delivery",
+        "lane": "high-risk",
+        "role": "writer",
+        "status": "open",
+        "deps": [
+          "sprs-1",
+          "sprs-2"
+        ],
+        "decisions": [
+          "902d1477",
+          "5c498adf",
+          "318dee0d",
+          "2c92af66",
+          "8452f29c",
+          "a8d8ad76",
+          "06fe4cb5"
+        ],
+        "files": [
+          "docs/knowledge/**",
+          "docs/history/supervisor-read-scope/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/supervisor-read-scope/CONTEXT.md",
+          "docs/history/supervisor-read-scope/plan.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature supervisor-read-scope`. Extend the section 'Cross-project refusal' of docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md with the supervisor grant (D1-D5, D7) anchored to the code sprs-1 wrote, and add the --root flag (D6) to the concept that documents bee knowledge report or bee report outcomes. Include the owner setup steps: hand-edit guards.supervises into the supervising repo's .bee/config.json, refresh that repo's .bee/bin/bee to the release that carries it, then Read <managed>/.bee/state.json as a smoke check. Dedupe and trim, never restate code, and write docs/history/supervisor-read-scope/delivery.md listing the concepts changed and why, one line each. Cite CONTEXT.md D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge check` green. One commit.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "area and pattern concepts describe the feature's changes, anchored to code",
+            "docs/history/supervisor-read-scope/delivery.md lists every concept the feature changed"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/supervisor-read-scope/delivery.md",
+              "substantive": "the feature's delivery record"
+            }
+          ],
+          "key_links": [
+            "the delivery lands in the same merge as the code"
+          ],
+          "prohibitions": [
+            "No restating of code in area concepts",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "sprs-1 writes the guard grant and its tests; sprs-2 writes the --root flags."
+        },
+        {
+          "stage": "writing",
+          "classification": "required",
+          "role": "writer",
+          "reason": "sprs-3 consolidates knowledge, the owner setup steps and delivery.md."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "High-risk: all five hat seats run the plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "High-risk: a guard opens a read path."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "High-risk hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "High-risk hat wave; cites the SMALLER PATH check below."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "High-risk hat wave."
+        },
+        {
+          "stage": "docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "sprs-1 carries the config-reference delta; sprs-3 the knowledge delta."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "Release runs through scripts/release.sh by the leader."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each cell writes its own red-first tests."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The leader read the guard during planning."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow lookup is left."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-11-11T13:36:36.585Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-11T14:01:53.344Z",
+    "branch": "wt/supervisor-read-scope",
+    "worktree_id": "beehive--wt--supervisor-read-scope",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

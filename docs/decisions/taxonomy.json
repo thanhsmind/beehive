@@ -848,6 +848,7 @@
     "contract:report-knowledge-used",
     "contract:claude-settings-baseline",
     "contract:guard-cd-absolute-targets",
-    "contract:cross-project-guard"
+    "contract:cross-project-guard",
+    "contract:supervisor-read-scope"
   ]
 }
