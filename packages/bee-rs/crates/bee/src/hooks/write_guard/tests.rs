@@ -6958,7 +6958,9 @@ use std::process::ExitCode;
             "cat <m>/.bee/state.json | jq .",
             "cat <m>/.bee/state.json 2>/dev/null",
             "cat <m>/.bee/state.json 2>&1",
-            "head -n 3 <m>/.bee/state.json && wc -l <m>/.bee/cells/a.json",
+            "head -n 3 <m>/.bee/state.json | wc -l",
+            "jq '.[] | .id' <m>/.bee/cells/a.json",
+            "jq \".a\" <m>/.bee/cells/a.json",
             "ls <m>/.bee/cells",
             "bee knowledge report --root <m>",
             "bee report outcomes --root <m>/.bee",
@@ -6996,6 +6998,35 @@ use std::process::ExitCode;
             let denied = sup_sh(&s, cmd);
             assert!(denied.is_some(), "{cmd:?} must be refused");
         }
+    }
+
+    #[test]
+    fn cross_project_supervisor_shell_grammar_refuses_structure_the_lexer_does_not_own() {
+        let s = sup_fixture(Some("waggledance"));
+        for cmd in [
+            "cat () ( rm <m>/.bee/state.json ) ; cat",
+            "cat <m>/.bee/state.json && rm x",
+            "cat <m>/.bee/state.json || rm x",
+            "cat <m>/.bee/state.json & rm x",
+            "cat {a,b} <m>/.bee/state.json",
+            "cat <m>/.bee/*",
+            "cat <m>/.bee/state.json ; rm x",
+            "( rm <m>/.bee/state.json )",
+            "{ rm <m>/.bee/state.json ; }",
+            "cat <m>/.bee/state.json # rm",
+            "cat <m>/.bee/state.json 'unterminated",
+            "cat <m>/.bee/state.json \"unterminated",
+            "cat <m>/.bee/state.json \"$x\"",
+            "cat <m>/.bee/state.json 2>/tmp/x",
+            "cat <m>/.bee/state.json | | cat",
+            "cat <m>/.bee/state.json |",
+            "cat ~/x <m>/.bee/state.json",
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert!(denied.is_some(), "{cmd:?} must be refused");
+        }
+        let text = sup_sh(&s, "cat () ( rm <m>/.bee/state.json ) ; cat").unwrap();
+        assert!(text.contains("shell grammar"), "{text}");
     }
 
     #[test]
