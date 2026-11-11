@@ -30,6 +30,7 @@
   "disableRemoteControl": true,
   "disableClaudeAiConnectors": true,
   "disableArtifact": true,
+  "syncClaudeAiSkills": false,
   "hooks": {
     "SessionStart": [
       {
