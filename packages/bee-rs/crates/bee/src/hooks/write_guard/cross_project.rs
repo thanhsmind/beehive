@@ -183,12 +183,40 @@ fn glob_prefix(pattern: &str) -> &str {
     &pattern[..cut]
 }
 
-fn token_path(token: &str) -> Option<&str> {
-    let body = match token.strip_prefix("--") {
-        Some(flag) => flag.split_once('=')?.1,
-        None => token,
-    };
-    (body.starts_with('/') || body.starts_with('~')).then_some(body)
+fn token_body(token: &str) -> Option<&str> {
+    match token.strip_prefix("--") {
+        Some(flag) => flag.split_once('=').map(|(_, v)| v),
+        None => Some(token),
+    }
+}
+
+fn shell_candidates(tokens: &[String], cwd: &Path, home: Option<&Path>) -> Vec<String> {
+    let mut base = cwd.to_path_buf();
+    let mut cd_next = false;
+    let mut out = Vec::new();
+    for token in tokens {
+        if token == "cd" {
+            cd_next = true;
+            continue;
+        }
+        if cd_next && token.starts_with('-') {
+            continue;
+        }
+        if let Some(body) = token_body(token) {
+            if body.starts_with('/') || body.starts_with('~') {
+                out.push(body.to_string());
+            } else if Path::new(body).components().any(|c| c == Component::ParentDir) {
+                out.push(base.join(body).to_string_lossy().into_owned());
+            }
+        }
+        if cd_next {
+            cd_next = false;
+            if let Some(next) = expand(token, &base, home) {
+                base = next;
+            }
+        }
+    }
+    out
 }
 
 fn refusal(raw: &str, other: &Path) -> String {
@@ -232,11 +260,8 @@ pub(crate) fn cross_project_denial(
                 _ => String::new(),
             };
             candidates.push(cwd.to_string());
-            for token in tokenize_deep(&fence_heredocs(&command)).tokens {
-                if let Some(p) = token_path(&token) {
-                    candidates.push(p.to_string());
-                }
-            }
+            let tokens = tokenize_deep(&fence_heredocs(&command)).tokens;
+            candidates.extend(shell_candidates(&tokens, Path::new(cwd), home.as_deref()));
         }
         _ => return None,
     }

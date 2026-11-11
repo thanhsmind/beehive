@@ -6661,6 +6661,36 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn cross_project_bash_relative_dotdot_token_is_refused() {
+        let fx = build_cross_project_fixture("swarming");
+        cp_refused(&expect_done(bash("cat ../sibling/x.txt"), &fx.root), &fx.sibling);
+        cp_refused(&expect_done(bash("grep --file=../sibling/x.txt y"), &fx.root), &fx.sibling);
+    }
+
+    #[test]
+    fn cross_project_bash_relative_cd_chain_resolves_against_the_cd_target() {
+        let fx = build_cross_project_fixture("swarming");
+        cp_refused(
+            &expect_done(bash("cd ../folder && cat child/x.txt"), &fx.root),
+            &fx.folder.join("child"),
+        );
+        cp_refused(
+            &expect_done(bash("cd ../plain && cat ../sibling/x.txt"), &fx.root),
+            &fx.sibling,
+        );
+        let abs = format!("cd {} && cat ../sibling/x.txt", fx.plain.to_string_lossy());
+        cp_refused(&expect_done(bash(&abs), &fx.root), &fx.sibling);
+    }
+
+    #[test]
+    fn cross_project_bash_dotdot_token_resolving_inside_this_repo_stays_allowed() {
+        let fx = build_cross_project_fixture("swarming");
+        assert_eq!(expect_done(bash("cat ../proj/in.txt"), &fx.root).code, 0);
+        assert_eq!(expect_done(bash("cat src/../in.txt"), &fx.root).code, 0);
+        assert_eq!(expect_done(bash("cd ../plain && cat p.txt"), &fx.root).code, 0);
+    }
+
+    #[test]
     fn cross_project_bash_cwd_inside_the_sibling_is_refused() {
         let fx = build_cross_project_fixture("swarming");
         let input = json!({ "command": "ls" }).as_object().unwrap().clone();

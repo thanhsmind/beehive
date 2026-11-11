@@ -440,9 +440,16 @@ containment.
   `bee config set` and an agent Edit/Write that adds or changes it are refused;
   only the user edits it. No environment variable turns the check off; HOME is
   read only to expand `~`.
-- Shell candidates: the hook cwd, plus every token of
-  `tokenize_deep(fence_heredocs(command))` that starts with `/` or `~`, with a
-  leading `--flag=` stripped. A relative `cd ../sibling` is not a candidate.
+- Shell candidates (D2): the hook cwd, plus every token of
+  `tokenize_deep(fence_heredocs(command))` that starts with `/` or `~`, or is a
+  relative path with a `..` segment, with a leading `--flag=` stripped. A
+  relative token resolves against a base that starts at the hook cwd and moves
+  with each `cd` in token order: a relative `cd` target joins onto the base, an
+  absolute or `~` target replaces it, so `cd ../folder && cat child/x` checks
+  `folder/child/x`. A relative token without `..` is not a candidate, which keeps
+  `cat src/a.rs` free; without the `..` rule `cat ../../sibling/package.json`
+  exited 0 because only `/` and `~` tokens were looked at. The base follows `cd`
+  textually and ignores subshell scope and `cd -`.
   The hook root is itself resolved from the cwd, so the cwd candidate only fires
   when a caller hands in a root and a cwd that disagree; the unit test calls the
   check directly for that reason.
