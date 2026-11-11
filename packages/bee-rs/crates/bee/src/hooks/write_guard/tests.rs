@@ -6829,7 +6829,7 @@ use std::process::ExitCode;
 
     fn sup_call(s: &SupFx, roots: Option<Vec<PathBuf>>, tool: &str, input: Value) -> Option<String> {
         let map = input.as_object().unwrap().clone();
-        let provider = move |_: &[PathBuf]| roots.clone();
+        let provider = move |_: &super::cross_project::Scope| roots.clone();
         cross_project_denial_with_registry(
             &s.fx.root,
             &s.fx.root,
@@ -6958,7 +6958,9 @@ use std::process::ExitCode;
             "cat <m>/.bee/state.json | jq .",
             "cat <m>/.bee/state.json 2>/dev/null",
             "cat <m>/.bee/state.json 2>&1",
-            "head -n 3 <m>/.bee/state.json && wc -l <m>/.bee/cells/a.json",
+            "head -n 3 <m>/.bee/state.json | wc -l",
+            "jq '.[] | .id' <m>/.bee/cells/a.json",
+            "jq \".a\" <m>/.bee/cells/a.json",
             "ls <m>/.bee/cells",
             "bee knowledge report --root <m>",
             "bee report outcomes --root <m>/.bee",
@@ -6991,7 +6993,71 @@ use std::process::ExitCode;
             "cat <m>/.bee/state.json > /tmp/out",
             "cat <m>/.bee/state.json 2>/tmp/out",
             "cat <m>/.bee/../src/main.rs",
+            "cat <m>/.bee/state.json '~/../../M/src/main.rs'",
+            "cat <m>/.bee/state.json link/../../../../M/src/main.rs",
+            "cat <m>/.bee/state.json ~",
+            "cat <m>/.bee/state.json --file=~/x",
+            "cat <m>/.bee/state.json --file=a/../b",
             mixed.as_str(),
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert!(denied.is_some(), "{cmd:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn cross_project_supervisor_shell_grammar_refuses_structure_the_lexer_does_not_own() {
+        let s = sup_fixture(Some("waggledance"));
+        for cmd in [
+            "cat () ( rm <m>/.bee/state.json ) ; cat",
+            "cat <m>/.bee/state.json && rm x",
+            "cat <m>/.bee/state.json || rm x",
+            "cat <m>/.bee/state.json & rm x",
+            "cat {a,b} <m>/.bee/state.json",
+            "cat <m>/.bee/*",
+            "cat <m>/.bee/state.json ; rm x",
+            "( rm <m>/.bee/state.json )",
+            "{ rm <m>/.bee/state.json ; }",
+            "cat <m>/.bee/state.json # rm",
+            "cat <m>/.bee/state.json 'unterminated",
+            "cat <m>/.bee/state.json \"unterminated",
+            "cat <m>/.bee/state.json \"$x\"",
+            "cat <m>/.bee/state.json 2>/tmp/x",
+            "cat <m>/.bee/state.json | | cat",
+            "cat <m>/.bee/state.json |",
+            "cat ~/x <m>/.bee/state.json",
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert!(denied.is_some(), "{cmd:?} must be refused");
+        }
+        let text = sup_sh(&s, "cat () ( rm <m>/.bee/state.json ) ; cat").unwrap();
+        assert!(text.contains("shell grammar"), "{text}");
+    }
+
+    #[test]
+    fn cross_project_supervisor_refuses_jq_import_and_dashdash_operand_leaks() {
+        let s = sup_fixture(Some("waggledance"));
+        for cmd in [
+            "jq -n -L <m>/.bee 'import \"config.local\" as $c; $c::c'",
+            "jq '$ENV' <m>/.bee/state.json",
+            "jq -L<m>/.bee . x",
+            "jq --library-path <m>/.bee . x",
+            "cat <m>/.bee/state.json -- --/../x",
+            "cat <m>/.bee/state.json 'a`id`'",
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert!(denied.is_some(), "{cmd:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn cross_project_supervisor_refuses_backslash_quote_smuggling() {
+        let s = sup_fixture(Some("waggledance"));
+        for cmd in [
+            "cat <m>/.bee/state.json \"a\\\" \" ; rm <m>/.bee/state.json ; \" \"",
+            "cat <m>/.bee/state.json 'a\\' ; rm <m>/.bee/state.json ; ' '",
+            "cat <m>/.bee/state.json \\\n rm <m>/.bee/state.json",
+            "cat <m>/.bee/config.local.json",
         ] {
             let denied = sup_sh(&s, cmd);
             assert!(denied.is_some(), "{cmd:?} must be refused");
@@ -7004,7 +7070,7 @@ use std::process::ExitCode;
         let command = format!("cat {}/.bee/state.json", s.managed.to_string_lossy());
         let map = json!({ "command": command }).as_object().unwrap().clone();
         let roots = vec![s.managed.clone()];
-        let provider = move |_: &[PathBuf]| Some(roots.clone());
+        let provider = move |_: &super::cross_project::Scope| Some(roots.clone());
         let denied = cross_project_denial_with_registry(
             &s.fx.root,
             &s.fx.root,
@@ -7086,7 +7152,7 @@ If the user asked you to research that repo from here, ask the user to add the p
     fn cross_project_supervisor_does_not_call_the_provider_for_this_project() {
         let s = sup_fixture(Some("waggledance"));
         let called = std::cell::Cell::new(false);
-        let provider = |_: &[PathBuf]| {
+        let provider = |_: &super::cross_project::Scope| {
             called.set(true);
             None
         };

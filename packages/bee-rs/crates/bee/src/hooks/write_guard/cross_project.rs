@@ -10,7 +10,7 @@ const REGISTRY_TIMEOUT: Duration = Duration::from_secs(2);
 const SURFACE_WALK_LIMIT: usize = 50000;
 const SHELL_HEADS: [&str; 6] = ["cat", "head", "tail", "wc", "ls", "jq"];
 
-struct Scope {
+pub(crate) struct Scope {
     roots: Vec<PathBuf>,
     common: Option<PathBuf>,
     home: Option<PathBuf>,
@@ -216,6 +216,12 @@ fn shell_candidates(tokens: &[String], cwd: &Path, home: Option<&Path>) -> Vec<S
         if cd_next && token.starts_with('-') {
             continue;
         }
+        if let Some(rest) = token.strip_prefix('-').filter(|r| !r.starts_with('-')) {
+            let tail = rest.get(1..).unwrap_or("");
+            if tail.starts_with('/') || tail.starts_with('~') {
+                out.push(tail.to_string());
+            }
+        }
         if let Some(body) = token_body(token) {
             if body.starts_with('/') || body.starts_with('~') {
                 out.push(body.to_string());
@@ -243,7 +249,7 @@ If the user asked you to research that repo from here, ask the user to add the p
     )
 }
 
-pub(crate) type RegistryProvider<'a> = &'a dyn Fn(&[PathBuf]) -> Option<Vec<PathBuf>>;
+pub(crate) type RegistryProvider<'a> = &'a dyn Fn(&Scope) -> Option<Vec<PathBuf>>;
 
 enum Why {
     Rule(String),
@@ -271,12 +277,12 @@ fn rule(text: &str) -> Why {
     Why::Rule(text.to_string())
 }
 
-fn waggledance_binary(own: &[PathBuf]) -> Option<PathBuf> {
+fn waggledance_binary(scope: &Scope) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         let candidate = dir.join("waggledance");
         let Ok(real) = std::fs::canonicalize(&candidate) else { continue };
-        if real.is_file() && !own.iter().any(|r| real.starts_with(r)) {
+        if real.is_file() && !real.parent().is_some_and(|d| scope.is_this_project(d)) {
             return Some(candidate);
         }
     }
@@ -296,8 +302,8 @@ fn parse_registry(bytes: &[u8]) -> Option<Vec<PathBuf>> {
     )
 }
 
-pub(crate) fn waggledance_registry_roots(own: &[PathBuf]) -> Option<Vec<PathBuf>> {
-    let binary = waggledance_binary(own)?;
+pub(crate) fn waggledance_registry_roots(scope: &Scope) -> Option<Vec<PathBuf>> {
+    let binary = waggledance_binary(scope)?;
     let mut child = Command::new(binary)
         .args(["list", "--json"])
         .stdin(Stdio::null())
@@ -380,7 +386,7 @@ impl Grant<'_> {
     fn managed_roots(&self) -> Option<&Vec<PathBuf>> {
         self.managed
             .get_or_init(|| {
-                let roots = (self.provider)(&self.scope.roots)?;
+                let roots = (self.provider)(self.scope)?;
                 let canon: Vec<PathBuf> = roots
                     .iter()
                     .map(|r| std::fs::canonicalize(r).unwrap_or_else(|_| r.clone()))
@@ -457,65 +463,51 @@ impl Grant<'_> {
         }
     }
 
-    fn judge_shell(&self, command: &str, tokens: &[String], truncated: bool) -> Result<(), (Why, Option<PathBuf>)> {
+    fn judge_shell(&self, command: &str) -> Result<(), (Why, Option<PathBuf>)> {
         let cwd = Path::new(self.cwd);
         let home = self.scope.home.as_deref();
         let bail = |text: &str| Err((rule(text), None));
-        if command.contains('\n') || command.contains('\r') {
-            return bail("newline");
-        }
-        if truncated {
-            return bail("undecidable wrapper");
-        }
+        let Some(stages) = lex_shell(command) else { return bail("shell grammar") };
         match expand(self.cwd, cwd, home) {
             Some(dir) if self.scope.is_this_project(&dir) => {}
             _ => return bail("hook cwd outside this project"),
         }
-        let mut folded: Vec<&str> = Vec::new();
-        let mut i = 0;
-        while i < tokens.len() {
-            let tail = (tokens.get(i + 1).map(String::as_str), tokens.get(i + 2).map(String::as_str));
-            if tokens[i] == "2>" && tail == (Some("&"), Some("1")) {
-                folded.push("2>&1");
-                i += 3;
-            } else {
-                folded.push(&tokens[i]);
-                i += 1;
-            }
-        }
-        for segment in folded.split(|t| is_separator(t)) {
-            let Some(head) = segment.first() else { continue };
+        for segment in &stages {
+            let head = segment[0].as_str();
             let bee = self.is_bee_head(head);
             let shape_ok = if bee {
                 matches!(
-                    (segment.get(1), segment.get(2)),
-                    (Some(&"knowledge"), Some(&"report")) | (Some(&"report"), Some(&"outcomes"))
+                    (segment.get(1).map(String::as_str), segment.get(2).map(String::as_str)),
+                    (Some("knowledge"), Some("report")) | (Some("report"), Some("outcomes"))
                 )
             } else {
-                SHELL_HEADS.contains(head)
+                SHELL_HEADS.contains(&head)
             };
             if !shape_ok {
                 return bail("command head");
             }
             for (idx, token) in segment.iter().enumerate().skip(1) {
-                if token.contains('$') || token.contains('`') {
-                    return bail("shell expansion");
-                }
-                if matches!(*token, "cd" | "pushd") {
-                    return bail("directory change");
-                }
-                if (token.contains('<') || token.contains('>')) && !matches!(*token, "2>/dev/null" | "2>&1") {
-                    return bail("redirect");
+                if matches!(token.as_str(), "2>/dev/null" | "2>&1") {
+                    continue;
                 }
                 let body = token_body(token).unwrap_or("");
-                if body.starts_with('~') && body != "~" && !body.starts_with("~/") {
-                    return bail("user home expansion");
+                if body.starts_with('~') || body.split('/').any(|part| part == "..") {
+                    return bail("path shape");
                 }
                 if token.starts_with('-')
                     && !token.starts_with("--")
                     && (token.contains('/') || token.contains('~'))
                 {
                     return bail("attached path");
+                }
+                if token.starts_with("--")
+                    && !token.contains('=')
+                    && (token.contains('/') || token.contains(".."))
+                {
+                    return bail("attached path");
+                }
+                if head == "jq" && (token.starts_with("-L") || token == "--library-path") {
+                    return bail("jq library path");
                 }
                 if token.contains('{') && (token.contains('/') || token.contains('~') || token.contains("..")) {
                     return bail("brace expansion");
@@ -526,11 +518,76 @@ impl Grant<'_> {
                     return bail("glob or brace");
                 }
                 let root_value = bee && (token.starts_with("--root=") || segment[idx - 1] == "--root");
-                self.judge(&raw, root_value, false)?;
+                self.judge(&raw, root_value, true)?;
             }
         }
         Ok(())
     }
+}
+
+fn lex_shell(command: &str) -> Option<Vec<Vec<String>>> {
+    let chars: Vec<char> = command.chars().collect();
+    let mut stages: Vec<Vec<String>> = vec![Vec::new()];
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == ' ' || c == '\t' {
+            i += 1;
+            continue;
+        }
+        if c == '|' {
+            if stages.last().is_some_and(|s| s.is_empty()) || chars.get(i + 1) == Some(&'|') {
+                return None;
+            }
+            stages.push(Vec::new());
+            i += 1;
+            continue;
+        }
+        let mut word = String::new();
+        let start = i;
+        for exact in ["2>/dev/null", "2>&1"] {
+            let len = exact.chars().count();
+            let ends = chars.get(start + len).map_or(true, |&n| n == ' ' || n == '\t' || n == '|');
+            if chars[start..].iter().take(len).copied().eq(exact.chars()) && ends {
+                word.push_str(exact);
+                i += len;
+                break;
+            }
+        }
+        if word.is_empty() {
+            while i < chars.len() && !matches!(chars[i], ' ' | '\t' | '|') {
+                let c = chars[i];
+                if c == '\'' || c == '"' {
+                    i += 1;
+                    loop {
+                        let q = *chars.get(i)?;
+                        i += 1;
+                        if q == c {
+                            break;
+                        }
+                        let bad = match c {
+                            '\'' => matches!(q, '$' | '`' | '\n' | '\r'),
+                            _ => matches!(q, '$' | '`' | '\\' | '\n' | '\r'),
+                        };
+                        if bad {
+                            return None;
+                        }
+                        word.push(q);
+                    }
+                } else if c.is_ascii_alphanumeric() || "/._-:=,+@%".contains(c) {
+                    word.push(c);
+                    i += 1;
+                } else {
+                    return None;
+                }
+            }
+        }
+        stages.last_mut()?.push(word);
+    }
+    if stages.iter().any(|s| s.is_empty()) {
+        return None;
+    }
+    Some(stages)
 }
 
 pub(crate) fn cross_project_denial(
@@ -565,7 +622,7 @@ pub(crate) fn cross_project_denial_with_registry(
     provider: RegistryProvider,
 ) -> Option<String> {
     let mut candidates: Vec<String> = Vec::new();
-    let mut shell: Option<(String, DeepTokens)> = None;
+    let mut shell: Option<String> = None;
     match tool_name {
         "Read" | "Glob" | "Grep" => {
             let key = if tool_name == "Read" { "file_path" } else { "path" };
@@ -589,7 +646,7 @@ pub(crate) fn cross_project_denial_with_registry(
             candidates.push(cwd.to_string());
             let deep = tokenize_deep(&fence_heredocs(&command));
             candidates.extend(shell_candidates(&deep.tokens, Path::new(cwd), home.as_deref()));
-            shell = Some((command, deep));
+            shell = Some(command);
         }
         _ => return None,
     }
@@ -624,7 +681,7 @@ pub(crate) fn cross_project_denial_with_registry(
         managed: OnceCell::new(),
     };
     let verdict = match &shell {
-        Some((command, deep)) => grant.judge_shell(command, &deep.tokens, deep.truncated),
+        Some(command) => grant.judge_shell(command),
         None => grant.judge_tool(tool_name, tool_input, &candidates),
     };
     match verdict {
