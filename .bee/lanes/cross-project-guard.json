@@ -1,0 +1,821 @@
+{
+  "schema_version": "1.0",
+  "feature": "cross-project-guard",
+  "mode": null,
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"cross-project-guard\" started at phase \"exploring\" (lane).",
+  "next_action": "close",
+  "created_at": "2026-11-11T08:32:18.917Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-11-11T08:32:15.382Z",
+    "feature": "cross-project-guard"
+  },
+  "gate_preview": {
+    "feature": "cross-project-guard",
+    "plan_sha256": "2a6a4e4ecf2115099985307f1ef6955cb1af60e55342720d694609114126626f",
+    "previewed_at": "2026-11-11T08:50:32.990Z",
+    "cells": [
+      {
+        "id": "cpg-1",
+        "feature": "cross-project-guard",
+        "title": "Refuse reads and commands that touch another project's tree",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "cc1d4957"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "read_first": [
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Keep contract cc1d4957 (docs/history/cross-project-guard/CONTEXT.md D1-D4). Add write_guard/cross_project.rs with a check that, given this project's roots, the hook cwd and a candidate path, returns the other project's root when the path belongs to another project per D1: resolve the path (absolute, cwd-relative, or ~ expanded from HOME); it is this project when it is under the store/main root or under a directory whose .git resolves to the same git common dir (this repo's worktrees); otherwise walk up from the path to the nearest ancestor holding .git or .bee/onboarding.json, never counting HOME or / as a root; a different root means another project; a directory that is in no repo but has a direct child holding .git or .bee/onboarding.json (not this project) also counts. Allowed despite a match (D4): a path under any entry of guards.cross_project_allow in .bee/config.json (absolute or ~ prefixes), under any permissions.additionalDirectories entry of ~/.claude/settings.json, <root>/.claude/settings.json or <root>/.claude/settings.local.json, or a harness-allowlisted target (hook_local.rs harness_allowlisted_target). In main.rs run the check after the hook_enabled switch and before the AskUserQuestion/read/write branches, for every phase: Read uses file_path; Glob and Grep use path, and an absolute Glob pattern prefix; Bash/exec checks the hook cwd and every token from tokenize_deep(fence_heredocs(command)) that starts with / or ~ (strip a leading key= of --flag=value tokens). The first hit denies with exit 2 and a message that starts with 'bee cross-project guard:', names the path and the other project root, says not to read or work it from this session, and gives the remedy: waggledance_ask_state for that project, then waggledance_dispatch with leader: true; if the user asked to research that repo from here, ask the user to add the path to guards.cross_project_allow in .bee/config.json. Make guards.cross_project_allow a governed key: extend config_governed_change_deny so bee config set and an agent Edit/Write that adds or changes it are refused like the other governed keys. Red first in write_guard/tests.rs with test names containing cross_project: Read of a file in a sibling fixture repo is refused with the remedy; Grep path at a folder whose child is a repo is refused; Bash 'cat <sibling>/x' and 'cd <sibling> && ls' are refused; Bash with hook cwd inside the sibling is refused; in-repo Read, /tmp Read, a sibling worktree of this repo, a path under guards.cross_project_allow, and a path under a fixture permissions.additionalDirectories entry are all allowed; the check runs while phase is idle; bee config set guards.cross_project_allow is refused. Watch them fail before the fix. Knowledge delta in the same commit: add a cross-project section to docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md citing docs/history/cross-project-guard/CONTEXT.md D1-D4 (not the raw decision id). No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+        "must_haves": {
+          "truths": [
+            "A Read, Glob, Grep or Bash call that touches another repo's tree is refused with exit 2 and the waggledance remedy",
+            "In-repo paths, this repo's worktrees, no-repo paths, guards.cross_project_allow entries and Claude additionalDirectories entries stay allowed",
+            "The refusal fires in every phase, idle included, for leaders and workers",
+            "bee config set cannot add guards.cross_project_allow"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+              "substantive": "the D1 ownership check and the D4 allowances"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "red-first cross_project tests for every D1-D4 case"
+            }
+          ],
+          "key_links": [
+            "main.rs calls the cross-project check before the read and write branches",
+            "config_governed_change_deny protects guards.cross_project_allow"
+          ],
+          "prohibitions": [
+            "Never weaken an existing read, privacy or write check",
+            "Never let an environment variable turn the check off",
+            "No code comments"
+          ],
+          "open_choices": [
+            "Cache the walked roots per hook call"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "cpg-2",
+        "feature": "cross-project-guard",
+        "title": "Add the other-project-to-its-leader doctrine rule",
+        "lane": "standard",
+        "role": "docs",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "cc1d4957"
+        ],
+        "files": [
+          "packages/bee/LEADER.md",
+          ".bee/LEADER.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/config-reference.md"
+        ],
+        "read_first": [
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "packages/bee/LEADER.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/config-reference.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Keep contract cc1d4957 (docs/history/cross-project-guard/CONTEXT.md D5, D3, D4). In packages/bee/LEADER.md, section Work in parallel, coordinate through the store, add a marked rule block <!-- rule: agents-other-project-to-its-leader --> ... <!-- /rule -->: work that belongs to another project goes to that project's leader through waggledance — waggledance_ask_state for that project, then waggledance_dispatch with leader: true (follow_up_of when its leader already runs the same work); the session never reads, searches or explores that project's code, and the write-guard refuses it; a research read of another repo needs the user to add it to guards.cross_project_allow. Regenerate the vendored copy with the repo's regen command (bee dev regen) so .bee/LEADER.md matches. Add the rule to the rule index in the router-triage doc beside agents-feedback-changes-framework, same shape: home, spoken line citing cross-project-guard D5, applied_at. Add guards.cross_project_allow to docs/config-reference.md: list of absolute or ~ path prefixes, governed (user edits only), with Claude permissions.additionalDirectories also allowed. ASD-STE100 style, no bee jargon beyond rule ids. One commit.",
+        "verify": ".bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- doctrine",
+        "must_haves": {
+          "truths": [
+            "packages/bee/LEADER.md and .bee/LEADER.md carry rule agents-other-project-to-its-leader",
+            "The rule index lists it with home, spoken line and applied_at",
+            "docs/config-reference.md documents guards.cross_project_allow as governed"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/LEADER.md",
+              "substantive": "the marked rule block"
+            }
+          ],
+          "key_links": [
+            "the rule names the write-guard refusal and the waggledance remedy"
+          ],
+          "prohibitions": [
+            "No hand edit of .bee/LEADER.md beyond the regen output"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      },
+      {
+        "id": "cpg-4",
+        "feature": "cross-project-guard",
+        "title": "Check relative .. path tokens in Bash against the cross-project rule",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "cpg-1"
+        ],
+        "decisions": [
+          "cc1d4957",
+          "118414b3",
+          "a239cdf4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "read_first": [
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Keep contracts 118414b3 and a239cdf4. Today the Bash cross-project scan in main.rs and cross_project.rs checks only tokens starting with / or ~, so 'cat ../../anphabe/a-blog/package.json' run from the beehive worktree exits 0. Extend the scan: a Bash token that is a relative path containing a .. segment (also the value of a --flag=value token) is resolved against the hook cwd and checked by the same rule; walk the command's cd tokens in order so a relative token after a relative cd (cd ../y && cat z) resolves against the cd target; a cd to an absolute target resets the base. Relative tokens without .. stay unchecked, as today. Red first in write_guard/tests.rs, names containing cross_project: 'cat ../../<sibling>/x' refused; 'cd ../<sibling-parent> && cat <sibling>/x' refused; 'cat ../<this-repo-dir>/AGENTS.md' resolving into this repo is allowed; 'cat src/../AGENTS.md' allowed. Watch them fail first. Update the cross-project section of write-guard-request-shapes.md (cite CONTEXT.md D2). No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+        "must_haves": {
+          "truths": [
+            "A Bash relative token with .. that resolves into another project is refused with the cross-project message",
+            "A relative .. token that resolves inside this repo stays allowed"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "red-first cross_project tests for .. tokens"
+            }
+          ],
+          "key_links": [
+            "main.rs hands .. tokens and the cd chain to the cross-project check"
+          ],
+          "prohibitions": [
+            "Never weaken an existing check",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "cpg-3",
+        "feature": "cross-project-guard",
+        "title": "Consolidate this feature's knowledge and write its delivery",
+        "lane": "standard",
+        "role": "writer",
+        "status": "open",
+        "deps": [
+          "cpg-1",
+          "cpg-2",
+          "cpg-4"
+        ],
+        "decisions": [
+          "cc1d4957"
+        ],
+        "files": [
+          "docs/knowledge/**",
+          "docs/history/cross-project-guard/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "docs/history/cross-project-guard/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature cross-project-guard`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/cross-project-guard/delivery.md listing the concepts changed and why, one line each. Run `.bee/bin/bee knowledge check` green. One commit.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "area concepts describe the feature's changes, anchored to code",
+            "docs/history/cross-project-guard/delivery.md lists every concept the feature changed"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/cross-project-guard/delivery.md",
+              "substantive": "the feature's delivery record"
+            }
+          ],
+          "key_links": [
+            "the delivery lands in the same merge as the code"
+          ],
+          "prohibitions": [
+            "No restating of code in area concepts",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cpg-1 writes the Rust guard and its tests."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "cpg-2 writes the doctrine rule, its index row and the config reference."
+        },
+        {
+          "stage": "writing",
+          "classification": "required",
+          "role": "writer",
+          "reason": "cpg-3 consolidates knowledge and writes delivery.md."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "Release runs on the owner's word through scripts/release.sh."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each cell writes its own red-first tests."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The gather already ran during planning."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow lookup is left."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No hard-gate flag; standard with 5 or fewer product files runs the plan check inline."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Standard, 4 product files, no hard-gate flag: inline plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Not high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Not high-risk."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Inline SMALLER PATH check below."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Inline plan check."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "cross-project-guard",
+    "plan_sha256": "2a6a4e4ecf2115099985307f1ef6955cb1af60e55342720d694609114126626f",
+    "previewed_at": "2026-11-11T08:50:32.990Z",
+    "cells": [
+      {
+        "id": "cpg-1",
+        "feature": "cross-project-guard",
+        "title": "Refuse reads and commands that touch another project's tree",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "cc1d4957"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "read_first": [
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/verbs/config.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Keep contract cc1d4957 (docs/history/cross-project-guard/CONTEXT.md D1-D4). Add write_guard/cross_project.rs with a check that, given this project's roots, the hook cwd and a candidate path, returns the other project's root when the path belongs to another project per D1: resolve the path (absolute, cwd-relative, or ~ expanded from HOME); it is this project when it is under the store/main root or under a directory whose .git resolves to the same git common dir (this repo's worktrees); otherwise walk up from the path to the nearest ancestor holding .git or .bee/onboarding.json, never counting HOME or / as a root; a different root means another project; a directory that is in no repo but has a direct child holding .git or .bee/onboarding.json (not this project) also counts. Allowed despite a match (D4): a path under any entry of guards.cross_project_allow in .bee/config.json (absolute or ~ prefixes), under any permissions.additionalDirectories entry of ~/.claude/settings.json, <root>/.claude/settings.json or <root>/.claude/settings.local.json, or a harness-allowlisted target (hook_local.rs harness_allowlisted_target). In main.rs run the check after the hook_enabled switch and before the AskUserQuestion/read/write branches, for every phase: Read uses file_path; Glob and Grep use path, and an absolute Glob pattern prefix; Bash/exec checks the hook cwd and every token from tokenize_deep(fence_heredocs(command)) that starts with / or ~ (strip a leading key= of --flag=value tokens). The first hit denies with exit 2 and a message that starts with 'bee cross-project guard:', names the path and the other project root, says not to read or work it from this session, and gives the remedy: waggledance_ask_state for that project, then waggledance_dispatch with leader: true; if the user asked to research that repo from here, ask the user to add the path to guards.cross_project_allow in .bee/config.json. Make guards.cross_project_allow a governed key: extend config_governed_change_deny so bee config set and an agent Edit/Write that adds or changes it are refused like the other governed keys. Red first in write_guard/tests.rs with test names containing cross_project: Read of a file in a sibling fixture repo is refused with the remedy; Grep path at a folder whose child is a repo is refused; Bash 'cat <sibling>/x' and 'cd <sibling> && ls' are refused; Bash with hook cwd inside the sibling is refused; in-repo Read, /tmp Read, a sibling worktree of this repo, a path under guards.cross_project_allow, and a path under a fixture permissions.additionalDirectories entry are all allowed; the check runs while phase is idle; bee config set guards.cross_project_allow is refused. Watch them fail before the fix. Knowledge delta in the same commit: add a cross-project section to docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md citing docs/history/cross-project-guard/CONTEXT.md D1-D4 (not the raw decision id). No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+        "must_haves": {
+          "truths": [
+            "A Read, Glob, Grep or Bash call that touches another repo's tree is refused with exit 2 and the waggledance remedy",
+            "In-repo paths, this repo's worktrees, no-repo paths, guards.cross_project_allow entries and Claude additionalDirectories entries stay allowed",
+            "The refusal fires in every phase, idle included, for leaders and workers",
+            "bee config set cannot add guards.cross_project_allow"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+              "substantive": "the D1 ownership check and the D4 allowances"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "red-first cross_project tests for every D1-D4 case"
+            }
+          ],
+          "key_links": [
+            "main.rs calls the cross-project check before the read and write branches",
+            "config_governed_change_deny protects guards.cross_project_allow"
+          ],
+          "prohibitions": [
+            "Never weaken an existing read, privacy or write check",
+            "Never let an environment variable turn the check off",
+            "No code comments"
+          ],
+          "open_choices": [
+            "Cache the walked roots per hook call"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "cpg-2",
+        "feature": "cross-project-guard",
+        "title": "Add the other-project-to-its-leader doctrine rule",
+        "lane": "standard",
+        "role": "docs",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "cc1d4957"
+        ],
+        "files": [
+          "packages/bee/LEADER.md",
+          ".bee/LEADER.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/config-reference.md"
+        ],
+        "read_first": [
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "packages/bee/LEADER.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/config-reference.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Keep contract cc1d4957 (docs/history/cross-project-guard/CONTEXT.md D5, D3, D4). In packages/bee/LEADER.md, section Work in parallel, coordinate through the store, add a marked rule block <!-- rule: agents-other-project-to-its-leader --> ... <!-- /rule -->: work that belongs to another project goes to that project's leader through waggledance — waggledance_ask_state for that project, then waggledance_dispatch with leader: true (follow_up_of when its leader already runs the same work); the session never reads, searches or explores that project's code, and the write-guard refuses it; a research read of another repo needs the user to add it to guards.cross_project_allow. Regenerate the vendored copy with the repo's regen command (bee dev regen) so .bee/LEADER.md matches. Add the rule to the rule index in the router-triage doc beside agents-feedback-changes-framework, same shape: home, spoken line citing cross-project-guard D5, applied_at. Add guards.cross_project_allow to docs/config-reference.md: list of absolute or ~ path prefixes, governed (user edits only), with Claude permissions.additionalDirectories also allowed. ASD-STE100 style, no bee jargon beyond rule ids. One commit.",
+        "verify": ".bee/bin/bee knowledge check && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- doctrine",
+        "must_haves": {
+          "truths": [
+            "packages/bee/LEADER.md and .bee/LEADER.md carry rule agents-other-project-to-its-leader",
+            "The rule index lists it with home, spoken line and applied_at",
+            "docs/config-reference.md documents guards.cross_project_allow as governed"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/LEADER.md",
+              "substantive": "the marked rule block"
+            }
+          ],
+          "key_links": [
+            "the rule names the write-guard refusal and the waggledance remedy"
+          ],
+          "prohibitions": [
+            "No hand edit of .bee/LEADER.md beyond the regen output"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      },
+      {
+        "id": "cpg-4",
+        "feature": "cross-project-guard",
+        "title": "Check relative .. path tokens in Bash against the cross-project rule",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "cpg-1"
+        ],
+        "decisions": [
+          "cc1d4957",
+          "118414b3",
+          "a239cdf4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "read_first": [
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Keep contracts 118414b3 and a239cdf4. Today the Bash cross-project scan in main.rs and cross_project.rs checks only tokens starting with / or ~, so 'cat ../../anphabe/a-blog/package.json' run from the beehive worktree exits 0. Extend the scan: a Bash token that is a relative path containing a .. segment (also the value of a --flag=value token) is resolved against the hook cwd and checked by the same rule; walk the command's cd tokens in order so a relative token after a relative cd (cd ../y && cat z) resolves against the cd target; a cd to an absolute target resets the base. Relative tokens without .. stay unchecked, as today. Red first in write_guard/tests.rs, names containing cross_project: 'cat ../../<sibling>/x' refused; 'cd ../<sibling-parent> && cat <sibling>/x' refused; 'cat ../<this-repo-dir>/AGENTS.md' resolving into this repo is allowed; 'cat src/../AGENTS.md' allowed. Watch them fail first. Update the cross-project section of write-guard-request-shapes.md (cite CONTEXT.md D2). No code comments. One commit.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+        "must_haves": {
+          "truths": [
+            "A Bash relative token with .. that resolves into another project is refused with the cross-project message",
+            "A relative .. token that resolves inside this repo stays allowed"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "red-first cross_project tests for .. tokens"
+            }
+          ],
+          "key_links": [
+            "main.rs hands .. tokens and the cd chain to the cross-project check"
+          ],
+          "prohibitions": [
+            "Never weaken an existing check",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "cpg-3",
+        "feature": "cross-project-guard",
+        "title": "Consolidate this feature's knowledge and write its delivery",
+        "lane": "standard",
+        "role": "writer",
+        "status": "open",
+        "deps": [
+          "cpg-1",
+          "cpg-2",
+          "cpg-4"
+        ],
+        "decisions": [
+          "cc1d4957"
+        ],
+        "files": [
+          "docs/knowledge/**",
+          "docs/history/cross-project-guard/delivery.md"
+        ],
+        "read_first": [
+          "docs/history/cross-project-guard/CONTEXT.md",
+          "docs/history/cross-project-guard/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature cross-project-guard`. Dedupe and trim the deltas the cells wrote, anchor each concept to the code it describes, never restate code, and write docs/history/cross-project-guard/delivery.md listing the concepts changed and why, one line each. Run `.bee/bin/bee knowledge check` green. One commit.",
+        "verify": ".bee/bin/bee knowledge check",
+        "must_haves": {
+          "truths": [
+            "area concepts describe the feature's changes, anchored to code",
+            "docs/history/cross-project-guard/delivery.md lists every concept the feature changed"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/cross-project-guard/delivery.md",
+              "substantive": "the feature's delivery record"
+            }
+          ],
+          "key_links": [
+            "the delivery lands in the same merge as the code"
+          ],
+          "prohibitions": [
+            "No restating of code in area concepts",
+            "No code comments"
+          ],
+          "open_choices": []
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "d4e696dbde7989d6388dacce3fd7057cb3a6935b46024b79698596a46f6f41d3",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cpg-1 writes the Rust guard and its tests."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "cpg-2 writes the doctrine rule, its index row and the config reference."
+        },
+        {
+          "stage": "writing",
+          "classification": "required",
+          "role": "writer",
+          "reason": "cpg-3 consolidates knowledge and writes delivery.md."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "Release runs on the owner's word through scripts/release.sh."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each cell writes its own red-first tests."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "The gather already ran during planning."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow lookup is left."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No hard-gate flag; standard with 5 or fewer product files runs the plan check inline."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "design-ui",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Standard, 4 product files, no hard-gate flag: inline plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Not high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Not high-risk."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Inline SMALLER PATH check below."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Inline plan check."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-11-11T09:00:29.711Z",
+    "branch": "wt/cross-project-guard",
+    "worktree_id": "beehive--wt--cross-project-guard",
+    "uat": "pending",
+    "blocked_by": [
+      "routing"
+    ]
+  },
+  "last_scribing_run": {
+    "feature": "cross-project-guard",
+    "date": "2026-11-11",
+    "at": "2026-11-11T09:01:57.816Z",
+    "areas_synced": [
+      "hook-runtime",
+      "doctrine-layer"
+    ],
+    "next_action": "close"
+  }
+}

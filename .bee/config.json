@@ -127,109 +127,100 @@
     },
     "claude": {
       "code": {
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash",
+        "model": "sonnet",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash",
+        "model": "haiku",
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
-        "model": "fable",
+        "model": "opus",
         "description": "author or repair tests, red-first",
-        "effort": "low"
+        "effort": "medium"
       },
       "docs": {
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash",
+        "model": "sonnet",
         "description": "doc edits and parity sweeps",
         "effort": "high"
       },
       "deploy": {
-        "description": "publish an approved release from main, wait for CI, and verify release assets",
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash"
+        "model": "haiku",
+        "description": "publish an approved release from main, wait for CI, and verify release assets"
       },
       "plan": {
-        "model": "fable",
+        "model": "opus",
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan",
-        "effort": "low"
+        "effort": "high"
       },
       "extraction": {
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash",
+        "model": "haiku",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash",
+        "model": "sonnet",
         "description": "fall-through tail: default writer role"
       },
       "review": {
-        "model": "fable",
+        "model": "opus",
         "description": "independent read-only check of a claim or diff",
-        "effort": "low"
+        "effort": "high"
       },
       "advisor": {
         "model": "fable",
         "description": "session-class consult for high-risk gates",
-        "effort": "low"
+        "effort": "high"
       },
       "supervisor": {
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash",
+        "model": "haiku",
         "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
       },
       "lane-1": {
         "model": "fable",
         "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief",
-        "effort": "low"
+        "effort": "high"
       },
       "lane-2": {
-        "model": "fable",
+        "model": "opus",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief",
-        "effort": "low"
+        "effort": "high"
       },
       "lane-3": {
-        "model": "fable",
+        "model": "opus",
         "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief",
-        "effort": "low"
+        "effort": "high"
       },
       "hat-facts-gaps": {
-        "model": "fable",
+        "model": "opus",
         "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test",
-        "effort": "low"
+        "effort": "high"
       },
       "hat-risks": {
         "model": "fable",
         "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation",
-        "effort": "low"
+        "effort": "high"
       },
       "hat-value": {
-        "model": "fable",
+        "model": "opus",
         "description": "hat: is this worth its cost — materiality test",
-        "effort": "low"
+        "effort": "high"
       },
       "hat-alternatives": {
-        "model": "fable",
+        "model": "opus",
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude",
-        "effort": "low"
+        "effort": "high"
       },
       "hat-user-impact": {
-        "model": "fable",
+        "model": "opus",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock",
-        "effort": "low"
+        "effort": "high"
       },
       "design": {
-        "model": "fable",
-        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate",
-        "effort": "low"
+        "model": "opus",
+        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
       },
       "writer": {
-        "kind": "herding",
-        "agent": "paseo-pi-agy-flash",
+        "model": "sonnet",
         "description": "dedicated technical writer — any role (plan, code, review, design) hands finished work here to write its docs, specs, plans, READMEs and reports; writes through bee-technical-writing; asked for with --role writer"
       }
     },

@@ -847,6 +847,7 @@
     "contract:knowledge-used",
     "contract:report-knowledge-used",
     "contract:claude-settings-baseline",
-    "contract:guard-cd-absolute-targets"
+    "contract:guard-cd-absolute-targets",
+    "contract:cross-project-guard"
   ]
 }
