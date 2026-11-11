@@ -415,8 +415,8 @@ lowers the baseline (69326d15).
 Read when: a Read, Glob, Grep or shell call was refused with "bee cross-project
 guard:", or you are changing which paths count as another project.
 
-The rule and its four decisions are `docs/history/cross-project-guard/CONTEXT.md`
-D1-D4. The check is `cross_project_denial` in
+The rule and its four decisions are cross-project-guard D1-D4
+(`docs/history/cross-project-guard/CONTEXT.md`). The check is `cross_project_denial` in
 `packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs`, called from
 `run_native_with_roots` right after the `hook_enabled` switch, so it runs in
 every phase (idle included) for leaders and workers. It looks only at Read,

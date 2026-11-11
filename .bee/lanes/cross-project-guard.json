@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "cross-project-guard",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"cross-project-guard\" started at phase \"exploring\" (lane).",
-  "next_action": "close",
+  "next_action": "bee close finished \"cross-project-guard\" — feature is closed.",
   "created_at": "2026-11-11T08:32:18.917Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
