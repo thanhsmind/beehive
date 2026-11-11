@@ -2118,5 +2118,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-11T09:50:22.713Z"
+  },
+  "supervisor-read-scope": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-11-11T15:26:16.699Z"
   }
 }

@@ -1,0 +1,606 @@
+{
+  "id": "sprs-1",
+  "feature": "supervisor-read-scope",
+  "title": "Let a supervising repo read the bee store and knowledge of its managed projects",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "902d1477",
+    "5c498adf",
+    "318dee0d",
+    "2c92af66",
+    "8452f29c",
+    "06fe4cb5",
+    "68db537b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+    "packages/bee-rs/crates/bee/src/verbs/config.rs",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/history/supervisor-read-scope/CONTEXT.md",
+    "docs/history/cross-project-guard/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    "docs/knowledge/patterns/20260714-a-fail-open-host-swallows-fail-closed-throws.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/verbs/config.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement docs/history/supervisor-read-scope/CONTEXT.md D1-D5, D7 and contract C1 in the cross-project guard; CONTEXT.md is the full rule text, follow it exactly. Inputs: the existing cross_project_denial arguments plus guards.supervises from .bee/config.json and .bee/config.local.json (same merge as cross_project_allow in Scope::load). Grant entry: in the candidate loop of cross_project_denial (anchor: `let Some(other) = scope.other_root(&raw, base) else { continue };`), only when guards.supervises is exactly the string \"waggledance\" and a candidate resolved to another root, ask a managed-roots provider once per call. Production provider (D2): resolve waggledance on the hook PATH, skip it when its canonical path lies inside this project, run `waggledance list --json` with a 2 s kill, take projects[].root_path; any failure yields a distinct 'registry unreadable' result, never a panic and never an unwrap on the spawn path. Managed match per D3, surface per D4 built from the resolved other root (so a worktree's own .bee counts). Read/Grep/Glob and Bash/exec grant rules exactly per D5, evaluated over the whole command: every other-project candidate must pass, and a single failing candidate or segment refuses the call. bee head check: bare `bee`, or a token whose canonical path equals <store root>/.bee/bin/bee of this project; segment shape must be `bee knowledge report ...` or `bee report outcomes ...`. Refusal text per D7: with no key, byte-identical to today; with the key, today's text plus one sentence naming the tripped rule and the readable surface, or that the registry was unreadable, or that the project is not in the registry. Keep cross_project_denial's signature; add a sibling entry point taking the provider (C1). Governed key (D1): make config_governed_view build the `guards` map when either cross_project_allow or supervises is present and carry both; make diff_governed_views refuse a change to guards.supervises like guards.cross_project_allow; leave other guards keys ungoverned. Red first, every new test name contains cross_project_supervisor. In write_guard/tests.rs with an injected provider: (a) Read <m>/.bee/state.json allowed; (b) Bash `echo x > <m>/.bee/state.json`, `cat <m>/.bee/state.json | tee x`, `git -C <m> status`, `cat <m>/.bee/state.json` followed by a newline and `rm <m>/.bee/state.json` all refused; (c) Read <m>/src/main.rs refused and stderr names the surface; (d) unregistered sibling refused with the not-in-registry sentence; (e) a provider root that is a symlink to <m> grants; plus: <m>/.bee/config.local.json and <m>/.bee/.env Read refused; Grep path=<m>/.bee with config.local.json present refused, Grep path=<m>/.bee/cells granted; `cat <m>/.bee/state.json | jq .` and `cat <m>/.bee/state.json 2>/dev/null` granted; `cat <m>/.bee/{state.json,../src/main.rs}`, `cat <m>/.bee/$x/state.json`, backtick, `cd <m>/.bee && cat state.json`, `sqlite3 -readonly <m>/.bee/x.db`, `rg x <m>/.bee/cells`, `/tmp/x/bee knowledge report --root <m>`, `bee cells add` with --root <m>, and a mixed `cat <m>/.bee/state.json <unmanaged>/x` refused; `bee knowledge report --root <m>` and `.bee/bin/bee report outcomes --root <m>/.bee` granted; Glob path=<m>/.bee pattern=../src/** refused; a git worktree of <m> granted; key absent gives byte-identical text; key value other than waggledance grants nothing; key set only in config.local.json grants; empty or failed provider gives the registry-unreadable sentence. In tests/hook_contracts.rs: run the real hook with a fake waggledance first on PATH that exits 1, prints garbage, or sleeps 5 s; each gives exit 2 within 4 s. In verbs/config.rs: a cross_project_supervisor test that bee config set guards.supervises is refused. Watch them fail before the fix. Document guards.supervises in docs/config-reference.md beside guards.cross_project_allow, including that only the user sets it by hand-editing .bee/config.json, citing docs/history/supervisor-read-scope/CONTEXT.md D-numbers, never raw decision ids. Do not edit docs/knowledge (sprs-3 owns it). No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+  "must_haves": {
+    "truths": [
+      "With guards.supervises set to waggledance, a Read of a managed project's .bee/state.json is allowed",
+      "A write-shaped shell command, a git command, a mutating bee verb or a newline-joined second command on a managed project is refused",
+      "A managed project's source outside .bee/ and docs/knowledge/ is refused, and the refusal names the readable surface",
+      "A project absent from the waggledance registry is refused",
+      "A symlinked registry root and a worktree of a managed repo both resolve to the managed project",
+      "Secret-shaped files and config.local.json inside a managed .bee/ stay unreadable, a directory-wide Grep included",
+      "A failing, garbage or hanging waggledance gives exit 2 with the registry-unreadable sentence",
+      "Without guards.supervises every refusal text is byte-identical to before",
+      "guards.supervises cannot be added or changed through bee config set or an agent edit"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+        "substantive": "the supervisor grant, the registry provider and the shell allowlist"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "red-first cross_project_supervisor tests (a)-(e) and the leak cases"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+        "substantive": "fake-waggledance hook contract tests"
+      }
+    ],
+    "key_links": [
+      "cross_project_denial consults the supervisor grant only after a candidate resolved to another project",
+      "config_governed_change_deny protects guards.supervises"
+    ],
+    "prohibitions": [
+      "Never weaken the existing refusal for a repo without guards.supervises",
+      "Never let an environment variable other than the hook PATH lookup of waggledance affect the grant",
+      "Never parse waggledance's sqlite registry directly",
+      "No code comments"
+    ],
+    "open_choices": [
+      "Memoise the provider result within one hook call"
+    ]
+  },
+  "trace": {
+    "worker": "worker-sprs-1b",
+    "outcome": "judge_shell refuses ~-leading and .. component words (path shape); red-first cases added; commit eb37cc268",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: suspect concepts anchor the write_guard files broadly; write-guard-request-shapes.md records the grant and its lexer"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-11T15:25:41.806Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full workspace run, 0 failures; commit eb37cc268",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d19ea25d-937a-4dbd-a8ac-91a0a0b44502",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project",
+    "claimed_at": "2026-11-11T14:17:47.901Z",
+    "knowledge_delta": [],
+    "sync_ack": "suspect concepts anchor the write_guard files broadly; write-guard-request-shapes.md records the grant and its lexer",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "judge_shell refuses ~-leading and .. component words (path shape); red-first cases added; commit eb37cc268",
+      "commit": "eb37cc268ca4b0970dd13764c5765c02d5992a6e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- cross_project — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full workspace run, 0 failures; commit eb37cc268",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "With guards.supervises set to waggledance, a Read of a managed project's .bee/state.json is allowed",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A write-shaped shell command, a git command, a mutating bee verb or a newline-joined second command on a managed project is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A managed project's source outside .bee/ and docs/knowledge/ is refused, and the refusal names the readable surface",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A project absent from the waggledance registry is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A symlinked registry root and a worktree of a managed repo both resolve to the managed project",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "Secret-shaped files and config.local.json inside a managed .bee/ stay unreadable, a directory-wide Grep included",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A failing, garbage or hanging waggledance gives exit 2 with the registry-unreadable sentence",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "Without guards.supervises every refusal text is byte-identical to before",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "guards.supervises cannot be added or changed through bee config set or an agent edit",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "cross_project_denial consults the supervisor grant only after a candidate resolved to another project",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "config_governed_change_deny protects guards.supervises",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/config.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/config.rs"
+          },
+          {
+            "requirement": "docs/config-reference.md",
+            "artifact": "docs/config-reference.md"
+          }
+        ],
+        "recorded_at": "2026-11-11T14:01:46.046Z",
+        "recorded_by": "d19ea25d-937a-4dbd-a8ac-91a0a0b44502",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "With guards.supervises set to waggledance, a Read of a managed project's .bee/state.json is allowed",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A write-shaped shell command, a git command, a mutating bee verb or a newline-joined second command on a managed project is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A managed project's source outside .bee/ and docs/knowledge/ is refused, and the refusal names the readable surface",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A project absent from the waggledance registry is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A symlinked registry root and a worktree of a managed repo both resolve to the managed project",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "Secret-shaped files and config.local.json inside a managed .bee/ stay unreadable, a directory-wide Grep included",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "A failing, garbage or hanging waggledance gives exit 2 with the registry-unreadable sentence",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "Without guards.supervises every refusal text is byte-identical to before",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "guards.supervises cannot be added or changed through bee config set or an agent edit",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "cross_project_denial consults the supervisor grant only after a candidate resolved to another project",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "config_governed_change_deny protects guards.supervises",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/cross_project.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/config.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/config.rs"
+          },
+          {
+            "requirement": "docs/config-reference.md",
+            "artifact": "docs/config-reference.md"
+          }
+        ],
+        "recorded_at": "2026-11-11T15:25:45.950Z",
+        "recorded_by": "d19ea25d-937a-4dbd-a8ac-91a0a0b44502",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "cross_project.rs:393-426 judge allows a managed in-surface non-secret path; tests cross_project_supervisor_reads_a_managed_bee_file and hook_contracts cross_project_supervisor_a_registry_naming_the_project_grants_the_read"
+          },
+          {
+            "id": "t2",
+            "status": "FAIL",
+            "evidence": "guards.rs:307-315 closes a double-quoted span at an escaped quote, so `cat <m>/.bee/state.json \"a\\\" \" ; rm <m>/.bee/state.json ; \" \"` folds the rm into one token; cross_project.rs:523-524 skips it as a non-candidate and judge_shell returns Ok. The listed shapes (redirect 507, head 486-499, newline 464) are refused and tested. Read, not run"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "cross_project.rs:415-418 refuses outside the surface, sentence 261-265 names .bee/** and docs/knowledge/**; test cross_project_supervisor_refuses_managed_source_and_names_the_surface. Shell path shares the t2 hole"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "cross_project.rs:403-405 Why::Unregistered, sentence line 260; test cross_project_supervisor_refuses_an_unregistered_sibling; mixed command refused in the leak-shapes test"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "cross_project.rs:384-387 canonicalises registry roots, is_managed 335-340 matches git common dir; tests cross_project_supervisor_resolves_a_symlinked_registry_root and cross_project_supervisor_grants_a_worktree_of_a_managed_repo"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "cross_project.rs:342-367 named_secret and holds_secret_below, walk for Grep at 442, limit 50000 at 354; test cross_project_supervisor_keeps_secrets_and_local_config_unreadable"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "cross_project.rs:299-333 returns None on spawn failure, non-zero exit, timeout (kill at 2 s) and bad JSON; sentence 257-259; hook_contracts cross_project_supervisor_a_broken_waggledance_is_exit_two_within_four_seconds"
+          },
+          {
+            "id": "t8",
+            "status": "PASS",
+            "evidence": "refusal() at cross_project.rs:236-244 is unchanged in the diff and returned at 613-616 before any grant code; test cross_project_supervisor_key_absent_leaves_the_text_unchanged compares the whole string"
+          },
+          {
+            "id": "t9",
+            "status": "PASS",
+            "evidence": "guards.rs:1141-1152 carries supervises in the governed view, 1424-1433 refuses any change; verbs/config.rs:103-114 routes config set through it; tests cross_project_supervisor_key_is_a_governed_config_key and cross_project_supervisor_cannot_be_set_through_config_set. The hook caller's old-text argument was not traced"
+          }
+        ],
+        "failure_signature": "escaped quote inside double quotes hides a second command from judge_shell",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-11T14:17:39.725Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "cross_project.rs:393-426 judge allows a managed in-surface non-secret path, reached from judge_tool 441-443; test cross_project_supervisor_reads_a_managed_bee_file at tests.rs:6859-6864"
+          },
+          {
+            "id": "t2",
+            "status": "FAIL",
+            "evidence": "The round 1 backslash shape is closed at cross_project.rs:467-469 and tested at tests.rs:7001-7013; redirect 510, head 489-502 and newline 464 are refused and tested. But `cat () ( rm <m>/.bee/state.json ) ; cat` passes: guards.rs:323-328 splits only on ; & |, so segment 1 is cat, (), (, rm, <path>, ) with an allowlisted head and one in-surface candidate, and cross_project.rs:503-533 has no rule for parentheses; bash defines a function cat and runs the rm. Read, not run"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "cross_project.rs:415-418 refuses outside the surface, sentence 261-265 names .bee/** and docs/knowledge/**; test tests.rs:6881-6888. A source path token inside a function body is still judged"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "cross_project.rs:402-405 Why::Unregistered, sentence line 260; test tests.rs:6890-6899; mixed managed/unmanaged command refused at tests.rs:6977 and 6994"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "cross_project.rs:384-387 canonicalises registry roots, is_managed 335-340 matches the git common dir; tests tests.rs:6901-6909 and 6911-6925"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "cross_project.rs:342-367 named_secret and holds_secret_below, walk for Grep at 442; test tests.rs:6927-6941; shell read of config.local.json refused and tested at tests.rs:7008"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "cross_project.rs:299-333 returns None on spawn failure, non-zero exit, timeout (kill at 2 s) and bad JSON; sentence 257-259; unit test tests.rs:7087-7097. hook_contracts.rs not re-read this round; the rework changed only the provider argument type"
+          },
+          {
+            "id": "t8",
+            "status": "PASS",
+            "evidence": "refusal() at cross_project.rs:236-244 is unchanged by the rework and returned at 616-619 before any grant code; test tests.rs:7046-7055 compares the whole string"
+          },
+          {
+            "id": "t9",
+            "status": "PASS",
+            "evidence": "test cross_project_supervisor_key_is_a_governed_config_key at tests.rs:7125-7139 refuses add and change and leaves guards.worker_outward settable; guards.rs and verbs/config.rs are untouched by the rework, so the config set path rests on round 1's reading. The hook caller's old-text argument was not traced"
+          }
+        ],
+        "failure_signature": "function definition with a subshell body runs a second command under an allowlisted head in judge_shell",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-11T14:40:34.663Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "cross_project.rs:393-426 judge allows a managed in-surface non-secret path, reached from judge_tool 441-443; granted shell shapes at tests.rs:6960-6971"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "cross_project.rs:513-576 lex_shell accepts only single-pipe pipelines of plain or quoted words plus the exact words 2>/dev/null and 2>&1; ; & && || ( ) { } < > $ backtick backslash newline are refused outside quotes (562-566) and $ backtick backslash in double quotes (555); head rule 472-482; tests tests.rs:6975-7001, 7004-7030, 7033-7044. No accepted string found that bash splits differently. Flags of the two bee report verbs not checked for a write"
+          },
+          {
+            "id": "t3",
+            "status": "FAIL",
+            "evidence": "cross_project.rs:200-205 token_body returns None for a word starting with -- that holds no =, so judge_shell 487 and 501 skip it and the attached-path rule 492 excludes it; `cat <m>/.bee/state.json -- --/../../<rel>/src/main.rs` returns Ok and cat opens managed source when the cwd holds a directory named --. Refused without the key (656-658). Read, Grep, Glob and plain shell paths hold (415-418, 261-265). Read, not run"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "cross_project.rs:402-405 Why::Unregistered, sentence line 260; mixed managed/unmanaged command refused at tests.rs:6979 and 6996"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "cross_project.rs:384-387 canonicalises registry roots, is_managed 335-340 matches the git common dir; unchanged since round 2"
+          },
+          {
+            "id": "t6",
+            "status": "FAIL",
+            "evidence": "`jq -n -L <m>/.bee 'import \"config.local\" as $c; $c::c'` passes: cross_project.rs:554 lets $ through inside single quotes, the -L directory is judged with walk=false (506, 422) and the filter word is no candidate (501); jq then loads <m>/.bee/config.local.json as data. Same for credentials.json and secrets.json under the surface. Direct cat of the file is refused (tests.rs:7039). D5 says no $ in any token. Read, not run"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "cross_project.rs:299-333 returns None on spawn failure, non-zero exit, timeout (kill at 2 s) and bad JSON; sentence 257-259. hook_contracts.rs rests on round 1's reading"
+          },
+          {
+            "id": "t8",
+            "status": "PASS",
+            "evidence": "refusal() at cross_project.rs:236-244 is returned at 655-658 before any grant code; test tests.rs:7078-7086 compares the whole string"
+          },
+          {
+            "id": "t9",
+            "status": "PASS",
+            "evidence": "rests on round 1 and round 2 readings of guards.rs and verbs/config.rs; cross_project.rs holds none of that code. The hook caller's old-text argument was not traced"
+          }
+        ],
+        "failure_signature": "jq -L data import reads config.local.json because $ is accepted in single quotes; a ---prefixed operand is never judged as a path",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-11T15:01:31.868Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "cross_project.rs:399-432 judge allows a managed in-surface non-secret path, reached from judge_tool 447-449; tests.rs:6860-6864 and granted shell shapes 6955-6972"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "cross_project.rs:528-591 lex_shell accepts only single-pipe pipelines of literal words plus the exact words 2>/dev/null and 2>&1; $ and backtick refused in every position (569, 570, 581); head rule 478-488; tests.rs:6867-6879, 6975-7001, 7004-7030, 7049-7060. report_outcomes.rs:29-67 takes only --json, --feature, --root. No accepted string found that bash splits differently"
+          },
+          {
+            "id": "t3",
+            "status": "FAIL",
+            "evidence": "cross_project.rs:401 judge returns Ok when other_root finds no project, and expand misplaces two word shapes: a quoted ~/ word is read as home (25-26) though bash keeps it literal, and .. is popped lexically (35-44) before symlinks resolve (48). `cat <m>/.bee/state.json '~/../../M/src/main.rs'` (needs a directory named ~ in the cwd) and `cat <m>/.bee/state.json link/../../../../M/src/main.rs` (needs a symlink in this project) are granted and open managed source. Refused without the key only because of the surface operand; the bare operand passes the base guard too. Read, Grep, Glob and plain shell paths hold (421-424, 267-271, tests.rs:6882-6888). Read, not run"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "cross_project.rs:408-411 Why::Unregistered, sentence 266; tests.rs:6891-6899, mixed command 6979 and 6996. The t3 shapes reach an unregistered project, but that read passes with no key as well"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "cross_project.rs:390-393 canonicalises registry roots, is_managed 341-346 matches the git common dir; tests.rs:6902-6925"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "round 3 jq import closed: $ refused in single quotes (cross_project.rs:569), -L and --library-path refused (509-511), shell directories walked for secrets (521, 428-430); tests.rs:6928-6941, 7033-7046, 7055. The t3 shapes reach a managed secret by the same misread and the same fix closes it"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "cross_project.rs:305-339 returns None on spawn failure, non-zero exit, timeout (kill at 2 s) and bad JSON; sentence 263-265; tests.rs:7135-7144. hook_contracts.rs rests on round 1's reading"
+          },
+          {
+            "id": "t8",
+            "status": "PASS",
+            "evidence": "refusal() at cross_project.rs:242-250 is returned at 670-673 before any grant code; tests.rs:7093-7102 compares the whole string"
+          },
+          {
+            "id": "t9",
+            "status": "PASS",
+            "evidence": "rests on round 1 and round 2 readings of guards.rs and verbs/config.rs; cross_project.rs holds none of that code"
+          }
+        ],
+        "failure_signature": "judge passes a word that expand misplaces: a quoted ~/ word read as home and a .. popped lexically before symlinks resolve let a granted command open managed source",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-11T15:14:19.436Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "cross_project.rs:399-432 judge allows a managed in-surface non-secret path, reached from judge_tool 447-449; tests.rs:6860-6864 and granted shell shapes 6955-6972"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "cross_project.rs:528-591 lex_shell accepts only single-pipe pipelines of literal words plus the exact words 2>/dev/null and 2>&1; head rule 478-488; tests.rs:6867-6879, 6975-7006, 7009-7035, 7054-7065. report_outcomes.rs:29-67 takes only --json, --feature, --root. No accepted string found that bash splits differently. Residual, not counted: the path-shape rule at 494 skips the head word (skip(1) at 489), so `link/../.bee/bin/bee knowledge report --root <m>` passes is_bee_head 453-464 while bash runs a planted file; that program runs equally with no key when called by its own name"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "cross_project.rs:421-424 surface rule, sentence 267-271, tests.rs:6882-6888; round 4 shapes refused at 494-496 (word body starting with ~ or holding a .. segment), tests.rs:6996-7000"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "cross_project.rs:408-411 Why::Unregistered, sentence 266; tests.rs:6891-6899, mixed command 6979 and 7001"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "cross_project.rs:390-393 canonicalises registry roots, is_managed 341-346 matches the git common dir; tests.rs:6902-6925"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "cross_project.rs:348-351 named_secret on the canonical path (425-427), directory walk 353-373 for Grep (448) and every shell path (521), $ refused in quoted spans (569-570), jq -L refused (509-511); tests.rs:6928-6941, 7038-7051, 7060"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "cross_project.rs:305-339 returns None on spawn failure, non-zero exit, timeout (kill at 2 s) and bad JSON; sentence 263-265; tests.rs:7140-7149. hook_contracts.rs rests on round 1's reading"
+          },
+          {
+            "id": "t8",
+            "status": "PASS",
+            "evidence": "refusal() at cross_project.rs:242-250 is returned at 670-673 before any grant code; tests.rs:7099-7107 compares the whole string"
+          },
+          {
+            "id": "t9",
+            "status": "PASS",
+            "evidence": "tests.rs:7178-7189 config_governed_change_deny refuses adding or changing guards.supervises and leaves guards.worker_outward settable; verbs/config.rs rests on round 1 and round 2 readings"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-11T15:25:38.293Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-11-11T14:17:39.725Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "mistakes": [
+      {
+        "wrong": "the first shell grant trusted the shared tokenizer's segmentation; four judge rounds found hidden commands and reads",
+        "better": "a security grant over shell text owns a closed-grammar lexer from the start",
+        "fix_at": "architecture"
+      }
+    ]
+  },
+  "usage": {
+    "new": 376330,
+    "cached": 4899841,
+    "total": 5276171,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 376330,
+        "cached": 4899841,
+        "total": 5276171
+      }
+    },
+    "jobs": [
+      "job-1794404235398-510697-1",
+      "job-1794406684063-1013005-1",
+      "job-1794408060792-1276189-1",
+      "job-1794409297138-1473011-1",
+      "job-1794410064735-1701083-1"
+    ]
+  }
+}

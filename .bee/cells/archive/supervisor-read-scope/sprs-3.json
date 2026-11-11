@@ -1,0 +1,133 @@
+{
+  "id": "sprs-3",
+  "feature": "supervisor-read-scope",
+  "title": "Consolidate this feature's knowledge and write its delivery",
+  "lane": "high-risk",
+  "role": "writer",
+  "status": "capped",
+  "deps": [
+    "sprs-1",
+    "sprs-2"
+  ],
+  "decisions": [
+    "902d1477",
+    "5c498adf",
+    "318dee0d",
+    "2c92af66",
+    "8452f29c",
+    "a8d8ad76",
+    "06fe4cb5"
+  ],
+  "files": [
+    "docs/knowledge/**",
+    "docs/history/supervisor-read-scope/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/supervisor-read-scope/CONTEXT.md",
+    "docs/history/supervisor-read-scope/plan.md",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run the writer consolidation step on this feature: run `bee knowledge consolidate --feature supervisor-read-scope`. Extend the section 'Cross-project refusal' of docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md with the supervisor grant (D1-D5, D7) anchored to the code sprs-1 wrote, and add the --root flag (D6) to the concept that documents bee knowledge report or bee report outcomes. Include the owner setup steps: hand-edit guards.supervises into the supervising repo's .bee/config.json, refresh that repo's .bee/bin/bee to the release that carries it, then Read <managed>/.bee/state.json as a smoke check. Dedupe and trim, never restate code, and write docs/history/supervisor-read-scope/delivery.md listing the concepts changed and why, one line each. Cite CONTEXT.md D-numbers, never raw decision ids. Run `.bee/bin/bee knowledge check` green. One commit.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "area and pattern concepts describe the feature's changes, anchored to code",
+      "docs/history/supervisor-read-scope/delivery.md lists every concept the feature changed"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/supervisor-read-scope/delivery.md",
+        "substantive": "the feature's delivery record"
+      }
+    ],
+    "key_links": [
+      "the delivery lands in the same merge as the code"
+    ],
+    "prohibitions": [
+      "No restating of code in area concepts",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "worker-sprs-3",
+    "outcome": "Supervisor grant documented in the cross-project concept, delivery.md written, commit bafe9a9bd",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+      "docs/history/supervisor-read-scope/delivery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-11T14:01:52.645Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only change, 0 OKF and 0 profile errors",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "d19ea25d-937a-4dbd-a8ac-91a0a0b44502",
+    "verify_command": ".bee/bin/bee knowledge check",
+    "claimed_at": "2026-11-11T14:01:16.175Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Supervisor grant documented in the cross-project concept, delivery.md written, commit bafe9a9bd",
+      "commit": "bafe9a9bdcaadbf1e3a03a08be6f8720d026e10a",
+      "files": [
+        "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+        "docs/history/supervisor-read-scope/delivery.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green:static — docs-only change, 0 OKF and 0 profile errors",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "area and pattern concepts describe the feature's changes, anchored to code",
+            "artifact": "docs/history/supervisor-read-scope/delivery.md"
+          },
+          {
+            "requirement": "docs/history/supervisor-read-scope/delivery.md lists every concept the feature changed",
+            "artifact": "docs/history/supervisor-read-scope/delivery.md"
+          },
+          {
+            "requirement": "the delivery lands in the same merge as the code",
+            "artifact": "docs/history/supervisor-read-scope/delivery.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+          },
+          {
+            "requirement": "docs/history/supervisor-read-scope/delivery.md",
+            "artifact": "docs/history/supervisor-read-scope/delivery.md"
+          }
+        ],
+        "recorded_at": "2026-11-11T14:02:07.384Z",
+        "recorded_by": "d19ea25d-937a-4dbd-a8ac-91a0a0b44502",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 47284,
+    "cached": 219875,
+    "total": 267159,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 47284,
+        "cached": 219875,
+        "total": 267159
+      }
+    },
+    "jobs": [
+      "job-1794405681585-759296-1"
+    ]
+  }
+}

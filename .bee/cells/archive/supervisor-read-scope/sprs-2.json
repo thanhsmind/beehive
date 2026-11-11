@@ -1,0 +1,218 @@
+{
+  "id": "sprs-2",
+  "feature": "supervisor-read-scope",
+  "title": "Measure another project's store with --root",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "a8d8ad76"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+    "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/supervisor-read-scope/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+    "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Implement docs/history/supervisor-read-scope/CONTEXT.md D6. Add an optional --root <path> flag to bee knowledge report (entry run_report in verbs/knowledge/report.rs, which takes its root through g_prelude in verbs/knowledge/frame.rs and rejects unknown keys through keys_known) and bee report outcomes (entry run in verbs/report_outcomes.rs, which resolves with resolve_store_root_worktree(&cwd) and then calls record_timing(&roots.root, CMD, t0, true)). With --root, resolve the store root from that path (a store root or any path inside one) exactly as each verb resolves it from the cwd today; without it, behavior is unchanged. With --root, no byte of the target store changes: record timing and any log row in the cwd store, or skip them when the cwd holds no store. A --root that is not inside a bee store exits with the verb's existing no-root error naming that path. If g_prelude needs a new parameter, keep every other caller's behavior unchanged. Register the flag in packages/bee-rs/crates/bee/src/generated/registry_payload.json for both verbs so bee <verb> --help lists it, and keep bee dev regen clean. Red first, test names containing report_root: knowledge report --root <fixture store> reads that store while the cwd is a different store; report outcomes --root <fixture store> counts that store's cells; --root <fixture>/.bee works; a non-store --root exits with the no-root error; after both verbs the fixture store's file list and every file's bytes are identical to before. No code comments. One commit.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_root",
+  "must_haves": {
+    "truths": [
+      "bee knowledge report --root <path> measures the store at that path, not the cwd store",
+      "bee report outcomes --root <path> counts the cells of the store at that path",
+      "No byte of the --root store changes, timing included",
+      "A --root that is not a bee store exits with the no-root error",
+      "Without --root both verbs behave as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+        "substantive": "--root resolution, timing kept off the target, report_root tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "substantive": "--root resolution and report_root tests"
+      }
+    ],
+    "key_links": [
+      "bee <verb> --help lists --root for both verbs"
+    ],
+    "prohibitions": [
+      "No write to the --root store",
+      "No code comments"
+    ],
+    "open_choices": []
+  },
+  "trace": {
+    "worker": "worker-sprs-2",
+    "outcome": "Added --root to bee knowledge report and bee report outcomes with no write to the target store; commit 64e7abaf9",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "docs/knowledge/areas/okf-profile/critical-bar.md"
+    ],
+    "deviations": [
+      "touched catalog.rs (PINNED_FLAG_COUNT 244 to 245) and okf-profile/critical-bar.md (anchors and a --root note) outside the cell files; both are mechanical companions of the new flag",
+      "sync-ack: the suspect concepts anchor these files broadly (catalog, registry payload, rust-runtime); the --root behavior is documented in okf-profile/critical-bar.md and the writer cell sprs-3 owns the knowledge sync"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-11T13:47:29.477Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_root distinct_flag_vocabulary — green:unit — 9 report_root tests plus the flag-vocabulary pin pass; the full suite's other failures are sibling write_guard cross_project tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "d19ea25d-937a-4dbd-a8ac-91a0a0b44502",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_root",
+    "claimed_at": "2026-11-11T13:37:03.197Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/okf-profile/critical-bar.md"
+    ],
+    "sync_ack": "the suspect concepts anchor these files broadly (catalog, registry payload, rust-runtime); the --root behavior is documented in okf-profile/critical-bar.md and the writer cell sprs-3 owns the knowledge sync",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "Added --root to bee knowledge report and bee report outcomes with no write to the target store; commit 64e7abaf9",
+      "commit": "64e7abaf9aea70164e9445b68b731e65d1c95575",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "docs/knowledge/areas/okf-profile/critical-bar.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_root — green:unit — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- report_root distinct_flag_vocabulary — green:unit — 9 report_root tests plus the flag-vocabulary pin pass; the full suite's other failures are sibling write_guard cross_project tests",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 357 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee knowledge report --root <path> measures the store at that path, not the cwd store",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "bee report outcomes --root <path> counts the cells of the store at that path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "No byte of the --root store changes, timing included",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "A --root that is not a bee store exits with the no-root error",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "Without --root both verbs behave as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "bee <verb> --help lists --root for both verbs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/catalog.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/okf-profile/critical-bar.md",
+            "artifact": "docs/knowledge/areas/okf-profile/critical-bar.md"
+          }
+        ],
+        "recorded_at": "2026-11-11T14:01:46.782Z",
+        "recorded_by": "d19ea25d-937a-4dbd-a8ac-91a0a0b44502",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "report.rs:674-679 passes --root to g_prelude_at, which resolves the store from cwd.join(target) in frame.rs; test report_root_measures_the_target_store_not_the_cwd_store"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "report_outcomes.rs:50-63 parses both flag forms, line 82 resolves from opts.start, line 94 collects from that store; test report_root_counts_the_target_stores_cells_not_the_cwd_store"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "frame.rs timing_root is cwd_store_root(&cwd) for a target and the drift check is skipped; report_outcomes.rs:100-106; output_spill.rs:29-36 lists neither verb; snapshot tests report_root_leaves_every_byte_of_the_target_store_alone in both files and report_root_skips_timing_when_the_cwd_holds_no_store. Builder bodies not read line by line"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "emit_no_root_error_at in frame.rs names the target; report_outcomes.rs:87-92; tests report_root_outside_a_store_exits_with_the_no_root_error in both files"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "g_prelude calls g_prelude_at with None and keeps the resolve, drift check and timing root; report_outcomes.rs:100-103 keeps roots.root when --root is absent"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-11-11T14:17:39.751Z"
+      }
+    ]
+  },
+  "usage": {
+    "new": 115642,
+    "cached": 1941001,
+    "total": 2056643,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 115642,
+        "cached": 1941001,
+        "total": 2056643
+      }
+    },
+    "jobs": [
+      "job-1794404236554-510748-1"
+    ]
+  }
+}
