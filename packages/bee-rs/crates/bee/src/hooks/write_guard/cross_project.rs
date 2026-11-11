@@ -491,8 +491,8 @@ impl Grant<'_> {
                     continue;
                 }
                 let body = token_body(token).unwrap_or("");
-                if body.starts_with('~') && body != "~" && !body.starts_with("~/") {
-                    return bail("user home expansion");
+                if body.starts_with('~') || body.split('/').any(|part| part == "..") {
+                    return bail("path shape");
                 }
                 if token.starts_with('-')
                     && !token.starts_with("--")

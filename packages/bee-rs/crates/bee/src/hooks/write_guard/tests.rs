@@ -6993,6 +6993,11 @@ use std::process::ExitCode;
             "cat <m>/.bee/state.json > /tmp/out",
             "cat <m>/.bee/state.json 2>/tmp/out",
             "cat <m>/.bee/../src/main.rs",
+            "cat <m>/.bee/state.json '~/../../M/src/main.rs'",
+            "cat <m>/.bee/state.json link/../../../../M/src/main.rs",
+            "cat <m>/.bee/state.json ~",
+            "cat <m>/.bee/state.json --file=~/x",
+            "cat <m>/.bee/state.json --file=a/../b",
             mixed.as_str(),
         ] {
             let denied = sup_sh(&s, cmd);
