@@ -216,6 +216,12 @@ fn shell_candidates(tokens: &[String], cwd: &Path, home: Option<&Path>) -> Vec<S
         if cd_next && token.starts_with('-') {
             continue;
         }
+        if let Some(rest) = token.strip_prefix('-').filter(|r| !r.starts_with('-')) {
+            let tail = rest.get(1..).unwrap_or("");
+            if tail.starts_with('/') || tail.starts_with('~') {
+                out.push(tail.to_string());
+            }
+        }
         if let Some(body) = token_body(token) {
             if body.starts_with('/') || body.starts_with('~') {
                 out.push(body.to_string());
@@ -494,6 +500,15 @@ impl Grant<'_> {
                 {
                     return bail("attached path");
                 }
+                if token.starts_with("--")
+                    && !token.contains('=')
+                    && (token.contains('/') || token.contains(".."))
+                {
+                    return bail("attached path");
+                }
+                if head == "jq" && (token.starts_with("-L") || token == "--library-path") {
+                    return bail("jq library path");
+                }
                 if token.contains('{') && (token.contains('/') || token.contains('~') || token.contains("..")) {
                     return bail("brace expansion");
                 }
@@ -503,7 +518,7 @@ impl Grant<'_> {
                     return bail("glob or brace");
                 }
                 let root_value = bee && (token.starts_with("--root=") || segment[idx - 1] == "--root");
-                self.judge(&raw, root_value, false)?;
+                self.judge(&raw, root_value, true)?;
             }
         }
         Ok(())
@@ -551,7 +566,7 @@ fn lex_shell(command: &str) -> Option<Vec<Vec<String>>> {
                             break;
                         }
                         let bad = match c {
-                            '\'' => matches!(q, '\n' | '\r'),
+                            '\'' => matches!(q, '$' | '`' | '\n' | '\r'),
                             _ => matches!(q, '$' | '`' | '\\' | '\n' | '\r'),
                         };
                         if bad {

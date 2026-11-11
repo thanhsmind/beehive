@@ -7030,6 +7030,22 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn cross_project_supervisor_refuses_jq_import_and_dashdash_operand_leaks() {
+        let s = sup_fixture(Some("waggledance"));
+        for cmd in [
+            "jq -n -L <m>/.bee 'import \"config.local\" as $c; $c::c'",
+            "jq '$ENV' <m>/.bee/state.json",
+            "jq -L<m>/.bee . x",
+            "jq --library-path <m>/.bee . x",
+            "cat <m>/.bee/state.json -- --/../x",
+            "cat <m>/.bee/state.json 'a`id`'",
+        ] {
+            let denied = sup_sh(&s, cmd);
+            assert!(denied.is_some(), "{cmd:?} must be refused");
+        }
+    }
+
+    #[test]
     fn cross_project_supervisor_refuses_backslash_quote_smuggling() {
         let s = sup_fixture(Some("waggledance"));
         for cmd in [
