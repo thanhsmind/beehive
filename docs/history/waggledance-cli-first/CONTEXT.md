@@ -56,13 +56,13 @@ call from bee code.
 
 ## Outstanding Questions
 
-### Deferred To Planning
+### Answered In Planning
 
-- [ ] Which rendered copies `bee dev regen` rewrites — answered by running it.
+- [x] Which rendered copies `bee dev regen` rewrites: the wcli-2 cap lists them.
 
-## Deferred Ideas
+## Not In Scope
 
-- Switch the guard registry read to a new CLI verb — only if waggledance removes `list` (D5).
+- A new CLI verb for the guard registry read. D5 keeps `waggledance list --json`; a change needs a new decision.
 
 ## Handoff Note
 
