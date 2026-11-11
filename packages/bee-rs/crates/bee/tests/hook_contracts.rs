@@ -780,3 +780,73 @@ fn installed_manifest_denies_observed_codex_spawn_with_opaque_message() {
     assert_eq!(code(&out), 2, "undecidable native dispatch must deny: {}", stderr(&out));
     assert!(stderr(&out).contains("explicit role"), "{}", stderr(&out));
 }
+
+fn supervisor_run(script: impl Fn(&Path) -> String) -> (i32, String, std::time::Duration) {
+    use std::os::unix::fs::PermissionsExt;
+    let fx = fixture();
+    std::fs::write(
+        fx.root.join(".bee").join("config.json"),
+        r#"{"guards":{"supervises":"waggledance"}}"#,
+    )
+    .unwrap();
+    let sibling = tempfile::tempdir().unwrap();
+    let sibling_root = dunce::canonicalize(sibling.path()).unwrap();
+    std::fs::create_dir_all(sibling_root.join(".git")).unwrap();
+    std::fs::create_dir_all(sibling_root.join(".bee")).unwrap();
+    std::fs::write(sibling_root.join(".bee").join("state.json"), "{}\n").unwrap();
+    let bin = tempfile::tempdir().unwrap();
+    let fake = bin.path().join("waggledance");
+    std::fs::write(&fake, script(&sibling_root)).unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", bin.path().display(), std::env::var("PATH").unwrap_or_default());
+    let input = serde_json::json!({
+        "tool_name": "Read",
+        "tool_input": { "file_path": sibling_root.join(".bee").join("state.json").to_string_lossy() },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let started = std::time::Instant::now();
+    let mut child = Command::new(bee_bin())
+        .args(["hook", "write-guard"])
+        .current_dir(&fx.root)
+        .env("PATH", path)
+        .env("BEE_HOOK_NO_DELEGATE", "1")
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("BEE_HERDING_JOB_ID")
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("PI_SESSION_ID")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(input.as_bytes()).ok();
+    let out = child.wait_with_output().unwrap();
+    (code(&out), stderr(&out), started.elapsed())
+}
+
+#[test]
+fn cross_project_supervisor_a_broken_waggledance_is_exit_two_within_four_seconds() {
+    for script in [
+        "#!/bin/sh\nexit 1\n",
+        "#!/bin/sh\necho 'not json at all'\n",
+        "#!/bin/sh\nsleep 5\n",
+    ] {
+        let (exit, err, took) = supervisor_run(|_| script.to_string());
+        assert_eq!(exit, 2, "{script:?}: {err}");
+        assert!(err.contains("registry was not readable"), "{script:?}: {err}");
+        assert!(took < std::time::Duration::from_secs(4), "{script:?} took {took:?}");
+    }
+}
+
+#[test]
+fn cross_project_supervisor_a_registry_naming_the_project_grants_the_read() {
+    let (exit, err, _) = supervisor_run(|root| {
+        format!(
+            "#!/bin/sh\nprintf '{{\"projects\":[{{\"root_path\":\"{}\"}}]}}'\n",
+            root.display()
+        )
+    });
+    assert_eq!(exit, 0, "{err}");
+}

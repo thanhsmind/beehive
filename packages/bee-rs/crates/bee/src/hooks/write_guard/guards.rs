@@ -1138,9 +1138,16 @@ pub(crate) fn config_governed_view(text: &str) -> Option<Value> {
         view.insert("hooks".to_string(), hooks_val.clone());
     }
 
-    if let Some(allow) = root_obj.get("guards").and_then(|g| g.get("cross_project_allow")) {
+    let guards_obj = root_obj.get("guards");
+    let allow = guards_obj.and_then(|g| g.get("cross_project_allow"));
+    let supervises = guards_obj.and_then(|g| g.get("supervises"));
+    if allow.is_some() || supervises.is_some() {
         let mut guards_view = Map::new();
-        guards_view.insert("cross_project_allow".to_string(), allow.clone());
+        for (key, val) in [("cross_project_allow", allow), ("supervises", supervises)] {
+            if let Some(v) = val {
+                guards_view.insert(key.to_string(), v.clone());
+            }
+        }
         view.insert("guards".to_string(), Value::Object(guards_view));
     }
 
@@ -1411,6 +1418,17 @@ fn diff_governed_views(rel: &str, old_view: &Value, new_view: &Value) -> Option<
             "guards.cross_project_allow",
             &format_diff_old(old_allow),
             &format_diff_val(new_allow),
+        ));
+    }
+
+    let old_sup = old_view.get("guards").and_then(|g| g.get("supervises"));
+    let new_sup = new_view.get("guards").and_then(|g| g.get("supervises"));
+    if old_sup != new_sup {
+        return Some(build_config_denial(
+            rel,
+            "guards.supervises",
+            &format_diff_old(old_sup),
+            &format_diff_val(new_sup),
         ));
     }
 
