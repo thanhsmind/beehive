@@ -462,8 +462,8 @@ containment.
 ### Supervisor grant — a supervising repo reads a managed project's bee store
 
 Read when: a managed project's `.bee/` or `docs/knowledge/` read is refused from a repo that supervises
-waggledance, or you are changing what that grant opens. Rules are D1-D5 and D7 of
-`docs/history/supervisor-read-scope/CONTEXT.md`.
+waggledance, or you are changing what that grant opens. Rules are supervisor-read-scope D1-D5 and supervisor-read-scope D7
+(`docs/history/supervisor-read-scope/CONTEXT.md`).
 
 - Opt-in (D1): `guards.supervises: "waggledance"`, governed in `config_governed_view` /
   `diff_governed_views` beside `guards.cross_project_allow`. Only that key is governed: `worker_outward` and
