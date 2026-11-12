@@ -781,6 +781,7 @@ fn installed_manifest_denies_observed_codex_spawn_with_opaque_message() {
     assert!(stderr(&out).contains("explicit role"), "{}", stderr(&out));
 }
 
+#[cfg(unix)]
 fn supervisor_run(script: impl Fn(&Path) -> String) -> (i32, String, std::time::Duration) {
     use std::os::unix::fs::PermissionsExt;
     let fx = fixture();
@@ -827,6 +828,7 @@ fn supervisor_run(script: impl Fn(&Path) -> String) -> (i32, String, std::time::
 }
 
 #[test]
+#[cfg(unix)]
 fn cross_project_supervisor_a_broken_waggledance_is_exit_two_within_four_seconds() {
     for script in [
         "#!/bin/sh\nexit 1\n",
@@ -841,6 +843,7 @@ fn cross_project_supervisor_a_broken_waggledance_is_exit_two_within_four_seconds
 }
 
 #[test]
+#[cfg(unix)]
 fn cross_project_supervisor_a_registry_naming_the_project_grants_the_read() {
     let (exit, err, _) = supervisor_run(|root| {
         format!(
