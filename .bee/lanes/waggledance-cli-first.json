@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"waggledance-cli-first\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at e848643; reload the product and test \"waggledance-cli-first\", then either approve uat (\"bee gate --name uat --approved true --lane waggledance-cli-first\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"waggledance-cli-first\" (lane).",
   "created_at": "2026-11-11T17:11:16.961Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: waggledance-cli-first",
-    "asked_at": "2026-11-11T17:32:11.400Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for waggledance-cli-first (owner tests CLI-first doctrine and guard text on main)",
+    "asked_at": "2026-11-11T17:49:03.749Z",
+    "session": "55a40427-deca-4709-8271-1cfb9eacd76d"
   },
   "route": {
     "class": "feature",
