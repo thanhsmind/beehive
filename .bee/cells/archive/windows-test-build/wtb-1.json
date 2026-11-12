@@ -1,0 +1,128 @@
+{
+  "id": "wtb-1",
+  "feature": "windows-test-build",
+  "title": "Gate the unix-only supervisor tests with cfg(unix)",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "68db537b-1454-4079-b417-1808236ca5e2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-test-build/CONTEXT.md",
+    "docs/knowledge/patterns/20260821-a-platform-job-red-on-a-build-error-is-an-unknown-number-of-failures.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add #[cfg(unix)] to supervisor_run, to cross_project_supervisor_a_broken_waggledance_is_exit_two_within_four_seconds and cross_project_supervisor_a_registry_naming_the_project_grants_the_read in packages/bee-rs/crates/bee/tests/hook_contracts.rs, and to cross_project_supervisor_resolves_a_symlinked_registry_root in packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs. Change nothing else; add no comment lines. Linux behavior and test count stay the same.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cross_project_supervisor",
+  "must_haves": {
+    "truths": [
+      "cargo check --tests for x86_64-pc-windows-gnu reports no error",
+      "the cross_project_supervisor tests still run and pass on Linux"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+        "substantive": "supervisor_run and its two callers carry #[cfg(unix)]"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "the symlink test carries #[cfg(unix)]"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no production code change",
+      "no test body rewritten",
+      "no comment lines"
+    ]
+  },
+  "behavior_change": false,
+  "judge_obligation_ack": "adds only #[cfg(unix)] to one existing test; no guard logic or assertion changes",
+  "status": "capped",
+  "trace": {
+    "worker": "wtb-w1",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "worker returned done without cells finish and with an abbreviated proof command; leader re-ran the exact verify and capped from main",
+      "sync-ack: test-only cfg(unix) gating; no behavior any hook-runtime or herding concept describes changed"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-12T10:25:58.047Z",
+    "behavior_change": false,
+    "verification_evidence": "windows-gnu test check has no error; 21 lib + 2 hook_contracts cross_project_supervisor tests pass on Linux",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "4f0a3393-8cce-4466-bcd4-5507edce819a",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cross_project_supervisor",
+    "claimed_at": "2026-11-12T10:22:49.618Z",
+    "knowledge_delta": [],
+    "sync_ack": "test-only cfg(unix) gating; no behavior any hook-runtime or herding concept describes changed",
+    "mistakes": [
+      {
+        "wrong": "herded worker reported done without running cells finish, second time this session",
+        "better": "the herded run should refuse a done outcome while its --cell-id is still claimed",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "supervisor_run, its two callers and the symlink test gated with cfg(unix)",
+      "commit": "8d4690657",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo check --tests --target x86_64-pc-windows-gnu --manifest-path packages/bee-rs/Cargo.toml -p bee && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cross_project_supervisor — green:unit — windows-gnu test check has no error; 21 lib + 2 hook_contracts cross_project_supervisor tests pass on Linux",
+      "deviations": [
+        "worker returned done without cells finish and with an abbreviated proof command; leader re-ran the exact verify and capped from main"
+      ],
+      "mistakes": [
+        "herded worker reported done without running cells finish, second time this session — the herded run should refuse a done outcome while its --cell-id is still claimed — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "cargo check --tests for x86_64-pc-windows-gnu reports no error",
+            "artifact": "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+          },
+          {
+            "requirement": "the cross_project_supervisor tests still run and pass on Linux",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-11-12T10:26:02.947Z",
+        "recorded_by": "4f0a3393-8cce-4466-bcd4-5507edce819a",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 32153,
+    "cached": 98595,
+    "total": 130748,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 32153,
+        "cached": 98595,
+        "total": 130748
+      }
+    },
+    "jobs": [
+      "job-1794478974016-2126822-1"
+    ]
+  }
+}
