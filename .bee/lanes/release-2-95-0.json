@@ -14,7 +14,12 @@
   "next_action": "Continue bee-exploring for \"release-2-95-0\" (lane).",
   "created_at": "2026-11-12T04:52:07.480Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Triage: tiny — release theo script, một lệnh.",
+    "asked_at": "2026-11-12T04:52:57.161Z",
+    "session": "7e42f8ac-2593-449e-a0d4-e2850745b07e"
+  },
   "route": {
     "class": "release",
     "lane": "tiny",
