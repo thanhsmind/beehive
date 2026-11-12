@@ -24,11 +24,11 @@ refused outright, so "done" can never mean "I said so".
   refused before disk writes. On success, trace records four structured fields:
   `verify_command`, `verify_output`, `verify_passed`, and `verification_evidence`.
   Historical bare-green caps remain readable.
-- `cell-claim-contract` refuses a claim on contract grounds
-  (`cells/handlers_write.rs:1248-1436`): `CONTRACT_UNCITED` when a test-writing
-  cell cites no `contract:<name>` decision, `CONTRACT_UNSETTLED` when a cited
-  decision carries an open revisit trigger, and `CONTRACT_RETIRED` when one has
-  left the active set.
+- `cell-claim-contract` checks a claim on contract grounds
+  (`cells/handlers_write.rs:1248-1436`): claiming a `test`-role cell that cites
+  no `contract:<name>` decision warns about the missing decision,
+  `CONTRACT_UNSETTLED` fires when a cited decision carries an open revisit
+  trigger, and `CONTRACT_RETIRED` when one has left the active set.
 - `cell-self-cap` a dispatched execution worker finishes its work, commits with cell trailer, and self-caps via `cells finish` using the terminal composed prompt instruction.
 
 ## How to get to it (user POV)
@@ -46,17 +46,24 @@ refused outright, so "done" can never mean "I said so".
 Preconditions:
 
 - A launched sandbox, `control-bee doctor` fully `ok`.
-- Feature `demo-note` started and the merged gate approved — see
-  [feature-gates](./feature-gates.md).
+- Feature `demo-note` started and the merged gate approved from the
+  `fixtures/demo-note-plan.md` plan — see [feature-gates](./feature-gates.md) and
+  the Fixtures section of [README](./README.md). `cells add` accepts only the
+  packet the preview approved, so the cell comes from `fixtures/demo-note-1.json`.
 
 - **Validation refuses an incomplete cell.** Pipe a cell missing `action` and
   `verify`. Run
   `printf '{"id":"demo-note-1","feature":"demo-note","title":"Add a note file","lane":"small","role":"code","affects_skills":[],"affects_specs":[]}' | control-bee cli -- cells add --stdin --dry-run --json`.
   The payload reports `dry_run: true`, `ok: false`, and a `problems[]` array
-  naming `action` and `verify` by name. `control-bee cli -- cells list --json`
-  shows no cell was written.
-- **Add a complete cell.** Run
+  naming `action` and `verify` by name; it also names the packet mismatch against
+  the approved preview. `control-bee cli -- cells list --json` shows no cell was
+  written.
+- **A cell that differs from the approved packet is refused.** Run
   `printf '{"id":"demo-note-1","feature":"demo-note","title":"Add a note file","action":"Write NOTE.md","verify":"test -f NOTE.md","lane":"small","role":"code","affects_skills":[],"affects_specs":[]}' | control-bee cli -- cells add --stdin --json`.
+  The `.exit` file holds a non-zero code and the payload's `error` contains
+  `differs from approved preview packet (action mismatch)`.
+- **Add the approved cell.** Run
+  `control-bee cli -- cells add --stdin --json < .bee/verify/verify-app/fixtures/demo-note-1.json`.
   The payload echoes the cell with `status: "open"` and an empty `trace`.
 - **Claim it.** Run
   `control-bee cli -- cells claim --id demo-note-1 --worker verify-w1 --json`.
@@ -121,10 +128,14 @@ Preconditions:
 
 ## Gotchas
 
-- `bee cells show` reads the shared control plane and refuses inside a granted feature worktree; run it from the main sandbox checkout to inspect cell state.
-- The `--report` value is a JSON **string** with exactly five keys: `outcome`,
+- `bee cells show` works inside a granted feature worktree; `bee cells cap`
+  refuses there with `refused inside a granted feature worktree`, so cap from the
+  main sandbox checkout.
+- The `--report` value is a JSON **string** with five required keys: `outcome`,
   `commit`, `files`, `tests`, `deviations`. An unknown or missing key is refused
-  by name. `mistakes` is an optional sixth: an array whose items each carry
+  by name. The optional keys are `mistakes`, `knowledge_used`, `baseline`,
+  `reaction`, `skipped`, `unknowns`, `found` and `stopped`. `mistakes` is an
+  array whose items each carry
   THREE parts — `"<what went wrong> — <what would have been better> — <fix-at>"`
   or `{wrong, better, fix_at}`. The fix-at layer is one of `architecture`,
   `check`, `doctrine`, `none`, and an item without it is refused by name.
@@ -133,15 +144,10 @@ Preconditions:
   `"all tests pass"`) are rejected.
 - The proof line has three segments split on the first two ` — ` separators, and
   the separator is an em dash surrounded by spaces, not a hyphen.
-- **`bee cells cap --no-mistakes` cannot be used at all.** Bare, it is refused as
-  `unsupported_argument_shape` (`no-mistakes` is absent from `FLAG_ALONE_BOOLEANS`
-  in `verbs/reservations/flags.rs:31`, so the parser swallows the next token).
-  Given a value, `bool_flag` maps the string `"true"` to `false` on purpose
-  (`verbs/cells/util.rs:122`), so the cap succeeds and writes **no**
-  `trace.no_mistakes`. Verified on a real capped cell. Settle the mistakes
-  answer with `bee mailbox reflect --no-mistakes` (bare — that one is a true
-  bare-only flag), or put a `mistakes` array in `--report` whose items carry
-  all three parts, the `--fix-at` layer included.
+- A bare `bee cells cap --no-mistakes` caps the cell and writes
+  `trace.no_mistakes: true`. The other ways to settle the mistakes answer are
+  `bee mailbox reflect --no-mistakes` (bare) or a `mistakes` array in `--report`
+  whose items carry all three parts, the fix-at layer included.
 - A `small`-lane cap refuses without a registered execution worker. `tiny` lanes
   run inline and skip that requirement, and `--inline-reason` is the audited
   escape on the higher lanes.

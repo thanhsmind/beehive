@@ -22,12 +22,13 @@ opts in.
 - `comment-guard-off` stays silent with the key absent or `false`.
 - `comment-guard-move` allows a comment that was only moved, reindented or
   deleted — the comparison is old versus new, not "the file has comments".
-- `comment-guard-exceptions` allows a `#!` line, a `SAFETY:` line on an unsafe
-  block, and a license header at file top.
+- `comment-guard-exceptions` allows a `#!` line, a `SAFETY:` line anywhere (not
+  only on an unsafe block), and a license header at file top.
 - `comment-guard-scope` never touches a `.md`, `.json` or `.toml`, and never
   touches a path outside the code roots.
 - `comment-baseline-check` reports every file above its baseline and exits 1.
-- `comment-baseline-write` lowers and drops entries and REFUSES to raise one.
+- `comment-baseline-write` lowers and drops entries and REFUSES to raise one;
+  when any file rises it refuses the whole write.
 
 ## How to get to it (user POV)
 
@@ -51,7 +52,10 @@ Preconditions:
 - **Turn the key on in the sandbox.** The sandbox's own config decides, so write
   it there. bee ships no `config set` verb, so put the file:
   `printf '{"no_code_comments": true}\n' | control-bee put .bee/config.json`.
-  Read it back with `control-bee sh -- cat .bee/config.json`.
+  Read it back with `control-bee sh -- cat .bee/config.json`. Drive the guard
+  before any feature is started: with a feature active on main, the
+  worktree-first guard answers before the comment guard. Otherwise add
+  `"worktree_first": "off"` to the same config object.
 - **Give the guard a code file to guard.** Run
   `printf 'fn f() {}\n' | control-bee put packages/bee-rs/crates/bee/src/x.rs`.
 - **Drive the refusal with a crafted hook payload.** The hook reads one JSON
@@ -82,7 +86,9 @@ Preconditions:
   from the real checkout: `.bee/bin/bee dev comment-baseline --check`. A clean
   tree prints `comment-baseline --check: <n> file(s) at or below baseline` and
   exits 0.
-- **A rise is named and refused.** Append a comment line to any code file in the
+- **A rise is named and refused.** This step writes real source, and the idle
+  intake gate refuses that write on main, so run it inside a worktree with an
+  active feature. Append a comment line to any code file in the
   source checkout, re-run `--check`, and read the per-file
   `<path>: <count> comment line(s), baseline <n>` line plus the remedy sentence
   `bee dev comment-baseline --write lowers a count, never raises one.` Delete the
@@ -95,9 +101,8 @@ Preconditions:
 
 - **The guard counts a line that only LOOKS like a comment.** The predicate is a
   line predicate, not a parser: a line starting with `//` or `#` inside a string
-  literal counts. One such line exists in the repo today
-  (`hooks/session_close/html.rs`). Fix a false red by rewriting the string, never
-  by an allowlist.
+  literal counts. Fix a false red by rewriting the string, never by an
+  allowlist.
 - **Hosts default to off.** `no_code_comments` absent reads as `false`. Onboarding
   ships the hook and the doctrine line, never the key and never the baseline — the
   baseline is this repository's own.

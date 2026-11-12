@@ -47,7 +47,9 @@ Preconditions:
   and `instruction` fields, and a `sessionTransition`
   object with `operation: "enter-worktree"`, canonical `sourceCwd: main_root`,
   `targetCwd: worktreeRoot`, and `continuation: null`. When `PI_SESSION_ID` is set,
-  `@@BEE_SESSION_TRANSITION@@` is emitted on stderr. Confirm with
+  `@@BEE_SESSION_TRANSITION@@` is emitted on stderr. When a `PASEO_*` variable is
+  set, bee also registers a paseo workspace — `control-bee` strips them, so a
+  sandbox drive registers none. Confirm with
   `control-bee sh -- ls ..` — the run dir now holds `repo` and
   `repo--wt--wt-demo`.
 - **The grant is registered.** Run `control-bee cli -- worktree list --json`. It
@@ -65,8 +67,9 @@ Preconditions:
   run `VERIFY_CWD=repo--wt--wt-demo control-bee cli -- worktree enter --id repo--wt--wt-second --json`.
   The payload reports `ok: true`, `id: "repo--wt--wt-second"`, and `sessionTransition` with
   `operation: "enter-worktree"`, `sourceCwd` pointing at `repo--wt--wt-demo`, and `targetCwd`
-  pointing at `repo--wt--wt-second`. Same-worktree entry (`--id repo--wt--wt-demo`) is refused
-  with `same_worktree` before transition marker emission.
+  pointing at `repo--wt--wt-second`. Same-worktree entry (`--id repo--wt--wt-demo`)
+  exits 1 with `{"error":"cannot enter worktree \"repo--wt--wt-demo\": target directory is identical to source directory"}`
+  before transition marker emission; there is no `same_worktree` kind.
 - **Exit a worktree without merging (`worktree exit`).** Run
   `VERIFY_CWD=repo--wt--wt-demo control-bee cli -- worktree exit --json`. The payload
   reports `ok: true`, top-level `sessionRuntime` and `instruction` fields, and `sessionTransition`
@@ -98,7 +101,8 @@ Preconditions:
   `control-bee cli -- worktree merge --id repo--wt--wt-demo --json` — from the
   main checkout. The payload reports
   `ok: true`, `merged: true`, the branch, and a `verify` field reading
-  `"proven (<N> cell(s))"`, `"unchecked (no capped cells)"` or `"skipped"`. When
+  `"proven (<N> cell(s))"`, `"unchecked (no capped cells)"` or `"skipped"`. The payload also carries
+  `cleanup_suggested_command`. When
   bee committed `.bee` bookkeeping first, a `bookkeeping_commit` object carries
   `committed: true` and its sha.
 - **Confirm the merge landed.** Run `control-bee sh -- ls WORK.md` and
@@ -111,16 +115,16 @@ Preconditions:
   `--no-cleanup` is an explicit keep and beats both
   (`worktree/handlers.rs:413-437`, where an absent config key reads `false`).
   A non-boolean config value refuses the merge rather than guessing.
-- **A merge refuses on recorded debt, before git runs.** Three zero-mutation
-  checks fire ahead of `git merge` (`worktree/phases.rs`):
-  `WORKTREE_MERGE_PROOF_DEBT` when a capped cell carries no proof line
-  (`:219-226`), `WORKTREE_MERGE_DISSENT_DEBT` (`:260-267`), and
-  `WORKTREE_MERGE_ADVISOR_NUDGE_DEBT` (`:296-303`), and
+- **A merge refuses on recorded debt, before git runs.** The zero-mutation
+  merge-debt checks fire ahead of `git merge` (`worktree/phases.rs`) and come as
+  four codes plus `WORKTREE_MERGE_UAT_PENDING`:
+  `WORKTREE_MERGE_PROOF_DEBT` when a capped cell carries no proof line,
+  `WORKTREE_MERGE_DISSENT_DEBT`, `WORKTREE_MERGE_ADVISOR_NUDGE_DEBT`, and
   `WORKTREE_MERGE_PARKED_CELL` while a cell is parked on a human question
   (drive it: `cells park --id <cell> --question "<q>"`, merge, see the
   refusal, then `cells answer --id <cell> --answer "<a>"` and merge again).
   A `standard`/`high-risk`
-  feature with an unapproved uat gate refuses too (`:478-488`) unless
+  feature with an unapproved uat gate refuses too unless
   `--skip-uat` is passed or config `uat_before_merge` is `false`.
 - **Reclaim dead worktrees.** `control-bee cli -- worktree prune --json` removes
   worktrees whose branch is fully merged and whose tree holds nothing precious;
@@ -130,37 +134,39 @@ Preconditions:
   `control-bee cli -- close --feature demo-note --dry-run --json`. The payload is
   a `doors[]` array; each entry has `door`, `blocking` and `detail`. Snapshot
   before and after and confirm the state is unchanged.
-- **Count the doors, do not assume them.** A dry run reports TWELVE on a `tiny`
-  lane: `tests`, `scribing-debt`, `capture-queue`, `mistakes`, `dissent-debt`,
-  `advisor-nudge-debt`, `uat`, `pattern-check`, `knowledge-freshness`, `impact`,
-  `routing`, `doc-deferral`. `judge-debt` is a thirteenth, lane-gated to
-  `standard`/`high-risk` (`drivers/close.rs:1594`). A `parked-cell` door
+- **Count the doors, do not assume them.** A dry run on a `small` lane lists 13
+  doors, including `leader-check`: `tests`, `scribing-debt`, `capture-queue`,
+  `mistakes`, `dissent-debt`, `advisor-nudge-debt`, `uat`, `pattern-check`,
+  `knowledge-freshness`, `impact`, `routing`, `doc-deferral`, `leader-check`.
+  `judge-debt` is lane-gated to
+  `standard`/`high-risk`. A `parked-cell` door
   joins the list only while the feature has a parked cell, so a clean
   feature's count does not change. The builder is
-  `build_close_report_doors` (`close.rs:1495-1786`); the remaining doors are
-  added by `close_handler` (`close.rs:2403-2413`). A recipe that names only the
-  door it cares about goes stale the next time one is added — read the array.
+  `build_close_report_doors`; the remaining doors are added by `close_handler`.
+  A recipe that names only the door it cares about goes stale the next time one
+  is added — read the array.
 - **A blocking door names its remedy.** With one capped cell and no reflection,
   the `mistakes` door reports `blocking: true` and a `detail` naming
   `bee mailbox reflect`. The `tests` door reports `blocking: false` with
   `1 capped cell(s) all carry a proof line`. On this `small` lane the `uat` door
   reports `blocking: false` with `clear — this lane is exempt from the
   close-time uat door`, whatever the uat gate says.
-- **Settle it and close green.** Run
+- **Settle it and close green.** For a `behavior_change` cell, `scribing-debt`
+  and `leader-check` block too. Clear `leader-check` with `bee cells leader-check`
+  or `bee audit log --kind leader-check-deferral`, and `scribing-debt` with
+  bee-capturing or `bee audit log --kind capture-deferral`. Run
   `control-bee cli -- mailbox reflect --no-mistakes --json`, then
   `control-bee cli -- close --feature demo-note --json`. No entry of `doors[]`
   has `blocking: true`.
 - **A mechanizable mistake files its backlog row at close.** Settle the door
   with a real reflection instead: `control-bee cli -- mailbox reflect --wrong
   "ran the wrong test target" --better "read the cell's verify first" --fix-at
-  check --json`, then close. The green tail carries `Filed for "demo-note": 1
-  fix-at row(s) to .bee/backlog.jsonl (0 already there) — bee backlog findings
-  --feature demo-note to read them.`, the payload carries
+  check --json`, then close. With `--json` close prints no `Filed for` line; the payload carries
   `fix_at_rows: {"filed": 1, "skipped": 0}`, and
   `control-bee cli -- backlog findings --feature demo-note --json` shows the
   row with `type: "finding"`, `severity: "P3"` and `layer: "fix-at:check"`.
-  Close a second time: the same line reports `0 fix-at row(s) … (1 already
-  there)` and the backlog grows by nothing.
+  Close a second time: `fix_at_rows` reports `skipped: 1` and the backlog grows
+  by nothing.
 - **Merge refusal recovery names re-entry in Pi.** In Pi, when a post-exit
   merge reconstructed on main refuses (due to uncommitted dirt, recorded proof
   debt, dissent debt, or an unapproved uat gate), the session remains on main,
@@ -200,8 +206,6 @@ Preconditions:
   session sits in that worktree.
 - `sessionRuntime` and `instruction` top-level fields accompany every worktree transition result
   (`new`, `enter`, `exit`, linked `merge`, and merge-from-main detection).
-- `bee worktree enter` is main-only. Invoking it inside any linked worktree
-  refuses untyped, naming the checkout kind it was run from.
 - Exit before merge never deletes the worktree. Teardown runs only after a
   successful merge on main when `--cleanup` is passed or
   `worktree_cleanup_on_merge: true` is configured.
@@ -247,13 +251,14 @@ Preconditions:
   uat door`. Assert on the doors you drove, never on a door count.
 - `bee close`'s `mistakes` door reads the feature's capped cells first
   (`trace.no_mistakes` or a non-empty `trace.mistakes`), and falls back to the
-  closing run's mailbox only when cell debt remains. In practice the cell half is
-  unreachable from the CLI — see the `--no-mistakes` gotcha in
-  [cells-and-proof](./cells-and-proof.md) — so `bee mailbox reflect
-  --no-mistakes` is what actually settles it.
-- The `Filed for "<feature>"` line is news-only. A feature whose mistakes were
+  closing run's mailbox only when cell debt remains. A bare
+  `bee cells cap --no-mistakes` writes `trace.no_mistakes: true`; `bee mailbox
+  reflect --no-mistakes` settles the mailbox half.
+- The `Filed for "<feature>"` line is news-only and only in non-`--json` close
+  output. A feature whose mistakes were
   all `doctrine`, `none` or absent prints no such line at all, so drive a
-  `check` or `architecture` reflection before asserting on it. The rows are
+  `check` or `architecture` reflection before asserting on it, and under `--json`
+  assert on `fix_at_rows`. The rows are
   read with `bee backlog findings --feature <feature>`; `bee backlog rank`
   sinks a P3 finding, so a ranked list is the wrong place to look for them.
 - A backlog file that cannot be written never refuses the close. The tail gains

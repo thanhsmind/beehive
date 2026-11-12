@@ -57,11 +57,17 @@ answers, or a doctor row that passes before init finished, is not ready, and
 evidence captured before that point is discarded. It:
 
 1. picks a run id and writes `$VERIFY_HOME/current-run`,
-2. creates `$VERIFY_HOME/run/<id>/repo`, `git init`s it, makes a seed commit,
+2. creates `$VERIFY_HOME/run/<id>/repo`, `git init`s it on branch `main`, makes a seed commit,
 3. runs `bee onboard --repo-root <sandbox> --apply --json` **with cwd set to the
    real checkout** (onboard finds the engine to vendor by walking up from its own
    cwd, not from `--repo-root`),
-4. commits the onboarded tree so later diffs are readable.
+4. links `.bee/bin/bee` to the built binary, which an onboard from the source
+   checkout leaves out and `doctor --runtime pi` needs,
+5. commits the onboarded tree so later diffs are readable.
+
+`control-bee` strips every `PASEO_*` variable from the environment of every
+command it runs. Without that, a drive from inside paseo makes `worktree new` in
+the sandbox register a workspace in the user's real paseo daemon.
 
 Paths (override `VERIFY_HOME` to move them all):
 
@@ -127,6 +133,13 @@ recorded `.exit` file, not on the shell's status.
 printf '{"id":"demo-1", ...}' | bash .../control-bee cli -- cells add --stdin --json
 ```
 
+Parallel `cli` and `sh` calls are safe: each claims its evidence stem with a
+no-clobber create, so five calls at once get five distinct stems.
+
+Runnable inputs for the gate-dependent recipes live in
+[`fixtures/`](./fixtures) — see the Fixtures section of
+[`features/README.md`](./features/README.md).
+
 Prefer stable handles: the `--json` payload keys and the `error` / `kind` strings
 in a refusal, never the human wording and never the `[bee] <verb> Nms` timing
 line on stderr.
@@ -190,10 +203,6 @@ or registered worktree behind.
   a redirect to an absolute path outside the worktree. That is why `control-bee`
   exists and why you must call it by its literal path — `"$C" put x`
   gets refused on the `$C`. Use `control-bee put` instead of `> file`.
-- **`bee cells cap --no-mistakes` does not work in either form.** Bare, it is
-  refused as `unsupported_argument_shape`; with a value, the cap succeeds and
-  silently records nothing. `bee mailbox reflect --no-mistakes` (bare) is what
-  settles the close door. Details in `features/cells-and-proof.md`.
 - **A refusal can still exit 0 at the shell.** With `--json` the error body goes
   to **stdout**, not stderr. Read the `.exit` file the harness recorded.
 - **`bee doctor` needs `--runtime`.** Bare `bee doctor --json` is a
@@ -204,9 +213,9 @@ or registered worktree behind.
   unless `trace.worker` also appears in `state.json` `workers[]` for that cell.
   Register it with `bee state worker add --nickname <w> --cell <id>`, or use a
   `tiny` lane, which runs inline.
-- **The close `mistakes` door checks the cells first, the mailbox second.** The
-  cell half is unreachable from the CLI (see the `--no-mistakes` gotcha above), so
-  in practice only `bee mailbox reflect --no-mistakes` clears it.
+- **The close `mistakes` door checks the cells first, the mailbox second.** A
+  bare `bee cells cap --no-mistakes` caps and writes `trace.no_mistakes: true`;
+  `bee mailbox reflect --no-mistakes` (bare) clears the mailbox half.
 - **Onboard must run from the real checkout.** `--repo-root` says where to
   install; the engine it vendors is found by walking up from cwd, stopping at the
   first `.git`. `control-bee launch` and `control-bee host` handle this; plain

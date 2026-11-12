@@ -8,9 +8,8 @@ records who approved, when, and under what bypass level.
 ## Sub-features
 
 - `feature-start` starts a feature and resets all four gates.
-- `feature-start-guard` refuses a start when the workspace is not clean.
 - `route-set` records the triage (class, lane, flags, product-file count).
-- `gate-preview` parses plan cell packets, validates required fields, records preview hash, and gates shape approval.
+- `gate-preview` parses plan cell packets, validates required fields, records the preview hash (`gate_preview.plan_sha256`), and gates shape approval.
 - `gate-merge` approves shape and execution together in one call.
 - `gate-named` approves or unapproves a single named gate.
 - `gate-audit` an auto approval records its bypass level and reason.
@@ -37,8 +36,8 @@ Preconditions:
   `workers` array, and a `next_action` naming the feature.
 - **A second start is refused.** Run the same command again with
   `--feature other-thing`. The `.exit` file holds a non-zero code and the payload
-  carries an `error` naming the unclean workspace. `bee orient --json` still
-  reports `feature: "demo-note"` — the refusal mutated nothing.
+  carries an `error` naming the current phase and offering `--as-lane`.
+  `bee orient --json` still reports `feature: "demo-note"` — the refusal mutated nothing.
 - **Record the route.** Run
   `control-bee cli -- route --set --class feature --lane small --flags "" --files 1 --json`.
   The payload reports `class: "feature"`, `lane: "small"`, `flags: []`,
@@ -46,6 +45,12 @@ Preconditions:
   exact `command` to create it.
 - **Read the route back.** Run `control-bee cli -- route --show --json`. It
   returns the same four values.
+- **Put the context and the plan.** The merged gate needs
+  `docs/history/demo-note/CONTEXT.md` (a read set, or the no-read-set marker) and
+  a previewed `plan.md`. Run
+  `control-bee put docs/history/demo-note/CONTEXT.md < .bee/verify/verify-app/fixtures/context-no-read-set.md`
+  and
+  `control-bee put docs/history/demo-note/plan.md < .bee/verify/verify-app/fixtures/demo-note-plan.md`.
 - **Preview cell packets.** Run `control-bee cli -- gate --preview --json`.
   The payload parses the cell packet from `plan.md`, verifies execution fields
   (`action`, `verify`, `files`, `read_first`, `must_haves`), and records
@@ -54,20 +59,24 @@ Preconditions:
   hashes against this preview. Automated Pi lifecycle coverage is exercised in
   `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`
   (`pi_lifecycle_end_to_end_onboarded_repo_parity`).
+- **The merged gate refuses in a fixed order.** Before the context is put it
+  refuses for the missing CONTEXT. With the context but no preview it refuses
+  `missing gate preview`. After a preview, an edit to `plan.md` makes it refuse
+  `stale gate preview`.
 - **Approve the merged gate.** Run
   `control-bee cli -- gate --merge --approved true --json`. The payload's
   `approved_gates` now has `shape: true` and `execution: true`, with `context`
-  and `review` still `false`. There is NO `uat` key: `default_gates()` mints
-  exactly four (`state_group/store.rs:42-49`), and `uat` appears only once
-  `--name uat` sets it.
+  and `review` still `false` and `uat: false`.
 - **An approval can refuse before it writes.** Four preconditions guard it, each
   zero-mutation (`state_group/set_gate.rs`): a shape or merged approval refuses
   if `approved_cell_packet` preview is missing or stale with respect to `plan.md`;
   a `high-risk` lane refuses an execution or merged approval while `advisor_ref`
-  is missing or stale (`:587-621`); a LANE target refuses while the plan-time conflict
-  review is absent or was derived against a different `plan_rev` (`:623-737`); and a plan
-  carrying unresolved load-bearing claims refuses (`:748-775`). Drive at least
-  the conflict one — it fires on any lane whose review has never run.
+  is missing or stale; a LANE target refuses while the plan-time conflict
+  review is absent or was derived against a different `plan_rev`; and a plan
+  carrying unresolved load-bearing claims refuses. The conflict refusal fires
+  only for a lane target — `start-feature --as-lane` or
+  `gate --merge --lane <f>` — and its remedy is
+  `state plan-conflicts derive --lane <f>`.
 - **Approve one named gate.** Run
   `control-bee cli -- gate --name uat --approved true --json`. Only
   `approved_gates.uat` flips.
@@ -75,8 +84,9 @@ Preconditions:
   `control-bee cli -- gate --name uat --approved false --json`. It flips back to
   `false`.
 - **Proof.** Run `control-bee snapshot gates`. The snapshot's `state.json`
-  carries the same `feature`, `phase` and gate values, and its `gate_records`
-  entries name the approving `actor` and the approval time.
+  carries the same `feature`, `phase` and gate values. Read `gate_records` from
+  `control-bee cli -- status --json`, not from the snapshot: its entries name the
+  approving `actor` and the approval time.
 
 ## Gotchas
 
