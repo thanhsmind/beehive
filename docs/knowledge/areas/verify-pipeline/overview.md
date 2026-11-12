@@ -59,6 +59,7 @@ lifecycle.
 - A red verification result refuses cell completion and merge unconditionally.
 - A cell proves itself with its related tests; the full suite runs once per feature, never per cell, and a leader never re-runs a worker's recorded proof.
 - Proof lines must name fresh command output and valid scope justifications.
+- The `verify-app` feature map drifts as bee changes, and `bee-verify-upkeep` keeps it true. Nothing in close, merge or release starts the upkeep yet; it ran by hand on 2026-09-02 and 2026-11-12. The 2026-11-12 pass edits only the `.bee/verify/verify-app/` source and re-renders it with `bee onboard --apply` (verify-map-upkeep-2 D1). It files product defects to the backlog, never into the map change (verify-map-upkeep-2 D2). It ships only corrections proven live or cited from source (verify-map-upkeep-2 D3). Runnable gate fixtures live in `.bee/verify/verify-app/fixtures/`.
 
 ## Pointers (implementation)
 
