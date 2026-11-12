@@ -2133,5 +2133,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-11T17:47:11.114Z"
+  },
+  "worktree-file-links": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-12T04:37:43.371Z"
   }
 }

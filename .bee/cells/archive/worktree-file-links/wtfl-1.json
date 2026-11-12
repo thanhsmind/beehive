@@ -1,0 +1,252 @@
+{
+  "id": "wtfl-1",
+  "feature": "worktree-file-links",
+  "title": "Name a file in an unmerged worktree by its absolute path, and drop the waggledance viewing block",
+  "lane": "small",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee/LEADER.md",
+    ".bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    ".claude/skills/bee-hive/references/routing-and-contracts.md",
+    ".agents/skills/bee-hive/references/routing-and-contracts.md",
+    ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+    ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+    ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee/LEADER.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "action": "Owner report: an agent that works in a feature worktree names a changed file by its bare repo-relative path; the owner clicks it, the host resolves it against the main checkout, and the file does not open (or an old copy opens). Change the path rule in its two source homes so that the report names such a file by its absolute path. Home 1: packages/bee/LEADER.md, section Communication, the sentence 'name a doc by its bare repo-relative path (`docs/...`), never a viewer URL'. Home 2: skills/bee-hive/references/routing-and-contracts.md, the sentence 'name a doc by its bare repo-relative path (`docs/...`), never a viewer URL'. In both homes keep the existing rule for a file that is in the main checkout, and add the exception: a file that lives in a feature worktree whose branch is not yet merged is named by its absolute path (worktree root plus the repo-relative path), because a relative path resolves against main; after the merge the bare repo-relative path is correct again. Keep 'never a viewer URL'. Use the same wording in both homes and keep each addition to one short sentence or clause. Then run the regen chain (`.bee/bin/bee dev regen`) so that .bee/LEADER.md and the rendered skill copies match their sources; never hand-edit a rendered copy. Second part: delete the whole section '## Documentation Viewing (Waggledance)' (heading through the end of its 'When to render' subsection) from AGENTS.md and from CLAUDE.md; the owner asked to stop the waggledance viewing link. Change nothing else in those two files. Third part: add the new exception to the knowledge concept docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md where it records the communication or path rule; if that concept does not record the path rule, change nothing there and say so in the cap trace. Write no code comment. Commit once.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity --test verification_contract_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "Both source homes state that a file in an unmerged feature worktree is named by its absolute path",
+      "AGENTS.md and CLAUDE.md carry no waggledance viewing section",
+      "Rendered copies match their sources"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/LEADER.md",
+        "substantive": "Communication section carries the worktree absolute-path exception"
+      },
+      {
+        "path": "skills/bee-hive/references/routing-and-contracts.md",
+        "substantive": "communication contract carries the same exception"
+      }
+    ],
+    "key_links": [
+      ".bee/LEADER.md equals the rendered packages/bee/LEADER.md"
+    ],
+    "prohibitions": [
+      "No change to the doc_viewer config mechanism",
+      "No other change in AGENTS.md or CLAUDE.md"
+    ]
+  },
+  "trace": {
+    "worker": "wtfl-worker-1",
+    "outcome": "Worktree absolute-path exception added to LEADER.md and routing-and-contracts.md, regen green, waggledance section removed from AGENTS.md and CLAUDE.md; commit 2b3072b67",
+    "files_changed": [
+      "packages/bee/LEADER.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      ".bee/LEADER.md",
+      ".claude/skills/bee-hive/references/routing-and-contracts.md",
+      ".agents/skills/bee-hive/references/routing-and-contracts.md",
+      ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json",
+      ".agents/skills/.bee-render.json",
+      ".claude/skills/.bee-render.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/.bee-render.json",
+      ".opencode/skills/.bee-render.json"
+    ],
+    "deviations": [
+      "sync-ack: The edit changes the path clause of the Communication rule only; the capture-line rule text is unchanged, and a search for the path clause found it in no other file than the two source homes"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-12T04:34:12.701Z",
+    "behavior_change": true,
+    "verification_evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity --test verification_contract_parity && bee dev release-manifest --check && bee onboard --json — green:static — doc and rendered-copy change only; knowledge concept lane-and-working-discipline.md records no path rule so left unchanged. Commit 2b3072b67",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7e42f8ac-2593-449e-a0d4-e2850745b07e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity --test verification_contract_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "claimed_at": "2026-11-12T04:32:38.562Z",
+    "knowledge_delta": [],
+    "sync_ack": "The edit changes the path clause of the Communication rule only; the capture-line rule text is unchanged, and a search for the path clause found it in no other file than the two source homes",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Worktree absolute-path exception added to LEADER.md and routing-and-contracts.md, regen green, waggledance section removed from AGENTS.md and CLAUDE.md; commit 2b3072b67",
+      "commit": "2b3072b67d4c9a1c80d4c7acf843eff97e3b473d",
+      "files": [
+        "packages/bee/LEADER.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        ".bee/LEADER.md",
+        ".claude/skills/bee-hive/references/routing-and-contracts.md",
+        ".agents/skills/bee-hive/references/routing-and-contracts.md",
+        ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json",
+        ".agents/skills/.bee-render.json",
+        ".claude/skills/.bee-render.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/.bee-render.json",
+        ".opencode/skills/.bee-render.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity --test verification_contract_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json — green:static — cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws --test pointer_integrity --test rule_index_parity --test verification_contract_parity && bee dev release-manifest --check && bee onboard --json — green:static — doc and rendered-copy change only; knowledge concept lane-and-working-discipline.md records no path rule so left unchanged. Commit 2b3072b67",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Both source homes state that a file in an unmerged feature worktree is named by its absolute path",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "AGENTS.md and CLAUDE.md carry no waggledance viewing section",
+            "artifact": "AGENTS.md"
+          },
+          {
+            "requirement": "Rendered copies match their sources",
+            "artifact": ".bee/LEADER.md"
+          },
+          {
+            "requirement": "Communication section carries the worktree absolute-path exception",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "communication contract carries the same exception",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".bee/LEADER.md equals the rendered packages/bee/LEADER.md",
+            "artifact": ".bee/LEADER.md"
+          },
+          {
+            "requirement": "No change to the doc_viewer config mechanism",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "No other change in AGENTS.md or CLAUDE.md",
+            "artifact": "CLAUDE.md"
+          },
+          {
+            "requirement": "packages/bee/LEADER.md",
+            "artifact": "packages/bee/LEADER.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".bee/LEADER.md",
+            "artifact": ".bee/LEADER.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".claude/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".agents/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".opencode/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+            "artifact": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md"
+          },
+          {
+            "requirement": "AGENTS.md",
+            "artifact": "AGENTS.md"
+          },
+          {
+            "requirement": "CLAUDE.md",
+            "artifact": "CLAUDE.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": ".bee/onboarding.json",
+            "artifact": ".bee/onboarding.json"
+          },
+          {
+            "requirement": ".agents/skills/.bee-render.json",
+            "artifact": ".agents/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude/skills/.bee-render.json",
+            "artifact": ".claude/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".claude-plugin/skills/.bee-render.json",
+            "artifact": ".claude-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".codex-plugin/skills/.bee-render.json",
+            "artifact": ".codex-plugin/skills/.bee-render.json"
+          },
+          {
+            "requirement": ".opencode/skills/.bee-render.json",
+            "artifact": ".opencode/skills/.bee-render.json"
+          }
+        ],
+        "recorded_at": "2026-11-12T04:34:24.324Z",
+        "recorded_by": "7e42f8ac-2593-449e-a0d4-e2850745b07e",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 28988,
+    "cached": 202345,
+    "total": 231333,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 28988,
+        "cached": 202345,
+        "total": 231333
+      }
+    },
+    "jobs": [
+      "job-1794457963537-4156239-1"
+    ]
+  }
+}

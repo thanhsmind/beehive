@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "worktree-file-links",
+  "closed_at": "2026-11-12T04:37:43.404Z",
+  "sessions": [
+    {
+      "session_id": "7e42f8ac-2593-449e-a0d4-e2850745b07e",
+      "models": {
+        "claude-fable-5-2": {
+          "input": 108,
+          "output": 23275,
+          "cache_write": 108852,
+          "cache_read": 4039977,
+          "new": 132235,
+          "cached": 4039977,
+          "total": 4172212
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794457479762,
+      "ended_ms": 1794458261566,
+      "totals": {
+        "new": 132235,
+        "cached": 4039977,
+        "total": 4172212
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 132235,
+      "cached": 4039977,
+      "total": 4172212
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 161223,
+      "cached": 4242322,
+      "total": 4403545
+    },
+    "herding": {
+      "new": 28988,
+      "cached": 202345,
+      "total": 231333,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 16,
+          "output": 4069,
+          "cache_write": 24903,
+          "cache_read": 202345,
+          "new": 28988,
+          "cached": 202345,
+          "total": 231333
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "23abb1fd-aca9-49c4-944a-a0bc25c58619",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 16,
+          "output": 4069,
+          "cache_write": 24903,
+          "cache_read": 202345,
+          "new": 28988,
+          "cached": 202345,
+          "total": 231333
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794457965134,
+      "ended_ms": 1794458029454,
+      "totals": {
+        "new": 28988,
+        "cached": 202345,
+        "total": 231333
+      },
+      "job_id": "job-1794457963537-4156239-1"
+    }
+  ]
+}
