@@ -10,7 +10,9 @@ as the recipe.
   `packages/bee-rs/target/release/bee` — `CARGO_TARGET_DIR` may move it. Ask
   `control-bee bin`.
 - Create a disposable sandbox: `control-bee launch`. It prints
-  `$VERIFY_HOME/run/<run-id>/repo`.
+  `$VERIFY_HOME/run/<run-id>/repo`, on branch `main`, with `.bee/bin/bee` linked
+  to the built binary. `control-bee` strips every `PASEO_*` variable from the
+  environment of the commands it runs.
 - Set `VERIFY_HOME` to give concurrent runs separate roots. Each run already gets
   its own id, sandbox and evidence dir.
 - Run `control-bee doctor` and require every line to read `ok`.
@@ -104,6 +106,32 @@ Runtime parity across supported runtimes (Claude, Codex, OpenCode, and Pi) is
 exercised through both CLI driving recipes and automated harness contract suites
 (`cargo test -p bee --test pi_plugin_contracts` for Pi lifecycle, early write denial,
 gate preview, proof line verification, and concurrent herding allocations).
+
+## Fixtures
+
+`../fixtures/` holds the runnable inputs for the recipes that need an approved
+plan.
+
+- `demo-note-plan.md` is a plan with one packet, cell `demo-note-1` (verify
+  `test -f NOTE.md`); `demo-note-1.json` is the exact packet `cells add` must
+  receive.
+- `context-no-read-set.md` is a CONTEXT.md carrying the no-read-set marker.
+- `role-plan-v2.md` is the same plan as `bee-plan/v2` with a role block; its
+  `roster_sha256` is `REPLACE_FROM_ROSTER_STALE_ERROR`.
+
+Put the context and the plan with
+`control-bee put docs/history/<f>/CONTEXT.md < .bee/verify/verify-app/fixtures/context-no-read-set.md`
+and
+`control-bee put docs/history/<f>/plan.md < .bee/verify/verify-app/fixtures/demo-note-plan.md`,
+then `gate --preview`, then `gate --merge`. For v2, preview once, copy the
+expected digest out of the `role_plan_roster_stale` error into `roster_sha256`,
+and put the plan again.
+
+## Upkeep log
+
+- 2026-11-12, run `20261112-123209-529324`: the feature files were audited
+  against source and driven live; the corrections shipped in
+  `verify-map-upkeep-2`.
 
 ## Not yet mapped
 

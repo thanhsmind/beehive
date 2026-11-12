@@ -10,7 +10,7 @@ completion.
 
 - `codex-write-deny` denies forbidden native `apply_patch` and `Bash` writes before Gate 2 approval.
 - `codex-write-allow` allows approved edits when the write targets history/docs.
-- `codex-model-guard` inspects native spawn requests, denies unmarked input as `codex-spawn-unmarked` (exit 2), and prevents child launch.
+- `codex-model-guard` inspects native spawn requests, denies unmarked input with exit 2 and `every Codex spawn_agent needs an explicit role`, and prevents child launch.
 - `codex-readonly-sandbox` dispatches model-shaped or prompt-budget non-cell roles via an explicit read-only CLI sandbox.
 - `codex-turn-completion` records parent turn completion as `turn-end` in `.bee/state.json` when a persisted transcript is present and preserves child isolation.
 
@@ -29,7 +29,7 @@ Set `CODEX_BIN` to the absolute path of the direct Codex executable before these
 Preconditions:
 
 - A launched sandbox, `bash .bee/verify/verify-app/control-bee doctor` fully `ok`.
-- An isolated private `CODEX_HOME` directory. Never use or alter real user credentials.
+- An isolated private `CODEX_HOME` directory that holds an authenticated login: the live canary ends `401 Unauthorized` on an empty one. Place it where the agent's write guard allows. Never use or alter real user credentials.
 - Set `TMPDIR=/var/tmp`.
 - Direct `CODEX_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}"` and `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)"`.
 - The repository is onboarded with Codex hooks present in `.codex/hooks.json`.
@@ -42,7 +42,7 @@ Preconditions:
   - Allowed writes: status 0 for `patch.txt` and `shell.txt` under `docs/history/canary/`, with allowed content verified on disk.
   - Model guard and child spawn: inspect `$EVIDENCE/report.json.skipped_capabilities` and raw actual model-guard call. The canary run may skip native spawn if the child declines it; never count absence of child event alone as proof of denial. Verify raw model guard directly with:
     `printf '{"tool_name":"collaborationspawn_agent","tool_input":{"message":"opaque"}}' | "$(bash .bee/verify/verify-app/control-bee bin)" hook model-guard --runtime codex`
-    returning exit code 2 and transport `codex-spawn-unmarked` (not `native_hook_input_opaque`, which is emitted by `dispatch prepare`). Retain earlier actual `ZPuEAI` guard exit 2 and `Cm0jce` child isolation as separate baseline evidence.
+    returning exit code 2 and printing `every Codex spawn_agent needs an explicit role` (it does not print `codex-spawn-unmarked`, and not `native_hook_input_opaque`, which is emitted by `dispatch prepare`). Retain earlier actual `ZPuEAI` guard exit 2 and `Cm0jce` child isolation as separate baseline evidence.
   - Overall canary script exits 0.
 
 - **Read-only sandbox verification with supported fixture put and actual prepared execution.**
@@ -74,7 +74,7 @@ Preconditions:
   A mock Stop event without a persisted session transcript leaves `waiting_on` null in `.bee/state.json`; do not fabricate mock Stop events as installed proof.
 
 - **Child subagent lifecycle isolation.**
-  `SubagentStart` runs audit only; `SubagentStop` runs audit, state sync, and chain nudge (the no-activity-on-child rule is unchanged; neither alters `hook activity`). On Codex 0.154.0, opaque native spawn is denied by the installed model guard as transport `codex-spawn-unmarked` (exit 2). Child isolation is verified separately via unit tests and prior canary telemetry (`Cm0jce`), preserving parent session turn state.
+  `SubagentStart` runs audit only; `SubagentStop` runs audit, state sync, and chain nudge (the no-activity-on-child rule is unchanged; neither alters `hook activity`). On Codex 0.154.0, opaque native spawn is denied by the installed model guard with exit 2 and `every Codex spawn_agent needs an explicit role`. Child isolation is verified separately via unit tests and prior canary telemetry (`Cm0jce`), preserving parent session turn state.
 
 ## Gotchas
 
@@ -82,7 +82,7 @@ Preconditions:
 - Fake Stop events without a persisted session transcript leave `waiting_on` null in `.bee/state.json`. Persisted transcripts are required for parent turn-end marking.
 - Set `CODEX_BIN` to an absolute direct executable path before running this recipe. The canary rejects relative paths, mise wrappers, sensitive home aliases, and invalid explicit `BEE_BIN` values. It replaces inherited `BEE_CODEX_PROBE_BIN`, isolates HOME and XDG paths, and permits Codex helper links only when they resolve to the selected executable. The shell tests include probe-executed and isolated-write checks. This prevents accidental settings writes; it is not an OS sandbox for arbitrary executables. Historical global-setting restoration remains unverified.
 - Canary runs may skip native spawn if the model declines the call; check `skipped_capabilities` and test `model-guard` with raw input directly instead of relying solely on the absence of child events.
-- Dispatch prepare classifies Codex 0.154.0 as `native_hook_input_opaque` and refuses native cell dispatch. `evaluate_codex_spawn` in `model-guard` denies unmarked/opaque native spawns as transport `codex-spawn-unmarked` (exit 2).
+- Dispatch prepare classifies Codex 0.154.0 as `native_hook_input_opaque` and refuses native cell dispatch. `evaluate_codex_spawn` in `model-guard` denies unmarked/opaque native spawns with exit 2 and `every Codex spawn_agent needs an explicit role`.
 - Doctor attestation (`bee doctor attest --runtime codex`) verifies static file hash and version; it does not constitute live execution proof.
 
 ## Reliability repair evidence

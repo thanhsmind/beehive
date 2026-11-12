@@ -9,7 +9,7 @@ per seat, named by its `seat:` row, and the leader reads each full answer at
 
 ## Sub-features
 
-- `pi-hat-prepare-in-worktree` returns a `bee herding run` payload for each hat seat when run inside a granted feature worktree, with `--cwd` set to that worktree, `--seat "<seat>"`, and `--ceiling 600`.
+- `pi-hat-prepare-in-worktree` returns a `bee herding run` payload for each hat seat when run inside a granted feature worktree, with `--cwd` set to that worktree, `--seat "<seat>"`, `--ceiling 600`, and always `--no-pane`.
 - `pi-hat-detached-launch` launches every seat in the background with `--inbox-session "$PI_SESSION_ID"`.
 - `pi-hat-seat-injection` injects one `bee-result` block per seat into the Pi session, with `job_id`, `seat`, `status`, `summary`, `proof`, and `report_path` rows.
 - `pi-hat-full-answer` gives the leader the full hat answer in the file at `report_path`. The injection carries only a one-line summary.
@@ -19,7 +19,7 @@ per seat, named by its `seat:` row, and the leader reads each full answer at
 ## How to get to it (user POV)
 
 - In a Pi session opened in a feature worktree, ask for the plan-step hat wave. The leader follows `.agents/skills/bee-hive/references/gates-and-delegation.md` ("Hat wave", its `On Pi:` block).
-- Per seat, the leader runs `.bee/bin/bee dispatch prepare --runtime pi --kind advisor --role <hat-seat> --purpose "<open question>" --json` and then the returned command, with `--inbox-session "$PI_SESSION_ID"` appended.
+- Per seat, the leader runs `.bee/bin/bee dispatch prepare --runtime pi --kind advisor --role <hat-seat> --purpose "<open question>" --json` and then the returned command, with `--inbox-session "$PI_SESSION_ID"` appended. When `$PI_SESSION_ID` is empty, run the returned command in the foreground without `--inbox-session`.
 - Dispatch no-pane hat seats with `.bee/bin/bee dispatch prepare --runtime pi --kind advisor --role <seat> --json`.
 - Execute the returned commands with `--no-pane` in parallel.
 - Verify each result envelope shows `seat: "<seat>"` and `pane_id: null`.
@@ -30,14 +30,15 @@ per seat, named by its `seat:` row, and the leader reads each full answer at
 Preconditions:
 
 - Build the candidate with `bash .bee/verify/verify-app/control-bee build`. Then run `bash .bee/verify/verify-app/control-bee launch` and `bash .bee/verify/verify-app/control-bee doctor`, and require all `ok`.
-- Vendor the candidate into the sandbox store with `bash .bee/verify/verify-app/control-bee put .bee/bin/bee < "$(bash .bee/verify/verify-app/control-bee bin)"`, then `bash .bee/verify/verify-app/control-bee sh -- chmod +x .bee/bin/bee`. A worktree's `.bee/bin/bee` is a symlink to this file.
+- `launch` links the sandbox `.bee/bin/bee` to the candidate binary, so nothing is vendored; never `put` onto that path, which would write through the link. A worktree's `.bee/bin/bee` is a symlink to it.
+- Use a feature with no approved v2 role plan: one with an approved v2 role plan refuses `stage_required` for a prepare with no stage.
 - The sandbox `.bee/config.json` needs a `team.pi` block that names the hat seats and a `herding.agents` entry for every agent it names, for example `pi-gpt-5.6-luna` = `["pi","-a","--model","openai-codex/gpt-5.6-luna:high"]`. Write the whole file with `control-bee put .bee/config.json`.
 - Start a feature and its worktree with `bash .bee/verify/verify-app/control-bee cli -- state start-feature --feature hat-demo --mode standard --json` and `bash .bee/verify/verify-app/control-bee cli -- worktree new --feature hat-demo --json`.
 - Put a plan only in the worktree: `VERIFY_CWD=repo--wt--hat-demo bash .bee/verify/verify-app/control-bee put docs/history/hat-demo/plan.md < plan.md`. A hat that runs in main cannot see this file.
 
 - **Start the Pi leader in the worktree.** Use bee's own herding transport, not a herdr prompt from a Claude subagent (see Gotchas). Run `bee herding run --task-file - --json --cwd "<run>/repo--wt--hat-demo" --agent pi-gpt-5.6-luna` from the sandbox main checkout, with the leader task on stdin. Tell the task to: echo `PI_SESSION_ID`; read the Hat wave section; prepare the three default seats; run the returned commands detached with the note's flag appended; read each `report_path`; write a synthesis; run `advisor-ref record`; and log every command and its exact output to an evidence file.
   Observable: a Pi session log appears under `~/.pi/agent/sessions/--<run path with dashes>--wt--hat-demo--/`. Its file name ends in the same id that `echo $PI_SESSION_ID` prints.
-- **Each prepare succeeds from the worktree.** Each `dispatch prepare --runtime pi --kind advisor --role <seat>` returns `"tool": "Bash"`, `transport_ready: true`, and a command that carries `--cwd "<run>/repo--wt--hat-demo"`, `--seat "<seat>"`, and `--ceiling 600`. It returns no granted-worktree refusal. The stdin opens with `Seat: <seat>.` and names the Hat wave row.
+- **Each prepare succeeds from the worktree.** Each `dispatch prepare --runtime pi --kind advisor --role <seat>` returns `"tool": "Bash"`, `transport_ready: true` with `HERDR_ENV` set (it is `false` without it — a backlog row), and a command that carries `--cwd "<run>/repo--wt--hat-demo"`, `--seat "<seat>"`, `--ceiling 600` and `--no-pane`. It returns no granted-worktree refusal. The stdin carries a `Seat: <seat>.` line, not as its first line, and names the Hat wave row.
 - **Each hat runs in the worktree.** `<run>/repo/.bee/mailbox/job-*/job.json` shows `cwd` = `<run>/repo--wt--hat-demo` for each seat.
 - **Each result is injected with its seat row.** The Pi session log holds one drain block per seat in this shape:
   ```
@@ -52,7 +53,6 @@ Preconditions:
 - **The wave keeps its budget.** Compare the launch time with the newest `report-1.md` mtime. Budget: 10 minutes.
 - **The advisor record succeeds from the bound leader.** `.bee/bin/bee state advisor-ref record --advisor "hat-wave:live-check" --digest-file <synthesis>` prints `Recorded advisor_ref (advisor "hat-wave:live-check", feature "hat-demo").`
 - **Each detached launch returns at once.** Each backgrounded `herding run ... --inbox-session "$PI_SESSION_ID"` prints one JSON line with `outcome detached` (`"outcome":"detached"`) and the job id. The launch shell exits with no timeout.
-- **Hat panes stay in the worker column and close.** Capture the herdr pane layout (a `cli:pane:layout` result) every 15 s from before the leader starts until after it ends. While the hats run, each hat pane has the leader's `x` and sits below the leader pane, and the main pane keeps its `x`, width, and height. A hat pane is gone from the first capture after its `result-1.json` mtime. The last capture equals the first one.
 - **Five-seat hat wave runs as child processes without tmux panes (no-pane-wave outcome).**
   Count open panes before launch:
   `bash .bee/verify/verify-app/control-bee cli -- herding pane list`
@@ -168,10 +168,10 @@ The sandbox `team.pi` slots and the leader all named `pi-gpt-5.6-luna` = `["pi",
 - **A native Claude subagent cannot drive this.** Under worktree isolation, a Claude subagent cannot type into a Pi pane in a `/tmp` sandbox. The isolation guard refuses `herdr agent prompt` with task text and `control-bee sh` scripts that aim outside the worktree. Start the leader with `bee herding run --cwd <sandbox worktree>`, or drive from a session rooted in the sandbox.
 - The result-inbox folder is empty after the drain. Read the seat rows from the Pi session log, not from the marker folder.
 - `result-1.json` in the mailbox carries no `seat` field. The seat rides the inbox marker, the `herding run --json` envelope, and the injected block.
-- A worktree's `.bee/bin/bee` is a symlink into the main sandbox. Vendor the candidate into the main sandbox store; copying a binary into the worktree path writes through the link.
+- A worktree's `.bee/bin/bee` is a symlink into the main sandbox. Copying a binary onto the worktree path writes through the link.
 - Hats spend real model calls on the configured agents. A missing `herding.agents` entry for a `team.pi` agent refuses the run and lists the known agent names.
 - A seat that exceeds the ceiling stops and returns `timed_out_ceiling`. The result envelope keeps the `seat` label.
 - Running hat seats with `--no-pane` executes workers as child processes. It does not open tmux panes (`pane_id: null`).
-- **Vendor the candidate before driving Pi.** Without `.bee/bin/bee` in the sandbox, the belt fails closed on every tool call (`bee guard could not find the bee binary`) and stage narrowing silently does nothing.
+- **The sandbox needs `.bee/bin/bee` before driving Pi.** `launch` links it. Without it the belt fails closed on every tool call (`bee guard could not find the bee binary`) and stage narrowing silently does nothing.
 - **A feature-worktree session cannot start `pi`.** The worker-outward guard refuses any shell command that names `pi` while the session's cwd is a feature worktree, the leader's included. Drive Pi from a session rooted in main or in the sandbox.
 - **Built-in TUI commands are not RPC commands.** `/reload` sent over `pi --mode rpc` reaches the model as text. Test `/reload` in the TUI.

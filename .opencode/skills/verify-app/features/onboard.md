@@ -22,7 +22,7 @@ idempotent, and without `--apply` it is a read-only plan that changes nothing.
 - Run `bee onboard --json` with no `--repo-root` to target the current directory.
 - Run `bee onboard --repo-root <path> --apply --skillstation --json` to also
   publish `bee-deploying` to the skillstation hub. Without the `skillstation` CLI
-  on PATH, `skipped_skills` carries one entry with target `skillstation`.
+  on PATH, `skills.skipped` carries one entry with target `skillstation`.
 
 ## Driving it with control-bee
 
@@ -43,7 +43,8 @@ Preconditions:
   `control-bee host -- <binary> onboard --repo-root <target> --json`, then repeat
   the `git status` call. The payload carries `"status": "changes_needed"`, a
   non-empty `plan[]`, `repo_root`, `source`, `bee_version`, `skills` and
-  `notices`. The two `git status` outputs are identical.
+  `notices`. The notices also carry the Claude settings baseline and the
+  design-packs offer. The two `git status` outputs are identical.
 - **The verification notice says which of five states the repo is in.** Read the
   `notices` array, not just its presence. `stale_advisor_notices` picks ONE
   verification line in strict priority order
@@ -67,12 +68,13 @@ Preconditions:
   and `"recheck_plan": []`. There is **no** `plan` key on an apply payload.
 - **Confirm what landed.** Run `VERIFY_CWD=target control-bee sh -- ls -a .` and
   `VERIFY_CWD=target control-bee sh -- ls .bee`. The tree gains `AGENTS.md`,
-  `CLAUDE.md`, `.gitignore`, `.bee/`, `.claude/`, `.agents/`, `.opencode/`,
-  `.pi/` and `docs/`. `.bee/` holds `onboarding.json`, `config.json`,
+  `CLAUDE.md`, `.gitignore`, `.gitattributes`, `.bee/`, `.claude/`, `.agents/`,
+  `.opencode/`, `.pi/` and `docs/`. `.bee/` holds `onboarding.json`, `config.json`,
   `state.json`, `reservations.json`, `decisions.jsonl`, `backlog.jsonl`,
-  `config-sample.json`, `cells/`, `logs/`, `expertise/` and `bin/`.
-  `.claude/` holds `settings.json` (with `statusLine` present) and
-  `statusline-command.sh`.
+  `config-sample.json`, `LEADER.md`, `playbooks/`, `cells/`, `logs/`,
+  `expertise/` and `bin/`.
+  `.claude/` holds `settings.json` (with `statusLine` present),
+  `statusline-command.sh` and `agents/`.
 - **Confirm the store agrees.** Run
   `VERIFY_CWD=target control-bee cli -- status --json`. It reports
   `onboarding.installed: true`, `onboarding.bee_version` equal to the manifest
@@ -99,8 +101,8 @@ Preconditions:
   exists.
 - A `blocked_*` status means zero mutations happened. The set is
   `blocked_no_engine`, `blocked_no_source`, `blocked_downgrade`,
-  `blocked_render`, `blocked_hooks_merge`, `blocked_worktree_migration_conflict`,
-  `blocked_codex_hook_write` (`onboard/apply.rs:215-225`) and a bare `blocked`. `versions` is present for the version and downgrade
+  `blocked_render`, `blocked_hooks_merge`, `blocked_worktree_migration_conflict`
+  (`onboard/apply.rs:215-225`) and a bare `blocked`. `versions` is present for the version and downgrade
   blocks only, not for migration or hook-merge conflicts. Do not retry with
   `--force-downgrade` unless that is the behavior under test.
 - The plan/apply split is the only dry-run here. Prove it by diffing

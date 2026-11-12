@@ -35,6 +35,8 @@
 
 set -euo pipefail
 
+for paseo_var in $(compgen -e | grep '^PASEO_' || true); do unset "$paseo_var"; done
+
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SKILL_DIR/../../.." && pwd)"
 MANIFEST="$REPO/packages/bee-rs/Cargo.toml"
@@ -139,7 +141,7 @@ cmd_launch() {
   rm -rf "$(run_dir)"
   mkdir -p "$sb" "$ev"
 
-  git -C "$sb" init -q .
+  git -C "$sb" init -q -b main .
   git -C "$sb" config user.email verify@bee.local
   git -C "$sb" config user.name  "bee verification"
   printf '# sandbox\n\nVerification sandbox for verify-app. Disposable.\n' > "$sb/README.md"
@@ -153,6 +155,9 @@ cmd_launch() {
 
   local status; status="$(json_get "$ev/launch-onboard.json" status)"
   [ "$status" = "applied" ] || die "onboard did not apply (status=$status) — see $ev/launch-onboard.json"
+
+  mkdir -p "$sb/.bee/bin"
+  ln -sf "$b" "$sb/.bee/bin/bee"
 
   git -C "$sb" add -A
   git -C "$sb" commit -qm "onboard bee into the sandbox"
@@ -222,7 +227,7 @@ record_in() { # record_in <cwd> <slug> <cmd...>
   # Count .cmd files only — each record writes four files per step.
   n="$(printf '%03d' "$(( $(find "$ev" -maxdepth 1 -name '[0-9][0-9][0-9]-*.cmd' | wc -l) + 1 ))")"
   stem="$ev/$n-$slug"
-  while [ -e "$stem.cmd" ]; do n="$(printf '%03d' "$((10#$n + 1))")"; stem="$ev/$n-$slug"; done
+  while ! ( set -C; : > "$stem.cmd" ) 2>/dev/null; do n="$(printf '%03d' "$((10#$n + 1))")"; stem="$ev/$n-$slug"; done
   { printf '$ %s\n' "$*"; } > "$stem.cmd"
   # Pin the sandbox's session identity. Without this the sandbox inherits
   # CLAUDE_CODE_SESSION_ID from the driving agent, so claims, locks and mailbox

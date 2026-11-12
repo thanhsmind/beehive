@@ -18,14 +18,17 @@ worker's result comes back to the session through the result drain.
 
 ## Driving it with control-bee
 
-- `control-bee build`, `launch`, then vendor the candidate into the sandbox
-  (`control-bee put .bee/bin/bee < "$(control-bee bin)"`, then chmod).
+- `control-bee build`, `launch`. `launch` already links `.bee/bin/bee` to the
+  candidate binary, so there is nothing to vendor.
 - In the sandbox: start a feature at `planning`, set route lane `small`, write
   `docs/history/<f>/plan.md` with a one-cell packet, `gate --preview`,
   `gate --name context`, `gate --merge`, `cells add`, set phase `swarming`,
   `worktree new`.
+- Register a session first with `hook session-init`, and put its `session_id` in
+  every hook payload below: without the id of a registered session the stage
+  reads `idle` and the intake gate answers instead.
 - Probe the hooks from the worktree: `bee hook stage-tools` returns
-  `allowed_tools` without `edit`/`write` and with `bee_dispatch`; a
+  `allowed_tools` without `edit`/`write` and with `bee_dispatch` and `bee_steer`; a
   `bee hook write-guard` Write with `"bee_runtime":"pi"` exits 2 with
   `bee Pi leader lock: writing "<file>" is refused`.
 - Drive a Pi leader in RPC mode with cwd = the worktree and ask it to get the
@@ -91,7 +94,9 @@ probe of the hook, because a probe marks the item served.
   its next turn boundary and delivers it once as a steer that starts with
   `Steer from your leader (relayed mid-run; context only, the cell and its
   gates are unchanged):`, then renames the file to `.delivered`. On Pi the
-  leader reaches it through the `bee_steer` tool.
+  leader reaches it through the `bee_steer` tool. A refused steer carries one of
+  `job_not_found`, `cell_capped`, `result_already_written` or
+  `mailbox_read_failed`.
 - Text the user types while the leader is busy (steer or follow-up) passes
   through unchanged; bee records it when it matches a scope phrase
   (`pi_scope_words`), and owes one log-or-ask turn at the next settle.

@@ -33,7 +33,8 @@ Preconditions:
 - **Orient on an idle repo.** Run `control-bee cli -- orient --json`. The payload
   reports `where.phase: "idle"`, `where.feature: null`, every entry of
   `where.gates` `false`, `work.cells` all zero, and
-  `next.skill: "bee-hive"`.
+  `next.skill: "bee-hive"`, or `bee-wayfinding` when a discovery map has a
+  frontier.
 - **Status on an idle repo.** Run `control-bee cli -- status --json`. It reports
   `onboarding.installed: true`, `onboarding.drift: false`, `phase: "idle"`,
   `feature: null`, and a `gate_records` object whose entries each carry
@@ -41,7 +42,8 @@ Preconditions:
 - **Orient reflects a started feature.** Start one — see
   [feature-gates](./feature-gates.md) — then run
   `control-bee cli -- orient --json` again. `where.feature` is the slug,
-  `where.phase` is `"exploring"`, and `where.mode` is the mode passed.
+  `where.phase` is `"exploring"`, `where.mode` is the mode passed, and
+  `next.skill` is `bee-shaping`.
 - **Proof.** Run `control-bee snapshot orient`. `state.json` in the snapshot
   carries the same phase, feature and gate values the two verbs reported.
 
@@ -53,8 +55,9 @@ Preconditions:
   payload between runs, because counts and timestamps move.
 - `bee doctor` is a different thing from a health check for this harness, and it
   requires `--runtime`. Use `control-bee doctor` instead.
-- `orient` is the session-start ritual. Calling it repeatedly is harmless, but a
-  recipe that calls it instead of the verb under test proves nothing.
+- `orient` is the session-start ritual, and it runs lease and claim expiry
+  sweeps, so it is not a pure read. A recipe that calls it instead of the verb
+  under test proves nothing.
 - Version numbers come from two places. `version` is the release, read from
   `.claude-plugin/plugin.json`; `binary` is the crate version, pinned at `0.1.0`
   and meaningless. Asserting on `binary` will pass forever.
