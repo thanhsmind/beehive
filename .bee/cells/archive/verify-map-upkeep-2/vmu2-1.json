@@ -1,0 +1,296 @@
+{
+  "id": "vmu2-1",
+  "feature": "verify-map-upkeep-2",
+  "title": "Ship the proven verify-app corrections from the 2026-11-12 upkeep pass",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".bee/verify/verify-app/control-bee",
+    ".bee/verify/verify-app/SKILL.md",
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/verify/verify-app/features/cells-and-proof.md",
+    ".bee/verify/verify-app/features/codex-runtime.md",
+    ".bee/verify/verify-app/features/comment-guard.md",
+    ".bee/verify/verify-app/features/feature-gates.md",
+    ".bee/verify/verify-app/features/onboard.md",
+    ".bee/verify/verify-app/features/orient-and-status.md",
+    ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+    ".bee/verify/verify-app/features/pi-hat-wave.md",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    ".bee/verify/verify-app/features/semantic-role-routing.md",
+    ".bee/verify/verify-app/features/worker-outward-guard.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md",
+    ".bee/verify/verify-app/fixtures/"
+  ],
+  "read_first": [
+    "docs/history/verify-map-upkeep-2/plan.md",
+    "skills/bee-verify-upkeep/SKILL.md",
+    ".bee/verify/verify-app/features/README.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Apply every item under Proven corrections in docs/history/verify-map-upkeep-2/plan.md to the verify-app source under .bee/verify/verify-app/ only: harness fixes H1-H5 in control-bee, the fixtures folder, and the doc drift in SKILL.md, the README and the twelve feature files. Add nothing the plan does not prove. Then run bee onboard --apply so the rendered verify-app copies match the source.",
+  "verify": "bash .bee/verify/verify-app/control-bee launch && bash .bee/verify/verify-app/control-bee doctor",
+  "must_haves": {
+    "truths": [
+      "control-bee strips PASEO_* from every sandbox command",
+      "parallel control-bee cli calls get distinct evidence stems",
+      "a launched sandbox is on branch main and has .bee/bin/bee",
+      "no feature file still claims a behavior the 2026-11-12 run disproved"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/control-bee",
+        "substantive": "H1-H4 harness fixes, no comment lines added"
+      },
+      {
+        "path": ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+        "substantive": "plan whose packet is the cells-and-proof cell"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no product code edits",
+      "no edits to commands.test",
+      "no hand edits to rendered copies under .claude/skills, .agents/skills, .opencode/skills"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "vmu2-w1",
+    "outcome": null,
+    "files_changed": [
+      ".agents/skills/verify-app/SKILL.md",
+      ".agents/skills/verify-app/control-bee",
+      ".agents/skills/verify-app/features/README.md",
+      ".agents/skills/verify-app/features/cells-and-proof.md",
+      ".agents/skills/verify-app/features/codex-runtime.md",
+      ".agents/skills/verify-app/features/comment-guard.md",
+      ".agents/skills/verify-app/features/feature-gates.md",
+      ".agents/skills/verify-app/features/onboard.md",
+      ".agents/skills/verify-app/features/orient-and-status.md",
+      ".agents/skills/verify-app/features/pi-harness-dispatch.md",
+      ".agents/skills/verify-app/features/pi-hat-wave.md",
+      ".agents/skills/verify-app/features/pi-runtime.md",
+      ".agents/skills/verify-app/features/semantic-role-routing.md",
+      ".agents/skills/verify-app/features/worktree-and-close.md",
+      ".agents/skills/verify-app/fixtures/context-no-read-set.md",
+      ".agents/skills/verify-app/fixtures/demo-note-1.json",
+      ".agents/skills/verify-app/fixtures/demo-note-plan.md",
+      ".agents/skills/verify-app/fixtures/role-plan-v2.md",
+      ".bee/onboarding.json",
+      ".bee/verify/verify-app/SKILL.md",
+      ".bee/verify/verify-app/control-bee",
+      ".bee/verify/verify-app/features/README.md",
+      ".bee/verify/verify-app/features/cells-and-proof.md",
+      ".bee/verify/verify-app/features/codex-runtime.md",
+      ".bee/verify/verify-app/features/comment-guard.md",
+      ".bee/verify/verify-app/features/feature-gates.md",
+      ".bee/verify/verify-app/features/onboard.md",
+      ".bee/verify/verify-app/features/orient-and-status.md",
+      ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+      ".bee/verify/verify-app/features/pi-hat-wave.md",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      ".bee/verify/verify-app/features/semantic-role-routing.md",
+      ".bee/verify/verify-app/features/worktree-and-close.md",
+      ".bee/verify/verify-app/fixtures/context-no-read-set.md",
+      ".bee/verify/verify-app/fixtures/demo-note-1.json",
+      ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+      ".bee/verify/verify-app/fixtures/role-plan-v2.md",
+      ".claude/skills/verify-app/SKILL.md",
+      ".claude/skills/verify-app/control-bee",
+      ".claude/skills/verify-app/features/README.md",
+      ".claude/skills/verify-app/features/cells-and-proof.md",
+      ".claude/skills/verify-app/features/codex-runtime.md",
+      ".claude/skills/verify-app/features/comment-guard.md",
+      ".claude/skills/verify-app/features/feature-gates.md",
+      ".claude/skills/verify-app/features/onboard.md",
+      ".claude/skills/verify-app/features/orient-and-status.md",
+      ".claude/skills/verify-app/features/pi-harness-dispatch.md",
+      ".claude/skills/verify-app/features/pi-hat-wave.md",
+      ".claude/skills/verify-app/features/pi-runtime.md",
+      ".claude/skills/verify-app/features/semantic-role-routing.md",
+      ".claude/skills/verify-app/features/worktree-and-close.md",
+      ".claude/skills/verify-app/fixtures/context-no-read-set.md",
+      ".claude/skills/verify-app/fixtures/demo-note-1.json",
+      ".claude/skills/verify-app/fixtures/demo-note-plan.md",
+      ".claude/skills/verify-app/fixtures/role-plan-v2.md",
+      ".opencode/skills/verify-app/SKILL.md",
+      ".opencode/skills/verify-app/control-bee",
+      ".opencode/skills/verify-app/features/README.md",
+      ".opencode/skills/verify-app/features/cells-and-proof.md",
+      ".opencode/skills/verify-app/features/codex-runtime.md",
+      ".opencode/skills/verify-app/features/comment-guard.md",
+      ".opencode/skills/verify-app/features/feature-gates.md",
+      ".opencode/skills/verify-app/features/onboard.md",
+      ".opencode/skills/verify-app/features/orient-and-status.md",
+      ".opencode/skills/verify-app/features/pi-harness-dispatch.md",
+      ".opencode/skills/verify-app/features/pi-hat-wave.md",
+      ".opencode/skills/verify-app/features/pi-runtime.md",
+      ".opencode/skills/verify-app/features/semantic-role-routing.md",
+      ".opencode/skills/verify-app/features/worktree-and-close.md",
+      ".opencode/skills/verify-app/fixtures/context-no-read-set.md",
+      ".opencode/skills/verify-app/fixtures/demo-note-1.json",
+      ".opencode/skills/verify-app/fixtures/demo-note-plan.md",
+      ".opencode/skills/verify-app/fixtures/role-plan-v2.md",
+      "docs/knowledge/patterns/20261112-verify-harness-sandbox-leaks-into-the-real-environment.md"
+    ],
+    "deviations": [
+      "worker returned done without running cells finish; leader capped from main with the worker's recorded proof",
+      "sync-ack: only the project-local verify-app skill changed; the herding, hook-runtime and onboarding concepts describe behavior this cell does not touch"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-12T05:51:57.590Z",
+    "behavior_change": true,
+    "verification_evidence": "launch+doctor healthy, PASEO strip, five distinct parallel stems, main branch and linked .bee/bin/bee re-driven, evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261112-124951-639136",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "4f0a3393-8cce-4466-bcd4-5507edce819a",
+    "verify_command": "bash .bee/verify/verify-app/control-bee launch && bash .bee/verify/verify-app/control-bee doctor",
+    "claimed_at": "2026-11-12T05:45:50.648Z",
+    "knowledge_delta": [
+      "docs/knowledge/patterns/20261112-verify-harness-sandbox-leaks-into-the-real-environment.md"
+    ],
+    "sync_ack": "only the project-local verify-app skill changed; the herding, hook-runtime and onboarding concepts describe behavior this cell does not touch",
+    "mistakes": [
+      {
+        "wrong": "worker reported done but never ran cells finish, leaving vmu2-1 claimed",
+        "better": "the herded run should refuse a done outcome while its --cell-id is still claimed",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "verify-app source corrected: control-bee H1-H4, fixtures, doc drift, rendered copies",
+      "commit": "2033a97d6",
+      "files": [
+        ".agents/skills/verify-app/SKILL.md",
+        ".agents/skills/verify-app/control-bee",
+        ".agents/skills/verify-app/features/README.md",
+        ".agents/skills/verify-app/features/cells-and-proof.md",
+        ".agents/skills/verify-app/features/codex-runtime.md",
+        ".agents/skills/verify-app/features/comment-guard.md",
+        ".agents/skills/verify-app/features/feature-gates.md",
+        ".agents/skills/verify-app/features/onboard.md",
+        ".agents/skills/verify-app/features/orient-and-status.md",
+        ".agents/skills/verify-app/features/pi-harness-dispatch.md",
+        ".agents/skills/verify-app/features/pi-hat-wave.md",
+        ".agents/skills/verify-app/features/pi-runtime.md",
+        ".agents/skills/verify-app/features/semantic-role-routing.md",
+        ".agents/skills/verify-app/features/worktree-and-close.md",
+        ".agents/skills/verify-app/fixtures/context-no-read-set.md",
+        ".agents/skills/verify-app/fixtures/demo-note-1.json",
+        ".agents/skills/verify-app/fixtures/demo-note-plan.md",
+        ".agents/skills/verify-app/fixtures/role-plan-v2.md",
+        ".bee/onboarding.json",
+        ".bee/verify/verify-app/SKILL.md",
+        ".bee/verify/verify-app/control-bee",
+        ".bee/verify/verify-app/features/README.md",
+        ".bee/verify/verify-app/features/cells-and-proof.md",
+        ".bee/verify/verify-app/features/codex-runtime.md",
+        ".bee/verify/verify-app/features/comment-guard.md",
+        ".bee/verify/verify-app/features/feature-gates.md",
+        ".bee/verify/verify-app/features/onboard.md",
+        ".bee/verify/verify-app/features/orient-and-status.md",
+        ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        ".bee/verify/verify-app/features/pi-hat-wave.md",
+        ".bee/verify/verify-app/features/pi-runtime.md",
+        ".bee/verify/verify-app/features/semantic-role-routing.md",
+        ".bee/verify/verify-app/features/worktree-and-close.md",
+        ".bee/verify/verify-app/fixtures/context-no-read-set.md",
+        ".bee/verify/verify-app/fixtures/demo-note-1.json",
+        ".bee/verify/verify-app/fixtures/demo-note-plan.md",
+        ".bee/verify/verify-app/fixtures/role-plan-v2.md",
+        ".claude/skills/verify-app/SKILL.md",
+        ".claude/skills/verify-app/control-bee",
+        ".claude/skills/verify-app/features/README.md",
+        ".claude/skills/verify-app/features/cells-and-proof.md",
+        ".claude/skills/verify-app/features/codex-runtime.md",
+        ".claude/skills/verify-app/features/comment-guard.md",
+        ".claude/skills/verify-app/features/feature-gates.md",
+        ".claude/skills/verify-app/features/onboard.md",
+        ".claude/skills/verify-app/features/orient-and-status.md",
+        ".claude/skills/verify-app/features/pi-harness-dispatch.md",
+        ".claude/skills/verify-app/features/pi-hat-wave.md",
+        ".claude/skills/verify-app/features/pi-runtime.md",
+        ".claude/skills/verify-app/features/semantic-role-routing.md",
+        ".claude/skills/verify-app/features/worktree-and-close.md",
+        ".claude/skills/verify-app/fixtures/context-no-read-set.md",
+        ".claude/skills/verify-app/fixtures/demo-note-1.json",
+        ".claude/skills/verify-app/fixtures/demo-note-plan.md",
+        ".claude/skills/verify-app/fixtures/role-plan-v2.md",
+        ".opencode/skills/verify-app/SKILL.md",
+        ".opencode/skills/verify-app/control-bee",
+        ".opencode/skills/verify-app/features/README.md",
+        ".opencode/skills/verify-app/features/cells-and-proof.md",
+        ".opencode/skills/verify-app/features/codex-runtime.md",
+        ".opencode/skills/verify-app/features/comment-guard.md",
+        ".opencode/skills/verify-app/features/feature-gates.md",
+        ".opencode/skills/verify-app/features/onboard.md",
+        ".opencode/skills/verify-app/features/orient-and-status.md",
+        ".opencode/skills/verify-app/features/pi-harness-dispatch.md",
+        ".opencode/skills/verify-app/features/pi-hat-wave.md",
+        ".opencode/skills/verify-app/features/pi-runtime.md",
+        ".opencode/skills/verify-app/features/semantic-role-routing.md",
+        ".opencode/skills/verify-app/features/worktree-and-close.md",
+        ".opencode/skills/verify-app/fixtures/context-no-read-set.md",
+        ".opencode/skills/verify-app/fixtures/demo-note-1.json",
+        ".opencode/skills/verify-app/fixtures/demo-note-plan.md",
+        ".opencode/skills/verify-app/fixtures/role-plan-v2.md",
+        "docs/knowledge/patterns/20261112-verify-harness-sandbox-leaks-into-the-real-environment.md"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee launch && bash .bee/verify/verify-app/control-bee doctor — green:live — launch+doctor healthy, PASEO strip, five distinct parallel stems, main branch and linked .bee/bin/bee re-driven, evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261112-124951-639136",
+      "deviations": [
+        "worker returned done without running cells finish; leader capped from main with the worker's recorded proof"
+      ],
+      "mistakes": [
+        "worker reported done but never ran cells finish, leaving vmu2-1 claimed — the herded run should refuse a done outcome while its --cell-id is still claimed — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "control-bee strips PASEO_* from every sandbox command",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "parallel control-bee cli calls get distinct evidence stems",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "a launched sandbox is on branch main and has .bee/bin/bee",
+            "artifact": ".bee/verify/verify-app/control-bee"
+          },
+          {
+            "requirement": "no feature file still claims a behavior the 2026-11-12 run disproved",
+            "artifact": ".bee/verify/verify-app/features/worktree-and-close.md"
+          }
+        ],
+        "recorded_at": "2026-11-12T05:54:32.888Z",
+        "recorded_by": "4f0a3393-8cce-4466-bcd4-5507edce819a",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 181283,
+    "cached": 3539891,
+    "total": 3721174,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 181283,
+        "cached": 3539891,
+        "total": 3721174
+      }
+    },
+    "jobs": [
+      "job-1794462365792-621345-1"
+    ]
+  }
+}

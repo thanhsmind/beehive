@@ -1,0 +1,90 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "verify-map-upkeep-2",
+  "closed_at": "2026-11-12T05:55:20.561Z",
+  "sessions": [
+    {
+      "session_id": "4f0a3393-8cce-4466-bcd4-5507edce819a",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 368,
+          "output": 101648,
+          "cache_write": 275462,
+          "cache_read": 31261817,
+          "new": 377478,
+          "cached": 31261817,
+          "total": 31639295
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794461323503,
+      "ended_ms": 1794462918805,
+      "totals": {
+        "new": 377478,
+        "cached": 31261817,
+        "total": 31639295
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 377478,
+      "cached": 31261817,
+      "total": 31639295
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 558761,
+      "cached": 34801708,
+      "total": 35360469
+    },
+    "herding": {
+      "new": 181283,
+      "cached": 3539891,
+      "total": 3721174,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 70,
+          "output": 35659,
+          "cache_write": 145554,
+          "cache_read": 3539891,
+          "new": 181283,
+          "cached": 3539891,
+          "total": 3721174
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "c2d82079-229d-4559-8941-dce9227ab0be",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 70,
+          "output": 35659,
+          "cache_write": 145554,
+          "cache_read": 3539891,
+          "new": 181283,
+          "cached": 3539891,
+          "total": 3721174
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794462367296,
+      "ended_ms": 1794462644592,
+      "totals": {
+        "new": 181283,
+        "cached": 3539891,
+        "total": 3721174
+      },
+      "job_id": "job-1794462365792-621345-1"
+    }
+  ]
+}
