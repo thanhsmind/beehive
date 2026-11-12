@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "feature": "verify-map-upkeep-2",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"verify-map-upkeep-2\" started at phase \"exploring\".",
+  "next_action": "Continue bee-exploring for \"verify-map-upkeep-2\".",
+  "created_at": "2026-11-12T05:44:09.995Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Trong lúc worker chạy, tôi dọn sandbox của mình. Tôi chỉ định đúng run id, để không đụng vào sandbox của worker.",
+    "asked_at": "2026-11-12T05:46:30.667Z",
+    "session": "4f0a3393-8cce-4466-bcd4-5507edce819a"
+  },
+  "merge_ready": {
+    "since": "2026-11-12T05:51:57.611Z",
+    "branch": "wt/verify-map-upkeep-2",
+    "worktree_id": "beehive--wt--verify-map-upkeep-2",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
