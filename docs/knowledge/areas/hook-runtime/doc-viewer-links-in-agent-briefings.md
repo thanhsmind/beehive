@@ -12,8 +12,8 @@ bee:
   sources: ["doc-viewer-links cell dvl-1 (one shared reader + both briefing injectors; trace .bee/cells/archive/doc-viewer-links/dvl-1.json, capped 2026-08-05)", "doc-viewer-links cell dvl-2 (the contract rule and the configuration reference; trace .bee/cells/archive/doc-viewer-links/dvl-2.json, capped 2026-08-05)", docs/config-reference.md (the doc_viewer key and its half-set warning)]
   authoritative_for: "hook-runtime: the doc-viewer link prefix carried into agent-facing briefings"
   anchors: [packages/bee-rs/crates/bee/src/state.rs, packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs, packages/bee-rs/crates/bee/src/hooks/compaction.rs, packages/bee/AGENTS.block.md, skills/bee-hive/references/routing-and-contracts.md]
-  verified_at: 2026-11-07
-  verified_commit: 9861c1b430dc099ce4e0ba481503579ad3a2d738
+  verified_at: 2026-11-12
+  verified_commit: 7f54454995fbf20e110c405f0f4016ecb9571cd8
 ---
 
 # Hook Runtime — the opt-in doc-viewer prefix in agent-facing briefings
@@ -68,6 +68,13 @@ someone's unfinished intent, while an unset key is a decision.
 - R25 — Where the prefix exists, the assistant's contract requires it: a record
   is linked as its viewer URL, never pasted and never named as a bare path. The
   briefing carries the prefix; the contract carries the obligation.
+
+- R26 — A file that lives in a feature workspace whose branch is not yet merged
+  is named by its absolute path: the workspace root plus the repo-relative path.
+  A relative path resolves against the main checkout, so a click on it opens
+  nothing, or opens the old copy. After the merge the bare repo-relative path
+  is correct again. Source: owner report, feature `worktree-file-links`,
+  2026-11-12.
 
 ## Edge Cases Settled
 
