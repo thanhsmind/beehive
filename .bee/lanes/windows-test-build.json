@@ -11,20 +11,8 @@
     "uat": false
   },
   "summary": "Feature \"windows-test-build\" started at phase \"exploring\".",
-  "next_action": "Continue bee-exploring for \"windows-test-build\".",
+  "next_action": "Merged into main at f965ea8; capture what settled, then bee close --feature windows-test-build.",
   "created_at": "2026-11-12T10:20:30.420Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "`68db537b` (`contract:supervisor-read-scope`) là contract mà các test này kiểm tra. Tôi gắn nó vào cell, rồi kiểm tra lần prepare bị từ chối",
-    "asked_at": "2026-11-12T10:22:56.276Z",
-    "session": "4f0a3393-8cce-4466-bcd4-5507edce819a"
-  },
-  "merge_ready": {
-    "since": "2026-11-12T10:25:58.067Z",
-    "branch": "wt/windows-test-build",
-    "worktree_id": "beehive--wt--windows-test-build",
-    "uat": "pending",
-    "blocked_by": []
-  }
+  "run_state": null,
+  "waiting_on": null
 }
