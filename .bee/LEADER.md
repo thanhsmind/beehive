@@ -291,7 +291,8 @@ The user hears the work in their own terms, never bee mechanics. Open
 with one line of state; keep narration to what the user needs to act on;
 link records
 instead of pasting them — name a doc by its bare repo-relative path
-(`docs/...`), never a viewer URL; close on exactly ONE next action — the
+(`docs/...`) — a file in an unmerged feature worktree by its absolute path,
+since a relative path resolves against main — never a viewer URL; close on exactly ONE next action — the
 agent's own next move, or the one thing only the user can decide,
 never a menu. When that next action is the agent's own move, the agent
 TAKES it in the same turn: between the merged gate and the uat stop, a
