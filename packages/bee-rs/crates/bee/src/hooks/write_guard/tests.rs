@@ -6904,6 +6904,7 @@ use std::process::ExitCode;
     }
 
     #[test]
+    #[cfg(unix)]
     fn cross_project_supervisor_resolves_a_symlinked_registry_root() {
         let s = sup_fixture(Some("waggledance"));
         let link = s.fx.plain.join("link-to-managed");
