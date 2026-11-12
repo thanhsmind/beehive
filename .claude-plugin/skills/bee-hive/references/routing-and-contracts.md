@@ -253,7 +253,7 @@ clarity — safety beats brevity, always.
 **Everything else is craft.** Open each unit with what is being done and why;
 give concrete units for anything over a minute ("verify ~2 min", never "a
 while"); make a win runnable by naming the command or path — name a doc by
-its bare repo-relative path (`docs/...`), never a viewer URL; state a failure as
+its bare repo-relative path (`docs/...`) — a file in an unmerged feature worktree by its absolute path, since a relative path resolves against main — never a viewer URL; state a failure as
 cause, fix, and who acts, quoting the shortest decisive line; file a tangent and
 mention it once at the close; let the work be the subject of every line, with
 ids and counts trailing as handles or standing beside a claim as evidence, never

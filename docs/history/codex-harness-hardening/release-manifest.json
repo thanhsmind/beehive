@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "ebceac654de19bc5407d99d94105349a24214f578a081eef801d165687f3d72a",
+      "sha256": "ed30be6216ca32b7571a48c40e90fc8d285935cf962d4c928a554d69ed539654",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -395,7 +395,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "c4445b7b105865d0293cf6eea79abb9413f3e9b1e50d2f95a494bc38c4ee5929",
+      "sha256": "1464c734ee00a0d11465c4aad07c53e2592a5fc1e3dca408d04586251567fbdb",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md"
@@ -1004,7 +1004,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "61f9b311eef1df59883e8d8abc5b8e1c4733f5c6b5eb6860d1232d95627d794c",
+      "sha256": "00ee2fdfd4004609c98be66ac54f64e585aa4879db7f710d9b227f14b116fb68",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1263,7 +1263,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "c4445b7b105865d0293cf6eea79abb9413f3e9b1e50d2f95a494bc38c4ee5929",
+      "sha256": "1464c734ee00a0d11465c4aad07c53e2592a5fc1e3dca408d04586251567fbdb",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md"
@@ -3275,7 +3275,7 @@
     },
     {
       "path": "packages/bee/LEADER.md",
-      "sha256": "f42cc5f8e035e9409ed3dabbeaceedcab07277b2ca89116e280237d11bf887e4",
+      "sha256": "fa1c9f1e0464892583b64ca75326458ef666749a3dba8cd81666f4887597a006",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/LEADER.md"
@@ -3609,7 +3609,7 @@
     },
     {
       "path": "skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "c4445b7b105865d0293cf6eea79abb9413f3e9b1e50d2f95a494bc38c4ee5929",
+      "sha256": "1464c734ee00a0d11465c4aad07c53e2592a5fc1e3dca408d04586251567fbdb",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/routing-and-contracts.md"
