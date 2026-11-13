@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"verify-render-standalone\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"verify-render-standalone\" (lane).",
+  "next_action": "Merged into main at 06d2e6b; capture what settled, then bee close --feature verify-render-standalone.",
   "created_at": "2026-11-13T06:42:20.786Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-13T06:42:17.453Z",
     "feature": "verify-render-standalone"
-  },
-  "merge_ready": {
-    "since": "2026-11-13T06:58:33.259Z",
-    "branch": "wt/verify-render-standalone",
-    "worktree_id": "beehive--wt--verify-render-standalone",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
