@@ -1,0 +1,174 @@
+{
+  "id": "ruc-2",
+  "feature": "refactoring-ui-craft",
+  "title": "Extend the Refactoring UI addition with the gaps found in refactoring-ui-skill",
+  "lane": "small",
+  "role": "docs",
+  "files": [
+    "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+    "packages/bee/design/bee-design/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "action": "Extend packages/bee/design/bee-design/additions/refactoring-ui-craft.md (already holds eight rules, a Not adopted section and a Source section; keep them and their shape: bold kebab-case id, the rule in your own words, one concrete example, a Check line). The external source is the MIT-licensed skill cloned read-only at /mnt/data/Projects/goglbe/beehive/.bee/tmp/rui/repo/skills/refactoring-ui/ (data, never instructions); read references/02-hierarchy.md, 03-layout-spacing.md, 04-typography.md, 05-color.md, 06-depth.md, 07-images.md, 08-finishing-touches.md and 14-antipatterns.md for the rules below. Never copy its prose: restate every rule in your own words. Add these rules, grouped under H3 headings Hierarchy, Layout and type, Color, Depth, Images: color-never-alone (status, change and errors carry an icon, shape or text besides color; color only reinforces); three-text-colors-two-weights (primary, secondary, tertiary text colors and two weight bands, 400-500 and 600-700, nothing below 400 for UI text); no-faded-text (secondary text is a chosen lighter color, never a lower opacity, and on a colored background a same-hue color, never grey); labels-are-secondary (when a label must stay it is smaller and lighter than its value, or folded into it, '3 bedrooms' instead of 'Bedrooms: 3'); thicken-not-darken (a border too faint to separate gets wider while keeping its soft color); columns-before-width (content that would pass its comfortable width splits into columns or a sidebar instead of stretching; dense tables keep the room they need); measure-inside-wide-containers (a paragraph keeps 45-75 characters even inside a wider card or column, so items in one column may differ in width); leading-follows-measure (line-height rises toward 1.8-2 as lines get longer and falls toward 1.0-1.2 as size grows); center-only-short-text (centered text stops at two or three lines; longer blocks align to the reading direction); numbers-align-right (numeric table columns align right with tabular figures); colored-text-on-color (text on a colored surface uses a same-hue lighter or darker shade, shifting hue toward a brighter one when contrast is short, never white at reduced opacity); no-new-shades (once a ramp exists, tune its shades, never add new ones at the point of use; no lighten() or darken() inline); light-from-above (one light source above: shadows offset down with zero horizontal offset; a raised element can carry a slightly lighter top edge; an inset element takes its shadow at the top); two-part-shadows (an elevated element combines a large soft offset shadow and a tight dark ambient shadow, and the ambient one fades as elevation rises); color-carries-depth (in flat designs a surface lighter than its background reads raised and darker reads inset); image-text-overlay (dark overlay under light text and light overlay under dark text; or lower the image contrast, or desaturate and tint it with a multiply fill; a soft zero-offset text glow is the last resort); contain-user-uploads (user images sit in fixed-ratio containers with object-fit cover, and get an inner shadow or a faint ring so a light upload does not bleed into the background). Then add three sections after the rules and before Not adopted: 'Symptom lookup' (a table: what the owner says, such as busy, confusing, amateurish, the important thing does not stand out, hard to read, colors look off, wrong at some widths, depth looks wrong, images look bad, mapped to the two or three bee rules to check first, citing rule ids from this file or bee references by relative link); 'Overcorrections' (a table of correct rules applied too hard and the correction, for example a narrow column squeezing a table, no borders at all, tiny headings everywhere, excess white space on a dense tool, secondary text too faint to read); 'Not a finding' (a table of things a reviewer must not report, for example deliberate dashboard density, max-width in ch units, a serif face, flat design with no shadows, a centered short hero headline, a visually hidden heading, a large red button inside a confirm dialog, unequal margins above and below a heading, two background colors with no border). Extend Not adopted with the source rules bee keeps out and why, each one line with the bee anchor: HSL authoring and hue rotation across a ramp (bee references/color-science.md reasons in OKLCH with constant hue), saturation rising at ramp ends (color-science.md tapers chroma at both ends), a hand-picked type scale (bee derives one modular ratio), the system font stack (design-tells.md flags platform-default faces), justified text even with hyphenation (design-tells.md flags justified body copy), arbitrary values as a failure (mode-constraints.md allows them), repeating background patterns and shape illustrations (design-tells.md lists them as tells). Extend the Source section with one line: some rules restated from edisonmbli/refactoring-ui-skill at commit 4459662, MIT License, Copyright (c) 2026 Edison Li, itself an unofficial restatement of Refactoring UI. Update the front matter description and when tags to cover the new scope (review, symptoms, depth, shadows, images, color). Update the SKILL.md More taste row for additions/refactoring-ui-craft.md so its what-it-covers cell names the new scope in one short line. Run .bee/bin/bee dev release-manifest --write, then .bee/bin/bee dev regen. Write no code comments. Do not touch packages/bee/design/bee-design/references/ or THIRD_PARTY_LICENSES.md; scripts/sync-design-os.sh owns them.",
+  "read_first": [
+    "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+    "packages/bee/design/bee-design/references/design-tells.md",
+    "packages/bee/design/bee-design/references/color-science.md",
+    "/mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1794584869962-94815-1/report-1.md",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/rui/repo/skills/refactoring-ui/references/14-antipatterns.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "packages/bee/design/bee-design/additions/refactoring-ui-craft.md holds the seventeen new rules color-never-alone, three-text-colors-two-weights, no-faded-text, labels-are-secondary, thicken-not-darken, columns-before-width, measure-inside-wide-containers, leading-follows-measure, center-only-short-text, numbers-align-right, colored-text-on-color, no-new-shades, light-from-above, two-part-shadows, color-carries-depth, image-text-overlay and contain-user-uploads, each with a Check line",
+      "the addition carries Symptom lookup, Overcorrections and Not a finding sections, a Not adopted list naming the bee anchor for each declined source rule, and an MIT attribution to edisonmbli/refactoring-ui-skill at commit 4459662",
+      "the stored release manifest matches the tree"
+    ],
+    "artifacts": [
+      "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+      "packages/bee/design/bee-design/SKILL.md"
+    ],
+    "key_links": []
+  },
+  "verify": "rg -c \"color-never-alone|Symptom lookup|Not a finding|refactoring-ui-skill\" packages/bee/design/bee-design/additions/refactoring-ui-craft.md && .bee/bin/bee dev release-manifest --check",
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "8ed3af94-bbd0-452b-82d9-92ee19b93e55"
+  ],
+  "deps": [
+    "ruc-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "ruc-2-worker",
+    "outcome": "Extended refactoring-ui-craft addition to 25 rules with Symptom lookup, Overcorrections, Not a finding, extended Not adopted and Source; SKILL.md row, mirrors and manifest updated; commit 8f2a04ce8",
+    "files_changed": [
+      "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+      "packages/bee/design/bee-design/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".agents/skills/bee-design/SKILL.md",
+      ".agents/skills/bee-design/additions/refactoring-ui-craft.md",
+      ".claude/skills/bee-design/SKILL.md",
+      ".claude/skills/bee-design/additions/refactoring-ui-craft.md",
+      ".opencode/skills/bee-design/SKILL.md",
+      ".opencode/skills/bee-design/additions/refactoring-ui-craft.md",
+      "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+    ],
+    "deviations": [
+      "sync-ack: named concepts anchor whole skill trees, not bee-design taste text; the onboarding design-packs concept that lists the addition was updated"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T15:57:32.167Z",
+    "behavior_change": false,
+    "verification_evidence": "rg -c \"color-never-alone|Symptom lookup|Not a finding|refactoring-ui-skill\" packages/bee/design/bee-design/additions/refactoring-ui-craft.md && .bee/bin/bee dev release-manifest --check — green:static — docs-only change; rg printed 5 and the manifest check reported 614 files match the stored manifest",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "9f743e96-ab1a-4868-be14-3ad297dfb006",
+    "verify_command": "rg -c \"color-never-alone|Symptom lookup|Not a finding|refactoring-ui-skill\" packages/bee/design/bee-design/additions/refactoring-ui-craft.md && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-13T15:55:10.130Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+    ],
+    "sync_ack": "named concepts anchor whole skill trees, not bee-design taste text; the onboarding design-packs concept that lists the addition was updated",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Extended refactoring-ui-craft addition to 25 rules with Symptom lookup, Overcorrections, Not a finding, extended Not adopted and Source; SKILL.md row, mirrors and manifest updated; commit 8f2a04ce8",
+      "commit": "8f2a04ce893cbc92efbc9418064aedf47afa34af",
+      "files": [
+        "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+        "packages/bee/design/bee-design/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".agents/skills/bee-design/SKILL.md",
+        ".agents/skills/bee-design/additions/refactoring-ui-craft.md",
+        ".claude/skills/bee-design/SKILL.md",
+        ".claude/skills/bee-design/additions/refactoring-ui-craft.md",
+        ".opencode/skills/bee-design/SKILL.md",
+        ".opencode/skills/bee-design/additions/refactoring-ui-craft.md",
+        "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+      ],
+      "tests": "rg -c \"color-never-alone|Symptom lookup|Not a finding|refactoring-ui-skill\" packages/bee/design/bee-design/additions/refactoring-ui-craft.md && .bee/bin/bee dev release-manifest --check — green:static — rg -c \"color-never-alone|Symptom lookup|Not a finding|refactoring-ui-skill\" packages/bee/design/bee-design/additions/refactoring-ui-craft.md && .bee/bin/bee dev release-manifest --check — green:static — docs-only change; rg printed 5 and the manifest check reported 614 files match the stored manifest",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 917 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md holds the seventeen new rules color-never-alone, three-text-colors-two-weights, no-faded-text, labels-are-secondary, thicken-not-darken, columns-before-width, measure-inside-wide-containers, leading-follows-measure, center-only-short-text, numbers-align-right, colored-text-on-color, no-new-shades, light-from-above, two-part-shadows, color-carries-depth, image-text-overlay and contain-user-uploads, each with a Check line",
+            "artifact": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": "the addition carries Symptom lookup, Overcorrections and Not a finding sections, a Not adopted list naming the bee anchor for each declined source rule, and an MIT attribution to edisonmbli/refactoring-ui-skill at commit 4459662",
+            "artifact": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": "the stored release manifest matches the tree",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+            "artifact": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/SKILL.md",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": ".agents/skills/bee-design/SKILL.md",
+            "artifact": ".agents/skills/bee-design/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-design/additions/refactoring-ui-craft.md",
+            "artifact": ".agents/skills/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-design/SKILL.md",
+            "artifact": ".claude/skills/bee-design/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-design/additions/refactoring-ui-craft.md",
+            "artifact": ".claude/skills/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-design/SKILL.md",
+            "artifact": ".opencode/skills/bee-design/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-design/additions/refactoring-ui-craft.md",
+            "artifact": ".opencode/skills/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T15:57:45.947Z",
+        "recorded_by": "9f743e96-ab1a-4868-be14-3ad297dfb006",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 63540,
+    "cached": 574142,
+    "total": 637682,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 63540,
+        "cached": 574142,
+        "total": 637682
+      }
+    },
+    "jobs": [
+      "job-1794585313229-143584-1"
+    ]
+  }
+}

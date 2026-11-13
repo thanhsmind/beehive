@@ -2188,5 +2188,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-13T15:44:58.265Z"
+  },
+  "refactoring-ui-craft": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-13T15:57:59.887Z"
   }
 }

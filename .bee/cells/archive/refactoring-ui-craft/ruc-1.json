@@ -1,0 +1,175 @@
+{
+  "id": "ruc-1",
+  "feature": "refactoring-ui-craft",
+  "title": "Add the Refactoring UI craft rules bee-design lacks as a bee-owned addition",
+  "lane": "small",
+  "role": "docs",
+  "files": [
+    "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+    "packages/bee/design/bee-design/SKILL.md",
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "action": "Write packages/bee/design/bee-design/additions/refactoring-ui-craft.md in the same shape as additions/wcag-2-2.md: YAML front matter (id refactoring-ui-craft, description, when tags such as hierarchy, buttons, badges, typography, responsive, icons, data-display), one H1, a short intro saying the rules sit beside references/generation-craft-defaults.md and references/taste-rubric.md and never above them, and that the static ui gate checks none of them so each is checked by eye in the rendered page and lands under NOT_VERIFIED when it was not. Then eight rules, each with a bold kebab-case id, the rule in your own words (never quote the book), one concrete before/after example, and a Check line saying what to look for in the render: (1) de-emphasize-competitors: when the primary element does not stand out, mute its competitors (lighter color, regular weight) before adding emphasis to it; (2) drop-data-labels: when displaying (not collecting) data, drop 'Label: value' pairs whose format or context already says what the value is, and lead with the identifying field; keep labels, slightly darker than values, on spec sheets and dashboards users scan by label; (3) actions-by-importance: style actions by their rank on the page, one solid primary, outline or low-contrast secondary, plain-link tertiary, and a destructive action that is not the page's main job stays secondary or tertiary until its confirm dialog, where it becomes the solid red primary; (4) non-proportional-scaling: on narrow screens large elements shrink by a larger factor than small ones, for example a heading at 2.5x body on desktop lands near 1.5x to 1.7x body on mobile, so never size headings in em of body alone; (5) baseline-align-mixed-sizes: text of different sizes on one line (card title plus a 'View all' link or timestamp) aligns on the text baseline (align-items: baseline), never centered; (6) tinted-badges: badges, pills and inline alerts use a light tint of the hue as background with a dark shade of the same hue as text, instead of white text on a dark saturated fill, which keeps contrast without stealing hierarchy; (7) native-size-assets: an icon drawn for 16-24px stays at its drawn size and fills a larger slot with a tinted circle or rounded square behind it, never a 3x upscale; a product screenshot is never shrunk whole into a small card, show a cropped region or a simplified mock instead; (8) grayscale-first: lay out a new screen in grayscale first, hierarchy from spacing, size, weight and contrast only, then add color to the primary action and key states. Add a short 'Not adopted' section naming two Refactoring UI ideas bee-design keeps out and why: the accent border, because references/design-tells.md bans a thick one-side accent border (side-tab) as an AI tell, with only a thin top bar on a card left open; and 'start with too much whitespace' as a bare rule, because references/generation-craft-defaults.md lists excessive whitespace as the empty-boldness failure mode, so extra space must still express grouping. End with one attribution line naming Refactoring UI by Adam Wathan and Steve Schoger as the source of the ideas. Add one row to the More taste table in packages/bee/design/bee-design/SKILL.md (the table that already links additions/wcag-2-2.md) linking additions/refactoring-ui-craft.md with a short what-it-covers cell. In docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md add the new file to the anchors list, to the 'The additions so far' sentence and to the bee's additions pointer line. Run .bee/bin/bee dev release-manifest --write to record the new shipped file, then run .bee/bin/bee dev regen so the rendered skill trees carry the new file. Write no code comments. Do not touch packages/bee/design/bee-design/references/ because scripts/sync-design-os.sh overwrites it on every sync.",
+  "read_first": [
+    "packages/bee/design/bee-design/additions/wcag-2-2.md",
+    "packages/bee/design/bee-design/SKILL.md",
+    "packages/bee/design/bee-design/references/design-tells.md",
+    "packages/bee/design/bee-design/references/generation-craft-defaults.md",
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "packages/bee/design/bee-design/additions/refactoring-ui-craft.md holds the eight rules de-emphasize-competitors, drop-data-labels, actions-by-importance, non-proportional-scaling, baseline-align-mixed-sizes, tinted-badges, native-size-assets and grayscale-first, each with a Check line, plus a Not adopted section and a Refactoring UI attribution line",
+      "packages/bee/design/bee-design/SKILL.md links additions/refactoring-ui-craft.md from its More taste table",
+      "the stored release manifest matches the tree with the new file"
+    ],
+    "artifacts": [
+      "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+      "packages/bee/design/bee-design/SKILL.md"
+    ],
+    "key_links": []
+  },
+  "verify": "rg -c \"additions/refactoring-ui-craft.md\" packages/bee/design/bee-design/SKILL.md && .bee/bin/bee dev release-manifest --check",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+  ],
+  "decisions": [
+    "ecf37992-0187-447e-b695-938464b051a7"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "ruc-1-worker",
+    "outcome": "Added the eight-rule refactoring-ui-craft addition, linked it from SKILL.md and the onboarding concept, refreshed the manifest and skill trees; commit b7a52fdaa",
+    "files_changed": [
+      "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+      "packages/bee/design/bee-design/SKILL.md",
+      "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".agents/skills/bee-design/SKILL.md",
+      ".agents/skills/bee-design/additions/refactoring-ui-craft.md",
+      ".claude/skills/bee-design/SKILL.md",
+      ".claude/skills/bee-design/additions/refactoring-ui-craft.md",
+      ".opencode/skills/bee-design/SKILL.md",
+      ".opencode/skills/bee-design/additions/refactoring-ui-craft.md"
+    ],
+    "deviations": [
+      "sync-ack: the eight named concepts anchor whole skill trees, not bee-design taste text; the one concept that lists bee-design additions (onboarding-design-packs) was updated in this commit"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T15:47:31.356Z",
+    "behavior_change": false,
+    "verification_evidence": "rg -c \"additions/refactoring-ui-craft.md\" packages/bee/design/bee-design/SKILL.md && .bee/bin/bee dev release-manifest --check — green:static — docs and skill text only; the cell's own verify covers the link and the manifest, so the cargo suite was not run",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "9f743e96-ab1a-4868-be14-3ad297dfb006",
+    "verify_command": "rg -c \"additions/refactoring-ui-craft.md\" packages/bee/design/bee-design/SKILL.md && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-13T15:46:07.083Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+    ],
+    "sync_ack": "the eight named concepts anchor whole skill trees, not bee-design taste text; the one concept that lists bee-design additions (onboarding-design-packs) was updated in this commit",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added the eight-rule refactoring-ui-craft addition, linked it from SKILL.md and the onboarding concept, refreshed the manifest and skill trees; commit b7a52fdaa",
+      "commit": "b7a52fdaab572d4ec6f86e9f2dda4a09f44c66c5",
+      "files": [
+        "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+        "packages/bee/design/bee-design/SKILL.md",
+        "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".agents/skills/bee-design/SKILL.md",
+        ".agents/skills/bee-design/additions/refactoring-ui-craft.md",
+        ".claude/skills/bee-design/SKILL.md",
+        ".claude/skills/bee-design/additions/refactoring-ui-craft.md",
+        ".opencode/skills/bee-design/SKILL.md",
+        ".opencode/skills/bee-design/additions/refactoring-ui-craft.md"
+      ],
+      "tests": "rg -c \"additions/refactoring-ui-craft.md\" packages/bee/design/bee-design/SKILL.md && .bee/bin/bee dev release-manifest --check — green:static — rg -c \"additions/refactoring-ui-craft.md\" packages/bee/design/bee-design/SKILL.md && .bee/bin/bee dev release-manifest --check — green:static — docs and skill text only; the cell's own verify covers the link and the manifest, so the cargo suite was not run",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 416 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md holds the eight rules de-emphasize-competitors, drop-data-labels, actions-by-importance, non-proportional-scaling, baseline-align-mixed-sizes, tinted-badges, native-size-assets and grayscale-first, each with a Check line, plus a Not adopted section and a Refactoring UI attribution line",
+            "artifact": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/SKILL.md links additions/refactoring-ui-craft.md from its More taste table",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "the stored release manifest matches the tree with the new file",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md",
+            "artifact": "packages/bee/design/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/SKILL.md",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+            "artifact": "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": ".agents/skills/bee-design/SKILL.md",
+            "artifact": ".agents/skills/bee-design/SKILL.md"
+          },
+          {
+            "requirement": ".agents/skills/bee-design/additions/refactoring-ui-craft.md",
+            "artifact": ".agents/skills/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-design/SKILL.md",
+            "artifact": ".claude/skills/bee-design/SKILL.md"
+          },
+          {
+            "requirement": ".claude/skills/bee-design/additions/refactoring-ui-craft.md",
+            "artifact": ".claude/skills/bee-design/additions/refactoring-ui-craft.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-design/SKILL.md",
+            "artifact": ".opencode/skills/bee-design/SKILL.md"
+          },
+          {
+            "requirement": ".opencode/skills/bee-design/additions/refactoring-ui-craft.md",
+            "artifact": ".opencode/skills/bee-design/additions/refactoring-ui-craft.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T15:57:45.933Z",
+        "recorded_by": "9f743e96-ab1a-4868-be14-3ad297dfb006",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 44906,
+    "cached": 289858,
+    "total": 334764,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 44906,
+        "cached": 289858,
+        "total": 334764
+      }
+    },
+    "jobs": [
+      "job-1794584773213-78790-1"
+    ]
+  }
+}
