@@ -1,0 +1,123 @@
+{
+  "id": "rel970-1",
+  "feature": "release-2-97-0",
+  "title": "Publish release 2.97.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-97-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.97.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode 1.18.16 (/mnt/data/Projects/goglbe/beehive/.bee/tmp/oc11816/bin) first on PATH and CARGO_TARGET_DIR=/home/thanhsmind/.cache/cargo-target-rel2970, so the opencode contract tests run green. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.97.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.97.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.97.0",
+      "tag v2.97.0 exists locally and on the remote",
+      "the GitHub release for v2.97.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.97.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.97.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "w-rel970-1",
+    "outcome": "scripts/release.sh 2.97.0 exited 0; v2.97.0 pushed, release CI 43409233361 success, 6 release assets live, proof cargo test exit 0",
+    "files_changed": [
+      ".agents/skills/.bee-skills-version.json",
+      ".bee/onboarding.json",
+      ".claude-plugin/plugin.json",
+      ".claude/skills/.bee-skills-version.json",
+      ".codex-plugin/plugin.json",
+      ".opencode/skills/.bee-skills-version.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: a release bumps version stamps only; the listed concepts were already suspect and no behavior changed in this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T10:34:26.249Z",
+    "behavior_change": false,
+    "verification_evidence": "scripts/release.sh 2.97.0 -> 'bee 2.97.0 is live'; gh run view 43409233361 -> conclusion success on 44a59947c; gh release view v2.97.0 -> 6 assets, not draft/prerelease; PATH=... cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -> exit 0, all test result lines 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "02472149-dd8d-4c2f-80ff-2dc1694a72eb",
+    "verify_command": "bash scripts/release.sh 2.97.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-13T10:24:10.943Z",
+    "knowledge_delta": [],
+    "sync_ack": "a release bumps version stamps only; the listed concepts were already suspect and no behavior changed in this cell",
+    "no_mistakes": true,
+    "commit_pending": "release commit 44a59947c is made by scripts/release.sh and carries no cell trailer",
+    "report": {
+      "outcome": "scripts/release.sh 2.97.0 exited 0; v2.97.0 pushed, release CI 43409233361 success, 6 release assets live, proof cargo test exit 0",
+      "commit": "e05d7ad527834d320073aef5b62b858420bc3706",
+      "files": [
+        ".agents/skills/.bee-skills-version.json",
+        ".bee/onboarding.json",
+        ".claude-plugin/plugin.json",
+        ".claude/skills/.bee-skills-version.json",
+        ".codex-plugin/plugin.json",
+        ".opencode/skills/.bee-skills-version.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.97.0 && bee dev release-manifest --check — green:unit — scripts/release.sh 2.97.0 -> 'bee 2.97.0 is live'; gh run view 43409233361 -> conclusion success on 44a59947c; gh release view v2.97.0 -> 6 assets, not draft/prerelease; PATH=... cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -> exit 0, all test result lines 0 failed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both plugin manifests report 2.97.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "tag v2.97.0 exists locally and on the remote",
+            "artifact": ".codex-plugin/plugin.json"
+          },
+          {
+            "requirement": "the GitHub release for v2.97.0 carries the binaries and SHA256SUMS",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "the script printed its final OK line",
+            "artifact": "scripts/release.sh"
+          }
+        ],
+        "recorded_at": "2026-11-13T10:34:26.340Z",
+        "recorded_by": "02472149-dd8d-4c2f-80ff-2dc1694a72eb",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  },
+  "usage": null,
+  "usage_reason": "no herding job names this cell: no session is attributable to it"
+}
