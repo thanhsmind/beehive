@@ -545,6 +545,8 @@ pub(crate) fn build_knowledge_used(root: &Path) -> (Value, Vec<String>) {
             *loads.entry(path.to_string()).or_insert(0) += 1;
         }
     }
+    let mut loaded: Vec<(String, usize)> = loads.iter().map(|(p, n)| (p.clone(), *n)).collect();
+    loaded.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     let mut never_used: Vec<(String, usize)> = loads
         .into_iter()
         .filter(|(path, count)| *count >= NEVER_USED_MIN_LOADS && !uses.contains_key(path))
@@ -581,6 +583,76 @@ pub(crate) fn build_knowledge_used(root: &Path) -> (Value, Vec<String>) {
             never_used
                 .iter()
                 .map(|(path, count)| json!({"path": path, "loads": count}))
+                .collect(),
+        ),
+    );
+    section.insert(
+        "loaded".into(),
+        Value::Array(
+            loaded
+                .iter()
+                .map(|(path, count)| json!({"path": path, "loads": count}))
+                .collect(),
+        ),
+    );
+    (Value::Object(section), lines)
+}
+
+const WRONG_NOTE_CHARS: usize = 120;
+
+pub(crate) fn build_knowledge_wrong(root: &Path) -> (Value, Vec<String>) {
+    struct Wrong {
+        count: usize,
+        notes: Vec<(String, String, String)>,
+    }
+    let mut concepts: std::collections::HashMap<String, Wrong> = std::collections::HashMap::new();
+    let mut cells = 0usize;
+
+    for cell in closed_cells(root) {
+        let trace = cell.get("trace").unwrap_or(&Value::Null);
+        let Some(Value::Array(entries)) = trace.get("knowledge_wrong") else { continue };
+        let id = cell.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let stamp = trace.get("capped_at").and_then(Value::as_str).unwrap_or_default().to_string();
+        let mut counted = false;
+        for entry in entries {
+            let Some(path) = entry.get("path").and_then(Value::as_str).map(js_trim).filter(|p| !p.is_empty()) else { continue };
+            let note = entry.get("wrong").and_then(Value::as_str).map(js_trim).unwrap_or_default();
+            counted = true;
+            let slot = concepts.entry(path.to_string()).or_insert(Wrong { count: 0, notes: Vec::new() });
+            slot.count += 1;
+            if !note.is_empty() {
+                slot.notes.push((stamp.clone(), id.clone(), note.to_string()));
+            }
+        }
+        cells += usize::from(counted);
+    }
+
+    let mut ranked: Vec<(String, Wrong)> = concepts.into_iter().collect();
+    ranked.sort_by(|a, b| b.1.count.cmp(&a.1.count).then_with(|| a.0.cmp(&b.0)));
+    for (_, wrong) in ranked.iter_mut() {
+        wrong.notes.sort();
+    }
+
+    let mut lines = vec![format!("reported wrong: {} concept(s) in {cells} cell(s)", ranked.len())];
+    for (path, wrong) in ranked.iter().take(TOP_CONCEPT_LINES) {
+        lines.push(format!("  {}  {path}", wrong.count));
+        if let Some((_, _, note)) = wrong.notes.last() {
+            let cut: String = note.chars().take(WRONG_NOTE_CHARS).collect();
+            lines.push(format!("      {cut}"));
+        }
+    }
+
+    let mut section = Map::new();
+    section.insert("cells".into(), Value::from(cells));
+    section.insert(
+        "concepts".into(),
+        Value::Array(
+            ranked
+                .iter()
+                .map(|(path, wrong)| {
+                    let notes: Vec<&String> = wrong.notes.iter().map(|(_, _, n)| n).collect();
+                    json!({"path": path, "wrong_count": wrong.count, "notes": notes})
+                })
                 .collect(),
         ),
     );
@@ -690,6 +762,8 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     lines.extend(feature_lines);
     let (knowledge_used, knowledge_used_lines) = build_knowledge_used(&ctx.root);
     lines.extend(knowledge_used_lines);
+    let (knowledge_wrong, knowledge_wrong_lines) = build_knowledge_wrong(&ctx.root);
+    lines.extend(knowledge_wrong_lines);
     let (pull_rate, pull_lines) = build_pull_rate(&ctx.root);
     lines.extend(pull_lines);
 
@@ -704,6 +778,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     result.insert("outcomes".into(), outcomes);
     result.insert("feature_outcomes".into(), feature_outcomes);
     result.insert("knowledge_used".into(), knowledge_used);
+    result.insert("knowledge_wrong".into(), knowledge_wrong);
     result.insert("pull_rate".into(), pull_rate);
     Some(ctx.emit(&Value::Object(result), &lines.join("\n"), 0))
 }
@@ -1126,6 +1201,107 @@ mod tests {
             lines.contains(&"loaded, never used: docs/knowledge/patterns/never.md — loaded 5 time(s)".to_string()),
             "{lines:?}"
         );
+    }
+
+    fn wrong_cell(root: &Path, id: &str, capped_at: &str, entries: Value) {
+        closed_cell(root, id, json!({"capped_at": capped_at, "knowledge_wrong": entries}));
+    }
+
+    #[test]
+    fn report_knowledge_wrong_counts_ranks_and_prints_the_newest_note() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        wrong_cell(root, "a", "2026-11-01T00:00:00Z", json!([{"path": "docs/knowledge/patterns/one.md", "wrong": "old note"}]));
+        wrong_cell(root, "b", "2026-11-05T00:00:00Z", json!([
+            {"path": "docs/knowledge/patterns/one.md", "wrong": "newest note"},
+            {"path": "docs/knowledge/patterns/two.md", "wrong": ""},
+        ]));
+        wrong_cell(root, "c", "2026-11-09T00:00:00Z", json!([{"path": "docs/knowledge/patterns/one.md", "wrong": ""}]));
+        closed_cell(root, "d", json!({}));
+
+        let (section, lines) = build_knowledge_wrong(root);
+
+        assert_eq!(section["cells"], 3, "{section}");
+        let concepts = section["concepts"].as_array().unwrap();
+        assert_eq!(concepts.len(), 2, "{section}");
+        assert_eq!(concepts[0]["path"], "docs/knowledge/patterns/one.md");
+        assert_eq!(concepts[0]["wrong_count"], 3);
+        assert_eq!(concepts[0]["notes"], json!(["old note", "newest note"]));
+        assert_eq!(concepts[1]["wrong_count"], 1);
+        assert_eq!(concepts[1]["notes"], json!([]));
+        assert_eq!(
+            lines,
+            vec![
+                "reported wrong: 2 concept(s) in 3 cell(s)".to_string(),
+                "  3  docs/knowledge/patterns/one.md".to_string(),
+                "      newest note".to_string(),
+                "  1  docs/knowledge/patterns/two.md".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn report_knowledge_wrong_breaks_ties_by_path_and_cuts_a_long_note() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let long = "x".repeat(200);
+        wrong_cell(root, "a", "2026-11-01T00:00:00Z", json!([{"path": "docs/knowledge/patterns/b.md", "wrong": long}]));
+        wrong_cell(root, "b", "2026-11-02T00:00:00Z", json!([{"path": "docs/knowledge/patterns/a.md", "wrong": "short"}]));
+
+        let (_section, lines) = build_knowledge_wrong(root);
+
+        assert_eq!(lines[1], "  1  docs/knowledge/patterns/a.md");
+        assert_eq!(lines[3], "  1  docs/knowledge/patterns/b.md");
+        assert_eq!(lines[4], format!("      {}", "x".repeat(120)));
+    }
+
+    #[test]
+    fn report_knowledge_wrong_prints_at_most_ten_concepts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for i in 0..12 {
+            wrong_cell(root, &format!("c{i}"), "2026-11-01T00:00:00Z", json!([{"path": format!("docs/knowledge/patterns/p{i:02}.md"), "wrong": ""}]));
+        }
+
+        let (section, lines) = build_knowledge_wrong(root);
+
+        assert_eq!(lines[0], "reported wrong: 12 concept(s) in 12 cell(s)");
+        assert_eq!(lines.len(), 11, "{lines:?}");
+        assert_eq!(section["concepts"].as_array().unwrap().len(), 12);
+    }
+
+    #[test]
+    fn report_knowledge_wrong_over_an_empty_root_is_a_zero_header() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (section, lines) = build_knowledge_wrong(tmp.path());
+        assert_eq!(lines, vec!["reported wrong: 0 concept(s) in 0 cell(s)".to_string()]);
+        assert_eq!(section["cells"], 0);
+        assert_eq!(section["concepts"], json!([]));
+    }
+
+    #[test]
+    fn report_knowledge_used_loaded_list_holds_a_used_concept_with_its_load_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut log = String::new();
+        for i in 0..3 {
+            log += &prepare_row(&format!("u{i}"), &["docs/knowledge/patterns/used-it.md"]);
+        }
+        log += &prepare_row("v0", &["docs/knowledge/patterns/once.md", "packages/x.rs"]);
+        write_root(root, "logs/dispatch.jsonl", &log);
+        closed_cell(root, "u0", json!({"knowledge_used": [{"path": "docs/knowledge/patterns/used-it.md", "changed": "c"}]}));
+
+        let (section, lines) = build_knowledge_used(root);
+
+        assert_eq!(
+            section["loaded"],
+            json!([
+                {"path": "docs/knowledge/patterns/used-it.md", "loads": 3},
+                {"path": "docs/knowledge/patterns/once.md", "loads": 1},
+            ])
+        );
+        assert_eq!(section["never_used"], json!([]));
+        assert_eq!(lines.len(), 2, "{lines:?}");
     }
 
     #[test]

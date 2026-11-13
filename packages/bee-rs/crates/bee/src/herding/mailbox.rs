@@ -472,6 +472,10 @@ concept as \"<docs/knowledge path> — <the decision it changed>\", or an empty 
 array when no concept changed a decision. Omitting the key states nothing at all; \
 it is never required, and no shape of it is ever refused (knowledge-in-the-flow \
 D1 forbids a mandatory knowledge-ref check).\n\n\
+Knowledge wrong (OPTIONAL): `knowledge_wrong` — a loaded concept that misled \
+this cell and that you did not fix in this commit, one entry per concept as \
+\"<docs/knowledge path> — <what was wrong>\"; omit the key when there is none. \
+It is never required, and no shape of it is ever refused.\n\n\
 {question_section}\
 # How to write it — write to a temp file, then rename (do not skip this)\n\n\
 Write the JSON above to a temp file in the SAME directory as the result file,\n\
@@ -551,6 +555,7 @@ pub(crate) struct MailboxResult {
     pub files_changed: Vec<String>,
     pub proof: String,
     pub knowledge_used: Option<Vec<String>>,
+    pub knowledge_wrong: Option<Vec<String>>,
     /// StopAndAsk (a2affcba): the ways forward the worker offers instead of
     /// guessing — one self-contained sentence each. OPTIONAL at parse and
     /// empty when absent, because a foreign agent that skips it still owes a
@@ -846,6 +851,10 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
     });
 
+    let knowledge_wrong = obj.get("knowledge_wrong").and_then(Value::as_array).map(|arr| {
+        arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
+    });
+
     Ok(MailboxResult {
         round,
         status,
@@ -853,6 +862,7 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         files_changed,
         proof,
         knowledge_used,
+        knowledge_wrong,
         options,
         leaning,
         dissent,
@@ -1400,6 +1410,23 @@ mod tests {
         assert!(text.contains("\"round\": 3"), "missing round field in the ack schema:\n{text}");
         assert!(text.contains("\"agent\""), "missing agent field in the ack schema:\n{text}");
         assert!(text.contains("\"received_at\""), "missing received_at field in the ack schema:\n{text}");
+    }
+
+    #[test]
+    fn knowledge_wrong_the_herded_brief_names_the_key() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let text = render_brief(&sample_spec(worktree_root, bee_dir, &files, 1));
+        assert!(text.contains("`knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit"), "{text}");
+        assert!(text.contains("<docs/knowledge path> — <what was wrong>"), "{text}");
+    }
+
+    #[test]
+    fn knowledge_wrong_a_result_file_array_is_parsed() {
+        let text = r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","knowledge_wrong":["docs/knowledge/a.md — x"]}"#;
+        let result = parse_result_text(1, text).expect("parses");
+        assert_eq!(result.knowledge_wrong, Some(vec!["docs/knowledge/a.md — x".to_string()]));
     }
 
     #[test]

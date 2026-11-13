@@ -224,7 +224,9 @@ included: add guidance beside those words, never over them.
    hit one, and update `bee.anchors` for files you changed — thin and
    anchored, no review step. The cap answers which concepts changed a
    decision with `--knowledge-used '<path> — <what it changed>'` or
-   `--no-knowledge-used`, never refused. Before the commit, run `bee
+   `--no-knowledge-used`, never refused. A loaded concept that misled the
+   cell and that the commit did not fix goes in with `--knowledge-wrong
+   '<path> — <what was wrong>'`, omitted when there is none. Before the commit, run `bee
    knowledge check --json`. For every suspect concept anchored by a file
    you changed, fix the concept or run `bee knowledge confirm --id <id>`,
    then reserve the concept file and commit it with the cell — the cap door

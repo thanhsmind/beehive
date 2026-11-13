@@ -72,9 +72,10 @@ pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests"
 /// result is read against. Optional here so callers without a baseline keep
 /// capping cleanly; validated as a non-empty string when present and stored
 /// on the cell trace.
-pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 8] = [
+pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 9] = [
     "mistakes",
     "knowledge_used",
+    "knowledge_wrong",
     "baseline",
     "reaction",
     "skipped",
@@ -237,6 +238,14 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
         _ => {
             return Err(Fail::Thrown(
                 "cells finish: --report key \"knowledge_used\" must be an array — one entry per concept that changed a decision, each \"<docs/knowledge path> — <the decision it changed>\"; an empty array states that no concept changed a decision.".to_string(),
+            ))
+        }
+    }
+    match map.get("knowledge_wrong") {
+        None | Some(Value::Array(_)) => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"knowledge_wrong\" must be an array — one entry per loaded concept that misled this cell and was not fixed in its commit, each \"<docs/knowledge path> — <what was wrong>\"; omit the key when there is none.".to_string(),
             ))
         }
     }
@@ -1049,6 +1058,12 @@ pub(crate) fn report_from_job(
     if let Some(entries) = &result.knowledge_used {
         map.insert(
             "knowledge_used".to_string(),
+            Value::Array(entries.iter().cloned().map(Value::String).collect()),
+        );
+    }
+    if let Some(entries) = &result.knowledge_wrong {
+        map.insert(
+            "knowledge_wrong".to_string(),
             Value::Array(entries.iter().cloned().map(Value::String).collect()),
         );
     }

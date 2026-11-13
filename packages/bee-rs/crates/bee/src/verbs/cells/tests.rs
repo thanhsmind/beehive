@@ -3650,6 +3650,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -5691,6 +5692,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -5771,6 +5773,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -5874,6 +5877,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -6130,6 +6134,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -7014,6 +7019,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -7137,6 +7143,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -8283,6 +8290,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -9575,6 +9583,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -10137,6 +10146,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -11887,6 +11897,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: true,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
@@ -13173,5 +13184,175 @@ use std::time::Instant;
             result_val["trace"]["report"]["knowledge_used"],
             json!(["docs/knowledge/areas/x.md — the flag pair earned its own names"]),
             "report_from_job carries the array into the report the cap reads"
+        );
+    }
+
+    fn knowledge_wrong_report(extra: Value) -> String {
+        let mut report = json!({
+            "outcome": "o", "commit": "abc1234", "files": [],
+            "tests": "echo ok — green:unit — fixture", "deviations": [],
+        });
+        for (k, v) in extra.as_object().unwrap() {
+            report[k] = v.clone();
+        }
+        report.to_string()
+    }
+
+    #[test]
+    fn knowledge_wrong_the_flag_records_the_path_and_what_was_wrong() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "kw-1", &cell("kw-1", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("kw-1");
+        flags.knowledge_wrong =
+            Some("docs/knowledge/areas/okf-profile/critical-bar.md — named a flag the cap no longer takes".to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(
+            capped["trace"]["knowledge_wrong"],
+            json!([{
+                "path": "docs/knowledge/areas/okf-profile/critical-bar.md",
+                "wrong": "named a flag the cap no longer takes",
+            }])
+        );
+    }
+
+    #[test]
+    fn knowledge_wrong_a_line_with_no_separator_keeps_the_path_and_an_empty_wrong() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "kw-2", &cell("kw-2", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("kw-2");
+        flags.knowledge_wrong = Some("docs/knowledge/patterns/some-pattern.md".to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(
+            capped["trace"]["knowledge_wrong"],
+            json!([{"path": "docs/knowledge/patterns/some-pattern.md", "wrong": ""}])
+        );
+    }
+
+    #[test]
+    fn knowledge_wrong_the_report_array_records_every_entry() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "kw-3", &cell("kw-3", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("kw-3");
+        flags.report = Some(knowledge_wrong_report(json!({
+            "knowledge_wrong": [
+                "docs/knowledge/areas/a.md — described a column the table dropped",
+                "docs/knowledge/patterns/b.md — claimed a guard that never fires",
+            ],
+        })));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(
+            capped["trace"]["knowledge_wrong"],
+            json!([
+                {"path": "docs/knowledge/areas/a.md", "wrong": "described a column the table dropped"},
+                {"path": "docs/knowledge/patterns/b.md", "wrong": "claimed a guard that never fires"},
+            ])
+        );
+    }
+
+    #[test]
+    fn knowledge_wrong_flag_and_array_together_keep_all_and_leave_knowledge_used_alone() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "kw-4", &cell("kw-4", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("kw-4");
+        flags.knowledge_wrong = Some("docs/knowledge/areas/a.md — first".to_string());
+        flags.knowledge_used = Some("docs/knowledge/areas/u.md — changed a decision".to_string());
+        flags.report = Some(knowledge_wrong_report(json!({
+            "knowledge_wrong": ["docs/knowledge/areas/b.md — second"],
+        })));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(
+            capped["trace"]["knowledge_wrong"],
+            json!([
+                {"path": "docs/knowledge/areas/a.md", "wrong": "first"},
+                {"path": "docs/knowledge/areas/b.md", "wrong": "second"},
+            ])
+        );
+        assert_eq!(
+            capped["trace"]["knowledge_used"],
+            json!([{"path": "docs/knowledge/areas/u.md", "changed": "changed a decision"}])
+        );
+        assert!(capped["trace"].get("no_knowledge_used").is_none());
+    }
+
+    #[test]
+    fn knowledge_wrong_silence_writes_no_key() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "kw-5", &cell("kw-5", "claimed", "f", json!([])));
+
+        let capped = cap_cell_from_flags(root, &knowledge_used_flags("kw-5"), false).unwrap();
+
+        assert_eq!(capped["status"], json!("capped"));
+        assert!(capped["trace"].get("knowledge_wrong").is_none());
+    }
+
+    #[test]
+    fn knowledge_wrong_a_non_array_report_value_is_refused() {
+        let tmp = knowledge_used_root();
+        let root = tmp.path();
+        write_cell_fixture(root, "kw-6", &cell("kw-6", "claimed", "f", json!([])));
+
+        let mut flags = knowledge_used_flags("kw-6");
+        flags.report = Some(knowledge_wrong_report(json!({"knowledge_wrong": "docs/knowledge/areas/a.md — x"})));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+
+        assert!(refusal.contains("cells finish: --report key \"knowledge_wrong\" must be an array"), "{refusal}");
+    }
+
+    #[test]
+    fn knowledge_wrong_reaches_the_trace_through_a_from_job_result() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "kw-job-1";
+        let job_id = "job-kw-1";
+
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", &format!("worker commit\n\ncell: {cell_id}")]);
+
+        write_from_job_mailbox(
+            &main,
+            job_id,
+            cell_id,
+            &wt,
+            "done",
+            &["file.txt"],
+            "cargo test --bin bee",
+            None,
+        );
+        let res_path = main.join(".bee").join("mailbox").join(job_id).join("result-1.json");
+        let mut res: Value = serde_json::from_str(&std::fs::read_to_string(&res_path).unwrap()).unwrap();
+        res["knowledge_wrong"] = json!(["docs/knowledge/areas/x.md — named a path that moved"]);
+        std::fs::write(&res_path, jsjson::stringify_pretty(&res)).unwrap();
+
+        write_cell_fixture(
+            &main,
+            cell_id,
+            &json!({
+                "id": cell_id, "feature": "myfeat", "title": "job cell",
+                "action": "do work", "verify": "cargo test --bin bee",
+                "lane": "tiny", "status": "claimed", "deps": [], "files": [],
+                "trace": { "worker": "w-worker" },
+            }),
+        );
+
+        let flags = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        let out = finish_cap_and_release(&main, None, flags, None).unwrap();
+        let Out::Emit(result_val, _, 0) = out else { panic!("expected Out::Emit") };
+
+        assert_eq!(
+            result_val["trace"]["knowledge_wrong"],
+            json!([{"path": "docs/knowledge/areas/x.md", "wrong": "named a path that moved"}])
         );
     }

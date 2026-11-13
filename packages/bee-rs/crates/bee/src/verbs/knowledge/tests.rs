@@ -897,6 +897,7 @@ use std::time::Instant;
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             session_flag: None,
             force_ownership: false,
