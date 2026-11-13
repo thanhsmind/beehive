@@ -190,6 +190,62 @@ fn apply_copy_verify_skill(
     Ok(source_walk.files)
 }
 
+pub(super) fn apply_verify_only(repo_root: &Path, items: &[Value]) -> (Vec<Value>, Vec<Value>) {
+    let mut applied: Vec<Value> = Vec::new();
+    let mut skipped: Vec<Value> = Vec::new();
+    let mut recorded: Map<String, Value> = Map::new();
+    for item in items {
+        let rel = item["path"].as_str().unwrap_or("");
+        let kind = item["target"].as_str().unwrap_or("");
+        let skill = item["skill"].as_str().unwrap_or("");
+        match item["action"].as_str().unwrap_or("") {
+            "copy_verify_skill" => {
+                match apply_copy_verify_skill(
+                    repo_root,
+                    skill,
+                    &join_rel(repo_root, rel),
+                    runtime_for_target_kind(kind),
+                ) {
+                    Err(reason) => {
+                        skipped.push(json!({"skill": skill, "target": kind, "reason": reason}));
+                    }
+                    Ok(files) => {
+                        let hashes: Map<String, Value> =
+                            files.into_iter().map(|(f, h)| (f, json!(h))).collect();
+                        recorded.insert(rel.to_string(), Value::Object(hashes));
+                        applied.push(item.clone());
+                    }
+                }
+            }
+            "blocked_verify_skill" => {
+                skipped.push(json!({"skill": skill, "target": kind, "reason": item["reason"]}));
+            }
+            _ => {}
+        }
+    }
+    if !recorded.is_empty() {
+        let onboarding_path = repo_root.join(".bee").join("onboarding.json");
+        if let Some(mut onboarding) = read_json_if_exists(&onboarding_path) {
+            if let Some(root) = onboarding.as_object_mut() {
+                let managed = root.entry("managed").or_insert_with(|| json!({}));
+                if let Some(managed) = managed.as_object_mut() {
+                    let ledger = managed.entry("verify_skills").or_insert_with(|| json!({}));
+                    if let Some(ledger) = ledger.as_object_mut() {
+                        for (rel, hashes) in recorded {
+                            ledger.insert(rel, hashes);
+                        }
+                    }
+                }
+            }
+            let _ = write_file_atomic(
+                &onboarding_path,
+                format!("{}\n", jsjson::stringify_pretty(&onboarding)).as_bytes(),
+            );
+        }
+    }
+    (applied, skipped)
+}
+
 /// utcNow(): `new Date().toISOString()`.
 fn utc_now() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
