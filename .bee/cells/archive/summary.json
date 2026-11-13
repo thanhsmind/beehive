@@ -2173,5 +2173,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-13T09:43:29.950Z"
+  },
+  "onboard-workspace-protocol": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-13T10:20:38.887Z"
   }
 }

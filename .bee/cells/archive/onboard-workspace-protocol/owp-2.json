@@ -1,0 +1,141 @@
+{
+  "id": "owp-2",
+  "feature": "onboard-workspace-protocol",
+  "title": "Make the workspace protocol procedure run after every onboard and say how to write a good one",
+  "lane": "small",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "a4c2c38d",
+    "0687dd2a"
+  ],
+  "files": [
+    "skills/bee-hive/references/onboarding.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-hive/references/onboarding.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "WORKSPACE_PROTOCOL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/onboarding.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+  ],
+  "action": "Per decisions a4c2c38d (D1) and 0687dd2a (D2). Write in ASD-STE100, short sentences, the existing style. (1) skills/bee-hive/SKILL.md Onboarding: replace the current WORKSPACE_PROTOCOL pointer line with one line saying: after every onboard result whose `workspace_protocol.action_needed` is true (the `workspace protocol:` notice), run the \"Workspace protocol\" procedure of references/onboarding.md before any feature work; it is part of onboarding, not optional. (2) references/onboarding.md, section \"Workspace protocol\": rewrite **When** — run it after every `bee onboard` whose result has `workspace_protocol.action_needed: true` (missing, invalid, unreadable, or still bee's unedited render), and when the owner asks; onboard never writes the file. Keep steps 1-8 (init --json / --print, read review, edit, Sources, no placeholder or test command, check until valid, commit, owner table) and add a step that runs `bee onboard --repo-root . --json` again to confirm action_needed is false. Add a subsection **Where to look** with one bullet per key: PROJECT_CRITICALITY rubric (high: real users, money, personal data, production deploys or a public package others install; medium: an internal service or tool with a team; low: a personal or throwaway repo); MERGE_OWNER from config uat_stop, branch protection hints in .github/, CONTRIBUTING.md; DEPLOY_OWNER from docs/DEPLOY.md, release scripts, deploy/publish workflows in .github/workflows, Dockerfile, package publish config; HUMAN_DECISION_BOUNDARIES from things that cannot be undone or reach an audience: deploy, release, tag, push, publish, database migrations, data deletion, auth and permission changes, billing, secrets, public API or schema changes, dependency major upgrades, and rules in the review files that say ask/never/must; PROTECTED_AREAS from generated files (DO NOT EDIT headers, codegen outputs), lockfiles, vendored trees, applied migrations, CI and release config, secret-shaped files, and paths the rule files forbid; ANTI_PATTERNS from the rule files' never/do-not lines and past mistakes in docs/knowledge or decisions. Add a subsection **What good looks like**: each item is one concrete action or path an agent can recognize (\"a database migration that drops a column\", not \"risky changes\"); a protected area names the path and the only allowed way to change it; every added line has a source in `## Sources`; 4-10 boundaries is normal, fewer means the tree was not read; never copy bee's own rules that the base set already carries; never invent an owner — when no source names one, keep `human` and say so in the owner table. Add a **Self-check before commit** list: every key has a source; no item is generic; no test command; `bee protocol check` is valid; onboard reports action_needed false. Keep the pointer to the bee repo's WORKSPACE_PROTOCOL.md as the reference result. (3) docs/knowledge/areas/workflow-state/workspace-protocol.md: add a behaviors paragraph for the onboard report (D1: the workspace_protocol payload object, the unedited test as byte-equal to the fresh render, the one notice and its text `workspace protocol: WORKSPACE_PROTOCOL.md is <what> — finish it now with the Workspace protocol procedure in bee-hive references/onboarding.md`, onboard never writes the file), a business rule for it, an edge case (an unedited render whose git facts changed since init no longer matches and reads as edited), cite decisions a4c2c38d and 0687dd2a in frontmatter decisions and sources, add onboard/notices.rs to anchors and Pointers. (4) Run `.bee/bin/bee dev regen` once from the worktree and commit the regenerated vendored trees and release-manifest with this cell. No code comments.",
+  "verify": ".bee/bin/bee dev release-manifest --check && rg -n 'action_needed' skills/bee-hive/SKILL.md skills/bee-hive/references/onboarding.md && rg -n 'Where to look|What good looks like|Self-check before commit' skills/bee-hive/references/onboarding.md && rg -n 'a4c2c38d' docs/knowledge/areas/workflow-state/workspace-protocol.md",
+  "must_haves": {
+    "truths": [
+      "SKILL.md onboarding makes the procedure a required step after an onboard with action_needed",
+      "the procedure says where to look for each key, what good looks like, and a self-check",
+      "the concept records the onboard report and cites a4c2c38d and 0687dd2a"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/onboarding.md",
+        "substantive": "Where to look, What good looks like, Self-check subsections"
+      }
+    ],
+    "key_links": [
+      "SKILL.md Onboarding points at the Workspace protocol section"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Do not touch packages/bee-rs"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-owp-2",
+    "outcome": "Workspace protocol procedure is now a required onboarding step with Where to look, What good looks like and Self-check; concept updated; regen done. Commit d06f4ec26876ef012a9943e6ad4bfde7b784cf76",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/onboarding.md",
+      "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "sync-ack: the owning concept workspace-protocol.md is updated in this cell; the listed concepts anchor the vendored skill trees generically and were already suspect before this change"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T10:12:41.532Z",
+    "behavior_change": false,
+    "verification_evidence": ".bee/bin/bee dev release-manifest --check && rg action_needed/Where to look/What good looks like/Self-check before commit/a4c2c38d — green:static — docs and skills only, cargo proof not run because a sibling's Rust edits are uncommitted in the tree",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "02472149-dd8d-4c2f-80ff-2dc1694a72eb",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && rg -n 'action_needed' skills/bee-hive/SKILL.md skills/bee-hive/references/onboarding.md && rg -n 'Where to look|What good looks like|Self-check before commit' skills/bee-hive/references/onboarding.md && rg -n 'a4c2c38d' docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "claimed_at": "2026-11-13T10:10:40.321Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+    ],
+    "sync_ack": "the owning concept workspace-protocol.md is updated in this cell; the listed concepts anchor the vendored skill trees generically and were already suspect before this change",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Workspace protocol procedure is now a required onboarding step with Where to look, What good looks like and Self-check; concept updated; regen done. Commit d06f4ec26876ef012a9943e6ad4bfde7b784cf76",
+      "commit": "d06f4ec26876ef012a9943e6ad4bfde7b784cf76",
+      "files": [
+        "skills/bee-hive/SKILL.md",
+        "skills/bee-hive/references/onboarding.md",
+        "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && rg -n 'action_needed' skills/bee-hive/SKILL.md skills/bee-hive/references/onboarding.md && rg -n 'Where to look|What good looks like|Self-check before commit' skills/bee-hive/references/onboarding.md && rg -n 'a4c2c38d' docs/knowledge/areas/workflow-state/workspace-protocol.md — green:unit — .bee/bin/bee dev release-manifest --check && rg action_needed/Where to look/What good looks like/Self-check before commit/a4c2c38d — green:static — docs and skills only, cargo proof not run because a sibling's Rust edits are uncommitted in the tree",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 367 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "SKILL.md onboarding makes the procedure a required step after an onboard with action_needed",
+            "artifact": "skills/bee-hive/SKILL.md"
+          },
+          {
+            "requirement": "the procedure says where to look for each key, what good looks like, and a self-check",
+            "artifact": "skills/bee-hive/references/onboarding.md"
+          },
+          {
+            "requirement": "the concept records the onboard report and cites a4c2c38d and 0687dd2a",
+            "artifact": "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T10:19:45.848Z",
+        "recorded_by": "02472149-dd8d-4c2f-80ff-2dc1694a72eb",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 43742,
+    "cached": 464074,
+    "total": 507816,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 43742,
+        "cached": 464074,
+        "total": 507816
+      }
+    },
+    "jobs": [
+      "job-1794564646355-2049931-1"
+    ]
+  }
+}

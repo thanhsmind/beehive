@@ -1,0 +1,134 @@
+{
+  "id": "owp-1",
+  "feature": "onboard-workspace-protocol",
+  "title": "Report the workspace protocol state on every onboard result",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "a4c2c38d",
+    "6474eb2d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/protocol.rs"
+  ],
+  "read_first": [
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md",
+    "packages/bee-rs/crates/bee/src/verbs/protocol.rs",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+  ],
+  "action": "Per decision a4c2c38d (D1). Contract: every `bee onboard` result for a repo root (dry-run --json, --apply, and every return that already carries `notices` and `design_offer`) gains a top-level key `workspace_protocol` = {\"state\": \"missing\"|\"unreadable\"|\"invalid\"|\"valid\", \"unedited\": bool, \"issues\": [string], \"action_needed\": bool}. state and issues come from the existing `protocol_state(repo_root)` in verbs/protocol.rs. unedited is true only when the file exists and its bytes equal `render_protocol(&gather_facts(repo_root))` exactly. action_needed = state != valid OR unedited. When action_needed, the notices array gains exactly one entry: `workspace protocol: WORKSPACE_PROTOCOL.md is <what> — finish it now with the Workspace protocol procedure in bee-hive references/onboarding.md`, where <what> is `missing`, `unreadable`, `invalid (<issues joined with \"; \">)` or `still bee's unedited render`. When not needed, no notice. Onboard never creates, writes or changes WORKSPACE_PROTOCOL.md. Put the helper (e.g. `workspace_protocol_notice(repo_root) -> (Value, Option<String>)`) in onboard/notices.rs, wire it where build_notices and the design_offer insert already run in onboard/mod.rs; widen visibility in protocol.rs only if needed. Red first: add tests in onboard/tests.rs that drive onboard on temp repos for four cases — no file (missing, notice), a valid hand-edited file (valid, unedited false, no notice), a file written by init_protocol unchanged (valid, unedited true, notice says unedited render), an invalid file (invalid, notice names the issue) — and assert that onboard left the file bytes untouched. Assert observable payload, not internals. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee workspace_protocol",
+  "must_haves": {
+    "truths": [
+      "onboard payload carries workspace_protocol with state, unedited, issues, action_needed",
+      "one notice appears when the file is missing, invalid, unreadable or the unedited render",
+      "no notice for a valid edited file",
+      "onboard never writes WORKSPACE_PROTOCOL.md"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "substantive": "workspace protocol notice helper"
+      }
+    ],
+    "key_links": [
+      "the notice text points at the Workspace protocol section of bee-hive references/onboarding.md"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Never create or change WORKSPACE_PROTOCOL.md from onboard"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-owp-1",
+    "outcome": "Onboard reports workspace_protocol and one notice when action is needed; never writes the file. Commit d85f32dab",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+    ],
+    "deviations": [
+      "sync-ack: the owning concept workspace-protocol.md carries the onboard report; the listed onboarding concepts anchor onboard/mod.rs generically and were already suspect before this change"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T10:17:38.730Z",
+    "behavior_change": false,
+    "verification_evidence": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite 5008 passed, 0 failed; includes four workspace_protocol tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "02472149-dd8d-4c2f-80ff-2dc1694a72eb",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee workspace_protocol",
+    "claimed_at": "2026-11-13T10:10:33.495Z",
+    "knowledge_delta": [
+      "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+    ],
+    "sync_ack": "the owning concept workspace-protocol.md carries the onboard report; the listed onboarding concepts anchor onboard/mod.rs generically and were already suspect before this change",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Onboard reports workspace_protocol and one notice when action is needed; never writes the file. Commit d85f32dab",
+      "commit": "d85f32dabacb41c2de099ce9f66bd118abd46910",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "docs/knowledge/areas/workflow-state/workspace-protocol.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee workspace_protocol — green:unit — cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — full suite 5008 passed, 0 failed; includes four workspace_protocol tests",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "onboard payload carries workspace_protocol with state, unedited, issues, action_needed",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/notices.rs workspace_protocol_notice; worktree onboard smoke printed action_needed false"
+          },
+          {
+            "requirement": "one notice appears when the file is missing, invalid, unreadable or the unedited render",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs workspace_protocol tests; bee test green"
+          },
+          {
+            "requirement": "no notice for a valid edited file",
+            "artifact": "onboard/tests.rs valid edited case; beehive smoke notices empty"
+          },
+          {
+            "requirement": "onboard never writes WORKSPACE_PROTOCOL.md",
+            "artifact": "tests assert file bytes unchanged"
+          }
+        ],
+        "recorded_at": "2026-11-13T10:19:37.373Z",
+        "recorded_by": "02472149-dd8d-4c2f-80ff-2dc1694a72eb",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 46253,
+    "cached": 435812,
+    "total": 482065,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 46253,
+        "cached": 435812,
+        "total": 482065
+      }
+    },
+    "jobs": [
+      "job-1794564644771-2049608-1"
+    ]
+  }
+}
