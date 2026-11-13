@@ -1247,6 +1247,7 @@ fn record_cap_in_mailbox(
         // would have fixed it (mistake-fix-at D1).
         better: None,
         fix_at: None,
+        source: None,
     };
     mailbox::record_stop(root, &run, &entry);
 
@@ -1920,6 +1921,7 @@ fn record_block_in_mailbox(root: &Path, blocked: &Value, reason: &str, session_f
         // or mistake-fix-at's layer.
         better: None,
         fix_at: None,
+        source: None,
     };
     mailbox::record_stop(root, &run, &entry);
 }

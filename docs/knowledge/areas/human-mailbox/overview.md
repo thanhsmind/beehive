@@ -12,7 +12,7 @@ bee:
   sources: [docs/history/human-mailbox/CONTEXT.md (the locked decisions), "docs/history/human-mailbox/plan.md (four phases, strictly ordered)", docs/discovery/human-mailbox/MAP.md (the discovery map and its 14 tickets), "cells hm-1..hm-10 (four slices, merged 2026-08-25/26)"]
   authoritative_for: "human-mailbox: the letter record, when it is filed, and the one command a consumer may call"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs]
-  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
   verified_at: 2026-10-16
   verified_commit: bce76a97d58a512b181a260c6f4a6461148ebd58
 ---
@@ -62,7 +62,7 @@ follows from that.
 | **armed** | The mailbox is on for this run, so it will file a letter and the explicit-departure rule is enforced. Arming needs both the checkout's own configuration and the owner's enable marker: the configuration alone only says a checkout *can* run unattended. |
 | **departure** | A recorded difference between what the plan said and what was done, in three required parts — what was done differently, why, and which kind — with kind drawn from a closed set of four. |
 | **plan-followed statement** | The explicit declaration that a unit followed its plan. Recorded separately from departures, so that a statement meaning *nothing happened* can never be mined as though it were a lesson. |
-| **reflection** | An entry kind the agent appends the moment it notices a mistake, or at the run-end look-back, via `bee mailbox reflect --wrong <what went wrong> --better <what would have been better> --fix-at <layer>` (LR2, MFA D1 `af14e1d6`). All three parts are required; a missing one refuses the append (LR3). The layer is the strongest thing that stops the mistake coming back, from a closed set: `architecture` (a code change makes it impossible), `check` (a test, hook, guard or doctor row catches it), `doctrine` (only prose can carry it), `none` (a one-off nobody would guard); a word outside that set refuses at the same door, and a row written before the layer existed reads as `none`, never backfilled (MFA D4). It renders as the letter's "Mistakes & reflection" section, between Broken-or-unfinished and Needs-your-call, dropped when empty (LR1); a reflection never appears in Done and never becomes the subject — a mistake is not a thing the run did. Lesson mining reads it as a trouble source, by its `what` alone (RBL D3 `0872f328`, superseding LR4). |
+| **reflection** | An entry kind the agent appends the moment it notices a mistake, or at the run-end look-back, via `bee mailbox reflect --wrong <what went wrong> --better <what would have been better> --fix-at <layer>` (LR2, MFA D1 `af14e1d6`). All three parts are required; a missing one refuses the append (LR3). The layer is the strongest thing that stops the mistake coming back, from a closed set: `architecture` (a code change makes it impossible), `check` (a test, hook, guard or doctor row catches it), `doctrine` (only prose can carry it), `none` (a one-off nobody would guard); a word outside that set refuses at the same door, and a row written before the layer existed reads as `none`, never backfilled (MFA D4). It renders as the letter's "Mistakes & reflection" section, between Broken-or-unfinished and Needs-your-call, dropped when empty (LR1); a reflection never appears in Done and never becomes the subject — a mistake is not a thing the run did. Lesson mining reads it as a trouble source, by its `what` alone (RBL D3 `0872f328`, superseding LR4). An optional `--source self|user|review` (trust-layers D3/D6) records where it came from: `self`, the default, is stored as no key at all so every older row and letter stays byte-identical; `user` and `review` are stored on the entry and the letter item, and the bullet ends `your correction` or `from a review`. Any other value, an empty one included, refuses and appends nothing, and `--source` with `--no-mistakes` is refused like `--wrong`. The lesson key never reads it, so a user correction and a self reflection with the same layer and first four words fold into one lesson. |
 <!-- bee:not-a-deferral: "a later session" names which session files the letter, shipped recovery behaviour, not a deferred task -->
 | **unfinished letter** | A letter filed by a later session for a run that went silent, marked plainly as such and naming the moment the run last recorded anything. |
 <!-- /bee:not-a-deferral -->
@@ -203,6 +203,11 @@ scheduler being introduced to watch for this.
     already writes, and reports both numbers and their ratio in its object
     and on its printed line. It is a WITNESS, never a guard — it refuses
     nothing, drops nothing, and scores nothing.
+    The same digest carries a top-level `prose_load` witness (trust-layers D4/D7):
+    line counts of the instruction files, the critical pattern count of the
+    knowledge index, and the fix-at rows filed, each null when its source is
+    absent and printed as not present, never as 0. It counts and names fixed
+    files only, never their content, and `bee feedback count` is untouched.
 20. **A feature close demands the mistakes answer, and asks the CELLS, not
     the run** (RBL D1, D5). The close refuses while any capped cell of the
     feature carries neither a reflection nor the clean-run answer, and names
@@ -232,7 +237,10 @@ cell whose proof line carries the new guard, lint, or test shown FAILING on
 the past mistake, then green. When the past mistake cannot be reproduced, the
 layer drops to `doctrine` with the reason recorded. `FIX_AT_VALUES` stays
 `architecture|check|doctrine|none`; the sub-kind of a `check` (type, lint,
-test) rides in `--better`. Why: a rule nothing enforces is the repeat waiting
+test) rides in `--better`. `expertise/static-rules.md` orders the homes (type, lint
+rule, test, hook), and the leader file says a user correction or an accepted P1
+or P2 review finding is recorded the same way with `--source` (trust-layers D2,
+D3). Why: a rule nothing enforces is the repeat waiting
 to happen, and a guard never seen red proves only that it compiles.
 
 ## Edge Cases Settled

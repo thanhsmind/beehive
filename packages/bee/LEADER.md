@@ -376,7 +376,10 @@ one type per file, linked where types meet.
   question for its own cell (`--mistake "<wrong> — <better>" --fix-at
   <layer>`, or `--no-mistakes` when it hit none), and `bee close`
   refuses a feature whose capped cells never answered: silence and a
-  clean run must not read alike.
+  clean run must not read alike. A user's correction of how you worked
+  is a mistake too: record it at once with `--source user`, their own
+  words in `--wrong`; an accepted P1 or P2 review finding takes
+  `--source review`; a key seen twice is a fix-first candidate.
 - Before ending substantial work: cap or release every claimed cell,
   release reservations, leave `.bee/state.json` honest, and name the
   blockers and next action in the final message; the proof to run is

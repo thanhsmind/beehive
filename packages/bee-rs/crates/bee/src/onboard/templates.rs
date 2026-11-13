@@ -366,6 +366,12 @@ pub const VERIFY_APP_SKILL_NAME: &str = "verify-app";
 /// version mismatch, so an offer already refused must not be made again.
 pub const NO_TEST_VERIFICATION_OFFER: &str = "This project has no command that proves it works. The bee-verifying skill can build one together with the user: it studies the project, writes a check that drives the real product, and leaves a single command anyone can run. Offer it — say what it does, then ask, but first look through the project's recorded decisions for an earlier refusal: if the user already said no to this, say nothing. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer.";
 
+pub const STATIC_CHECK_FIRST_OFFER: &str = "Static checks found in this project's own files: {checks}. Offer them as the first members of the `commands.test` list, before the tests.";
+
+pub const STATIC_CHECK_MISSING_OFFER: &str = "Static checks found in this project's own files that `commands.test` does not run: {checks}. Offer adding them before the tests in the `commands.test` list.";
+
+pub const STATIC_CHECK_HOW_TO_OFFER: &str = "Run each proposed check once first and tell the user whether it is green or how many findings it reports. Look through the project's recorded decisions for an earlier answer about that check and stay silent about a check the user already refused. Record the user's answer for each check as a decision. Never write an unconfirmed value.";
+
 pub const DESIGN_PACKS_OFFER: &str = "This project has files that draw a user interface. bee can install design skills that guide how that interface looks and feels, in packs for the kind of project it is: web - web pages and web apps; charts - dashboards and data displays; motion - animation and transitions; apple - native apps for iPhone, iPad and Mac; figma - work that starts from Figma designs. A core design skill comes with any pack. Offer it - say what each pack is for, then ask which ones fit, or none. Then run bee onboard --apply --design-packs with the chosen names (for example --design-packs web,charts), or --design-packs none to stop this offer. Tell the user first that bee replaces every edit made inside its design folders on each install, so their own design notes belong in a folder of their own. The choice is the user's: never pick for them, and install nothing before they answer.";
 
 /// The second offer: this repo tests its code but nothing drives its product.
