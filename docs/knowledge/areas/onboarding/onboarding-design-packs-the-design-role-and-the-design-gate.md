@@ -111,10 +111,15 @@ lacks, ported from ui-ux-pro-max-skill under MIT — focus not obscured, a drag
 alternative, accessible login, a pause for auto-rotation, scrim contrast on the
 real background, and an error summary that takes focus (decision e7b47aa2); the
 fresh-context critic's brief — frames only, the closest gold example beside
-them, ranked findings; eight Refactoring UI craft rules checked by eye in the
-render, with two of its ideas left out because bee's own tells and defaults ban
-them (the thick one-side accent border, and extra whitespace that expresses no
-grouping); and, in the motion pack, frame rehearsal scripts
+them, ranked findings; twenty-five Refactoring UI craft rules checked by eye in
+the render, with a symptom lookup, an overcorrection table and a not-a-finding
+list, and the source rules left out because bee's own tells, colour science and
+defaults contradict them (the thick one-side accent border, extra whitespace
+that expresses no grouping, HSL ramps, hand-picked type scales, justified text,
+repeating background patterns), each declined rule naming the bee file that
+owns the opposite stance; the second source is the MIT-licensed
+refactoring-ui-skill restatement, credited in the addition's Source section;
+and, in the motion pack, frame rehearsal scripts
 ported from Stageshow under MIT — the contact sheet, the jump and drift scan,
 and the box-fit check, without the parts bound to Stageshow's own kit
 (decision 967bd7a2).

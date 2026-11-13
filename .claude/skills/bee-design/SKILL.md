@@ -166,7 +166,7 @@ critic is never the builder. A runtime with no second model uses a fresh subagen
 | --- | --- |
 | What static checks can and cannot prove about accessibility; never claim compliance | [accessibility.md](references/accessibility.md) |
 | WCAG 2.2 rules design-os does not carry: focus not obscured, drag alternative, login paste, carousel pause, scrim contrast, error summary | [additions/wcag-2-2.md](additions/wcag-2-2.md) |
-| Eight craft rules for hierarchy, buttons, badges, type scaling, icons and data display, checked by eye in the render | [additions/refactoring-ui-craft.md](additions/refactoring-ui-craft.md) |
+| Twenty-five craft rules for hierarchy, layout, colour, depth and images, with a symptom lookup, overcorrections and not-a-finding list, checked by eye in the render | [additions/refactoring-ui-craft.md](additions/refactoring-ui-craft.md) |
 | OKLCH reasoning, WCAG contrast targets, 11-stop scales, semantic role mapping | [color-science.md](references/color-science.md) |
 | The DTCG token model: primitive and semantic tiers, aliasing, role/foreground pairs | [token-taxonomy.md](references/token-taxonomy.md) |
 | The eight UI-mode constraint sets and the universal hard style guide | [mode-constraints.md](references/mode-constraints.md) |
