@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: "Bee OKF Profile — the context consumer, the promote proposer, and the session preamble"
-description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, the one home of the five knowledge writing rules the worker brief renders, the Read-when line the pack prints in place of a title, the shared anchor resolver that lets both verbs work from a docs/history/ fallback when no work-item concept exists, the symptom-text search verb that pulls matching patterns and area concepts mid-flow, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate, including the critical-patterns digest's own relevance ranking."
+description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, the one home of the seven knowledge writing rules the worker brief renders, the Read-when line the pack prints in place of a title, the shared anchor resolver that lets both verbs work from a docs/history/ fallback when no work-item concept exists, the symptom-text search verb that pulls matching patterns and area concepts mid-flow, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate, including the critical-patterns digest's own relevance ranking."
 timestamp: 2026-08-11
 bee:
   id: okf-profile-context-and-promote
@@ -73,10 +73,12 @@ words in its title and description, and splits past 300 lines along its lifecycl
 writer consolidates these changes and writes
 `docs/history/<f>/delivery.md`, so knowledge lands in main in the same merge as code.
 
-The five rules have ONE home — the rule list `bee knowledge consolidate` prints — and that one
+The seven rules have ONE home — the rule list `bee knowledge consolidate` prints — and that one
 home is what the worker brief renders (this feature's CONTEXT.md D6). Before it, the list held
 three rules and the brief carried a single sentence, so the two could not agree: a rule added to
-one was invisible to the other until someone remembered. `knowledge_rules` in
+one was invisible to the other until someone remembered. The list later grew to five and then to
+seven (knowledge-skill-pair D6: state the condition under which a claim holds and mark a guess as
+a guess; record how to find a volatile detail, never the detail), with no change to the render. `knowledge_rules` in
 `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` renders the same constant one line per
 rule under the brief's knowledge-delta bullet, so a worker reads the rules at the moment it
 writes its delta, and no second copy of the sentence exists to drift. The worker writes the delta
@@ -323,7 +325,7 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
   read-only view of `.bee/cells/` and cell archive/<feature>/ (trace purged from .bee/cells/). Neither function writes; the CLI handler
   (`handleKnowledgePromote` in `.bee/bin/bee`) only prints what they return.
 - Feature pack assembler (D2, D3): `learned_context_lines` in `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`; CLI verb `bee knowledge pack` in `packages/bee-rs/crates/bee/src/verbs/knowledge/pack.rs`; the `Read when:` lookup is `read_when_of` in `prepare.rs` calling the shared `read_when_line` in `packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs`.
-- The five writing rules' one home and the brief's render of them: `KNOWLEDGE_RULES` in
+- The seven writing rules' one home and the brief's render of them: `KNOWLEDGE_RULES` in
   `packages/bee-rs/crates/bee/src/verbs/knowledge/consolidate.rs`, rendered as `knowledge_rules`
   in `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` and printed by
   `packages/bee/prompts/worker-cell.md`.
