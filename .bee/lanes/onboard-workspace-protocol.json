@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"onboard-workspace-protocol\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"onboard-workspace-protocol\" (lane).",
+  "next_action": "Merged into main at 9fa1042; capture what settled, then bee close --feature onboard-workspace-protocol.",
   "created_at": "2026-11-13T10:08:16.945Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-11-13T10:08:13.766Z",
     "feature": "onboard-workspace-protocol"
-  },
-  "merge_ready": {
-    "since": "2026-11-13T10:17:38.765Z",
-    "branch": "wt/onboard-workspace-protocol",
-    "worktree_id": "beehive--wt--onboard-workspace-protocol",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
