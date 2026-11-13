@@ -382,6 +382,8 @@ pub const TESTED_REPO_VERIFICATION_OFFER: &str = "This project's tests check tha
 /// There is nothing here for the user to accept — the skill exists already.
 pub const VERIFICATION_UPKEEP_POINTER: &str = "This project already carries its own verification skill — the one that drives the real product. The bee-verify-upkeep skill keeps it true: it re-reads what the product does now, refreshes the checks that have drifted behind it, and reports whatever it cannot repair on its own.";
 
+pub const DEPLOY_DRIVES_NO_PRODUCT_NOTICE: &str = "This project's deploy goes live without driving the product first. Before its first live step, the deploy record and the deploy script should run the full product drive of the project's verification skill and stop when it fails. The bee-deploying skill adds that step. A project with no verification skill yet can have one built by the bee-verifying skill.";
+
 /// onboard_bee.mjs HEADER_POINTER_CANDIDATES (l. 2194–2198).
 pub const HEADER_POINTER_CANDIDATES: &[&str] =
     &["README.md", "docs/specs/system-overview.md", "docs/specs/reading-map.md"];
