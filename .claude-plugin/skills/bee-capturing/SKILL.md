@@ -107,6 +107,11 @@ and a new area entry carries `bee.anchors`. A bundle with no anchors is
 seeded once with `bee knowledge seed-anchors`. The rule and its fields:
 `docs/knowledge/areas/okf-profile/freshness-and-document-homes.md`.
 
+A loaded concept the cell proved wrong is fixed in place in the same
+commit, headline first — title, description, the `Read when:` line —
+never as an appended correction. A wrong concept the cell did not fix is
+reported at cap with `--knowledge-wrong "<path> — <what was wrong>"`.
+
 Every area template section opens with the one question it answers for
 a rebuilder and names the sources that feed it, followed by a deletion
 line that tells the writer when to remove a line a test already states.
