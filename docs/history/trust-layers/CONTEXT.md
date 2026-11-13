@@ -89,15 +89,9 @@ installs no linter, and adds no refusal.
 
 ## Outstanding Questions
 
-### Resolve Before Planning
-
 (none)
 
-### Deferred To Planning
-
-(none)
-
-## Deferred Ideas
+## Not in this feature
 
 - A CI workflow file that bee writes for a host project — bee does not write a host's CI today, and a host's CI is its owner's choice.
 - A `fix_at` field on review findings — D3 counts them through the reflection key; a second counter would split the count.
@@ -106,4 +100,4 @@ installs no linter, and adds no refusal.
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
-decisions, the read set, code context, canonical references, and deferred-to-planning questions.
+decisions, the read set, code context and canonical references.
