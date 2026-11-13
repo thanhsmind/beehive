@@ -1,0 +1,99 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "release-smoke",
+  "closed_at": "2026-11-13T08:20:19.087Z",
+  "sessions": [
+    {
+      "session_id": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+      "models": {
+        "claude-fable-5-2": {
+          "input": 438,
+          "output": 140789,
+          "cache_write": 440449,
+          "cache_read": 58515914,
+          "new": 581676,
+          "cached": 58515914,
+          "total": 59097590
+        },
+        "claude-opus-5-5": {
+          "input": 40,
+          "output": 6809,
+          "cache_write": 415104,
+          "cache_read": 7358158,
+          "new": 421953,
+          "cached": 7358158,
+          "total": 7780111
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794552569439,
+      "ended_ms": 1794558015336,
+      "totals": {
+        "new": 1003629,
+        "cached": 65874072,
+        "total": 66877701
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 1003629,
+      "cached": 65874072,
+      "total": 66877701
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 1085159,
+      "cached": 66507640,
+      "total": 67592799
+    },
+    "herding": {
+      "new": 81530,
+      "cached": 633568,
+      "total": 715098,
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 24,
+          "output": 12870,
+          "cache_write": 68636,
+          "cache_read": 633568,
+          "new": 81530,
+          "cached": 633568,
+          "total": 715098
+        }
+      }
+    }
+  },
+  "herding_sessions": [
+    {
+      "session_id": "ca144a29-6d8b-431b-92e3-dfdc3126ffd4",
+      "models": {
+        "claude-sonnet-5-5": {
+          "input": 24,
+          "output": 12870,
+          "cache_write": 68636,
+          "cache_read": 633568,
+          "new": 81530,
+          "cached": 633568,
+          "total": 715098
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1794557461293,
+      "ended_ms": 1794557587065,
+      "totals": {
+        "new": 81530,
+        "cached": 633568,
+        "total": 715098
+      },
+      "job_id": "job-1794557459694-1072541-1"
+    }
+  ]
+}

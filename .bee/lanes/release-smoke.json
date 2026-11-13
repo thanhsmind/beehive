@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-smoke",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"release-smoke\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 856152a; capture what settled, then bee close --feature release-smoke.",
+  "next_action": "close",
   "created_at": "2026-11-13T08:08:22.912Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -205,5 +205,14 @@
         }
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "release-smoke",
+    "date": "2026-11-13",
+    "at": "2026-11-13T08:20:16.227Z",
+    "areas_synced": [
+      "verify-pipeline"
+    ],
+    "next_action": "close"
   }
 }

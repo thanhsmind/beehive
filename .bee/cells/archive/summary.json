@@ -2163,5 +2163,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-11-13T07:59:13.093Z"
+  },
+  "release-smoke": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-13T08:20:19.034Z"
   }
 }

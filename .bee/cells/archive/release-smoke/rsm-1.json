@@ -1,0 +1,147 @@
+{
+  "id": "rsm-1",
+  "feature": "release-smoke",
+  "title": "Run a live smoke of the built binary inside the release script",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "d29bbedb-b1a6-48fb-a35e-d660ccaaafbf"
+  ],
+  "files": [
+    ".bee/verify/verify-app/control-bee",
+    ".bee/verify/verify-app/SKILL.md",
+    "scripts/release.sh",
+    "LEADER.md",
+    "docs/knowledge/areas/verify-pipeline/*",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-smoke/CONTEXT.md",
+    ".bee/verify/verify-app/control-bee",
+    ".bee/verify/verify-app/SKILL.md",
+    "scripts/release.sh",
+    "docs/knowledge/patterns/20261112-verify-harness-sandbox-leaks-into-the-real-environment.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/verify-pipeline/overview.md"
+  ],
+  "action": "Implement docs/history/release-smoke/CONTEXT.md D1, D2 and D3. (1) Driver. In .bee/verify/verify-app/control-bee add one subcommand named smoke, wired in the case block beside the existing ones (anchor: the line that dispatches build to cmd_build) and listed in the usage header. Reuse the driver's own functions for build, launch, doctor, cli, host and cleanup; add no second sandbox logic. The smoke uses a run id of its own, made for this call, and must leave the current-run pointer file exactly as it found it (absent stays absent), so a verify run an agent has in flight is not disturbed. Steps, in order, each printing one line that starts with ok or FAIL and names the step: build the release binary; launch an onboarded sandbox; the driver's doctor; the binary's version equals the version in .claude-plugin/plugin.json; status as JSON exits 0 and parses; orient exits 0; the JSON help surface exits 0 and parses; one decision written with the decisions log verb and then found by the decisions search verb; a second onboard of the sandbox, run the way the driver's host door runs it, reports up_to_date. Remember that the driver's cli door always returns 0 and records the real exit code in a file: assert on the recorded exit code and output, never on the shell status. On the first failing step: print the FAIL line with the step name and the evidence folder, keep the sandbox, exit non-zero. On a clean run: remove the sandbox, keep the evidence, print one final line that says the smoke is green and how many steps ran, exit 0. A step you find is not deterministic on this tree (needs network, a live agent, or fails for a reason unrelated to the binary) is replaced by the nearest deterministic one, and you record that as a departure. (2) Release script. In scripts/release.sh, right after the test gate block (anchor: the fail line that says the declared test suite went RED) and before the release commit block (anchor: the line that sets SUBJECT), call the smoke through bash with the literal driver path, output to stderr like the test gate. A non-zero exit calls fail with a message that says the live smoke went RED and nothing was tagged or pushed. When tests are skipped (RUN_TESTS is 0) the smoke is skipped too and one log line says so; do not change the confirm checklist text or its item count, which scripts/tests/release-confirm-gate.sh pins. The idempotent branch for an already committed version stays untouched. Update the step list in the header of scripts/release.sh by editing existing lines so the header names the smoke; add no code comment anywhere else and write no comment in the new driver code. (3) Docs. In .bee/verify/verify-app/SKILL.md document the smoke subcommand in the same form as the other commands, by its literal path with the bash prefix, and say that the release script runs it. In LEADER.md (the project file at the repo root), section Release, name the live smoke between the test suite and the tag in one sentence. In docs/knowledge/areas/verify-pipeline/overview.md add the smoke and its place in the release, citing release-smoke D1, D2 and D3 by those names, anchored to the two scripts. Then run .bee/bin/bee dev regen so the rendered skill copies and the release manifest match the sources; never hand-edit a rendered copy. Proof, all three recorded: the smoke run green on this worktree with its step lines; the smoke run with VERIFY_HOME set to a path that cannot be created (for example a path under /proc) exiting non-zero; and bash -n on both scripts. Also run bash scripts/tests/release-confirm-gate.sh and report its result. One commit.",
+  "verify": "bash .bee/verify/verify-app/control-bee smoke && bash -n scripts/release.sh && bash -n .bee/verify/verify-app/control-bee && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "The smoke subcommand of the verify driver builds the binary, launches an onboarded sandbox, runs the listed steps, prints one ok line per step and exits 0 on a clean run",
+      "A failing step makes the smoke exit non-zero, name the step and the evidence folder, and keep the sandbox",
+      "The smoke leaves the current-run pointer file as it found it",
+      "scripts/release.sh calls the smoke after the test gate and before the release commit, and a non-zero exit stops the release through fail",
+      "With tests skipped the release script skips the smoke and logs one line that says so",
+      "The confirm checklist of the release script is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/control-bee",
+        "substantive": "the smoke subcommand, built on the driver's existing functions"
+      },
+      {
+        "path": "scripts/release.sh",
+        "substantive": "the smoke call between the test gate and the release commit"
+      }
+    ],
+    "key_links": [
+      "scripts/release.sh invokes .bee/verify/verify-app/control-bee smoke"
+    ],
+    "prohibitions": [
+      "No new skip flag on the release script",
+      "No change to the confirm checklist text or to scripts/tests/release-confirm-gate.sh",
+      "No write into the real checkout's .bee state from the smoke",
+      "No hand edit of a rendered skill copy",
+      "No code comments in new code"
+    ],
+    "open_choices": [
+      "The exact bee calls behind each step of the fixed list"
+    ]
+  },
+  "trace": {
+    "worker": "rsm-1-worker",
+    "outcome": "Added control-bee smoke, wired it into release.sh after the test gate, updated docs and regenerated copies; commit 1ff4d4fe2",
+    "files_changed": [
+      ".bee/verify/verify-app/control-bee",
+      ".bee/verify/verify-app/SKILL.md",
+      "scripts/release.sh",
+      "LEADER.md",
+      "docs/knowledge/areas/verify-pipeline/overview.md",
+      ".claude/skills/verify-app/*",
+      ".agents/skills/verify-app/*",
+      ".opencode/skills/verify-app/*",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "sync-ack: The cell updated verify-pipeline/overview.md, the concept that owns the verify driver"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T08:14:00.071Z",
+    "behavior_change": true,
+    "verification_evidence": "smoke drove the built binary through 9 steps in a throwaway onboarded repo; evidence at /home/thanhsmind/.local/state/bee-verify/evidence/smoke-20261113-151355-1086570; before this change no release step drove the binary; a run with an unusable state folder exited 1",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "b39d6126-50db-4f5e-8fdb-7ac15a337530",
+    "verify_command": "bash .bee/verify/verify-app/control-bee smoke && bash -n scripts/release.sh && bash -n .bee/verify/verify-app/control-bee && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-11-13T08:10:54.016Z",
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "knowledge_delta": [
+      "docs/knowledge/areas/verify-pipeline/overview.md"
+    ],
+    "sync_ack": "The cell updated verify-pipeline/overview.md, the concept that owns the verify driver",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added control-bee smoke, wired it into release.sh after the test gate, updated docs and regenerated copies; commit 1ff4d4fe2",
+      "commit": "1ff4d4fe2842b387706f8b91dedfc4ba1b7c0e46",
+      "files": [
+        ".bee/verify/verify-app/control-bee",
+        ".bee/verify/verify-app/SKILL.md",
+        "scripts/release.sh",
+        "LEADER.md",
+        "docs/knowledge/areas/verify-pipeline/overview.md",
+        ".claude/skills/verify-app/*",
+        ".agents/skills/verify-app/*",
+        ".opencode/skills/verify-app/*",
+        ".bee/onboarding.json"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee smoke && bash -n scripts/release.sh && bash -n .bee/verify/verify-app/control-bee && .bee/bin/bee dev release-manifest --check — green:live — smoke drove the built binary through 9 steps in a throwaway onboarded repo; evidence at /home/thanhsmind/.local/state/bee-verify/evidence/smoke-20261113-151355-1086570; before this change no release step drove the binary; a run with an unusable state folder exited 1",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 441 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "usage": {
+    "new": 81530,
+    "cached": 633568,
+    "total": 715098,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 81530,
+        "cached": 633568,
+        "total": 715098
+      }
+    },
+    "jobs": [
+      "job-1794557459694-1072541-1"
+    ]
+  }
+}
