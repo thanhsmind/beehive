@@ -32,7 +32,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 19] = [
+pub(crate) const CAP_FLAGS: [&str; 20] = [
     "id",
     "outcome",
     "files",
@@ -52,9 +52,10 @@ pub(crate) const CAP_FLAGS: [&str; 19] = [
     "fix-at",
     "knowledge-used",
     "no-knowledge-used",
+    "knowledge-wrong",
 ];
 
-pub(crate) const FINISH_FLAGS: [&str; 22] = [
+pub(crate) const FINISH_FLAGS: [&str; 23] = [
     "id",
     "outcome",
     "files",
@@ -74,6 +75,7 @@ pub(crate) const FINISH_FLAGS: [&str; 22] = [
     "fix-at",
     "knowledge-used",
     "no-knowledge-used",
+    "knowledge-wrong",
     "from-job",
     "proof-result",
     "proof-reason",
@@ -164,6 +166,7 @@ pub(crate) struct CapFlags {
     pub(crate) no_mistakes: bool,
     pub(crate) knowledge_used: Option<String>,
     pub(crate) no_knowledge_used: bool,
+    pub(crate) knowledge_wrong: Option<String>,
     /// wfl-1/D8: `--report <json-string>`, RAW — validated against the
     /// worker Result-form shape (finish_support.rs's `parse_report_flag`)
     /// before any write, then stored verbatim as `trace.report`. `None`
@@ -378,6 +381,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     let mistakes_answer = read_mistakes_answer(id, f, &report_value)?;
 
     let knowledge_used_answer = read_knowledge_used_answer(f, &report_value);
+    let knowledge_wrong_answer = read_knowledge_wrong_answer(f, &report_value);
 
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
     // to run the declared command HERE and refuse a red cap — that run and
@@ -706,6 +710,17 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 trace.insert("no_knowledge_used".into(), Value::Bool(true));
             }
             KnowledgeUsedAnswer::Silent => {}
+        }
+        if !knowledge_wrong_answer.is_empty() {
+            trace.insert(
+                "knowledge_wrong".into(),
+                Value::Array(
+                    knowledge_wrong_answer
+                        .iter()
+                        .map(|k| json!({"path": k.path, "wrong": k.wrong}))
+                        .collect(),
+                ),
+            );
         }
         trace.insert(
             "friction".into(),
@@ -1154,6 +1169,45 @@ pub(crate) fn read_knowledge_used_answer(f: &CapFlags, report: &Value) -> Knowle
     KnowledgeUsedAnswer::Silent
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct KnowledgeWrong {
+    pub(crate) path: String,
+    pub(crate) wrong: String,
+}
+
+pub(crate) fn read_knowledge_wrong_answer(f: &CapFlags, report: &Value) -> Vec<KnowledgeWrong> {
+    let mut lines: Vec<Value> = Vec::new();
+    if let Some(raw) = &f.knowledge_wrong {
+        lines.push(Value::String(raw.clone()));
+    }
+    if let Some(Value::Array(reported)) = report.get("knowledge_wrong") {
+        lines.extend(reported.iter().cloned());
+    }
+    let mut recorded: Vec<KnowledgeWrong> = Vec::new();
+    for line in &lines {
+        let rendered = jsjson::js_to_string(line);
+        let text = match line {
+            Value::String(s) => js_trim(s),
+            _ => js_trim(&rendered),
+        };
+        if text.is_empty() {
+            continue;
+        }
+        let (path, wrong) = match text.split_once(PROOF_SEPARATOR) {
+            Some((path, wrong)) => (js_trim(path), js_trim(wrong)),
+            None => (text, ""),
+        };
+        if path.is_empty() {
+            continue;
+        }
+        let entry = KnowledgeWrong { path: path.to_string(), wrong: wrong.to_string() };
+        if !recorded.contains(&entry) {
+            recorded.push(entry);
+        }
+    }
+    recorded
+}
+
 /// D4/D8/D9 (docs/history/human-mailbox/CONTEXT.md): record this cap as one
 /// human-mailbox entry, THE MOMENT the cap lands.
 ///
@@ -1310,6 +1364,7 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     let no_mistakes = bool_flag(flags, "no-mistakes")?;
     let knowledge_used = opt_string_flag(flags, "knowledge-used")?;
     let no_knowledge_used = bool_flag(flags, "no-knowledge-used")?;
+    let knowledge_wrong = opt_string_flag(flags, "knowledge-wrong")?;
     let force_ownership = bool_flag(flags, "force-ownership")?;
     // D2's --fix-first convention: trimmed; empty/absent = None.
     let commit_pending = match opt_string_flag(flags, "commit-pending")? {
@@ -1342,6 +1397,7 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         no_mistakes,
         knowledge_used,
         no_knowledge_used,
+        knowledge_wrong,
         session_flag,
         force_ownership,
         commit_pending,
@@ -2342,6 +2398,7 @@ mod tests {
             fix_at: None,
             no_mistakes: false,
             knowledge_used: None,
+            knowledge_wrong: None,
             no_knowledge_used: false,
             // Pinned so the run this test reads back can never depend on a
             // BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID the test process inherited.

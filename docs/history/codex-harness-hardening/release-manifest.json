@@ -142,7 +142,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "1c775c227eee94d2b5f3afed90c5138de9dad49b46a515d3e3711d7672180d27",
+      "sha256": "2b848caf0c9dbfec3c8645f8f85717630b2eae9b3db4b2da3dfbd936c2bc3817",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -184,7 +184,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/SKILL.md",
-      "sha256": "22dc561bb1016bc2424bc6540dc76f6254dad65c7ebc925ab5475a9e1021d4c8",
+      "sha256": "e15ffbb63169f508b0b6373d9b68754567117114d504fdff9f34bd3fccca4663",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-capturing/SKILL.md"
@@ -433,6 +433,20 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-how/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-knowledge-setup/SKILL.md",
+      "sha256": "1986c19159af2efe480dd6b3fec36ce36e873e4d1bd43e4a66ae3923077e8a13",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-knowledge-setup/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-knowledge-upkeep/SKILL.md",
+      "sha256": "d0c7d236c5d403a3feaeb114fd62e2d35a61bbb97eea913b8f499fe47dbe0f88",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-knowledge-upkeep/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-planning/agents/openai.yaml",
@@ -800,7 +814,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-swarming/SKILL.md",
-      "sha256": "d1dd0fa5a7d9063a902fa0628dffe15a356af58b183cdb84c8f8eb30da9a43fc",
+      "sha256": "895a85e6a2ae78baa6490ca245108d77b51b9b7a4403d63b19514665cdbdce2b",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-swarming/SKILL.md"
@@ -1010,7 +1024,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "784c59d7c99a6c101c50695e387e0839a16ca5f6abca9a41f9332c88885b91d2",
+      "sha256": "752912ead82991eb64da8c1f8d33df71fb4f240d82a1f6499401e2ff9f5c9336",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1052,7 +1066,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/SKILL.md",
-      "sha256": "22dc561bb1016bc2424bc6540dc76f6254dad65c7ebc925ab5475a9e1021d4c8",
+      "sha256": "e15ffbb63169f508b0b6373d9b68754567117114d504fdff9f34bd3fccca4663",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-capturing/SKILL.md"
@@ -1301,6 +1315,20 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-how/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-knowledge-setup/SKILL.md",
+      "sha256": "1986c19159af2efe480dd6b3fec36ce36e873e4d1bd43e4a66ae3923077e8a13",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-knowledge-setup/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-knowledge-upkeep/SKILL.md",
+      "sha256": "d0c7d236c5d403a3feaeb114fd62e2d35a61bbb97eea913b8f499fe47dbe0f88",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-knowledge-upkeep/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-planning/agents/openai.yaml",
@@ -1668,7 +1696,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-swarming/SKILL.md",
-      "sha256": "d1dd0fa5a7d9063a902fa0628dffe15a356af58b183cdb84c8f8eb30da9a43fc",
+      "sha256": "895a85e6a2ae78baa6490ca245108d77b51b9b7a4403d63b19514665cdbdce2b",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-swarming/SKILL.md"
@@ -3343,7 +3371,7 @@
     },
     {
       "path": "packages/bee/prompts/worker-cell.md",
-      "sha256": "f7eb44d7aef519c845454df24d415020510c9f6f0829b3f927c62cb89360605c",
+      "sha256": "5b75795ef1437c46382bda6e3085f1d554fece4a73f64b4358c3dadc5bdc8d5d",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/worker-cell.md"
@@ -3404,7 +3432,7 @@
     },
     {
       "path": "skills/bee-capturing/SKILL.md",
-      "sha256": "22dc561bb1016bc2424bc6540dc76f6254dad65c7ebc925ab5475a9e1021d4c8",
+      "sha256": "e15ffbb63169f508b0b6373d9b68754567117114d504fdff9f34bd3fccca4663",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-capturing/SKILL.md"
@@ -3653,6 +3681,20 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-how/SKILL.md"
+    },
+    {
+      "path": "skills/bee-knowledge-setup/SKILL.md",
+      "sha256": "1986c19159af2efe480dd6b3fec36ce36e873e4d1bd43e4a66ae3923077e8a13",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-knowledge-setup/SKILL.md"
+    },
+    {
+      "path": "skills/bee-knowledge-upkeep/SKILL.md",
+      "sha256": "d0c7d236c5d403a3feaeb114fd62e2d35a61bbb97eea913b8f499fe47dbe0f88",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-knowledge-upkeep/SKILL.md"
     },
     {
       "path": "skills/bee-planning/agents/openai.yaml",
@@ -4020,7 +4062,7 @@
     },
     {
       "path": "skills/bee-swarming/SKILL.md",
-      "sha256": "17a17fcdb98befd396886e96acd590085ada368a9098da9dad060cce62d53140",
+      "sha256": "147a244f2c67f7637c66f3188d085e82951629a57346741c1f06b578cd3749dd",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/SKILL.md"

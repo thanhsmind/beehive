@@ -127,5 +127,16 @@
   {"brief": "Edit this skill so it triggers on the right requests.", "expect": ["bee-writing-skills"]},
   {"brief": "Viết một kỹ năng mới rồi kiểm tra nó chịu áp lực thế nào.", "expect": ["bee-writing-skills"]},
   {"brief": "Add a convention to this project's agent instructions file.", "expect": [], "near": "bee-writing-skills"},
-  {"brief": "Write the handbook page for our team's coding style.", "expect": ["bee-technical-writing"], "near": "bee-writing-skills"}
+  {"brief": "Write the handbook page for our team's coding style.", "expect": ["bee-technical-writing"], "near": "bee-writing-skills"},
+
+  {"brief": "This repo has no docs/knowledge folder yet — build the knowledge base from the code.", "expect": ["bee-knowledge-setup"]},
+  {"brief": "Stand up a project knowledge bundle with an area per subsystem and an orientation page.", "expect": ["bee-knowledge-setup"]},
+  {"brief": "Dự án này chưa có kho tri thức — hãy tạo nó từ cây mã nguồn.", "expect": ["bee-knowledge-setup"]},
+  {"brief": "The knowledge base is a few releases old and one concept was reported wrong — audit it and fix what drifted.", "expect": ["bee-knowledge-upkeep"], "near": "bee-knowledge-setup"},
+  {"brief": "Several concepts grade orphan and others keep loading without being used — go through them against their sources.", "expect": ["bee-knowledge-upkeep"], "near": "bee-knowledge-setup"},
+  {"brief": "Kiểm tra định kỳ xem các khái niệm trong kho tri thức còn khớp với mã nguồn không.", "expect": ["bee-knowledge-upkeep"]},
+  {"brief": "There is no knowledge bundle here at all — set one up from scratch.", "expect": ["bee-knowledge-setup"], "near": "bee-knowledge-upkeep"},
+  {"brief": "Run the periodic pass over the existing knowledge base after this release.", "expect": ["bee-knowledge-upkeep"]},
+  {"brief": "We just agreed the retry cap lives in the loop — record that decision now.", "expect": ["bee-capturing"], "near": "bee-knowledge-upkeep"},
+  {"brief": "Find the dead code and stale docs in this repo and clean them up.", "expect": ["bee-grooming"], "near": "bee-knowledge-upkeep"}
 ]

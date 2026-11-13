@@ -213,6 +213,61 @@ use std::time::Instant;
     }
 
     #[test]
+    fn worker_prompt_result_form_names_the_knowledge_wrong_key() {
+        let cell = json!({"id": "c-1", "feature": "feat", "status": "claimed"});
+        let rendered = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            rendered.contains("\"knowledge_wrong\": [\"<docs/knowledge path> — <what was wrong>\"]"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("`knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit"),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn knowledge_rules_the_rendered_cell_brief_carries_the_two_new_rules() {
+        let cell = json!({"id": "c-1", "feature": "feat", "status": "claimed"});
+        let rendered = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w1"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        for rule in crate::verbs::knowledge::KNOWLEDGE_RULES {
+            assert!(rendered.contains(&format!("  - {rule}")), "missing {rule}");
+        }
+        assert!(rendered.contains("  - State the condition under which a claim holds"));
+        assert!(rendered.contains("  - For a detail that changes often"));
+    }
+
+    #[test]
     fn worker_prompt_result_form_names_the_knowledge_used_key() {
         let cell = json!({"id": "c-1", "feature": "feat", "status": "claimed"});
         let rendered = prompt_body_for(
@@ -10802,6 +10857,8 @@ Contract:
   - Extend the concept that owns the subject; find it with bee knowledge search --text and bee knowledge list --area, and never file a near-duplicate beside it.
   - Open the body with one line Read when: <the situation the reader is in>, and put the words a reader will search for — the error text, the symptom, the mechanism — in the title and description.
   - Split a concept that passes 300 lines along its lifecycles.
+  - State the condition under which a claim holds, and mark a guess as a guess, never as a fact.
+  - For a detail that changes often (a column name, a path, a count), record how to find it, never the detail itself.
 - Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: c-golden` (the words "cell:" then the id — a bare id alone fails the cap).
 - Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), [PARKED] (question, cell id — after `bee cells park`), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
 
@@ -10810,9 +10867,9 @@ Result form: beside the token, in the same message, emit exactly one fenced JSON
 - `green:unit` — automated tests passed.
 - `green:static` — it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.
 ```json
-{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "knowledge_used": ["<docs/knowledge path> — <the decision it changed>"], "baseline": "<optional: what the same proof produced on base>"}
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "knowledge_used": ["<docs/knowledge path> — <the decision it changed>"], "knowledge_wrong": ["<docs/knowledge path> — <what was wrong>"], "baseline": "<optional: what the same proof produced on base>"}
 ```
-An empty `knowledge_used` array means no concept changed a decision.
+An empty `knowledge_used` array means no concept changed a decision. `knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit, `<docs/knowledge path> — <what was wrong>`; omit the key when there is none.
 
 Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --files <a,b> --report '<json>'"#;
 

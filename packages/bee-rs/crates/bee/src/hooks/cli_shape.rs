@@ -767,6 +767,19 @@ parameters (see `bee cells show --help --json`)."
     }
 
     #[test]
+    fn the_knowledge_wrong_flag_is_declared_so_the_guard_resolves_it() {
+        let reg = registry();
+        for name in ["cells.cap", "cells.finish"] {
+            let entry = reg.iter().find(|e| e.name == name).expect(name);
+            let props = entry.parameters["properties"].as_object().expect("properties");
+            assert_eq!(props["knowledge-wrong"]["type"], "string", "{name} --knowledge-wrong");
+        }
+        allow(
+            "bee cells finish --id demo-1 --report '{\"outcome\":\"o\"}' --knowledge-wrong \"docs/knowledge/areas/x.md — named a flag that moved\"",
+        );
+    }
+
+    #[test]
     fn a_flag_value_beginning_with_dash_dash_is_consumed_as_the_value() {
         allow("node .bee/bin/bee_decisions.mjs log --decision \"--foo\" --rationale bar --relation none");
     }

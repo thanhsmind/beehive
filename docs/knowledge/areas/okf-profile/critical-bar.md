@@ -8,10 +8,10 @@ bee:
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", "knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)", "knowledge-useful-rules CONTEXT.md D5 (knowledge report records concept use counts and loaded-never-used findings)"]
+  decisions: ["U6 (knowledge-usable, PBI p-355d4740): bee.critical earns a written bar — recurrence-prone AND cross-feature AND costly-when-missed; existing patterns re-graded to at most ~30 critical, re-grade recorded per-pattern in the commit, never a bulk strip)", "knowledge-in-the-flow D8 (feature outcomes and pack pull tracking in knowledge report)", "knowledge-useful-rules CONTEXT.md D5 (knowledge report records concept use counts and loaded-never-used findings)", "knowledge-skill-pair D5, D8 (the knowledge-wrong cap answer and its report section)"]
   sources: ["docs/history/knowledge-outcome-measure/plan.md (D1-D5: the outcomes measure)", "docs/history/knowledge-usable/CONTEXT.md (U6 rationale: 85/101 critical = no filter; the ranker needs a selective pool)", "knowledge-usable cell ku-6 (the re-grade this concept authors; trace in `.bee/cells/`, 2026-08-10)", "knowledge-in-the-flow cell kitf-3 (feature outcomes by feature arm and pack pull rate in knowledge report, commit 8794b2917, 2026-11-09)", "CONTEXT.md docs/history/knowledge-in-the-flow/CONTEXT.md", "docs/history/knowledge-useful-rules/CONTEXT.md"]
   authoritative_for: "okf-profile: the bee.critical bar and what earns a pattern that label"
-  anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs, packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs, packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs, packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs, packages/bee-rs/crates/bee/src/verbs/report_outcomes.rs, packages/bee-rs/crates/bee/tests/knowledge_outcomes.rs]
   verified_at: 2026-11-10
   verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
@@ -108,6 +108,18 @@ because nothing else records it, so a concept that helped without being named re
 `uses` counts the concept per cell, not per decision, so one cell naming a concept twice credits it
 once. Both directions under-count, which is the safe way to read a metric whose absence is silence.
 
+**The knowledge-wrong answer — a loaded concept that misled the cell (knowledge-skill-pair D5, D8).**
+The sibling of the use answer, and like it an answer, never a door: `bee cells cap` takes
+`--knowledge-wrong "<docs/knowledge path> — <what was wrong>"`, and `--report` accepts a
+`knowledge_wrong` array, recorded on `trace.knowledge_wrong` as `{path, wrong}`; nothing refuses a cap
+that omits it (knowledge-in-the-flow D1 forbids a mandatory knowledge check). It is for a concept the
+cell could not fix in its own commit; one the cell fixed is revised in place instead (D7), so the
+answer carries only what is still wrong. `bee knowledge report` prints a `reported wrong` section beside
+the `knowledge used` one: concepts by wrong count descending then path, the newest non-empty note under
+each (a count with no note cannot be triaged, D8d), cut at ten in text while the JSON keeps every
+concept with its `wrong_count` and notes. Orphan and suspect grades are not in this report; they come
+from `bee knowledge check --json` (D8a). The count feeds the first rank of the upkeep pick.
+
 ## Business Rules
 
 - The bar applies only to `bee.pattern` concepts; no other concept type carries `bee.critical`.
@@ -144,6 +156,9 @@ once. Both directions under-count, which is the safe way to read a metric whose 
   `trace.no_knowledge_used` off closed cells and `learned_context` off cell prepare rows
   (`knowledge-useful-rules` CONTEXT.md D5; the trace shape is written in
   `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs`).
+- The knowledge-wrong answer: `build_knowledge_wrong` in the same `report.rs`; the cap flag and the
+  `--report` array are parsed in `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs` and
+  `packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs`.
 - The re-grade this concept documents: `docs/history/knowledge-usable/CONTEXT.md` (U6), cell `ku-6`.
 - `--root <path>` on `bee knowledge report` and `bee report outcomes` (supervisor-read-scope D6): the store
   resolves from that path while timing goes to the cwd store, or nowhere when the cwd holds no store, so a

@@ -6,12 +6,14 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
-pub(crate) const KNOWLEDGE_RULES: [&str; 5] = [
+pub(crate) const KNOWLEDGE_RULES: [&str; 7] = [
     "Anchor every entry to the code files it describes in bee.anchors — files, never directories.",
     "Never restate what the code or a test shows: keep the why, the boundary, and the rejected option with how it failed; drop the how.",
     "Extend the concept that owns the subject; find it with bee knowledge search --text and bee knowledge list --area, and never file a near-duplicate beside it.",
     "Open the body with one line Read when: <the situation the reader is in>, and put the words a reader will search for — the error text, the symptom, the mechanism — in the title and description.",
     "Split a concept that passes 300 lines along its lifecycles.",
+    "State the condition under which a claim holds, and mark a guess as a guess, never as a fact.",
+    "For a detail that changes often (a column name, a path, a count), record how to find it, never the detail itself.",
 ];
 
 pub(crate) fn delivery_rel(feature: &str) -> String {
@@ -172,9 +174,40 @@ mod tests {
                 "Extend the concept that owns the subject; find it with bee knowledge search --text and bee knowledge list --area, and never file a near-duplicate beside it.",
                 "Open the body with one line Read when: <the situation the reader is in>, and put the words a reader will search for — the error text, the symptom, the mechanism — in the title and description.",
                 "Split a concept that passes 300 lines along its lifecycles.",
+                "State the condition under which a claim holds, and mark a guess as a guess, never as a fact.",
+                "For a detail that changes often (a column name, a path, a count), record how to find it, never the detail itself.",
             ])
         );
         assert!(value["proposal"]["pattern_candidates"].as_array().is_some_and(|p| !p.is_empty()), "{value}");
+    }
+
+    #[test]
+    fn knowledge_rules_the_list_has_seven_entries_and_the_first_five_are_unchanged() {
+        assert_eq!(KNOWLEDGE_RULES.len(), 7);
+        for (rule, opening) in KNOWLEDGE_RULES.iter().zip([
+            "Anchor every entry to the code files",
+            "Never restate what the code or a test shows",
+            "Extend the concept that owns the subject",
+            "Open the body with one line Read when:",
+            "Split a concept that passes 300 lines",
+        ]) {
+            assert!(rule.starts_with(opening), "{rule}");
+        }
+        assert!(KNOWLEDGE_RULES[5].starts_with("State the condition under which a claim holds"));
+        assert!(KNOWLEDGE_RULES[6].starts_with("For a detail that changes often"));
+        assert!(KNOWLEDGE_RULES.iter().all(|r| !r.contains('\n')));
+    }
+
+    #[test]
+    fn knowledge_rules_consolidate_json_and_text_carry_seven() {
+        let tmp = tempfile::tempdir().unwrap();
+        fixture(tmp.path());
+        let value = build_consolidation(tmp.path(), tmp.path(), "demo").unwrap();
+        assert_eq!(value["rules"].as_array().unwrap().len(), 7, "{value}");
+        let text = consolidation_text(&value);
+        for rule in KNOWLEDGE_RULES {
+            assert!(text.contains(&format!("- {rule}")), "{rule}");
+        }
     }
 
     #[test]

@@ -80,9 +80,9 @@ Result form: beside the token, in the same message, emit exactly one fenced JSON
 - `green:unit` — automated tests passed.
 - `green:static` — it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.
 ```json
-{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "knowledge_used": ["<docs/knowledge path> — <the decision it changed>"], "baseline": "<optional: what the same proof produced on base>"}
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "knowledge_used": ["<docs/knowledge path> — <the decision it changed>"], "knowledge_wrong": ["<docs/knowledge path> — <what was wrong>"], "baseline": "<optional: what the same proof produced on base>"}
 ```
-An empty `knowledge_used` array means no concept changed a decision.
+An empty `knowledge_used` array means no concept changed a decision. `knowledge_wrong` — a loaded concept that misled this cell and that you did not fix in this commit, `<docs/knowledge path> — <what was wrong>`; omit the key when there is none.
 
 Finish with: .bee/bin/bee cells finish --id {{cell_id}} --outcome "<one line>" --files <a,b> --report '<json>'
 {{/if}}

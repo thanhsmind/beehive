@@ -13,7 +13,7 @@ bee:
   owns.code: [packages/bee-rs/crates/bee/src/verbs/knowledge/*]
   owns.skills: []
   owns.tests: [packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
-  anchors: [scripts/]
+  anchors: [scripts/, skills/bee-knowledge-setup/SKILL.md, skills/bee-knowledge-upkeep/SKILL.md]
   verified_at: 2026-11-10
   verified_commit: f1c771b12fbf1a9b491a54191cb1f6423e911ec3
 ---
@@ -98,6 +98,13 @@ under:
   path from the title, emits canonical frontmatter, and re-renders the indexes. The second write
   path into the bundle after `index`; the checker still writes nothing (B4, D2)
   (behavior and refusals: `concept-model-and-authoring.md`).
+- The two skills that own a bundle's life (knowledge-skill-pair D1-D4, D7): `bee-knowledge-setup`
+  builds `docs/knowledge/` once from the tree, orientation file at
+  `areas/project/overview.md`; `bee-knowledge-upkeep` audits it periodically, at most 5 concepts
+  per run, picked by reported-wrong, orphan, suspect-and-loaded, then loaded-never-used (the last
+  never makes a run due alone while silent caps outnumber answered ones). The in-flow write stays
+  with `bee-capturing`; a loaded concept a cell proves wrong is fixed in that cell's commit, or
+  reported with `--knowledge-wrong`. The due table lives in the upkeep skill, its one home.
 - Migration authoring (the D20 loop: read a legacy source, split it into concepts, carry its
   frontmatter across per D33, replace it with a pointer stub per D37) is the human/agent trigger
   that populates the bundle the checker then grades. The checker itself performs no writes (D2).
