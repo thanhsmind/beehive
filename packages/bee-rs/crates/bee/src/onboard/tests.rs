@@ -864,7 +864,8 @@ fn plan_payload_key_order_matches_node() {
             "plan",
             "skills",
             "notices",
-            "design_offer"
+            "design_offer",
+            "workspace_protocol"
         ]
     );
     // No worktree_migration key for an ordinary checkout (must_have truth).
@@ -3388,4 +3389,88 @@ fn no_engine_refusal_names_verify_only_when_the_repo_holds_verify_skills() {
 
     std::fs::remove_dir_all(repo.join(".bee").join("verify")).unwrap();
     assert!(!no_engine_message(&err).contains("--verify-only"));
+}
+
+fn protocol_bytes(fx: &Fixture) -> Option<Vec<u8>> {
+    std::fs::read(fx.repo.join("WORKSPACE_PROTOCOL.md")).ok()
+}
+
+fn protocol_notices(payload: &Value) -> Vec<String> {
+    payload["notices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|n| n.as_str())
+        .filter(|n| n.starts_with("workspace protocol:"))
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn workspace_protocol_missing_is_reported_with_one_notice_and_no_file_is_created() {
+    let fx = fixture();
+    for payload in [plan(&fx, &[]), apply(&fx, &[])] {
+        assert_eq!(
+            payload["workspace_protocol"],
+            json!({"state": "missing", "unedited": false, "issues": [], "action_needed": true})
+        );
+        let notices = protocol_notices(&payload);
+        assert_eq!(notices.len(), 1, "{notices:?}");
+        assert!(notices[0].contains("WORKSPACE_PROTOCOL.md is missing"), "{}", notices[0]);
+        assert!(notices[0].contains("references/onboarding.md"), "{}", notices[0]);
+    }
+    assert_eq!(protocol_bytes(&fx), None, "onboard never creates the file");
+}
+
+#[test]
+fn workspace_protocol_hand_edited_valid_file_reports_no_action() {
+    let fx = fixture();
+    crate::verbs::protocol::init_protocol(&fx.repo).unwrap();
+    let mut edited = protocol_bytes(&fx).unwrap();
+    edited.extend_from_slice(b"\nEdited by the owner.\n");
+    std::fs::write(fx.repo.join("WORKSPACE_PROTOCOL.md"), &edited).unwrap();
+    for payload in [plan(&fx, &[]), apply(&fx, &[])] {
+        assert_eq!(
+            payload["workspace_protocol"],
+            json!({"state": "valid", "unedited": false, "issues": [], "action_needed": false})
+        );
+        assert!(protocol_notices(&payload).is_empty());
+    }
+    assert_eq!(protocol_bytes(&fx), Some(edited), "onboard left the file untouched");
+}
+
+#[test]
+fn workspace_protocol_unedited_render_is_flagged() {
+    let fx = fixture();
+    crate::verbs::protocol::init_protocol(&fx.repo).unwrap();
+    let before = protocol_bytes(&fx).unwrap();
+    for payload in [plan(&fx, &[]), apply(&fx, &[])] {
+        let wp = &payload["workspace_protocol"];
+        assert_eq!(wp["state"], "valid");
+        assert_eq!(wp["unedited"], true);
+        assert_eq!(wp["action_needed"], true);
+        let notices = protocol_notices(&payload);
+        assert_eq!(notices.len(), 1, "{notices:?}");
+        assert!(notices[0].contains("still bee's unedited render"), "{}", notices[0]);
+    }
+    assert_eq!(protocol_bytes(&fx), Some(before), "onboard left the file untouched");
+}
+
+#[test]
+fn workspace_protocol_invalid_file_names_its_issue() {
+    let fx = fixture();
+    std::fs::write(fx.repo.join("WORKSPACE_PROTOCOL.md"), "not a protocol\n").unwrap();
+    let before = protocol_bytes(&fx).unwrap();
+    for payload in [plan(&fx, &[]), apply(&fx, &[])] {
+        let wp = &payload["workspace_protocol"];
+        assert_eq!(wp["state"], "invalid");
+        assert_eq!(wp["action_needed"], true);
+        let issues = wp["issues"].as_array().unwrap();
+        assert!(!issues.is_empty());
+        let notices = protocol_notices(&payload);
+        assert_eq!(notices.len(), 1, "{notices:?}");
+        assert!(notices[0].contains("is invalid ("), "{}", notices[0]);
+        assert!(notices[0].contains(issues[0].as_str().unwrap()), "{}", notices[0]);
+    }
+    assert_eq!(protocol_bytes(&fx), Some(before), "onboard left the file untouched");
 }

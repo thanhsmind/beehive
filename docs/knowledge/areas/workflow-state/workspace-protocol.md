@@ -8,10 +8,10 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [workspace-protocol D1-D12 (`bee decisions search --text WORKSPACE_PROTOCOL`), protocol-init-from-project D1-D8 (init renders from the project; narrows D4)]
-  sources: [docs/history/workspace-protocol/CONTEXT.md (D1-D12), docs/history/workspace-protocol/plan.md, workspace-protocol cells wsp-1..wsp-4, docs/history/protocol-init-from-project/CONTEXT.md (D1-D8)]
+  decisions: [workspace-protocol D1-D12 (`bee decisions search --text WORKSPACE_PROTOCOL`), protocol-init-from-project D1-D8 (init renders from the project; narrows D4), onboard-workspace-protocol a4c2c38d and 0687dd2a (onboard reports the protocol state and the procedure runs after it)]
+  sources: [docs/history/workspace-protocol/CONTEXT.md (D1-D12), docs/history/workspace-protocol/plan.md, workspace-protocol cells wsp-1..wsp-4, docs/history/protocol-init-from-project/CONTEXT.md (D1-D8), onboard-workspace-protocol decisions a4c2c38d and 0687dd2a, cell owp-2]
   authoritative_for: "workflow-state: WORKSPACE_PROTOCOL.md, bee protocol, the prepare digests, bee dispatch verify, the purpose leaning lint"
-  anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs]
+  anchors: [packages/bee/prompts/worker-cell.md, packages/bee/prompts/advisor.md, packages/bee-rs/crates/bee/src/verbs/protocol.rs, packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/onboard/notices.rs, packages/bee-rs/crates/bee/src/onboard/mod.rs]
   verified_at: 2026-11-10
   verified_commit: 2f0495d24e30048da79fa3d5dcc287605cf6869c
 ---
@@ -82,6 +82,19 @@ existing file is still the `protocol_exists` refusal without `--print`. The
 render still holds no placeholder and no test command, so `check` gives
 `valid`. The agent finishes the file by reading the `review` files, as the
 "Workspace protocol" section of bee-hive `references/onboarding.md` says (D8).
+
+**`bee onboard` reports the protocol state (a4c2c38d, 0687dd2a).** The onboard
+JSON carries a `workspace_protocol` object. It holds the check state and
+`action_needed`. `action_needed` is true when the state is `missing`,
+`invalid` or `unreadable`, and also when the file is valid but still bee's
+unedited render. The unedited test is byte equality of the file with the fresh
+`bee protocol init --print` render. When `action_needed` is true, onboard adds
+one notice: `workspace protocol: WORKSPACE_PROTOCOL.md is <what> — finish it
+now with the Workspace protocol procedure in bee-hive references/onboarding.md`.
+Onboard never writes the file. The agent runs the procedure, then runs onboard
+again to see `action_needed` false. bee-hive `SKILL.md` makes that a required
+step of onboarding, and the procedure says where to look for each key, what a
+good item looks like and what to check before the commit.
 
 **The `doctor` row (D5).** `bee doctor` always prints the row
 `workspace-protocol`. States `missing` and `valid` have status `ok`; the
@@ -174,6 +187,9 @@ specialist reads one lens (`reviewer.md`).
   record it finds (D8).
 - R8 — The purpose lint warns and never refuses. It does not run for `hat-`
   roles or for other kinds (D11).
+- R9 — Onboard reports and never writes the protocol file. A true
+  `action_needed` asks the agent to run the Workspace protocol procedure
+  before feature work, and gates nothing in the binary (a4c2c38d, 0687dd2a).
 
 ## Edge Cases Settled
 
@@ -183,6 +199,9 @@ specialist reads one lens (`reviewer.md`).
 - A dispatch record written before the digests existed has no
   `prompt_sha256`. Verify reports `prompt: unrecorded` for it, and
   `protocol: appeared` or `absent` from the missing recorded digest.
+- An unedited render stops matching the fresh render when the git facts
+  changed since `init` (a new remote or default branch). Onboard then reads the
+  file as edited and `action_needed` is false.
 - Prepare and verify read the protocol from the control root, so a worktree
   copy of the file never changes either result.
 
@@ -197,6 +216,8 @@ specialist reads one lens (`reviewer.md`).
   `packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs`.
 - Doctor row: `workspace_protocol_row` in
   `packages/bee-rs/crates/bee/src/doctor.rs`.
+- Onboard report and notice: `packages/bee-rs/crates/bee/src/onboard/notices.rs`.
+  Procedure: `skills/bee-hive/references/onboarding.md`, "Workspace protocol".
 - Prompt lines: `packages/bee/prompts/worker-cell.md` (D9) and
   `packages/bee/prompts/advisor.md` (D10). Leader doctrine (D6):
   `.bee/LEADER.md`.
