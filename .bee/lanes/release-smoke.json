@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"release-smoke\" started at phase \"exploring\" (lane).",
-  "next_action": "Dispatch rsm-1.",
+  "next_action": "Merged into main at 856152a; capture what settled, then bee close --feature release-smoke.",
   "created_at": "2026-11-13T08:08:22.912Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -204,15 +204,6 @@
           "behavior_change": true
         }
       }
-    ]
-  },
-  "merge_ready": {
-    "since": "2026-11-13T08:14:00.106Z",
-    "branch": "wt/release-smoke",
-    "worktree_id": "beehive--wt--release-smoke",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt"
     ]
   }
 }
