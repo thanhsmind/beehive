@@ -856,6 +856,7 @@
     "contract:prose-load",
     "contract:deploy-verify-notice",
     "contract:onboard-workspace-protocol-report",
-    "contract:knowledge-wrong"
+    "contract:knowledge-wrong",
+    "design"
   ]
 }
