@@ -30,8 +30,6 @@ while you write. This skill restates neither.
 Every concept comes from reading the repo: manifests, entry points, the
 directory layout, the existing docs, the commands that build and test. Ask the
 user only for what no file can answer, and never to dictate a concept's content.
-A fact you could not find stays a stated gap in the concept; it is never
-invented.
 
 ## Pass
 
@@ -48,8 +46,7 @@ invented.
 2. **Orientation file.** Write it at the one fixed path
    `docs/knowledge/areas/project/overview.md`, as an area concept derived by
    reading the tree, in the shape `.bee/expertise/knowledge.md` ("The orientation
-   file") describes. Link each area concept from it, and state in the file what
-   it is a map of and how to re-derive it.
+   file") describes. Link each area concept from it.
 
 3. **Anchor.** Run `bee knowledge seed-anchors` so every area concept names the
    code files it describes and the first freshness grade is honest.
