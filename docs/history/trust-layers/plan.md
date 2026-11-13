@@ -110,7 +110,7 @@ Waves: serial, trl-1 → trl-2 → trl-3 → trl-4 → trl-5. Reason: every cell
     {"stage":"read-only-gather","classification":"not-applicable","role":"read","reason":"The leader read the code during planning."},
     {"stage":"fact-extraction","classification":"not-applicable","role":"extraction","reason":"No narrow lookup is left."},
     {"stage":"generation-fallback","classification":"not-applicable","role":"generation","reason":"Every job has a specific role."},
-    {"stage":"independent-review","classification":"not-applicable","role":"review","reason":"Independent review stays user-invoked."},
+    {"stage":"slice-judge","classification":"required","role":"review","reason":"Standard lane: one read-only checklist judge covers the behavior-change cells trl-1, trl-2 and trl-3. Independent review stays user-invoked."},
     {"stage":"generic-advisor","classification":"not-applicable","role":"advisor","reason":"The hat wave is the consult."},
     {"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"No unattended loop."},
     {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"One shape, no competing designs."},
