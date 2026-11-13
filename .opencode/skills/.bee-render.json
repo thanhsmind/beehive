@@ -140,11 +140,11 @@
     },
     {
       "name": "bee-verify-upkeep",
-      "sha256": "1941334469f941c74b9570528c2173455b50605dcd99f995b5fc56b794484c07"
+      "sha256": "3f582caabbe466b22936d1b43790354c9d32a0ac71ca9d1070c8a810c17dc937"
     },
     {
       "name": "bee-verifying",
-      "sha256": "744d3eb75396d6e494211b89429a1ba977cb2778d0ca0000aaf8158bdb9ae3b2"
+      "sha256": "8b0447b8ef2cee092e30fe838e0e91fe4e65afd6f4da6798ec00aa154c9ed201"
     },
     {
       "name": "bee-wayfinding",

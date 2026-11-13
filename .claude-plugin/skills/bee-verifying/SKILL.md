@@ -37,9 +37,9 @@ Two rules follow from that, and both hold for the rest of this skill's life:
 
 - Write and edit only the source under `.bee/verify/verify-app/`. The rendered
   copies are bee's output; a hand edit there is lost at the next
-  `bee onboard --apply`.
-- After any edit to the source, run `bee onboard --apply` to re-render, so every
-  runtime sees the same bytes.
+  `bee onboard --verify-only --apply`.
+- After any edit to the source, run `bee onboard --verify-only --apply` to
+  re-render (it needs no bee checkout), so every runtime sees the same bytes.
 
 ## 1. Interview the repo, not the user
 
@@ -136,8 +136,8 @@ the generated cleanup after every failed iteration too, so broken attempts don't
 strand processes and ports. A generated skill that was never executed is a draft,
 not a deliverable.
 
-Then run `bee onboard --apply` once, so the proven source reaches every runtime
-skill home.
+Then run `bee onboard --verify-only --apply` once (it needs no bee checkout), so
+the proven source reaches every runtime skill home.
 
 ## 5. Fast and full: the contract the control script must satisfy
 
