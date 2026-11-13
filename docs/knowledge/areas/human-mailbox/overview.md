@@ -237,7 +237,10 @@ cell whose proof line carries the new guard, lint, or test shown FAILING on
 the past mistake, then green. When the past mistake cannot be reproduced, the
 layer drops to `doctrine` with the reason recorded. `FIX_AT_VALUES` stays
 `architecture|check|doctrine|none`; the sub-kind of a `check` (type, lint,
-test) rides in `--better`; `expertise/static-rules.md` orders the homes (type, lint rule, test, hook) and the leader file says a user correction or an accepted P1 or P2 review finding is recorded the same way with `--source` (trust-layers D2, D3). Why: a rule nothing enforces is the repeat waiting
+test) rides in `--better`. `expertise/static-rules.md` orders the homes (type, lint
+rule, test, hook), and the leader file says a user correction or an accepted P1
+or P2 review finding is recorded the same way with `--source` (trust-layers D2,
+D3). Why: a rule nothing enforces is the repeat waiting
 to happen, and a guard never seen red proves only that it compiles.
 
 ## Edge Cases Settled
