@@ -1650,6 +1650,100 @@ fn sort_by_key(list: &mut [Value]) -> Option<()> {
 const SCHEMA_VERSION: &str = "1.0";
 const DEFAULT_FEEDBACK_DIGEST_REL: &str = ".bee\\feedback-digest.json";
 
+fn count_lines(path: &Path) -> Option<u64> {
+    let bytes = std::fs::read(path).ok()?;
+    Some(String::from_utf8_lossy(&bytes).lines().count() as u64)
+}
+
+fn critical_pattern_count(root: &Path) -> Option<u64> {
+    let bytes = std::fs::read(root.join("docs").join("knowledge").join("index.md")).ok()?;
+    let text = String::from_utf8_lossy(&bytes);
+    let mut in_section = false;
+    let mut found = false;
+    let mut n = 0u64;
+    for line in text.lines() {
+        if line.starts_with("## ") {
+            if in_section {
+                break;
+            }
+            in_section = line.trim_end() == "## Critical patterns";
+            found |= in_section;
+        } else if in_section && line.starts_with("- ") {
+            n += 1;
+        }
+    }
+    found.then_some(n)
+}
+
+fn fix_at_row_counts(root: &Path) -> (Option<u64>, Option<u64>) {
+    let Ok(real_root) = dunce::canonicalize(root) else {
+        return (None, None);
+    };
+    let Scope::Ok(path) = resolve_in_scope(&real_root, SRC_BACKLOG) else {
+        return (None, None);
+    };
+    let (mut check, mut architecture) = (0u64, 0u64);
+    for row in read_jsonl(&path).rows {
+        match row.get("layer").and_then(Value::as_str) {
+            Some("fix-at:check") => check += 1,
+            Some("fix-at:architecture") => architecture += 1,
+            _ => {}
+        }
+    }
+    (Some(check), Some(architecture))
+}
+
+fn prose_load_value(root: &Path) -> Value {
+    let mut seen: Vec<std::path::PathBuf> = Vec::new();
+    let mut count_once = |rel: &str| -> Option<u64> {
+        let path = root.join(rel);
+        let real = dunce::canonicalize(&path).ok()?;
+        if seen.contains(&real) {
+            return None;
+        }
+        let lines = count_lines(&path)?;
+        seen.push(real);
+        Some(lines)
+    };
+    let bee_lines = count_once(".bee/LEADER.md");
+    let mut project_files: Vec<Value> = Vec::new();
+    let mut project_lines: Option<u64> = None;
+    for name in ["AGENTS.md", "CLAUDE.md", "LEADER.md"] {
+        if let Some(lines) = count_once(name) {
+            project_files.push(serde_json::json!({ "path": name, "lines": lines }));
+            *project_lines.get_or_insert(0) += lines;
+        }
+    }
+    let (check, architecture) = fix_at_row_counts(root);
+    serde_json::json!({
+        "project_files": project_files,
+        "project_lines": project_lines,
+        "bee_lines": bee_lines,
+        "critical_patterns": critical_pattern_count(root),
+        "fix_at_check_rows": check,
+        "fix_at_architecture_rows": architecture,
+    })
+}
+
+fn prose_load_line(digest: &Value) -> String {
+    let p = &digest["prose_load"];
+    let n = |key: &str| p[key].as_u64().map_or("not present".to_string(), |v| v.to_string());
+    let rows = match (p["fix_at_check_rows"].as_u64(), p["fix_at_architecture_rows"].as_u64()) {
+        (Some(c), Some(a)) => format!("{c} check and {a} architecture rows filed"),
+        _ => "rows filed not present".to_string(),
+    };
+    let lead = |key: &str, noun: &str| match p[key].as_u64() {
+        Some(v) => format!("{v} {noun}"),
+        None => format!("{noun} {}", n(key)),
+    };
+    format!(
+        "{}, {}, {}, {rows}",
+        lead("project_lines", "project lines"),
+        lead("bee_lines", "bee lines"),
+        lead("critical_patterns", "critical patterns")
+    )
+}
+
 /// buildDigest(root, {now}) — the full digest object. None => delegate.
 fn build_digest(root: &Path) -> Option<Value> {
     let mut data = collect_counts(root)?;
@@ -1669,6 +1763,7 @@ fn build_digest(root: &Path) -> Option<Value> {
     m.insert("counts".into(), counts_value(&data));
     m.insert("dropped".into(), Value::Array(data.dropped.clone()));
     m.insert("entries".into(), Value::Array(data.entries.clone()));
+    m.insert("prose_load".into(), prose_load_value(root));
     Some(Value::Object(m))
 }
 
@@ -1705,7 +1800,8 @@ fn digest_summary_line(digest: &Value) -> String {
     // fraction — "12 clean / 0 reflected" is the sentence that makes a
     // reflexive clean answer impossible to miss.
     let mistakes = MistakesTally::from_counts(&digest["counts"]).line();
-    format!("{entries} {word}, {dropped_n} dropped ({summary}); mistakes: {mistakes}")
+    let prose = prose_load_line(digest);
+    format!("{entries} {word}, {dropped_n} dropped ({summary}); prose load: {prose}; mistakes: {mistakes}")
 }
 
 fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -2470,6 +2566,98 @@ mod tests {
         assert_eq!(data.dropped.len(), 0);
         assert_eq!(data.skipped, 0, "the counter skipped a cell it only had to count");
         assert!(digest["entries"].is_array());
+    }
+
+    fn prose_load_fixture(root: &Path) {
+        std::fs::write(root.join("AGENTS.md"), "one\ntwo\nthree\n").unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("LEADER.md"), "a\nb\n").unwrap();
+        std::fs::create_dir_all(root.join("docs").join("knowledge")).unwrap();
+        std::fs::write(
+            root.join("docs").join("knowledge").join("index.md"),
+            "# Index\n\n## Critical patterns\n\n- first\n- second\n  - nested\n- third\n\n## Other\n\n- not counted\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join(".bee").join("backlog.jsonl"),
+            concat!(
+                "{\"type\":\"friction\",\"title\":\"a\",\"layer\":\"fix-at:check\"}\n",
+                "{\"type\":\"friction\",\"title\":\"b\",\"layer\":\"fix-at:check\"}\n",
+                "{\"type\":\"friction\",\"title\":\"c\",\"layer\":\"fix-at:architecture\"}\n",
+                "{\"type\":\"friction\",\"title\":\"d\",\"layer\":\"fix-at:check-extra\"}\n",
+                "not json\n",
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn prose_load_reports_lines_patterns_and_rows_in_object_and_sentence() {
+        let tmp = tempfile::tempdir().unwrap();
+        prose_load_fixture(tmp.path());
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = &digest["prose_load"];
+        assert_eq!(p["project_lines"], json!(3));
+        assert_eq!(p["bee_lines"], json!(2));
+        assert_eq!(p["critical_patterns"], json!(3));
+        assert_eq!(p["fix_at_check_rows"], json!(2));
+        assert_eq!(p["fix_at_architecture_rows"], json!(1));
+        assert_eq!(p["project_files"], json!([{"path": "AGENTS.md", "lines": 3}]));
+        let line = digest_summary_line(&digest);
+        assert!(
+            line.contains(
+                "prose load: 3 project lines, 2 bee lines, 3 critical patterns, 2 check and 1 architecture rows filed"
+            ),
+            "{line}"
+        );
+        assert!(line.ends_with("(67% clean)") || line.contains("mistakes:"), "{line}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prose_load_counts_a_symlink_to_a_counted_file_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        prose_load_fixture(tmp.path());
+        std::os::unix::fs::symlink("AGENTS.md", tmp.path().join("CLAUDE.md")).unwrap();
+        let digest = build_digest(tmp.path()).unwrap();
+        assert_eq!(digest["prose_load"]["project_lines"], json!(3));
+        assert_eq!(digest["prose_load"]["project_files"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn prose_load_of_an_empty_root_is_null_not_zero_and_the_digest_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let digest = build_digest(tmp.path()).unwrap();
+        let p = &digest["prose_load"];
+        assert_eq!(p["project_lines"], json!(null));
+        assert_eq!(p["bee_lines"], json!(null));
+        assert_eq!(p["critical_patterns"], json!(null));
+        assert_eq!(p["fix_at_check_rows"], json!(null));
+        assert_eq!(p["fix_at_architecture_rows"], json!(null));
+        assert_eq!(p["project_files"], json!([]));
+        let line = digest_summary_line(&digest);
+        assert!(
+            line.contains(
+                "prose load: project lines not present, bee lines not present, critical patterns not present, rows filed not present"
+            ),
+            "{line}"
+        );
+        let prose = line.split("prose load: ").nth(1).unwrap().split("; mistakes").next().unwrap();
+        assert!(!prose.contains('0'), "{line}");
+    }
+
+    #[test]
+    fn prose_load_leaves_the_counts_object_of_an_empty_root_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let digest = build_digest(tmp.path()).unwrap();
+        assert_eq!(
+            jsjson::stringify(&digest["counts"]),
+            concat!(
+                r#"{"entries":0,"dropped":0,"skipped":0,"by_kind":{},"sources_scanned":[],"#,
+                r#""sources_absent":[".bee/backlog.jsonl",".bee/cells",".bee/decisions.jsonl","docs/history/learnings"],"#,
+                r#""mistakes_answer":{"clean":0,"recorded":0,"answered":0,"clean_ratio":null}}"#
+            )
+        );
     }
 
     #[test]

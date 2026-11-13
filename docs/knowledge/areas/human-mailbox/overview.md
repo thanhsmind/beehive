@@ -12,7 +12,7 @@ bee:
   sources: [docs/history/human-mailbox/CONTEXT.md (the locked decisions), "docs/history/human-mailbox/plan.md (four phases, strictly ordered)", docs/discovery/human-mailbox/MAP.md (the discovery map and its 14 tickets), "cells hm-1..hm-10 (four slices, merged 2026-08-25/26)"]
   authoritative_for: "human-mailbox: the letter record, when it is filed, and the one command a consumer may call"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs]
-  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
+  anchors: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs, packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, packages/bee-rs/crates/bee/src/verbs/work.rs, packages/bee-rs/crates/bee/src/verbs/cells/audit.rs, packages/bee-rs/crates/bee/src/verbs/feedback.rs, packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs, packages/bee-rs/crates/bee/src/verbs/drivers/close.rs]
   verified_at: 2026-10-16
   verified_commit: bce76a97d58a512b181a260c6f4a6461148ebd58
 ---
@@ -203,6 +203,11 @@ scheduler being introduced to watch for this.
     already writes, and reports both numbers and their ratio in its object
     and on its printed line. It is a WITNESS, never a guard — it refuses
     nothing, drops nothing, and scores nothing.
+    The same digest carries a top-level `prose_load` witness (trust-layers D4/D7):
+    line counts of the instruction files, the critical pattern count of the
+    knowledge index, and the fix-at rows filed, each null when its source is
+    absent and printed as not present, never as 0. It counts and names fixed
+    files only, never their content, and `bee feedback count` is untouched.
 20. **A feature close demands the mistakes answer, and asks the CELLS, not
     the run** (RBL D1, D5). The close refuses while any capped cell of the
     feature carries neither a reflection nor the clean-run answer, and names
