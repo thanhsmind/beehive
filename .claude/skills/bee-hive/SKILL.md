@@ -89,7 +89,7 @@ knowledge layer of its own. Its first debt is the orientation entry —
 written by reading the tree, never by asking the user to describe it:
 `.bee/expertise/knowledge.md` ("The orientation file") sets the bar,
 `bee-capturing` owns the write.
-The project's `WORKSPACE_PROTOCOL.md` is finished by the agent too: the owner asks, or `bee protocol check` is not `valid` → the "Workspace protocol" section of `references/onboarding.md`.
+After every onboard result whose `workspace_protocol.action_needed` is true (the `workspace protocol:` notice), run the "Workspace protocol" procedure of `references/onboarding.md` before any feature work. It is part of onboarding, not optional.
 
 ## Go mode
 

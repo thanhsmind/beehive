@@ -43,8 +43,10 @@ human decision boundaries, the merge owner and the deploy owner. The binary
 writes the facts it can read. The agent adds what only reading can find. Read
 the tree. Do not ask the owner to describe the project.
 
-**When.** Run this procedure when the owner asks for it. Run it also when
-`bee protocol check` is not `valid`.
+**When.** Run this procedure after every `bee onboard` whose result has
+`workspace_protocol.action_needed: true`. That means the file is missing,
+invalid, unreadable, or still bee's unedited render. Run it also when the owner
+asks. `bee onboard` never writes the file.
 
 **Steps.**
 
@@ -63,6 +65,48 @@ the tree. Do not ask the owner to describe the project.
 6. Run `.bee/bin/bee protocol check` until the state is `valid`.
 7. Commit the file.
 8. Show the owner a table of key, value and source. Take each row from the
-   `facts` list and from your own `## Sources` lines.
+   `facts` list and from your own `## Sources` lines. When no source names an
+   owner, keep `human` and say so in the table.
+9. Run `.bee/bin/bee onboard --repo-root . --json` again. Confirm that
+   `workspace_protocol.action_needed` is false.
+
+**Where to look.**
+
+- `PROJECT_CRITICALITY`: `high` for real users, money, personal data,
+  production deploys or a public package that others install. `medium` for an
+  internal service or tool with a team. `low` for a personal or throwaway repo.
+- `MERGE_OWNER`: `.bee/config.json` `uat_stop`, branch protection hints in
+  `.github/`, and `CONTRIBUTING.md`.
+- `DEPLOY_OWNER`: `docs/DEPLOY.md`, the release scripts, the deploy and publish
+  workflows in `.github/workflows`, the `Dockerfile` and the package publish
+  config.
+- `HUMAN_DECISION_BOUNDARIES`: things that cannot be undone or that reach an
+  audience. These are deploy, release, tag, push, publish, database
+  migrations, data deletion, auth and permission changes, billing, secrets,
+  public API or schema changes and major dependency upgrades. Add the rules in
+  the review files that say ask, never or must.
+- `PROTECTED_AREAS`: generated files (`DO NOT EDIT` headers and codegen
+  outputs), lockfiles, vendored trees, applied migrations, CI and release
+  config, secret-shaped files, and paths the rule files forbid.
+- `ANTI_PATTERNS`: the never and do-not lines of the rule files, and past
+  mistakes in `docs/knowledge` or in recorded decisions.
+
+**What good looks like.**
+
+- Each item is one concrete action or path that an agent can recognize. Write
+  "a database migration that drops a column", not "risky changes".
+- A protected area names the path and the only allowed way to change it.
+- Every line you add has a source in `## Sources`.
+- Four to ten boundaries is normal. Fewer means the tree was not read.
+- Do not copy bee's own rules that the base set already carries.
+- Never invent an owner. When no source names one, keep `human`.
+
+**Self-check before commit.**
+
+- Every key has a source.
+- No item is generic.
+- No test command is in the file.
+- `bee protocol check` is `valid`.
+- `bee onboard` reports `action_needed` false.
 
 The repo-root `WORKSPACE_PROTOCOL.md` of the bee repo is the reference result.
