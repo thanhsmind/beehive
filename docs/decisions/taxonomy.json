@@ -854,6 +854,7 @@
     "contract:static-check-offer",
     "contract:reflect-source",
     "contract:prose-load",
-    "contract:deploy-verify-notice"
+    "contract:deploy-verify-notice",
+    "contract:onboard-workspace-protocol-report"
   ]
 }
