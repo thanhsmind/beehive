@@ -1,0 +1,97 @@
+{
+  "id": "vrs-2",
+  "feature": "verify-render-standalone",
+  "lane": "small",
+  "role": "docs",
+  "depends_on": [
+    "vrs-1"
+  ],
+  "title": "Point host verify skills at bee onboard --verify-only --apply",
+  "action": "Implement item 8 of docs/history/verify-render-standalone/plan.md. In skills/bee-verifying/SKILL.md (lines 40, 41, 139) and skills/bee-verify-upkeep/SKILL.md (lines 41, 109) replace the host instruction `bee onboard --apply` with `bee onboard --verify-only --apply`, and say in one short clause that it needs no bee checkout. Check whether any template under skills/bee-verifying that generates a host verify-app SKILL.md also says `bee onboard --apply`, and change it the same way. Then regenerate the rendered skill trees and manifests the repo requires (bee dev render-skill-trees and bee dev regen) so parity tests stay green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee parity",
+  "affects_skills": [
+    "skills/bee-verifying/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md"
+  ],
+  "affects_specs": [],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "vrs-2-worker",
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-verifying/SKILL.md",
+      "skills/bee-verify-upkeep/SKILL.md"
+    ],
+    "deviations": [
+      "leader ran bee dev regen and committed because the worker brief forbids bee dev commands",
+      "sync-ack: skill wording only; the listed concepts were suspect before this cell and none describes the onboard command name"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-13T06:58:33.233Z",
+    "behavior_change": false,
+    "verification_evidence": "the full bee test run after regen covered the skill tree parity tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "294dbd38-38d5-4726-8de0-fc0d5f72b7e2",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee parity",
+    "claimed_at": "2026-11-13T06:55:01.189Z",
+    "knowledge_delta": [],
+    "sync_ack": "skill wording only; the listed concepts were suspect before this cell and none describes the onboard command name",
+    "no_mistakes": true,
+    "no_knowledge_used": true,
+    "report": {
+      "outcome": "done",
+      "commit": "c845644d3",
+      "files": [
+        "skills/bee-verifying/SKILL.md",
+        "skills/bee-verify-upkeep/SKILL.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee parity — green:unit — the full bee test run after regen covered the skill tree parity tests",
+      "deviations": [
+        "leader ran bee dev regen and committed because the worker brief forbids bee dev commands"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 152 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-verifying/SKILL.md",
+            "artifact": "skills/bee-verifying/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-verify-upkeep/SKILL.md",
+            "artifact": "skills/bee-verify-upkeep/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-13T06:58:47.603Z",
+        "recorded_by": "294dbd38-38d5-4726-8de0-fc0d5f72b7e2",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "usage": {
+    "new": 39095,
+    "cached": 584741,
+    "total": 623836,
+    "models": {
+      "claude-sonnet-5-5": {
+        "new": 39095,
+        "cached": 584741,
+        "total": 623836
+      }
+    },
+    "jobs": [
+      "job-1794552906475-316350-1"
+    ]
+  }
+}
